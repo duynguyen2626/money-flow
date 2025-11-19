@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Account } from '@/types/moneyflow.types'
+import { Json } from '@/types/database.types'
 
 type AccountRow = {
   id: string
@@ -9,6 +10,7 @@ type AccountRow = {
   current_balance: number | null
   credit_limit: number | null
   owner_id: string | null
+  cashback_config: Json | null
 }
 
 export async function getAccounts(): Promise<Account[]> {
@@ -34,5 +36,6 @@ export async function getAccounts(): Promise<Account[]> {
     current_balance: item.current_balance ?? 0,
     credit_limit: item.credit_limit ?? 0,
     owner_id: item.owner_id ?? '',
+    cashback_config: item.cashback_config ?? null,
   }))
 }

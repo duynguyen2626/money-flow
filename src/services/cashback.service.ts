@@ -1,11 +1,11 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-
-type CashbackConfig = {
-  rate: number
-  maxAmount: number | null
-}
+import {
+  parseCashbackConfig,
+  getCashbackCycleRange,
+  ParsedCashbackConfig,
+} from '@/lib/cashback'
 
 type AccountRow = {
   id: string
@@ -14,8 +14,20 @@ type AccountRow = {
 }
 
 type TransactionLineRow = {
-  account_id: string | null
   amount: number | null
+  transactions: {
+    id: string
+    occurred_at: string
+    note: string | null
+  } | null
+}
+
+export type CashbackTransaction = {
+  id: string
+  occurred_at: string
+  note: string | null
+  amount: number
+  earned: number
 }
 
 export type CashbackCard = {
@@ -27,93 +39,88 @@ export type CashbackCard = {
   progress: number
   rate: number
   spendTarget: number | null
+  cycleStart: string
+  cycleEnd: string
+  cycleType: ParsedCashbackConfig['cycleType']
+  transactions: CashbackTransaction[]
 }
 
-function parseCashbackConfig(raw: unknown): CashbackConfig {
-  if (!raw) {
-    return { rate: 0, maxAmount: null }
+async function fetchAccountLines(
+  supabase: ReturnType<typeof createClient>,
+  accountId: string,
+  rangeStart: Date,
+  rangeEnd: Date
+): Promise<TransactionLineRow[]> {
+  const { data, error } = await supabase
+    .from('transaction_lines')
+    .select('amount, transactions!inner(id, occurred_at, note)')
+    .eq('account_id', accountId)
+    .eq('type', 'credit')
+    .gte('transactions.occurred_at', rangeStart.toISOString())
+    .lte('transactions.occurred_at', rangeEnd.toISOString())
+
+  if (error) {
+    console.error(`Failed to load cashback lines for account ${accountId}:`, error)
+    return []
   }
 
-  let config: Record<string, unknown> | null = null
+  return (data ?? []) as TransactionLineRow[]
+}
 
-  if (typeof raw === 'string') {
-    try {
-      config = JSON.parse(raw)
-    } catch {
-      config = null
-    }
-  } else if (typeof raw === 'object') {
-    config = raw as Record<string, unknown>
+function toTransaction(
+  line: TransactionLineRow,
+  rate: number
+): CashbackTransaction | null {
+  if (typeof line.amount !== 'number' || !line.transactions) {
+    return null
   }
 
-  const rateValue = Number(config?.rate ?? 0)
-  const rawMax = (config?.max_amt ?? config?.maxAmount) as unknown
-  const parsedMax =
-    rawMax === null || rawMax === undefined ? null : Number(rawMax)
-
-  const numericRate =
-    Number.isFinite(rateValue) && rateValue > 0 ? rateValue : 0
-  const numericMax =
-    typeof parsedMax === 'number' && Number.isFinite(parsedMax)
-      ? parsedMax
-      : null
+  const amount = Math.abs(line.amount)
 
   return {
-    rate: numericRate,
-    maxAmount: numericMax,
+    id: line.transactions.id,
+    occurred_at: line.transactions.occurred_at,
+    note: line.transactions.note,
+    amount,
+    earned: amount * rate,
   }
 }
 
 export async function getCashbackProgress(): Promise<CashbackCard[]> {
   const supabase = createClient()
 
-  const { data: accounts, error: accountError } = await supabase
+  const { data: accounts, error } = await supabase
     .from('accounts')
     .select('id, name, cashback_config')
     .eq('type', 'credit_card')
     .not('cashback_config', 'is', null)
 
-  if (accountError) {
-    console.error('Failed to fetch cashback-enabled accounts:', accountError)
+  if (error) {
+    console.error('Failed to fetch cashback-enabled accounts:', error)
     return []
   }
 
-  const accountRows = (accounts ?? []) as AccountRow[]
-  if (accountRows.length === 0) {
-    return []
-  }
+  const referenceDate = new Date()
 
-  const accountIds = accountRows.map(acc => acc.id)
+  const rows = (accounts ?? []) as AccountRow[]
 
-  const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  startOfMonth.setHours(0, 0, 0, 0)
+  const cards: CashbackCard[] = []
 
-  const spendByAccount = new Map<string, number>()
-
-  const { data: lines, error: linesError } = await supabase
-    .from('transaction_lines')
-    .select('account_id, amount, type, transactions!inner(occurred_at)')
-    .in('account_id', accountIds)
-    .eq('type', 'credit')
-    .gte('transactions.occurred_at', startOfMonth.toISOString())
-    .lte('transactions.occurred_at', now.toISOString())
-
-  if (linesError) {
-    console.error('Failed to fetch monthly spending:', linesError)
-  } else {
-    for (const line of (lines ?? []) as TransactionLineRow[]) {
-      if (!line.account_id || typeof line.amount !== 'number') {
-        continue
-      }
-      const current = spendByAccount.get(line.account_id) ?? 0
-      spendByAccount.set(line.account_id, current + Math.abs(line.amount))
-    }
-  }
-
-  return accountRows.map(account => {
+  for (const account of rows) {
     const config = parseCashbackConfig(account.cashback_config)
-    const currentSpend = spendByAccount.get(account.id) ?? 0
+    const cycleRange = getCashbackCycleRange(config, referenceDate)
+    const lines = await fetchAccountLines(
+      supabase,
+      account.id,
+      cycleRange.start,
+      cycleRange.end
+    )
+
+    const transactions = lines
+      .map(line => toTransaction(line, config.rate))
+      .filter(Boolean) as CashbackTransaction[]
+
+    const currentSpend = transactions.reduce((sum, txn) => sum + txn.amount, 0)
     const earned = currentSpend * config.rate
     const maxCashback = config.maxAmount
     const cappedEarned =
@@ -129,7 +136,12 @@ export async function getCashbackProgress(): Promise<CashbackCard[]> {
         ? maxCashback / config.rate
         : null
 
-    return {
+    transactions.sort(
+      (a, b) =>
+        new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime()
+    )
+
+    cards.push({
       accountId: account.id,
       accountName: account.name,
       currentSpend,
@@ -138,6 +150,12 @@ export async function getCashbackProgress(): Promise<CashbackCard[]> {
       progress,
       rate: config.rate,
       spendTarget,
-    }
-  })
+      cycleStart: cycleRange.start.toISOString(),
+      cycleEnd: cycleRange.end.toISOString(),
+      cycleType: config.cycleType,
+      transactions,
+    })
+  }
+
+  return cards
 }

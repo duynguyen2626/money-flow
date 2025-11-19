@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react'
 import { z } from 'zod'
 import { createTransaction } from '@/services/transaction.service'
 import { Account, Category } from '@/types/moneyflow.types'
+import { parseCashbackConfig } from '@/lib/cashback'
 
 const formSchema = z.object({
   occurred_at: z.date(),
@@ -33,6 +34,12 @@ const formSchema = z.object({
   message: 'Person is required for debts.',
   path: ['debt_account_id'],
 });
+
+const currencyFormatter = new Intl.NumberFormat('vi-VN', {
+  style: 'currency',
+  currency: 'VND',
+  maximumFractionDigits: 0,
+})
 
 type TransactionFormProps = {
   accounts: Account[];
@@ -110,6 +117,37 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
     name: 'type',
   })
 
+  const watchedAccountId = useWatch({
+    control,
+    name: 'source_account_id',
+  })
+
+  const watchedAmount = useWatch({
+    control,
+    name: 'amount',
+  })
+
+  const selectedAccount = useMemo(
+    () => sourceAccounts.find(acc => acc.id === watchedAccountId),
+    [sourceAccounts, watchedAccountId]
+  )
+
+  const cashbackMeta = useMemo(
+    () =>
+      selectedAccount ? parseCashbackConfig(selectedAccount.cashback_config) : null,
+    [selectedAccount]
+  )
+
+  const potentialCashback = useMemo(() => {
+    if (!cashbackMeta || cashbackMeta.rate === 0) {
+      return 0
+    }
+    if (typeof watchedAmount !== 'number' || Number.isNaN(watchedAmount)) {
+      return 0
+    }
+    return Math.abs(watchedAmount) * cashbackMeta.rate
+  }, [cashbackMeta, watchedAmount])
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-2">
@@ -182,6 +220,21 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
         />
         {errors.source_account_id && (
           <p className="text-sm text-red-600">{errors.source_account_id.message}</p>
+        )}
+        {cashbackMeta && cashbackMeta.rate > 0 && (
+          <div className="mt-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-slate-600">
+            <p className="text-xs font-semibold text-slate-900">
+              Cashback Rate: {(cashbackMeta.rate * 100).toFixed(0)}%
+            </p>
+            <p className="text-xs text-slate-500">
+              Max: {cashbackMeta.maxAmount ? currencyFormatter.format(cashbackMeta.maxAmount) : 'Khong gioi han'}
+            </p>
+            {potentialCashback > 0 && (
+              <p className="text-xs text-emerald-600">
+                Du kien hoan: +{currencyFormatter.format(potentialCashback)}
+              </p>
+            )}
+          </div>
         )}
       </div>
 
