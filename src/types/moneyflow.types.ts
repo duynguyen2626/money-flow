@@ -32,3 +32,13 @@ export type Category = {
   type: 'expense' | 'income';
   parent_id?: string;
 }
+
+export type TransactionWithDetails = {
+  id: string;
+  occurred_at: string;
+  note: string;
+  amount: number;
+  type: 'income' | 'expense' | 'transfer';
+  category_name?: string;
+  account_name?: string;
+}
