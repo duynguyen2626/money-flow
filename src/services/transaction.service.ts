@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { Transaction, TransactionLine } from '@/types/moneyflow.types'
+import { Transaction, TransactionLine, TransactionWithDetails } from '@/types/moneyflow.types'
 
 export type CreateTransactionInput = {
   occurred_at: string;
@@ -86,4 +86,83 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   }
 
   return true;
+}
+
+type TransactionLineWithRelations = TransactionLine & {
+  accounts?: { name: string } | null;
+  categories?: { name: string } | null;
+};
+
+type TransactionRow = Transaction & {
+  transaction_lines?: TransactionLineWithRelations[];
+};
+
+export async function getRecentTransactions(limit: number = 10): Promise<TransactionWithDetails[]> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(`
+      id,
+      occurred_at,
+      note,
+      transaction_lines (
+        amount,
+        type,
+        account_id,
+        category_id,
+        accounts (name),
+        categories (name)
+      )
+    `)
+    .order('occurred_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error fetching recent transactions:', error);
+    return [];
+  }
+
+  const rows = (data ?? []) as TransactionRow[];
+
+  return rows.map(txn => {
+    const lines = txn.transaction_lines ?? [];
+    const displayAmount =
+      lines.reduce((sum, line) => sum + Math.abs(line.amount), 0) / 2;
+
+    let type: 'income' | 'expense' | 'transfer' = 'transfer';
+    let categoryName: string | undefined;
+    let accountName: string | undefined;
+
+    const categoryLine = lines.find(line => Boolean(line.category_id));
+    const creditAccountLine = lines.find(
+      line => line.account_id && line.type === 'credit'
+    );
+    const debitAccountLine = lines.find(
+      line => line.account_id && line.type === 'debit'
+    );
+
+    if (categoryLine) {
+      categoryName = categoryLine.categories?.name;
+      if (categoryLine.type === 'debit') {
+        type = 'expense';
+        accountName = creditAccountLine?.accounts?.name;
+      } else {
+        type = 'income';
+        accountName = debitAccountLine?.accounts?.name;
+      }
+    } else {
+      accountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name;
+    }
+
+    return {
+      id: txn.id,
+      occurred_at: txn.occurred_at,
+      note: txn.note,
+      amount: displayAmount,
+      type,
+      category_name: categoryName,
+      account_name: accountName,
+    };
+  });
 }
