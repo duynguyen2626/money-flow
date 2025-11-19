@@ -9,6 +9,8 @@ import { createTransaction } from '@/services/transaction.service'
 import { Account, Category } from '@/types/moneyflow.types'
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
 import { CashbackCard, AccountSpendingStats } from '@/types/cashback.types'
+import { Combobox } from '@/components/ui/combobox'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 const formSchema = z.object({
   occurred_at: z.date(),
@@ -69,6 +71,11 @@ function getCycleLabelForDate(
   return formatRangeLabel(range)
 }
 
+function getAccountInitial(name: string) {
+  const firstLetter = name?.trim().charAt(0)
+  return firstLetter ? firstLetter.toUpperCase() : '?'
+}
+
 type TransactionFormProps = {
   accounts: Account[];
   categories: Category[];
@@ -89,6 +96,38 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
     const debtAccounts = allAccounts.filter(a => a.type === 'debt');
     return { sourceAccounts, debtAccounts };
   }, [allAccounts]);
+
+const accountOptions = useMemo(
+  () =>
+    sourceAccounts.map(acc => ({
+      value: acc.id,
+      label: acc.name,
+      description: `${acc.type.replace('_', ' ')} - ${currencyFormatter.format(acc.current_balance)}`,
+      searchValue: `${acc.name} ${acc.type.replace('_', ' ')} ${acc.current_balance}`,
+      icon: (
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+          {getAccountInitial(acc.name)}
+          </span>
+        ),
+      })),
+    [sourceAccounts]
+  )
+
+const debtAccountOptions = useMemo(
+  () =>
+    debtAccounts.map(acc => ({
+      value: acc.id,
+      label: acc.name,
+      description: `Cong no, ${currencyFormatter.format(acc.current_balance)}`,
+      searchValue: `${acc.name} cong no ${acc.current_balance}`,
+        icon: (
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+            {getAccountInitial(acc.name)}
+          </span>
+        ),
+      })),
+    [debtAccounts]
+  )
 
   const [status, setStatus] = useState<StatusMessage>(null)
   const [cashbackProgress, setCashbackProgress] = useState<CashbackCard | null>(null)
@@ -167,6 +206,20 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
     control,
     name: 'type',
   })
+
+  const categoryOptions = useMemo(() => {
+    if (transactionType !== 'expense' && transactionType !== 'income') {
+      return []
+    }
+    return categories
+      .filter(cat => cat.type === transactionType)
+      .map(cat => ({
+        value: cat.id,
+        label: cat.name,
+        description: cat.type === 'expense' ? 'Chi tieu' : 'Thu nhap',
+        searchValue: `${cat.name} ${cat.type}`,
+      }))
+  }, [categories, transactionType])
 
   const watchedAccountId = useWatch({
     control,
@@ -435,15 +488,14 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
           control={control}
           name="type"
           render={({ field }) => (
-            <select
-              {...field}
-              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            >
-              <option value="expense">Expense</option>
-              <option value="income">Income</option>
-              <option value="debt">Debt</option>
-              <option value="transfer">Transfer</option>
-            </select>
+            <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
+              <TabsList className="grid w-full grid-cols-4 gap-1">
+                <TabsTrigger value="expense">Chi tieu</TabsTrigger>
+                <TabsTrigger value="income">Thu nhap</TabsTrigger>
+                <TabsTrigger value="transfer">Chuyen khoan</TabsTrigger>
+                <TabsTrigger value="debt">No/Cho vay</TabsTrigger>
+              </TabsList>
+            </Tabs>
           )}
         />
         {errors.type && (
@@ -477,24 +529,18 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
         <label className="text-sm font-medium text-gray-700">
           {transactionType === 'income' ? 'To Account' : 'From Account'}
         </label>
-      <Controller
-        control={control}
-        name="source_account_id"
+        <Controller
+          control={control}
+          name="source_account_id"
           render={({ field }) => (
-            <select
-              value={field.value ?? ''}
-              onChange={event => field.onChange(event.target.value || undefined)}
-              className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            >
-              <option value="" disabled>
-                Select an account
-              </option>
-              {sourceAccounts.map(acc => (
-                <option key={acc.id} value={acc.id}>
-                  {acc.name}
-                </option>
-              ))}
-            </select>
+            <Combobox
+              value={field.value}
+              onValueChange={field.onChange}
+              items={accountOptions}
+              placeholder="Chon tai khoan"
+              inputPlaceholder="Tim kiem tai khoan..."
+              emptyState="Khong tim thay tai khoan"
+            />
           )}
         />
         {errors.source_account_id && (
@@ -556,22 +602,14 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
             control={control}
             name="category_id"
             render={({ field }) => (
-              <select
-                value={field.value ?? ''}
-                onChange={event => field.onChange(event.target.value || undefined)}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              >
-                <option value="" disabled>
-                  Select a category
-                </option>
-                {categories
-                  .filter(cat => cat.type === transactionType)
-                  .map(cat => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
-                  ))}
-              </select>
+              <Combobox
+                value={field.value}
+                onValueChange={field.onChange}
+                items={categoryOptions}
+                placeholder="Chon danh muc"
+                inputPlaceholder="Tim kiem danh muc..."
+                emptyState="Khong co danh muc phu hop"
+              />
             )}
           />
           {errors.category_id && (
@@ -587,20 +625,14 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
           control={control}
           name="debt_account_id"
           render={({ field }) => (
-            <select
-                value={field.value ?? ''}
-                onChange={event => field.onChange(event.target.value || undefined)}
-                className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              >
-                <option value="" disabled>
-                  Select a person
-                </option>
-                {debtAccounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name}
-                  </option>
-                ))}
-              </select>
+            <Combobox
+              value={field.value}
+              onValueChange={field.onChange}
+              items={debtAccountOptions}
+              placeholder="Chon nguoi nhan"
+              inputPlaceholder="Tim kiem doi tac..."
+              emptyState="Khong tim thay doi tuong phu hop"
+            />
           )}
         />
         {errors.debt_account_id && (
