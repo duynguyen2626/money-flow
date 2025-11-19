@@ -1,3 +1,5 @@
+import { Json } from '@/types/database.types'
+
 export type Account = {
   id: string;
   name: string;
@@ -6,6 +8,7 @@ export type Account = {
   current_balance: number;
   credit_limit?: number;
   owner_id: string;
+  cashback_config?: Json | null;
 }
 
 export type DebtAccount = {
