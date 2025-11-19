@@ -23,6 +23,7 @@ export type TransactionLine = {
   transaction_id: string;
   account_id?: string;
   category_id?: string;
+  metadata?: Json | null;
   amount: number;
   type: 'debit' | 'credit';
   description?: string;

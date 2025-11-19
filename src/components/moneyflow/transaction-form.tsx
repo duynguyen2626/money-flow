@@ -3,11 +3,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { format } from 'date-fns'
 import { Controller, useForm, useWatch } from 'react-hook-form'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { z } from 'zod'
 import { createTransaction } from '@/services/transaction.service'
 import { Account, Category } from '@/types/moneyflow.types'
-import { parseCashbackConfig } from '@/lib/cashback'
+import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
+import { CashbackCard, AccountSpendingStats } from '@/types/cashback.types'
 
 const formSchema = z.object({
   occurred_at: z.date(),
@@ -17,6 +18,8 @@ const formSchema = z.object({
   source_account_id: z.string({ required_error: 'Please select an account.' }),
   category_id: z.string().optional(),
   debt_account_id: z.string().optional(),
+  cashback_share_percent: z.coerce.number().min(0).optional(),
+  cashback_share_fixed: z.coerce.number().min(0).optional(),
 }).refine(data => {
   if ((data.type === 'expense' || data.type === 'income') && !data.category_id) {
     return false
@@ -41,6 +44,31 @@ const currencyFormatter = new Intl.NumberFormat('vi-VN', {
   maximumFractionDigits: 0,
 })
 
+const cycleDateFormatter = new Intl.DateTimeFormat('vi-VN', {
+  day: '2-digit',
+  month: '2-digit',
+})
+
+function formatRangeLabel(range: { start: Date; end: Date }) {
+  const fmt = (date: Date) => `${String(date.getDate()).padStart(2, '0')}/${String(
+    date.getMonth() + 1
+  ).padStart(2, '0')}`
+  return `${fmt(range.start)} - ${fmt(range.end)}`
+}
+
+function getCycleLabelForDate(
+  targetDate: Date | undefined,
+  config: ParsedCashbackConfig | null
+): string {
+  if (!config) {
+    return ''
+  }
+
+  const referenceDate = targetDate ?? new Date()
+  const range = getCashbackCycleRange(config, referenceDate)
+  return formatRangeLabel(range)
+}
+
 type TransactionFormProps = {
   accounts: Account[];
   categories: Category[];
@@ -63,6 +91,12 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
   }, [allAccounts]);
 
   const [status, setStatus] = useState<StatusMessage>(null)
+  const [cashbackProgress, setCashbackProgress] = useState<CashbackCard | null>(null)
+  const [progressLoading, setProgressLoading] = useState(false)
+  const [progressError, setProgressError] = useState<string | null>(null)
+  const [spendingStats, setSpendingStats] = useState<AccountSpendingStats | null>(null)
+  const [statsLoading, setStatsLoading] = useState(false)
+  const [statsError, setStatsError] = useState<string | null>(null)
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -71,16 +105,31 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
       type: 'expense',
       amount: 0,
       note: '',
+      cashback_share_percent: undefined,
+      cashback_share_fixed: undefined,
     },
   })
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setStatus(null)
 
-    const result = await createTransaction({
+    const percentLimit = cashbackProgress ? cashbackProgress.rate * 100 : null
+    const rawPercent = Number(values.cashback_share_percent ?? 0)
+    const rawFixed = Number(values.cashback_share_fixed ?? 0)
+    const sanitizedPercent =
+      percentLimit !== null
+        ? Math.min(percentLimit, Math.max(0, rawPercent))
+        : Math.max(0, rawPercent)
+    const sanitizedFixed = Math.max(0, rawFixed)
+
+    const payload = {
       ...values,
       occurred_at: values.occurred_at.toISOString(),
-    })
+      cashback_share_percent: sanitizedPercent > 0 ? sanitizedPercent : undefined,
+      cashback_share_fixed: sanitizedFixed > 0 ? sanitizedFixed : undefined,
+    }
+
+    const result = await createTransaction(payload)
 
     if (result) {
       setStatus({
@@ -95,6 +144,8 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
         source_account_id: undefined,
         category_id: undefined,
         debt_account_id: undefined,
+        cashback_share_percent: undefined,
+        cashback_share_fixed: undefined,
       })
       onSuccess?.()
     } else {
@@ -127,6 +178,26 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
     name: 'amount',
   })
 
+  const watchedDate = useWatch({
+    control,
+    name: 'occurred_at',
+  })
+
+  const watchedDebtAccountId = useWatch({
+    control,
+    name: 'debt_account_id',
+  })
+
+  const watchedCashbackPercent = useWatch({
+    control,
+    name: 'cashback_share_percent',
+  })
+
+  const watchedCashbackFixed = useWatch({
+    control,
+    name: 'cashback_share_fixed',
+  })
+
   const selectedAccount = useMemo(
     () => sourceAccounts.find(acc => acc.id === watchedAccountId),
     [sourceAccounts, watchedAccountId]
@@ -138,6 +209,101 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
     [selectedAccount]
   )
 
+  const selectedCycleLabel = useMemo(
+    () => getCycleLabelForDate(watchedDate, cashbackMeta),
+    [watchedDate, cashbackMeta]
+  )
+
+  useEffect(() => {
+    if (!watchedAccountId) {
+      setSpendingStats(null)
+      setStatsError(null)
+      setStatsLoading(false)
+      return
+    }
+
+    const controller = new AbortController()
+    setStatsLoading(true)
+    setStatsError(null)
+
+    const params = new URLSearchParams()
+    params.set('accountId', watchedAccountId)
+    if (watchedDate) {
+      params.set('date', watchedDate.toISOString())
+    }
+
+    fetch(`/api/cashback/stats?${params.toString()}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(async response => {
+        if (!response.ok) {
+          throw new Error('Failed to load spending stats')
+        }
+        const payload = await response.json()
+        setSpendingStats(payload ?? null)
+      })
+      .catch(error => {
+        if ((error as { name?: string }).name === 'AbortError') {
+          return
+        }
+        console.error(error)
+        setSpendingStats(null)
+        setStatsError('Khong the tai thong tin Min Spend')
+      })
+      .finally(() => {
+        setStatsLoading(false)
+      })
+
+    return () => {
+      controller.abort()
+    }
+  }, [watchedAccountId, watchedDate])
+
+  useEffect(() => {
+    if (!selectedAccount?.id) {
+      setCashbackProgress(null)
+      setProgressError(null)
+      return undefined
+    }
+
+    const controller = new AbortController()
+    setProgressLoading(true)
+    setProgressError(null)
+
+    fetch(`/api/cashback/progress?accountId=${selectedAccount.id}`, {
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+      .then(async response => {
+        if (!response.ok) {
+          throw new Error('Failed to load cashback progress')
+        }
+        const payload = (await response.json()) as CashbackCard[]
+        if (!payload.length) {
+        setCashbackProgress(null)
+        setProgressError('Khong tim thay du lieu cashback chu ky')
+          return
+        }
+        setCashbackProgress(payload[0])
+      })
+      .catch((error: unknown) => {
+        if ((error as { name?: string }).name === 'AbortError') {
+          return
+        }
+        console.error(error)
+        setCashbackProgress(null)
+        setProgressError('Khong the tai thong tin cashback')
+      })
+      .finally(() => {
+        setProgressLoading(false)
+      })
+
+    return () => {
+      controller.abort()
+    }
+  }, [selectedAccount?.id])
+
   const potentialCashback = useMemo(() => {
     if (!cashbackMeta || cashbackMeta.rate === 0) {
       return 0
@@ -147,6 +313,119 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
     }
     return Math.abs(watchedAmount) * cashbackMeta.rate
   }, [cashbackMeta, watchedAmount])
+
+  const amountValue = typeof watchedAmount === 'number' ? Math.abs(watchedAmount) : 0
+  const projectedSpend = (spendingStats?.currentSpend ?? 0) + amountValue
+  const minSpendHint = useMemo(() => {
+    if (!spendingStats?.minSpend || spendingStats.minSpend <= 0) {
+      return null
+    }
+
+    const formattedTarget = currencyFormatter.format(spendingStats.minSpend)
+    const ratePercent = Math.round(spendingStats.rate * 100)
+
+    if (projectedSpend < spendingStats.minSpend) {
+      const remaining = Math.max(0, spendingStats.minSpend - projectedSpend)
+      return {
+        text: `Cần chi thêm ${currencyFormatter.format(remaining)} nữa để đạt min spend ${formattedTarget} (${ratePercent}% cashback).`,
+        className: 'text-amber-600',
+      }
+    }
+
+    if (spendingStats.currentSpend < spendingStats.minSpend) {
+      return {
+        text: `Tuyệt vời! Giao dịch này giúp bạn đạt chỉ tiêu tối thiểu (${formattedTarget}).`,
+        className: 'text-emerald-600',
+      }
+    }
+
+    return {
+      text: `Đã đạt chỉ tiêu Min Spend (${formattedTarget}). Đang tích lũy hoàn tiền ${ratePercent}%.`,
+      className: 'text-blue-600',
+    }
+  }, [projectedSpend, spendingStats])
+  const limitWarning = useMemo(() => {
+    if (
+      !spendingStats ||
+      spendingStats.maxCashback === null ||
+      spendingStats.rate <= 0
+    ) {
+      return null
+    }
+
+    const minSpendSatisfied =
+      spendingStats.minSpend === null ||
+      spendingStats.currentSpend >= spendingStats.minSpend
+
+    if (!minSpendSatisfied) {
+      return null
+    }
+
+    const potentialNewEarn = amountValue * spendingStats.rate
+    const remaining =
+      spendingStats.maxCashback - spendingStats.earnedSoFar
+
+    if (remaining <= 0) {
+      return {
+        text: 'Ngân sách hoàn tiền đã cạn. Giao dịch này sẽ không được hoàn thêm.',
+        className: 'text-amber-600',
+      }
+    }
+
+    if (potentialNewEarn > remaining) {
+      return {
+        text: `Ngân sách hoàn tiền chỉ còn ${currencyFormatter.format(
+          Math.max(0, remaining)
+        )}. Bạn chỉ nên nhận tối đa ${currencyFormatter.format(
+          Math.max(0, remaining)
+        )} cho giao dịch này.`,
+        className: 'text-amber-600',
+      }
+    }
+
+    return null
+  }, [amountValue, spendingStats])
+  const rateLimitPercent =
+    typeof cashbackProgress?.rate === 'number'
+      ? cashbackProgress.rate * 100
+      : null
+  const percentEntry = Number.isFinite(Number(watchedCashbackPercent ?? 0))
+    ? Number(watchedCashbackPercent ?? 0)
+    : 0
+  const appliedPercent =
+    rateLimitPercent !== null
+      ? Math.min(rateLimitPercent, Math.max(0, percentEntry))
+      : Math.max(0, percentEntry)
+  const fixedEntry = Math.max(0, Number(watchedCashbackFixed ?? 0))
+  const percentBackValue = (appliedPercent / 100) * amountValue
+  const rawShareTotal = percentBackValue + fixedEntry
+  const remainingBudget =
+    typeof cashbackProgress?.remainingBudget === 'number'
+      ? Math.max(0, cashbackProgress.remainingBudget)
+      : null
+  const budgetLimitedShare =
+    typeof remainingBudget === 'number'
+      ? Math.min(rawShareTotal, remainingBudget)
+      : rawShareTotal
+  const totalBackGiven = Math.min(amountValue, budgetLimitedShare)
+  const budgetExceeded =
+    typeof remainingBudget === 'number' && rawShareTotal > remainingBudget
+  const budgetMaxed =
+    typeof remainingBudget === 'number' && remainingBudget <= 0
+  const suggestedPercent =
+    typeof remainingBudget === 'number' && amountValue > 0
+      ? Math.max(
+          0,
+          Math.min(
+            rateLimitPercent ?? Infinity,
+            ((remainingBudget - fixedEntry) / amountValue) * 100
+          )
+        )
+      : null
+  const showCashbackInputs =
+    transactionType === 'debt' &&
+    selectedAccount?.type === 'credit_card' &&
+    Boolean(watchedDebtAccountId)
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -198,9 +477,9 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
         <label className="text-sm font-medium text-gray-700">
           {transactionType === 'income' ? 'To Account' : 'From Account'}
         </label>
-        <Controller
-          control={control}
-          name="source_account_id"
+      <Controller
+        control={control}
+        name="source_account_id"
           render={({ field }) => (
             <select
               value={field.value ?? ''}
@@ -221,14 +500,46 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
         {errors.source_account_id && (
           <p className="text-sm text-red-600">{errors.source_account_id.message}</p>
         )}
+        {progressLoading && (
+          <p className="text-xs text-slate-400">Dang tai lich su cashback...</p>
+        )}
+        {progressError && (
+          <p className="text-xs text-rose-600">{progressError}</p>
+        )}
         {cashbackMeta && cashbackMeta.rate > 0 && (
-          <div className="mt-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-slate-600">
-            <p className="text-xs font-semibold text-slate-900">
+          <div className="mt-3 flex flex-col gap-1 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-slate-600">
+            {selectedCycleLabel && (
+              <div className="font-semibold text-slate-900">
+                Kỳ sao kê: {selectedCycleLabel}
+              </div>
+            )}
+            <div className="text-xs text-blue-600">
               Cashback Rate: {(cashbackMeta.rate * 100).toFixed(0)}%
-            </p>
-            <p className="text-xs text-slate-500">
+            </div>
+            <div className="text-xs text-slate-500">
               Max: {cashbackMeta.maxAmount ? currencyFormatter.format(cashbackMeta.maxAmount) : 'Khong gioi han'}
-            </p>
+            </div>
+            {minSpendHint && (
+              <p className={`text-xs font-medium ${minSpendHint.className}`}>
+                {minSpendHint.text}
+              </p>
+            )}
+            {limitWarning && (
+              <p className={`text-xs font-medium ${limitWarning.className}`}>
+                {limitWarning.text}
+              </p>
+            )}
+            {statsLoading && (
+              <p className="text-xs text-slate-500">Đang cập nhật tiến độ Min Spend...</p>
+            )}
+            {statsError && (
+              <p className="text-xs text-rose-600">{statsError}</p>
+            )}
+            {typeof cashbackProgress?.remainingBudget === 'number' && (
+              <p className="text-xs text-slate-500">
+                Ngan sach con lai: {currencyFormatter.format(cashbackProgress.remainingBudget)}
+              </p>
+            )}
             {potentialCashback > 0 && (
               <p className="text-xs text-emerald-600">
                 Du kien hoan: +{currencyFormatter.format(potentialCashback)}
@@ -269,14 +580,14 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
         </div>
       )}
 
-      {transactionType === 'debt' && (
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">Person</label>
-          <Controller
-            control={control}
-            name="debt_account_id"
-            render={({ field }) => (
-              <select
+    {transactionType === 'debt' && (
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-700">Person</label>
+        <Controller
+          control={control}
+          name="debt_account_id"
+          render={({ field }) => (
+            <select
                 value={field.value ?? ''}
                 onChange={event => field.onChange(event.target.value || undefined)}
                 className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
@@ -290,13 +601,102 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
                   </option>
                 ))}
               </select>
-            )}
-          />
-          {errors.debt_account_id && (
-            <p className="text-sm text-red-600">{errors.debt_account_id.message}</p>
           )}
+        />
+        {errors.debt_account_id && (
+          <p className="text-sm text-red-600">{errors.debt_account_id.message}</p>
+        )}
+      </div>
+    )}
+
+    {showCashbackInputs && (
+      <div className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/80 p-4 text-sm text-slate-600 shadow-sm">
+        <div className="flex items-center justify-between text-xs font-semibold uppercase text-indigo-700">
+          <span>Chia cashback</span>
+          <span>
+            Ngan sach:{' '}
+            {remainingBudget === null
+              ? 'Khong gioi han'
+              : currencyFormatter.format(remainingBudget)}
+          </span>
         </div>
-      )}
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-600">% Back</label>
+            <Controller
+              control={control}
+              name="cashback_share_percent"
+              render={({ field }) => (
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max={rateLimitPercent ?? undefined}
+                  value={field.value ?? ''}
+                  onChange={event => {
+                    const nextValue = event.target.value
+                    field.onChange(nextValue === '' ? undefined : Number(nextValue))
+                  }}
+                  className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  placeholder="Nhap phan tram"
+                />
+              )}
+            />
+            {rateLimitPercent !== null && (
+              <p className="text-xs text-slate-500">
+                Khong qua {rateLimitPercent.toFixed(2)}%
+              </p>
+            )}
+            {rateLimitPercent !== null && percentEntry > rateLimitPercent && (
+              <p className="text-xs text-amber-600">
+                Toi da {rateLimitPercent.toFixed(2)}% theo chinh sach the
+              </p>
+            )}
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-slate-600">Fixed Back</label>
+            <Controller
+              control={control}
+              name="cashback_share_fixed"
+              render={({ field }) => (
+                <input
+                  type="number"
+                  step="1000"
+                  min="0"
+                  value={field.value ?? ''}
+                  onChange={event => {
+                    const nextValue = event.target.value
+                    field.onChange(nextValue === '' ? undefined : Number(nextValue))
+                  }}
+                  disabled={budgetMaxed}
+                  className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Nhap co dinh"
+                />
+              )}
+            />
+            {budgetMaxed && (
+            <p className="text-xs text-rose-600">Ngan sach da het, khong the chia them co dinh.</p>
+            )}
+          </div>
+        </div>
+          <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+            <span>Tong hoan cho nguoi khac</span>
+          <span className="font-semibold text-slate-900">
+            {currencyFormatter.format(totalBackGiven)}
+          </span>
+        </div>
+        {budgetExceeded && remainingBudget !== null && (
+          <p className="text-xs text-amber-600">
+            Ngan sach hoan tien chi con {currencyFormatter.format(remainingBudget)}.
+          </p>
+        )}
+        {suggestedPercent !== null && budgetExceeded && (
+          <p className="text-xs text-amber-600">
+            Goi y giam ty le xuong {suggestedPercent.toFixed(2)}% de khong vuot ngan sach.
+          </p>
+        )}
+      </div>
+    )}
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Amount</label>
