@@ -8,6 +8,13 @@ export type Account = {
   owner_id: string;
 }
 
+export type DebtAccount = {
+  id: string;
+  name: string;
+  current_balance: number;
+  owner_id: string | null;
+}
+
 export type TransactionLine = {
   id: string;
   transaction_id: string;
