@@ -1,0 +1,73 @@
+'use client'
+
+import { MouseEvent, useState } from 'react'
+import { TransactionForm } from './transaction-form'
+import { useRouter } from 'next/navigation'
+import { Account, Category } from '@/types/moneyflow.types'
+
+type AddTransactionDialogProps = {
+  accounts: Account[];
+  categories: Category[];
+}
+
+export function AddTransactionDialog({ accounts, categories }: AddTransactionDialogProps) {
+  const [open, setOpen] = useState(false)
+  const router = useRouter()
+
+  const handleSuccess = () => {
+    setOpen(false)
+    router.refresh()
+  }
+
+  const closeDialog = () => setOpen(false)
+
+  const stopPropagation = (event: MouseEvent<HTMLDivElement>) => {
+    event.stopPropagation()
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+        onClick={() => setOpen(true)}
+      >
+        Add Transaction
+      </button>
+
+      {open && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Add Transaction"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10"
+          onClick={closeDialog}
+        >
+          <div
+            className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
+            onClick={stopPropagation}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Add New Transaction</h2>
+              <button
+                type="button"
+                className="rounded p-1 text-gray-500 transition hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                aria-label="Close dialog"
+                onClick={closeDialog}
+              >
+                X
+              </button>
+            </div>
+            <div className="py-2">
+              <TransactionForm
+                accounts={accounts}
+                categories={categories}
+                onSuccess={handleSuccess}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
