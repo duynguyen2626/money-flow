@@ -1,23 +1,49 @@
-'use server'
+'use server';
 
-import { createClient } from '@/lib/supabase/server'
-import { Transaction, TransactionLine, TransactionWithDetails } from '@/types/moneyflow.types'
+import { createClient } from '@/lib/supabase/server';
+import { Transaction, TransactionLine, TransactionWithDetails } from '@/types/moneyflow.types';
 
 export type CreateTransactionInput = {
   occurred_at: string;
   note: string;
   type: 'expense' | 'income' | 'debt';
   source_account_id: string;
-  destination_account_id?: string; // For transfers
-  category_id?: string; // For expense/income
-  debt_account_id?: string; // For debt/lending
+  destination_account_id?: string;
+  category_id?: string;
+  debt_account_id?: string;
   amount: number;
+  cashback_share_percent?: number;
+  cashback_share_fixed?: number;
+  discount_category_id?: string;
 };
+
+async function resolveDiscountCategoryId(
+  supabase: ReturnType<typeof createClient>,
+  overrideCategoryId?: string
+): Promise<string | null> {
+  if (overrideCategoryId) {
+    return overrideCategoryId;
+  }
+
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('name', 'Discount Given')
+    .eq('type', 'expense')
+    .limit(1);
+
+  if (error) {
+    console.error('Error fetching Discount Given category:', error);
+    return null;
+  }
+
+  const rows = (data ?? []) as { id: string }[];
+  return rows[0]?.id ?? null;
+}
 
 export async function createTransaction(input: CreateTransactionInput): Promise<boolean> {
   const supabase = createClient();
 
-  // 1. Prepare lines based on type
   const lines: Omit<TransactionLine, 'id' | 'transaction_id'>[] = [];
 
   if (input.type === 'expense' && input.category_id) {
@@ -43,23 +69,55 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       type: 'credit',
     });
   } else if (input.type === 'debt' && input.debt_account_id) {
-    // This assumes you have a way to get the debt account of a person
+    const amount = Math.abs(input.amount);
+    const sharePercent = Math.min(
+      100,
+      Math.max(0, Number(input.cashback_share_percent ?? 0))
+    );
+    const shareFixed = Math.max(0, Number(input.cashback_share_fixed ?? 0));
+    const percentContribution = (sharePercent / 100) * amount;
+    const rawCashback = percentContribution + shareFixed;
+    const cashbackGiven = Math.min(amount, Math.max(0, rawCashback));
+    const debtAmount = Math.max(0, amount - cashbackGiven);
+    const hasShareInput = sharePercent > 0 || shareFixed > 0;
+
+    const shareMetadata = hasShareInput
+      ? {
+          cashback_share_percent: sharePercent,
+          cashback_share_fixed: shareFixed,
+          cashback_share_amount: cashbackGiven,
+        }
+      : undefined;
+
     lines.push({
       account_id: input.source_account_id,
-      amount: -Math.abs(input.amount),
+      amount: -amount,
       type: 'credit',
+      metadata: shareMetadata,
     });
     lines.push({
       account_id: input.debt_account_id,
-      amount: Math.abs(input.amount),
+      amount: debtAmount,
       type: 'debit',
+      metadata: shareMetadata,
     });
+
+    if (cashbackGiven > 0) {
+      const discountCategoryId = await resolveDiscountCategoryId(
+        supabase,
+        input.discount_category_id
+      );
+      lines.push({
+        category_id: discountCategoryId ?? undefined,
+        amount: cashbackGiven,
+        type: 'debit',
+      });
+    }
   } else {
     console.error('Invalid transaction type or missing data');
     return false;
   }
 
-  // 2. Insert Header to 'transactions' table
   const { data: txn, error: txnError } = await supabase
     .from('transactions')
     .insert({
@@ -75,13 +133,11 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     return false;
   }
 
-  // 3. Insert Lines to 'transaction_lines' table with txn.id
   const linesWithId = lines.map(l => ({ ...l, transaction_id: txn.id }));
   const { error: linesError } = await supabase.from('transaction_lines').insert(linesWithId);
 
   if (linesError) {
     console.error('Error creating transaction lines:', linesError);
-    // TODO: Consider deleting the transaction header if lines fail
     return false;
   }
 

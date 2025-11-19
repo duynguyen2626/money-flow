@@ -1,10 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { CreditCard } from 'lucide-react'
 
 import { Progress } from '@/components/ui/progress'
-import { CashbackCard } from '@/services/cashback.service'
+import { CashbackCard } from '@/types/cashback.types'
 import { CashbackDetailsDialog } from './cashback-details'
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
@@ -23,17 +23,25 @@ type CashbackDashboardProps = {
   cards: CashbackCard[]
 }
 
+const calculateProgress = (earned: number | null, max: number | null) => {
+  const safeEarned = earned ?? 0
+  const safeMax = max ?? 0
+
+  if (safeMax === 0) {
+    return 0
+  }
+
+  const percent = (safeEarned / safeMax) * 100
+
+  if (!Number.isFinite(percent)) {
+    return 0
+  }
+
+  return Math.min(percent, 100)
+}
+
 export function CashbackDashboard({ cards }: CashbackDashboardProps) {
   const [expandedCard, setExpandedCard] = useState<CashbackCard | null>(null)
-
-  const cycleLabelCache = useMemo(() => {
-    return cards.reduce<Record<string, string>>((acc, card) => {
-      const start = new Date(card.cycleStart)
-      const end = new Date(card.cycleEnd)
-      acc[card.accountId] = `${dateFormatter.format(start)} - ${dateFormatter.format(end)}`
-      return acc
-    }, {})
-  }, [cards])
 
   if (cards.length === 0) {
     return (
@@ -50,13 +58,17 @@ export function CashbackDashboard({ cards }: CashbackDashboardProps) {
     <>
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {cards.map(card => {
+          const safeSpendTarget =
+            typeof card.spendTarget === 'number' && Number.isFinite(card.spendTarget)
+              ? card.spendTarget
+              : null
           const spendGoalLabel =
-            typeof card.spendTarget === 'number'
-              ? currencyFormatter.format(card.spendTarget)
+            safeSpendTarget !== null
+              ? currencyFormatter.format(safeSpendTarget)
               : 'Khong gioi han'
 
-          const progressValue = Number.isFinite(card.progress) ? card.progress : 0
-          const earnedLabel = currencyFormatter.format(card.earned)
+          const progressValue = calculateProgress(card.totalEarned, card.maxCashback)
+          const earnedLabel = currencyFormatter.format(card.totalEarned)
           const spendLabel = currencyFormatter.format(card.currentSpend)
           const ratePercent = `${Math.round(card.rate * 100)}%`
           const maxCashbackLabel =
@@ -76,7 +88,7 @@ export function CashbackDashboard({ cards }: CashbackDashboardProps) {
                 </div>
               </div>
 
-              <div className="mt-3 text-xs text-slate-400">{cycleLabelCache[card.accountId]}</div>
+              <div className="mt-3 text-xs text-slate-400">{card.cycleLabel}</div>
 
               <div className="mt-6">
                 <p className="text-sm text-slate-500">Da hoan</p>
@@ -95,8 +107,25 @@ export function CashbackDashboard({ cards }: CashbackDashboardProps) {
                 </div>
                 <Progress value={progressValue} />
                 <div className="text-right text-xs text-slate-400">
-                  {progressValue.toFixed(0)}% hoan thanh muc tieu
+                  {card.maxCashback
+                    ? `${progressValue.toFixed(1)}% hoan thanh muc tieu`
+                    : 'N/A'}
                 </div>
+              </div>
+              {card.minSpend !== null && !card.minSpendMet && (
+                <p className="mt-3 text-xs text-amber-600">
+                  Can them {currencyFormatter.format(Math.max(0, card.minSpendRemaining ?? 0))} de dat min spend.
+                </p>
+              )}
+              <div className="mt-4 flex items-center justify-between text-xs text-slate-500">
+                <span>Da chia: {currencyFormatter.format(card.sharedAmount)}</span>
+                <span
+                  className={`font-semibold ${
+                    card.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'
+                  }`}
+                >
+                  Loi nhuan: {currencyFormatter.format(card.netProfit)}
+                </span>
               </div>
 
               <div className="mt-6 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">

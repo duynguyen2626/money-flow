@@ -10,6 +10,7 @@ export type ParsedCashbackConfig = {
   maxAmount: number | null
   cycleType: CashbackCycleType
   statementDay: number | null
+  minSpend: number | null
 }
 
 function parseConfigCandidate(raw: Record<string, unknown> | null) {
@@ -41,11 +42,22 @@ function parseConfigCandidate(raw: Record<string, unknown> | null) {
       ? Math.min(Math.max(Math.floor(statementNumber), 1), 31)
       : null
 
+  const minCandidate = raw?.min_spend ?? raw?.minSpend
+  const minNumber =
+    minCandidate === null || minCandidate === undefined
+      ? null
+      : Number(minCandidate)
+  const minSpend =
+    typeof minNumber === 'number' && Number.isFinite(minNumber) && minNumber > 0
+      ? minNumber
+      : null
+
   return {
     rate: parsedRate,
     maxAmount,
     cycleType,
     statementDay,
+    minSpend,
   }
 }
 
@@ -56,6 +68,7 @@ export function parseCashbackConfig(raw: unknown): ParsedCashbackConfig {
       maxAmount: null,
       cycleType: 'calendar_month',
       statementDay: null,
+      minSpend: null,
     }
   }
 
@@ -68,6 +81,7 @@ export function parseCashbackConfig(raw: unknown): ParsedCashbackConfig {
         maxAmount: null,
         cycleType: 'calendar_month',
         statementDay: null,
+        minSpend: null,
       }
     }
   }
@@ -81,6 +95,7 @@ export function parseCashbackConfig(raw: unknown): ParsedCashbackConfig {
     maxAmount: null,
     cycleType: 'calendar_month',
     statementDay: null,
+    minSpend: null,
   }
 }
 
