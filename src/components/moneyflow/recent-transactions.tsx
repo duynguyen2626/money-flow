@@ -45,8 +45,8 @@ export function RecentTransactions({ transactions }: RecentTransactionsProps) {
               : txn.type === 'income'
               ? 'text-green-600'
               : 'text-slate-600';
-          const prefix =
-            txn.type === 'expense' ? '- ' : txn.type === 'income' ? '+ ' : '';
+          const prefix = txn.type === 'income' ? '+ ' : '';
+          const amountValue = currencyFormatter.format(Math.abs(txn.amount));
 
           return (
             <TableRow key={txn.id}>
@@ -59,7 +59,7 @@ export function RecentTransactions({ transactions }: RecentTransactionsProps) {
               </TableCell>
               <TableCell className={`text-right font-mono font-bold ${amountClass}`}>
                 {prefix}
-                {currencyFormatter.format(txn.amount)}
+                {amountValue}
               </TableCell>
             </TableRow>
           );
