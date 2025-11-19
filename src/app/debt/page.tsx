@@ -1,10 +1,11 @@
+import { getAccounts } from '@/services/account.service'
 import { getDebtAccounts } from '@/services/debt.service'
 import { DebtList } from '@/components/moneyflow/debt-list'
 
 export const dynamic = 'force-dynamic'
 
 export default async function DebtPage() {
-  const debts = await getDebtAccounts()
+  const [debts, accounts] = await Promise.all([getDebtAccounts(), getAccounts()])
 
   return (
     <div className="space-y-6">
@@ -15,7 +16,7 @@ export default async function DebtPage() {
             <p className="text-sm text-slate-500">Danh sach nguoi dang no va nguoi ban dang no</p>
           </div>
         </div>
-        <DebtList debts={debts} />
+        <DebtList debts={debts} accounts={accounts} />
       </section>
     </div>
   )

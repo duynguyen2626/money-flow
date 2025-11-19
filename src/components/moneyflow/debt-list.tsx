@@ -1,6 +1,10 @@
+'use client'
+
+import { useState } from 'react'
 import { Check } from 'lucide-react'
 
-import { DebtAccount } from '@/types/moneyflow.types'
+import { Account, DebtAccount } from '@/types/moneyflow.types'
+import { SettleDebtDialog } from './settle-debt-dialog'
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -9,6 +13,7 @@ const currencyFormatter = new Intl.NumberFormat('vi-VN', {
 
 type DebtListProps = {
   debts: DebtAccount[]
+  accounts: Account[]
 }
 
 function getInitials(name: string) {
@@ -16,7 +21,9 @@ function getInitials(name: string) {
   return `${first.charAt(0)}${second.charAt(0)}`.toUpperCase()
 }
 
-export function DebtList({ debts }: DebtListProps) {
+export function DebtList({ debts, accounts }: DebtListProps) {
+  const [selectedDebt, setSelectedDebt] = useState<DebtAccount | null>(null)
+
   if (debts.length === 0) {
     return (
       <div className="text-center py-8 text-gray-400 border rounded-lg">
@@ -33,13 +40,17 @@ export function DebtList({ debts }: DebtListProps) {
         const formattedAmount = currencyFormatter.format(Math.abs(balance))
         const balanceClass =
           balance > 0 ? 'text-green-600' : balance < 0 ? 'text-red-600' : 'text-gray-500'
-        const displayAmount = balance > 0 ? `+ ${formattedAmount}` : formattedAmount
         const statusText =
           balance > 0
-            ? `Dang no ban: ${displayAmount}`
+            ? `Dang no ban: ${formattedAmount}`
             : balance < 0
-            ? `Ban no: ${displayAmount}`
+            ? `Ban no: ${formattedAmount}`
             : 'Da tat toan'
+
+        const handleSettle = () => {
+          if (balance === 0) return
+          setSelectedDebt(debt)
+        }
 
         return (
           <div
@@ -55,18 +66,32 @@ export function DebtList({ debts }: DebtListProps) {
                 <p className={`text-sm ${balanceClass}`}>{statusText}</p>
               </div>
             </div>
-            <button
-              type="button"
-              className="inline-flex items-center gap-1 text-sm text-blue-600 border border-blue-200 px-3 py-1 rounded-full hover:bg-blue-50 transition-colors"
-              aria-label={`Settle debt with ${debt.name}`}
-              title="Xác nhận đã trả hết nợ"
-            >
-              <Check className="h-4 w-4" />
-              Tất toán
-            </button>
+            {balance === 0 ? (
+              <span className="text-sm text-gray-400 font-medium">Da tat toan</span>
+            ) : (
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-sm text-blue-600 border border-blue-200 px-3 py-1 rounded-full hover:bg-blue-50 transition-colors"
+                aria-label={`Settle debt with ${debt.name}`}
+                title="Xac nhan tat toan"
+                onClick={handleSettle}
+              >
+                <Check className="h-4 w-4" />
+                Tat toan
+              </button>
+            )}
           </div>
         )
       })}
+
+      {selectedDebt && (
+        <SettleDebtDialog
+          key={selectedDebt.id}
+          debt={selectedDebt}
+          accounts={accounts}
+          onClose={() => setSelectedDebt(null)}
+        />
+      )}
     </div>
   )
 }
