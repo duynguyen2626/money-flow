@@ -34,6 +34,7 @@ export function RecentTransactions({ transactions }: RecentTransactionsProps) {
           <TableHead>Ngày</TableHead>
           <TableHead>Ghi chú</TableHead>
           <TableHead>Danh mục/Tài khoản</TableHead>
+          <TableHead>Tag</TableHead>
           <TableHead className="text-right">Số tiền</TableHead>
         </TableRow>
       </TableHeader>
@@ -56,6 +57,9 @@ export function RecentTransactions({ transactions }: RecentTransactionsProps) {
               <TableCell className="font-semibold">{txn.note}</TableCell>
               <TableCell className="text-sm text-gray-500">
                 {txn.category_name || txn.account_name || 'Không xác định'}
+              </TableCell>
+              <TableCell className="text-sm">
+                {txn.tag || 'Không có tag'}
               </TableCell>
               <TableCell className={`text-right font-mono font-bold ${amountClass}`}>
                 {prefix}

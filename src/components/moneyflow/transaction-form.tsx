@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { format } from 'date-fns'
+import { format, subMonths } from 'date-fns' // Thêm subMonths để hỗ trợ tính năng lùi tháng
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useEffect, useMemo, useState } from 'react'
 import { z } from 'zod'
@@ -12,11 +12,16 @@ import { CashbackCard, AccountSpendingStats } from '@/types/cashback.types'
 import { Combobox } from '@/components/ui/combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
+// Helper function để tạo tag từ ngày
+export const generateTag = (date: Date) => format(date, 'MMMyy').toUpperCase();
+
+// Cập nhật schema để thêm trường tag
 const formSchema = z.object({
   occurred_at: z.date(),
   type: z.enum(['expense', 'income', 'debt', 'transfer']),
   amount: z.coerce.number().positive(),
   note: z.string().optional(),
+  tag: z.string().min(1, 'Tag là bắt buộc'), // Thêm trường tag
   source_account_id: z.string({ required_error: 'Please select an account.' }),
   category_id: z.string().optional(),
   debt_account_id: z.string().optional(),
@@ -97,6 +102,20 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
     return { sourceAccounts, debtAccounts };
   }, [allAccounts]);
 
+  // Thêm state để quản lý chế độ tag thủ công
+  const [manualTagMode, setManualTagMode] = useState(false);
+  
+  // Tạo danh sách tag gợi ý (6 tháng gần nhất)
+  const suggestedTags = useMemo(() => {
+    const tags = [];
+    const today = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const date = subMonths(today, i);
+      tags.push(generateTag(date));
+    }
+    return tags;
+  }, []);
+
 const accountOptions = useMemo(
   () =>
     sourceAccounts.map(acc => ({
@@ -144,6 +163,7 @@ const debtAccountOptions = useMemo(
       type: 'expense',
       amount: 0,
       note: '',
+      tag: generateTag(new Date()), // Thêm giá trị mặc định cho tag
       cashback_share_percent: undefined,
       cashback_share_fixed: undefined,
     },
@@ -199,7 +219,8 @@ const debtAccountOptions = useMemo(
     control,
     handleSubmit,
     formState: { errors, isSubmitting },
-    register,
+    register, // Thêm register vào destructuring
+    watch, 
   } = form
 
   const transactionType = useWatch({
@@ -480,6 +501,13 @@ const debtAccountOptions = useMemo(
     selectedAccount?.type === 'credit_card' &&
     Boolean(watchedDebtAccountId)
 
+  // Thêm useEffect để tự động cập nhật tag khi ngày thay đổi
+  useEffect(() => {
+    if (!manualTagMode && watchedDate) {
+      form.setValue('tag', generateTag(watchedDate));
+    }
+  }, [watchedDate, manualTagMode, form]);
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-2">
@@ -523,6 +551,88 @@ const debtAccountOptions = useMemo(
         {errors.occurred_at && (
           <p className="text-sm text-red-600">{errors.occurred_at.message}</p>
         )}
+      </div>
+
+      {/* Thêm trường Tag vào form */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-700">Kỳ nợ (Tag)</label>
+        <Controller
+          control={control}
+          name="tag"
+          render={({ field }) => (
+            <div className="space-y-2">
+              <input
+                {...field}
+                onChange={(e) => {
+                  field.onChange(e);
+                  // Khi người dùng thay đổi tag thủ công, đặt manualTagMode thành true
+                  if (!manualTagMode) {
+                    setManualTagMode(true);
+                  }
+                }}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="Nhập tag (ví dụ: NOV25)"
+              />
+              {/* Các nút hành động nhanh */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Lùi về tháng trước
+                    const currentDate = watchedDate || new Date();
+                    const previousMonth = subMonths(currentDate, 1);
+                    const previousTag = generateTag(previousMonth);
+                    form.setValue('tag', previousTag);
+                    setManualTagMode(true);
+                  }}
+                  className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700 hover:bg-gray-200"
+                >
+                  &lt; Tháng trước
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Reset về tag mặc định dựa trên ngày hiện tại
+                    const currentDate = watchedDate || new Date();
+                    const defaultTag = generateTag(currentDate);
+                    form.setValue('tag', defaultTag);
+                    setManualTagMode(false);
+                  }}
+                  className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700 hover:bg-gray-200"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          )}
+        />
+        {errors.tag && (
+          <p className="text-sm text-red-600">{errors.tag.message}</p>
+        )}
+        
+        {/* Dropdown gợi ý tag gần đây */}
+        <div className="mt-1">
+          <p className="text-xs text-gray-500 mb-1">Gợi ý gần đây:</p>
+          <div className="flex flex-wrap gap-1">
+            {suggestedTags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => {
+                  form.setValue('tag', tag);
+                  setManualTagMode(true);
+                }}
+                className={`rounded px-2 py-1 text-xs ${
+                  watch('tag') === tag 
+                    ? 'bg-blue-500 text-white' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -652,7 +762,7 @@ const debtAccountOptions = useMemo(
               : currencyFormatter.format(remainingBudget)}
           </span>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <label className="text-xs font-medium text-slate-600">% Back</label>
             <Controller
@@ -669,21 +779,25 @@ const debtAccountOptions = useMemo(
                     const nextValue = event.target.value
                     field.onChange(nextValue === '' ? undefined : Number(nextValue))
                   }}
-                  className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                  disabled={budgetMaxed} // Thêm disabled khi ngân sách đã hết
+                  className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
                   placeholder="Nhap phan tram"
                 />
               )}
-            />
+/>
             {rateLimitPercent !== null && (
               <p className="text-xs text-slate-500">
-                Khong qua {rateLimitPercent.toFixed(2)}%
+                {/* Thay đổi giới hạn hiển thị tối đa 50% thay vì rateLimitPercent */}
+                Khong qua {Math.min(50, rateLimitPercent).toFixed(2)}%
               </p>
-            )}
-            {rateLimitPercent !== null && percentEntry > rateLimitPercent && (
-              <p className="text-xs text-amber-600">
-                Toi da {rateLimitPercent.toFixed(2)}% theo chinh sach the
-              </p>
-            )}
+)}
+{rateLimitPercent !== null && percentEntry > rateLimitPercent && (
+  <p className="text-xs text-amber-600">
+    {/* Giới hạn tối đa 50% cho cảnh báo */}
+    Toi da {Math.min(50, rateLimitPercent).toFixed(2)}% theo chinh sach the
+  </p>
+)}
+
           </div>
           <div className="space-y-1">
             <label className="text-xs font-medium text-slate-600">Fixed Back</label>

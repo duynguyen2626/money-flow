@@ -1,4 +1,4 @@
-# **AGENT TASK: BUILD TRANSACTION FORM & CORE LOGIC**
+# **AGENT TASK: git commit -m "Task 1: BUILD TRANSACTION FORM & CORE LOGIC"**
 
 Objective: Create a "Add Transaction" feature.  
 Constraint: User inputs SIMPLE data \-\> System converts to DOUBLE-ENTRY in Database.

@@ -34,6 +34,7 @@ export type Transaction = {
   occurred_at: string;
   note: string;
   status: 'posted' | 'pending' | 'void';
+  tag?: string; // Adding the tag field
   transaction_lines?: TransactionLine[];
 }
 
@@ -52,4 +53,5 @@ export type TransactionWithDetails = {
   type: 'income' | 'expense' | 'transfer';
   category_name?: string;
   account_name?: string;
+  tag?: string; // Thêm trường tag
 }

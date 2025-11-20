@@ -47,6 +47,32 @@ export interface Database {
           created_at?: string
         }
       }
+      transactions: {
+        Row: {
+          id: string
+          occurred_at: string
+          note: string | null
+          status: 'posted' | 'pending' | 'void'
+          tag: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          occurred_at: string
+          note?: string | null
+          status?: 'posted' | 'pending' | 'void'
+          tag?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          occurred_at?: string
+          note?: string | null
+          status?: 'posted' | 'pending' | 'void'
+          tag?: string | null
+          created_at?: string
+        }
+      }
       // Add other tables as needed later, this is enough to compile Page.tsx
     }
   }
