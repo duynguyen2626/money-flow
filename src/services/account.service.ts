@@ -13,6 +13,19 @@ type AccountRow = {
   cashback_config: Json | null
 }
 
+function normalizeCashbackConfig(value: Json | null): Json | null {
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value)
+    } catch (parseError) {
+      console.error('Failed to parse cashback_config string:', parseError)
+      return null
+    }
+  }
+
+  return value
+}
+
 export async function getAccounts(): Promise<Account[]> {
   const supabase = createClient()
     
@@ -36,7 +49,7 @@ export async function getAccounts(): Promise<Account[]> {
     current_balance: item.current_balance ?? 0,
     credit_limit: item.credit_limit ?? 0,
           owner_id: item.owner_id ?? '',
-          cashback_config: item.cashback_config ?? null,
+    cashback_config: normalizeCashbackConfig(item.cashback_config),
         }))
 }
 
@@ -50,7 +63,15 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
     .maybeSingle()
 
   if (error || !data) {
-    console.error('Error fetching account details:', error)
+    // Treat "no rows found" as a simple not-found instead of a hard error
+    if (error?.code && error.code === 'PGRST116') {
+      return null
+    }
+    console.error('Error fetching account details:', {
+      accountId: id,
+      message: error?.message ?? 'unknown error',
+      code: error?.code,
+    })
     return null
   }
 
@@ -63,7 +84,7 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
     current_balance: row.current_balance ?? 0,
     credit_limit: row.credit_limit ?? 0,
     owner_id: row.owner_id ?? '',
-    cashback_config: row.cashback_config ?? null,
+    cashback_config: normalizeCashbackConfig(row.cashback_config),
   }
 }
 
@@ -143,11 +164,100 @@ export async function getAccountTransactions(
     .limit(limit)
 
   if (error) {
-    console.error('Error fetching transactions for account:', error)
+    console.error('Error fetching transactions for account:', {
+      accountId,
+      message: error?.message ?? 'unknown error',
+      code: error?.code,
+    })
     return []
   }
 
   const rows = (data ?? []) as TransactionRow[]
 
   return rows.map(mapTransactionRow)
+}
+
+export async function updateAccountConfig(
+  accountId: string,
+  data: {
+    name?: string
+    credit_limit?: number | null
+    cashback_config?: Json | null
+  }
+): Promise<boolean> {
+  const supabase = createClient()
+
+  const payload: {
+    name?: string
+    credit_limit?: number | null
+    cashback_config?: Json | null
+  } = {}
+
+  if (typeof data.name === 'string') {
+    payload.name = data.name
+  }
+
+  if (typeof data.credit_limit !== 'undefined') {
+    payload.credit_limit = data.credit_limit
+  }
+
+  if (typeof data.cashback_config !== 'undefined') {
+    payload.cashback_config = data.cashback_config
+  }
+
+  if (Object.keys(payload).length === 0) {
+    return true
+  }
+
+  const { error } = await supabase
+    .from('accounts')
+    .update(payload)
+    .eq('id', accountId)
+
+  if (error) {
+    console.error('Error updating account configuration:', error)
+    return false
+  }
+
+  return true
+}
+
+export async function getAccountStats(accountId: string) {
+  const { getAccountSpendingStats } = await import('@/services/cashback.service')
+  const stats = await getAccountSpendingStats(accountId, new Date())
+  return stats
+}
+
+export async function getAccountTransactionDetails(
+  accountId: string,
+  limit = 20
+): Promise<any[]> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(`
+      id,
+      occurred_at,
+      note,
+      transaction_lines (
+        amount,
+        type,
+        account_id
+      )
+    `)
+    .order('occurred_at', { ascending: false })
+    .eq('transaction_lines.account_id', accountId)
+    .limit(limit)
+
+  if (error) {
+    console.error('Error fetching transaction details for account:', {
+      accountId,
+      message: error?.message ?? 'unknown error',
+      code: error?.code,
+    })
+    return []
+  }
+
+  return data ?? []
 }

@@ -1,10 +1,13 @@
-import { notFound } from 'next/navigation'
-import { CreditCard, Banknotes, Wallet, Users } from 'lucide-react'
-
-import { getAccountDetails, getAccountTransactions } from '@/services/account.service'
-import { parseCashbackConfig, getCashbackCycleRange } from '@/lib/cashback'
-import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
 import { Account } from '@/types/moneyflow.types'
+import { getAccountDetails, getAccountTransactions, getAccountStats, getAccountTransactionDetails } from '@/services/account.service'
+import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
+import { EditAccountDialog } from '@/components/moneyflow/edit-account-dialog'
+
+type PageProps = {
+  params: Promise<{
+    id: string
+  }>
+}
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -12,141 +15,185 @@ const currencyFormatter = new Intl.NumberFormat('vi-VN', {
   maximumFractionDigits: 0,
 })
 
-const cycleDateFormatter = new Intl.DateTimeFormat('vi-VN', {
-  day: '2-digit',
-  month: '2-digit',
-})
-
-function formatCycleRange(range: { start: Date; end: Date }) {
-  const fmt = (date: Date) => cycleDateFormatter.format(date)
-  return `${fmt(range.start)} - ${fmt(range.end)}`
+function getAccountTypeLabel(type: Account['type']) {
+  return type.replace('_', ' ').replace(/\b\w/g, char => char.toUpperCase())
 }
 
-function getAccountIcon(type: Account['type']) {
-  switch (type) {
-    case 'credit_card':
-      return <CreditCard className="h-5 w-5 text-slate-700" />
-    case 'bank':
-      return <Banknotes className="h-5 w-5 text-slate-700" />
-    case 'cash':
-    case 'ewallet':
-      return <Wallet className="h-5 w-5 text-slate-700" />
-    case 'debt':
-      return <Users className="h-5 w-5 text-slate-700" />
-    default:
-      return <Wallet className="h-5 w-5 text-slate-700" />
+function formatCurrency(value: number) {
+  return currencyFormatter.format(value)
+}
+
+export default async function AccountPage({ params }: PageProps) {
+  const { id } = await params
+
+  if (!id || id === 'undefined') {
+    return (
+      <div className="p-6">
+        <p className="text-center text-sm text-gray-500">ID tài khoản không hợp lệ.</p>
+      </div>
+    )
   }
-}
 
-export const dynamic = 'force-dynamic'
-
-type AccountPageProps = {
-  params: {
-    id: string
-  }
-}
-
-export default async function AccountDetailsPage({ params }: AccountPageProps) {
-  const account = await getAccountDetails(params.id)
+  const account = await getAccountDetails(id)
 
   if (!account) {
-    notFound()
+    return (
+      <div className="p-6">
+        <p className="text-center text-sm text-gray-500">Không tìm thấy tài khoản.</p>
+      </div>
+    )
   }
 
-  const transactions = await getAccountTransactions(params.id, 25)
-  const cashbackConfig = parseCashbackConfig(account.cashback_config)
-  const cycleRange = getCashbackCycleRange(cashbackConfig, new Date())
-  const cycleLabel = formatCycleRange(cycleRange)
-  const cycleTypeLabel =
-    cashbackConfig.cycleType === 'statement_cycle'
-      ? 'Statement cycle'
-      : 'Calendar month'
+  const [txns, stats, txnDetails] = await Promise.all([
+    getAccountTransactions(id, 50),
+    account.type === 'credit_card' ? getAccountStats(id) : Promise.resolve(null),
+    getAccountTransactionDetails(id, 50), // New function to get transaction details with lines
+  ])
+
+  // Calculate inflow and outflow based on transaction lines directly
+  let totalInflow = 0
+  let totalOutflow = 0
+  
+  txnDetails.forEach(txn => {
+    txn.transaction_lines?.forEach((line: { account_id: string; type: string; amount: number; }) => {
+      if (line.account_id === id) {
+        if (line.type === 'debit') {
+          // Money going out (expense)
+          totalOutflow += Math.abs(line.amount)
+        } else if (line.type === 'credit') {
+          // Money coming in (income)
+          totalInflow += Math.abs(line.amount)
+        }
+      }
+    })
+  })
+
+  const netBalance = totalInflow - totalOutflow
+  const isCreditCard = account.type === 'credit_card'
+  const cashbackStatsAvailable = Boolean(isCreditCard && stats)
+
+  const statCards = [
+    {
+      label: 'Tổng thu',
+      value: totalInflow,
+      accent: 'text-green-600',
+      bg: 'bg-white',
+      border: 'border-slate-200',
+      textColor: 'text-slate-900',
+    },
+    {
+      label: 'Tổng chi',
+      value: totalOutflow,
+      accent: 'text-red-600',
+      bg: 'bg-slate-50',
+      border: 'border-slate-200',
+      textColor: 'text-slate-700',
+    },
+    {
+      label: 'Chênh lệch',
+      value: netBalance,
+      accent: netBalance >= 0 ? 'text-green-600' : 'text-red-600',
+      bg: 'bg-white',
+      border: 'border-slate-200',
+      textColor: 'text-slate-900',
+    },
+  ]
 
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+      <section className="bg-white shadow rounded-lg p-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="flex items-center gap-4">
-            <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100">
-              {getAccountIcon(account.type)}
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-xl font-semibold text-slate-600">
+              {account.name.charAt(0).toUpperCase()}
             </div>
             <div>
-              <p className="text-lg font-semibold text-slate-900">{account.name}</p>
-              <p className="text-xs uppercase tracking-wider text-slate-500">
-                {account.type.replace('_', ' ')}
+              <h1 className="text-xl font-semibold">{account.name}</h1>
+              <p className="text-sm uppercase tracking-wide text-slate-500">
+                {getAccountTypeLabel(account.type)}
               </p>
+              {isCreditCard && account.credit_limit !== undefined && (
+                <p className="text-xs text-slate-400">
+                  Credit limit: {formatCurrency(account.credit_limit)}
+                </p>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-6">
+          
+          {cashbackStatsAvailable && stats ? (
+            <div className="flex flex-col justify-center">
+              <p className="text-sm font-medium text-slate-500">Chu kỳ hoàn tiền</p>
+              <p className="text-lg font-semibold text-slate-900">
+                {stats.currentSpend > 0
+                  ? formatCurrency(stats.currentSpend)
+                  : 'Chưa có chi tiêu'}
+              </p>
+              <p className="text-xs text-slate-500">
+                Tỉ lệ {Math.round(stats.rate * 100)}% ·{' '}
+                {stats.minSpend ? `Min tiêu ${formatCurrency(stats.minSpend)}` : 'Không yêu cầu min'}
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col justify-center">
+              <p className="text-sm font-medium text-slate-500">Chu kỳ hoàn tiền</p>
+              <p className="text-lg font-semibold text-slate-400">Không áp dụng</p>
+            </div>
+          )}
+          
+          <div className="flex flex-col items-end justify-center">
+            <span className="text-sm text-slate-500">Số dư hiện tại</span>
             <p
-              className={`text-3xl font-bold ${
-                account.current_balance < 0 ? 'text-rose-600' : 'text-emerald-600'
+              className={`text-2xl font-semibold ${
+                account.current_balance < 0 ? 'text-red-600' : 'text-green-600'
               }`}
             >
-              {currencyFormatter.format(account.current_balance)}
+              {formatCurrency(account.current_balance)}
             </p>
-            <button
-              type="button"
-              className="rounded-full border border-slate-200 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
-            >
-              Edit Account
-            </button>
+            <EditAccountDialog account={account} />
           </div>
         </div>
+        
+        {cashbackStatsAvailable && stats && (
+          <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between text-sm text-slate-500">
+            <div className="flex gap-4">
+              <span>
+                Earned: <span className="font-medium text-emerald-600">{formatCurrency(stats.earnedSoFar)}</span>
+                {stats.maxCashback && ` / ${formatCurrency(stats.maxCashback)}`}
+              </span>
+            </div>
+            <div>
+              <span>
+                Remaining: <span className="font-medium">
+                  {stats.maxCashback
+                    ? formatCurrency(Math.max(0, stats.maxCashback - stats.earnedSoFar))
+                    : 'Không giới hạn'}
+                </span>
+              </span>
+            </div>
+          </div>
+        )}
       </section>
 
-      {account.type === 'credit_card' && (
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm font-semibold text-slate-900">Cashback Configuration</p>
-              <p className="text-xs text-slate-500">Thông tin chu kỳ và hạn mức</p>
-            </div>
-            <div className="text-right text-xs text-slate-500">
-              Cycle type: {cycleTypeLabel}
-              {cashbackConfig.statementDay && ` • Day ${cashbackConfig.statementDay}`}
-            </div>
+      <section className="grid gap-4 md:grid-cols-3">
+        {statCards.map(card => (
+          <div 
+            key={card.label} 
+            className={`rounded-lg border ${card.bg} ${card.border} p-4 shadow-sm`}
+          >
+            <p className="text-xs uppercase tracking-wide text-slate-400">{card.label}</p>
+            <p className={`text-2xl font-semibold ${card.accent}`}>{formatCurrency(card.value)}</p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="rounded-xl border border-slate-100 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Rate</p>
-              <p className="text-xl font-semibold text-slate-900">
-                {(cashbackConfig.rate * 100).toFixed(2)}%
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-100 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Max cap</p>
-              <p className="text-lg font-semibold text-slate-900">
-                {cashbackConfig.maxAmount === null
-                  ? 'Khong gioi han'
-                  : currencyFormatter.format(cashbackConfig.maxAmount)}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-100 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Min spend</p>
-              <p className="text-lg font-semibold text-slate-900">
-                {cashbackConfig.minSpend === null
-                  ? 'Khong yeu cau'
-                  : currencyFormatter.format(cashbackConfig.minSpend)}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-100 p-4">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Cycle window</p>
-              <p className="text-sm font-semibold text-slate-900">{cycleLabel}</p>
-              <p className="text-xs text-slate-500">As of today</p>
-            </div>
-          </div>
-        </section>
-      )}
+        ))}
+      </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <p className="text-lg font-semibold text-slate-900">Transaction history</p>
-            <p className="text-xs text-slate-500">Giao dịch có liên quan đến tài khoản này</p>
-          </div>
+      <section className="bg-white shadow rounded-lg p-6">
+        <div className="flex items-center justify-between border-b pb-3">
+          <h2 className="text-lg font-semibold">Lịch sử giao dịch</h2>
+          <span className="text-sm text-slate-500">{txns.length} giao dịch gần nhất</span>
         </div>
-        <RecentTransactions transactions={transactions} />
+        <div className="mt-4">
+          <RecentTransactions transactions={txns} />
+        </div>
       </section>
     </div>
   )
