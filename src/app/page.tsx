@@ -30,7 +30,12 @@ export default async function Home() {
               className="flex justify-between items-center p-4 border rounded hover:bg-gray-50 transition-colors"
             >
               <div className="flex flex-col">
-                <span className="font-bold text-gray-900">{acc.name}</span>
+                <Link
+                  href={`/accounts/${acc.id}`}
+                  className="font-bold text-gray-900 hover:text-blue-600 transition-colors"
+                >
+                  {acc.name}
+                </Link>
                 <span className="text-xs text-gray-500 uppercase tracking-wider">
                   {acc.type.replace('_', ' ')}
                 </span>
