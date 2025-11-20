@@ -93,8 +93,23 @@ type TransactionLineWithRelations = TransactionLine & {
   categories?: { name: string } | null
 }
 
-type TransactionRow = Transaction & {
-  transaction_lines?: TransactionLineWithRelations[]
+type TransactionRow = {
+  id: string
+  occurred_at: string
+  note: string
+  tag: string | null // Thêm trường tag
+  transaction_lines?: {
+    amount: number
+    type: 'debit' | 'credit'
+    account_id?: string
+    category_id?: string
+    accounts?: {
+      name: string
+    }
+    categories?: {
+      name: string
+    }
+  }[]
 }
 
 function mapTransactionRow(txn: TransactionRow): TransactionWithDetails {
@@ -135,6 +150,7 @@ function mapTransactionRow(txn: TransactionRow): TransactionWithDetails {
     type,
     category_name: categoryName,
     account_name: accountName,
+    tag: txn.tag || undefined, // Thêm trường tag
   }
 }
 
@@ -150,6 +166,7 @@ export async function getAccountTransactions(
       id,
       occurred_at,
       note,
+      tag,
       transaction_lines (
         amount,
         type,
@@ -240,6 +257,7 @@ export async function getAccountTransactionDetails(
       id,
       occurred_at,
       note,
+      tag,
       transaction_lines (
         amount,
         type,

@@ -44,7 +44,8 @@ export function AddTransactionDialog({ accounts, categories }: AddTransactionDia
           onClick={closeDialog}
         >
           <div
-            className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
+            // Sửa lại class để giới hạn chiều rộng tối đa và cải thiện responsive
+            className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto"
             onClick={stopPropagation}
           >
             <div className="mb-4 flex items-center justify-between">

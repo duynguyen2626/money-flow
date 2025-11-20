@@ -1,6 +1,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { format } from 'date-fns';
 import { Transaction, TransactionLine, TransactionWithDetails } from '@/types/moneyflow.types';
 
 export type CreateTransactionInput = {
@@ -12,6 +13,7 @@ export type CreateTransactionInput = {
   category_id?: string;
   debt_account_id?: string;
   amount: number;
+  tag: string; // Thêm trường tag
   cashback_share_percent?: number;
   cashback_share_fixed?: number;
   discount_category_id?: string;
@@ -41,8 +43,16 @@ async function resolveDiscountCategoryId(
   return rows[0]?.id ?? null;
 }
 
+// Function to generate tag based on date
+function generateTag(date: Date): string {
+  return format(date, 'MMMyy').toUpperCase();
+}
+
 export async function createTransaction(input: CreateTransactionInput): Promise<boolean> {
   const supabase = createClient();
+  
+  // Sử dụng tag từ input thay vì tạo tự động
+  const tag = input.tag;
 
   const lines: Omit<TransactionLine, 'id' | 'transaction_id'>[] = [];
 
@@ -124,6 +134,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       occurred_at: input.occurred_at,
       note: input.note,
       status: 'posted',
+      tag: tag, // Add the generated tag
     })
     .select()
     .single();
@@ -162,6 +173,7 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
       id,
       occurred_at,
       note,
+      tag,
       transaction_lines (
         amount,
         type,
