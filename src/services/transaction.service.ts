@@ -1,8 +1,10 @@
+
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
 import { format } from 'date-fns';
-import { Transaction, TransactionLine, TransactionWithDetails } from '@/types/moneyflow.types';
+import { TransactionInsert, TransactionLineInsert, TransactionRow as DatabaseTransactionRow } from '@/types/database.types';
+import { TransactionLine, TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types';
 
 export type CreateTransactionInput = {
   occurred_at: string;
@@ -13,7 +15,7 @@ export type CreateTransactionInput = {
   category_id?: string;
   debt_account_id?: string;
   amount: number;
-  tag: string; // Thêm trường tag
+  tag: string;
   cashback_share_percent?: number;
   cashback_share_fixed?: number;
   discount_category_id?: string;
@@ -43,18 +45,16 @@ async function resolveDiscountCategoryId(
   return rows[0]?.id ?? null;
 }
 
-// Function to generate tag based on date
 function generateTag(date: Date): string {
   return format(date, 'MMMyy').toUpperCase();
 }
 
 export async function createTransaction(input: CreateTransactionInput): Promise<boolean> {
   const supabase = createClient();
-  
-  // Sử dụng tag từ input thay vì tạo tự động
+
   const tag = input.tag;
 
-  const lines: Omit<TransactionLine, 'id' | 'transaction_id'>[] = [];
+  const lines: Omit<TransactionLineInsert, 'transaction_id'>[] = [];
 
   if (input.type === 'expense' && input.category_id) {
     lines.push({
@@ -79,37 +79,28 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       type: 'credit',
     });
   } else if (input.type === 'debt' && input.debt_account_id) {
-    const amount = Math.abs(input.amount);
-    const sharePercent = Math.min(
-      100,
-      Math.max(0, Number(input.cashback_share_percent ?? 0))
-    );
+    const originalAmount = Math.abs(input.amount);
+    const sharePercentEntry = Math.max(0, Number(input.cashback_share_percent ?? 0));
+    const sharePercentCapped = Math.min(100, sharePercentEntry);
+    const sharePercentRate = sharePercentCapped / 100;
     const shareFixed = Math.max(0, Number(input.cashback_share_fixed ?? 0));
-    const percentContribution = (sharePercent / 100) * amount;
+    const percentContribution = sharePercentRate * originalAmount;
     const rawCashback = percentContribution + shareFixed;
-    const cashbackGiven = Math.min(amount, Math.max(0, rawCashback));
-    const debtAmount = Math.max(0, amount - cashbackGiven);
-    const hasShareInput = sharePercent > 0 || shareFixed > 0;
-
-    const shareMetadata = hasShareInput
-      ? {
-          cashback_share_percent: sharePercent,
-          cashback_share_fixed: shareFixed,
-          cashback_share_amount: cashbackGiven,
-        }
-      : undefined;
+    const cashbackGiven = Math.min(originalAmount, Math.max(0, rawCashback));
+    const debtAmount = Math.max(0, originalAmount - cashbackGiven);
 
     lines.push({
       account_id: input.source_account_id,
-      amount: -amount,
+      amount: -originalAmount,
       type: 'credit',
-      metadata: shareMetadata,
     });
     lines.push({
       account_id: input.debt_account_id,
       amount: debtAmount,
       type: 'debit',
-      metadata: shareMetadata,
+      original_amount: originalAmount,
+      cashback_share_percent: sharePercentRate,
+      cashback_share_fixed: shareFixed,
     });
 
     if (cashbackGiven > 0) {
@@ -134,8 +125,8 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       occurred_at: input.occurred_at,
       note: input.note,
       status: 'posted',
-      tag: tag, // Add the generated tag
-    })
+      tag: tag,
+    } as TransactionInsert)
     .select()
     .single();
 
@@ -145,7 +136,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   }
 
   const linesWithId = lines.map(l => ({ ...l, transaction_id: txn.id }));
-  const { error: linesError } = await supabase.from('transaction_lines').insert(linesWithId);
+  const { error: linesError } = await supabase.from('transaction_lines').insert(linesWithId as TransactionLineInsert[]);
 
   if (linesError) {
     console.error('Error creating transaction lines:', linesError);
@@ -155,30 +146,15 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   return true;
 }
 
-type TransactionLineWithRelations = TransactionLine & {
-  accounts?: { name: string } | null;
-  categories?: { name: string } | null;
-};
-
-type TransactionRow = Transaction & {
-  transaction_lines?: TransactionLineWithRelations[];
-};
-
 export async function getRecentTransactions(limit: number = 10): Promise<TransactionWithDetails[]> {
   const supabase = createClient();
 
   const { data, error } = await supabase
     .from('transactions')
     .select(`
-      id,
-      occurred_at,
-      note,
-      tag,
+      *,
       transaction_lines (
-        amount,
-        type,
-        account_id,
-        category_id,
+        *,
         accounts (name),
         categories (name)
       )
@@ -191,16 +167,16 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
     return [];
   }
 
-  const rows = (data ?? []) as TransactionRow[];
+  const rows = (data ?? []) as (DatabaseTransactionRow & { transaction_lines: TransactionWithLineRelations[] })[];
 
   return rows.map(txn => {
     const lines = txn.transaction_lines ?? [];
-    const displayAmount =
+    const totalAmount =
       lines.reduce((sum, line) => sum + Math.abs(line.amount), 0) / 2;
 
-    let type: 'income' | 'expense' | 'transfer' = 'transfer';
-    let categoryName: string | undefined;
-    let accountName: string | undefined;
+    let displayType: 'income' | 'expense' | 'transfer' = 'transfer';
+    let displayCategoryName: string | undefined;
+    let displayAccountName: string | undefined;
 
     const categoryLine = lines.find(line => Boolean(line.category_id));
     const creditAccountLine = lines.find(
@@ -211,26 +187,24 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
     );
 
     if (categoryLine) {
-      categoryName = categoryLine.categories?.name;
+      displayCategoryName = categoryLine.categories?.name;
       if (categoryLine.type === 'debit') {
-        type = 'expense';
-        accountName = creditAccountLine?.accounts?.name;
+        displayType = 'expense';
+        displayAccountName = creditAccountLine?.accounts?.name;
       } else {
-        type = 'income';
-        accountName = debitAccountLine?.accounts?.name;
+        displayType = 'income';
+        displayAccountName = debitAccountLine?.accounts?.name;
       }
     } else {
-      accountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name;
+      displayAccountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name;
     }
 
     return {
-      id: txn.id,
-      occurred_at: txn.occurred_at,
-      note: txn.note,
-      amount: displayAmount,
-      type,
-      category_name: categoryName,
-      account_name: accountName,
+      ...txn,
+      totalAmount,
+      displayType,
+      displayCategoryName,
+      displayAccountName,
     };
   });
 }

@@ -1,4 +1,9 @@
-import { Json } from '@/types/database.types'
+import { Json, Database } from '@/types/database.types'
+
+export type TransactionLineRow = Database["public"]["Tables"]["transaction_lines"]["Row"]
+export type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"]
+export type AccountRow = Database["public"]["Tables"]["accounts"]["Row"]
+export type CategoryRow = Database["public"]["Tables"]["categories"]["Row"]
 
 export type Account = {
   id: string;
@@ -24,34 +29,31 @@ export type TransactionLine = {
   account_id?: string;
   category_id?: string;
   metadata?: Json | null;
+  original_amount?: number | null;
+  cashback_share_percent?: number | null;
+  cashback_share_fixed?: number | null;
   amount: number;
   type: 'debit' | 'credit';
   description?: string;
 }
 
-export type Transaction = {
-  id: string;
-  occurred_at: string;
-  note: string;
-  status: 'posted' | 'pending' | 'void';
-  tag?: string; // Adding the tag field
-  transaction_lines?: TransactionLine[];
+export type TransactionWithLineRelations = TransactionLineRow & {
+  accounts: Pick<AccountRow, 'name'> | null;
+  categories: Pick<CategoryRow, 'name'> | null;
 }
 
-export type Category = {
-  id: string;
-  name: string;
-  type: 'expense' | 'income';
-  parent_id?: string;
-}
-
-export type TransactionWithDetails = {
-  id: string;
-  occurred_at: string;
-  note: string;
-  amount: number;
-  type: 'income' | 'expense' | 'transfer';
+export type TransactionWithDetails = TransactionRow & {
+  amount: number
+  transaction_lines?: TransactionWithLineRelations[];
+  totalAmount?: number; // For aggregated display
+  displayType?: 'income' | 'expense' | 'transfer';
+  displayCategoryName?: string;
+  displayAccountName?: string;
   category_name?: string;
   account_name?: string;
-  tag?: string; // Thêm trường tag
+  cashback_share_percent?: number | null;
+  cashback_share_fixed?: number | null;
+  cashback_share_amount?: number | null;
+  original_amount?: number | null;
+  type?: 'income' | 'expense' | 'transfer';
 }

@@ -11,9 +11,7 @@ import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from
 import { CashbackCard, AccountSpendingStats } from '@/types/cashback.types'
 import { Combobox } from '@/components/ui/combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-
-// Helper function để tạo tag từ ngày
-export const generateTag = (date: Date) => format(date, 'MMMyy').toUpperCase();
+import { generateTag } from '@/lib/tag'
 
 // Cập nhật schema để thêm trường tag
 const formSchema = z.object({
@@ -85,6 +83,9 @@ type TransactionFormProps = {
   accounts: Account[];
   categories: Category[];
   onSuccess?: () => void;
+  defaultTag?: string;
+  defaultPersonId?: string;
+  defaultType?: 'expense' | 'income' | 'debt' | 'transfer';
 }
 
 type StatusMessage = {
@@ -92,7 +93,14 @@ type StatusMessage = {
   text: string;
 } | null
 
-export function TransactionForm({ accounts: allAccounts, categories, onSuccess }: TransactionFormProps) {
+export function TransactionForm({
+  accounts: allAccounts,
+  categories,
+  onSuccess,
+  defaultTag,
+  defaultPersonId,
+  defaultType,
+}: TransactionFormProps) {
   const {
     sourceAccounts,
     debtAccounts,
@@ -103,7 +111,7 @@ export function TransactionForm({ accounts: allAccounts, categories, onSuccess }
   }, [allAccounts]);
 
   // Thêm state để quản lý chế độ tag thủ công
-  const [manualTagMode, setManualTagMode] = useState(false);
+  const [manualTagMode, setManualTagMode] = useState(Boolean(defaultTag));
   
   // Tạo danh sách tag gợi ý (6 tháng gần nhất)
   const suggestedTags = useMemo(() => {
@@ -160,10 +168,11 @@ const debtAccountOptions = useMemo(
     resolver: zodResolver(formSchema),
     defaultValues: {
       occurred_at: new Date(),
-      type: 'expense',
+      type: defaultType ?? 'expense',
       amount: 0,
       note: '',
-      tag: generateTag(new Date()), // Thêm giá trị mặc định cho tag
+      tag: defaultTag ?? generateTag(new Date()), // Thêm giá trị mặc định cho tag
+      debt_account_id: defaultPersonId,
       cashback_share_percent: undefined,
       cashback_share_fixed: undefined,
     },
@@ -197,15 +206,17 @@ const debtAccountOptions = useMemo(
       })
       form.reset({
         occurred_at: new Date(),
-        type: 'expense',
+        type: defaultType ?? 'expense',
         amount: 0,
         note: '',
+        tag: defaultTag ?? generateTag(new Date()),
         source_account_id: undefined,
         category_id: undefined,
-        debt_account_id: undefined,
+        debt_account_id: defaultPersonId,
         cashback_share_percent: undefined,
         cashback_share_fixed: undefined,
       })
+      setManualTagMode(Boolean(defaultTag))
       onSuccess?.()
     } else {
       setStatus({
@@ -507,6 +518,25 @@ const debtAccountOptions = useMemo(
       form.setValue('tag', generateTag(watchedDate));
     }
   }, [watchedDate, manualTagMode, form]);
+
+  useEffect(() => {
+    if (typeof defaultTag === 'string') {
+      form.setValue('tag', defaultTag);
+      setManualTagMode(true);
+    }
+  }, [defaultTag, form]);
+
+  useEffect(() => {
+    if (defaultPersonId) {
+      form.setValue('debt_account_id', defaultPersonId);
+    }
+  }, [defaultPersonId, form]);
+
+  useEffect(() => {
+    if (defaultType) {
+      form.setValue('type', defaultType);
+    }
+  }, [defaultType, form]);
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
