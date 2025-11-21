@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useTagFilter } from '@/context/tag-filter-context'
 import { SettleDebtDialog } from './settle-debt-dialog'
 import { TransactionForm } from './transaction-form'
-import { Account, Category, DebtAccount } from '@/types/moneyflow.types'
+import { Account, Category, DebtAccount, Person } from '@/types/moneyflow.types'
 import type { DebtByTagAggregatedResult } from '@/services/debt.service'
 
 type DebtCycle = DebtByTagAggregatedResult
@@ -133,11 +133,13 @@ export function DebtCycleFilter({
     debtAccount,
     accounts,
     categories,
+    people,
 }: {
     allCycles: DebtCycle[]
     debtAccount: DebtAccount
     accounts: Account[]
     categories: Category[]
+    people: Person[]
 }) {
     const { selectedTag, setSelectedTag } = useTagFilter()
     const router = useRouter()
@@ -277,9 +279,10 @@ export function DebtCycleFilter({
                             key={`${quickAddCycle.tag}-${debtAccount.id}`}
                             accounts={accounts}
                             categories={categories}
+                            people={people}
                             onSuccess={handleQuickAddSuccess}
                             defaultTag={quickAddCycle.tag === 'UNTAGGED' ? undefined : quickAddCycle.tag}
-                            defaultPersonId={debtAccount.id}
+                            defaultPersonId={debtAccount.owner_id ?? debtAccount.id}
                             defaultType="debt"
                         />
                     </div>

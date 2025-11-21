@@ -1,16 +1,17 @@
-'use client'
+"use client"
 
-import { Home, Receipt, Landmark, CreditCard, Wallet } from 'lucide-react'
-import Link from 'next/link'
+import { Home, Receipt, Landmark, CreditCard, Wallet, Users } from "lucide-react"
+import Link from "next/link"
 
-import { SidebarNav, type NavItem } from './sidebar-nav'
+import { SidebarNav, type NavItem } from "./sidebar-nav"
 
 const navItems: NavItem[] = [
-  { label: 'Tong quan', href: '/', icon: Home },
-  { label: 'Tai khoan', href: '/accounts', icon: Wallet },
-  { label: 'So Giao dich', href: '/transactions', icon: Receipt },
-  { label: 'So No', href: '/debt', icon: Landmark },
-  { label: 'Cashback', href: '/cashback', icon: CreditCard },
+  { label: "Tong quan", href: "/", icon: Home },
+  { label: "Tai khoan", href: "/accounts", icon: Wallet },
+  { label: "So Giao dich", href: "/transactions", icon: Receipt },
+  { label: "People", href: "/people", icon: Users },
+  { label: "So No", href: "/debt", icon: Landmark },
+  { label: "Cashback", href: "/cashback", icon: CreditCard },
 ]
 
 type AppLayoutProps = {

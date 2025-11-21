@@ -3,25 +3,27 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { format, subMonths } from 'date-fns' // Thêm subMonths để hỗ trợ tính năng lùi tháng
 import { Controller, useForm, useWatch } from 'react-hook-form'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { z } from 'zod'
+import { ensureDebtAccountAction } from '@/actions/people-actions'
 import { createTransaction } from '@/services/transaction.service'
-import { Account, Category } from '@/types/moneyflow.types'
+import { Account, Category, Person } from '@/types/moneyflow.types'
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
 import { CashbackCard, AccountSpendingStats } from '@/types/cashback.types'
 import { Combobox } from '@/components/ui/combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateTag } from '@/lib/tag'
 
-// Cập nhật schema để thêm trường tag
+// C??-p nh??-t schema ???? thA?m tr?????ng tag
 const formSchema = z.object({
   occurred_at: z.date(),
   type: z.enum(['expense', 'income', 'debt', 'transfer']),
   amount: z.coerce.number().positive(),
   note: z.string().optional(),
-  tag: z.string().min(1, 'Tag là bắt buộc'), // Thêm trường tag
+  tag: z.string().min(1, 'Tag lA? b??_t bu??Tc'), // ThA?m tr?????ng tag
   source_account_id: z.string({ required_error: 'Please select an account.' }),
   category_id: z.string().optional(),
+  person_id: z.string().optional(),
   debt_account_id: z.string().optional(),
   cashback_share_percent: z.coerce.number().min(0).optional(),
   cashback_share_fixed: z.coerce.number().min(0).optional(),
@@ -34,7 +36,15 @@ const formSchema = z.object({
   message: 'Category is required for expenses and incomes.',
   path: ['category_id'],
 }).refine(data => {
-  if (data.type === 'debt' && !data.debt_account_id) {
+  if ((data.type === 'debt' || data.type === 'transfer') && !data.person_id) {
+    return false
+  }
+  return true
+}, {
+  message: 'Please choose a person for this transaction.',
+  path: ['person_id'],
+}).refine(data => {
+  if ((data.type === 'debt' || data.type === 'transfer') && !data.debt_account_id) {
     return false
   }
   return true
@@ -82,6 +92,7 @@ function getAccountInitial(name: string) {
 type TransactionFormProps = {
   accounts: Account[];
   categories: Category[];
+  people: Person[];
   onSuccess?: () => void;
   defaultTag?: string;
   defaultPersonId?: string;
@@ -96,19 +107,22 @@ type StatusMessage = {
 export function TransactionForm({
   accounts: allAccounts,
   categories,
+  people,
   onSuccess,
   defaultTag,
   defaultPersonId,
   defaultType,
 }: TransactionFormProps) {
-  const {
-    sourceAccounts,
-    debtAccounts,
-  } = useMemo(() => {
-    const sourceAccounts = allAccounts.filter(a => a.type !== 'debt');
-    const debtAccounts = allAccounts.filter(a => a.type === 'debt');
-    return { sourceAccounts, debtAccounts };
-  }, [allAccounts]);
+  const sourceAccounts = useMemo(
+    () => allAccounts.filter(a => a.type !== 'debt'),
+    [allAccounts]
+  )
+
+  const [peopleState, setPeopleState] = useState<Person[]>(people)
+
+  useEffect(() => {
+    setPeopleState(people)
+  }, [people])
 
   // Thêm state để quản lý chế độ tag thủ công
   const [manualTagMode, setManualTagMode] = useState(Boolean(defaultTag));
@@ -140,21 +154,37 @@ const accountOptions = useMemo(
     [sourceAccounts]
   )
 
-const debtAccountOptions = useMemo(
+const personOptions = useMemo(
   () =>
-    debtAccounts.map(acc => ({
-      value: acc.id,
-      label: acc.name,
-      description: `Cong no, ${currencyFormatter.format(acc.current_balance)}`,
-      searchValue: `${acc.name} cong no ${acc.current_balance}`,
-        icon: (
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
-            {getAccountInitial(acc.name)}
-          </span>
-        ),
-      })),
-    [debtAccounts]
-  )
+    peopleState.map(person => ({
+      value: person.id,
+      label: person.name,
+      description: person.email || 'Chua co email',
+      searchValue: `${person.name} ${person.email ?? ''}`.trim(),
+      icon: (
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+          {getAccountInitial(person.name)}
+        </span>
+      ),
+    })),
+  [peopleState]
+)
+
+const personMap = useMemo(() => {
+  const map = new Map<string, Person>()
+  peopleState.forEach(person => map.set(person.id, person))
+  return map
+}, [peopleState])
+
+const debtAccountByPerson = useMemo(() => {
+  const map = new Map<string, string>()
+  peopleState.forEach(person => {
+    if (person.debt_account_id) {
+      map.set(person.id, person.debt_account_id)
+    }
+  })
+  return map
+}, [peopleState])
 
   const [status, setStatus] = useState<StatusMessage>(null)
   const [cashbackProgress, setCashbackProgress] = useState<CashbackCard | null>(null)
@@ -163,6 +193,8 @@ const debtAccountOptions = useMemo(
   const [spendingStats, setSpendingStats] = useState<AccountSpendingStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [statsError, setStatsError] = useState<string | null>(null)
+  const [debtEnsureError, setDebtEnsureError] = useState<string | null>(null)
+  const [isEnsuringDebt, startEnsuringDebt] = useTransition()
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -172,11 +204,31 @@ const debtAccountOptions = useMemo(
       amount: 0,
       note: '',
       tag: defaultTag ?? generateTag(new Date()), // Thêm giá trị mặc định cho tag
-      debt_account_id: defaultPersonId,
+      person_id: undefined,
+      debt_account_id: undefined,
       cashback_share_percent: undefined,
       cashback_share_fixed: undefined,
     },
   })
+
+  const applyDefaultPersonSelection = useCallback(() => {
+    if (!defaultPersonId) {
+      return
+    }
+    const direct = personMap.get(defaultPersonId)
+    if (direct) {
+      form.setValue('person_id', direct.id)
+      form.setValue('debt_account_id', direct.debt_account_id ?? undefined)
+      return
+    }
+    const fromDebt = peopleState.find(person => person.debt_account_id === defaultPersonId)
+    if (fromDebt) {
+      form.setValue('person_id', fromDebt.id)
+      form.setValue('debt_account_id', fromDebt.debt_account_id ?? undefined)
+      return
+    }
+    form.setValue('debt_account_id', defaultPersonId)
+  }, [defaultPersonId, form, peopleState, personMap])
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setStatus(null)
@@ -197,7 +249,10 @@ const debtAccountOptions = useMemo(
       cashback_share_fixed: sanitizedFixed > 0 ? sanitizedFixed : undefined,
     }
 
-    const result = await createTransaction(payload)
+    const { person_id: _personId, ...requestPayload } = payload
+    void _personId
+
+    const result = await createTransaction(requestPayload)
 
     if (result) {
       setStatus({
@@ -212,11 +267,13 @@ const debtAccountOptions = useMemo(
         tag: defaultTag ?? generateTag(new Date()),
         source_account_id: undefined,
         category_id: undefined,
-        debt_account_id: defaultPersonId,
+        person_id: undefined,
+        debt_account_id: undefined,
         cashback_share_percent: undefined,
         cashback_share_fixed: undefined,
       })
       setManualTagMode(Boolean(defaultTag))
+      applyDefaultPersonSelection()
       onSuccess?.()
     } else {
       setStatus({
@@ -268,6 +325,11 @@ const debtAccountOptions = useMemo(
     name: 'occurred_at',
   })
 
+  const watchedPersonId = useWatch({
+    control,
+    name: 'person_id',
+  })
+
   const watchedDebtAccountId = useWatch({
     control,
     name: 'debt_account_id',
@@ -298,6 +360,29 @@ const debtAccountOptions = useMemo(
     () => getCycleLabelForDate(watchedDate, cashbackMeta),
     [watchedDate, cashbackMeta]
   )
+
+  useEffect(() => {
+    if (!defaultPersonId) {
+      return
+    }
+    const currentPerson = form.getValues('person_id')
+    const currentDebt = form.getValues('debt_account_id')
+    if (currentPerson || currentDebt) {
+      return
+    }
+    applyDefaultPersonSelection()
+  }, [applyDefaultPersonSelection, defaultPersonId, form])
+
+  useEffect(() => {
+    if (!watchedPersonId) {
+      form.setValue('debt_account_id', undefined)
+      setDebtEnsureError(null)
+      return
+    }
+    setDebtEnsureError(null)
+    const linkedAccountId = debtAccountByPerson.get(watchedPersonId)
+    form.setValue('debt_account_id', linkedAccountId ?? undefined)
+  }, [watchedPersonId, debtAccountByPerson, form])
 
   useEffect(() => {
     if (!watchedAccountId) {
@@ -508,9 +593,26 @@ const debtAccountOptions = useMemo(
         )
       : null
   const showCashbackInputs =
-    transactionType === 'debt' &&
+    (transactionType === 'debt' || transactionType === 'transfer') &&
     selectedAccount?.type === 'credit_card' &&
     Boolean(watchedDebtAccountId)
+
+  const handleEnsureDebtAccount = () => {
+    if (!watchedPersonId) {
+      return
+    }
+    const person = personMap.get(watchedPersonId)
+    startEnsuringDebt(async () => {
+      setDebtEnsureError(null)
+      const accountId = await ensureDebtAccountAction(watchedPersonId, person?.name)
+      if (!accountId) {
+        setDebtEnsureError('Khong the tao tai khoan no. Thu lai.')
+        return
+      }
+      setPeopleState(prev => prev.map(p => p.id === watchedPersonId ? { ...p, debt_account_id: accountId } : p))
+      form.setValue('debt_account_id', accountId, { shouldValidate: true })
+    })
+  }
 
   // Thêm useEffect để tự động cập nhật tag khi ngày thay đổi
   useEffect(() => {
@@ -525,12 +627,6 @@ const debtAccountOptions = useMemo(
       setManualTagMode(true);
     }
   }, [defaultTag, form]);
-
-  useEffect(() => {
-    if (defaultPersonId) {
-      form.setValue('debt_account_id', defaultPersonId);
-    }
-  }, [defaultPersonId, form]);
 
   useEffect(() => {
     if (defaultType) {
@@ -667,7 +763,11 @@ const debtAccountOptions = useMemo(
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">
-          {transactionType === 'income' ? 'To Account' : 'From Account'}
+          {transactionType === 'income'
+            ? 'To Account'
+            : transactionType === 'transfer'
+              ? 'Lay tien tu dau?'
+              : 'From Account'}
         </label>
         <Controller
           control={control}
@@ -758,23 +858,54 @@ const debtAccountOptions = useMemo(
         </div>
       )}
 
-    {transactionType === 'debt' && (
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Person</label>
-        <Controller
-          control={control}
-          name="debt_account_id"
-          render={({ field }) => (
-            <Combobox
-              value={field.value}
-              onValueChange={field.onChange}
-              items={debtAccountOptions}
-              placeholder="Chon nguoi nhan"
-              inputPlaceholder="Tim kiem doi tac..."
-              emptyState="Khong tim thay doi tuong phu hop"
-            />
+    {(transactionType === 'debt' || transactionType === 'transfer') && (
+      <div className="space-y-3">
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">
+            {transactionType === 'transfer' ? 'Cho ai vay?' : 'Nguoi'}
+          </label>
+          <Controller
+            control={control}
+            name="person_id"
+            render={({ field }) => (
+              <Combobox
+                value={field.value}
+                onValueChange={value => {
+                  field.onChange(value)
+                  const linkedAccount = value ? debtAccountByPerson.get(value) : undefined
+                  form.setValue('debt_account_id', linkedAccount ?? undefined, { shouldValidate: true })
+                }}
+                items={personOptions}
+                placeholder="Chon nguoi nhan"
+                inputPlaceholder="Tim kiem doi tac..."
+                emptyState="Khong tim thay doi tuong phu hop"
+              />
+            )}
+          />
+          {errors.person_id && (
+            <p className="text-sm text-red-600">{errors.person_id.message}</p>
           )}
-        />
+        </div>
+
+        {watchedPersonId && !debtAccountByPerson.get(watchedPersonId) && (
+          <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <div className="space-y-1">
+              <p className="font-semibold">Nguoi nay chua co tai khoan no.</p>
+              <p>He thong se tao tai khoan cong no tu dong khi ban bam nut ben canh.</p>
+              {debtEnsureError && (
+                <p className="text-rose-600">{debtEnsureError}</p>
+              )}
+            </div>
+            <button
+              type="button"
+              className="rounded-md bg-amber-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
+              onClick={handleEnsureDebtAccount}
+              disabled={isEnsuringDebt}
+            >
+              {isEnsuringDebt ? 'Dang tao...' : 'Tao lien ket ngay'}
+            </button>
+          </div>
+        )}
         {errors.debt_account_id && (
           <p className="text-sm text-red-600">{errors.debt_account_id.message}</p>
         )}

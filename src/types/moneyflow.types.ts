@@ -23,6 +23,24 @@ export type DebtAccount = {
   owner_id: string | null;
 }
 
+export type Person = {
+  id: string
+  name: string
+  email?: string | null
+  avatar_url?: string | null
+  sheet_link?: string | null
+  debt_account_id?: string | null
+  subscription_ids?: string[]
+}
+
+export type Subscription = {
+  id: string
+  name: string
+  price?: number | null
+  next_billing_date?: string | null
+  is_active?: boolean | null
+}
+
 export type TransactionLine = {
   id: string;
   transaction_id: string;

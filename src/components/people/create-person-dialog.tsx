@@ -1,17 +1,16 @@
 'use client'
 
 import { MouseEvent, useState } from 'react'
-import { TransactionForm } from './transaction-form'
 import { useRouter } from 'next/navigation'
-import { Account, Category, Person } from '@/types/moneyflow.types'
+import { PersonForm } from './person-form'
+import { Subscription } from '@/types/moneyflow.types'
+import { createPersonAction } from '@/actions/people-actions'
 
-type AddTransactionDialogProps = {
-  accounts: Account[];
-  categories: Category[];
-  people: Person[];
+type CreatePersonDialogProps = {
+  subscriptions: Subscription[]
 }
 
-export function AddTransactionDialog({ accounts, categories, people }: AddTransactionDialogProps) {
+export function CreatePersonDialog({ subscriptions }: CreatePersonDialogProps) {
   const [open, setOpen] = useState(false)
   const router = useRouter()
 
@@ -33,24 +32,26 @@ export function AddTransactionDialog({ accounts, categories, people }: AddTransa
         className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
         onClick={() => setOpen(true)}
       >
-        Add Transaction
+        Them thanh vien
       </button>
 
       {open && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Add Transaction"
+          aria-label="Create person"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10"
           onClick={closeDialog}
         >
           <div
-            // Sửa lại class để giới hạn chiều rộng tối đa và cải thiện responsive
-            className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+            className="w-full max-w-3xl rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto"
             onClick={stopPropagation}
           >
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Add New Transaction</h2>
+              <div>
+                <p className="text-xs font-semibold uppercase text-slate-500">Tao thanh vien</p>
+                <h2 className="text-lg font-semibold text-gray-900">Nguoi nhan/nguoi vay moi</h2>
+              </div>
               <button
                 type="button"
                 className="rounded p-1 text-gray-500 transition hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
@@ -60,14 +61,23 @@ export function AddTransactionDialog({ accounts, categories, people }: AddTransa
                 X
               </button>
             </div>
-            <div className="py-2">
-              <TransactionForm
-                accounts={accounts}
-                categories={categories}
-                people={people}
-                onSuccess={handleSuccess}
-              />
-            </div>
+
+            <PersonForm
+              mode="create"
+              subscriptions={subscriptions}
+              onCancel={closeDialog}
+              onSubmit={async values => {
+                await createPersonAction({
+                  name: values.name,
+                  email: values.email,
+                  avatar_url: values.avatar_url,
+                  sheet_link: values.sheet_link,
+                  subscriptionIds: values.subscriptionIds,
+                })
+                handleSuccess()
+              }}
+              submitLabel="Tao thanh vien"
+            />
           </div>
         </div>
       )}
