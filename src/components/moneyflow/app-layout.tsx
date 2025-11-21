@@ -23,7 +23,7 @@ type AppLayoutProps = {
 export function AppLayout({ children }: AppLayoutProps) {
   return (
     <div className="min-h-screen bg-slate-100 flex">
-      <aside className="hidden md:flex md:w-64 lg:w-72 flex-col border-r bg-white px-6 py-8">
+      <aside className="flex w-64 flex-col border-r bg-white px-6 py-8">
         <div className="text-2xl font-bold text-blue-700 mb-10">Money Flow</div>
         <SidebarNav items={navItems} />
         <div className="mt-auto text-xs text-slate-400">
