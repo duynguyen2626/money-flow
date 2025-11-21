@@ -1,11 +1,12 @@
 'use client'
 
-import { FormEvent, MouseEvent, useMemo, useState } from 'react'
+import { FormEvent, MouseEvent, useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { useRouter } from 'next/navigation'
 
 import { Account, DebtAccount } from '@/types/moneyflow.types'
 import { settleDebt } from '@/services/debt.service'
+import { generateTag } from '@/lib/tag'
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -16,18 +17,31 @@ type SettleDebtDialogProps = {
   debt: DebtAccount
   accounts: Account[]
   onClose: () => void
+  defaultTag?: string
+  defaultAmount?: number
 }
 
-export function SettleDebtDialog({ debt, accounts, onClose }: SettleDebtDialogProps) {
+export function SettleDebtDialog({ debt, accounts, onClose, defaultTag, defaultAmount }: SettleDebtDialogProps) {
   const router = useRouter()
   const realAccounts = useMemo(() => accounts.filter(acc => acc.type !== 'debt'), [accounts])
   const initialAccountId = realAccounts[0]?.id ?? ''
+  const currentMonthTag = useMemo(() => generateTag(new Date()), [])
+  const defaultTagValue = defaultTag ?? currentMonthTag
+  const defaultAmountValue = useMemo(
+    () => defaultAmount ?? Math.abs(debt.current_balance),
+    [defaultAmount, debt.current_balance]
+  )
   const [selectedAccount, setSelectedAccount] = useState(initialAccountId)
-  const [amount, setAmount] = useState(Math.abs(debt.current_balance))
+  const [tag, setTag] = useState(defaultTagValue)
+  const [amount, setAmount] = useState(defaultAmountValue)
   const [note, setNote] = useState('')
   const [date, setDate] = useState(() => format(new Date(), 'yyyy-MM-dd'))
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [status, setStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
+
+  useEffect(() => {
+    setTag(defaultTagValue)
+  }, [defaultTagValue])
 
   const title = debt.current_balance >= 0 ? `Thu no tu ${debt.name}` : `Tra no cho ${debt.name}`
 
@@ -44,6 +58,8 @@ export function SettleDebtDialog({ debt, accounts, onClose }: SettleDebtDialogPr
     event.preventDefault()
     setStatus(null)
 
+    const trimmedTag = tag.trim()
+
     if (!selectedAccount) {
       setStatus({ type: 'error', message: 'Vui long chon tai khoan de nhan/tra tien.' })
       return
@@ -54,8 +70,20 @@ export function SettleDebtDialog({ debt, accounts, onClose }: SettleDebtDialogPr
       return
     }
 
+    if (!trimmedTag) {
+      setStatus({ type: 'error', message: 'Vui long nhap tag cho ky no.' })
+      return
+    }
+
     setIsSubmitting(true)
-    const result = await settleDebt(debt.id, amount, selectedAccount, note.trim(), new Date(date))
+    const result = await settleDebt(
+      debt.id,
+      amount,
+      selectedAccount,
+      note.trim(),
+      new Date(date),
+      trimmedTag.toUpperCase()
+    )
     setIsSubmitting(false)
 
     if (!result) {
@@ -101,7 +129,7 @@ export function SettleDebtDialog({ debt, accounts, onClose }: SettleDebtDialogPr
             <input
               type="number"
               min={0}
-              step="1000"
+              step="any"
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               value={amount}
               onChange={event => setAmount(Number(event.target.value))}
@@ -110,6 +138,18 @@ export function SettleDebtDialog({ debt, accounts, onClose }: SettleDebtDialogPr
             <p className="text-xs text-gray-500">
               So tien mac dinh la so du hien tai ({currencyFormatter.format(Math.abs(debt.current_balance))})
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Kỳ nợ (Tag)</label>
+            <input
+              type="text"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              value={tag}
+              onChange={event => setTag(event.target.value.toUpperCase())}
+              placeholder="Ví dụ: NOV25"
+            />
+            <p className="text-xs text-gray-500">Gợi ý: {currentMonthTag}</p>
           </div>
 
           <div className="space-y-2">

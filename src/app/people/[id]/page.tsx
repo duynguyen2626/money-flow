@@ -1,16 +1,11 @@
-import { getPersonDetails, getDebtByTags } from '@/services/debt.service';
+﻿import { getPersonDetails, getDebtByTags } from '@/services/debt.service';
 import { getAccounts, getAccountTransactions } from '@/services/account.service';
+import { getCategories } from '@/services/category.service';
 import { SettleDebtButton } from '@/components/moneyflow/settle-debt-button';
 import { DebtCycleFilter } from '@/components/moneyflow/debt-cycle-filter';
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions';
 import { TagFilterProvider } from '@/context/tag-filter-context';
 import { notFound } from 'next/navigation';
-
-type PageProps = {
-    params: Promise<{  // Thay đổi kiểu params thành Promise
-        id: string;
-    }>;
-};
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
     style: 'currency',
@@ -22,32 +17,20 @@ function formatCurrency(value: number) {
     return currencyFormatter.format(value);
 }
 
-// Thêm kiểu dữ liệu cho cycle
-interface DebtCycle {
-    tag: string;
-    balance: number;
-    status: string;
-    last_activity: string;
-}
-
-export default async function PeopleDetailPage({ params }: PageProps) {
-    const { id } = await params;  // Await params để lấy giá trị id
+export default async function PeopleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
 
     if (!id) {
         notFound();
     }
 
-    const [person, debtCycles, transactions, accounts] = await Promise.all([
+    const [person, debtCycles, transactions, accounts, categories] = await Promise.all([
         getPersonDetails(id),
         getDebtByTags(id),
-        getAccountTransactions(id, 100), // Fetching more transactions for a detailed view
+        getAccountTransactions(id, 100),
         getAccounts(),
+        getCategories(),
     ]);
-
-    // Thêm log để debug
-    console.log('Person:', person);
-    console.log('Debt Cycles:', JSON.stringify(debtCycles, null, 2));
-    console.log('Transactions:', transactions);
 
     if (!person) {
         notFound();
@@ -55,42 +38,40 @@ export default async function PeopleDetailPage({ params }: PageProps) {
 
     const totalBalance = person.current_balance;
     const balanceColor = totalBalance > 0 ? 'text-green-600' : 'text-red-600';
-    const balanceText = totalBalance > 0 ? 'Họ nợ mình' : 'Mình nợ họ';
+    const balanceText = totalBalance > 0 ? 'Ho no minh' : 'Minh no ho';
 
     return (
         <TagFilterProvider>
             <div className="space-y-6">
-                {/* Profile Header */}
-                <section className="bg-white shadow rounded-lg p-6 flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-2xl font-bold text-slate-600">
-                            {person.name.charAt(0).toUpperCase()}
+                <section className="space-y-5 bg-white shadow rounded-lg p-6">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-2xl font-bold text-slate-600">
+                                {person.name.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                                <h1 className="text-2xl font-bold">{person.name}</h1>
+                                <p className="text-sm text-gray-500">{balanceText}</p>
+                            </div>
                         </div>
-                        <div>
-                            <h1 className="text-2xl font-bold">{person.name}</h1>
-                            <p className="text-sm text-gray-500">{balanceText}</p>
+                        <div className="flex flex-col items-start gap-2 sm:items-end">
+                            <p className={`text-3xl font-bold ${balanceColor}`}>{formatCurrency(totalBalance)}</p>
+                            <SettleDebtButton debtAccount={person} accounts={accounts} />
                         </div>
                     </div>
-                    <div className="text-right">
-                        <p className={`text-3xl font-bold ${balanceColor}`}>{formatCurrency(totalBalance)}</p>
-                        <SettleDebtButton debtAccount={person} accounts={accounts} />
+
+                    <div className="border-t pt-5">
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="text-lg font-semibold">Ky no (Debt Cycles)</h2>
+                        </div>
+                        <DebtCycleFilter allCycles={debtCycles} debtAccount={person} accounts={accounts} categories={categories} />
                     </div>
                 </section>
 
-                {/* Debt Cycles */}
-                <section className="bg-white shadow rounded-lg p-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-semibold">Kỳ nợ (Debt Cycles)</h2>
-                    </div>
-                    
-                    <DebtCycleFilter allCycles={debtCycles} />
-                </section>
-
-                {/* Transaction History */}
                 <section className="bg-white shadow rounded-lg p-6">
                     <div className="flex items-center justify-between border-b pb-3">
-                        <h2 className="text-lg font-semibold">Lịch sử giao dịch</h2>
-                        <span className="text-sm text-slate-500">{transactions.length} giao dịch</span>
+                        <h2 className="text-lg font-semibold">Lich su giao dich</h2>
+                        <span className="text-sm text-slate-500">{transactions.length} giao dich</span>
                     </div>
                     <div className="mt-4">
                         <FilterableTransactions transactions={transactions} />

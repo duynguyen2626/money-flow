@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect } from 'react'
 import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
 import { TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'

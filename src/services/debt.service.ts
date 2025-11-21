@@ -1,3 +1,4 @@
+
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
@@ -20,15 +21,19 @@ type DebtAccountWithProfile = DebtAccount & {
   profiles: Profile | null
 }
 
-type DebtByTagResult = {
+type TransactionRow = Database['public']['Tables']['transactions']['Row']
+type TransactionInsert = Database['public']['Tables']['transactions']['Insert']
+type TransactionLineInsert = Database['public']['Tables']['transaction_lines']['Insert']
+type TransactionLineRow = Database['public']['Tables']['transaction_lines']['Row']
+
+export type DebtByTagAggregatedResult = {
   tag: string;
-  balance: number | string; // Có thể là string hoặc number tùy theo dữ liệu trả về
+  netBalance: number; 
+  originalPrincipal: number; 
+  totalBack: number; 
   status: string;
   last_activity: string;
 }
-
-type Account = Database['public']['Tables']['accounts']['Row']
-type Transaction = Database['public']['Tables']['transactions']['Row']
 
 export async function getDebtAccounts(): Promise<DebtAccount[]> {
   const supabase = createClient()
@@ -52,7 +57,6 @@ export async function getDebtAccounts(): Promise<DebtAccount[]> {
   }))
 }
 
-// New function to get person details
 export async function getPersonDetails(id: string) {
   const supabase = createClient()
 
@@ -76,79 +80,93 @@ export async function getPersonDetails(id: string) {
 
   const accountData = data as unknown as DebtAccountWithProfile
 
-  // Trả về đối tượng với đầy đủ thông tin
   return {
     id: accountData.id,
-    name: accountData.profiles?.name || accountData.name, // Ưu tiên tên từ profile nếu có
+    name: accountData.profiles?.name || accountData.name, 
     current_balance: accountData.current_balance ?? 0,
     owner_id: accountData.owner_id,
     avatar_url: accountData.profiles?.avatar_url || null
   }
 }
 
-// New function to get debt grouped by tags
-export async function getDebtByTags(personId: string) {
+type TransactionLineWithTransaction = TransactionLineRow & {
+  transactions: TransactionRow | null;
+}
+
+export async function getDebtByTags(personId: string): Promise<DebtByTagAggregatedResult[]> {
   const supabase = createClient()
 
-  console.log('Fetching debt by tags with personId:', personId);
-
-  // Thay thế RPC function bằng truy vấn trực tiếp
   const { data, error } = await supabase
     .from('transaction_lines')
     .select(`
       transactions(tag, occurred_at, id),
-      amount
+      amount,
+      original_amount,
+      cashback_share_percent,
+      cashback_share_fixed
     `)
     .eq('account_id', personId)
-    // Sửa lại cú pháp sắp xếp
     .order('occurred_at', { foreignTable: 'transactions', ascending: false });
-
-  console.log('Query result:', { data, error });
-  console.log('Query error details:', JSON.stringify(error, null, 2));
 
   if (error) {
     console.error('Error fetching debt by tags:', error);
-    console.error('Error code:', error.code);
-    console.error('Error message:', error.message);
-    console.error('Error details:', error.details);
     return []
   }
 
-  // Kiểm tra dữ liệu trả về
   if (!data) {
-    console.warn('No data returned from debt query')
     return []
   }
 
-  console.log('Raw data from query:', data);
+  const tagMap: Record<
+    string,
+    {
+      netBalance: number
+      originalPrincipal: number
+      totalBack: number
+      last_activity: string
+    }
+  > = {}
 
-  // Xử lý dữ liệu để nhóm theo tag
-  const tagMap: { [key: string]: { balance: number, last_activity: string } } = {};
-  
-  data.forEach(item => {
-    const tag = item.transactions?.tag || 'UNTAGGED';
-    const amount = item.amount || 0;
-    const occurredAt = item.transactions?.occurred_at || '';
-    
+  const lines: TransactionLineWithTransaction[] = Array.isArray(data) ? (data as TransactionLineWithTransaction[]) : []
+
+  lines.forEach(item => {
+    const tag = item.transactions?.tag || 'UNTAGGED'
+    const amount = item.amount || 0
+    const occurredAt = item.transactions?.occurred_at || ''
+    const originalAmount = item.original_amount ?? item.amount ?? 0
+    const isLending = amount > 0
+
     if (!tagMap[tag]) {
-      tagMap[tag] = { balance: 0, last_activity: occurredAt };
+      tagMap[tag] = {
+        netBalance: 0,
+        originalPrincipal: 0,
+        totalBack: 0,
+        last_activity: occurredAt 
+      }
     }
     
-    tagMap[tag].balance += amount;
-    if (occurredAt > tagMap[tag].last_activity) {
-      tagMap[tag].last_activity = occurredAt;
-    }
-  });
+    tagMap[tag].netBalance += amount
 
-  // Chuyển đổi sang mảng
-  const result = Object.entries(tagMap).map(([tag, { balance, last_activity }]) => ({
+    if (isLending) {
+      tagMap[tag].originalPrincipal += originalAmount
+      const backDelta = Math.max(0, originalAmount - amount)
+      tagMap[tag].totalBack += backDelta
+    }
+
+    if (!tagMap[tag].last_activity || occurredAt > tagMap[tag].last_activity) {
+      tagMap[tag].last_activity = occurredAt
+    }
+  })
+
+  const result = Object.entries(tagMap).map(([tag, { netBalance, originalPrincipal, totalBack, last_activity }]) => ({
     tag,
-    balance,
-    status: Math.abs(balance) < 0.01 ? 'settled' : 'active',
+    netBalance,
+    originalPrincipal,
+    totalBack,
+    status: Math.abs(netBalance) < 0.01 ? 'settled' : 'active',
     last_activity
   }));
 
-  console.log('Processed debt cycles:', JSON.stringify(result, null, 2));
   return result;
 }
 
@@ -163,7 +181,8 @@ export async function settleDebt(
   amount: number,
   targetBankAccountId: string,
   note: string,
-  date: Date
+  date: Date,
+  tag: string
 ): Promise<SettleDebtResult | null> {
   const supabase = createClient()
 
@@ -180,23 +199,24 @@ export async function settleDebt(
   }
 
   const currentBalance = (debtAccount.current_balance as number) ?? 0
-  if (currentBalance === 0) {
-    console.warn('Attempt to settle an already balanced debt account.')
-    return null
-  }
-
   const settlementDirection: SettleDebtResult['direction'] =
-    currentBalance > 0 ? 'collect' : 'repay'
-  const sanitizedAmount = Math.min(Math.abs(amount), Math.abs(currentBalance))
+    currentBalance >= 0 ? 'collect' : 'repay'
+  const absoluteAmount = Math.abs(amount)
 
-  if (!sanitizedAmount || Number.isNaN(sanitizedAmount)) {
-    console.error('Invalid settlement amount calculated:', sanitizedAmount)
+  if (absoluteAmount <= 0 || Number.isNaN(absoluteAmount)) {
+    console.error('Invalid settlement amount entered:', amount)
     return null
   }
 
-  const transactionNote = `Settlement with ${(debtAccount as Account).name}${
-    note ? ` - ${note}` : ''
-  }`
+  const isOverpayment = absoluteAmount > Math.abs(currentBalance)
+
+  const transactionNoteParts = [
+    `Settlement with ${(debtAccount as Account).name}`,
+    note?.trim() ? note.trim() : undefined,
+    isOverpayment ? 'Overpayment' : undefined,
+  ].filter(Boolean)
+
+  const transactionNote = transactionNoteParts.join(' - ')
 
   const { data: transaction, error: transactionError } = await supabase
     .from('transactions')
@@ -204,7 +224,8 @@ export async function settleDebt(
       occurred_at: date.toISOString(),
       note: transactionNote,
       status: 'posted',
-    } as Partial<Transaction>)
+      tag,
+    } as TransactionInsert)
     .select()
     .single()
 
@@ -213,40 +234,38 @@ export async function settleDebt(
     return null
   }
 
-  const absoluteAmount = Math.abs(sanitizedAmount)
-  const lines =
+  const lines: TransactionLineInsert[] =
     settlementDirection === 'collect'
       ? [
           {
             account_id: targetBankAccountId,
             amount: absoluteAmount,
-            type: 'debit' as const,
+            type: 'debit',
+            transaction_id: transaction.id,
           },
           {
             account_id: debtAccountId,
             amount: -absoluteAmount,
-            type: 'credit' as const,
+            type: 'credit',
+            transaction_id: transaction.id,
           },
         ]
       : [
           {
             account_id: targetBankAccountId,
             amount: -absoluteAmount,
-            type: 'credit' as const,
+            type: 'credit',
+            transaction_id: transaction.id,
           },
           {
             account_id: debtAccountId,
             amount: absoluteAmount,
-            type: 'debit' as const,
+            type: 'debit',
+            transaction_id: transaction.id,
           },
         ]
 
-  const { error: linesError } = await supabase.from('transaction_lines').insert(
-    lines.map(line => ({
-      ...line,
-      transaction_id: (transaction as Transaction).id,
-    }))
-  )
+  const { error: linesError } = await supabase.from('transaction_lines').insert(lines)
 
   if (linesError) {
     console.error('Failed to create settlement transaction lines:', linesError)
@@ -254,7 +273,7 @@ export async function settleDebt(
   }
 
   return {
-    transactionId: (transaction as Transaction).id,
+    transactionId: transaction.id,
     direction: settlementDirection,
     amount: absoluteAmount,
   }
