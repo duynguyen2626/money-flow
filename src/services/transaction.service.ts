@@ -9,7 +9,7 @@ import { TransactionLine, TransactionWithDetails, TransactionWithLineRelations }
 export type CreateTransactionInput = {
   occurred_at: string;
   note: string;
-  type: 'expense' | 'income' | 'debt';
+  type: 'expense' | 'income' | 'debt' | 'transfer';
   source_account_id: string;
   destination_account_id?: string;
   category_id?: string;
@@ -78,7 +78,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       amount: -Math.abs(input.amount),
       type: 'credit',
     });
-  } else if (input.type === 'debt' && input.debt_account_id) {
+  } else if ((input.type === 'debt' || input.type === 'transfer') && input.debt_account_id) {
     const originalAmount = Math.abs(input.amount);
     const sharePercentEntry = Math.max(0, Number(input.cashback_share_percent ?? 0));
     const sharePercentCapped = Math.min(100, sharePercentEntry);

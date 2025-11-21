@@ -137,6 +137,81 @@ export interface Database {
           created_at?: string
         }
       }
+      profiles: {
+        Row: {
+          id: string
+          name: string
+          email: string | null
+          avatar_url: string | null
+          sheet_link: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          email?: string | null
+          avatar_url?: string | null
+          sheet_link?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          email?: string | null
+          avatar_url?: string | null
+          sheet_link?: string | null
+          created_at?: string
+        }
+      }
+      subscriptions: {
+        Row: {
+          id: string
+          name: string
+          price: number | null
+          next_billing_date: string | null
+          is_active: boolean | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          price?: number | null
+          next_billing_date?: string | null
+          is_active?: boolean | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          price?: number | null
+          next_billing_date?: string | null
+          is_active?: boolean | null
+          created_at?: string
+        }
+      }
+      subscription_members: {
+        Row: {
+          id: string
+          subscription_id: string
+          profile_id: string
+          fixed_amount: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          subscription_id: string
+          profile_id: string
+          fixed_amount?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          subscription_id?: string
+          profile_id?: string
+          fixed_amount?: number | null
+          created_at?: string
+        }
+      }
     }
   }
 }

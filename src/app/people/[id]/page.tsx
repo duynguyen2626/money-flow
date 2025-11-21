@@ -1,10 +1,13 @@
 ﻿import { getPersonDetails, getDebtByTags } from '@/services/debt.service';
 import { getAccounts, getAccountTransactions } from '@/services/account.service';
 import { getCategories } from '@/services/category.service';
+import { getPersonWithSubs } from '@/services/people.service';
+import { getSubscriptions } from '@/services/subscription.service';
 import { SettleDebtButton } from '@/components/moneyflow/settle-debt-button';
 import { DebtCycleFilter } from '@/components/moneyflow/debt-cycle-filter';
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions';
 import { TagFilterProvider } from '@/context/tag-filter-context';
+import { EditPersonDialog } from '@/components/people/edit-person-dialog';
 import { notFound } from 'next/navigation';
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
@@ -24,12 +27,22 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
         notFound();
     }
 
-    const [person, debtCycles, transactions, accounts, categories] = await Promise.all([
+    const [
+        person,
+        debtCycles,
+        transactions,
+        accounts,
+        categories,
+        personProfile,
+        subscriptions,
+    ] = await Promise.all([
         getPersonDetails(id),
         getDebtByTags(id),
         getAccountTransactions(id, 100),
         getAccounts(),
         getCategories(),
+        getPersonWithSubs(id),
+        getSubscriptions(),
     ]);
 
     if (!person) {
@@ -39,6 +52,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
     const totalBalance = person.current_balance;
     const balanceColor = totalBalance > 0 ? 'text-green-600' : 'text-red-600';
     const balanceText = totalBalance > 0 ? 'Ho no minh' : 'Minh no ho';
+    const sidebarPeople = personProfile ? [personProfile] : [];
 
     return (
         <TagFilterProvider>
@@ -56,7 +70,12 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                         </div>
                         <div className="flex flex-col items-start gap-2 sm:items-end">
                             <p className={`text-3xl font-bold ${balanceColor}`}>{formatCurrency(totalBalance)}</p>
-                            <SettleDebtButton debtAccount={person} accounts={accounts} />
+                            <div className="flex flex-wrap justify-end gap-2">
+                                {personProfile && (
+                                    <EditPersonDialog person={personProfile} subscriptions={subscriptions} />
+                                )}
+                                <SettleDebtButton debtAccount={person} accounts={accounts} />
+                            </div>
                         </div>
                     </div>
 
@@ -64,7 +83,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                         <div className="flex items-center justify-between mb-3">
                             <h2 className="text-lg font-semibold">Ky no (Debt Cycles)</h2>
                         </div>
-                        <DebtCycleFilter allCycles={debtCycles} debtAccount={person} accounts={accounts} categories={categories} />
+                        <DebtCycleFilter allCycles={debtCycles} debtAccount={person} accounts={accounts} categories={categories} people={sidebarPeople} />
                     </div>
                 </section>
 

@@ -1,15 +1,17 @@
 import { getAccounts } from '@/services/account.service'
 import { getCategories } from '@/services/category.service'
 import { getRecentTransactions } from '@/services/transaction.service'
+import { getPeople } from '@/services/people.service'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
 
 export const dynamic = 'force-dynamic'
 
 export default async function TransactionsPage() {
-  const [accounts, categories, recentTransactions] = await Promise.all([
+  const [accounts, categories, people, recentTransactions] = await Promise.all([
     getAccounts(),
     getCategories(),
+    getPeople(),
     getRecentTransactions(25),
   ])
 
@@ -21,7 +23,7 @@ export default async function TransactionsPage() {
             <h1 className="text-2xl font-semibold">So giao dich</h1>
             <p className="text-sm text-slate-500">Quan ly thu chi va dong bo theo thoi gian thuc</p>
           </div>
-          <AddTransactionDialog accounts={accounts} categories={categories} />
+          <AddTransactionDialog accounts={accounts} categories={categories} people={people} />
         </div>
         <RecentTransactions transactions={recentTransactions} />
       </section>
