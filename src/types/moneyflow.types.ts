@@ -8,12 +8,13 @@ export type CategoryRow = Database["public"]["Tables"]["categories"]["Row"]
 export type Account = {
   id: string;
   name: string;
-  type: 'bank' | 'cash' | 'credit_card' | 'ewallet' | 'debt';
+  type: 'bank' | 'cash' | 'credit_card' | 'ewallet' | 'debt' | 'savings' | 'investment' | 'asset';
   currency: string;
   current_balance: number;
   credit_limit?: number;
   owner_id: string;
   cashback_config?: Json | null;
+  secured_by_account_id?: string | null;
 }
 
 export type DebtAccount = {
