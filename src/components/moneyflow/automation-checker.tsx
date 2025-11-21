@@ -1,8 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { Loader2, Zap } from 'lucide-react'
 
 import { runSubscriptionBotAction } from '@/actions/subscription-actions'
+import { Button } from '@/components/ui/button'
 
 type BotToast = {
   title: string
@@ -12,43 +14,50 @@ type BotToast = {
 export function AutomationChecker() {
   const [status, setStatus] = useState<'idle' | 'checking' | 'ready'>('checking')
   const [toast, setToast] = useState<BotToast | null>(null)
+  const isMounted = useRef(true)
 
-  useEffect(() => {
-    let mounted = true
-    const run = async () => {
-      try {
-        const result = await runSubscriptionBotAction()
-        if (!mounted || !result) return
-        if (result.processedCount > 0) {
-          const names = (result.names ?? []).join(', ')
-          setToast({
-            title: `Bot tao ${result.processedCount} giao dich`,
-            detail: names ? `Da xu ly: ${names}` : undefined,
-          })
-        }
-      } catch (error) {
-        console.error('Automation checker failed:', error)
-      } finally {
-        if (mounted) {
-          setStatus('ready')
-        }
+  const runCheck = useCallback(async () => {
+    if (!isMounted.current) return
+    setStatus('checking')
+
+    try {
+      const result = await runSubscriptionBotAction()
+      if (!isMounted.current || !result) return
+
+      if (result.processedCount > 0) {
+        const names = (result.names ?? []).join(', ')
+        setToast({
+          title: `Bot tao ${result.processedCount} giao dich`,
+          detail: names ? `Da xu ly: ${names}` : undefined,
+        })
       }
-    }
-
-    run()
-    return () => {
-      mounted = false
+    } catch (error) {
+      console.error('Automation checker failed:', error)
+    } finally {
+      if (isMounted.current) {
+        setStatus('ready')
+      }
     }
   }, [])
 
+  useEffect(() => {
+    isMounted.current = true
+    runCheck()
+
+    return () => {
+      isMounted.current = false
+    }
+  }, [runCheck])
+
   return (
     <>
-      <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-        <span className="text-blue-600">Lazy Bot</span>
-        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-          {status === 'checking' ? 'Dang quet...' : 'San sang'}
-        </span>
-      </div>
+      <Button variant="ghost" size="icon" onClick={runCheck} title="Quét dịch vụ định kỳ">
+        {status === 'checking' ? (
+          <Loader2 className="animate-spin" />
+        ) : (
+          <Zap className="text-yellow-500" />
+        )}
+      </Button>
 
       {toast && (
         <div className="fixed right-4 top-4 z-50 w-full max-w-sm rounded-lg border border-blue-100 bg-white p-4 shadow-lg">
