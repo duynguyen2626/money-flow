@@ -31,6 +31,15 @@ export type Person = {
   sheet_link?: string | null
   debt_account_id?: string | null
   subscription_ids?: string[]
+  subscription_count?: number
+}
+
+export type SubscriptionMember = {
+  profile_id: string
+  fixed_amount?: number | null
+  profile_name?: string | null
+  avatar_url?: string | null
+  debt_account_id?: string | null
 }
 
 export type Subscription = {
@@ -39,6 +48,7 @@ export type Subscription = {
   price?: number | null
   next_billing_date?: string | null
   is_active?: boolean | null
+  members?: SubscriptionMember[]
 }
 
 export type TransactionLine = {

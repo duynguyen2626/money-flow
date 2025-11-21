@@ -1,15 +1,17 @@
 "use client"
 
-import { Home, Receipt, Landmark, CreditCard, Wallet, Users } from "lucide-react"
+import { Home, Receipt, Landmark, CreditCard, Wallet, Users, Clapperboard } from "lucide-react"
 import Link from "next/link"
 
 import { SidebarNav, type NavItem } from "./sidebar-nav"
+import { AutomationChecker } from "./automation-checker"
 
 const navItems: NavItem[] = [
   { label: "Tong quan", href: "/", icon: Home },
   { label: "Tai khoan", href: "/accounts", icon: Wallet },
   { label: "So Giao dich", href: "/transactions", icon: Receipt },
   { label: "People", href: "/people", icon: Users },
+  { label: "Dich vu", href: "/services", icon: Clapperboard },
   { label: "So No", href: "/debt", icon: Landmark },
   { label: "Cashback", href: "/cashback", icon: CreditCard },
 ]
@@ -36,12 +38,15 @@ export function AppLayout({ children }: AppLayoutProps) {
             <p className="text-sm text-slate-500">Money Flow</p>
             <h1 className="text-xl font-semibold text-slate-900">Control Center</h1>
           </div>
-          <Link
-            href="/transactions"
-            className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
-          >
-            Ghi giao dich
-          </Link>
+          <div className="flex items-center gap-3">
+            <AutomationChecker />
+            <Link
+              href="/transactions"
+              className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              Ghi giao dich
+            </Link>
+          </div>
         </header>
 
         <div className="flex-1 px-4 py-6 md:px-8">{children}</div>

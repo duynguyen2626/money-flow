@@ -115,7 +115,11 @@ export async function createPerson(
 export async function getPeople(): Promise<Person[]> {
   const supabase = createClient()
 
-  const [{ data: profiles, error: profileError }, { data: debtAccounts, error: debtError }] =
+  const [
+    { data: profiles, error: profileError },
+    { data: debtAccounts, error: debtError },
+    { data: subscriptionMembers, error: subError },
+  ] =
     await Promise.all([
       supabase
         .from('profiles')
@@ -125,6 +129,7 @@ export async function getPeople(): Promise<Person[]> {
         .from('accounts')
         .select('id, owner_id')
         .eq('type', 'debt'),
+      supabase.from('subscription_members').select('profile_id, subscription_id'),
     ])
 
   if (profileError) {
@@ -136,11 +141,30 @@ export async function getPeople(): Promise<Person[]> {
     console.error('Error fetching debt accounts for people:', debtError)
   }
 
+  if (subError) {
+    console.error('Error fetching subscription memberships for people:', subError)
+  }
+
   const debtAccountMap = new Map<string, string>()
   if (Array.isArray(debtAccounts)) {
     (debtAccounts as AccountRow[]).forEach(account => {
       if (account.owner_id) {
         debtAccountMap.set(account.owner_id, account.id)
+      }
+    })
+  }
+
+  const subscriptionCountMap = new Map<string, number>()
+  const subscriptionIdsMap = new Map<string, Set<string>>()
+  if (Array.isArray(subscriptionMembers)) {
+    ;(subscriptionMembers as { profile_id: string; subscription_id?: string }[]).forEach(row => {
+      if (!row.profile_id) return
+      subscriptionCountMap.set(row.profile_id, (subscriptionCountMap.get(row.profile_id) ?? 0) + 1)
+      if (row.subscription_id) {
+        if (!subscriptionIdsMap.has(row.profile_id)) {
+          subscriptionIdsMap.set(row.profile_id, new Set<string>())
+        }
+        subscriptionIdsMap.get(row.profile_id)?.add(row.subscription_id)
       }
     })
   }
@@ -152,6 +176,8 @@ export async function getPeople(): Promise<Person[]> {
     avatar_url: person.avatar_url,
     sheet_link: person.sheet_link,
     debt_account_id: debtAccountMap.get(person.id) ?? null,
+    subscription_count: subscriptionCountMap.get(person.id) ?? 0,
+    subscription_ids: Array.from(subscriptionIdsMap.get(person.id) ?? []),
   })) ?? []
 }
 
@@ -284,6 +310,7 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     avatar_url: profile.avatar_url,
     sheet_link: profile.sheet_link,
     subscription_ids,
+    subscription_count: subscription_ids.length,
     debt_account_id,
   }
 }

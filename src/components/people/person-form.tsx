@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Subscription } from '@/types/moneyflow.types'
+import { getServiceBranding } from '@/components/services/service-branding'
 
 type PersonFormValues = {
   name: string
@@ -30,6 +31,26 @@ const schema = z.object({
   sheet_link: z.string().url('Link sheet khong hop le').optional().or(z.literal('')),
   subscriptionIds: z.array(z.string()),
 })
+
+const currencyFormatter = new Intl.NumberFormat('vi-VN', {
+  style: 'currency',
+  currency: 'VND',
+  maximumFractionDigits: 0,
+})
+
+function formatMoney(value?: number | null) {
+  if (typeof value !== 'number') return ''
+  return currencyFormatter.format(value)
+}
+
+function formatNextDate(value?: string | null) {
+  if (!value) return 'Chua hen'
+  try {
+    return new Intl.DateTimeFormat('vi-VN').format(new Date(value))
+  } catch {
+    return value
+  }
+}
 
 export function PersonForm({
   mode,
@@ -89,6 +110,7 @@ export function PersonForm({
         id: sub.id,
         name: sub.name,
         price: sub.price,
+        next_billing_date: sub.next_billing_date,
       })),
     [subscriptions]
   )
@@ -98,7 +120,7 @@ export function PersonForm({
       <div className="grid gap-6 md:grid-cols-2">
         <div className="space-y-4">
           <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-            Account nợ sẽ được tự động tạo và liên kết sau khi lưu người này.
+            Account no se duoc tu dong tao va lien ket sau khi luu nguoi nay.
           </div>
 
           <div className="space-y-2">
@@ -163,7 +185,7 @@ export function PersonForm({
 
         <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-slate-800">Đăng ký dịch vụ</p>
+            <p className="text-sm font-semibold text-slate-800">Dang ky dich vu</p>
             <span className="text-xs text-slate-500">{watchedSubs?.length ?? 0} da chon</span>
           </div>
           <div className="space-y-2">
@@ -172,22 +194,22 @@ export function PersonForm({
             ) : (
               subscriptionOptions.map(item => {
                 const checked = watchedSubs?.includes(item.id) ?? false
+                const brand = getServiceBranding(item.name)
                 return (
                   <label
                     key={item.id}
-                    className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition hover:border-blue-200"
+                    className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition hover:border-blue-200"
                   >
-                    <div className="flex flex-col">
+                    <div
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-sm font-semibold ring-2 ${brand.bg} ${brand.text} ${brand.ring}`}
+                    >
+                      {brand.icon}
+                    </div>
+                    <div className="flex flex-1 flex-col">
                       <span className="font-medium text-slate-900">{item.name}</span>
-                      {typeof item.price === 'number' && (
-                        <span className="text-xs text-slate-500">
-                          {new Intl.NumberFormat('vi-VN', {
-                            style: 'currency',
-                            currency: 'VND',
-                            maximumFractionDigits: 0,
-                          }).format(item.price)}
-                        </span>
-                      )}
+                      <span className="text-xs text-slate-500">
+                        {formatMoney(item.price ?? null) || 'No price'} - {formatNextDate(item.next_billing_date)}
+                      </span>
                     </div>
                     <input
                       type="checkbox"
@@ -200,11 +222,11 @@ export function PersonForm({
                         setValue('subscriptionIds', next, { shouldValidate: true })
                       }}
                     />
-          </label>
-        )
-      })
-    )}
-  </div>
+                  </label>
+                )
+              })
+            )}
+          </div>
         </div>
       </div>
 
