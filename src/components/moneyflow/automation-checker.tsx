@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Zap } from 'lucide-react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 
 import { runSubscriptionBotAction } from '@/actions/subscription-actions'
 
@@ -12,42 +13,66 @@ type BotToast = {
 export function AutomationChecker() {
   const [status, setStatus] = useState<'idle' | 'checking' | 'ready'>('checking')
   const [toast, setToast] = useState<BotToast | null>(null)
+  const mounted = useRef(true)
 
-  useEffect(() => {
-    let mounted = true
-    const run = async () => {
-      try {
-        const result = await runSubscriptionBotAction()
-        if (!mounted || !result) return
-        if (result.processedCount > 0) {
-          const names = (result.names ?? []).join(', ')
-          setToast({
-            title: `Bot tao ${result.processedCount} giao dich`,
-            detail: names ? `Da xu ly: ${names}` : undefined,
-          })
-        }
-      } catch (error) {
-        console.error('Automation checker failed:', error)
-      } finally {
-        if (mounted) {
-          setStatus('ready')
-        }
-      }
+  const runBot = useCallback(async (manual = false) => {
+    if (manual) {
+      setStatus('checking')
     }
-
-    run()
-    return () => {
-      mounted = false
+    try {
+      const result = await runSubscriptionBotAction()
+      if (!mounted.current) return
+      if (result && result.processedCount > 0) {
+        const names = (result.names ?? []).join(', ')
+        setToast({
+          title: `Bot tao ${result.processedCount} giao dich`,
+          detail: names ? `Da xu ly: ${names}` : undefined,
+        })
+      } else if (manual) {
+        setToast({
+          title: `Bot da quet xong`,
+          detail: 'Khong co gi moi',
+        })
+      }
+    } catch (error) {
+      console.error('Automation checker failed:', error)
+      if (manual && mounted.current) {
+        setToast({
+          title: `Bot quet that bai`,
+          detail: 'Hay kiem tra console log',
+        })
+      }
+    } finally {
+      if (mounted.current) {
+        setStatus('ready')
+      }
     }
   }, [])
 
+  useEffect(() => {
+    mounted.current = true
+    runBot()
+    return () => {
+      mounted.current = false
+    }
+  }, [runBot])
+
   return (
     <>
-      <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+      <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 pl-3 pr-2 py-1 text-xs font-semibold text-slate-700 shadow-sm">
         <span className="text-blue-600">Lazy Bot</span>
-        <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-          {status === 'checking' ? 'Dang quet...' : 'San sang'}
-        </span>
+        {status === 'checking' ? (
+          <span className="text-[11px] font-semibold text-slate-600">Dang quet...</span>
+        ) : (
+          <button
+            type="button"
+            className="text-slate-500 hover:text-blue-600 transition-colors"
+            onClick={() => runBot(true)}
+            title="Force run"
+          >
+            <Zap size={14} />
+          </button>
+        )}
       </div>
 
       {toast && (
