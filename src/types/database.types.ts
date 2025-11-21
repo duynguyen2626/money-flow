@@ -13,7 +13,7 @@ export interface Database {
         Row: {
           id: string
           name: string
-          type: 'bank' | 'cash' | 'credit_card' | 'ewallet' | 'debt'
+          type: 'bank' | 'cash' | 'credit_card' | 'ewallet' | 'debt' | 'savings' | 'investment' | 'asset'
           currency: string | null
           credit_limit: number | null
           current_balance: number | null
@@ -21,11 +21,12 @@ export interface Database {
           cashback_config: Json | null
           is_active: boolean | null
           created_at: string
+          secured_by_account_id: string | null
         }
         Insert: {
           id?: string
           name: string
-          type: 'bank' | 'cash' | 'credit_card' | 'ewallet' | 'debt'
+          type: 'bank' | 'cash' | 'credit_card' | 'ewallet' | 'debt' | 'savings' | 'investment' | 'asset'
           currency?: string | null
           credit_limit?: number | null
           current_balance?: number | null
@@ -33,11 +34,12 @@ export interface Database {
           cashback_config?: Json | null
           is_active?: boolean | null
           created_at?: string
+          secured_by_account_id?: string | null
         }
         Update: {
           id?: string
           name?: string
-          type?: 'bank' | 'cash' | 'credit_card' | 'ewallet' | 'debt'
+          type?: 'bank' | 'cash' | 'credit_card' | 'ewallet' | 'debt' | 'savings' | 'investment' | 'asset'
           currency?: string | null
           credit_limit?: number | null
           current_balance?: number | null
@@ -45,6 +47,7 @@ export interface Database {
           cashback_config?: Json | null
           is_active?: boolean | null
           created_at?: string
+          secured_by_account_id?: string | null
         }
       }
       transactions: {

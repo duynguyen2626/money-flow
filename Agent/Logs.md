@@ -1,114 +1,134 @@
-1/4
+1/5
 Console Error
 Server
 
 
-Error fetching debt by tags: {}
-src\services\debt.service.ts (109:13) @ getDebtByTags
+Error fetching transaction lines: {}
+src\services\account.service.ts (321:15) @ fetchTransactions
 
 
-  107 |
-  108 |   if (error) {
-> 109 |     console.error('Error fetching debt by tags:', error);
-      |             ^
-  110 |     console.error('Error code:', error.code);
-  111 |     console.error('Error message:', error.message);
-  112 |     console.error('Error details:', error.details);
+  319 |     let transactionIds: string[] = []
+  320 |     if (lineQuery.error) {
+> 321 |       console.error('Error fetching transaction lines:', {
+      |               ^
+  322 |         accountId,
+  323 |         message: lineQuery.error.message ?? 'unknown error',
+  324 |         code: lineQuery.error.code,
 Call Stack
 13
 
 Show 9 ignore-listed frame(s)
-getDebtByTags
-src\services\debt.service.ts (109:13)
+fetchTransactions
+src\services\account.service.ts (321:15)
 Function.all
 <anonymous>
 PeopleDetailPage
-src\app\people\[id]\page.tsx (39:58)
+src\app\people\[id]\page.tsx (38:9)
 PeopleDetailPage
 <anonymous>
-
-2/4
-Error code: "PGRST100"
-src\services\debt.service.ts (110:13) @ getDebtByTags
-
-
-  108 |   if (error) {
-  109 |     console.error('Error fetching debt by tags:', error);
-> 110 |     console.error('Error code:', error.code);
-      |             ^
-  111 |     console.error('Error message:', error.message);
-  112 |     console.error('Error details:', error.details);
-  113 |     return []
-Call Stack
-13
-
-Show 9 ignore-listed frame(s)
-getDebtByTags
-src\services\debt.service.ts (110:13)
-Function.all
-<anonymous>
-PeopleDetailPage
-src\app\people\[id]\page.tsx (39:58)
-PeopleDetailPage
-<anonymous>
-3/4
+2/5
 Console Error
 Server
 
 
-Error message: "\"failed to parse order (transactions.occurred_at.desc)\" (line 1, column 14)"
-src\services\debt.service.ts (111:13) @ getDebtByTags
+Error fetching transactions via fallback: {}
+src\services\account.service.ts (409:15) @ fetchTransactions
 
 
-  109 |     console.error('Error fetching debt by tags:', error);
-  110 |     console.error('Error code:', error.code);
-> 111 |     console.error('Error message:', error.message);
-      |             ^
-  112 |     console.error('Error details:', error.details);
-  113 |     return []
-  114 |   }
+  407 |
+  408 |     if (fallbackError) {
+> 409 |       console.error('Error fetching transactions via fallback:', {
+      |               ^
+  410 |         accountId,
+  411 |         message: fallbackError?.message ?? 'unknown error',
+  412 |         code: fallbackError?.code,
 Call Stack
 13
 
 Show 9 ignore-listed frame(s)
-getDebtByTags
-src\services\debt.service.ts (111:13)
+fetchTransactions
+src\services\account.service.ts (409:15)
 Function.all
 <anonymous>
 PeopleDetailPage
-src\app\people\[id]\page.tsx (39:58)
+src\app\people\[id]\page.tsx (38:9)
 PeopleDetailPage
 <anonymous>
-1
-2
 
-4/4
+3/5
 Console Error
 Server
 
 
-Error message: "\"failed to parse order (transactions.occurred_at.desc)\" (line 1, column 14)"
-src\services\debt.service.ts (111:13) @ getDebtByTags
+Error fetching transaction details for account: {}
+src\services\account.service.ts (511:13) @ getAccountTransactionDetails
 
 
-  109 |     console.error('Error fetching debt by tags:', error);
-  110 |     console.error('Error code:', error.code);
-> 111 |     console.error('Error message:', error.message);
+  509 |
+  510 |   if (error) {
+> 511 |     console.error('Error fetching transaction details for account:', {
       |             ^
-  112 |     console.error('Error details:', error.details);
-  113 |     return []
-  114 |   }
+  512 |       accountId,
+  513 |       message: error?.message ?? 'unknown error',
+  514 |       code: error?.code,
 Call Stack
 13
 
 Show 9 ignore-listed frame(s)
-getDebtByTags
-src\services\debt.service.ts (111:13)
+getAccountTransactionDetails
+src\services\account.service.ts (511:13)
 Function.all
 <anonymous>
-PeopleDetailPage
-src\app\people\[id]\page.tsx (39:58)
-PeopleDetailPage
+AccountPage
+src\app\accounts\[id]\page.tsx (74:50)
+AccountPage
 <anonymous>
-1
-2
+
+4/5
+ Error fetching transaction lines: {}
+src\services\account.service.ts (321:15) @ fetchTransactions
+
+
+  319 |     let transactionIds: string[] = []
+  320 |     if (lineQuery.error) {
+> 321 |       console.error('Error fetching transaction lines:', {
+      |               ^
+  322 |         accountId,
+  323 |         message: lineQuery.error.message ?? 'unknown error',
+  324 |         code: lineQuery.error.code,
+Call Stack
+13
+
+Show 9 ignore-listed frame(s)
+fetchTransactions
+src\services\account.service.ts (321:15)
+Function.all
+<anonymous>
+AccountPage
+src\app\accounts\[id]\page.tsx (74:50)
+AccountPage
+<anonymous>
+5/5
+Error fetching transactions via fallback: {}
+src\services\account.service.ts (409:15) @ fetchTransactions
+
+
+  407 |
+  408 |     if (fallbackError) {
+> 409 |       console.error('Error fetching transactions via fallback:', {
+      |               ^
+  410 |         accountId,
+  411 |         message: fallbackError?.message ?? 'unknown error',
+  412 |         code: fallbackError?.code,
+Call Stack
+13
+
+Show 9 ignore-listed frame(s)
+fetchTransactions
+src\services\account.service.ts (409:15)
+Function.all
+<anonymous>
+AccountPage
+src\app\accounts\[id]\page.tsx (74:50)
+AccountPage
+<anonymous>

@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { Account, Transaction, TransactionLine, TransactionWithDetails } from '@/types/moneyflow.types'
+import { Account, TransactionLine, TransactionWithDetails } from '@/types/moneyflow.types'
 import { Json } from '@/types/database.types'
 
 type AccountRow = {
@@ -11,6 +11,7 @@ type AccountRow = {
   credit_limit: number | null
   owner_id: string | null
   cashback_config: Json | null
+  secured_by_account_id: string | null
 }
 
 function normalizeCashbackConfig(value: Json | null): Json | null {
@@ -48,9 +49,10 @@ export async function getAccounts(): Promise<Account[]> {
     currency: item.currency ?? 'VND',
     current_balance: item.current_balance ?? 0,
     credit_limit: item.credit_limit ?? 0,
-          owner_id: item.owner_id ?? '',
+    owner_id: item.owner_id ?? '',
+    secured_by_account_id: item.secured_by_account_id ?? null,
     cashback_config: normalizeCashbackConfig(item.cashback_config),
-        }))
+  }))
 }
 
 export async function getAccountDetails(id: string): Promise<Account | null> {
@@ -84,17 +86,9 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
     current_balance: row.current_balance ?? 0,
     credit_limit: row.credit_limit ?? 0,
     owner_id: row.owner_id ?? '',
+    secured_by_account_id: row.secured_by_account_id ?? null,
     cashback_config: normalizeCashbackConfig(row.cashback_config),
   }
-}
-
-type TransactionLineWithRelations = TransactionLine & {
-  accounts?: { name: string } | null
-  categories?: { name: string } | null
-  original_amount?: number | null
-  cashback_share_percent?: number | null
-  cashback_share_fixed?: number | null
-  metadata?: Json | null
 }
 
 type TransactionRow = {
@@ -123,6 +117,15 @@ type TransactionRow = {
   }[]
 }
 
+
+type GroupedTransactionLines = {
+  transaction_lines: {
+    amount: number
+    type: string
+    account_id: string
+  }[]
+}
+
 function extractCashbackFromLines(lines: TransactionRow['transaction_lines']): {
   cashback_share_percent?: number
   cashback_share_fixed?: number
@@ -130,23 +133,21 @@ function extractCashbackFromLines(lines: TransactionRow['transaction_lines']): {
   original_amount?: number
 } {
   for (const line of lines ?? []) {
-    const meta = line?.metadata as any
+    const meta = (line?.metadata as Record<string, unknown> | null) ?? null
+    const readMetaNumber = (key: string) => {
+      if (!meta) return undefined
+      const value = meta[key]
+      return typeof value === 'number' ? value : undefined
+    }
     const percent =
       typeof line?.cashback_share_percent === 'number'
         ? line.cashback_share_percent
-        : typeof meta?.cashback_share_percent === 'number'
-          ? meta.cashback_share_percent
-          : undefined
+        : readMetaNumber('cashback_share_percent')
     const fixed =
       typeof line?.cashback_share_fixed === 'number'
         ? line.cashback_share_fixed
-        : typeof meta?.cashback_share_fixed === 'number'
-          ? meta.cashback_share_fixed
-          : undefined
-    const amount =
-      typeof meta?.cashback_share_amount === 'number'
-        ? meta.cashback_share_amount
-        : undefined
+        : readMetaNumber('cashback_share_fixed')
+    const amount = readMetaNumber('cashback_share_amount')
     const original_amount = typeof line?.original_amount === 'number' ? line.original_amount : undefined
     if (percent !== undefined || fixed !== undefined || amount !== undefined || original_amount !== undefined) {
       return { cashback_share_percent: percent, cashback_share_fixed: fixed, cashback_share_amount: amount, original_amount }
@@ -155,11 +156,16 @@ function extractCashbackFromLines(lines: TransactionRow['transaction_lines']): {
   return {}
 }
 
-function mapTransactionRow(txn: TransactionRow): TransactionWithDetails {
+function mapTransactionRow(txn: TransactionRow, accountId?: string): TransactionWithDetails {
   const lines = txn.transaction_lines ?? []
   const cashbackFromLines = extractCashbackFromLines(lines)
+  const accountLine = accountId
+    ? lines.find(line => line.account_id === accountId)
+    : undefined
   const displayAmount =
-    lines.reduce((sum, line) => sum + Math.abs(line.amount), 0) / 2
+    typeof accountLine?.amount === 'number'
+      ? accountLine.amount
+      : lines.reduce((sum, line) => sum + Math.abs(line.amount), 0) / 2
 
   let type: 'income' | 'expense' | 'transfer' = 'transfer'
   let categoryName: string | undefined
@@ -186,6 +192,17 @@ function mapTransactionRow(txn: TransactionRow): TransactionWithDetails {
     accountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name
   }
 
+  const counterpartLine =
+    accountLine &&
+    lines.find(line => line.account_id && line.account_id !== accountLine.account_id)
+  if (counterpartLine?.accounts?.name) {
+    accountName = counterpartLine.accounts.name
+  }
+
+  if (accountLine) {
+    type = accountLine.amount >= 0 ? 'income' : 'expense'
+  }
+
   const percentRaw = txn.cashback_share_percent ?? cashbackFromLines.cashback_share_percent
   const cashbackAmount = txn.cashback_share_amount ?? cashbackFromLines.cashback_share_amount
 
@@ -201,7 +218,9 @@ function mapTransactionRow(txn: TransactionRow): TransactionWithDetails {
     cashback_share_percent: percentRaw ?? undefined,
     cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? undefined,
     cashback_share_amount: cashbackAmount ?? undefined,
-    original_amount: cashbackFromLines.original_amount,
+    original_amount: typeof accountLine?.original_amount === 'number'
+      ? accountLine.original_amount
+      : cashbackFromLines.original_amount,
   }
 }
 
@@ -271,21 +290,10 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
 async function fetchTransactions(
   accountId: string,
   limit: number,
-  includeCashback: boolean
 ): Promise<TransactionWithDetails[]> {
   const supabase = createClient()
-  const columns = [
-    'id',
-    'occurred_at',
-    'note',
-    'tag',
-    ...(includeCashback
-      ? ['cashback_share_percent', 'cashback_share_fixed', 'cashback_share_amount']
-      : []),
-  ]
 
   try {
-    // First, check if this is a debt account
     const { data: accountData, error: accountError } = await supabase
       .from('accounts')
       .select('type')
@@ -301,114 +309,105 @@ async function fetchTransactions(
       return []
     }
 
-    if ((accountData as any)?.type === 'debt') {
-      // For debt accounts, query transaction_lines directly
-      const { data, error } = await supabase
-        .from('transaction_lines')
-        .select(`
-          amount,
-          type,
-          account_id,
-          metadata,
-          category_id,
-          original_amount,
-          cashback_share_percent,
-          cashback_share_fixed,
-          transactions (
-            ${columns.join(',\n')}
-          ),
-          accounts (name),
-          categories (name)
-        `)
-        .eq('account_id', accountId)
-        .limit(limit)
+    const lineQuery = await supabase
+      .from('transaction_lines')
+      .select('transaction_id')
+      .eq('account_id', accountId)
+      .order('id', { ascending: false })
+      .limit(Math.max(limit, 50))
 
-      if (error) {
-        if (includeCashback) {
-          // Retry without cashback columns to handle missing schema fields.
-          return fetchTransactions(accountId, limit, false)
-        }
-        console.error('Error fetching transactions for debt account:', {
-          accountId,
-          message: error?.message ?? 'unknown error',
-          code: error?.code,
-        })
-        return []
-      }
-
-      // Group transaction lines by transaction ID to reconstruct transactions
-      const transactionMap = new Map<string, any>()
-      
-      data?.forEach((line: any) => {
-        const transaction = line.transactions
-        if (!transaction) return
-        
-        if (!transactionMap.has(transaction.id)) {
-          transactionMap.set(transaction.id, {
-            ...transaction,
-            transaction_lines: []
-          })
-        }
-        
-        transactionMap.get(transaction.id).transaction_lines.push({
-          amount: line.amount,
-          type: line.type,
-          account_id: line.account_id,
-          category_id: line.category_id,
-          original_amount: line.original_amount,
-          cashback_share_percent: line.cashback_share_percent,
-          cashback_share_fixed: line.cashback_share_fixed,
-          metadata: line.metadata,
-          accounts: line.accounts,
-          categories: line.categories
-        })
+    let transactionIds: string[] = []
+    if (lineQuery.error) {
+      console.error('Error fetching transaction lines:', {
+        accountId,
+        message: lineQuery.error.message ?? 'unknown error',
+        code: lineQuery.error.code,
       })
-
-      const rows = Array.from(transactionMap.values()) as TransactionRow[]
-      // Ensure newest transactions appear first since remote ordering on nested relations can fail
-      rows.sort(
-        (a, b) =>
-          new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime()
-      )
-      return rows.map(row => mapDebtTransactionRow(row, accountId))
     } else {
-      // Regular account query
-      const query = supabase
+      transactionIds = Array.from(
+        new Set((lineQuery.data ?? [])
+          .map(line => (line as { transaction_id?: string }).transaction_id)
+          .filter((id): id is string => Boolean(id)))
+      )
+    }
+
+    const accountType = (accountData as { type?: Account['type'] } | null)?.type
+    const isDebtAccount = accountType === 'debt'
+
+    if (transactionIds.length > 0) {
+      const { data: transactions, error: txError } = await supabase
         .from('transactions')
         .select(`
-          ${columns.join(',\n')}
+          id,
+          occurred_at,
+          note,
+          tag,
           transaction_lines (
             amount,
             type,
             account_id,
             metadata,
             category_id,
+            original_amount,
             accounts (name),
             categories (name)
           )
         `)
+        .in('id', transactionIds)
         .order('occurred_at', { ascending: false })
-        .eq('transaction_lines.account_id', accountId)
-        .limit(limit)
 
-      const { data, error } = await query
-
-      if (error) {
-        if (includeCashback) {
-          // Retry without cashback columns to handle missing schema fields.
-          return fetchTransactions(accountId, limit, false)
-        }
-        console.error('Error fetching transactions for account:', {
-          accountId,
-          message: error?.message ?? 'unknown error',
-          code: error?.code,
-        })
-        return []
+      if (!txError && transactions) {
+        const rows = transactions as TransactionRow[]
+        return isDebtAccount
+          ? rows.map(row => mapDebtTransactionRow(row, accountId))
+          : rows.map(row => mapTransactionRow(row, accountId))
       }
 
-      const rows = (data ?? []) as TransactionRow[]
-      return rows.map(mapTransactionRow)
+      if (txError) {
+        console.error('Error fetching transactions for account:', {
+          accountId,
+          message: txError?.message ?? 'unknown error',
+          code: txError?.code,
+        })
+      }
     }
+
+    // Fallback: query transactions with inner filter to avoid empty results when line query fails
+    const { data: fallbackRows, error: fallbackError } = await supabase
+      .from('transactions')
+      .select(`
+        id,
+        occurred_at,
+        note,
+        tag,
+        transaction_lines!inner (
+          amount,
+          type,
+          account_id,
+          metadata,
+          category_id,
+          original_amount,
+          accounts (name),
+          categories (name)
+        )
+      `)
+      .eq('transaction_lines.account_id', accountId)
+      .order('occurred_at', { ascending: false })
+      .limit(limit)
+
+    if (fallbackError) {
+      console.error('Error fetching transactions via fallback:', {
+        accountId,
+        message: fallbackError?.message ?? 'unknown error',
+        code: fallbackError?.code,
+      })
+      return []
+    }
+
+    const rows = (fallbackRows ?? []) as TransactionRow[]
+    return isDebtAccount
+      ? rows.map(row => mapDebtTransactionRow(row, accountId))
+      : rows.map(row => mapTransactionRow(row, accountId))
   } catch (err) {
     console.error('Unexpected error in fetchTransactions:', err)
     return []
@@ -419,7 +418,7 @@ export async function getAccountTransactions(
   accountId: string,
   limit = 20
 ): Promise<TransactionWithDetails[]> {
-  return fetchTransactions(accountId, limit, true)
+  return fetchTransactions(accountId, limit)
 }
 
 export async function updateAccountConfig(
@@ -428,6 +427,8 @@ export async function updateAccountConfig(
     name?: string
     credit_limit?: number | null
     cashback_config?: Json | null
+    type?: Account['type']
+    secured_by_account_id?: string | null
   }
 ): Promise<boolean> {
   const supabase = createClient()
@@ -436,6 +437,8 @@ export async function updateAccountConfig(
     name?: string
     credit_limit?: number | null
     cashback_config?: Json | null
+    type?: Account['type']
+    secured_by_account_id?: string | null
   } = {}
 
   if (typeof data.name === 'string') {
@@ -448,6 +451,14 @@ export async function updateAccountConfig(
 
   if (typeof data.cashback_config !== 'undefined') {
     payload.cashback_config = data.cashback_config
+  }
+
+  if (typeof data.type === 'string') {
+    payload.type = data.type
+  }
+
+  if ('secured_by_account_id' in data) {
+    payload.secured_by_account_id = data.secured_by_account_id ?? null
   }
 
   if (Object.keys(payload).length === 0) {
@@ -476,25 +487,15 @@ export async function getAccountStats(accountId: string) {
 export async function getAccountTransactionDetails(
   accountId: string,
   limit = 20
-): Promise<any[]> {
+): Promise<GroupedTransactionLines[]> {
   const supabase = createClient()
 
   const { data, error } = await supabase
-    .from('transactions')
-    .select(`
-      id,
-      occurred_at,
-      note,
-      tag,
-      transaction_lines (
-        amount,
-        type,
-        account_id
-      )
-    `)
-    .order('occurred_at', { ascending: false })
-    .eq('transaction_lines.account_id', accountId)
-    .limit(limit)
+    .from('transaction_lines')
+    .select('transaction_id, amount, type, account_id')
+    .eq('account_id', accountId)
+    .order('id', { ascending: false })
+    .limit(Math.max(limit, 50))
 
   if (error) {
     console.error('Error fetching transaction details for account:', {
@@ -502,8 +503,60 @@ export async function getAccountTransactionDetails(
       message: error?.message ?? 'unknown error',
       code: error?.code,
     })
-    return []
+
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from('transactions')
+      .select(`
+        transaction_lines!inner (
+          transaction_id,
+          amount,
+          type,
+          account_id
+        )
+      `)
+      .eq('transaction_lines.account_id', accountId)
+      .order('occurred_at', { ascending: false })
+      .limit(limit)
+
+    if (fallbackError) {
+      console.error('Error fetching transaction details via fallback:', {
+        accountId,
+        message: fallbackError?.message ?? 'unknown error',
+        code: fallbackError?.code,
+      })
+      return []
+    }
+
+    const groupedFallback = new Map<string, GroupedTransactionLines>()
+    ;(fallbackData ?? []).forEach(row => {
+      const lines = (row as { transaction_lines?: { transaction_id?: string; amount?: number; type?: string; account_id?: string }[] }).transaction_lines ?? []
+      lines.forEach(line => {
+        if (!line.transaction_id) return
+        if (!groupedFallback.has(line.transaction_id)) {
+          groupedFallback.set(line.transaction_id, { transaction_lines: [] })
+        }
+        groupedFallback.get(line.transaction_id)!.transaction_lines.push({
+          amount: line.amount ?? 0,
+          type: line.type ?? '',
+          account_id: line.account_id ?? '',
+        })
+      })
+    })
+    return Array.from(groupedFallback.values())
   }
 
-  return data ?? []
+  const grouped = new Map<string, GroupedTransactionLines>()
+  ;(data ?? []).forEach(line => {
+    if (!line.transaction_id) return
+    if (!grouped.has(line.transaction_id)) {
+      grouped.set(line.transaction_id, { transaction_lines: [] })
+    }
+    grouped.get(line.transaction_id)!.transaction_lines.push({
+      amount: line.amount ?? 0,
+      type: line.type ?? '',
+      account_id: line.account_id ?? '',
+    })
+  })
+
+  return Array.from(grouped.values())
 }

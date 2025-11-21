@@ -1,5 +1,6 @@
+import Link from 'next/link'
 import { Account } from '@/types/moneyflow.types'
-import { getAccountDetails, getAccountTransactions, getAccountStats, getAccountTransactionDetails } from '@/services/account.service'
+import { getAccountDetails, getAccountTransactions, getAccountStats, getAccountTransactionDetails, getAccounts } from '@/services/account.service'
 import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
 import { EditAccountDialog } from '@/components/moneyflow/edit-account-dialog'
 
@@ -23,6 +24,32 @@ function formatCurrency(value: number) {
   return currencyFormatter.format(value)
 }
 
+function parseAssetConfig(raw: Account['cashback_config']): {
+  interestRate: number | null
+  termMonths: number | null
+  maturityDate: string | null
+} {
+  if (!raw) {
+    return { interestRate: null, termMonths: null, maturityDate: null }
+  }
+
+  try {
+    const normalized = typeof raw === 'string' ? JSON.parse(raw) : raw
+    const asRecord = normalized as Record<string, unknown>
+    const toNumber = (value: unknown) => {
+      const num = Number(value)
+      return Number.isFinite(num) ? num : null
+    }
+    return {
+      interestRate: toNumber(asRecord.interestRate),
+      termMonths: toNumber(asRecord.termMonths ?? asRecord.term),
+      maturityDate: typeof asRecord.maturityDate === 'string' ? asRecord.maturityDate : null,
+    }
+  } catch {
+    return { interestRate: null, termMonths: null, maturityDate: null }
+  }
+}
+
 export default async function AccountPage({ params }: PageProps) {
   const { id } = await params
 
@@ -44,11 +71,19 @@ export default async function AccountPage({ params }: PageProps) {
     )
   }
 
-  const [txns, stats, txnDetails] = await Promise.all([
+  const [txns, stats, txnDetails, allAccounts] = await Promise.all([
     getAccountTransactions(id, 50),
     account.type === 'credit_card' ? getAccountStats(id) : Promise.resolve(null),
     getAccountTransactionDetails(id, 50), // New function to get transaction details with lines
+    getAccounts(),
   ])
+
+  const savingsAccounts = allAccounts.filter(acc =>
+    acc.type === 'savings' || acc.type === 'investment' || acc.type === 'asset'
+  )
+  const collateralAccount = account.secured_by_account_id
+    ? allAccounts.find(acc => acc.id === account.secured_by_account_id) ?? null
+    : null
 
   // Calculate inflow and outflow based on transaction lines directly
   let totalInflow = 0
@@ -70,6 +105,14 @@ export default async function AccountPage({ params }: PageProps) {
 
   const netBalance = totalInflow - totalOutflow
   const isCreditCard = account.type === 'credit_card'
+  const isAssetAccount =
+    account.type === 'savings' || account.type === 'investment' || account.type === 'asset'
+  const assetConfig = isAssetAccount ? parseAssetConfig(account.cashback_config) : null
+  const formatDateValue = (value: string | null | undefined) => {
+    if (!value) return null
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toLocaleDateString('vi-VN')
+  }
   const cashbackStatsAvailable = Boolean(isCreditCard && stats)
 
   const statCards = [
@@ -117,31 +160,54 @@ export default async function AccountPage({ params }: PageProps) {
                   Credit limit: {formatCurrency(account.credit_limit)}
                 </p>
               )}
+              {isCreditCard && collateralAccount && (
+                <p className="text-xs font-medium text-blue-700">
+                  The duoc dam bao boi{' '}
+                  <Link href={`/accounts/${collateralAccount.id}`} className="underline">
+                    {collateralAccount.name}
+                  </Link>
+                </p>
+              )}
             </div>
           </div>
           
-          {cashbackStatsAvailable && stats ? (
+          {isAssetAccount ? (
             <div className="flex flex-col justify-center">
-              <p className="text-sm font-medium text-slate-500">Chu kỳ hoàn tiền</p>
+              <p className="text-sm font-medium text-slate-500">Thong tin lai suat</p>
+              <p className="text-lg font-semibold text-slate-900">
+                {assetConfig?.interestRate !== null && assetConfig?.interestRate !== undefined
+                  ? `${assetConfig.interestRate}%`
+                  : 'Chua thiet lap'}
+              </p>
+              <p className="text-xs text-slate-500">
+                {assetConfig?.termMonths ? `${assetConfig.termMonths} thang` : 'Khong ky han'}
+                {assetConfig?.maturityDate
+                  ? ` - Dao han ${formatDateValue(assetConfig.maturityDate) ?? ''}`
+                  : ''}
+              </p>
+            </div>
+          ) : cashbackStatsAvailable && stats ? (
+            <div className="flex flex-col justify-center">
+              <p className="text-sm font-medium text-slate-500">Chu ky hoan tien</p>
               <p className="text-lg font-semibold text-slate-900">
                 {stats.currentSpend > 0
                   ? formatCurrency(stats.currentSpend)
-                  : 'Chưa có chi tiêu'}
+                  : 'Chua co chi tieu'}
               </p>
               <p className="text-xs text-slate-500">
-                Tỉ lệ {Math.round(stats.rate * 100)}% ·{' '}
-                {stats.minSpend ? `Min tiêu ${formatCurrency(stats.minSpend)}` : 'Không yêu cầu min'}
+                Ty le {Math.round(stats.rate * 100)}%
+                {stats.minSpend ? ` - Min tieu ${formatCurrency(stats.minSpend)}` : ' - Khong yeu cau min'}
               </p>
             </div>
           ) : (
             <div className="flex flex-col justify-center">
-              <p className="text-sm font-medium text-slate-500">Chu kỳ hoàn tiền</p>
-              <p className="text-lg font-semibold text-slate-400">Không áp dụng</p>
+              <p className="text-sm font-medium text-slate-500">Chu ky hoan tien</p>
+              <p className="text-lg font-semibold text-slate-400">Khong ap dung</p>
             </div>
           )}
           
           <div className="flex flex-col items-end justify-center">
-            <span className="text-sm text-slate-500">Số dư hiện tại</span>
+            <span className="text-sm text-slate-500">So du hien tai</span>
             <p
               className={`text-2xl font-semibold ${
                 account.current_balance < 0 ? 'text-red-600' : 'text-green-600'
@@ -149,7 +215,7 @@ export default async function AccountPage({ params }: PageProps) {
             >
               {formatCurrency(account.current_balance)}
             </p>
-            <EditAccountDialog account={account} />
+            <EditAccountDialog account={account} collateralAccounts={savingsAccounts} />
           </div>
         </div>
         

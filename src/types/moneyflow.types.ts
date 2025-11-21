@@ -8,12 +8,13 @@ export type CategoryRow = Database["public"]["Tables"]["categories"]["Row"]
 export type Account = {
   id: string;
   name: string;
-  type: 'bank' | 'cash' | 'credit_card' | 'ewallet' | 'debt';
+  type: 'bank' | 'cash' | 'credit_card' | 'ewallet' | 'debt' | 'savings' | 'investment' | 'asset';
   currency: string;
   current_balance: number;
   credit_limit?: number;
   owner_id: string;
   cashback_config?: Json | null;
+  secured_by_account_id?: string | null;
 }
 
 export type DebtAccount = {
@@ -31,6 +32,15 @@ export type Person = {
   sheet_link?: string | null
   debt_account_id?: string | null
   subscription_ids?: string[]
+  subscription_count?: number
+}
+
+export type SubscriptionMember = {
+  profile_id: string
+  fixed_amount?: number | null
+  profile_name?: string | null
+  avatar_url?: string | null
+  debt_account_id?: string | null
 }
 
 export type Subscription = {
@@ -39,6 +49,7 @@ export type Subscription = {
   price?: number | null
   next_billing_date?: string | null
   is_active?: boolean | null
+  members?: SubscriptionMember[]
 }
 
 export type TransactionLine = {
