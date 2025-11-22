@@ -3,8 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTagFilter } from '@/context/tag-filter-context'
-import { SettleDebtDialog } from './settle-debt-dialog'
-import { TransactionForm } from './transaction-form'
+import { SettleDebtDialog } from '@/components/moneyflow/settle-debt-dialog'
+import { TransactionForm } from '@/components/moneyflow/transaction-form'
 import { Account, Category, DebtAccount, Person } from '@/types/moneyflow.types'
 import type { DebtByTagAggregatedResult } from '@/services/debt.service'
 
