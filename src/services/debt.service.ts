@@ -15,6 +15,7 @@ type Profile = {
   id: string
   name: string
   avatar_url: string | null
+  sheet_link?: string | null
 }
 
 type DebtAccountWithProfile = DebtAccount & {
@@ -67,7 +68,7 @@ export async function getPersonDetails(id: string) {
       name, 
       current_balance, 
       owner_id,
-      profiles (id, name, avatar_url)
+      profiles (id, name, avatar_url, sheet_link)
     `)
     .eq('id', id)
     .eq('type', 'debt')
@@ -85,7 +86,8 @@ export async function getPersonDetails(id: string) {
     name: accountData.profiles?.name || accountData.name, 
     current_balance: accountData.current_balance ?? 0,
     owner_id: accountData.owner_id,
-    avatar_url: accountData.profiles?.avatar_url || null
+    avatar_url: accountData.profiles?.avatar_url || null,
+    sheet_link: accountData.profiles?.sheet_link ?? null,
   }
 }
 

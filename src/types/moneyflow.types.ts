@@ -40,6 +40,8 @@ export type DebtAccount = {
   name: string;
   current_balance: number;
   owner_id: string | null;
+  avatar_url?: string | null;
+  sheet_link?: string | null;
 }
 
 export type Person = {

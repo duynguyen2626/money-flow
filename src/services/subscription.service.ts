@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { Subscription, SubscriptionMember } from '@/types/moneyflow.types'
 import { ensureDebtAccount } from './people.service'
+import { syncTransactionToSheet } from './sheet.service'
 
 type SubscriptionRow = Database['public']['Tables']['subscriptions']['Row']
 type SubscriptionInsert = Database['public']['Tables']['subscriptions']['Insert']
@@ -444,6 +445,8 @@ export async function checkAndProcessSubscriptions(): Promise<{
     }
 
     const billingDate = parseBillingDate(row.next_billing_date ?? today)
+    const txnNote = formatNoteTemplate(row, billingDate, row.subscription_members?.length ?? 0)
+    const txnTag = format(parseISO(billingDate), 'MMMyy').toUpperCase()
     const members = buildMemberShareList(row, debtMap)
     const memberTotal = members.reduce(
       (sum, member) => sum + Math.max(0, Number(member.fixed_amount ?? 0)),
@@ -456,9 +459,9 @@ export async function checkAndProcessSubscriptions(): Promise<{
       .from('transactions')
       .insert({
         occurred_at: `${billingDate}T00:00:00.000Z`,
-        note: formatNoteTemplate(row, billingDate, members.length),
+        note: txnNote,
         status: 'posted',
-        tag: format(parseISO(billingDate), 'MMMyy').toUpperCase(),
+        tag: txnTag,
       } as TransactionInsert)
       .select('id')
       .single()
@@ -542,6 +545,38 @@ export async function checkAndProcessSubscriptions(): Promise<{
         message: lineError?.message ?? 'unknown error',
       })
       continue
+    }
+
+    const syncBase = {
+      id: txn.id,
+      occurred_at: `${billingDate}T00:00:00.000Z`,
+      note: txnNote,
+      tag: txnTag,
+    }
+
+    for (const line of lines) {
+      const personId = (line as { person_id?: string | null }).person_id
+      if (!personId) continue
+      const originalAmount =
+        typeof line.original_amount === 'number' ? line.original_amount : line.amount
+
+      void syncTransactionToSheet(
+        personId,
+        {
+          ...syncBase,
+          original_amount: originalAmount,
+          cashback_share_percent: line.cashback_share_percent ?? undefined,
+          cashback_share_fixed: line.cashback_share_fixed ?? undefined,
+          amount: line.amount,
+        },
+        'create'
+      )
+        .then(() => {
+          console.log(`[Sheet Sync] Triggered for Person ${personId} (subscription bot)`)
+        })
+        .catch(err => {
+          console.error('Sheet Sync Error (Bot Background):', err)
+        })
     }
 
     const nextCycleDate = addMonths(parseISO(billingDate), 1)
