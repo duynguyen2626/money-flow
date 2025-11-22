@@ -3,8 +3,9 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
+import type { DebtAccount } from '@/types/moneyflow.types'
 
-type DebtAccount = {
+type DebtAccountRow = {
   id: string
   name: string
   current_balance: number | null
@@ -18,7 +19,7 @@ type Profile = {
   sheet_link?: string | null
 }
 
-type DebtAccountWithProfile = DebtAccount & {
+type DebtAccountWithProfile = DebtAccountRow & {
   profiles: Profile | null
 }
 
@@ -50,7 +51,7 @@ export async function getDebtAccounts(): Promise<DebtAccount[]> {
     return []
   }
 
-  return (data as DebtAccount[]).map(item => ({
+  return (data as DebtAccountRow[]).map(item => ({
     id: item.id,
     name: item.name,
     current_balance: item.current_balance ?? 0,
