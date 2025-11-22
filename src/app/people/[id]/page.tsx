@@ -10,7 +10,6 @@ import { EditPersonDialog } from '@/components/people/edit-person-dialog';
 import { notFound } from 'next/navigation';
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog';
 import { Account, Category, Person, TransactionWithDetails, Subscription, DebtAccount } from '@/types/moneyflow.types';
-import { PersonWithSubscriptions } from '@/services/people.service';
 import { DebtByTagAggregatedResult } from '@/services/debt.service';
 import { SheetSyncControls } from '@/components/people/sheet-sync-controls';
 
@@ -29,7 +28,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
-    const [personProfile, setPersonProfile] = useState<PersonWithSubscriptions | null>(null);
+    const [personProfile, setPersonProfile] = useState<Person | null>(null);
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
     const [allPeople, setAllPeople] = useState<Person[]>([]);
     const [loading, setLoading] = useState(true);
