@@ -27,7 +27,7 @@ export default async function TransactionsPage() {
             </div>
             <AddTransactionDialog accounts={accounts} categories={categories} people={people} />
           </div>
-          <FilterableTransactions transactions={recentTransactions} />
+          <FilterableTransactions transactions={recentTransactions} categories={categories} />
         </section>
       </div>
     </TagFilterProvider>

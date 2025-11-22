@@ -50,10 +50,40 @@ export function AccountList({ accounts, cashbackById = {}, categories, people }:
     [items]
   )
 
-  const filtered = useMemo(
+  const filteredItems = useMemo(
     () => items.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc)),
     [items, activeFilter]
   )
+
+  const grouped = useMemo(() => {
+    const sections: { key: FilterKey; title: string; helper: string; accounts: Account[] }[] = [
+      {
+        key: 'credit',
+        title: '💳 Credit Cards',
+        helper: 'Statement cycles & repayments',
+        accounts: filteredItems.filter(acc => acc.type === 'credit_card'),
+      },
+      {
+        key: 'bank',
+        title: '🏦 Payment Accounts',
+        helper: 'Banks · E-wallets · Cash',
+        accounts: filteredItems.filter(acc => ['bank', 'cash', 'ewallet'].includes(acc.type)),
+      },
+      {
+        key: 'savings',
+        title: '💰 Savings & Assets',
+        helper: 'Term deposits · Investments',
+        accounts: filteredItems.filter(acc => ['savings', 'investment', 'asset'].includes(acc.type)),
+      },
+      {
+        key: 'debt',
+        title: '👥 Debt Accounts',
+        helper: 'People & loans',
+        accounts: filteredItems.filter(acc => acc.type === 'debt'),
+      },
+    ]
+    return sections.filter(section => section.accounts.length > 0)
+  }, [filteredItems])
 
   const handleToggleStatus = async (accountId: string, nextValue: boolean) => {
     setPendingId(accountId)
@@ -122,27 +152,42 @@ export function AccountList({ accounts, cashbackById = {}, categories, people }:
         </div>
       </div>
 
-      {filtered.length === 0 ? (
+      {grouped.length === 0 && view === 'grid' ? (
         <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-slate-500">
           No accounts match this filter.
         </div>
       ) : view === 'grid' ? (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map(account => (
-            <AccountCard
-              key={account.id}
-              account={account}
-              cashback={cashbackById[account.id]}
-              categories={categories}
-              people={people}
-              allAccounts={items}
-              collateralAccounts={collateralAccounts}
-            />
+        <div className="space-y-6">
+          {grouped.map(section => (
+            <div key={section.key} className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">{section.title}</p>
+                  <p className="text-xs text-slate-500">{section.helper}</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                  {section.accounts.length} accounts
+                </span>
+              </div>
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {section.accounts.map(account => (
+                  <AccountCard
+                    key={account.id}
+                    account={account}
+                    cashback={cashbackById[account.id]}
+                    categories={categories}
+                    people={people}
+                    allAccounts={items}
+                    collateralAccounts={collateralAccounts}
+                  />
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       ) : (
         <AccountTable
-          accounts={filtered}
+          accounts={filteredItems}
           onToggleStatus={handleToggleStatus}
           pendingId={pendingId}
           collateralAccounts={collateralAccounts}

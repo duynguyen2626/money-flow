@@ -5,6 +5,13 @@ export type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"]
 export type AccountRow = Database["public"]["Tables"]["accounts"]["Row"]
 export type CategoryRow = Database["public"]["Tables"]["categories"]["Row"]
 
+export type Category = {
+  id: string
+  name: string
+  type: 'expense' | 'income'
+  parent_id?: string | null
+}
+
 export type Account = {
   id: string;
   name: string;
@@ -100,4 +107,6 @@ export type TransactionWithDetails = TransactionRow & {
   type?: 'income' | 'expense' | 'transfer';
   person_id?: string | null;
   person_name?: string | null;
+  category_id?: string | null;
+  persisted_cycle_tag?: string | null;
 }

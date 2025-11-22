@@ -203,6 +203,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
                 <div className="mt-4">
                     <FilterableTransactions
                         transactions={filteredTransactions}
+                        categories={categories}
                         searchTerm={searchTerm}
                         onSearchChange={setSearchTerm}
                     />

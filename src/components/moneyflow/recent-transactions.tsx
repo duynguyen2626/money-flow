@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { Zap, SlidersHorizontal, ChevronDown } from "lucide-react"
-import { TransactionWithDetails } from "@/types/moneyflow.types"
+import { Account, TransactionWithDetails } from "@/types/moneyflow.types"
 import {
   Table,
   TableBody,
@@ -40,6 +40,7 @@ interface ColumnConfig {
 
 interface RecentTransactionsProps {
   transactions: TransactionWithDetails[]
+  accountType?: Account['type']
   selectedTxnIds?: Set<string>
   onSelectionChange?: (selectedIds: Set<string>) => void
 }
@@ -55,12 +56,13 @@ const defaultColumns: ColumnConfig[] = [
   { key: "amount", label: "Amount", defaultWidth: 120 },
   { key: "finalPrice", label: "Final Price", defaultWidth: 130 },
   { key: "people", label: "People", defaultWidth: 140 },
-  { key: "tag", label: "Tag", defaultWidth: 120 },
+  { key: "tag", label: "Tag", defaultWidth: 140 },
   { key: "task", label: "", defaultWidth: 56, minWidth: 48 },
 ]
 
 export function RecentTransactions({
   transactions,
+  accountType,
   selectedTxnIds,
   onSelectionChange,
 }: RecentTransactionsProps) {
@@ -93,6 +95,12 @@ export function RecentTransactions({
   const [dateFormat, setDateFormat] = useState<"en-CA" | "DD-MM" | "custom">("en-CA")
   const [customDatePattern, setCustomDatePattern] = useState<string>("YYYY-MM-DD")
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
+  const tagHeaderLabel =
+    accountType === 'credit_card'
+      ? 'Cycle'
+      : accountType === 'debt'
+        ? 'Debt Tag'
+        : 'Tag'
 
   const selection = selectedTxnIds ?? internalSelection
   const updateSelection = (next: Set<string>) => {
@@ -142,6 +150,34 @@ export function RecentTransactions({
     }
     return transactions
   }, [transactions, selection, showSelectedOnly])
+
+  const getCycleLabel = (txn: TransactionWithDetails) => {
+    const persisted = txn.persisted_cycle_tag ?? txn.tag
+    const normalize = (value: string | null | undefined) => {
+      if (!value) return "-"
+      const yMonth = value.match(/^(\d{4})-(0[1-9]|1[0-2])$/)
+      if (yMonth) {
+        return value
+      }
+      const abbrev = value.slice(0, 3).toLowerCase()
+      const map: Record<string, string> = {
+        jan: "January", feb: "February", mar: "March", apr: "April", may: "May", jun: "June",
+        jul: "July", aug: "August", sep: "September", oct: "October", nov: "November", dec: "December",
+      }
+      if (map[abbrev]) return map[abbrev]
+      return value
+    }
+    if (accountType === "credit_card") {
+      if (persisted) return normalize(persisted)
+      const rawDate = txn.occurred_at ?? (txn as { created_at?: string }).created_at
+      const parsed = rawDate ? new Date(rawDate) : null
+      if (parsed && !Number.isNaN(parsed.getTime())) {
+        const month = String(parsed.getMonth() + 1).padStart(2, "0")
+        return normalize(`${parsed.getFullYear()}-${month}`)
+      }
+    }
+    return normalize(txn.tag ?? "-")
+  }
 
   const formattedDate = (value: string | number | Date) => {
     const d = new Date(value)
@@ -262,10 +298,10 @@ export function RecentTransactions({
               return (
                 <TableHead
                   key={col.key}
-                  className="border-r bg-slate-100 font-semibold text-slate-700"
+                  className={`border-r bg-slate-100 font-semibold text-slate-700 ${col.key === "tag" ? "whitespace-nowrap" : ""}`}
                   style={{ width: columnWidths[col.key] }}
                 >
-                  {col.label}
+                  {col.key === "tag" ? tagHeaderLabel : col.label}
                 </TableHead>
               )
             })}
@@ -345,7 +381,7 @@ export function RecentTransactions({
                   return personName || "-"
                 }
                 case "tag":
-                  return txn.tag || "-"
+                  return getCycleLabel(txn)
                 case "percent":
                   return percentBack
                 case "fixed":

@@ -3,11 +3,13 @@
 import { useMemo, useState } from 'react'
 import { FilterIcon, X } from 'lucide-react'
 import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
-import { TransactionWithDetails } from '@/types/moneyflow.types'
+import { Account, Category, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
 
 type FilterableTransactionsProps = {
     transactions: TransactionWithDetails[]
+    categories?: Category[]
+    accountType?: Account['type']
     searchTerm?: string
     onSearchChange?: (next: string) => void
 }
@@ -18,6 +20,8 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 
 export function FilterableTransactions({ 
     transactions,
+    categories = [],
+    accountType,
     searchTerm: externalSearch,
     onSearchChange,
 }: FilterableTransactionsProps) {
@@ -28,13 +32,71 @@ export function FilterableTransactions({
     const [selectedTxnIds, setSelectedTxnIds] = useState(new Set<string>());
     const [showSelectedOnly, setShowSelectedOnly] = useState(false)
     const [showFilterMenu, setShowFilterMenu] = useState(false)
+    const [tagSearch, setTagSearch] = useState('')
     const [moreTagsOpen, setMoreTagsOpen] = useState(false)
-    const [filterChoices, setFilterChoices] = useState<{ tag: boolean; category: boolean }>({ tag: true, category: false })
+    const [selectedCycle, setSelectedCycle] = useState<string | null>(null)
+    const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
+    const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(null)
+
+    const categoryById = useMemo(() => {
+        const map = new Map<string, Category>()
+        categories.forEach(cat => map.set(cat.id, cat))
+        return map
+    }, [categories])
+
+    const parentLookup = useMemo(() => {
+        const map = new Map<string, string | undefined>()
+        categories.forEach(cat => {
+            map.set(cat.id, cat.parent_id ?? undefined)
+        })
+        return map
+    }, [categories])
+
+    const topLevelCategories = useMemo(
+        () => categories.filter(cat => !cat.parent_id),
+        [categories]
+    )
+
+    const availableSubcategories = useMemo(
+        () => categories.filter(cat => cat.parent_id === selectedCategoryId),
+        [categories, selectedCategoryId]
+    )
+
+    const formatCycleLabel = (value: string | null | undefined) => {
+        if (!value) return 'UNTAGGED'
+        const monthNameMatch = value.match(/^(\d{4})-(0[1-9]|1[0-2])$/)
+        if (monthNameMatch) {
+            return value
+        }
+        const abbrev = value.slice(0, 3).toLowerCase()
+        const monthMap: Record<string, string> = {
+            jan: 'January', feb: 'February', mar: 'March', apr: 'April', may: 'May', jun: 'June',
+            jul: 'July', aug: 'August', sep: 'September', oct: 'October', nov: 'November', dec: 'December',
+        }
+        if (monthMap[abbrev]) {
+            return monthMap[abbrev]
+        }
+        return value
+    }
+
+    const getDisplayTag = (txn: TransactionWithDetails) => {
+        if (accountType === 'credit_card') {
+            const persisted = txn.persisted_cycle_tag ?? txn.tag
+            if (persisted) return persisted
+            const rawDate = txn.occurred_at ?? (txn as { created_at?: string }).created_at
+            const parsed = rawDate ? new Date(rawDate) : null
+            if (parsed && !Number.isNaN(parsed.getTime())) {
+                const month = String(parsed.getMonth() + 1).padStart(2, '0')
+                return `${parsed.getFullYear()}-${month}`
+            }
+        }
+        return txn.tag || 'UNTAGGED'
+    }
     
     const tagMeta = useMemo(() => {
         const map = new Map<string, { tag: string; last: number }>()
         transactions.forEach(txn => {
-            const tag = txn.tag || 'UNTAGGED'
+            const tag = getDisplayTag(txn)
             const ts = new Date(txn.occurred_at ?? txn.created_at ?? Date.now()).getTime()
             const prev = map.get(tag)
             if (!prev || ts > prev.last) {
@@ -46,23 +108,58 @@ export function FilterableTransactions({
             .sort((a, b) => b.last - a.last)
     }, [transactions])
 
+    const filteredTagOptions = useMemo(() => {
+        const query = tagSearch.trim().toLowerCase()
+        const options = tagMeta.map(item => ({
+            value: item.tag,
+            label: formatCycleLabel(item.tag),
+            raw: item.tag,
+        }))
+        if (!query) return options
+        return options.filter(opt => opt.label.toLowerCase().includes(query) || opt.value.toLowerCase().includes(query))
+    }, [tagMeta, tagSearch])
+
     const primaryTags = tagMeta.slice(0, 5).map(item => item.tag)
     const extraTags = tagMeta.slice(5).map(item => item.tag)
 
-    const effectiveTag = filterChoices.tag ? selectedTag : null
+    const effectiveTag = accountType === 'credit_card' ? selectedCycle ?? selectedTag : selectedTag
 
     const filteredByTag = effectiveTag 
-        ? transactions.filter(txn => txn.tag === effectiveTag)
+        ? transactions.filter(txn => getDisplayTag(txn) === effectiveTag)
         : transactions
+
+    const filteredByCategory = useMemo(() => {
+        if (!selectedCategoryId) {
+            return filteredByTag
+        }
+        const subSet = new Set(availableSubcategories.map(cat => cat.id))
+        return filteredByTag.filter(txn => {
+            const txnCategoryId = txn.category_id ?? null
+            if (selectedSubcategoryId) {
+                return txnCategoryId === selectedSubcategoryId
+            }
+            if (txnCategoryId === selectedCategoryId) return true
+            if (txnCategoryId && parentLookup.get(txnCategoryId) === selectedCategoryId) {
+                return true
+            }
+            if (!txnCategoryId && txn.category_name) {
+                const parentName = categoryById.get(selectedCategoryId)?.name
+                if (parentName && txn.category_name.toLowerCase().includes(parentName.toLowerCase())) {
+                    return true
+                }
+            }
+            return txnCategoryId ? subSet.has(txnCategoryId) : false
+        })
+    }, [availableSubcategories, categoryById, filteredByTag, parentLookup, selectedCategoryId, selectedSubcategoryId])
 
     const searchedTransactions = useMemo(() => {
         if (!searchTerm) {
-            return filteredByTag;
+            return filteredByCategory;
         }
-        return filteredByTag.filter(txn =>
+        return filteredByCategory.filter(txn =>
             txn.note?.toLowerCase().includes(searchTerm.toLowerCase())
         );
-    }, [filteredByTag, searchTerm]);
+    }, [filteredByCategory, searchTerm]);
 
     const finalTransactions = useMemo(() => {
         if (showSelectedOnly && selectedTxnIds.size > 0) {
@@ -106,6 +203,12 @@ export function FilterableTransactions({
 
     const clearTagFilter = () => {
         setSelectedTag(null)
+        setSelectedCycle(null)
+    }
+
+    const clearCategoryFilters = () => {
+        setSelectedCategoryId(null)
+        setSelectedSubcategoryId(null)
     }
 
     return (
@@ -135,26 +238,92 @@ export function FilterableTransactions({
                             title="Filter options"
                         >
                             <FilterIcon className="h-4 w-4" />
-                            Filter
+                            Filters
                         </button>
                         {showFilterMenu && (
-                            <div className="absolute right-0 top-full z-20 mt-1 w-40 rounded-md border border-slate-200 bg-white text-xs shadow">
-                                <label className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50">
+                            <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-md border border-slate-200 bg-white p-3 text-xs shadow space-y-3">
+                                <div className="space-y-1">
+                                    <p className="text-[11px] font-semibold text-slate-700">Tag/Cycle</p>
                                     <input
-                                        type="checkbox"
-                                        checked={filterChoices.tag}
-                                        onChange={() => setFilterChoices(prev => ({ ...prev, tag: !prev.tag }))}
+                                        type="text"
+                                        placeholder="Search tag..."
+                                        value={tagSearch}
+                                        onChange={e => setTagSearch(e.target.value)}
+                                        className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
                                     />
-                                    Tag
-                                </label>
-                                <label className="flex items-center gap-2 px-3 py-2 hover:bg-slate-50">
-                                    <input
-                                        type="checkbox"
-                                        checked={filterChoices.category}
-                                        onChange={() => setFilterChoices(prev => ({ ...prev, category: !prev.category }))}
-                                    />
-                                    Category
-                                </label>
+                                    <select
+                                        className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                        value={effectiveTag ?? ''}
+                                        onChange={e => {
+                                            const next = e.target.value || null
+                                            if (accountType === 'credit_card') {
+                                                setSelectedCycle(next)
+                                                setSelectedTag(next)
+                                            } else {
+                                                setSelectedTag(next)
+                                            }
+                                        }}
+                                    >
+                                        <option value="">All</option>
+                                        {filteredTagOptions.map(opt => (
+                                            <option key={opt.value} value={opt.value}>
+                                                {opt.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-[11px] font-semibold text-slate-700">Category</p>
+                                    <select
+                                        className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                        value={selectedCategoryId ?? ''}
+                                        onChange={e => {
+                                            const next = e.target.value || null
+                                            setSelectedCategoryId(next)
+                                            setSelectedSubcategoryId(null)
+                                        }}
+                                    >
+                                        <option value="">All categories</option>
+                                        {topLevelCategories.map(cat => (
+                                            <option key={cat.id} value={cat.id}>
+                                                {cat.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {selectedCategoryId && availableSubcategories.length > 0 && (
+                                        <select
+                                            className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                            value={selectedSubcategoryId ?? ''}
+                                            onChange={e => setSelectedSubcategoryId(e.target.value || null)}
+                                        >
+                                            <option value="">Subcategory</option>
+                                            {availableSubcategories.map(cat => (
+                                                <option key={cat.id} value={cat.id}>
+                                                    {cat.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    )}
+                                </div>
+                                <div className="flex items-center justify-between gap-2">
+                                    <button
+                                        className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                                        onClick={() => {
+                                            setSelectedTag(null)
+                                            setSelectedCycle(null)
+                                            clearCategoryFilters()
+                                            setTagSearch('')
+                                        }}
+                                    >
+                                        Reset
+                                    </button>
+                                    <button
+                                        className="text-xs text-slate-600 hover:text-slate-800"
+                                        onClick={() => setShowFilterMenu(false)}
+                                    >
+                                        Close
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -181,9 +350,15 @@ export function FilterableTransactions({
                                     ? 'bg-blue-500 text-white'
                                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
-                            onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                            onClick={() => {
+                                const next = selectedTag === tag ? null : tag
+                                setSelectedTag(next)
+                                if (accountType === 'credit_card') {
+                                    setSelectedCycle(next)
+                                }
+                            }}
                         >
-                            {tag}
+                            {formatCycleLabel(tag)}
                         </button>
                     ))}
                     {extraTags.length > 0 && (
@@ -202,9 +377,16 @@ export function FilterableTransactions({
                                             className={`block w-full px-3 py-2 text-left text-sm ${
                                                 selectedTag === tag ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50'
                                             }`}
-                                            onClick={() => { setSelectedTag(selectedTag === tag ? null : tag); setMoreTagsOpen(false) }}
+                                            onClick={() => { 
+                                                const next = selectedTag === tag ? null : tag
+                                                setSelectedTag(next); 
+                                                if (accountType === 'credit_card') {
+                                                    setSelectedCycle(next)
+                                                }
+                                                setMoreTagsOpen(false) 
+                                            }}
                                         >
-                                            {tag}
+                                            {formatCycleLabel(tag)}
                                         </button>
                                     ))}
                                 </div>
@@ -216,7 +398,7 @@ export function FilterableTransactions({
                             className="px-3 py-1 rounded-full text-sm font-medium bg-green-500 text-white"
                             onClick={clearTagFilter}
                         >
-                            Clear: {selectedTag}
+                            Clear: {formatCycleLabel(selectedTag)}
                         </button>
                     )}
                     {selectedTxnIds.size > 0 && (
@@ -259,6 +441,7 @@ export function FilterableTransactions({
             <div>
                 <RecentTransactions 
                     transactions={finalTransactions} 
+                    accountType={accountType}
                     selectedTxnIds={selectedTxnIds}
                     onSelectionChange={setSelectedTxnIds}
                 />

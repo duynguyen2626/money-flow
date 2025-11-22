@@ -217,6 +217,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   const percentRaw = txn.cashback_share_percent ?? cashbackFromLines.cashback_share_percent
   const cashbackAmount = txn.cashback_share_amount ?? cashbackFromLines.cashback_share_amount
   const personLine = lines.find(line => line.person_id)
+  const categoryId = categoryLine?.category_id ?? null
 
   return {
     id: txn.id,
@@ -226,6 +227,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     type,
     category_name: categoryName,
     account_name: accountName,
+    category_id: categoryId,
     tag: txn.tag || undefined, // Thêm trường tag
     cashback_share_percent: percentRaw ?? undefined,
     cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? undefined,
@@ -235,6 +237,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
       : cashbackFromLines.original_amount,
     person_id: personLine?.person_id,
     person_name: personLine?.profiles?.name ?? null,
+    persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,
   }
 }
 
@@ -285,6 +288,7 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
   } else {
     accountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name
   }
+  const categoryId = categoryLine?.category_id ?? null
 
   return {
     id: txn.id,
@@ -295,12 +299,14 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
     type,
     category_name: categoryName,
     account_name: accountName,
+    category_id: categoryId,
     tag: txn.tag || undefined,
     cashback_share_percent: rawPercent,
     cashback_share_fixed: fixedBack,
     cashback_share_amount: cashbackAmount,
     person_id: personLine?.person_id ?? null,
     person_name: personLine?.profiles?.name ?? null,
+    persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,
   }
 }
 
