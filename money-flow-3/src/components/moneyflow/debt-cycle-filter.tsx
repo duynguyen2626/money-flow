@@ -1,3 +1,100 @@
+'use client'
+
+import { useState } from 'react'
+import { useTagFilter } from '@/context/tag-filter-context'
+import type { DebtByTagAggregatedResult } from '@/services/debt.service'
+
+type DebtCycle = DebtByTagAggregatedResult
+
+const numberFormatter = new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 0,
+})
+
+function formatCurrency(value: number) {
+    return numberFormatter.format(value)
+}
+
+function DebtCycleCard({
+    cycle,
+}: {
+    cycle: DebtCycle;
+}) {
+    const { selectedTag, setSelectedTag } = useTagFilter()
+    const isSettled = cycle.status === 'settled'
+    const amountColor = isSettled
+        ? 'text-emerald-700'
+        : cycle.netBalance >= 0
+            ? 'text-emerald-700'
+            : 'text-red-600'
+    const tagLabel = cycle.tag === 'UNTAGGED' ? 'No tag' : cycle.tag
+    const badgeLabel = cycle.tag === 'UNTAGGED' ? '-' : cycle.tag
+
+    const toggleTagFilter = () => {
+        setSelectedTag(cycle.tag === selectedTag ? null : cycle.tag)
+    }
+
+    return (
+        <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setSelectedTag(cycle.tag === selectedTag ? null : cycle.tag)}
+            onKeyDown={event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    toggleTagFilter()
+                }
+            }}
+            className={`w-full rounded-lg border p-3 shadow-sm transition ${
+                isSettled ? 'bg-slate-50' : 'bg-white'
+            } cursor-pointer`}
+        >
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        className="flex items-center gap-2"
+                        onClick={event => {
+                            event.stopPropagation()
+                            setSelectedTag(cycle.tag === selectedTag ? null : cycle.tag)
+                        }}
+                    >
+                        <span
+                            className={`flex h-8 w-8 items-center justify-center rounded-md border bg-slate-50 text-[10px] font-semibold tracking-tight uppercase ${isSettled ? 'border-gray-200 text-gray-500' : 'border-slate-300 text-slate-700'}`}
+                            title={tagLabel}
+                        >
+                            {badgeLabel}
+                        </span>
+                        <span className={`text-xs font-semibold ${cycle.tag === 'UNTAGGED' ? 'text-gray-500' : 'text-slate-700'}`}>
+                            {tagLabel}
+                        </span>
+                    </button>
+                </div>
+            </div>
+            <div className="mt-3 flex flex-col gap-1.5">
+                <p className={`text-2xl font-bold ${amountColor}`}>
+                    {formatCurrency(cycle.netBalance)}
+                </p>
+                <span
+                    className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                        isSettled
+                            ? 'bg-gray-200 text-gray-600'
+                            : cycle.netBalance > 0
+                                ? 'bg-green-100 text-green-700'
+                                : 'bg-red-100 text-red-700'
+                    }`}
+                >
+                    {isSettled ? 'Settled' : cycle.netBalance > 0 ? 'They owe me' : 'I owe them'}
+                </span>
+                <p className="text-[11px] text-gray-600">
+                    <span>Principal: {formatCurrency(Math.abs(cycle.originalPrincipal))}</span>
+                    <span className="mx-1 text-slate-400">|</span>
+                    <span className="text-amber-600">Cashback: {formatCurrency(Math.abs(cycle.totalBack ?? 0))}</span>
+                </p>
+            </div>
+        </div>
+    )
+}
+
 export function DebtCycleFilter({ 
     allCycles 
 }: {
