@@ -13,7 +13,7 @@ export type ParsedCashbackConfig = {
   minSpend: number | null
 }
 
-function parseConfigCandidate(raw: Record<string, unknown> | null) {
+function parseConfigCandidate(raw: Record<string, unknown> | null): ParsedCashbackConfig {
   let rateValue = Number(raw?.rate ?? 0)
 
   // BUG FIX: The user reported that for some cards, a rate of 0.5 is stored
@@ -37,7 +37,7 @@ function parseConfigCandidate(raw: Record<string, unknown> | null) {
       : null
 
   const cycleTypeCandidate = String(raw?.cycle_type ?? raw?.cycleType ?? 'calendar_month')
-  const cycleType =
+  const cycleType: CashbackCycleType =
     cycleTypeCandidate === 'statement_cycle' ? 'statement_cycle' : 'calendar_month'
 
   const statementCandidate = raw?.statement_day ?? raw?.statementDay
