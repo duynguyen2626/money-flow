@@ -19,9 +19,10 @@ type SettleDebtDialogProps = {
   onClose: () => void
   defaultTag?: string
   defaultAmount?: number
+  onSuccess?: () => Promise<void> | void
 }
 
-export function SettleDebtDialog({ debt, accounts, onClose, defaultTag, defaultAmount }: SettleDebtDialogProps) {
+export function SettleDebtDialog({ debt, accounts, onClose, defaultTag, defaultAmount, onSuccess }: SettleDebtDialogProps) {
   const router = useRouter()
   const realAccounts = useMemo(() => accounts.filter(acc => acc.type !== 'debt'), [accounts])
   const initialAccountId = realAccounts[0]?.id ?? ''
@@ -92,7 +93,7 @@ export function SettleDebtDialog({ debt, accounts, onClose, defaultTag, defaultA
     }
 
     setStatus({ type: 'success', message: 'Da tao giao dich tat toan.' })
-    router.refresh()
+    await (onSuccess ? onSuccess() : router.refresh())
     onClose()
   }
 

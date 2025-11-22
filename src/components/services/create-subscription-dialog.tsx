@@ -4,15 +4,16 @@ import { MouseEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { createSubscriptionAction } from '@/actions/subscription-actions'
-import { Person } from '@/types/moneyflow.types'
+import { Account, Person } from '@/types/moneyflow.types'
 
 import { SubscriptionForm } from './subscription-form'
 
 type CreateSubscriptionDialogProps = {
   people: Person[]
+  accounts: Account[]
 }
 
-export function CreateSubscriptionDialog({ people }: CreateSubscriptionDialogProps) {
+export function CreateSubscriptionDialog({ people, accounts }: CreateSubscriptionDialogProps) {
   const [open, setOpen] = useState(false)
   const router = useRouter()
 
@@ -59,6 +60,7 @@ export function CreateSubscriptionDialog({ people }: CreateSubscriptionDialogPro
             <SubscriptionForm
               mode="create"
               people={people}
+              accounts={accounts}
               onCancel={closeDialog}
               onSubmit={async values => {
                 await createSubscriptionAction(values)

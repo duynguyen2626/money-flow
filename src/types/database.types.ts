@@ -173,6 +173,8 @@ export interface Database {
           price: number | null
           next_billing_date: string | null
           is_active: boolean | null
+          payment_account_id: string | null
+          note_template: string | null
           created_at: string
         }
         Insert: {
@@ -181,6 +183,8 @@ export interface Database {
           price?: number | null
           next_billing_date?: string | null
           is_active?: boolean | null
+          payment_account_id?: string | null
+          note_template?: string | null
           created_at?: string
         }
         Update: {
@@ -189,6 +193,8 @@ export interface Database {
           price?: number | null
           next_billing_date?: string | null
           is_active?: boolean | null
+          payment_account_id?: string | null
+          note_template?: string | null
           created_at?: string
         }
       }

@@ -3,13 +3,29 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 
 import { SubscriptionPayload } from '@/services/subscription.service'
-import { Person, Subscription } from '@/types/moneyflow.types'
+import { Account, Person, Subscription } from '@/types/moneyflow.types'
 
 import { getServiceBranding } from './service-branding'
+
+function formatPreview(template: string, serviceName: string, price: number, memberCount: number) {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const year = String(now.getFullYear())
+  const safePrice = Math.max(0, Math.round(price))
+  return template
+    .replace('{name}', serviceName)
+    .replace('{date}', `${month}-${year}`)
+    .replace('{month}', month)
+    .replace('{year}', year)
+    .replace('{price}', String(safePrice))
+    .replace('{members}', String(memberCount))
+    .replace('{member}', String(memberCount))
+}
 
 type SubscriptionFormProps = {
   mode: 'create' | 'edit'
   people: Person[]
+  accounts: Account[]
   initialData?: Subscription
   submitLabel?: string
   onCancel?: () => void
@@ -88,6 +104,7 @@ function getInitialMembers(subscription?: Subscription): MemberSelection[] {
 export function SubscriptionForm({
   mode,
   people,
+  accounts,
   initialData,
   submitLabel,
   onCancel,
@@ -100,10 +117,19 @@ export function SubscriptionForm({
   const [nextBillingDate, setNextBillingDate] = useState(
     pickInitialDate(initialData?.next_billing_date)
   )
+  const defaultTemplate = 'Auto: {name} {date}'
+  const [noteTemplate, setNoteTemplate] = useState(initialData?.note_template ?? defaultTemplate)
   const [isActive, setIsActive] = useState(initialData?.is_active ?? true)
   const [members, setMembers] = useState<MemberSelection[]>(getInitialMembers(initialData))
   const [isSaving, setIsSaving] = useState(false)
   const [status, setStatus] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
+  const paymentAccount = useMemo(
+    () => accounts.find(acc => acc.id === initialData?.payment_account_id) ?? null,
+    [accounts, initialData?.payment_account_id]
+  )
+  const [paymentAccountId, setPaymentAccountId] = useState<string | null>(
+    paymentAccount?.id ?? null
+  )
 
   const priceNumber = useMemo(() => {
     const parsed = Number(priceInput)
@@ -170,7 +196,9 @@ export function SubscriptionForm({
         name: trimmedName,
         price: Number.isFinite(priceNumber) ? priceNumber : null,
         next_billing_date: nextBillingDate || null,
+        payment_account_id: paymentAccountId,
         is_active: isActive,
+        note_template: noteTemplate.trim() || null,
         members,
       })
       setStatus({
@@ -209,6 +237,48 @@ export function SubscriptionForm({
             </div>
           </div>
 
+          <label className="space-y-1 text-sm">
+            <span className="text-slate-600">Mẫu nội dung giao dịch</span>
+            <input
+              value={noteTemplate}
+              onChange={event => setNoteTemplate(event.target.value)}
+              type="text"
+              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              placeholder={defaultTemplate}
+            />
+            <span className="text-xs text-slate-500">
+              Dùng các từ khóa: {`{name}`}, {`{date}`} (MM-YYYY), {`{price}`}, {`{members}`}.
+            </span>
+            <span className="text-[11px] text-slate-600">
+              Ví dụ: {formatPreview(
+                noteTemplate || defaultTemplate,
+                name || initialData?.name || 'Service',
+                priceNumber,
+                members.length
+              )}
+            </span>
+            <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
+              {['{name}', '{date}', '{price}', '{members}'].map(token => (
+                <button
+                  key={token}
+                  type="button"
+                  onClick={() => setNoteTemplate(prev => `${prev} ${token}`.trim())}
+                  className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 hover:bg-slate-100"
+                  title="Chèn từ khóa"
+                >
+                  {token}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setNoteTemplate(defaultTemplate)}
+                className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-blue-700 hover:bg-blue-100"
+              >
+                Reset
+              </button>
+            </div>
+          </label>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1 text-sm">
               <span className="text-slate-600">Tong chi phi</span>
@@ -233,6 +303,25 @@ export function SubscriptionForm({
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
               <span className="text-xs text-slate-500">Bot se chay vao ngay nay.</span>
+            </label>
+
+            <label className="space-y-1 text-sm">
+              <span className="text-slate-600">Tai khoan thanh toan</span>
+              <select
+                value={paymentAccountId ?? ''}
+                onChange={event => setPaymentAccountId(event.target.value || null)}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                <option value="">Mac dinh (chon lon nhat)</option>
+                {accounts
+                  .filter(acc => acc.type !== 'debt')
+                  .map(acc => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name}
+                    </option>
+                  ))}
+              </select>
+              <span className="text-xs text-slate-500">Chon nguon thanh toan cho bot.</span>
             </label>
           </div>
 

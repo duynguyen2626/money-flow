@@ -1,7 +1,7 @@
 'use client'
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { format, subMonths } from 'date-fns' // Thêm subMonths để hỗ trợ tính năng lùi tháng
+import { format, subMonths } from 'date-fns'
 import { Controller, useForm, useWatch } from 'react-hook-form'
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { z } from 'zod'
@@ -14,13 +14,12 @@ import { Combobox } from '@/components/ui/combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateTag } from '@/lib/tag'
 
-// C??-p nh??-t schema ???? thA?m tr?????ng tag
 const formSchema = z.object({
   occurred_at: z.date(),
   type: z.enum(['expense', 'income', 'debt', 'transfer']),
   amount: z.coerce.number().positive(),
   note: z.string().optional(),
-  tag: z.string().min(1, 'Tag lA? b??_t bu??Tc'), // ThA?m tr?????ng tag
+  tag: z.string().min(1, 'Tag is required'),
   source_account_id: z.string({ required_error: 'Please select an account.' }),
   category_id: z.string().optional(),
   person_id: z.string().optional(),
@@ -53,13 +52,11 @@ const formSchema = z.object({
   path: ['debt_account_id'],
 });
 
-const currencyFormatter = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
+const numberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 })
 
-const cycleDateFormatter = new Intl.DateTimeFormat('vi-VN', {
+const cycleDateFormatter = new Intl.DateTimeFormat('en-US', {
   day: '2-digit',
   month: '2-digit',
 })
@@ -124,18 +121,16 @@ export function TransactionForm({
     setPeopleState(people)
   }, [people])
 
-  // Thêm state để quản lý chế độ tag thủ công
   const [manualTagMode, setManualTagMode] = useState(Boolean(defaultTag));
   
-  // Tạo danh sách tag gợi ý (6 tháng gần nhất)
   const suggestedTags = useMemo(() => {
     const tags = [];
     const today = new Date();
-    for (let i = 5; i >= 0; i--) {
+    for (let i = 2; i >= 0; i--) {
       const date = subMonths(today, i);
       tags.push(generateTag(date));
     }
-    return tags;
+    return [...new Set(tags)];
   }, []);
 
 const accountOptions = useMemo(
@@ -143,7 +138,7 @@ const accountOptions = useMemo(
     sourceAccounts.map(acc => ({
       value: acc.id,
       label: acc.name,
-      description: `${acc.type.replace('_', ' ')} - ${currencyFormatter.format(acc.current_balance)}`,
+      description: `${acc.type.replace('_', ' ')} - ${numberFormatter.format(acc.current_balance)}`,
       searchValue: `${acc.name} ${acc.type.replace('_', ' ')} ${acc.current_balance}`,
       icon: (
         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
@@ -159,7 +154,7 @@ const personOptions = useMemo(
     peopleState.map(person => ({
       value: person.id,
       label: person.name,
-      description: person.email || 'Chua co email',
+      description: person.email || 'No email',
       searchValue: `${person.name} ${person.email ?? ''}`.trim(),
       icon: (
         <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
@@ -203,7 +198,7 @@ const debtAccountByPerson = useMemo(() => {
       type: defaultType ?? 'expense',
       amount: 0,
       note: '',
-      tag: defaultTag ?? generateTag(new Date()), // Thêm giá trị mặc định cho tag
+      tag: defaultTag ?? generateTag(new Date()),
       person_id: undefined,
       debt_account_id: undefined,
       cashback_share_percent: undefined,
@@ -249,10 +244,7 @@ const debtAccountByPerson = useMemo(() => {
       cashback_share_fixed: sanitizedFixed > 0 ? sanitizedFixed : undefined,
     }
 
-    const { person_id: _personId, ...requestPayload } = payload
-    void _personId
-
-    const result = await createTransaction(requestPayload)
+    const result = await createTransaction(payload)
 
     if (result) {
       setStatus({
@@ -287,7 +279,7 @@ const debtAccountByPerson = useMemo(() => {
     control,
     handleSubmit,
     formState: { errors, isSubmitting },
-    register, // Thêm register vào destructuring
+    register,
     watch, 
   } = form
 
@@ -305,7 +297,7 @@ const debtAccountByPerson = useMemo(() => {
       .map(cat => ({
         value: cat.id,
         label: cat.name,
-        description: cat.type === 'expense' ? 'Chi tieu' : 'Thu nhap',
+        description: cat.type === 'expense' ? 'Expense' : 'Income',
         searchValue: `${cat.name} ${cat.type}`,
       }))
   }, [categories, transactionType])
@@ -419,7 +411,7 @@ const debtAccountByPerson = useMemo(() => {
         }
         console.error(error)
         setSpendingStats(null)
-        setStatsError('Khong the tai thong tin Min Spend')
+        setStatsError('Could not load Min Spend info')
       })
       .finally(() => {
         setStatsLoading(false)
@@ -452,7 +444,7 @@ const debtAccountByPerson = useMemo(() => {
         const payload = (await response.json()) as CashbackCard[]
         if (!payload.length) {
         setCashbackProgress(null)
-        setProgressError('Khong tim thay du lieu cashback chu ky')
+        setProgressError('Could not find cashback cycle data')
           return
         }
         setCashbackProgress(payload[0])
@@ -463,7 +455,7 @@ const debtAccountByPerson = useMemo(() => {
         }
         console.error(error)
         setCashbackProgress(null)
-        setProgressError('Khong the tai thong tin cashback')
+        setProgressError('Could not load cashback info')
       })
       .finally(() => {
         setProgressLoading(false)
@@ -491,26 +483,26 @@ const debtAccountByPerson = useMemo(() => {
       return null
     }
 
-    const formattedTarget = currencyFormatter.format(spendingStats.minSpend)
+    const formattedTarget = numberFormatter.format(spendingStats.minSpend)
     const ratePercent = Math.round(spendingStats.rate * 100)
 
     if (projectedSpend < spendingStats.minSpend) {
       const remaining = Math.max(0, spendingStats.minSpend - projectedSpend)
       return {
-        text: `Cần chi thêm ${currencyFormatter.format(remaining)} nữa để đạt min spend ${formattedTarget} (${ratePercent}% cashback).`,
+        text: `Spend ${numberFormatter.format(remaining)} more to reach min spend of ${formattedTarget} (${ratePercent}% cashback).`,
         className: 'text-amber-600',
       }
     }
 
     if (spendingStats.currentSpend < spendingStats.minSpend) {
       return {
-        text: `Tuyệt vời! Giao dịch này giúp bạn đạt chỉ tiêu tối thiểu (${formattedTarget}).`,
+        text: `Great! This transaction helps you meet the minimum spend requirement (${formattedTarget}).`,
         className: 'text-emerald-600',
       }
     }
 
     return {
-      text: `Đã đạt chỉ tiêu Min Spend (${formattedTarget}). Đang tích lũy hoàn tiền ${ratePercent}%.`,
+      text: `Min spend target met (${formattedTarget}). Accumulating ${ratePercent}% cashback.`,
       className: 'text-blue-600',
     }
   }, [projectedSpend, spendingStats])
@@ -537,18 +529,18 @@ const debtAccountByPerson = useMemo(() => {
 
     if (remaining <= 0) {
       return {
-        text: 'Ngân sách hoàn tiền đã cạn. Giao dịch này sẽ không được hoàn thêm.',
+        text: 'Cashback budget exhausted. This transaction will not earn further cashback.',
         className: 'text-amber-600',
       }
     }
 
     if (potentialNewEarn > remaining) {
       return {
-        text: `Ngân sách hoàn tiền chỉ còn ${currencyFormatter.format(
+        text: `Cashback budget has only ${numberFormatter.format(
           Math.max(0, remaining)
-        )}. Bạn chỉ nên nhận tối đa ${currencyFormatter.format(
+        )} left. You should only claim a maximum of ${numberFormatter.format(
           Math.max(0, remaining)
-        )} cho giao dịch này.`,
+        )} for this transaction.`,
         className: 'text-amber-600',
       }
     }
@@ -606,7 +598,7 @@ const debtAccountByPerson = useMemo(() => {
       setDebtEnsureError(null)
       const accountId = await ensureDebtAccountAction(watchedPersonId, person?.name)
       if (!accountId) {
-        setDebtEnsureError('Khong the tao tai khoan no. Thu lai.')
+        setDebtEnsureError('Could not create debt account. Please try again.')
         return
       }
       setPeopleState(prev => prev.map(p => p.id === watchedPersonId ? { ...p, debt_account_id: accountId } : p))
@@ -614,7 +606,6 @@ const debtAccountByPerson = useMemo(() => {
     })
   }
 
-  // Thêm useEffect để tự động cập nhật tag khi ngày thay đổi
   useEffect(() => {
     if (!manualTagMode && watchedDate) {
       form.setValue('tag', generateTag(watchedDate));
@@ -634,6 +625,12 @@ const debtAccountByPerson = useMemo(() => {
     }
   }, [defaultType, form]);
 
+  const debtAccountName = useMemo(() => {
+    if (!watchedDebtAccountId) return null
+    const account = allAccounts.find(acc => acc.id === watchedDebtAccountId)
+    return account?.name ?? null
+  }, [watchedDebtAccountId, allAccounts])
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="space-y-2">
@@ -644,10 +641,10 @@ const debtAccountByPerson = useMemo(() => {
           render={({ field }) => (
             <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
               <TabsList className="grid w-full grid-cols-4 gap-1">
-                <TabsTrigger value="expense">Chi tieu</TabsTrigger>
-                <TabsTrigger value="income">Thu nhap</TabsTrigger>
-                <TabsTrigger value="transfer">Chuyen khoan</TabsTrigger>
-                <TabsTrigger value="debt">No/Cho vay</TabsTrigger>
+                <TabsTrigger value="expense">Expense</TabsTrigger>
+                <TabsTrigger value="income">Income</TabsTrigger>
+                <TabsTrigger value="transfer">Transfer</TabsTrigger>
+                <TabsTrigger value="debt">Debt</TabsTrigger>
               </TabsList>
             </Tabs>
           )}
@@ -656,6 +653,65 @@ const debtAccountByPerson = useMemo(() => {
           <p className="text-sm text-red-600">{errors.type.message}</p>
         )}
       </div>
+
+      {(transactionType === 'debt' || transactionType === 'transfer') && (
+      <div className="space-y-3">
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">
+            {transactionType === 'transfer' ? 'Lend to' : 'Person'}
+          </label>
+          <Controller
+            control={control}
+            name="person_id"
+            render={({ field }) => (
+              <Combobox
+                value={field.value}
+                onValueChange={value => {
+                  field.onChange(value)
+                  const linkedAccount = value ? debtAccountByPerson.get(value) : undefined
+                  form.setValue('debt_account_id', linkedAccount ?? undefined, { shouldValidate: true })
+                }}
+                items={personOptions}
+                placeholder="Select person"
+                inputPlaceholder="Search person..."
+                emptyState="No person found"
+              />
+            )}
+          />
+          {errors.person_id && (
+            <p className="text-sm text-red-600">{errors.person_id.message}</p>
+          )}
+           {debtAccountName && (
+            <p className="text-xs text-slate-500 mt-1">
+                Debt Account: <span className="font-semibold text-slate-700">{debtAccountName}</span>
+            </p>
+           )}
+        </div>
+
+        {watchedPersonId && !debtAccountByPerson.get(watchedPersonId) && (
+          <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <div className="space-y-1">
+              <p className="font-semibold">This person does not have a debt account.</p>
+              <p>A debt account will be created automatically when you click the button.</p>
+              {debtEnsureError && (
+                <p className="text-rose-600">{debtEnsureError}</p>
+              )}
+            </div>
+            <button
+              type="button"
+              className="rounded-md bg-amber-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
+              onClick={handleEnsureDebtAccount}
+              disabled={isEnsuringDebt}
+            >
+              {isEnsuringDebt ? 'Creating...' : 'Create & Link Now'}
+            </button>
+          </div>
+        )}
+        {errors.debt_account_id && (
+          <p className="text-sm text-red-600">{errors.debt_account_id.message}</p>
+        )}
+      </div>
+    )}
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Date</label>
@@ -677,11 +733,12 @@ const debtAccountByPerson = useMemo(() => {
         {errors.occurred_at && (
           <p className="text-sm text-red-600">{errors.occurred_at.message}</p>
         )}
+        {transactionType !== 'debt' && <p className="text-xs text-gray-500 pt-1">Cycle Tag: <span className="font-semibold">{watch('tag')}</span></p>}
       </div>
 
-      {/* Thêm trường Tag vào form */}
+      {transactionType === 'debt' && (
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Kỳ nợ (Tag)</label>
+        <label className="text-sm font-medium text-gray-700">Debt Cycle (Tag)</label>
         <Controller
           control={control}
           name="tag"
@@ -691,44 +748,13 @@ const debtAccountByPerson = useMemo(() => {
                 {...field}
                 onChange={(e) => {
                   field.onChange(e);
-                  // Khi người dùng thay đổi tag thủ công, đặt manualTagMode thành true
                   if (!manualTagMode) {
                     setManualTagMode(true);
                   }
                 }}
                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                placeholder="Nhập tag (ví dụ: NOV25)"
+                placeholder="Enter tag (e.g., NOV25)"
               />
-              {/* Các nút hành động nhanh */}
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Lùi về tháng trước
-                    const currentDate = watchedDate || new Date();
-                    const previousMonth = subMonths(currentDate, 1);
-                    const previousTag = generateTag(previousMonth);
-                    form.setValue('tag', previousTag);
-                    setManualTagMode(true);
-                  }}
-                  className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700 hover:bg-gray-200"
-                >
-                  &lt; Tháng trước
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    // Reset về tag mặc định dựa trên ngày hiện tại
-                    const currentDate = watchedDate || new Date();
-                    const defaultTag = generateTag(currentDate);
-                    form.setValue('tag', defaultTag);
-                    setManualTagMode(false);
-                  }}
-                  className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700 hover:bg-gray-200"
-                >
-                  Reset
-                </button>
-              </div>
             </div>
           )}
         />
@@ -736,22 +762,46 @@ const debtAccountByPerson = useMemo(() => {
           <p className="text-sm text-red-600">{errors.tag.message}</p>
         )}
         
-        {/* Dropdown gợi ý tag gần đây */}
         <div className="mt-1">
-          <p className="text-xs text-gray-500 mb-1">Gợi ý gần đây:</p>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs text-gray-500 mr-1">Recent:</span>
+            <button
+              type="button"
+              onClick={() => {
+                form.setValue('tag', generateTag(new Date()), { shouldValidate: true });
+                setManualTagMode(true);
+              }}
+              className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
+              aria-label="Reset to current month"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/></svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const currentDate = watchedDate || new Date();
+                const previousMonth = subMonths(currentDate, 1);
+                const previousTag = generateTag(previousMonth);
+                form.setValue('tag', previousTag, { shouldValidate: true });
+                setManualTagMode(true);
+              }}
+              className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
+              aria-label="Previous month"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
             {suggestedTags.map((tag) => (
               <button
                 key={tag}
                 type="button"
                 onClick={() => {
-                  form.setValue('tag', tag);
+                  form.setValue('tag', tag, { shouldValidate: true });
                   setManualTagMode(true);
                 }}
-                className={`rounded px-2 py-1 text-xs ${
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
                   watch('tag') === tag 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-blue-500 text-white shadow-sm' 
+                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
                 }`}
               >
                 {tag}
@@ -760,78 +810,80 @@ const debtAccountByPerson = useMemo(() => {
           </div>
         </div>
       </div>
+      )}
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">
-          {transactionType === 'income'
-            ? 'To Account'
-            : transactionType === 'transfer'
-              ? 'Lay tien tu dau?'
-              : 'From Account'}
-        </label>
-        <Controller
-          control={control}
-          name="source_account_id"
-          render={({ field }) => (
-            <Combobox
-              value={field.value}
-              onValueChange={field.onChange}
-              items={accountOptions}
-              placeholder="Chon tai khoan"
-              inputPlaceholder="Tim kiem tai khoan..."
-              emptyState="Khong tim thay tai khoan"
-            />
+      <div className="space-y-3">
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">
+            {transactionType === 'income'
+              ? 'To Account'
+              : transactionType === 'transfer'
+                ? 'Source of Funds'
+                : 'From Account'}
+          </label>
+          <Controller
+            control={control}
+            name="source_account_id"
+            render={({ field }) => (
+              <Combobox
+                value={field.value}
+                onValueChange={field.onChange}
+                items={accountOptions}
+                placeholder="Select account"
+                inputPlaceholder="Search account..."
+                emptyState="No account found"
+              />
+            )}
+          />
+          {errors.source_account_id && (
+            <p className="text-sm text-red-600">{errors.source_account_id.message}</p>
           )}
-        />
-        {errors.source_account_id && (
-          <p className="text-sm text-red-600">{errors.source_account_id.message}</p>
-        )}
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">Amount</label>
+          <Controller
+            control={control}
+            name="amount"
+            render={({ field }) => (
+              <input
+                type="text"
+                inputMode="decimal"
+                value={field.value ? new Intl.NumberFormat('en-US').format(field.value) : ''}
+                onFocus={() => {
+                  if (field.value === 0) {
+                    field.onChange(undefined);
+                  }
+                }}
+                onChange={event => {
+                  const rawValue = event.target.value;
+                  const numericValue = rawValue.replace(/[^0-9]/g, '');
+                  
+                  if (numericValue === '') {
+                    field.onChange(undefined);
+                    return;
+                  }
+
+                  const number = parseInt(numericValue, 10);
+                  if (!isNaN(number)) {
+                    field.onChange(number);
+                  }
+                }}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="0"
+              />
+            )}
+          />
+          {errors.amount && (
+            <p className="text-sm text-red-600">{errors.amount.message}</p>
+          )}
+        </div>
+
         {progressLoading && (
-          <p className="text-xs text-slate-400">Dang tai lich su cashback...</p>
+          <p className="text-xs text-slate-400">Loading cashback history...</p>
         )}
         {progressError && (
           <p className="text-xs text-rose-600">{progressError}</p>
-        )}
-        {cashbackMeta && cashbackMeta.rate > 0 && (
-          <div className="mt-3 flex flex-col gap-1 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm text-slate-600">
-            {selectedCycleLabel && (
-              <div className="font-semibold text-slate-900">
-                Kỳ sao kê: {selectedCycleLabel}
-              </div>
-            )}
-            <div className="text-xs text-blue-600">
-              Cashback Rate: {(cashbackMeta.rate * 100).toFixed(0)}%
-            </div>
-            <div className="text-xs text-slate-500">
-              Max: {cashbackMeta.maxAmount ? currencyFormatter.format(cashbackMeta.maxAmount) : 'Khong gioi han'}
-            </div>
-            {minSpendHint && (
-              <p className={`text-xs font-medium ${minSpendHint.className}`}>
-                {minSpendHint.text}
-              </p>
-            )}
-            {limitWarning && (
-              <p className={`text-xs font-medium ${limitWarning.className}`}>
-                {limitWarning.text}
-              </p>
-            )}
-            {statsLoading && (
-              <p className="text-xs text-slate-500">Đang cập nhật tiến độ Min Spend...</p>
-            )}
-            {statsError && (
-              <p className="text-xs text-rose-600">{statsError}</p>
-            )}
-            {typeof cashbackProgress?.remainingBudget === 'number' && (
-              <p className="text-xs text-slate-500">
-                Ngan sach con lai: {currencyFormatter.format(cashbackProgress.remainingBudget)}
-              </p>
-            )}
-            {potentialCashback > 0 && (
-              <p className="text-xs text-emerald-600">
-                Du kien hoan: +{currencyFormatter.format(potentialCashback)}
-              </p>
-            )}
-          </div>
         )}
       </div>
 
@@ -846,9 +898,9 @@ const debtAccountByPerson = useMemo(() => {
                 value={field.value}
                 onValueChange={field.onChange}
                 items={categoryOptions}
-                placeholder="Chon danh muc"
-                inputPlaceholder="Tim kiem danh muc..."
-                emptyState="Khong co danh muc phu hop"
+                placeholder="Select category"
+                inputPlaceholder="Search category..."
+                emptyState="No matching category"
               />
             )}
           />
@@ -858,71 +910,26 @@ const debtAccountByPerson = useMemo(() => {
         </div>
       )}
 
-    {(transactionType === 'debt' || transactionType === 'transfer') && (
-      <div className="space-y-3">
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            {transactionType === 'transfer' ? 'Cho ai vay?' : 'Nguoi'}
-          </label>
-          <Controller
-            control={control}
-            name="person_id"
-            render={({ field }) => (
-              <Combobox
-                value={field.value}
-                onValueChange={value => {
-                  field.onChange(value)
-                  const linkedAccount = value ? debtAccountByPerson.get(value) : undefined
-                  form.setValue('debt_account_id', linkedAccount ?? undefined, { shouldValidate: true })
-                }}
-                items={personOptions}
-                placeholder="Chon nguoi nhan"
-                inputPlaceholder="Tim kiem doi tac..."
-                emptyState="Khong tim thay doi tuong phu hop"
-              />
-            )}
-          />
-          {errors.person_id && (
-            <p className="text-sm text-red-600">{errors.person_id.message}</p>
-          )}
-        </div>
-
-        {watchedPersonId && !debtAccountByPerson.get(watchedPersonId) && (
-          <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-            <div className="space-y-1">
-              <p className="font-semibold">Nguoi nay chua co tai khoan no.</p>
-              <p>He thong se tao tai khoan cong no tu dong khi ban bam nut ben canh.</p>
-              {debtEnsureError && (
-                <p className="text-rose-600">{debtEnsureError}</p>
-              )}
-            </div>
-            <button
-              type="button"
-              className="rounded-md bg-amber-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
-              onClick={handleEnsureDebtAccount}
-              disabled={isEnsuringDebt}
-            >
-              {isEnsuringDebt ? 'Dang tao...' : 'Tao lien ket ngay'}
-            </button>
-          </div>
-        )}
-        {errors.debt_account_id && (
-          <p className="text-sm text-red-600">{errors.debt_account_id.message}</p>
-        )}
-      </div>
-    )}
-
     {showCashbackInputs && (
       <div className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/80 p-4 text-sm text-slate-600 shadow-sm">
-        <div className="flex items-center justify-between text-xs font-semibold uppercase text-indigo-700">
-          <span>Chia cashback</span>
-          <span>
-            Ngan sach:{' '}
-            {remainingBudget === null
-              ? 'Khong gioi han'
-              : currencyFormatter.format(remainingBudget)}
-          </span>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs font-semibold uppercase text-indigo-700">
+          <div className="space-y-0.5">
+            <div className="text-[11px] text-slate-500">Statement Cycle</div>
+            <div className="text-sm font-semibold text-slate-900">
+              {selectedCycleLabel ?? 'No cycle info'}
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] text-indigo-800">Rate: {(cashbackMeta?.rate ?? 0) * 100}%</span>
+            <span>
+              Budget:{' '}
+              {remainingBudget === null
+                ? 'Unlimited'
+                : numberFormatter.format(remainingBudget)}
+            </span>
+          </div>
         </div>
+
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <label className="text-xs font-medium text-slate-600">% Back</label>
@@ -940,24 +947,22 @@ const debtAccountByPerson = useMemo(() => {
                     const nextValue = event.target.value
                     field.onChange(nextValue === '' ? undefined : Number(nextValue))
                   }}
-                  disabled={budgetMaxed} // Thêm disabled khi ngân sách đã hết
+                  disabled={budgetMaxed}
                   className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder="Nhap phan tram"
+                  placeholder="Enter percentage"
                 />
               )}
-/>
+            />
             {rateLimitPercent !== null && (
               <p className="text-xs text-slate-500">
-                {/* Thay đổi giới hạn hiển thị tối đa 50% thay vì rateLimitPercent */}
-                Khong qua {Math.min(50, rateLimitPercent).toFixed(2)}%
+                Up to {Math.min(50, rateLimitPercent).toFixed(2)}%
               </p>
-)}
-{rateLimitPercent !== null && percentEntry > rateLimitPercent && (
-  <p className="text-xs text-amber-600">
-    {/* Giới hạn tối đa 50% cho cảnh báo */}
-    Toi da {Math.min(50, rateLimitPercent).toFixed(2)}% theo chinh sach the
-  </p>
-)}
+            )}
+            {rateLimitPercent !== null && percentEntry > rateLimitPercent && (
+              <p className="text-xs text-amber-600">
+                Max {Math.min(50, rateLimitPercent).toFixed(2)}% according to card policy
+              </p>
+            )}
 
           </div>
           <div className="space-y-1">
@@ -967,67 +972,50 @@ const debtAccountByPerson = useMemo(() => {
               name="cashback_share_fixed"
               render={({ field }) => (
                 <input
-                  type="number"
-                  step="1000"
-                  min="0"
-                  value={field.value ?? ''}
+                  type="text"
+                  inputMode="decimal"
+                  value={field.value ? new Intl.NumberFormat('en-US').format(field.value) : ''}
                   onChange={event => {
-                    const nextValue = event.target.value
-                    field.onChange(nextValue === '' ? undefined : Number(nextValue))
+                    const rawValue = event.target.value
+                    const numericValue = rawValue.replace(/[^0-9]/g, '')
+                    if (numericValue === '') {
+                      field.onChange(undefined)
+                      return
+                    }
+                    const number = parseInt(numericValue, 10)
+                    if (!Number.isNaN(number)) {
+                      field.onChange(number)
+                    }
                   }}
                   disabled={budgetMaxed}
                   className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder="Nhap co dinh"
+                  placeholder="Enter fixed amount"
                 />
               )}
             />
             {budgetMaxed && (
-            <p className="text-xs text-rose-600">Ngan sach da het, khong the chia them co dinh.</p>
+            <p className="text-xs text-rose-600">Budget exhausted, cannot add fixed amount.</p>
             )}
           </div>
         </div>
           <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-            <span>Tong hoan cho nguoi khac</span>
+            <span>Total shared with person</span>
           <span className="font-semibold text-slate-900">
-            {currencyFormatter.format(totalBackGiven)}
+            {numberFormatter.format(totalBackGiven)}
           </span>
         </div>
         {budgetExceeded && remainingBudget !== null && (
           <p className="text-xs text-amber-600">
-            Ngan sach hoan tien chi con {currencyFormatter.format(remainingBudget)}.
+            Cashback budget only has {numberFormatter.format(remainingBudget)} remaining.
           </p>
         )}
         {suggestedPercent !== null && budgetExceeded && (
           <p className="text-xs text-amber-600">
-            Goi y giam ty le xuong {suggestedPercent.toFixed(2)}% de khong vuot ngan sach.
+            Suggest lowering percentage to {suggestedPercent.toFixed(2)}% to not exceed budget.
           </p>
         )}
       </div>
     )}
-
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Amount</label>
-        <Controller
-          control={control}
-          name="amount"
-          render={({ field }) => (
-            <input
-              type="number"
-              step="0.01"
-              value={field.value ?? ''}
-              onChange={event => {
-                const nextValue = event.target.value
-                field.onChange(nextValue === '' ? undefined : Number(nextValue))
-              }}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="0.00"
-            />
-          )}
-        />
-        {errors.amount && (
-          <p className="text-sm text-red-600">{errors.amount.message}</p>
-        )}
-      </div>
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Note</label>

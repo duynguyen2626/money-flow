@@ -49,6 +49,8 @@ export type Subscription = {
   price?: number | null
   next_billing_date?: string | null
   is_active?: boolean | null
+  payment_account_id?: string | null
+  note_template?: string | null
   members?: SubscriptionMember[]
 }
 
@@ -85,4 +87,6 @@ export type TransactionWithDetails = TransactionRow & {
   cashback_share_amount?: number | null;
   original_amount?: number | null;
   type?: 'income' | 'expense' | 'transfer';
+  person_id?: string | null;
+  person_name?: string | null;
 }

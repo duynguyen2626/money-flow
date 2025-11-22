@@ -24,11 +24,23 @@ type SubscriptionWithMembersRow = SubscriptionRow & {
   })[] | null
 }
 
+function formatNoteTemplate(row: SubscriptionWithMembersRow, billingDate: string, memberCount: number) {
+  const base = row.note_template?.trim() || 'Auto: {name} {date}'
+  const safePrice = Math.max(0, Number(row.price ?? 0))
+  return base
+    .replace('{name}', row.name ?? '')
+    .replace('{date}', format(parseISO(billingDate), 'MM-yyyy'))
+    .replace('{price}', String(safePrice))
+    .replace('{members}', String(memberCount))
+}
+
 export type SubscriptionPayload = {
   name: string
   price?: number | null
   next_billing_date?: string | null
   is_active?: boolean | null
+  payment_account_id?: string | null
+  note_template?: string | null
   members?: { profile_id: string; fixed_amount?: number | null }[]
 }
 
@@ -100,6 +112,8 @@ function mapSubscriptionRow(
     price: row.price,
     next_billing_date: row.next_billing_date ?? undefined,
     is_active: row.is_active ?? undefined,
+    payment_account_id: row.payment_account_id ?? undefined,
+    note_template: row.note_template ?? undefined,
     members,
   }
 }
@@ -109,7 +123,7 @@ export async function getSubscriptions(): Promise<Subscription[]> {
     const supabase = createClient()
 
     const baseSelect = `
-      id, name, price, next_billing_date, is_active,
+      id, name, price, next_billing_date, is_active, payment_account_id, note_template,
       subscription_members (
         profile_id,
         fixed_amount,
@@ -206,16 +220,18 @@ export async function createSubscription(payload: SubscriptionPayload): Promise<
       price: typeof payload.price === 'number' ? payload.price : null,
       next_billing_date: payload.next_billing_date || null,
       is_active: typeof payload.is_active === 'boolean' ? payload.is_active : undefined,
+      payment_account_id: payload.payment_account_id ?? null,
+      note_template: payload.note_template ?? null,
     }
 
     const performInsert = async (fields: SubscriptionInsert, select: string) =>
       supabase.from('subscriptions').insert(fields).select(select).single()
 
-    let { data, error } = await performInsert(body, 'id, name, price, next_billing_date, is_active')
+    let { data, error } = await performInsert(body, 'id, name, price, next_billing_date, is_active, payment_account_id, note_template')
 
     if (error?.code === '42703') {
-      // Schema does not have is_active
-      const { is_active: _ignored, ...rest } = body
+      // Schema missing new columns
+      const { is_active: _ignored, payment_account_id: _ignoredPay, note_template: _ignoredTemplate, ...rest } = body
       const fallback = await performInsert(rest, 'id, name, price, next_billing_date')
       data = fallback.data
       error = fallback.error as typeof error
@@ -234,6 +250,8 @@ export async function createSubscription(payload: SubscriptionPayload): Promise<
       price: data.price,
       next_billing_date: data.next_billing_date ?? undefined,
       is_active: data.is_active ?? undefined,
+      payment_account_id: data.payment_account_id ?? undefined,
+      note_template: data.note_template ?? undefined,
       members: payload.members?.map(member => ({
         profile_id: member.profile_id,
         fixed_amount: member.fixed_amount,
@@ -254,6 +272,10 @@ export async function updateSubscription(id: string, payload: SubscriptionPayloa
   if (typeof payload.next_billing_date !== 'undefined')
     updatePayload.next_billing_date = payload.next_billing_date ?? null
   if (typeof payload.is_active !== 'undefined') updatePayload.is_active = payload.is_active
+  if (typeof payload.payment_account_id !== 'undefined')
+    updatePayload.payment_account_id = payload.payment_account_id ?? null
+  if (typeof payload.note_template !== 'undefined')
+    updatePayload.note_template = payload.note_template ?? null
 
   if (Object.keys(updatePayload).length > 0) {
     const attemptUpdate = async (data: SubscriptionUpdate) =>
@@ -358,7 +380,7 @@ export async function checkAndProcessSubscriptions(): Promise<{
     .from('subscriptions')
     .select(
       `
-      id, name, price, next_billing_date, is_active,
+      id, name, price, next_billing_date, is_active, payment_account_id,
       subscription_members (
         profile_id,
         fixed_amount,
@@ -377,7 +399,7 @@ export async function checkAndProcessSubscriptions(): Promise<{
         .from('subscriptions')
         .select(
           `
-          id, name, price, next_billing_date,
+          id, name, price, next_billing_date, payment_account_id,
           subscription_members (
             profile_id,
             fixed_amount,
@@ -429,11 +451,12 @@ export async function checkAndProcessSubscriptions(): Promise<{
     )
     const myShare = Math.max(0, price - memberTotal)
 
+    const paymentSource = row.payment_account_id ?? paymentAccountId
     const { data: txn, error: txnError } = await supabase
       .from('transactions')
       .insert({
         occurred_at: `${billingDate}T00:00:00.000Z`,
-        note: `Auto-generated for ${row.name}`,
+        note: formatNoteTemplate(row, billingDate, members.length),
         status: 'posted',
         tag: format(parseISO(billingDate), 'MMMyy').toUpperCase(),
       } as TransactionInsert)
@@ -452,7 +475,7 @@ export async function checkAndProcessSubscriptions(): Promise<{
       {
         id: randomUUID(),
         transaction_id: txn.id,
-        account_id: paymentAccountId,
+        account_id: paymentSource,
         amount: -price,
         type: 'credit',
         metadata: { subscription_id: row.id },
@@ -481,6 +504,7 @@ export async function checkAndProcessSubscriptions(): Promise<{
         account_id: member.debt_account_id,
         amount: share,
         type: 'debit',
+        person_id: member.profile_id,
         metadata: {
           subscription_id: row.id,
           member_profile_id: member.profile_id,
