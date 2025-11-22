@@ -22,6 +22,8 @@ export interface Database {
           is_active: boolean | null
           created_at: string
           secured_by_account_id: string | null
+          img_url: string | null
+          logo_url: string | null
         }
         Insert: {
           id?: string
@@ -35,6 +37,8 @@ export interface Database {
           is_active?: boolean | null
           created_at?: string
           secured_by_account_id?: string | null
+          img_url?: string | null
+          logo_url?: string | null
         }
         Update: {
           id?: string
@@ -48,6 +52,8 @@ export interface Database {
           is_active?: boolean | null
           created_at?: string
           secured_by_account_id?: string | null
+          img_url?: string | null
+          logo_url?: string | null
         }
       }
       transactions: {

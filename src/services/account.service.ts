@@ -12,6 +12,9 @@ type AccountRow = {
   owner_id: string | null
   cashback_config: Json | null
   secured_by_account_id: string | null
+  is_active: boolean | null
+  img_url: string | null
+  logo_url: string | null
 }
 
 function normalizeCashbackConfig(value: Json | null): Json | null {
@@ -52,6 +55,9 @@ export async function getAccounts(): Promise<Account[]> {
     owner_id: item.owner_id ?? '',
     secured_by_account_id: item.secured_by_account_id ?? null,
     cashback_config: normalizeCashbackConfig(item.cashback_config),
+    is_active: typeof item.is_active === 'boolean' ? item.is_active : null,
+    img_url: typeof item.img_url === 'string' ? item.img_url : typeof item.logo_url === 'string' ? item.logo_url : null,
+    logo_url: typeof item.logo_url === 'string' ? item.logo_url : null,
   }))
 }
 
@@ -88,6 +94,9 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
     owner_id: row.owner_id ?? '',
     secured_by_account_id: row.secured_by_account_id ?? null,
     cashback_config: normalizeCashbackConfig(row.cashback_config),
+    is_active: typeof row.is_active === 'boolean' ? row.is_active : null,
+    img_url: typeof row.img_url === 'string' ? row.img_url : typeof row.logo_url === 'string' ? row.logo_url : null,
+    logo_url: typeof row.logo_url === 'string' ? row.logo_url : null,
   }
 }
 
@@ -208,6 +217,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   const percentRaw = txn.cashback_share_percent ?? cashbackFromLines.cashback_share_percent
   const cashbackAmount = txn.cashback_share_amount ?? cashbackFromLines.cashback_share_amount
   const personLine = lines.find(line => line.person_id)
+  const categoryId = categoryLine?.category_id ?? null
 
   return {
     id: txn.id,
@@ -217,6 +227,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     type,
     category_name: categoryName,
     account_name: accountName,
+    category_id: categoryId,
     tag: txn.tag || undefined, // Thêm trường tag
     cashback_share_percent: percentRaw ?? undefined,
     cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? undefined,
@@ -226,6 +237,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
       : cashbackFromLines.original_amount,
     person_id: personLine?.person_id,
     person_name: personLine?.profiles?.name ?? null,
+    persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,
   }
 }
 
@@ -276,6 +288,7 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
   } else {
     accountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name
   }
+  const categoryId = categoryLine?.category_id ?? null
 
   return {
     id: txn.id,
@@ -286,12 +299,14 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
     type,
     category_name: categoryName,
     account_name: accountName,
+    category_id: categoryId,
     tag: txn.tag || undefined,
     cashback_share_percent: rawPercent,
     cashback_share_fixed: fixedBack,
     cashback_share_amount: cashbackAmount,
     person_id: personLine?.person_id ?? null,
     person_name: personLine?.profiles?.name ?? null,
+    persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,
   }
 }
 
@@ -445,6 +460,9 @@ export async function updateAccountConfig(
     cashback_config?: Json | null
     type?: Account['type']
     secured_by_account_id?: string | null
+    is_active?: boolean | null
+    img_url?: string | null
+    logo_url?: string | null
   }
 ): Promise<boolean> {
   const supabase = createClient()
@@ -455,6 +473,9 @@ export async function updateAccountConfig(
     cashback_config?: Json | null
     type?: Account['type']
     secured_by_account_id?: string | null
+    is_active?: boolean | null
+    img_url?: string | null
+    logo_url?: string | null
   } = {}
 
   if (typeof data.name === 'string') {
@@ -477,6 +498,19 @@ export async function updateAccountConfig(
     payload.secured_by_account_id = data.secured_by_account_id ?? null
   }
 
+  if (typeof data.is_active === 'boolean') {
+    payload.is_active = data.is_active
+  }
+
+  if (typeof data.img_url === 'string') {
+    payload.img_url = data.img_url
+    payload.logo_url = data.logo_url ?? data.img_url
+  }
+
+  if (typeof data.logo_url === 'string') {
+    payload.logo_url = data.logo_url
+  }
+
   if (Object.keys(payload).length === 0) {
     return true
   }
@@ -487,6 +521,24 @@ export async function updateAccountConfig(
     .eq('id', accountId)
 
   if (error) {
+    const columnMissing =
+      (error.code && ['42703', '42P01'].includes(error.code)) ||
+      (typeof error.message === 'string' && error.message.includes('img_url'))
+
+    if (columnMissing && 'img_url' in payload) {
+      const { img_url: _ignored, ...retryPayload } = payload
+      const { error: retryError } = await supabase
+        .from('accounts')
+        .update(retryPayload)
+        .eq('id', accountId)
+
+      if (retryError) {
+        console.error('Error updating account configuration after retry:', retryError)
+        return false
+      }
+      return true
+    }
+
     console.error('Error updating account configuration:', error)
     return false
   }
