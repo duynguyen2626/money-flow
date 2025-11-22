@@ -5,6 +5,7 @@ import { FilterIcon, X } from 'lucide-react'
 import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
 import { Account, Category, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
+import { Combobox } from '@/components/ui/combobox'
 
 type FilterableTransactionsProps = {
     transactions: TransactionWithDetails[]
@@ -32,7 +33,8 @@ export function FilterableTransactions({
     const [selectedTxnIds, setSelectedTxnIds] = useState(new Set<string>());
     const [showSelectedOnly, setShowSelectedOnly] = useState(false)
     const [showFilterMenu, setShowFilterMenu] = useState(false)
-    const [tagSearch, setTagSearch] = useState('')
+    const currentYear = String(new Date().getFullYear())
+    const [selectedYear, setSelectedYear] = useState<string>(currentYear)
     const [moreTagsOpen, setMoreTagsOpen] = useState(false)
     const [selectedCycle, setSelectedCycle] = useState<string | null>(null)
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
@@ -61,6 +63,30 @@ export function FilterableTransactions({
         () => categories.filter(cat => cat.parent_id === selectedCategoryId),
         [categories, selectedCategoryId]
     )
+
+    const availableYears = useMemo(() => {
+        const years = new Set<string>([currentYear])
+        transactions.forEach(txn => {
+            const rawDate = txn.occurred_at ?? (txn as { created_at?: string }).created_at
+            const parsed = rawDate ? new Date(rawDate) : null
+            if (parsed && !Number.isNaN(parsed.getTime())) {
+                years.add(String(parsed.getFullYear()))
+            }
+        })
+        return Array.from(years).sort((a, b) => Number(b) - Number(a))
+    }, [currentYear, transactions])
+
+    const filteredByYear = useMemo(() => {
+        if (!selectedYear) return transactions
+        return transactions.filter(txn => {
+            const rawDate = txn.occurred_at ?? (txn as { created_at?: string }).created_at
+            const parsed = rawDate ? new Date(rawDate) : null
+            if (!parsed || Number.isNaN(parsed.getTime())) {
+                return false
+            }
+            return String(parsed.getFullYear()) === selectedYear
+        })
+    }, [selectedYear, transactions])
 
     const formatCycleLabel = (value: string | null | undefined) => {
         if (!value) return 'UNTAGGED'
@@ -95,7 +121,7 @@ export function FilterableTransactions({
     
     const tagMeta = useMemo(() => {
         const map = new Map<string, { tag: string; last: number }>()
-        transactions.forEach(txn => {
+        filteredByYear.forEach(txn => {
             const tag = getDisplayTag(txn)
             const ts = new Date(txn.occurred_at ?? txn.created_at ?? Date.now()).getTime()
             const prev = map.get(tag)
@@ -106,18 +132,27 @@ export function FilterableTransactions({
         return Array.from(map.values())
             .filter(item => item.tag !== 'UNTAGGED')
             .sort((a, b) => b.last - a.last)
-    }, [transactions])
+    }, [filteredByYear])
 
-    const filteredTagOptions = useMemo(() => {
-        const query = tagSearch.trim().toLowerCase()
-        const options = tagMeta.map(item => ({
-            value: item.tag,
-            label: formatCycleLabel(item.tag),
-            raw: item.tag,
-        }))
-        if (!query) return options
-        return options.filter(opt => opt.label.toLowerCase().includes(query) || opt.value.toLowerCase().includes(query))
-    }, [tagMeta, tagSearch])
+    const tagOptions = useMemo(
+        () =>
+            tagMeta.map(item => ({
+                value: item.tag,
+                label: formatCycleLabel(item.tag),
+                searchValue: item.tag,
+            })),
+        [tagMeta]
+    )
+
+    const categoryItems = useMemo(
+        () => topLevelCategories.map(cat => ({ value: cat.id, label: cat.name })),
+        [topLevelCategories]
+    )
+
+    const subcategoryItems = useMemo(
+        () => availableSubcategories.map(cat => ({ value: cat.id, label: cat.name })),
+        [availableSubcategories]
+    )
 
     const primaryTags = tagMeta.slice(0, 5).map(item => item.tag)
     const extraTags = tagMeta.slice(5).map(item => item.tag)
@@ -125,8 +160,8 @@ export function FilterableTransactions({
     const effectiveTag = accountType === 'credit_card' ? selectedCycle ?? selectedTag : selectedTag
 
     const filteredByTag = effectiveTag 
-        ? transactions.filter(txn => getDisplayTag(txn) === effectiveTag)
-        : transactions
+        ? filteredByYear.filter(txn => getDisplayTag(txn) === effectiveTag)
+        : filteredByYear
 
     const filteredByCategory = useMemo(() => {
         if (!selectedCategoryId) {
@@ -214,24 +249,22 @@ export function FilterableTransactions({
     return (
         <div className="space-y-4">
             {!onSearchChange && (
-                <div className="flex items-center gap-3">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center">
                     <div className="relative flex-1">
                         <input
                             type="text"
                             placeholder="Search by note..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full rounded-md border border-gray-300 px-3 py-2 pr-20 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 pr-36 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                         />
-                        {searchTerm && (
-                            <button
-                                className="absolute right-10 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                                onClick={() => setSearchTerm('')}
-                                title="Clear search"
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
-                        )}
+                        <button
+                            className="absolute right-24 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:text-slate-800 shadow-sm"
+                            onClick={() => setSearchTerm('')}
+                            title="Clear search"
+                        >
+                            <X className="h-4 w-4" />
+                        </button>
                         <button
                             className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50"
                             onClick={() => setShowFilterMenu(prev => !prev)}
@@ -241,21 +274,14 @@ export function FilterableTransactions({
                             Filters
                         </button>
                         {showFilterMenu && (
-                            <div className="absolute right-0 top-full z-20 mt-1 w-64 rounded-md border border-slate-200 bg-white p-3 text-xs shadow space-y-3">
-                                <div className="space-y-1">
+                            <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-md border border-slate-200 bg-white p-3 text-xs shadow space-y-3">
+                                <div className="space-y-2">
                                     <p className="text-[11px] font-semibold text-slate-700">Tag/Cycle</p>
-                                    <input
-                                        type="text"
-                                        placeholder="Search tag..."
-                                        value={tagSearch}
-                                        onChange={e => setTagSearch(e.target.value)}
-                                        className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
-                                    />
-                                    <select
-                                        className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
-                                        value={effectiveTag ?? ''}
-                                        onChange={e => {
-                                            const next = e.target.value || null
+                                    <Combobox
+                                        items={tagOptions}
+                                        value={effectiveTag ?? undefined}
+                                        onValueChange={value => {
+                                            const next = value ?? null
                                             if (accountType === 'credit_card') {
                                                 setSelectedCycle(next)
                                                 setSelectedTag(next)
@@ -263,46 +289,34 @@ export function FilterableTransactions({
                                                 setSelectedTag(next)
                                             }
                                         }}
-                                    >
-                                        <option value="">All</option>
-                                        {filteredTagOptions.map(opt => (
-                                            <option key={opt.value} value={opt.value}>
-                                                {opt.label}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        placeholder="All tags"
+                                        inputPlaceholder="Search tag..."
+                                        emptyState="No tags found"
+                                    />
                                 </div>
-                                <div className="space-y-1">
+                                <div className="space-y-2">
                                     <p className="text-[11px] font-semibold text-slate-700">Category</p>
-                                    <select
-                                        className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
-                                        value={selectedCategoryId ?? ''}
-                                        onChange={e => {
-                                            const next = e.target.value || null
+                                    <Combobox
+                                        items={categoryItems}
+                                        value={selectedCategoryId ?? undefined}
+                                        onValueChange={value => {
+                                            const next = value ?? null
                                             setSelectedCategoryId(next)
                                             setSelectedSubcategoryId(null)
                                         }}
-                                    >
-                                        <option value="">All categories</option>
-                                        {topLevelCategories.map(cat => (
-                                            <option key={cat.id} value={cat.id}>
-                                                {cat.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        placeholder="All categories"
+                                        inputPlaceholder="Search category..."
+                                        emptyState="No categories"
+                                    />
                                     {selectedCategoryId && availableSubcategories.length > 0 && (
-                                        <select
-                                            className="w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-xs text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
-                                            value={selectedSubcategoryId ?? ''}
-                                            onChange={e => setSelectedSubcategoryId(e.target.value || null)}
-                                        >
-                                            <option value="">Subcategory</option>
-                                            {availableSubcategories.map(cat => (
-                                                <option key={cat.id} value={cat.id}>
-                                                    {cat.name}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        <Combobox
+                                            items={subcategoryItems}
+                                            value={selectedSubcategoryId ?? undefined}
+                                            onValueChange={value => setSelectedSubcategoryId(value ?? null)}
+                                            placeholder="Subcategory"
+                                            inputPlaceholder="Search subcategory..."
+                                            emptyState="No subcategories"
+                                        />
                                     )}
                                 </div>
                                 <div className="flex items-center justify-between gap-2">
@@ -312,7 +326,7 @@ export function FilterableTransactions({
                                             setSelectedTag(null)
                                             setSelectedCycle(null)
                                             clearCategoryFilters()
-                                            setTagSearch('')
+                                            setSelectedYear(currentYear)
                                         }}
                                     >
                                         Reset
@@ -326,6 +340,22 @@ export function FilterableTransactions({
                                 </div>
                             </div>
                         )}
+                    </div>
+                    <div className="w-full md:w-32">
+                        <label className="sr-only" htmlFor="year-filter">Year</label>
+                        <select
+                            id="year-filter"
+                            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            value={selectedYear}
+                            onChange={e => setSelectedYear(e.target.value)}
+                        >
+                            <option value="">All years</option>
+                            {availableYears.map(year => (
+                                <option key={year} value={year}>
+                                    {year}
+                                </option>
+                            ))}
+                        </select>
                     </div>
                 </div>
             )}

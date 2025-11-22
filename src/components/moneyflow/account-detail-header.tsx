@@ -1,0 +1,264 @@
+"use client"
+
+import { useState } from 'react'
+import { ArrowLeftRight, CreditCard, Minus, Plus, Settings, User, ChevronUp, ChevronDown } from 'lucide-react'
+
+import { Account, Category, Person } from '@/types/moneyflow.types'
+import { AccountSpendingStats } from '@/types/cashback.types'
+import { AccountStatsHeader } from './account-stats-header'
+import { AddTransactionDialog } from './add-transaction-dialog'
+import { EditAccountDialog } from './edit-account-dialog'
+
+type AccountDetailHeaderProps = {
+  account: Account
+  categories: Category[]
+  people: Person[]
+  allAccounts: Account[]
+  savingsAccounts: Account[]
+  collateralAccount: Account | null
+  statTotals: { inflow: number; outflow: number; net: number }
+  cashbackStats: AccountSpendingStats | null
+  isAssetAccount: boolean
+  assetConfig: { interestRate: number | null; termMonths: number | null; maturityDate: string | null } | null
+}
+
+export function AccountDetailHeader({
+  account,
+  categories,
+  people,
+  allAccounts,
+  savingsAccounts,
+  collateralAccount,
+  statTotals,
+  cashbackStats,
+  isAssetAccount,
+  assetConfig,
+}: AccountDetailHeaderProps) {
+  const [collapsed, setCollapsed] = useState(false)
+  const toggle = () => setCollapsed(prev => !prev)
+
+  const actionButtons = (
+    <>
+      {account.type !== 'credit_card' ? (
+        <AddTransactionDialog
+          accounts={allAccounts}
+          categories={categories}
+          people={people}
+          defaultType="transfer"
+          defaultSourceAccountId={account.id}
+          triggerContent={
+            <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50">
+              <ArrowLeftRight className="h-3.5 w-3.5" />
+              Transfer
+            </span>
+          }
+        />
+      ) : (
+        <AddTransactionDialog
+          accounts={allAccounts}
+          categories={categories}
+          people={people}
+          defaultType="transfer"
+          defaultDebtAccountId={account.id}
+          triggerContent={
+            <span className="inline-flex items-center gap-1 rounded-full border border-purple-100 bg-white px-3 py-1.5 text-xs font-semibold text-purple-700 shadow-sm hover:border-purple-200 hover:bg-purple-50">
+              <CreditCard className="h-3.5 w-3.5" />
+              Credit Pay
+            </span>
+          }
+        />
+      )}
+      <AddTransactionDialog
+        accounts={allAccounts}
+        categories={categories}
+        people={people}
+        defaultType="debt"
+        defaultDebtAccountId={account.id}
+        defaultSourceAccountId={account.id}
+        triggerContent={
+          <span className="inline-flex items-center gap-1 rounded-full border border-amber-100 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 shadow-sm hover:border-amber-200 hover:bg-amber-50">
+            <User className="h-3.5 w-3.5" />
+            Debt
+          </span>
+        }
+      />
+      <AddTransactionDialog
+        accounts={allAccounts}
+        categories={categories}
+        people={people}
+        defaultType="income"
+        defaultSourceAccountId={account.id}
+        triggerContent={
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm hover:border-emerald-200 hover:bg-emerald-50">
+            <Plus className="h-3.5 w-3.5" />
+            Income
+          </span>
+        }
+      />
+      <AddTransactionDialog
+        accounts={allAccounts}
+        categories={categories}
+        people={people}
+        defaultType="expense"
+        defaultSourceAccountId={account.id}
+        triggerContent={
+          <span className="inline-flex items-center gap-1 rounded-full border border-rose-100 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-sm hover:border-rose-200 hover:bg-rose-50">
+            <Minus className="h-3.5 w-3.5" />
+            Expense
+          </span>
+        }
+      />
+      <EditAccountDialog
+        account={account}
+        collateralAccounts={savingsAccounts}
+        triggerContent={
+          <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+            <Settings className="h-3.5 w-3.5" />
+            Settings
+          </span>
+        }
+      />
+    </>
+  )
+
+  const actionIcons = (
+    <div className="flex items-center gap-2">
+      {account.type !== 'credit_card' ? (
+        <AddTransactionDialog
+          accounts={allAccounts}
+          categories={categories}
+          people={people}
+          defaultType="transfer"
+          defaultSourceAccountId={account.id}
+          triggerContent={
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50">
+              <ArrowLeftRight className="h-4 w-4" />
+            </span>
+          }
+        />
+      ) : (
+        <AddTransactionDialog
+          accounts={allAccounts}
+          categories={categories}
+          people={people}
+          defaultType="transfer"
+          defaultDebtAccountId={account.id}
+          triggerContent={
+            <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-purple-700 hover:border-purple-200 hover:bg-purple-50">
+              <CreditCard className="h-4 w-4" />
+            </span>
+          }
+        />
+      )}
+      <AddTransactionDialog
+        accounts={allAccounts}
+        categories={categories}
+        people={people}
+        defaultType="debt"
+        defaultDebtAccountId={account.id}
+        defaultSourceAccountId={account.id}
+        triggerContent={
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-amber-700 hover:border-amber-200 hover:bg-amber-50">
+            <User className="h-4 w-4" />
+          </span>
+        }
+      />
+      <AddTransactionDialog
+        accounts={allAccounts}
+        categories={categories}
+        people={people}
+        defaultType="income"
+        defaultSourceAccountId={account.id}
+        triggerContent={
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-emerald-700 hover:border-emerald-200 hover:bg-emerald-50">
+            <Plus className="h-4 w-4" />
+          </span>
+        }
+      />
+      <AddTransactionDialog
+        accounts={allAccounts}
+        categories={categories}
+        people={people}
+        defaultType="expense"
+        defaultSourceAccountId={account.id}
+        triggerContent={
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-rose-700 hover:border-rose-200 hover:bg-rose-50">
+            <Minus className="h-4 w-4" />
+          </span>
+        }
+      />
+      <EditAccountDialog
+        account={account}
+        collateralAccounts={savingsAccounts}
+        triggerContent={
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-700 hover:bg-slate-50">
+            <Settings className="h-4 w-4" />
+          </span>
+        }
+      />
+    </div>
+  )
+
+  const avatar = account.logo_url ? (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={account.logo_url} alt="" className="h-10 w-10 object-contain" />
+  ) : (
+    <div className="flex h-10 w-10 items-center justify-center bg-slate-200 text-sm font-semibold text-slate-700">
+      {account.name.charAt(0).toUpperCase()}
+    </div>
+  )
+
+  if (collapsed) {
+    return (
+      <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 shadow">
+        <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-800">
+          {avatar}
+          <span className="text-slate-900">{account.name}</span>
+          <span className={account.current_balance < 0 ? 'text-red-600' : 'text-emerald-700'}>
+            {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(account.current_balance)}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          {actionIcons}
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+            onClick={toggle}
+          >
+            Expand
+            <ChevronDown className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
+          Account overview
+        </span>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+          onClick={toggle}
+        >
+          Collapse
+          <ChevronUp className="h-4 w-4" />
+        </button>
+      </div>
+      <AccountStatsHeader
+        account={account}
+        collateralAccount={collateralAccount}
+        totals={statTotals}
+        cashbackStats={cashbackStats}
+        isAssetAccount={isAssetAccount}
+        assetConfig={assetConfig}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        {actionButtons}
+      </div>
+    </div>
+  )
+}

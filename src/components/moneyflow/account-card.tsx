@@ -1,18 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import {
-  ArrowLeftRight,
-  CreditCard,
-  Minus,
-  Pencil,
-  PiggyBank,
-  Plus,
-  User,
-  Wallet,
-  Clock4,
-  Eye,
-} from 'lucide-react'
+import { ArrowLeftRight, CreditCard, Minus, Pencil, PiggyBank, Plus, User, Clock4, Eye } from 'lucide-react'
 import { MouseEvent, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -28,11 +17,6 @@ type AccountCardProps = {
   people: Person[]
   collateralAccounts?: Account[]
   allAccounts?: Account[]
-}
-
-function getInitial(name: string) {
-  const [first = ''] = name.split(' ')
-  return first.charAt(0).toUpperCase()
 }
 
 function getDueStatus(dueDate: Date | null) {
@@ -73,12 +57,20 @@ const badgeColors: Record<Account['type'] | 'default', string> = {
   default: 'bg-slate-100 text-slate-700',
 }
 
+function Tooltip({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="group/tooltip relative inline-flex">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md bg-slate-900 px-2 py-1 text-[10px] font-semibold text-white opacity-0 shadow transition duration-150 group-hover/tooltip:opacity-100 group-focus-within/tooltip:opacity-100">
+        {label}
+      </span>
+    </div>
+  )
+}
+
 function ActionButton({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-1 text-[11px] text-slate-600" title={label}>
-      {children}
-      <span className="font-semibold">{label}</span>
-    </div>
+    <Tooltip label={label}>{children}</Tooltip>
   )
 }
 
@@ -118,6 +110,9 @@ export function AccountCard({
 
   const badgeTone = badgeColors[account.type] ?? badgeColors.default
   const balanceTone = account.current_balance < 0 ? 'text-red-600' : 'text-slate-900'
+  const balanceDisplay = new Intl.NumberFormat('vi-VN', {
+    maximumFractionDigits: 0,
+  }).format(account.current_balance)
   const cashbackLabel =
     cashbackLeft === null ? 'Unlimited' : formatCurrency(Math.max(0, cashbackLeft))
   const showTransfer = account.type !== 'credit_card'
@@ -135,7 +130,7 @@ export function AccountCard({
         }
       }}
     >
-      <div className={`h-32 w-full bg-gradient-to-r ${getGradient(account.type)} relative overflow-hidden`}>
+      <div className={`h-28 w-full bg-gradient-to-r ${getGradient(account.type)} relative overflow-hidden`}>
         {account.img_url && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -144,15 +139,25 @@ export function AccountCard({
             className="absolute inset-0 h-full w-full object-cover opacity-50"
           />
         )}
-        <div className="absolute -bottom-6 left-4 h-12 w-16 rounded-md border-4 border-white bg-white p-1 shadow-sm">
-          {account.logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={account.logo_url} alt="" className="h-full w-full object-contain" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center rounded bg-slate-100 text-sm font-semibold text-slate-700">
-              {getInitial(account.name)}
-            </div>
-          )}
+        <div className="absolute right-3 top-3 flex items-center gap-2">
+          <button
+            type="button"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/70 text-slate-600 backdrop-blur transition hover:bg-white hover:text-slate-800"
+            onClick={event => {
+              stopCardNavigation(event)
+              openDetails()
+            }}
+            title="View details"
+          >
+            <Eye className="h-4 w-4" />
+          </button>
+          <EditAccountDialog
+            account={account}
+            collateralAccounts={collateralAccounts}
+            triggerContent={<Pencil className="h-4 w-4" />}
+            buttonClassName="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/70 text-slate-600 backdrop-blur transition hover:bg-white hover:text-slate-800"
+            onOpen={stopCardNavigation}
+          />
         </div>
         <div className="absolute bottom-2 left-4 right-4 flex items-end justify-between gap-3 text-white">
           <div className="space-y-0.5">
@@ -160,35 +165,21 @@ export function AccountCard({
               <Link href={`/accounts/${account.id}`} className="text-base font-semibold whitespace-nowrap">
                 {account.name}
               </Link>
-              <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
-                {getAccountTypeLabel(account.type)}
-              </span>
             </div>
             <p className="text-xs text-white/80">{statusLabel}</p>
           </div>
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-wide text-white/80">Balance</p>
-            <p className={`text-xl font-bold leading-tight whitespace-nowrap ${balanceTone}`}>
-              {formatCurrency(account.current_balance)}
-            </p>
+            <div className="mt-1 inline-flex items-center rounded-lg bg-gray-50 px-3 py-1 shadow-sm">
+              <p className={`text-2xl font-bold leading-tight tracking-tight whitespace-nowrap ${balanceTone}`}>
+                {balanceDisplay}
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col gap-3 p-4 pt-8">
-        <div className="flex items-center justify-end gap-2 text-[11px] text-slate-500">
-          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-slate-700">
-            <Wallet className="h-3 w-3" />
-            {account.currency}
-          </span>
-          <EditAccountDialog
-            account={account}
-            collateralAccounts={collateralAccounts}
-            triggerContent={<Pencil className="h-4 w-4" />}
-            buttonClassName="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700"
-            onOpen={stopCardNavigation}
-          />
-        </div>
+      <div className="flex flex-col gap-3 p-4">
 
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {isCreditCard && (
@@ -206,6 +197,9 @@ export function AccountCard({
                   <span>Limit: {formatCurrency(account.credit_limit)}</span>
                 </div>
               )}
+              <div className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold ${badgeTone}`}>
+                <span>{getAccountTypeLabel(account.type)}</span>
+              </div>
             </>
           )}
           {!isCreditCard && typeof account.credit_limit === 'number' && account.credit_limit > 0 && (
@@ -213,15 +207,14 @@ export function AccountCard({
               <span>Limit: {formatCurrency(account.credit_limit)}</span>
             </div>
           )}
-          {account.type === 'debt' && (
-            <div className="flex items-center gap-1 rounded-md bg-orange-50 px-2 py-1 text-orange-700">
-              <CreditCard className="h-3 w-3" />
-              <span>Debt account</span>
+          {account.type !== 'credit_card' && (
+            <div className={`flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-semibold ${badgeTone}`}>
+              <span>{getAccountTypeLabel(account.type)}</span>
             </div>
           )}
         </div>
 
-        <div className="mt-1 grid grid-cols-5 gap-2 border-t border-dashed pt-3">
+        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-dashed pt-3">
           {showTransfer ? (
             <ActionButton label="Transfer">
               <AddTransactionDialog
@@ -231,7 +224,7 @@ export function AccountCard({
                 defaultType="transfer"
                 defaultSourceAccountId={account.id}
                 triggerContent={
-                  <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-blue-200 text-blue-700 hover:border-blue-400">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600">
                     <ArrowLeftRight className="h-4 w-4" />
                   </span>
                 }
@@ -247,7 +240,7 @@ export function AccountCard({
                 defaultType="transfer"
                 defaultDebtAccountId={account.id}
                 triggerContent={
-                  <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-blue-200 text-blue-700 hover:border-blue-400">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-600">
                     <CreditCard className="h-4 w-4" />
                   </span>
                 }
@@ -258,61 +251,49 @@ export function AccountCard({
           <ActionButton label="Income">
             <AddTransactionDialog
               accounts={selectableAccounts}
-              categories={categories}
-              people={people}
-              defaultType="income"
-              defaultSourceAccountId={account.id}
-              triggerContent={
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-emerald-200 text-emerald-700 hover:border-emerald-400">
-                  <Plus className="h-4 w-4" />
-                </span>
-              }
-              onOpen={stopCardNavigation}
-            />
+                categories={categories}
+                people={people}
+                defaultType="income"
+                defaultSourceAccountId={account.id}
+                triggerContent={
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600">
+                    <Plus className="h-4 w-4" />
+                  </span>
+                }
+                onOpen={stopCardNavigation}
+              />
           </ActionButton>
           <ActionButton label="Expense">
             <AddTransactionDialog
               accounts={selectableAccounts}
-              categories={categories}
-              people={people}
-              defaultType="expense"
-              defaultSourceAccountId={account.id}
-              triggerContent={
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-rose-200 text-rose-700 hover:border-rose-400">
-                  <Minus className="h-4 w-4" />
-                </span>
-              }
-              onOpen={stopCardNavigation}
-            />
+                categories={categories}
+                people={people}
+                defaultType="expense"
+                defaultSourceAccountId={account.id}
+                triggerContent={
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600">
+                    <Minus className="h-4 w-4" />
+                  </span>
+                }
+                onOpen={stopCardNavigation}
+              />
           </ActionButton>
           <ActionButton label="Debt">
             <AddTransactionDialog
               accounts={selectableAccounts}
               categories={categories}
               people={people}
-              defaultType="debt"
-              defaultDebtAccountId={account.id}
-              defaultSourceAccountId={account.id}
-              triggerContent={
-                <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-orange-200 text-orange-700 hover:border-orange-400">
-                  <User className="h-4 w-4" />
-                </span>
-              }
-              onOpen={stopCardNavigation}
-            />
-          </ActionButton>
-          <ActionButton label="Details">
-            <button
-              type="button"
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:border-blue-300 hover:text-blue-700"
-              onClick={event => {
-                stopCardNavigation(event)
-                openDetails()
-              }}
-            >
-              <Eye className="h-4 w-4" />
-            </button>
-          </ActionButton>
+                defaultType="debt"
+                defaultDebtAccountId={account.id}
+                defaultSourceAccountId={account.id}
+                triggerContent={
+                  <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600">
+                    <User className="h-4 w-4" />
+                  </span>
+                }
+                onOpen={stopCardNavigation}
+              />
+            </ActionButton>
         </div>
       </div>
     </article>

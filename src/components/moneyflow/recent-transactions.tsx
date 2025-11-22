@@ -340,7 +340,7 @@ export function RecentTransactions({
             const taskCell = (
               <div className="relative group flex justify-end">
                 <button
-                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-1 text-slate-600 shadow-sm hover:bg-slate-50"
+                  className="inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-100"
                   title="Quick actions"
                 >
                   <Zap className="h-4 w-4 text-amber-500" />
