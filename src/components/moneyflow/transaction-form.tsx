@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { format, subMonths } from 'date-fns'
-import { Controller, useForm, useWatch } from 'react-hook-form'
+import { Controller, Resolver, useForm, useWatch } from 'react-hook-form'
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { z } from 'zod'
 import { ensureDebtAccountAction } from '@/actions/people-actions'
@@ -224,7 +224,7 @@ const debtAccountByPerson = useMemo(() => {
   const [isEnsuringDebt, startEnsuringDebt] = useTransition()
 
   const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema) as Resolver<z.infer<typeof formSchema>>,
     defaultValues: {
       occurred_at: new Date(),
       type: defaultType ?? 'expense',
