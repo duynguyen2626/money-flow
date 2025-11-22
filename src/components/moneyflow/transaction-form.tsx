@@ -270,11 +270,12 @@ const debtAccountByPerson = useMemo(() => {
         : Math.max(0, rawPercent)
     const sanitizedFixed = Math.max(0, rawFixed)
 
-    const payload = {
+    const payload: Parameters<typeof createTransaction>[0] = {
       ...values,
       occurred_at: values.occurred_at.toISOString(),
       cashback_share_percent: sanitizedPercent > 0 ? sanitizedPercent : undefined,
       cashback_share_fixed: sanitizedFixed > 0 ? sanitizedFixed : undefined,
+      note: values.note ?? '',
     }
 
     const result = await createTransaction(payload)
