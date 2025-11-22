@@ -15,6 +15,17 @@ export type Account = {
   owner_id: string;
   cashback_config?: Json | null;
   secured_by_account_id?: string | null;
+  is_active?: boolean | null;
+  img_url?: string | null;
+  logo_url?: string | null;
+}
+
+export type AccountCashbackSnapshot = {
+  remainingBudget: number | null
+  maxCashback: number | null
+  progress: number
+  currentSpend: number
+  cycleLabel?: string
 }
 
 export type DebtAccount = {

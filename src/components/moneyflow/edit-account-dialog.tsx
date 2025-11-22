@@ -1,7 +1,8 @@
 'use client'
 
-import { FormEvent, MouseEvent, useMemo, useState, useTransition } from 'react'
+import { FormEvent, MouseEvent, ReactNode, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { createPortal } from 'react-dom'
 import { parseCashbackConfig, CashbackCycleType } from '@/lib/cashback'
 import { Account } from '@/types/moneyflow.types'
 import { updateAccountConfigAction } from '@/actions/account-actions'
@@ -10,6 +11,9 @@ import type { Json } from '@/types/database.types'
 type EditAccountDialogProps = {
   account: Account
   collateralAccounts?: Account[]
+  triggerContent?: ReactNode
+  buttonClassName?: string
+  onOpen?: () => void
 }
 
 type StatusMessage = {
@@ -19,6 +23,12 @@ type StatusMessage = {
 
 const toNumericString = (value: number | null | undefined) =>
   typeof value === 'number' ? String(value) : ''
+
+const formatWithSeparators = (value: string) => {
+  const digits = value.replace(/[^0-9]/g, '')
+  if (!digits) return ''
+  return Number(digits).toLocaleString('en-US')
+}
 
 const ASSET_TYPES: Account['type'][] = ['savings', 'investment', 'asset']
 
@@ -60,7 +70,7 @@ function parseSavingsConfig(raw: Json | null | undefined): SavingsConfig {
   }
 }
 
-export function EditAccountDialog({ account, collateralAccounts }: EditAccountDialogProps) {
+export function EditAccountDialog({ account, collateralAccounts, triggerContent, buttonClassName, onOpen }: EditAccountDialogProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<StatusMessage>(null)
@@ -79,10 +89,11 @@ export function EditAccountDialog({ account, collateralAccounts }: EditAccountDi
   const [accountType, setAccountType] = useState<Account['type']>(account.type)
   const [securedByAccountId, setSecuredByAccountId] = useState(account.secured_by_account_id ?? '')
   const [isSecured, setIsSecured] = useState(Boolean(account.secured_by_account_id))
-  const [creditLimit, setCreditLimit] = useState(toNumericString(account.credit_limit))
+  const [creditLimit, setCreditLimit] = useState(formatWithSeparators(toNumericString(account.credit_limit)))
+  const [imgUrl, setImgUrl] = useState(account.img_url ?? '')
   const [rate, setRate] = useState(String(parsedCashbackConfig.rate))
-  const [maxAmount, setMaxAmount] = useState(toNumericString(parsedCashbackConfig.maxAmount))
-  const [minSpend, setMinSpend] = useState(toNumericString(parsedCashbackConfig.minSpend))
+  const [maxAmount, setMaxAmount] = useState(formatWithSeparators(toNumericString(parsedCashbackConfig.maxAmount)))
+  const [minSpend, setMinSpend] = useState(formatWithSeparators(toNumericString(parsedCashbackConfig.minSpend)))
   const [cycleType, setCycleType] = useState<CashbackCycleType>(parsedCashbackConfig.cycleType)
   const [statementDay, setStatementDay] = useState(toNumericString(parsedCashbackConfig.statementDay))
   const [interestRate, setInterestRate] = useState(toNumericString(parsedSavingsConfig.interestRate))
@@ -119,31 +130,33 @@ export function EditAccountDialog({ account, collateralAccounts }: EditAccountDi
     setAccountType(account.type)
     setSecuredByAccountId(account.secured_by_account_id ?? '')
     setIsSecured(Boolean(account.secured_by_account_id))
-    setCreditLimit(toNumericString(account.credit_limit))
+    setCreditLimit(formatWithSeparators(toNumericString(account.credit_limit)))
     setRate(String(freshCashback.rate))
-    setMaxAmount(toNumericString(freshCashback.maxAmount))
-    setMinSpend(toNumericString(freshCashback.minSpend))
+    setMaxAmount(formatWithSeparators(toNumericString(freshCashback.maxAmount)))
+    setMinSpend(formatWithSeparators(toNumericString(freshCashback.minSpend)))
     setCycleType(freshCashback.cycleType)
     setStatementDay(toNumericString(freshCashback.statementDay))
     setInterestRate(toNumericString(freshSavings.interestRate))
     setTermMonths(toNumericString(freshSavings.termMonths))
     setMaturityDate(freshSavings.maturityDate ?? '')
+    setImgUrl(account.img_url ?? '')
     setStatus(null)
   }
 
   const closeDialog = () => setOpen(false)
 
-  const stopPropagation = (event: MouseEvent<HTMLDivElement>) => {
-    event.stopPropagation()
+  const stopPropagation = (event?: MouseEvent<HTMLDivElement>) => {
+    event?.stopPropagation()
   }
 
   const openDialog = () => {
+    onOpen?.()
     resetForm()
     setOpen(true)
   }
 
   const parseOptionalNumber = (value: string) => {
-    const trimmed = value.trim()
+    const trimmed = value.trim().replace(/,/g, '')
     if (trimmed === '') {
       return null
     }
@@ -169,6 +182,7 @@ export function EditAccountDialog({ account, collateralAccounts }: EditAccountDi
     }
 
     const nextCreditLimit = isCreditCard ? parseOptionalNumber(creditLimit) : null
+    const cleanedImgUrl = imgUrl.trim() || null
 
     const rateValue = parseOptionalNumber(rate) ?? 0
     let configPayload: Json | undefined
@@ -201,6 +215,7 @@ export function EditAccountDialog({ account, collateralAccounts }: EditAccountDi
         cashbackConfig: configPayload,
         type: accountType,
         securedByAccountId: securedBy,
+        imgUrl: cleanedImgUrl,
       })
 
       if (!success) {
@@ -217,36 +232,42 @@ export function EditAccountDialog({ account, collateralAccounts }: EditAccountDi
     <>
       <button
         type="button"
-        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-        onClick={openDialog}
+        className={buttonClassName ?? 'rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600'}
+        onClick={event => {
+          event.stopPropagation()
+          onOpen?.()
+          openDialog()
+        }}
       >
-        Settings
+        {triggerContent ?? 'Settings'}
       </button>
 
-      {open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Edit account configuration"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-          onClick={closeDialog}
-        >
+      {open &&
+        createPortal(
           <div
-            className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl"
-            onClick={stopPropagation}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Edit account configuration"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4"
+            onClick={closeDialog}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-slate-900">Edit account</h2>
-              <button
-                type="button"
-                className="rounded p-1 text-slate-500 transition hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-                onClick={closeDialog}
-                aria-label="Close dialog"
-              >
-                ?
-              </button>
-            </div>
-                        <form className="space-y-5" onSubmit={handleSubmit}>
+            <div
+              className="w-full max-w-lg rounded-lg bg-white p-6 shadow-xl"
+              style={{ maxHeight: '90vh', overflowY: 'auto' }}
+              onClick={stopPropagation}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-semibold text-slate-900">Edit account</h2>
+                <button
+                  type="button"
+                  className="rounded p-1 text-slate-500 transition hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                  onClick={closeDialog}
+                  aria-label="Close dialog"
+                >
+                  ?
+                </button>
+              </div>
+              <form className="space-y-5" onSubmit={handleSubmit}>
               <div className="space-y-1">
                 <label className="text-sm font-medium text-slate-600">Name</label>
                 <input
@@ -255,6 +276,16 @@ export function EditAccountDialog({ account, collateralAccounts }: EditAccountDi
                   onChange={event => setName(event.target.value)}
                   className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                   placeholder="Account name"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-slate-600">Image URL</label>
+                <input
+                  type="url"
+                  value={imgUrl}
+                  onChange={event => setImgUrl(event.target.value)}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  placeholder="https://logo.example.com/bank.png"
                 />
               </div>
               <div className="space-y-1">
@@ -282,11 +313,9 @@ export function EditAccountDialog({ account, collateralAccounts }: EditAccountDi
                   <div className="space-y-1">
                     <label className="text-sm font-medium text-slate-600">Credit limit</label>
                     <input
-                      type="number"
-                      step="1000"
-                      min="0"
+                      type="text"
                       value={creditLimit}
-                      onChange={event => setCreditLimit(event.target.value)}
+                      onChange={event => setCreditLimit(formatWithSeparators(event.target.value))}
                       className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                       placeholder="Credit limit"
                     />
@@ -356,11 +385,9 @@ export function EditAccountDialog({ account, collateralAccounts }: EditAccountDi
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-slate-600">Max amount</label>
                       <input
-                        type="number"
-                        step="1000"
-                        min="0"
+                        type="text"
                         value={maxAmount}
-                        onChange={event => setMaxAmount(event.target.value)}
+                        onChange={event => setMaxAmount(formatWithSeparators(event.target.value))}
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                         placeholder="Ex: 100000"
                       />
@@ -368,11 +395,9 @@ export function EditAccountDialog({ account, collateralAccounts }: EditAccountDi
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-slate-600">Min spend</label>
                       <input
-                        type="number"
-                        step="1000"
-                        min="0"
+                        type="text"
                         value={minSpend}
-                        onChange={event => setMinSpend(event.target.value)}
+                        onChange={event => setMinSpend(formatWithSeparators(event.target.value))}
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                         placeholder="Ex: 500000"
                       />
@@ -473,7 +498,8 @@ export function EditAccountDialog({ account, collateralAccounts }: EditAccountDi
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )

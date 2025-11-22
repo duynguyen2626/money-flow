@@ -56,7 +56,7 @@ const defaultColumns: ColumnConfig[] = [
   { key: "finalPrice", label: "Final Price", defaultWidth: 130 },
   { key: "people", label: "People", defaultWidth: 140 },
   { key: "tag", label: "Tag", defaultWidth: 120 },
-  { key: "task", label: "", defaultWidth: 90, minWidth: 80 },
+  { key: "task", label: "", defaultWidth: 56, minWidth: 48 },
 ]
 
 export function RecentTransactions({

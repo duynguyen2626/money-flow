@@ -237,7 +237,7 @@ export function FilterableTransactions({
                     )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold">
+                <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                     <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
                         Income: {numberFormatter.format(totals.income)}
                     </span>

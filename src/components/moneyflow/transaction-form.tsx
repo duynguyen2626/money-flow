@@ -35,7 +35,7 @@ const formSchema = z.object({
   message: 'Category is required for expenses and incomes.',
   path: ['category_id'],
 }).refine(data => {
-  if ((data.type === 'debt' || data.type === 'transfer') && !data.person_id) {
+  if (data.type === 'debt' && !data.person_id) {
     return false
   }
   return true
@@ -48,7 +48,19 @@ const formSchema = z.object({
   }
   return true
 }, {
-  message: 'Person is required for debts.',
+  message: 'Destination account is required for this transaction.',
+  path: ['debt_account_id'],
+}).refine(data => {
+  if (
+    (data.type === 'transfer' || data.type === 'debt') &&
+    data.debt_account_id &&
+    data.debt_account_id === data.source_account_id
+  ) {
+    return false
+  }
+  return true
+}, {
+  message: 'Source and destination must be different.',
   path: ['debt_account_id'],
 });
 
@@ -94,6 +106,8 @@ type TransactionFormProps = {
   defaultTag?: string;
   defaultPersonId?: string;
   defaultType?: 'expense' | 'income' | 'debt' | 'transfer';
+  defaultSourceAccountId?: string;
+  defaultDebtAccountId?: string;
 }
 
 type StatusMessage = {
@@ -109,6 +123,8 @@ export function TransactionForm({
   defaultTag,
   defaultPersonId,
   defaultType,
+  defaultSourceAccountId,
+  defaultDebtAccountId,
 }: TransactionFormProps) {
   const sourceAccounts = useMemo(
     () => allAccounts.filter(a => a.type !== 'debt'),
@@ -148,6 +164,22 @@ const accountOptions = useMemo(
       })),
     [sourceAccounts]
   )
+
+const destinationAccountOptions = useMemo(
+  () =>
+    allAccounts.map(acc => ({
+      value: acc.id,
+      label: acc.name,
+      description: `${acc.type.replace('_', ' ')} - ${numberFormatter.format(acc.current_balance)}`,
+      searchValue: `${acc.name} ${acc.type.replace('_', ' ')} ${acc.current_balance}`,
+      icon: (
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+          {getAccountInitial(acc.name)}
+        </span>
+      ),
+    })),
+  [allAccounts]
+)
 
 const personOptions = useMemo(
   () =>
@@ -199,8 +231,9 @@ const debtAccountByPerson = useMemo(() => {
       amount: 0,
       note: '',
       tag: defaultTag ?? generateTag(new Date()),
+      source_account_id: defaultSourceAccountId ?? undefined,
       person_id: undefined,
-      debt_account_id: undefined,
+      debt_account_id: defaultDebtAccountId ?? undefined,
       cashback_share_percent: undefined,
       cashback_share_fixed: undefined,
     },
@@ -255,15 +288,15 @@ const debtAccountByPerson = useMemo(() => {
         occurred_at: new Date(),
         type: defaultType ?? 'expense',
         amount: 0,
-        note: '',
-        tag: defaultTag ?? generateTag(new Date()),
-        source_account_id: undefined,
-        category_id: undefined,
-        person_id: undefined,
-        debt_account_id: undefined,
-        cashback_share_percent: undefined,
-        cashback_share_fixed: undefined,
-      })
+      note: '',
+      tag: defaultTag ?? generateTag(new Date()),
+      source_account_id: defaultSourceAccountId ?? undefined,
+      category_id: undefined,
+      person_id: undefined,
+      debt_account_id: defaultDebtAccountId ?? undefined,
+      cashback_share_percent: undefined,
+      cashback_share_fixed: undefined,
+    })
       setManualTagMode(Boolean(defaultTag))
       applyDefaultPersonSelection()
       onSuccess?.()
@@ -585,9 +618,9 @@ const debtAccountByPerson = useMemo(() => {
         )
       : null
   const showCashbackInputs =
-    (transactionType === 'debt' || transactionType === 'transfer') &&
+    transactionType !== 'income' &&
     selectedAccount?.type === 'credit_card' &&
-    Boolean(watchedDebtAccountId)
+    (transactionType !== 'transfer' || Boolean(watchedDebtAccountId))
 
   const handleEnsureDebtAccount = () => {
     if (!watchedPersonId) {
@@ -625,6 +658,18 @@ const debtAccountByPerson = useMemo(() => {
     }
   }, [defaultType, form]);
 
+  useEffect(() => {
+    if (defaultSourceAccountId) {
+      form.setValue('source_account_id', defaultSourceAccountId)
+    }
+  }, [defaultSourceAccountId, form])
+
+  useEffect(() => {
+    if (defaultDebtAccountId) {
+      form.setValue('debt_account_id', defaultDebtAccountId)
+    }
+  }, [defaultDebtAccountId, form])
+
   const debtAccountName = useMemo(() => {
     if (!watchedDebtAccountId) return null
     const account = allAccounts.find(acc => acc.id === watchedDebtAccountId)
@@ -654,11 +699,11 @@ const debtAccountByPerson = useMemo(() => {
         )}
       </div>
 
-      {(transactionType === 'debt' || transactionType === 'transfer') && (
+      {transactionType === 'debt' && (
       <div className="space-y-3">
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">
-            {transactionType === 'transfer' ? 'Lend to' : 'Person'}
+            Person
           </label>
           <Controller
             control={control}
@@ -712,6 +757,31 @@ const debtAccountByPerson = useMemo(() => {
         )}
       </div>
     )}
+
+      {transactionType === 'transfer' && (
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">Destination account</label>
+            <Controller
+              control={control}
+              name="debt_account_id"
+              render={({ field }) => (
+                <Combobox
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  items={destinationAccountOptions}
+                  placeholder="Select destination"
+                  inputPlaceholder="Search account..."
+                  emptyState="No account found"
+                />
+              )}
+            />
+            {errors.debt_account_id && (
+              <p className="text-sm text-red-600">{errors.debt_account_id.message}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Date</label>
