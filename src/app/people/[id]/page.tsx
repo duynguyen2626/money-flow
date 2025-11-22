@@ -38,7 +38,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     const { selectedTag, setSelectedTag } = useTagFilter();
     const [activeTab, setActiveTab] = useState<'all' | 'tagged' | 'untagged'>('all');
     const [isExpanded, setIsExpanded] = useState(true);
-    const [showSheetSettings, setShowSheetSettings] = useState(false);
+    const [showSheetSettings, setShowSheetSettings] = useState(true);
 
     const refreshData = async () => {
         if (!id) return;
@@ -188,7 +188,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
                                     className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
                                     onClick={() => setShowSheetSettings(prev => !prev)}
                                 >
-                                    {showSheetSettings ? 'Thu gọn' : 'Mở rộng'}
+                                    {showSheetSettings ? 'Thu gọn' : 'Mở Google Sheet Sync'}
                                 </button>
                             </div>
                             {showSheetSettings && (
