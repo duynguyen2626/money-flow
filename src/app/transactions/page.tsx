@@ -3,7 +3,8 @@ import { getCategories } from '@/services/category.service'
 import { getRecentTransactions } from '@/services/transaction.service'
 import { getPeople } from '@/services/people.service'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
-import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
+import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
+import { TagFilterProvider } from '@/context/tag-filter-context'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,21 +13,23 @@ export default async function TransactionsPage() {
     getAccounts(),
     getCategories(),
     getPeople(),
-    getRecentTransactions(25),
+    getRecentTransactions(50),
   ])
 
   return (
-    <div className="space-y-6">
-      <section className="bg-white shadow rounded-lg p-6">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 border-b pb-4">
-          <div>
-            <h1 className="text-2xl font-semibold">So giao dich</h1>
-            <p className="text-sm text-slate-500">Quan ly thu chi va dong bo theo thoi gian thuc</p>
+    <TagFilterProvider>
+      <div className="space-y-6">
+        <section className="bg-white shadow rounded-lg p-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 border-b pb-4">
+            <div>
+              <h1 className="text-2xl font-semibold">Transactions</h1>
+              <p className="text-sm text-slate-500">Manage your income and expenses, with real-time synchronization.</p>
+            </div>
+            <AddTransactionDialog accounts={accounts} categories={categories} people={people} />
           </div>
-          <AddTransactionDialog accounts={accounts} categories={categories} people={people} />
-        </div>
-        <RecentTransactions transactions={recentTransactions} />
-      </section>
-    </div>
+          <FilterableTransactions transactions={recentTransactions} />
+        </section>
+      </div>
+    </TagFilterProvider>
   )
 }

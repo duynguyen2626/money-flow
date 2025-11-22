@@ -1,7 +1,11 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createPerson, ensureDebtAccount, updatePerson } from '@/services/people.service'
+import { createPerson, ensureDebtAccount, updatePerson, getPersonWithSubs, getPeople } from '@/services/people.service'
+import { getPersonDetails, getDebtByTags } from '@/services/debt.service';
+import { getAccounts, getAccountTransactions } from '@/services/account.service';
+import { getCategories } from '@/services/category.service';
+import { getSubscriptions } from '@/services/subscription.service';
 
 export async function createPersonAction(payload: {
   name: string
@@ -46,4 +50,41 @@ export async function updatePersonAction(
     revalidatePath('/people')
   }
   return ok
+}
+
+export async function getPeoplePageData(id: string) {
+    const [
+        person,
+        debtCycles,
+        transactions,
+        accounts,
+        categories,
+        personProfile,
+        subscriptions,
+        allPeople,
+    ] = await Promise.all([
+        getPersonDetails(id),
+        getDebtByTags(id),
+        getAccountTransactions(id, 100),
+        getAccounts(),
+        getCategories(),
+        getPersonWithSubs(id),
+        getSubscriptions(),
+        getPeople(),
+    ]);
+
+    // The data returned from server actions must be serializable.
+    // Convert any non-serializable properties if necessary.
+    // For example, Date objects can be converted to ISO strings.
+    // In this case, the data from Supabase should already be serializable.
+    return {
+        person,
+        debtCycles,
+        transactions,
+        accounts,
+        categories,
+        personProfile,
+        subscriptions,
+        allPeople,
+    };
 }

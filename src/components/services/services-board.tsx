@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 
-import { Person, Subscription } from '@/types/moneyflow.types'
+import { Account, Person, Subscription } from '@/types/moneyflow.types'
 
 import { CreateSubscriptionDialog } from './create-subscription-dialog'
 import { EditSubscriptionDialog } from './edit-subscription-dialog'
@@ -12,9 +12,10 @@ import { EditPersonDialog } from '../people/edit-person-dialog'
 type ServicesBoardProps = {
   subscriptions: Subscription[]
   people: Person[]
+  accounts: Account[]
 }
 
-export function ServicesBoard({ subscriptions, people }: ServicesBoardProps) {
+export function ServicesBoard({ subscriptions, people, accounts }: ServicesBoardProps) {
   const [editId, setEditId] = useState<string | null>(null)
   const [editPersonId, setEditPersonId] = useState<string | null>(null)
   const selected = useMemo(
@@ -38,7 +39,7 @@ export function ServicesBoard({ subscriptions, people }: ServicesBoardProps) {
             Brand card co logo (YouTube, Netflix...) + tinh trang billing. Nhan Edit de cap nhat chia se.
           </p>
         </div>
-        <CreateSubscriptionDialog people={people} />
+        <CreateSubscriptionDialog people={people} accounts={accounts} />
       </div>
 
       {subscriptions.length === 0 ? (
@@ -65,6 +66,7 @@ export function ServicesBoard({ subscriptions, people }: ServicesBoardProps) {
         <EditSubscriptionDialog
           subscription={selected}
           people={people}
+          accounts={accounts}
           initiallyOpen
           onClose={() => setEditId(null)}
         />

@@ -10,18 +10,16 @@ type PageProps = {
   }>
 }
 
-const currencyFormatter = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
+const numberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
-})
+});
 
 function getAccountTypeLabel(type: Account['type']) {
   return type.replace('_', ' ').replace(/\b\w/g, char => char.toUpperCase())
 }
 
 function formatCurrency(value: number) {
-  return currencyFormatter.format(value)
+  return numberFormatter.format(value)
 }
 
 function parseAssetConfig(raw: Account['cashback_config']): {
@@ -56,7 +54,7 @@ export default async function AccountPage({ params }: PageProps) {
   if (!id || id === 'undefined') {
     return (
       <div className="p-6">
-        <p className="text-center text-sm text-gray-500">ID tài khoản không hợp lệ.</p>
+        <p className="text-center text-sm text-gray-500">Invalid account ID.</p>
       </div>
     )
   }
@@ -66,7 +64,7 @@ export default async function AccountPage({ params }: PageProps) {
   if (!account) {
     return (
       <div className="p-6">
-        <p className="text-center text-sm text-gray-500">Không tìm thấy tài khoản.</p>
+        <p className="text-center text-sm text-gray-500">Account not found.</p>
       </div>
     )
   }
@@ -74,7 +72,7 @@ export default async function AccountPage({ params }: PageProps) {
   const [txns, stats, txnDetails, allAccounts] = await Promise.all([
     getAccountTransactions(id, 50),
     account.type === 'credit_card' ? getAccountStats(id) : Promise.resolve(null),
-    getAccountTransactionDetails(id, 50), // New function to get transaction details with lines
+    getAccountTransactionDetails(id, 50),
     getAccounts(),
   ])
 
@@ -85,7 +83,6 @@ export default async function AccountPage({ params }: PageProps) {
     ? allAccounts.find(acc => acc.id === account.secured_by_account_id) ?? null
     : null
 
-  // Calculate inflow and outflow based on transaction lines directly
   let totalInflow = 0
   let totalOutflow = 0
   
@@ -93,10 +90,8 @@ export default async function AccountPage({ params }: PageProps) {
     txn.transaction_lines?.forEach((line: { account_id: string; type: string; amount: number; }) => {
       if (line.account_id === id) {
         if (line.type === 'debit') {
-          // Money going out (expense)
           totalOutflow += Math.abs(line.amount)
         } else if (line.type === 'credit') {
-          // Money coming in (income)
           totalInflow += Math.abs(line.amount)
         }
       }
@@ -111,13 +106,13 @@ export default async function AccountPage({ params }: PageProps) {
   const formatDateValue = (value: string | null | undefined) => {
     if (!value) return null
     const parsed = new Date(value)
-    return Number.isNaN(parsed.getTime()) ? null : parsed.toLocaleDateString('vi-VN')
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toLocaleDateString('en-CA')
   }
   const cashbackStatsAvailable = Boolean(isCreditCard && stats)
 
   const statCards = [
     {
-      label: 'Tổng thu',
+      label: 'Total Inflow',
       value: totalInflow,
       accent: 'text-green-600',
       bg: 'bg-white',
@@ -125,7 +120,7 @@ export default async function AccountPage({ params }: PageProps) {
       textColor: 'text-slate-900',
     },
     {
-      label: 'Tổng chi',
+      label: 'Total Outflow',
       value: totalOutflow,
       accent: 'text-red-600',
       bg: 'bg-slate-50',
@@ -133,7 +128,7 @@ export default async function AccountPage({ params }: PageProps) {
       textColor: 'text-slate-700',
     },
     {
-      label: 'Chênh lệch',
+      label: 'Net Balance',
       value: netBalance,
       accent: netBalance >= 0 ? 'text-green-600' : 'text-red-600',
       bg: 'bg-white',
@@ -162,7 +157,7 @@ export default async function AccountPage({ params }: PageProps) {
               )}
               {isCreditCard && collateralAccount && (
                 <p className="text-xs font-medium text-blue-700">
-                  The duoc dam bao boi{' '}
+                  Secured by{' '}
                   <Link href={`/accounts/${collateralAccount.id}`} className="underline">
                     {collateralAccount.name}
                   </Link>
@@ -173,41 +168,41 @@ export default async function AccountPage({ params }: PageProps) {
           
           {isAssetAccount ? (
             <div className="flex flex-col justify-center">
-              <p className="text-sm font-medium text-slate-500">Thong tin lai suat</p>
+              <p className="text-sm font-medium text-slate-500">Interest Information</p>
               <p className="text-lg font-semibold text-slate-900">
                 {assetConfig?.interestRate !== null && assetConfig?.interestRate !== undefined
                   ? `${assetConfig.interestRate}%`
-                  : 'Chua thiet lap'}
+                  : 'Not set'}
               </p>
               <p className="text-xs text-slate-500">
-                {assetConfig?.termMonths ? `${assetConfig.termMonths} thang` : 'Khong ky han'}
+                {assetConfig?.termMonths ? `${assetConfig.termMonths} months` : 'No term'}
                 {assetConfig?.maturityDate
-                  ? ` - Dao han ${formatDateValue(assetConfig.maturityDate) ?? ''}`
+                  ? ` - Matures on ${formatDateValue(assetConfig.maturityDate) ?? ''}`
                   : ''}
               </p>
             </div>
           ) : cashbackStatsAvailable && stats ? (
             <div className="flex flex-col justify-center">
-              <p className="text-sm font-medium text-slate-500">Chu ky hoan tien</p>
+              <p className="text-sm font-medium text-slate-500">Cashback Cycle</p>
               <p className="text-lg font-semibold text-slate-900">
                 {stats.currentSpend > 0
                   ? formatCurrency(stats.currentSpend)
-                  : 'Chua co chi tieu'}
+                  : 'No spending yet'}
               </p>
               <p className="text-xs text-slate-500">
-                Ty le {Math.round(stats.rate * 100)}%
-                {stats.minSpend ? ` - Min tieu ${formatCurrency(stats.minSpend)}` : ' - Khong yeu cau min'}
+                Rate: {Math.round(stats.rate * 100)}%
+                {stats.minSpend ? ` - Min spend ${formatCurrency(stats.minSpend)}` : ' - No min spend'}
               </p>
             </div>
           ) : (
             <div className="flex flex-col justify-center">
-              <p className="text-sm font-medium text-slate-500">Chu ky hoan tien</p>
-              <p className="text-lg font-semibold text-slate-400">Khong ap dung</p>
+              <p className="text-sm font-medium text-slate-500">Cashback Cycle</p>
+              <p className="text-lg font-semibold text-slate-400">Not applicable</p>
             </div>
           )}
           
           <div className="flex flex-col items-end justify-center">
-            <span className="text-sm text-slate-500">So du hien tai</span>
+            <span className="text-sm text-slate-500">Current Balance</span>
             <p
               className={`text-2xl font-semibold ${
                 account.current_balance < 0 ? 'text-red-600' : 'text-green-600'
@@ -232,7 +227,7 @@ export default async function AccountPage({ params }: PageProps) {
                 Remaining: <span className="font-medium">
                   {stats.maxCashback
                     ? formatCurrency(Math.max(0, stats.maxCashback - stats.earnedSoFar))
-                    : 'Không giới hạn'}
+                    : 'Unlimited'}
                 </span>
               </span>
             </div>
@@ -254,8 +249,8 @@ export default async function AccountPage({ params }: PageProps) {
 
       <section className="bg-white shadow rounded-lg p-6">
         <div className="flex items-center justify-between border-b pb-3">
-          <h2 className="text-lg font-semibold">Lịch sử giao dịch</h2>
-          <span className="text-sm text-slate-500">{txns.length} giao dịch gần nhất</span>
+          <h2 className="text-lg font-semibold">Transaction History</h2>
+          <span className="text-sm text-slate-500">{txns.length} most recent</span>
         </div>
         <div className="mt-4">
           <RecentTransactions transactions={txns} />

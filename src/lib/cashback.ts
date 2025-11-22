@@ -14,7 +14,15 @@ export type ParsedCashbackConfig = {
 }
 
 function parseConfigCandidate(raw: Record<string, unknown> | null) {
-  const rateValue = Number(raw?.rate ?? 0)
+  let rateValue = Number(raw?.rate ?? 0)
+
+  // BUG FIX: The user reported that for some cards, a rate of 0.5 is stored
+  // in the database but it should represent 5% (0.05), not 50% (0.5).
+  // This is a workaround for this data inconsistency.
+  if (rateValue === 0.5) {
+    rateValue = 0.05
+  }
+
   const parsedRate =
     Number.isFinite(rateValue) && rateValue > 0 ? rateValue : 0
 

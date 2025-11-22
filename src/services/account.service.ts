@@ -104,9 +104,11 @@ type TransactionRow = {
     type: 'debit' | 'credit'
     account_id?: string
     category_id?: string
+    person_id?: string | null
     original_amount?: number | null
     cashback_share_percent?: number | null
     cashback_share_fixed?: number | null
+    profiles?: { name?: string | null } | null
     accounts?: {
       name: string
     }
@@ -205,6 +207,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
 
   const percentRaw = txn.cashback_share_percent ?? cashbackFromLines.cashback_share_percent
   const cashbackAmount = txn.cashback_share_amount ?? cashbackFromLines.cashback_share_amount
+  const personLine = lines.find(line => line.person_id)
 
   return {
     id: txn.id,
@@ -221,6 +224,8 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     original_amount: typeof accountLine?.original_amount === 'number'
       ? accountLine.original_amount
       : cashbackFromLines.original_amount,
+    person_id: personLine?.person_id,
+    person_name: personLine?.profiles?.name ?? null,
   }
 }
 
@@ -238,6 +243,7 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
   const cashbackAmount = isLending
     ? Math.max(0, originalAmountAbs - netAmountAbs)
     : 0
+  const personLine = lines.find(line => line.person_id)
   const rawPercent =
     typeof debtLine?.cashback_share_percent === 'number'
       ? debtLine.cashback_share_percent
@@ -284,6 +290,8 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
     cashback_share_percent: rawPercent,
     cashback_share_fixed: fixedBack,
     cashback_share_amount: cashbackAmount,
+    person_id: personLine?.person_id ?? null,
+    person_name: personLine?.profiles?.name ?? null,
   }
 }
 
@@ -348,7 +356,11 @@ async function fetchTransactions(
             account_id,
             metadata,
             category_id,
+            person_id,
             original_amount,
+            cashback_share_percent,
+            cashback_share_fixed,
+            profiles ( name ),
             accounts (name),
             categories (name)
           )
@@ -386,7 +398,11 @@ async function fetchTransactions(
           account_id,
           metadata,
           category_id,
+          person_id,
           original_amount,
+          cashback_share_percent,
+          cashback_share_fixed,
+          profiles ( name ),
           accounts (name),
           categories (name)
         )
