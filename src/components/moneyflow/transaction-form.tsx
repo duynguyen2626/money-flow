@@ -20,7 +20,7 @@ const formSchema = z.object({
   amount: z.coerce.number().positive(),
   note: z.string().optional(),
   tag: z.string().min(1, 'Tag is required'),
-  source_account_id: z.string({ required_error: 'Please select an account.' }),
+  source_account_id: z.string().min(1, { message: 'Please select an account.' }),
   category_id: z.string().optional(),
   person_id: z.string().optional(),
   debt_account_id: z.string().optional(),
