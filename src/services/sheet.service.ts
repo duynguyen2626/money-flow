@@ -67,7 +67,7 @@ async function getProfileSheetLink(personId: string): Promise<string | null> {
     return null
   }
 
-  const sheetLink = profile?.sheet_link?.trim() ?? null
+  const sheetLink = (profile as any)?.sheet_link?.trim() ?? null
   if (!isValidWebhook(sheetLink)) {
     return null
   }
@@ -164,7 +164,6 @@ export async function syncAllTransactions(personId: string) {
         person_id,
         transactions!inner(id, occurred_at, note, tag)
       `)
-      // @ts-expect-error person_id exists in DB though generated types may lag
       .eq('person_id', personId)
       .order('occurred_at', { foreignTable: 'transactions', ascending: true })
 

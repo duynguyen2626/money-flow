@@ -3,7 +3,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { format } from 'date-fns';
-import { Json, TransactionInsert, TransactionLineInsert, TransactionRow as DatabaseTransactionRow } from '@/types/database.types';
+import { Json } from '@/types/database.types';
 import { TransactionLine, TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types';
 import { syncTransactionToSheet } from './sheet.service';
 
@@ -13,14 +13,14 @@ export type CreateTransactionInput = {
   type: 'expense' | 'income' | 'debt' | 'transfer';
   source_account_id: string;
   person_id?: string | null;
-  destination_account_id?: string;
-  category_id?: string;
-  debt_account_id?: string;
+  destination_account_id?: string | null;
+  category_id?: string | null;
+  debt_account_id?: string | null;
   amount: number;
   tag: string;
-  cashback_share_percent?: number;
-  cashback_share_fixed?: number;
-  discount_category_id?: string;
+  cashback_share_percent?: number | null;
+  cashback_share_fixed?: number | null;
+  discount_category_id?: string | null;
 };
 
 async function resolveDiscountCategoryId(
@@ -56,7 +56,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
 
   const tag = input.tag;
 
-  const lines: Omit<TransactionLineInsert, 'transaction_id'>[] = [];
+  const lines: any[] = [];
 
   if (input.type === 'expense' && input.category_id) {
     lines.push({
@@ -109,7 +109,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     if (cashbackGiven > 0) {
       const discountCategoryId = await resolveDiscountCategoryId(
         supabase,
-        input.discount_category_id
+        input.discount_category_id || undefined
       );
       lines.push({
         category_id: discountCategoryId ?? undefined,
@@ -122,14 +122,14 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     return false;
   }
 
-  const { data: txn, error: txnError } = await supabase
+  const { data: txn, error: txnError } = await (supabase
     .from('transactions')
-    .insert({
+    .insert as any)({
       occurred_at: input.occurred_at,
       note: input.note,
       status: 'posted',
       tag: tag,
-    } as TransactionInsert)
+    })
     .select()
     .single();
 
@@ -139,7 +139,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   }
 
   const linesWithId = lines.map(l => ({ ...l, transaction_id: txn.id }));
-  const { error: linesError } = await supabase.from('transaction_lines').insert(linesWithId as TransactionLineInsert[]);
+  const { error: linesError } = await (supabase.from('transaction_lines').insert as any)(linesWithId);
 
   if (linesError) {
     console.error('Error creating transaction lines:', linesError);
@@ -194,11 +194,11 @@ type TransactionRow = {
   cashback_share_percent?: number | null
   cashback_share_fixed?: number | null
   cashback_share_amount?: number | null
-  transaction_lines?: {
+  transaction_lines?: Array<{
     amount: number
     type: 'debit' | 'credit'
-    account_id?: string
-    category_id?: string
+    account_id?: string | null
+    category_id?: string | null
     person_id?: string | null
     original_amount?: number | null
     cashback_share_percent?: number | null
@@ -206,12 +206,12 @@ type TransactionRow = {
     profiles?: { name?: string | null } | null
     accounts?: {
       name: string
-    }
+    } | null
     categories?: {
       name: string
-    }
+    } | null
     metadata?: Json | null
-  }[]
+  } | null>
 }
 
 function extractCashbackFromLines(lines: TransactionRow['transaction_lines']): {
@@ -249,31 +249,31 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   const cashbackFromLines = extractCashbackFromLines(lines)
 
   // Prioritize finding the line with debt/cashback info (original_amount is a good marker)
-  let accountLine = lines.find(line => typeof line.original_amount === 'number');
+  let accountLine = lines.find(line => line && typeof line.original_amount === 'number');
 
   // If no specific debt line, fall back to the original logic
   if (!accountLine) {
       accountLine = accountId
-      ? lines.find(line => line.account_id === accountId)
-      : lines.find(line => line.type === 'credit') // Assume the credit line is the source account for general transactions
+      ? lines.find(line => line && line.account_id === accountId)
+      : lines.find(line => line && line.type === 'credit') // Assume the credit line is the source account for general transactions
   }
   
   const displayAmount =
     typeof accountLine?.amount === 'number'
       ? accountLine.amount
-      : lines.reduce((sum, line) => sum + Math.abs(line.amount), 0) / 2
+      : lines.reduce((sum, line) => sum + (line ? Math.abs(line.amount) : 0), 0) / 2
 
   let type: 'income' | 'expense' | 'transfer' = 'transfer'
   let categoryName: string | undefined
   let accountName: string | undefined
 
-  const categoryLine = lines.find(line => Boolean(line.category_id))
+  const categoryLine = lines.find(line => line && Boolean(line.category_id))
   const creditAccountLine = lines.find(
-    line => line.account_id && line.type === 'credit'
-  )
+    line => line && line.account_id && line.type === 'credit'
+  ) as (typeof lines)[0] | undefined
   const debitAccountLine = lines.find(
-    line => line.account_id && line.type === 'debit'
-  )
+    line => line && line.account_id && line.type === 'debit'
+  ) as (typeof lines)[0] | undefined
 
   if (categoryLine) {
     categoryName = categoryLine.categories?.name
@@ -287,41 +287,41 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   } else {
     // For transfers, show the other account
     if (accountId) {
-        const otherLine = lines.find(line => line.account_id !== accountId)
+        const otherLine = lines.find(line => line && line.account_id !== accountId)
         accountName = otherLine?.accounts?.name
     } else {
         accountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name
     }
   }
 
-  if (accountLine) {
+  if (accountLine?.amount !== undefined) {
     type = accountLine.amount >= 0 ? 'income' : 'expense'
   }
 
   const percentRaw = txn.cashback_share_percent ?? cashbackFromLines.cashback_share_percent
   const cashbackAmount = txn.cashback_share_amount ?? cashbackFromLines.cashback_share_amount
-  const personLine = lines.find(line => line.person_id)
+  const personLine = lines.find(line => line && line.person_id)
   const categoryId = categoryLine?.category_id ?? null
 
   return {
     id: txn.id,
     occurred_at: txn.occurred_at,
-    note: txn.note,
+    note: txn.note || null,
+    status: (txn as any).status as 'posted' | 'pending' | 'void',
+    tag: txn.tag || null,
+    created_at: (txn as any).created_at,
     amount: displayAmount,
-    type,
-    category_name: categoryName,
+    type: type,
+    category_name: categoryLine?.categories?.name,
     account_name: accountName,
     category_id: categoryId,
-    tag: txn.tag || undefined,
-    cashback_share_percent: percentRaw ?? undefined,
-    cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? undefined,
-    cashback_share_amount: cashbackAmount ?? undefined,
-    original_amount: typeof accountLine?.original_amount === 'number'
-      ? accountLine.original_amount
-      : cashbackFromLines.original_amount,
-    person_id: personLine?.person_id,
-    person_name: personLine?.profiles?.name ?? null,
-    persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,
+    cashback_share_percent: percentRaw ?? null,
+    cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? null,
+    cashback_share_amount: cashbackAmount ?? null,
+    original_amount: accountLine?.original_amount ?? null,
+    person_id: personLine?.person_id ?? null,
+    person_name: (personLine as any)?.people?.name ?? null,
+    persisted_cycle_tag: (txn as any).metadata?.persisted_cycle_tag ?? null,
   }
 }
 

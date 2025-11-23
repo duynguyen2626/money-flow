@@ -201,7 +201,7 @@ export async function settleDebt(
     return null
   }
 
-  const currentBalance = (debtAccount.current_balance as number) ?? 0
+  const currentBalance = (debtAccount as any).current_balance ?? 0
   const settlementDirection: SettleDebtResult['direction'] =
     currentBalance >= 0 ? 'collect' : 'repay'
   const absoluteAmount = Math.abs(amount)
@@ -214,21 +214,21 @@ export async function settleDebt(
   const isOverpayment = absoluteAmount > Math.abs(currentBalance)
 
   const transactionNoteParts = [
-    `Settlement with ${(debtAccount as Account).name}`,
+    `Settlement with ${(debtAccount as any).name}`,
     note?.trim() ? note.trim() : undefined,
     isOverpayment ? 'Overpayment' : undefined,
   ].filter(Boolean)
 
   const transactionNote = transactionNoteParts.join(' - ')
 
-  const { data: transaction, error: transactionError } = await supabase
+  const { data: transaction, error: transactionError } = await (supabase
     .from('transactions')
-    .insert({
+    .insert as any)({
       occurred_at: date.toISOString(),
       note: transactionNote,
       status: 'posted',
       tag,
-    } as TransactionInsert)
+    })
     .select()
     .single()
 
@@ -268,7 +268,7 @@ export async function settleDebt(
           },
         ]
 
-  const { error: linesError } = await supabase.from('transaction_lines').insert(lines)
+  const { error: linesError } = await (supabase.from('transaction_lines').insert as any)(lines)
 
   if (linesError) {
     console.error('Failed to create settlement transaction lines:', linesError)

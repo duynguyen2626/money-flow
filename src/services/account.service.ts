@@ -473,16 +473,7 @@ export async function updateAccountConfig(
 ): Promise<boolean> {
   const supabase = createClient()
 
-  const payload: {
-    name?: string
-    credit_limit?: number | null
-    cashback_config?: Json | null
-    type?: Account['type']
-    secured_by_account_id?: string | null
-    is_active?: boolean | null
-    img_url?: string | null
-    logo_url?: string | null
-  } = {}
+  const payload: any = {}
 
   if (typeof data.name === 'string') {
     payload.name = data.name
@@ -521,11 +512,9 @@ export async function updateAccountConfig(
     return true
   }
 
-  type AccountUpdate = Database['public']['Tables']['accounts']['Update']
-
-  const { error } = await supabase
+  const { error } = await (supabase
     .from('accounts')
-    .update(payload as Partial<AccountUpdate>)
+    .update as any)(payload)
     .eq('id', accountId)
 
   if (error) {
@@ -535,9 +524,9 @@ export async function updateAccountConfig(
 
     if (columnMissing && 'img_url' in payload) {
       const { img_url: _ignored, ...retryPayload } = payload
-      const { error: retryError } = await supabase
+      const { error: retryError } = await (supabase
         .from('accounts')
-        .update(retryPayload as Partial<AccountUpdate>)
+        .update as any)(retryPayload)
         .eq('id', accountId)
 
       if (retryError) {
@@ -622,7 +611,7 @@ export async function getAccountTransactionDetails(
   }
 
   const grouped = new Map<string, GroupedTransactionLines>()
-  ;(data ?? []).forEach(line => {
+  ;(data as any ?? []).forEach((line: any) => {
     if (!line.transaction_id) return
     if (!grouped.has(line.transaction_id)) {
       grouped.set(line.transaction_id, { transaction_lines: [] })
