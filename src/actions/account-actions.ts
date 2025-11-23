@@ -17,16 +17,14 @@ export async function createAccount(payload: {
 }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    console.error('User is not authenticated')
-    return { error: 'User is not authenticated' }
-  }
+  
+  // Use default user ID if not authenticated
+  const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66'
 
   const insertPayload: Database['public']['Tables']['accounts']['Insert'] = {
     name: payload.name,
     current_balance: payload.balance ?? 0,
-    owner_id: user.id,
+    owner_id: userId,
     type: payload.type ?? 'bank',
     currency: 'VND',
     is_active: true,
@@ -36,12 +34,28 @@ export async function createAccount(payload: {
     img_url: payload.imgUrl,
   }
 
-  const { data, error } = await supabase
-    .from('accounts')
-    .insert([insertPayload] as any)
-    .select()
+  const executeInsert = (data: typeof insertPayload) =>
+    supabase
+      .from('accounts')
+      .insert([data] as any)
+      .select()
+
+  const { data, error } = await executeInsert(insertPayload)
 
   if (error) {
+    const missingColumn =
+      error.code === 'PGRST204' ||
+      (typeof error.message === 'string' && error.message.includes('img_url'))
+    if (missingColumn && insertPayload.img_url) {
+      delete insertPayload.img_url
+      const { data: retryData, error: retryError } = await executeInsert(insertPayload)
+      if (retryError) {
+        console.error('Error creating account after retry:', retryError)
+        return { error: retryError }
+      }
+      revalidatePath('/accounts')
+      return { data: retryData }
+    }
     console.error('Error creating account:', error)
     return { error }
   }

@@ -40,12 +40,15 @@ async function createDebtAccountForPerson(
   personId: string,
   personName: string
 ): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser()
+  const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66'
+
   const { data, error } = await (supabase
     .from('accounts')
     .insert as any)({
       name: buildDebtAccountName(personName),
       type: 'debt',
-      owner_id: personId,
+      owner_id: userId,
       currency: 'VND',
       current_balance: 0,
     })

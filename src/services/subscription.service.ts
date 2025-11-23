@@ -375,6 +375,8 @@ export async function checkAndProcessSubscriptions(): Promise<{
   names: string[]
 }> {
   const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66'
   const today = parseBillingDate()
 
   const query = supabase
@@ -462,6 +464,7 @@ export async function checkAndProcessSubscriptions(): Promise<{
         note: txnNote,
         status: 'posted',
         tag: txnTag,
+        created_by: userId,
       })
       .select('id')
       .single()

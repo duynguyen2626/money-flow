@@ -189,6 +189,9 @@ export async function settleDebt(
 ): Promise<SettleDebtResult | null> {
   const supabase = createClient()
 
+  const { data: { user } } = await supabase.auth.getUser()
+  const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66'
+
   const { data: debtAccount, error: debtError } = await supabase
     .from('accounts')
     .select('id, name, current_balance')
@@ -228,6 +231,7 @@ export async function settleDebt(
       note: transactionNote,
       status: 'posted',
       tag,
+      created_by: userId,
     })
     .select()
     .single()
