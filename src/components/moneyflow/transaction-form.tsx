@@ -2,7 +2,7 @@
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { format, subMonths } from 'date-fns'
-import { Controller, useForm, useWatch } from 'react-hook-form'
+import { Controller, Resolver, useForm, useWatch } from 'react-hook-form'
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { z } from 'zod'
 import { ensureDebtAccountAction } from '@/actions/people-actions'
@@ -20,7 +20,7 @@ const formSchema = z.object({
   amount: z.coerce.number().positive(),
   note: z.string().optional(),
   tag: z.string().min(1, 'Tag is required'),
-  source_account_id: z.string({ required_error: 'Please select an account.' }),
+  source_account_id: z.string().min(1, { message: 'Please select an account.' }),
   category_id: z.string().optional(),
   person_id: z.string().optional(),
   debt_account_id: z.string().optional(),
@@ -224,7 +224,7 @@ const debtAccountByPerson = useMemo(() => {
   const [isEnsuringDebt, startEnsuringDebt] = useTransition()
 
   const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema),
+    resolver: zodResolver(formSchema) as Resolver<z.infer<typeof formSchema>>,
     defaultValues: {
       occurred_at: new Date(),
       type: defaultType ?? 'expense',
@@ -270,11 +270,12 @@ const debtAccountByPerson = useMemo(() => {
         : Math.max(0, rawPercent)
     const sanitizedFixed = Math.max(0, rawFixed)
 
-    const payload = {
+    const payload: Parameters<typeof createTransaction>[0] = {
       ...values,
       occurred_at: values.occurred_at.toISOString(),
       cashback_share_percent: sanitizedPercent > 0 ? sanitizedPercent : undefined,
       cashback_share_fixed: sanitizedFixed > 0 ? sanitizedFixed : undefined,
+      note: values.note ?? '',
     }
 
     const result = await createTransaction(payload)

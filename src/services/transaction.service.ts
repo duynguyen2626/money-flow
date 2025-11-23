@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { format } from 'date-fns';
 import { Json, TransactionInsert, TransactionLineInsert, TransactionRow as DatabaseTransactionRow } from '@/types/database.types';
 import { TransactionLine, TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types';
+import { syncTransactionToSheet } from './sheet.service';
 
 export type CreateTransactionInput = {
   occurred_at: string;
@@ -143,6 +144,43 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   if (linesError) {
     console.error('Error creating transaction lines:', linesError);
     return false;
+  }
+
+  const syncBase = {
+    id: txn.id,
+    occurred_at: input.occurred_at,
+    note: input.note,
+    tag,
+  };
+
+  for (const line of linesWithId) {
+    const personId = (line as { person_id?: string | null }).person_id;
+    if (!personId) continue;
+
+    const originalAmount =
+      typeof line.original_amount === 'number' ? line.original_amount : line.amount;
+    const cashbackPercent =
+      typeof line.cashback_share_percent === 'number' ? line.cashback_share_percent : undefined;
+    const cashbackFixed =
+      typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
+
+    void syncTransactionToSheet(
+      personId,
+      {
+        ...syncBase,
+        original_amount: originalAmount,
+        cashback_share_percent: cashbackPercent,
+        cashback_share_fixed: cashbackFixed,
+        amount: line.amount,
+      },
+      'create'
+    )
+      .then(() => {
+        console.log(`[Sheet Sync] Triggered for Person ${personId}`);
+      })
+      .catch(err => {
+        console.error('Sheet Sync Error (Background):', err);
+      });
   }
 
   return true;

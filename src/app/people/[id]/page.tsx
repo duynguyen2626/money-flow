@@ -10,8 +10,8 @@ import { EditPersonDialog } from '@/components/people/edit-person-dialog';
 import { notFound } from 'next/navigation';
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog';
 import { Account, Category, Person, TransactionWithDetails, Subscription, DebtAccount } from '@/types/moneyflow.types';
-import { PersonWithSubscriptions } from '@/services/people.service';
 import { DebtByTagAggregatedResult } from '@/services/debt.service';
+import { SheetSyncControls } from '@/components/people/sheet-sync-controls';
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
@@ -28,7 +28,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
-    const [personProfile, setPersonProfile] = useState<PersonWithSubscriptions | null>(null);
+    const [personProfile, setPersonProfile] = useState<Person | null>(null);
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
     const [allPeople, setAllPeople] = useState<Person[]>([]);
     const [loading, setLoading] = useState(true);
@@ -37,6 +37,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     const { selectedTag, setSelectedTag } = useTagFilter();
     const [activeTab, setActiveTab] = useState<'all' | 'tagged' | 'untagged'>('all');
     const [isExpanded, setIsExpanded] = useState(true);
+    const [showSheetSettings, setShowSheetSettings] = useState(true);
 
     const refreshData = async () => {
         if (!id) return;
@@ -104,14 +105,27 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     const balanceColor = totalBalance > 0 ? 'text-green-600' : 'text-red-600';
     const balanceText = totalBalance > 0 ? 'They owe you' : 'You owe them';
 
+    const ownerPerson = allPeople.find(p => p.id === person.owner_id);
+    const displayAvatar =
+        person.avatar_url ||
+        personProfile?.avatar_url ||
+        ownerPerson?.avatar_url ||
+        null;
+    const displaySheetLink = personProfile?.sheet_link ?? ownerPerson?.sheet_link ?? person.sheet_link ?? null;
+    const canShowSheetControls = Boolean(person.owner_id || personProfile || displaySheetLink);
+
     return (
         <div className="space-y-6">
             <section className="space-y-5 bg-white shadow rounded-lg p-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-center gap-4">
-                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-2xl font-bold text-slate-600">
-                            {person.name.charAt(0).toUpperCase()}
-                        </div>
+                        {displayAvatar ? (
+                            <img src={displayAvatar} alt={person.name} className="h-16 w-16 object-contain" />
+                        ) : (
+                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-2xl font-bold text-slate-600">
+                                {person.name.charAt(0).toUpperCase()}
+                            </div>
+                        )}
                         <div>
                             <h1 className="text-2xl font-bold">{person.name}</h1>
                             <p className="text-sm text-gray-500">{balanceText}</p>
@@ -161,6 +175,31 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
                 </div>
 
                 <div className="border-t pt-5">
+                    {canShowSheetControls && (
+                        <div className="mb-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-sm font-semibold text-slate-700">Google Sheet Sync</p>
+                                    <p className="text-xs text-slate-500">Test Kết Nối / Đồng bộ toàn bộ</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                                    onClick={() => setShowSheetSettings(prev => !prev)}
+                                >
+                                    {showSheetSettings ? 'Thu gọn' : 'Mở Google Sheet Sync'}
+                                </button>
+                            </div>
+                            {showSheetSettings && (
+                                <div className="mt-3">
+                                    <SheetSyncControls
+                                        personId={person.owner_id ?? personProfile?.id ?? null}
+                                        sheetLink={displaySheetLink}
+                                    />
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <DebtCycleFilter
                         allCycles={debtCycles}
                         debtAccount={person}

@@ -4,6 +4,9 @@ import { SettleDebtButton } from '@/components/moneyflow/settle-debt-button';
 import { DebtCycleFilter } from '@/components/moneyflow/debt-cycle-filter';
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions';
 import { TagFilterProvider } from '@/context/tag-filter-context';
+import { SheetSyncControls } from '@/components/people/sheet-sync-controls';
+import { getCategories } from '@/services/category.service';
+import { getPeople } from '@/services/people.service';
 import { notFound } from 'next/navigation';
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
@@ -23,11 +26,13 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
         notFound();
     }
 
-    const [person, debtCycles, transactions, accounts] = await Promise.all([
+    const [person, debtCycles, transactions, accounts, categories, people] = await Promise.all([
         getPersonDetails(id),
         getDebtByTags(id),
         getAccountTransactions(id, 100),
         getAccounts(),
+        getCategories(),
+        getPeople(),
     ]);
 
     if (!person) {
@@ -44,9 +49,13 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                 <section className="space-y-5 bg-white shadow rounded-lg p-6">
                     <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div className="flex items-center gap-4">
-                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-2xl font-bold text-slate-600">
-                                {person.name.charAt(0).toUpperCase()}
-                            </div>
+                            {person.avatar_url ? (
+                                <img src={person.avatar_url} alt={person.name} className="h-16 w-16 object-contain" />
+                            ) : (
+                                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 text-2xl font-bold text-slate-600">
+                                    {person.name.charAt(0).toUpperCase()}
+                                </div>
+                            )}
                             <div>
                                 <h1 className="text-2xl font-bold">{person.name}</h1>
                                 <p className="text-sm text-gray-500">{balanceText}</p>
@@ -59,10 +68,21 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                     </div>
 
                     <div className="border-t pt-5">
+                        <div className="mb-4">
+                            <SheetSyncControls personId={person.owner_id ?? null} sheetLink={person.sheet_link} />
+                        </div>
                         <div className="flex items-center justify-between mb-3">
                             <h2 className="text-lg font-semibold">Ky no (Debt Cycles)</h2>
                         </div>
-                        <DebtCycleFilter allCycles={debtCycles} debtAccount={person} accounts={accounts} />
+                        <DebtCycleFilter
+                            allCycles={debtCycles}
+                            debtAccount={person}
+                            accounts={accounts}
+                            categories={categories}
+                            people={people}
+                            displayedCycles={debtCycles}
+                            isExpanded
+                        />
                     </div>
                 </section>
 

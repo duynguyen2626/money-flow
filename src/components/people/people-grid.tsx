@@ -167,6 +167,7 @@ export function PeopleGrid({ people, subscriptions }: PeopleGridProps) {
         <EditSubscriptionDialog
           subscription={subscriptionMap.get(editServiceId)!}
           people={people}
+          accounts={[]}
           initiallyOpen
           onClose={() => {
             setEditServiceId(null)

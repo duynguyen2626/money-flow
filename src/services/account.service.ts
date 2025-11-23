@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Account, TransactionLine, TransactionWithDetails } from '@/types/moneyflow.types'
-import { Json } from '@/types/database.types'
+import { Database, Json } from '@/types/database.types'
 
 type AccountRow = {
   id: string
@@ -103,8 +103,10 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
 type TransactionRow = {
   id: string
   occurred_at: string
-  note: string
+  note: string | null
   tag: string | null // Thêm trường tag
+  status?: 'posted' | 'pending' | 'void'
+  created_at?: string
   cashback_share_percent?: number | null
   cashback_share_fixed?: number | null
   cashback_share_amount?: number | null
@@ -222,13 +224,15 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   return {
     id: txn.id,
     occurred_at: txn.occurred_at,
-    note: txn.note,
+    note: txn.note ?? '',
+    status: txn.status ?? 'posted',
+    created_at: txn.created_at ?? '',
     amount: displayAmount,
     type,
     category_name: categoryName,
     account_name: accountName,
     category_id: categoryId,
-    tag: txn.tag || undefined, // Thêm trường tag
+    tag: txn.tag ?? null, // Thêm trường tag
     cashback_share_percent: percentRaw ?? undefined,
     cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? undefined,
     cashback_share_amount: cashbackAmount ?? undefined,
@@ -293,14 +297,16 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
   return {
     id: txn.id,
     occurred_at: txn.occurred_at,
-    note: txn.note,
+    note: txn.note ?? '',
+    status: (txn as { status?: 'posted' | 'pending' | 'void' }).status ?? 'posted',
+    created_at: (txn as { created_at?: string }).created_at ?? '',
     amount: netAmount,
     original_amount: originalAmount,
     type,
     category_name: categoryName,
     account_name: accountName,
     category_id: categoryId,
-    tag: txn.tag || undefined,
+    tag: txn.tag ?? null,
     cashback_share_percent: rawPercent,
     cashback_share_fixed: fixedBack,
     cashback_share_amount: cashbackAmount,
@@ -515,9 +521,11 @@ export async function updateAccountConfig(
     return true
   }
 
+  type AccountUpdate = Database['public']['Tables']['accounts']['Update']
+
   const { error } = await supabase
     .from('accounts')
-    .update(payload)
+    .update(payload as Partial<AccountUpdate>)
     .eq('id', accountId)
 
   if (error) {
@@ -529,7 +537,7 @@ export async function updateAccountConfig(
       const { img_url: _ignored, ...retryPayload } = payload
       const { error: retryError } = await supabase
         .from('accounts')
-        .update(retryPayload)
+        .update(retryPayload as Partial<AccountUpdate>)
         .eq('id', accountId)
 
       if (retryError) {
