@@ -6,7 +6,7 @@ import { Controller, Resolver, useForm, useWatch } from 'react-hook-form'
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { z } from 'zod'
 import { ensureDebtAccountAction } from '@/actions/people-actions'
-import { createTransaction } from '@/services/transaction.service'
+import { createTransaction, updateTransaction } from '@/services/transaction.service'
 import { Account, Category, Person } from '@/types/moneyflow.types'
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
 import { CashbackCard, AccountSpendingStats } from '@/types/cashback.types'
@@ -68,6 +68,8 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 })
 
+export type TransactionFormValues = z.infer<typeof formSchema>
+
 const cycleDateFormatter = new Intl.DateTimeFormat('en-US', {
   day: '2-digit',
   month: '2-digit',
@@ -108,6 +110,9 @@ type TransactionFormProps = {
   defaultType?: 'expense' | 'income' | 'debt' | 'transfer';
   defaultSourceAccountId?: string;
   defaultDebtAccountId?: string;
+  transactionId?: string;
+  initialValues?: Partial<TransactionFormValues>;
+  mode?: 'create' | 'edit';
 }
 
 type StatusMessage = {
@@ -125,6 +130,9 @@ export function TransactionForm({
   defaultType,
   defaultSourceAccountId,
   defaultDebtAccountId,
+  transactionId,
+  initialValues,
+  mode = 'create',
 }: TransactionFormProps) {
   const sourceAccounts = useMemo(
     () => allAccounts.filter(a => a.type !== 'debt'),
@@ -137,7 +145,7 @@ export function TransactionForm({
     setPeopleState(people)
   }, [people])
 
-  const [manualTagMode, setManualTagMode] = useState(Boolean(defaultTag));
+  const [manualTagMode, setManualTagMode] = useState(() => Boolean(defaultTag || initialValues?.tag));
   
   const suggestedTags = useMemo(() => {
     const tags = [];
@@ -222,10 +230,10 @@ const debtAccountByPerson = useMemo(() => {
   const [statsError, setStatsError] = useState<string | null>(null)
   const [debtEnsureError, setDebtEnsureError] = useState<string | null>(null)
   const [isEnsuringDebt, startEnsuringDebt] = useTransition()
+  const isEditMode = mode === 'edit' || Boolean(transactionId)
 
-  const form = useForm<z.infer<typeof formSchema>>({
-    resolver: zodResolver(formSchema) as Resolver<z.infer<typeof formSchema>>,
-    defaultValues: {
+  const baseDefaults = useMemo(
+    () => ({
       occurred_at: new Date(),
       type: defaultType ?? 'expense',
       amount: 0,
@@ -236,6 +244,15 @@ const debtAccountByPerson = useMemo(() => {
       debt_account_id: defaultDebtAccountId ?? undefined,
       cashback_share_percent: undefined,
       cashback_share_fixed: undefined,
+    }),
+    [defaultDebtAccountId, defaultSourceAccountId, defaultTag, defaultType]
+  )
+
+  const form = useForm<TransactionFormValues>({
+    resolver: zodResolver(formSchema) as Resolver<TransactionFormValues>,
+    defaultValues: {
+      ...baseDefaults,
+      ...initialValues,
     },
   })
 
@@ -258,7 +275,18 @@ const debtAccountByPerson = useMemo(() => {
     form.setValue('debt_account_id', defaultPersonId)
   }, [defaultPersonId, form, peopleState, personMap])
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  useEffect(() => {
+    if (!initialValues) {
+      return
+    }
+    form.reset({
+      ...baseDefaults,
+      ...initialValues,
+    })
+    setManualTagMode(true)
+  }, [baseDefaults, form, initialValues])
+
+  async function onSubmit(values: TransactionFormValues) {
     setStatus(null)
 
     const percentLimit = cashbackProgress ? cashbackProgress.rate * 100 : null
@@ -278,26 +306,32 @@ const debtAccountByPerson = useMemo(() => {
       note: values.note ?? '',
     }
 
-    const result = await createTransaction(payload)
+    const result = transactionId
+      ? await updateTransaction(transactionId, payload)
+      : await createTransaction(payload)
 
     if (result) {
       setStatus({
         type: 'success',
-        text: 'Transaction created successfully.',
+        text: isEditMode ? 'Transaction updated successfully.' : 'Transaction created successfully.',
       })
+      if (isEditMode) {
+        onSuccess?.()
+        return
+      }
       form.reset({
+        ...baseDefaults,
         occurred_at: new Date(),
-        type: defaultType ?? 'expense',
         amount: 0,
-      note: '',
-      tag: defaultTag ?? generateTag(new Date()),
-      source_account_id: defaultSourceAccountId ?? undefined,
-      category_id: undefined,
-      person_id: undefined,
-      debt_account_id: defaultDebtAccountId ?? undefined,
-      cashback_share_percent: undefined,
-      cashback_share_fixed: undefined,
-    })
+        note: '',
+        tag: defaultTag ?? generateTag(new Date()),
+        source_account_id: defaultSourceAccountId ?? undefined,
+        category_id: undefined,
+        person_id: undefined,
+        debt_account_id: defaultDebtAccountId ?? undefined,
+        cashback_share_percent: undefined,
+        cashback_share_fixed: undefined,
+      })
       setManualTagMode(Boolean(defaultTag))
       applyDefaultPersonSelection()
       onSuccess?.()
@@ -400,6 +434,10 @@ const debtAccountByPerson = useMemo(() => {
   }, [applyDefaultPersonSelection, defaultPersonId, form])
 
   useEffect(() => {
+    if (transactionType !== 'debt') {
+      setDebtEnsureError(null)
+      return
+    }
     if (!watchedPersonId) {
       form.setValue('debt_account_id', undefined)
       setDebtEnsureError(null)
@@ -408,7 +446,7 @@ const debtAccountByPerson = useMemo(() => {
     setDebtEnsureError(null)
     const linkedAccountId = debtAccountByPerson.get(watchedPersonId)
     form.setValue('debt_account_id', linkedAccountId ?? undefined)
-  }, [watchedPersonId, debtAccountByPerson, form])
+  }, [transactionType, watchedPersonId, debtAccountByPerson, form])
 
   useEffect(() => {
     if (!watchedAccountId) {
@@ -621,7 +659,19 @@ const debtAccountByPerson = useMemo(() => {
   const showCashbackInputs =
     transactionType !== 'income' &&
     selectedAccount?.type === 'credit_card' &&
+    amountValue > 0 &&
     (transactionType !== 'transfer' || Boolean(watchedDebtAccountId))
+
+  useEffect(() => {
+    if (amountValue <= 0) {
+      form.setValue('cashback_share_percent', undefined)
+      form.setValue('cashback_share_fixed', undefined)
+      return
+    }
+    if (typeof watchedCashbackFixed === 'number' && watchedCashbackFixed > amountValue) {
+      form.setValue('cashback_share_fixed', amountValue)
+    }
+  }, [amountValue, form, watchedCashbackFixed])
 
   const handleEnsureDebtAccount = () => {
     if (!watchedPersonId) {
@@ -647,29 +697,35 @@ const debtAccountByPerson = useMemo(() => {
   }, [watchedDate, manualTagMode, form]);
 
   useEffect(() => {
+    if (isEditMode && initialValues?.tag) {
+      return
+    }
     if (typeof defaultTag === 'string') {
       form.setValue('tag', defaultTag);
       setManualTagMode(true);
     }
-  }, [defaultTag, form]);
+  }, [defaultTag, form, initialValues?.tag, isEditMode]);
 
   useEffect(() => {
+    if (isEditMode) return
     if (defaultType) {
       form.setValue('type', defaultType);
     }
-  }, [defaultType, form]);
+  }, [defaultType, form, isEditMode]);
 
   useEffect(() => {
+    if (isEditMode && initialValues?.source_account_id) return
     if (defaultSourceAccountId) {
       form.setValue('source_account_id', defaultSourceAccountId)
     }
-  }, [defaultSourceAccountId, form])
+  }, [defaultSourceAccountId, form, initialValues?.source_account_id, isEditMode])
 
   useEffect(() => {
+    if (isEditMode && initialValues?.debt_account_id) return
     if (defaultDebtAccountId) {
       form.setValue('debt_account_id', defaultDebtAccountId)
     }
-  }, [defaultDebtAccountId, form])
+  }, [defaultDebtAccountId, form, initialValues?.debt_account_id, isEditMode])
 
   const debtAccountName = useMemo(() => {
     if (!watchedDebtAccountId) return null
@@ -1054,11 +1110,12 @@ const debtAccountByPerson = useMemo(() => {
                       return
                     }
                     const number = parseInt(numericValue, 10)
-                    if (!Number.isNaN(number)) {
-                      field.onChange(number)
-                    }
+                    if (Number.isNaN(number)) return
+                    const clamped = amountValue > 0 ? Math.min(number, amountValue) : number
+                    field.onChange(clamped)
                   }}
                   disabled={budgetMaxed}
+                  max={amountValue > 0 ? amountValue : undefined}
                   className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
                   placeholder="Enter fixed amount"
                 />
@@ -1115,7 +1172,7 @@ const debtAccountByPerson = useMemo(() => {
         disabled={isSubmitting}
         className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
       >
-        {isSubmitting ? 'Saving...' : 'Add Transaction'}
+        {isSubmitting ? 'Saving...' : isEditMode ? 'Update Transaction' : 'Add Transaction'}
       </button>
     </form>
   )

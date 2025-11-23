@@ -91,6 +91,9 @@ export type TransactionLine = {
 export type TransactionWithLineRelations = TransactionLineRow & {
   accounts: Pick<AccountRow, 'name'> | null;
   categories: Pick<CategoryRow, 'name'> | null;
+  profiles?: { name?: string | null } | null;
+  people?: { name?: string | null } | null;
+  person_id?: string | null;
 }
 
 export type TransactionWithDetails = TransactionRow & {

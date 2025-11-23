@@ -1,6 +1,8 @@
 import Link from 'next/link'
 
 import { getAccounts } from '@/services/account.service'
+import { getCategories } from '@/services/category.service'
+import { getPeople } from '@/services/people.service'
 import { getRecentTransactions } from '@/services/transaction.service'
 import { Account } from '@/types/moneyflow.types'
 import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
@@ -8,7 +10,12 @@ import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
 export const dynamic = 'force-dynamic'
 
 export default async function Home() {
-  const [accounts, recentTransactions] = await Promise.all([getAccounts(), getRecentTransactions(5)])
+  const [accounts, categories, people, recentTransactions] = await Promise.all([
+    getAccounts(),
+    getCategories(),
+    getPeople(),
+    getRecentTransactions(5),
+  ])
 
   return (
     <div className="space-y-6">
@@ -71,7 +78,12 @@ export default async function Home() {
             Xem tat ca
           </Link>
         </div>
-        <RecentTransactions transactions={recentTransactions} />
+        <RecentTransactions
+          transactions={recentTransactions}
+          accounts={accounts}
+          categories={categories}
+          people={people}
+        />
       </section>
     </div>
   )

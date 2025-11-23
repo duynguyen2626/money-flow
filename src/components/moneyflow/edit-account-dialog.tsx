@@ -374,7 +374,7 @@ export function EditAccountDialog({ account, collateralAccounts, triggerContent,
                       <label className="text-sm font-medium text-slate-600">Rate (%)</label>
                       <input
                         type="number"
-                        step="1"
+                        step="any"
                         min="0"
                         max="100"
                         value={rate ? (parseFloat(rate) * 100).toString() : ''}
@@ -444,7 +444,7 @@ export function EditAccountDialog({ account, collateralAccounts, triggerContent,
                       <label className="text-sm font-medium text-slate-600">Interest rate (%)</label>
                       <input
                         type="number"
-                        step="0.01"
+                        step="any"
                         min="0"
                         value={interestRate}
                         onChange={event => setInterestRate(event.target.value)}

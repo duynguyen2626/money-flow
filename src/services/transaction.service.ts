@@ -33,30 +33,48 @@ async function resolveDiscountCategoryId(
 
   const { data, error } = await supabase
     .from('categories')
+    .select('id, name, type')
+    .in('name', ['Chiết khấu / Quà tặng', 'Chi phí khác', 'Discount Given'])
+    .eq('type', 'expense')
+    .limit(3);
+
+  const rows = (data ?? []) as { id: string; name: string; type: 'expense' | 'income' }[];
+
+  if (error) {
+    console.error('Error fetching fallback discount categories:', error);
+  }
+
+  const preferredOrder = ['Chiết khấu / Quà tặng', 'Chi phí khác', 'Discount Given'];
+  for (const name of preferredOrder) {
+    const match = rows.find(row => row.name === name && row.type === 'expense');
+    if (match) return match.id;
+  }
+
+  const { data: fallback, error: fallbackError } = await supabase
+    .from('categories')
     .select('id')
-    .eq('name', 'Discount Given')
     .eq('type', 'expense')
     .limit(1);
 
-  if (error) {
-    console.error('Error fetching Discount Given category:', error);
+  if (fallbackError) {
+    console.error('Error fetching any expense category for fallback:', fallbackError);
     return null;
   }
 
-  const rows = (data ?? []) as { id: string }[];
-  return rows[0]?.id ?? null;
+  const fallbackRows = (fallback ?? []) as { id: string }[];
+  return fallbackRows[0]?.id ?? null;
 }
 
 function generateTag(date: Date): string {
   return format(date, 'MMMyy').toUpperCase();
 }
 
-export async function createTransaction(input: CreateTransactionInput): Promise<boolean> {
-  const supabase = createClient();
-
-  const tag = input.tag;
-
+async function buildTransactionLines(
+  supabase: ReturnType<typeof createClient>,
+  input: CreateTransactionInput
+) {
   const lines: any[] = [];
+  const tag = input.tag;
 
   if (input.type === 'expense' && input.category_id) {
     lines.push({
@@ -111,16 +129,65 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
         supabase,
         input.discount_category_id || undefined
       );
+      if (!discountCategoryId) {
+        console.error('No fallback category found for discount line');
+        return null;
+      }
       lines.push({
-        category_id: discountCategoryId ?? undefined,
+        category_id: discountCategoryId,
         amount: cashbackGiven,
         type: 'debit',
       });
     }
   } else {
     console.error('Invalid transaction type or missing data');
+    return null;
+  }
+
+  return { lines, tag };
+}
+
+function buildSheetPayload(
+  txn: { id: string; occurred_at: string; note?: string | null; tag?: string | null },
+  line:
+    | {
+        amount: number
+        original_amount?: number | null
+        cashback_share_percent?: number | null
+        cashback_share_fixed?: number | null
+        metadata?: Json | null
+      }
+    | null
+) {
+  if (!line) return null;
+  const meta = (line.metadata as Record<string, unknown> | null) ?? null;
+  const cashbackAmount =
+    typeof meta?.cashback_share_amount === 'number' ? meta.cashback_share_amount : undefined;
+
+  return {
+    id: txn.id,
+    occurred_at: txn.occurred_at,
+    note: txn.note ?? undefined,
+    tag: txn.tag ?? undefined,
+    amount: line.amount,
+    original_amount:
+      typeof line.original_amount === 'number' ? line.original_amount : Math.abs(line.amount),
+    cashback_share_percent:
+      typeof line.cashback_share_percent === 'number' ? line.cashback_share_percent : undefined,
+    cashback_share_fixed:
+      typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined,
+    cashback_share_amount: cashbackAmount,
+  };
+}
+
+export async function createTransaction(input: CreateTransactionInput): Promise<boolean> {
+  const supabase = createClient();
+
+  const built = await buildTransactionLines(supabase, input);
+  if (!built) {
     return false;
   }
+  const { lines, tag } = built;
 
   const { data: txn, error: txnError } = await (supabase
     .from('transactions')
@@ -320,8 +387,12 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     cashback_share_amount: cashbackAmount ?? null,
     original_amount: accountLine?.original_amount ?? null,
     person_id: personLine?.person_id ?? null,
-    person_name: (personLine as any)?.people?.name ?? null,
+    person_name:
+      (personLine as { profiles?: { name?: string | null } | null })?.profiles?.name ??
+      (personLine as any)?.people?.name ??
+      null,
     persisted_cycle_tag: (txn as any).metadata?.persisted_cycle_tag ?? null,
+    transaction_lines: (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[],
   }
 }
 
@@ -335,6 +406,8 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
       occurred_at,
       note,
       tag,
+      status,
+      created_at,
       transaction_lines (
         amount,
         type,
@@ -361,4 +434,241 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
   const rows = (data ?? []) as TransactionRow[];
 
   return rows.map(txn => mapTransactionRow(txn));
+}
+
+export async function voidTransaction(id: string): Promise<boolean> {
+  const supabase = createClient();
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('transactions')
+    .select(
+      `
+      id,
+      occurred_at,
+      note,
+      tag,
+      transaction_lines (
+        amount,
+        original_amount,
+        cashback_share_percent,
+        cashback_share_fixed,
+        metadata,
+        person_id
+      )
+    `
+    )
+    .eq('id', id)
+    .maybeSingle();
+
+  if (fetchError || !existing) {
+    console.error('Failed to load transaction for void:', fetchError);
+    return false;
+  }
+
+  const { error: updateError } = await supabase.from('transactions').update({ status: 'void' }).eq('id', id);
+
+  if (updateError) {
+    console.error('Failed to void transaction:', updateError);
+    return false;
+  }
+
+  const lines = (existing.transaction_lines ?? []) as {
+    amount: number
+    original_amount?: number | null
+    cashback_share_percent?: number | null
+    cashback_share_fixed?: number | null
+    metadata?: Json | null
+    person_id?: string | null
+  }[];
+  const personLine = lines.find(line => line?.person_id);
+
+  if (personLine?.person_id) {
+    const payload = buildSheetPayload(existing, personLine);
+    if (payload) {
+      void syncTransactionToSheet(personLine.person_id, payload, 'delete').catch(err => {
+        console.error('Sheet Sync Error (Void):', err);
+      });
+    }
+  }
+
+  return true;
+}
+
+export async function restoreTransaction(id: string): Promise<boolean> {
+  const supabase = createClient();
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('transactions')
+    .select(
+      `
+      id,
+      occurred_at,
+      note,
+      tag,
+      transaction_lines (
+        amount,
+        original_amount,
+        cashback_share_percent,
+        cashback_share_fixed,
+        metadata,
+        person_id
+      )
+    `
+    )
+    .eq('id', id)
+    .maybeSingle();
+
+  if (fetchError || !existing) {
+    console.error('Failed to load transaction for restore:', fetchError);
+    return false;
+  }
+
+  const { error: updateError } = await supabase
+    .from('transactions')
+    .update({ status: 'posted' })
+    .eq('id', id);
+
+  if (updateError) {
+    console.error('Failed to restore transaction:', updateError);
+    return false;
+  }
+
+  const lines = (existing.transaction_lines ?? []) as {
+    amount: number
+    original_amount?: number | null
+    cashback_share_percent?: number | null
+    cashback_share_fixed?: number | null
+    metadata?: Json | null
+    person_id?: string | null
+  }[];
+
+  for (const line of lines) {
+    if (!line?.person_id) continue;
+    const payload = buildSheetPayload(existing, line);
+    if (!payload) continue;
+    void syncTransactionToSheet(line.person_id, payload, 'create').catch(err => {
+      console.error('Sheet Sync Error (Restore):', err);
+    });
+  }
+
+  return true;
+}
+
+export async function updateTransaction(id: string, input: CreateTransactionInput): Promise<boolean> {
+  const supabase = createClient();
+
+  const [existing, built] = await Promise.all([
+    supabase
+      .from('transactions')
+      .select(
+        `
+        id,
+        occurred_at,
+        note,
+        tag,
+        transaction_lines (
+          amount,
+          original_amount,
+          cashback_share_percent,
+          cashback_share_fixed,
+          metadata,
+          person_id
+        )
+      `
+      )
+      .eq('id', id)
+      .maybeSingle(),
+    buildTransactionLines(supabase, input),
+  ]);
+
+  const existingData = existing.data as
+    | (TransactionRow & {
+        transaction_lines?: Array<{
+          amount: number
+          original_amount?: number | null
+          cashback_share_percent?: number | null
+          cashback_share_fixed?: number | null
+          metadata?: Json | null
+          person_id?: string | null
+        } | null>
+      })
+    | null;
+
+  if (existing.error || !existingData) {
+    console.error('Failed to fetch transaction before update:', existing.error);
+    return false;
+  }
+
+  if (!built) {
+    return false;
+  }
+
+  const { lines, tag } = built;
+
+  const { error: headerError } = await supabase
+    .from('transactions')
+    .update({
+      occurred_at: input.occurred_at,
+      note: input.note,
+      tag: tag,
+      status: 'posted',
+    })
+    .eq('id', id);
+
+  if (headerError) {
+    console.error('Failed to update transaction header:', headerError);
+    return false;
+  }
+
+  const { error: deleteError } = await supabase.from('transaction_lines').delete().eq('transaction_id', id);
+  if (deleteError) {
+    console.error('Failed to clear old transaction lines:', deleteError);
+    return false;
+  }
+
+  const linesWithId = lines.map(line => ({ ...line, transaction_id: id }));
+  const { error: insertError } = await (supabase.from('transaction_lines').insert as any)(linesWithId);
+  if (insertError) {
+    console.error('Failed to insert new transaction lines:', insertError);
+    return false;
+  }
+
+  const existingLines = (existingData.transaction_lines ?? []).filter(Boolean) as {
+    amount: number
+    original_amount?: number | null
+    cashback_share_percent?: number | null
+    cashback_share_fixed?: number | null
+    metadata?: Json | null
+    person_id?: string | null
+  }[];
+
+  for (const line of existingLines) {
+    if (!line.person_id) continue;
+    const payload = buildSheetPayload(existingData, line);
+    if (!payload) continue;
+    void syncTransactionToSheet(line.person_id, payload, 'delete').catch(err => {
+      console.error('Sheet Sync Error (Update/Delete):', err);
+    });
+  }
+
+  const syncBase = {
+    id,
+    occurred_at: input.occurred_at,
+    note: input.note,
+    tag,
+  };
+
+  for (const line of linesWithId) {
+    const personId = (line as { person_id?: string | null }).person_id;
+    if (!personId) continue;
+
+    const payload = buildSheetPayload(syncBase, line);
+    if (!payload) continue;
+
+    void syncTransactionToSheet(personId, payload, 'create').catch(err => {
+      console.error('Sheet Sync Error (Update/Create):', err);
+    });
+  }
+
+  return true;
 }
