@@ -19,16 +19,16 @@ export default function NewAccountPage() {
     id: 'new',
     name: '',
     type: 'bank',
-    balance: 0,
-    credit_limit: null,
+    currency: 'VND',
+    current_balance: 0,
+    credit_limit: undefined,
     cashback_config: null,
-    secured_by_account_id: null,
+    secured_by_account_id: undefined,
     is_active: true,
-    owner_id: null,
+    owner_id: '',
     img_url: null,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
+    logo_url: null
+  } as Account
 
   const handleSuccess = () => {
     router.push('/accounts')

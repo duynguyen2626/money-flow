@@ -2,11 +2,19 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { updateAccountConfig } from '@/services/account.service'
-import { Json } from '@/types/database.types'
+import { Database, Json } from '@/types/database.types'
 import { Account } from '@/types/moneyflow.types'
 import { revalidatePath } from 'next/cache'
 
-export async function createAccount(payload: { name: string; balance?: number }) {
+export async function createAccount(payload: { 
+  name: string; 
+  balance?: number;
+  type?: Account['type'];
+  creditLimit?: number | null;
+  cashbackConfig?: Json | null;
+  securedByAccountId?: string | null;
+  imgUrl?: string | null;
+}) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -15,16 +23,23 @@ export async function createAccount(payload: { name: string; balance?: number })
     return { error: 'User is not authenticated' }
   }
 
-  const { data, error } = await supabase.from('accounts').insert([
-    {
-      name: payload.name,
-      current_balance: payload.balance ?? 0,
-      owner_id: user.id,
-      type: 'bank', 
-      currency: 'VND',
-      is_active: true,
-    },
-  ]).select()
+  const insertPayload: Database['public']['Tables']['accounts']['Insert'] = {
+    name: payload.name,
+    current_balance: payload.balance ?? 0,
+    owner_id: user.id,
+    type: payload.type ?? 'bank',
+    currency: 'VND',
+    is_active: true,
+    credit_limit: payload.creditLimit,
+    cashback_config: payload.cashbackConfig,
+    secured_by_account_id: payload.securedByAccountId,
+    img_url: payload.imgUrl,
+  }
+
+  const { data, error } = await supabase
+    .from('accounts')
+    .insert([insertPayload] as any)
+    .select()
 
   if (error) {
     console.error('Error creating account:', error)

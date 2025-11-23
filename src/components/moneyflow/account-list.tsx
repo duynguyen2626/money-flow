@@ -5,6 +5,8 @@ import { LayoutGrid, List } from 'lucide-react'
 import { CreateAccountDialog } from './create-account-dialog'
 import { AccountCard } from './account-card'
 import { AccountTable } from './account-table'
+import { Account, AccountCashbackSnapshot, Category, Person } from '@/types/moneyflow.types'
+import { updateAccountConfigAction } from '@/actions/account-actions'
 
 type AccountListProps = {
   accounts: Account[]
@@ -139,7 +141,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people }:
               Table
             </button>
           </div>
-          <CreateAccountDialog />
+          <CreateAccountDialog collateralAccounts={collateralAccounts} />
         </div>
       </div>
 

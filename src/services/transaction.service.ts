@@ -465,22 +465,15 @@ export async function voidTransaction(id: string): Promise<boolean> {
     return false;
   }
 
-  const { error: updateError } = await supabase.from('transactions').update({ status: 'void' }).eq('id', id);
+  const { error: updateError } = await supabase.from('transactions').update([{ status: 'void' }] as never).eq('id', id);
 
   if (updateError) {
     console.error('Failed to void transaction:', updateError);
     return false;
   }
 
-  const lines = (existing.transaction_lines ?? []) as {
-    amount: number
-    original_amount?: number | null
-    cashback_share_percent?: number | null
-    cashback_share_fixed?: number | null
-    metadata?: Json | null
-    person_id?: string | null
-  }[];
-  const personLine = lines.find(line => line?.person_id);
+  const lines = (existing as any).transaction_lines ?? [];
+  const personLine = lines.find((line: any) => line?.person_id);
 
   if (personLine?.person_id) {
     const payload = buildSheetPayload(existing, personLine);
@@ -525,7 +518,7 @@ export async function restoreTransaction(id: string): Promise<boolean> {
 
   const { error: updateError } = await supabase
     .from('transactions')
-    .update({ status: 'posted' })
+    .update([{ status: 'posted' }] as never)
     .eq('id', id);
 
   if (updateError) {
@@ -533,14 +526,7 @@ export async function restoreTransaction(id: string): Promise<boolean> {
     return false;
   }
 
-  const lines = (existing.transaction_lines ?? []) as {
-    amount: number
-    original_amount?: number | null
-    cashback_share_percent?: number | null
-    cashback_share_fixed?: number | null
-    metadata?: Json | null
-    person_id?: string | null
-  }[];
+  const lines = (existing as any).transaction_lines ?? [];
 
   for (const line of lines) {
     if (!line?.person_id) continue;
@@ -607,12 +593,12 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
 
   const { error: headerError } = await supabase
     .from('transactions')
-    .update({
+    .update([{
       occurred_at: input.occurred_at,
       note: input.note,
       tag: tag,
       status: 'posted',
-    })
+    }] as never)
     .eq('id', id);
 
   if (headerError) {
