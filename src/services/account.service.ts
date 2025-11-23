@@ -297,7 +297,9 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
   return {
     id: txn.id,
     occurred_at: txn.occurred_at,
-    note: txn.note,
+    note: txn.note ?? '',
+    status: (txn as { status?: 'posted' | 'pending' | 'void' }).status ?? 'posted',
+    created_at: (txn as { created_at?: string }).created_at ?? '',
     amount: netAmount,
     original_amount: originalAmount,
     type,
