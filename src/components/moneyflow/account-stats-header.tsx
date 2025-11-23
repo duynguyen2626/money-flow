@@ -1,10 +1,13 @@
 import Link from 'next/link'
-import { ArrowDownRight, ArrowUpRight, CreditCard, TrendingUp, Wallet, Link2 } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CreditCard, TrendingUp, Wallet, Link2, Archive, RotateCcw } from 'lucide-react'
 
 import { formatCurrency, getAccountTypeLabel } from '@/lib/account-utils'
 import { Account } from '@/types/moneyflow.types'
 import { AccountSpendingStats } from '@/types/cashback.types'
 import { Progress } from '@/components/ui/progress'
+import { updateAccountConfigAction } from '@/actions/account-actions'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 
 type AssetConfig = {
   interestRate: number | null
@@ -29,6 +32,9 @@ export function AccountStatsHeader({
   isAssetAccount,
   assetConfig,
 }: AccountStatsHeaderProps) {
+  const router = useRouter()
+  const [isUpdating, setIsUpdating] = useState(false)
+  
   const balanceTone = account.current_balance < 0 ? 'text-red-600' : 'text-slate-900'
   const statItems = [
     {
@@ -60,6 +66,25 @@ export function AccountStatsHeader({
   const progressMax = cap ?? Math.max(earned, 1)
   const remaining = cap ? Math.max(0, cap - earned) : null
   const minSpend = cashbackStats?.minSpend
+  
+  // Hàm xử lý đóng/mở lại tài khoản
+  const handleToggleAccountStatus = async () => {
+    setIsUpdating(true)
+    try {
+      const newStatus = !account.is_active
+      const success = await updateAccountConfigAction({ 
+        id: account.id, 
+        isActive: newStatus 
+      })
+      
+      if (success) {
+        // Làm mới trang để cập nhật trạng thái
+        router.refresh()
+      }
+    } finally {
+      setIsUpdating(false)
+    }
+  }
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
@@ -79,14 +104,18 @@ export function AccountStatsHeader({
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">
                 {getAccountTypeLabel(account.type)}
               </span>
-              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                Active
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                account.is_active !== false 
+                  ? 'bg-emerald-50 text-emerald-700' 
+                  : 'bg-slate-100 text-slate-600'
+              }`}>
+                {account.is_active !== false ? 'Active' : 'Closed'}
               </span>
             </div>
             {account.type === 'credit_card' && typeof account.credit_limit === 'number' && (
               <p className="text-xs text-slate-600">Credit limit: {formatCurrency(account.credit_limit)}</p>
             )}
-            {collateralAccount && (
+            {account.secured_by_account_id && collateralAccount && (
               <p className="text-xs text-blue-700">
                 Secured by{' '}
                 <Link href={`/accounts/${collateralAccount.id}`} className="inline-flex items-center gap-1 underline">
@@ -95,15 +124,45 @@ export function AccountStatsHeader({
                 </Link>
               </p>
             )}
+            {account.secured_by_account_id && !collateralAccount && (
+              <p className="text-xs text-slate-500">
+                Secured by an account (not found)
+              </p>
+            )}
           </div>
         </div>
-        <div className="text-right">
-          <span className="text-[11px] uppercase tracking-wide text-slate-500">Current balance</span>
-          <div className="mt-1 inline-flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-1">
-            <Wallet className="h-4 w-4 text-slate-500" />
-            <span className={`text-2xl font-bold tabular-nums ${balanceTone}`}>
-              {formatCurrency(account.current_balance)}
-            </span>
+        <div className="flex flex-col items-end gap-2">
+          <div className="text-right">
+            <span className="text-[11px] uppercase tracking-wide text-slate-500">Current balance</span>
+            <div className="mt-1 inline-flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-1">
+              <Wallet className="h-4 w-4 text-slate-500" />
+              <span className={`text-2xl font-bold tabular-nums ${balanceTone}`}>
+                {formatCurrency(account.current_balance)}
+              </span>
+            </div>
+          </div>
+          
+          {/* Thêm nút Đóng/Mở lại tài khoản */}
+          <div className="flex gap-2">
+            {account.is_active !== false ? (
+              <button
+                onClick={handleToggleAccountStatus}
+                disabled={isUpdating}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <Archive className="h-3 w-3" />
+                Close Account
+              </button>
+            ) : (
+              <button
+                onClick={handleToggleAccountStatus}
+                disabled={isUpdating}
+                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reopen Account
+              </button>
+            )}
           </div>
         </div>
       </div>

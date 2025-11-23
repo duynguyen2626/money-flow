@@ -1,10 +1,13 @@
 "use client"
 
 import { useState } from 'react'
-import { ArrowLeftRight, CreditCard, Minus, Plus, Settings, User, ChevronUp, ChevronDown } from 'lucide-react'
+import { ArrowLeftRight, CreditCard, Minus, Plus, Settings, User, ChevronUp, ChevronDown, Archive, RotateCcw } from 'lucide-react'
+
+import { useRouter } from 'next/navigation'
 
 import { Account, Category, Person } from '@/types/moneyflow.types'
 import { AccountSpendingStats } from '@/types/cashback.types'
+import { updateAccountConfigAction } from '@/actions/account-actions'
 import { AccountStatsHeader } from './account-stats-header'
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { EditAccountDialog } from './edit-account-dialog'
@@ -36,6 +39,24 @@ export function AccountDetailHeader({
 }: AccountDetailHeaderProps) {
   const [collapsed, setCollapsed] = useState(false)
   const toggle = () => setCollapsed(prev => !prev)
+  const router = useRouter()
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const isCurrentlyActive = account.is_active !== false
+  const handleToggleAccountStatus = async () => {
+    if (isUpdatingStatus) return
+    setIsUpdatingStatus(true)
+    try {
+      const success = await updateAccountConfigAction({
+        id: account.id,
+        isActive: !isCurrentlyActive,
+      })
+      if (success) {
+        router.refresh()
+      }
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
 
   const actionButtons = (
     <>
@@ -258,6 +279,19 @@ export function AccountDetailHeader({
       />
       <div className="flex flex-wrap items-center gap-2">
         {actionButtons}
+        <button
+          type="button"
+          onClick={handleToggleAccountStatus}
+          disabled={isUpdatingStatus}
+          className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60"
+        >
+          {isCurrentlyActive ? (
+            <Archive className="h-3.5 w-3.5" />
+          ) : (
+            <RotateCcw className="h-3.5 w-3.5" />
+          )}
+          {isCurrentlyActive ? 'Close account' : 'Reopen account'}
+        </button>
       </div>
     </div>
   )

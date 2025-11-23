@@ -63,6 +63,8 @@ const formSchema = z.object({
   cashbackMinSpend: z.number().nullable().optional(),
   cashbackCycleType: z.enum(['calendar_month', 'statement_cycle']),
   cashbackStatementDay: z.number().nullable().optional(),
+  isUnlimitedCashback: z.boolean(), // Thêm trường cho tùy chọn cashback không giới hạn
+  parentAccountId: z.string().optional(), // Thêm trường cho tài khoản cha
 })
 
 type CreateAccountFormValues = z.infer<typeof formSchema>
@@ -84,6 +86,8 @@ const DEFAULT_FORM_VALUES: CreateAccountFormValues = {
   cashbackMinSpend: null,
   cashbackCycleType: 'calendar_month',
   cashbackStatementDay: null,
+  isUnlimitedCashback: false, // Giá trị mặc định
+  parentAccountId: '', // Giá trị mặc định
 }
 
 const formatWithSeparators = (value: string) => {
@@ -115,9 +119,13 @@ const toNumericString = (value: number | null | undefined) =>
 
 type CreateAccountDialogProps = {
   collateralAccounts?: Account[]
+  creditCardAccounts?: Account[]
 }
 
-export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDialogProps) {
+export function CreateAccountDialog({
+  collateralAccounts = [],
+  creditCardAccounts = [],
+}: CreateAccountDialogProps) {
   const [open, setOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<AccountTab>('bank')
   const router = useRouter()
@@ -141,6 +149,35 @@ export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDi
   const watchedSavingType = watch('savingType')
   const cashbackCycleType = watch('cashbackCycleType')
   const logoUrl = watch('imgUrl')
+  const isUnlimitedCashback = watch('isUnlimitedCashback') // Theo dõi trạng thái cashback không giới hạn
+  const parentAccountId = watch('parentAccountId') // Theo dõi tài khoản cha được chọn
+  const accountName = watch('name') // Theo dõi tên tài khoản
+
+  // Lọc danh sách tài khoản cha (chỉ lấy các thẻ tín dụng)
+  const parentAccountOptions = useMemo(
+    () =>
+      creditCardAccounts.filter(
+        acc => acc.type === 'credit_card' && acc.is_active !== false
+      ),
+    [creditCardAccounts]
+  )
+  const selectedParent = useMemo(
+    () => parentAccountOptions.find(option => option.id === parentAccountId),
+    [parentAccountId, parentAccountOptions]
+  )
+  const normalizedAccountName = accountName?.trim().toLowerCase()
+  const suggestedParent = useMemo(() => {
+    if (!normalizedAccountName) return null
+    return parentAccountOptions.find(option => {
+      const candidate = option.name?.trim().toLowerCase()
+      if (!candidate) return false
+      return (
+        candidate === normalizedAccountName ||
+        normalizedAccountName.includes(candidate) ||
+        candidate.includes(normalizedAccountName)
+      )
+    })
+  }, [normalizedAccountName, parentAccountOptions])
 
   const collateralOptions = useMemo(
     () => collateralAccounts.filter(acc => ASSET_TYPES.includes(acc.type)),
@@ -152,6 +189,26 @@ export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDi
       setValue('securedByAccountId', '')
     }
   }, [setValue, watchedIsSecured])
+
+  useEffect(() => {
+    if (activeTab !== 'credit' && parentAccountId) {
+      setValue('parentAccountId', '')
+    }
+  }, [activeTab, parentAccountId, setValue])
+
+  // Khi chọn tài khoản cha, vô hiệu hóa trường hạn mức tín dụng
+  useEffect(() => {
+    if (parentAccountId) {
+      setValue('creditLimit', null)
+    }
+  }, [parentAccountId, setValue])
+
+  // Khi chọn tùy chọn cashback không giới hạn, vô hiệu hóa trường số tiền tối đa
+  useEffect(() => {
+    if (isUnlimitedCashback) {
+      setValue('cashbackMaxAmount', null)
+    }
+  }, [isUnlimitedCashback, setValue])
 
   const handleTabChange = (nextTab: string) => {
     // Type assertion since we know the values are valid AccountTab values
@@ -196,7 +253,8 @@ export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDi
     setStatus(null)
 
     const finalType = resolveAccountType()
-    const creditLimitPayload = isCreditCard ? values.creditLimit ?? null : null
+    // Nếu có tài khoản cha thì sử dụng hạn mức từ tài khoản cha, ngược lại sử dụng giá trị được nhập
+    const creditLimitPayload = isCreditCard && !values.parentAccountId ? values.creditLimit ?? null : null
     const securedBy =
       isCreditCard && values.isSecured && values.securedByAccountId
         ? values.securedByAccountId
@@ -206,13 +264,15 @@ export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDi
     if (isCreditCard) {
       configPayload = {
         rate: values.cashbackRate ?? 0,
-        maxAmount: values.cashbackMaxAmount ?? null,
+        // Nếu chọn cashback không giới hạn thì đặt maxAmount là 0, ngược lại sử dụng giá trị được nhập
+        maxAmount: values.isUnlimitedCashback ? 0 : values.cashbackMaxAmount ?? null,
         minSpend: values.cashbackMinSpend ?? null,
         cycleType: values.cashbackCycleType,
         statementDay:
           values.cashbackCycleType === 'statement_cycle'
             ? values.cashbackStatementDay
             : null,
+        sharedLimitParentId: values.parentAccountId ?? null,
       }
     } else if (isSavingVariant) {
       configPayload = {
@@ -399,6 +459,41 @@ export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDi
 
           {activeTab === 'credit' && (
             <>
+            {/* Thêm dropdown chọn tài khoản cha */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-600">Liên kết hạn mức (Thẻ phụ)?</label>
+              <select
+                {...register('parentAccountId')}
+                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              >
+                <option value="">Không liên kết (Thẻ chính)</option>
+                {parentAccountOptions.map(option => (
+                  <option key={option.id} value={option.id}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+              {!parentAccountId && suggestedParent && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  <p className="flex-1">
+                    Có vẻ bạn đang thêm thẻ phụ của {suggestedParent.name}. Liên kết hạn mức để duy trì chia sẻ?
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setValue('parentAccountId', suggestedParent.id)}
+                    className="rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-semibold text-blue-700 hover:border-blue-300 hover:bg-blue-50"
+                  >
+                    Liên kết với {suggestedParent.name}
+                  </button>
+                </div>
+              )}
+              {parentAccountId && selectedParent && (
+                <p className="text-xs text-slate-500">
+                  Hạn mức sẽ được chia sẻ từ thẻ {selectedParent.name}.
+                </p>
+              )}
+            </div>
+
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-600">Credit limit</label>
                 <Controller
@@ -409,8 +504,11 @@ export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDi
                       type="text"
                       value={formatWithSeparators(toNumericString(field.value))}
                       onChange={event => field.onChange(parseOptionalNumber(event.target.value))}
-                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      className={`w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
+                        parentAccountId ? 'bg-slate-100 cursor-not-allowed' : ''
+                      }`}
                       placeholder="Credit limit"
+                      disabled={!!parentAccountId} // Vô hiệu hóa nếu đã chọn tài khoản cha
                     />
                   )}
                 />
@@ -477,6 +575,18 @@ export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDi
                     <p className="text-xs text-slate-500">Enter the percentage (like 10 for 10%).</p>
                   </div>
 
+                  {/* Thêm checkbox cho tùy chọn cashback không giới hạn */}
+                  <div className="flex items-center">
+                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                      <input
+                        type="checkbox"
+                        {...register('isUnlimitedCashback')}
+                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      Không giới hạn
+                    </label>
+                  </div>
+
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-slate-600">Max amount</label>
@@ -488,8 +598,11 @@ export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDi
                             type="text"
                             value={formatWithSeparators(toNumericString(field.value))}
                             onChange={event => field.onChange(parseOptionalNumber(event.target.value))}
-                            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            className={`w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
+                              isUnlimitedCashback ? 'bg-slate-100 cursor-not-allowed' : ''
+                            }`}
                             placeholder="e.g. 100000"
+                            disabled={isUnlimitedCashback} // Vô hiệu hóa nếu chọn không giới hạn
                           />
                         )}
                       />

@@ -5,7 +5,12 @@ import { ArrowLeftRight, CreditCard, Minus, Pencil, PiggyBank, Plus, User, Clock
 import { MouseEvent, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
 
-import { computeNextDueDate, formatCurrency, getAccountTypeLabel } from '@/lib/account-utils'
+import {
+  computeNextDueDate,
+  formatCurrency,
+  getAccountTypeLabel,
+  getSharedLimitParentId,
+} from '@/lib/account-utils'
 import { Account, AccountCashbackSnapshot, Category, Person } from '@/types/moneyflow.types'
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { EditAccountDialog } from './edit-account-dialog'
@@ -90,6 +95,9 @@ export function AccountCard({
   const isNegative = account.current_balance < 0
   const statusLabel =
     typeof account.is_active === 'boolean' ? (account.is_active ? 'Active' : 'Inactive') : 'Active'
+  const sharedLimitParentId = getSharedLimitParentId(account.cashback_config ?? null)
+  const sharedLimitParent =
+    sharedLimitParentId != null ? allAccounts.find(acc => acc.id === sharedLimitParentId) ?? null : null
   const selectableAccounts = allAccounts.length ? allAccounts : [account]
 
   const openDetails = () => {
@@ -192,11 +200,21 @@ export function AccountCard({
                 <PiggyBank className="h-3 w-3" />
                 <span>Back remaining: {cashbackLabel}</span>
               </div>
-              {typeof account.credit_limit === 'number' && account.credit_limit > 0 && (
+              {sharedLimitParent ? (
+                <div className="flex items-center gap-1 rounded-md border border-blue-100 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">
+                  <span>Link:</span>
+                  <Link
+                    href={`/accounts/${sharedLimitParent.id}`}
+                    className="text-xs font-semibold text-blue-700 underline"
+                  >
+                    {sharedLimitParent.name}
+                  </Link>
+                </div>
+              ) : typeof account.credit_limit === 'number' && account.credit_limit > 0 ? (
                 <div className="flex items-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-blue-700">
                   <span>Limit: {formatCurrency(account.credit_limit)}</span>
                 </div>
-              )}
+              ) : null}
             </>
           )}
           {!isCreditCard && typeof account.credit_limit === 'number' && account.credit_limit > 0 && (

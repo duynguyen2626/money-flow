@@ -1,7 +1,7 @@
 import { getAccountDetails, getAccountTransactions, getAccountStats, getAccountTransactionDetails, getAccounts } from '@/services/account.service'
 import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
-import { parseSavingsConfig } from '@/lib/account-utils'
+import { parseSavingsConfig, getSharedLimitParentId } from '@/lib/account-utils'
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 import { AccountDetailHeader } from '@/components/moneyflow/account-detail-header'
@@ -47,6 +47,10 @@ export default async function AccountPage({ params }: PageProps) {
   )
   const collateralAccount = account.secured_by_account_id
     ? allAccounts.find(acc => acc.id === account.secured_by_account_id) ?? null
+    : null
+  const parentAccountId = getSharedLimitParentId(account.cashback_config ?? null)
+  const parentAccount = parentAccountId
+    ? allAccounts.find(acc => acc.id === parentAccountId) ?? null
     : null
 
   let totalInflow = 0

@@ -182,6 +182,10 @@ function buildSheetPayload(
 
 export async function createTransaction(input: CreateTransactionInput): Promise<boolean> {
   const supabase = createClient();
+  
+  // Sử dụng ID người dùng mặc định nếu chưa đăng nhập
+  const { data: { user } } = await supabase.auth.getUser();
+  const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66';
 
   const built = await buildTransactionLines(supabase, input);
   if (!built) {
@@ -196,6 +200,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       note: input.note,
       status: 'posted',
       tag: tag,
+      created_by: userId, // Thêm created_by với ID người dùng
     })
     .select()
     .single();

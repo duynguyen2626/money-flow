@@ -39,6 +39,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people }:
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all')
   const [items, setItems] = useState<Account[]>(accounts)
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const [showClosedAccounts, setShowClosedAccounts] = useState(false) // Thêm trạng thái cho phần tài khoản đã đóng
 
   useEffect(() => {
     setItems(accounts)
@@ -48,10 +49,26 @@ export function AccountList({ accounts, cashbackById = {}, categories, people }:
     () => items.filter(acc => ['savings', 'investment', 'asset'].includes(acc.type)),
     [items]
   )
+  const creditCardAccounts = useMemo(
+    () => items.filter(acc => acc.type === 'credit_card' && acc.is_active !== false),
+    [items]
+  )
+
+  // Lọc các tài khoản đang hoạt động
+  const activeItems = useMemo(
+    () => items.filter(acc => acc.is_active !== false),
+    [items]
+  )
+
+  // Lọc các tài khoản đã đóng
+  const closedItems = useMemo(
+    () => items.filter(acc => acc.is_active === false),
+    [items]
+  )
 
   const filteredItems = useMemo(
-    () => items.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc)),
-    [items, activeFilter]
+    () => activeItems.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc)),
+    [activeItems, activeFilter]
   )
 
   const grouped = useMemo(() => {
@@ -141,7 +158,10 @@ export function AccountList({ accounts, cashbackById = {}, categories, people }:
               Table
             </button>
           </div>
-          <CreateAccountDialog collateralAccounts={collateralAccounts} />
+          <CreateAccountDialog
+            collateralAccounts={collateralAccounts}
+            creditCardAccounts={creditCardAccounts}
+          />
         </div>
       </div>
 
@@ -177,14 +197,77 @@ export function AccountList({ accounts, cashbackById = {}, categories, people }:
               </div>
             </div>
           ))}
+
+          {/* Thêm phần hiển thị tài khoản đã đóng */}
+          {closedItems.length > 0 && (
+            <details
+              className="border-t border-slate-200 pt-6 mt-6"
+              open={showClosedAccounts}
+              onToggle={event => setShowClosedAccounts(event.currentTarget.open)}
+            >
+              <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
+                <div className="flex items-center gap-2">
+                  <span>Tài khoản đã đóng</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                    {closedItems.length}
+                  </span>
+                </div>
+                <span className="text-slate-500">{showClosedAccounts ? '▲' : '▼'}</span>
+              </summary>
+              <div className="mt-4 grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {closedItems.map(account => (
+                  <AccountCard
+                    key={account.id}
+                    account={account}
+                    cashback={cashbackById[account.id]}
+                    categories={categories}
+                    people={people}
+                    allAccounts={items}
+                    collateralAccounts={collateralAccounts}
+                  />
+                ))}
+              </div>
+            </details>
+          )}
         </div>
       ) : (
-        <AccountTable
-          accounts={filteredItems}
-          onToggleStatus={handleToggleStatus}
-          pendingId={pendingId}
-          collateralAccounts={collateralAccounts}
-        />
+        <>
+          <AccountTable
+            accounts={filteredItems}
+            onToggleStatus={handleToggleStatus}
+            pendingId={pendingId}
+            collateralAccounts={collateralAccounts}
+            allAccounts={items}
+          />
+          
+          {/* Thêm phần hiển thị tài khoản đã đóng trong chế độ bảng */}
+          {closedItems.length > 0 && (
+            <details
+              className="mt-8 rounded-xl border border-dashed border-slate-200 bg-white px-4 py-3"
+              open={showClosedAccounts}
+              onToggle={event => setShowClosedAccounts(event.currentTarget.open)}
+            >
+              <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
+                <div className="flex items-center gap-2">
+                  <span>Tài khoản đã đóng</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                    {closedItems.length}
+                  </span>
+                </div>
+                <span className="text-slate-500">{showClosedAccounts ? '▲' : '▼'}</span>
+              </summary>
+              <div className="mt-4">
+                <AccountTable
+                  accounts={closedItems}
+                  onToggleStatus={handleToggleStatus}
+                  pendingId={pendingId}
+                  collateralAccounts={collateralAccounts}
+                  allAccounts={items}
+                />
+              </div>
+            </details>
+          )}
+        </>
       )}
     </div>
   )

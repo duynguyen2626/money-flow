@@ -93,3 +93,24 @@ export function parseSavingsConfig(raw: Json | null | undefined) {
     maturityDate: typeof parsed?.maturityDate === 'string' ? parsed.maturityDate : null,
   }
 }
+
+export function getSharedLimitParentId(raw: Json | null | undefined) {
+  if (!raw) {
+    return null
+  }
+
+  const parsed =
+    typeof raw === 'object' ? (raw as Record<string, unknown>) : null
+
+  if (!parsed) {
+    return null
+  }
+
+  const candidate =
+    parsed.sharedLimitParentId ??
+    parsed.shared_limit_parent_id ??
+    parsed.parentAccountId ??
+    parsed.parent_account_id
+
+  return typeof candidate === 'string' && candidate.trim() !== '' ? candidate.trim() : null
+}
