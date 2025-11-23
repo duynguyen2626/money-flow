@@ -103,8 +103,10 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
 type TransactionRow = {
   id: string
   occurred_at: string
-  note: string
+  note: string | null
   tag: string | null // Thêm trường tag
+  status?: 'posted' | 'pending' | 'void'
+  created_at?: string
   cashback_share_percent?: number | null
   cashback_share_fixed?: number | null
   cashback_share_amount?: number | null
@@ -222,7 +224,9 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   return {
     id: txn.id,
     occurred_at: txn.occurred_at,
-    note: txn.note,
+    note: txn.note ?? '',
+    status: txn.status ?? 'posted',
+    created_at: txn.created_at ?? '',
     amount: displayAmount,
     type,
     category_name: categoryName,
