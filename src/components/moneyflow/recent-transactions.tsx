@@ -1,8 +1,10 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Zap, SlidersHorizontal, ChevronDown } from "lucide-react"
-import { Account, TransactionWithDetails } from "@/types/moneyflow.types"
+import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { createPortal } from "react-dom"
+import { Account, Category, Person, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
 import {
   Table,
   TableBody,
@@ -12,6 +14,9 @@ import {
   TableRow,
   TableFooter,
 } from "@/components/ui/table"
+import { TransactionForm, TransactionFormValues } from "./transaction-form"
+import { restoreTransaction, voidTransaction } from "@/services/transaction.service"
+import { generateTag } from "@/lib/tag"
 
 type ColumnKey =
   | "date"
@@ -19,6 +24,7 @@ type ColumnKey =
   | "category"
   | "account"
   | "tag"
+  | "cycle"
   | "percent"
   | "fixed"
   | "sumBack"
@@ -30,6 +36,47 @@ type ColumnKey =
 const numberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 });
+
+function buildEditInitialValues(txn: TransactionWithDetails): Partial<TransactionFormValues> {
+  const lines = (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[];
+  const accountLines = lines.filter(line => line.account_id);
+  const creditLine = accountLines.find(line => line.type === "credit");
+  const debitLine =
+    accountLines.find(line => line.type === "debit" && line.account_id !== creditLine?.account_id) ??
+    accountLines.find(line => line.type === "debit");
+  const categoryLine = lines.find(line => line.category_id);
+  const personLine = lines.find(line => line.person_id);
+  const baseAmount =
+    typeof txn.original_amount === "number" ? txn.original_amount : txn.amount ?? 0;
+  const percentValue =
+    typeof txn.cashback_share_percent === "number" ? txn.cashback_share_percent : undefined;
+  const derivedType: TransactionFormValues["type"] =
+    personLine?.person_id
+      ? "debt"
+      : categoryLine
+        ? ((txn.type ?? "expense") as TransactionFormValues["type"])
+        : "transfer";
+  const destinationAccountId =
+    derivedType === "transfer" || derivedType === "debt"
+      ? debitLine?.account_id ?? undefined
+      : undefined;
+
+  return {
+    occurred_at: txn.occurred_at ? new Date(txn.occurred_at) : new Date(),
+    type: derivedType,
+    amount: Math.abs(baseAmount ?? 0),
+    note: txn.note ?? "",
+    tag: txn.tag ?? generateTag(new Date()),
+    source_account_id: creditLine?.account_id ?? debitLine?.account_id ?? undefined,
+    category_id: categoryLine?.category_id ?? undefined,
+    person_id: personLine?.person_id ?? undefined,
+    debt_account_id: destinationAccountId,
+    cashback_share_percent:
+      percentValue !== undefined && percentValue !== null ? percentValue * 100 : undefined,
+    cashback_share_fixed:
+      typeof txn.cashback_share_fixed === "number" ? txn.cashback_share_fixed : undefined,
+  };
+}
 
 interface ColumnConfig {
   key: ColumnKey
@@ -43,6 +90,9 @@ interface RecentTransactionsProps {
   accountType?: Account['type']
   selectedTxnIds?: Set<string>
   onSelectionChange?: (selectedIds: Set<string>) => void
+  accounts?: Account[]
+  categories?: Category[]
+  people?: Person[]
 }
 
 const defaultColumns: ColumnConfig[] = [
@@ -50,13 +100,14 @@ const defaultColumns: ColumnConfig[] = [
   { key: "note", label: "Note", defaultWidth: 200, minWidth: 140 },
   { key: "category", label: "Category", defaultWidth: 140 },
   { key: "account", label: "Account", defaultWidth: 140 },
+  { key: "tag", label: "Tag", defaultWidth: 100, minWidth: 90 },
+  { key: "cycle", label: "Cycle", defaultWidth: 120 },
   { key: "percent", label: "% Back", defaultWidth: 110 },
   { key: "fixed", label: "Fix Back", defaultWidth: 110 },
   { key: "sumBack", label: "Sum Back", defaultWidth: 120 },
   { key: "amount", label: "Amount", defaultWidth: 120 },
   { key: "finalPrice", label: "Final Price", defaultWidth: 130 },
   { key: "people", label: "People", defaultWidth: 140 },
-  { key: "tag", label: "Tag", defaultWidth: 140 },
   { key: "task", label: "", defaultWidth: 56, minWidth: 48 },
 ]
 
@@ -65,7 +116,11 @@ export function RecentTransactions({
   accountType,
   selectedTxnIds,
   onSelectionChange,
+  accounts = [],
+  categories = [],
+  people = [],
 }: RecentTransactionsProps) {
+  const router = useRouter()
   const [showSelectedOnly, setShowSelectedOnly] = useState(false)
   const [internalSelection, setInternalSelection] = useState<Set<string>>(new Set())
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
@@ -76,6 +131,7 @@ export function RecentTransactions({
       account: true,
       people: true,
       tag: true,
+      cycle: true,
       percent: true,
       fixed: true,
       sumBack: true,
@@ -95,13 +151,17 @@ export function RecentTransactions({
   const [dateFormat, setDateFormat] = useState<"en-CA" | "DD-MM" | "custom">("en-CA")
   const [customDatePattern, setCustomDatePattern] = useState<string>("YYYY-MM-DD")
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
-  const tagHeaderLabel =
-    accountType === 'credit_card'
-      ? 'Cycle'
-      : accountType === 'debt'
-        ? 'Debt Tag'
-        : 'Tag'
-
+  const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null)
+  const [editingTxn, setEditingTxn] = useState<TransactionWithDetails | null>(null)
+  const [confirmVoidTarget, setConfirmVoidTarget] = useState<TransactionWithDetails | null>(null)
+  const [isVoiding, setIsVoiding] = useState(false)
+  const [isRestoring, setIsRestoring] = useState(false)
+  const [voidError, setVoidError] = useState<string | null>(null)
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, TransactionWithDetails['status']>>({})
+  const editingInitialValues = useMemo(
+    () => (editingTxn ? buildEditInitialValues(editingTxn) : null),
+    [editingTxn]
+  )
   const selection = selectedTxnIds ?? internalSelection
   const updateSelection = (next: Set<string>) => {
     if (onSelectionChange) {
@@ -133,6 +193,7 @@ export function RecentTransactions({
       account: true,
       people: true,
       tag: true,
+      cycle: true,
       percent: true,
       fixed: true,
       sumBack: true,
@@ -142,6 +203,58 @@ export function RecentTransactions({
     })
     setDateFormat("en-CA")
     setCustomDatePattern("YYYY-MM-DD")
+  }
+
+  const closeVoidDialog = () => {
+    setConfirmVoidTarget(null)
+    setVoidError(null)
+    setIsVoiding(false)
+  }
+
+  const handleRestore = (txn: TransactionWithDetails) => {
+    setIsRestoring(true)
+    void restoreTransaction(txn.id)
+      .then(ok => {
+        if (!ok) {
+          setVoidError('Không thể khôi phục giao dịch. Vui lòng thử lại.')
+          return
+        }
+        setActionMenuOpen(null)
+        setVoidError(null)
+        setStatusOverrides(prev => ({ ...prev, [txn.id]: 'posted' }))
+        router.refresh()
+      })
+      .catch(err => {
+        console.error('Failed to restore transaction:', err)
+        setVoidError('Không thể khôi phục giao dịch. Vui lòng thử lại.')
+      })
+      .finally(() => setIsRestoring(false))
+  }
+
+  const handleVoidConfirm = () => {
+    if (!confirmVoidTarget) return
+    setVoidError(null)
+    setIsVoiding(true)
+    void voidTransaction(confirmVoidTarget.id)
+      .then(ok => {
+        if (!ok) {
+          setVoidError('Không thể hủy giao dịch. Vui lòng thử lại.')
+          return
+        }
+        setStatusOverrides(prev => ({ ...prev, [confirmVoidTarget.id]: 'void' }))
+        closeVoidDialog()
+        router.refresh()
+      })
+      .catch(err => {
+        console.error('Failed to void transaction:', err)
+        setVoidError('Không thể hủy giao dịch. Vui lòng thử lại.')
+      })
+      .finally(() => setIsVoiding(false))
+  }
+
+  const handleEditSuccess = () => {
+    setEditingTxn(null)
+    router.refresh()
   }
 
   const displayedTransactions = useMemo(() => {
@@ -301,7 +414,7 @@ export function RecentTransactions({
                   className={`border-r bg-slate-100 font-semibold text-slate-700 ${col.key === "tag" ? "whitespace-nowrap" : ""}`}
                   style={{ width: columnWidths[col.key] }}
                 >
-                  {col.key === "tag" ? tagHeaderLabel : col.label}
+                  {col.label}
                 </TableHead>
               )
             })}
@@ -315,7 +428,6 @@ export function RecentTransactions({
                 : txn.type === "expense"
                 ? "text-red-500"
                 : "text-slate-600"
-            const finalPriceColor = amountClass
             const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount
             const amountValue = numberFormatter.format(Math.abs(originalAmount ?? 0))
             const percentValue = typeof txn.cashback_share_percent === "number" ? txn.cashback_share_percent : null
@@ -333,36 +445,67 @@ export function RecentTransactions({
               typeof txn.cashback_share_amount === "number" && txn.cashback_share_amount > 0
                 ? txn.cashback_share_amount
                 : derivedSumBack
-            const sumBack = cashbackAmount > 0 ? numberFormatter.format(cashbackAmount) : "-"
-            const finalPrice = Math.abs(txn.amount ?? 0)
+          const sumBack = cashbackAmount > 0 ? numberFormatter.format(cashbackAmount) : "-"
+          const finalPrice = Math.abs(txn.amount ?? 0)
             const isSelected = selection.has(txn.id)
+            const effectiveStatus = statusOverrides[txn.id] ?? txn.status
+            const isVoided = effectiveStatus === 'void'
+            const isMenuOpen = actionMenuOpen === txn.id
 
             const taskCell = (
-              <div className="relative group flex justify-end">
+              <div className="relative flex justify-end">
                 <button
-                  className="inline-flex items-center justify-center rounded-md p-1 text-slate-600 transition hover:bg-slate-100"
-                  title="Quick actions"
+                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-1 text-slate-600 shadow-sm transition hover:bg-slate-50"
+                  title="Thao tác"
+                  onClick={event => {
+                    event.stopPropagation()
+                    setActionMenuOpen(prev => (prev === txn.id ? null : txn.id))
+                  }}
                 >
-                  <Zap className="h-4 w-4 text-amber-500" />
+                  <MoreHorizontal className="h-4 w-4" />
                 </button>
-                <div className="pointer-events-none absolute right-0 top-full z-10 mt-1 w-40 rounded-md border border-slate-200 bg-white text-sm shadow-md opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100">
-                  <button className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50">
-                    <span>Edit</span>
-                  </button>
-                  <button className="flex w-full items-center justify-between px-3 py-2 text-left text-red-600 hover:bg-red-50">
-                    <span>Delete</span>
-                  </button>
-                  <div className="relative group/inner">
-                    <button className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-slate-50">
-                      <span>More</span>
-                      <ChevronDown className="h-4 w-4" />
+                {isMenuOpen && (
+                  <div className="absolute right-0 top-8 z-20 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg">
+                    <button
+                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                      onClick={event => {
+                        event.stopPropagation()
+                        setEditingTxn(txn)
+                        setActionMenuOpen(null)
+                      }}
+                      disabled={isVoided}
+                    >
+                      <Pencil className="h-4 w-4 text-slate-600" />
+                      <span>Chỉnh sửa</span>
                     </button>
-                    <div className="pointer-events-none absolute right-full top-0 z-20 mr-1 w-40 rounded-md border border-slate-200 bg-white text-xs shadow-md opacity-0 transition group-hover/inner:pointer-events-auto group-hover/inner:opacity-100">
-                      <button className="block w-full px-3 py-2 text-left hover:bg-slate-50">Cancel</button>
-                      <button className="block w-full px-3 py-2 text-left hover:bg-slate-50">Cancel a Part</button>
-                    </div>
+                    {isVoided && (
+                      <button
+                        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isRestoring}
+                        onClick={event => {
+                          event.stopPropagation()
+                          handleRestore(txn)
+                        }}
+                      >
+                        <RotateCcw className="h-4 w-4" />
+                        <span>{isRestoring ? 'Đang khôi phục...' : 'Khôi phục'}</span>
+                      </button>
+                    )}
+                    <button
+                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={isVoiding || isVoided}
+                      onClick={event => {
+                        event.stopPropagation()
+                        setConfirmVoidTarget(txn)
+                        setVoidError(null)
+                        setActionMenuOpen(null)
+                      }}
+                    >
+                      <Ban className="h-4 w-4" />
+                      <span>Hủy giao dịch</span>
+                    </button>
                   </div>
-                </div>
+                )}
               </div>
             )
 
@@ -377,11 +520,15 @@ export function RecentTransactions({
                 case "account":
                   return txn.account_name || "-"
                 case "people": {
-                  const personName = (txn as any).person_name ?? txn.person_name ?? txn.person_id ?? "-"
+                  const personName = (txn as any).person_name ?? txn.person_name ?? null
                   return personName || "-"
                 }
                 case "tag":
-                  return getCycleLabel(txn)
+                  return txn.tag ?? "-"
+                case "cycle":
+                  return accountType === "credit_card" || txn.persisted_cycle_tag
+                    ? getCycleLabel(txn)
+                    : "-"
                 case "percent":
                   return percentBack
                 case "fixed":
@@ -399,8 +546,13 @@ export function RecentTransactions({
               }
             }
 
+            const voidedTextClass = isVoided ? "opacity-60 line-through text-gray-400" : ""
+
             return (
-              <TableRow key={txn.id} data-state={isSelected ? "selected" : undefined}>
+              <TableRow
+                key={txn.id}
+                data-state={isSelected ? "selected" : undefined}
+              >
                 <TableCell className="border-r">
                   <input
                     type="checkbox"
@@ -414,7 +566,7 @@ export function RecentTransactions({
                     key={`${txn.id}-${col.key}`}
                     className={`border-r text-sm ${col.key === "amount" || col.key === "finalPrice" || col.key === "percent" || col.key === "fixed" || col.key === "sumBack" ? "text-right" : ""} ${
                       col.key === "amount" || col.key === "finalPrice" ? "font-semibold" : ""
-                    } ${col.key === "amount" || col.key === "finalPrice" ? amountClass : ""}`}
+                    } ${col.key === "amount" || col.key === "finalPrice" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass}`}
                     style={{ width: columnWidths[col.key], maxWidth: columnWidths[col.key] }}
                   >
                     {renderCell(col.key)}
@@ -553,6 +705,76 @@ export function RecentTransactions({
             </div>
           </div>
         </>
+      )}
+      {editingTxn && editingInitialValues && createPortal(
+        <div
+          className="fixed inset-0 z-40 flex items-start justify-center bg-black/50 px-4 py-10"
+          onClick={() => setEditingTxn(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-lg bg-white p-6 shadow-2xl"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">Chỉnh sửa giao dịch</h3>
+              <button
+                className="rounded px-2 py-1 text-slate-500 transition hover:bg-slate-100"
+                onClick={() => setEditingTxn(null)}
+                aria-label="Đóng"
+              >
+                ×
+              </button>
+            </div>
+            <TransactionForm
+              accounts={accounts}
+              categories={categories}
+              people={people}
+              transactionId={editingTxn.id}
+              initialValues={editingInitialValues}
+              mode="edit"
+              onSuccess={handleEditSuccess}
+            />
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {confirmVoidTarget && createPortal(
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+          onClick={closeVoidDialog}
+        >
+          <div
+            className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
+            onClick={event => event.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-slate-900">Hủy giao dịch?</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              Hành động này sẽ chuyển trạng thái giao dịch thành void và cập nhật số dư.
+            </p>
+            {voidError && (
+              <p className="mt-2 text-sm text-red-600">{voidError}</p>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                className="rounded-md px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100"
+                onClick={closeVoidDialog}
+                disabled={isVoiding}
+              >
+                Giữ lại
+              </button>
+              <button
+                className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-70"
+                onClick={handleVoidConfirm}
+                disabled={isVoiding}
+              >
+                {isVoiding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Hủy giao dịch
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   )

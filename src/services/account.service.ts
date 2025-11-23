@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
-import { Account, TransactionLine, TransactionWithDetails } from '@/types/moneyflow.types'
+import { Account, TransactionLine, TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types'
 import { Database, Json } from '@/types/database.types'
 
 type AccountRow = {
@@ -40,6 +40,8 @@ export async function getAccounts(): Promise<Account[]> {
 
   if (error) {
     console.error('Error fetching accounts:', error)
+    if (error.message) console.error('Error message:', error.message)
+    if (error.code) console.error('Error code:', error.code)
     return []
   }
 
@@ -62,6 +64,10 @@ export async function getAccounts(): Promise<Account[]> {
 }
 
 export async function getAccountDetails(id: string): Promise<Account | null> {
+  if (!id || id === 'add' || id === 'undefined') {
+    return null
+  }
+
   const supabase = createClient()
 
   const { data, error } = await supabase
@@ -242,6 +248,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     person_id: personLine?.person_id,
     person_name: personLine?.profiles?.name ?? null,
     persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,
+    transaction_lines: (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[],
   }
 }
 
@@ -313,6 +320,7 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
     person_id: personLine?.person_id ?? null,
     person_name: personLine?.profiles?.name ?? null,
     persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,
+    transaction_lines: (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[],
   }
 }
 
@@ -371,6 +379,8 @@ async function fetchTransactions(
           occurred_at,
           note,
           tag,
+          status,
+          created_at,
           transaction_lines (
             amount,
             type,
@@ -413,6 +423,8 @@ async function fetchTransactions(
         occurred_at,
         note,
         tag,
+        status,
+        created_at,
         transaction_lines!inner (
           amount,
           type,

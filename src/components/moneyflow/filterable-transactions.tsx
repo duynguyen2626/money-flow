@@ -3,13 +3,15 @@
 import { useMemo, useState } from 'react'
 import { FilterIcon, X } from 'lucide-react'
 import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
-import { Account, Category, TransactionWithDetails } from '@/types/moneyflow.types'
+import { Account, Category, Person, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
 import { Combobox } from '@/components/ui/combobox'
 
 type FilterableTransactionsProps = {
     transactions: TransactionWithDetails[]
     categories?: Category[]
+    accounts?: Account[]
+    people?: Person[]
     accountType?: Account['type']
     searchTerm?: string
     onSearchChange?: (next: string) => void
@@ -22,6 +24,8 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 export function FilterableTransactions({ 
     transactions,
     categories = [],
+    accounts = [],
+    people = [],
     accountType,
     searchTerm: externalSearch,
     onSearchChange,
@@ -472,6 +476,9 @@ export function FilterableTransactions({
                 <RecentTransactions 
                     transactions={finalTransactions} 
                     accountType={accountType}
+                    accounts={accounts}
+                    categories={categories}
+                    people={people}
                     selectedTxnIds={selectedTxnIds}
                     onSelectionChange={setSelectedTxnIds}
                 />

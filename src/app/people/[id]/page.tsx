@@ -243,6 +243,8 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
                     <FilterableTransactions
                         transactions={filteredTransactions}
                         categories={categories}
+                        accounts={accounts}
+                        people={allPeople}
                         searchTerm={searchTerm}
                         onSearchChange={setSearchTerm}
                     />

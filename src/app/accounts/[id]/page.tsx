@@ -106,7 +106,13 @@ export default async function AccountPage({ params }: PageProps) {
             <span className="text-sm text-slate-500">{txns.length} most recent</span>
           </div>
           <div className="mt-4">
-            <FilterableTransactions transactions={txns} categories={categories} accountType={account.type} />
+            <FilterableTransactions
+              transactions={txns}
+              categories={categories}
+              accounts={allAccounts}
+              people={people}
+              accountType={account.type}
+            />
           </div>
         </section>
       </TagFilterProvider>
