@@ -228,7 +228,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     category_name: categoryName,
     account_name: accountName,
     category_id: categoryId,
-    tag: txn.tag || undefined, // Thêm trường tag
+    tag: txn.tag ?? null, // Thêm trường tag
     cashback_share_percent: percentRaw ?? undefined,
     cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? undefined,
     cashback_share_amount: cashbackAmount ?? undefined,
