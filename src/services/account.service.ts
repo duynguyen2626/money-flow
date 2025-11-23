@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { Account, TransactionLine, TransactionWithDetails } from '@/types/moneyflow.types'
-import { Json } from '@/types/database.types'
+import { Database, Json } from '@/types/database.types'
 
 type AccountRow = {
   id: string
@@ -521,10 +521,11 @@ export async function updateAccountConfig(
     return true
   }
 
+  type AccountUpdate = Database['public']['Tables']['accounts']['Update']
+
   const { error } = await supabase
     .from('accounts')
-    // Supabase type may be narrower; cast to any to satisfy TS while keeping runtime shape.
-    .update(payload as any)
+    .update(payload as Partial<AccountUpdate>)
     .eq('id', accountId)
 
   if (error) {
@@ -536,7 +537,7 @@ export async function updateAccountConfig(
       const { img_url: _ignored, ...retryPayload } = payload
       const { error: retryError } = await supabase
         .from('accounts')
-        .update(retryPayload as any)
+        .update(retryPayload as Partial<AccountUpdate>)
         .eq('id', accountId)
 
       if (retryError) {
