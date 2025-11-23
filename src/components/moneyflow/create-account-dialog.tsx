@@ -19,6 +19,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { createAccount } from '@/actions/account-actions'
 import { Account } from '@/types/moneyflow.types'
+import { Json } from '@/types/database.types'
 
 const ASSET_TYPES: Account['type'][] = ['savings', 'investment', 'asset']
 
@@ -152,9 +153,11 @@ export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDi
     }
   }, [setValue, watchedIsSecured])
 
-  const handleTabChange = (nextTab: AccountTab) => {
-    setActiveTab(nextTab)
-    if (nextTab !== 'credit') {
+  const handleTabChange = (nextTab: string) => {
+    // Type assertion since we know the values are valid AccountTab values
+    const tab = nextTab as AccountTab;
+    setActiveTab(tab)
+    if (tab !== 'credit') {
       setValue('isSecured', false)
       setValue('securedByAccountId', '')
     }
@@ -199,7 +202,7 @@ export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDi
         ? values.securedByAccountId
         : null
 
-    let configPayload: Record<string, unknown> | undefined
+    let configPayload: Json | undefined
     if (isCreditCard) {
       configPayload = {
         rate: values.cashbackRate ?? 0,
@@ -231,18 +234,18 @@ export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDi
       })
 
       if (result?.error) {
-        setStatus({ text: result.error, variant: 'error' })
+        setStatus({ text: String(result.error), variant: 'error' })
         console.error('Error creating account:', result.error)
         return
       }
 
+      setStatus({ text: 'Account created successfully!', variant: 'success' })
       reset(DEFAULT_FORM_VALUES)
       setActiveTab('bank')
-      setOpen(false)
       router.refresh()
-    } catch (error) {
-      setStatus({ text: 'Unable to create the account. Please try again.', variant: 'error' })
-      console.error('Error creating account:', error)
+    } catch (err) {
+      console.error('Unexpected error:', err)
+      setStatus({ text: 'An unexpected error occurred', variant: 'error' })
     }
   }
 
@@ -284,7 +287,7 @@ export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDi
                     <button
                       key={option.value}
                       type="button"
-                      onClick={() => setValue('savingType', option.value)}
+                      onClick={() => setValue('savingType', option.value as 'savings' | 'investment' | 'asset')}
                       className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
                         watchedSavingType === option.value
                           ? 'border-blue-500 bg-blue-50 text-blue-700'
@@ -306,7 +309,7 @@ export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDi
                     <button
                       key={option.value}
                       type="button"
-                      onClick={() => setValue('otherSubtype', option.value)}
+                      onClick={() => setValue('otherSubtype', option.value as 'cash' | 'ewallet')}
                       className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
                         watchedOtherSubtype === option.value
                           ? 'border-blue-500 bg-blue-50 text-blue-700'
