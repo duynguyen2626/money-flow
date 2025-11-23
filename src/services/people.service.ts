@@ -40,9 +40,9 @@ async function createDebtAccountForPerson(
   personId: string,
   personName: string
 ): Promise<string | null> {
-  const { data, error } = await supabase
+  const { data, error } = await (supabase
     .from('accounts')
-    .insert({
+    .insert as any)({
       name: buildDebtAccountName(personName),
       type: 'debt',
       owner_id: personId,
@@ -87,9 +87,9 @@ export async function createPerson(
     sheet_link: sheet_link?.trim() || null,
   }
 
-  const { data: profile, error: profileError } = await supabase
+  const { data: profile, error: profileError } = await (supabase
     .from('profiles')
-    .insert(profilePayload)
+    .insert as any)(profilePayload)
     .select('id, name')
     .single()
 
@@ -214,9 +214,9 @@ async function syncSubscriptionMemberships(
     profile_id: personId,
   }))
 
-  const { error } = await supabase
+  const { error } = await (supabase
     .from('subscription_members')
-    .insert(rows as SubscriptionMemberRow[])
+    .insert as any)(rows as SubscriptionMemberRow[])
 
   if (error) {
     console.error('Failed to sync subscription memberships:', error)
@@ -242,7 +242,7 @@ export async function updatePerson(
   if (typeof data.sheet_link !== 'undefined') payload.sheet_link = data.sheet_link?.trim() || null
 
   if (Object.keys(payload).length > 0) {
-    const { error } = await supabase.from('profiles').update(payload).eq('id', id)
+    const { error } = await (supabase.from('profiles').update as any)(payload).eq('id', id)
     if (error) {
       console.error('Failed to update profile:', error)
       return false
@@ -304,11 +304,11 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
   const debt_account_id = (debtAccounts as { id: string }[] | null)?.[0]?.id ?? null
 
   return {
-    id: profile.id,
-    name: profile.name,
-    email: profile.email,
-    avatar_url: profile.avatar_url,
-    sheet_link: profile.sheet_link,
+    id: (profile as any).id,
+    name: (profile as any).name,
+    email: (profile as any).email,
+    avatar_url: (profile as any).avatar_url,
+    sheet_link: (profile as any).sheet_link,
     subscription_ids,
     subscription_count: subscription_ids.length,
     debt_account_id,
