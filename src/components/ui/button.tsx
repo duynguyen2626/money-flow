@@ -11,7 +11,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   asChild?: boolean
 }
 
-const variants: Record<ButtonProps['variant'], string> = {
+const variants: Record<NonNullable<ButtonProps['variant']>, string> = {
   default:
     'bg-blue-600 text-white hover:bg-blue-500 focus-visible:ring-blue-500',
   destructive:
@@ -22,7 +22,7 @@ const variants: Record<ButtonProps['variant'], string> = {
   link: 'text-blue-600 underline-offset-4 hover:underline',
 }
 
-const sizes: Record<ButtonProps['size'], string> = {
+const sizes: Record<NonNullable<ButtonProps['size']>, string> = {
   default: 'h-10 px-4 py-2',
   sm: 'h-9 px-3 py-1 text-sm',
   lg: 'h-11 px-6 py-2',
@@ -40,7 +40,6 @@ const ButtonComponent = React.forwardRef<HTMLButtonElement, ButtonProps>(
           sizes[size],
           className
         )}
-        ref={asChild ? undefined : ref}
         {...(asChild ? { ...props, ref: undefined } : { ...props, ref })}
       />
     )

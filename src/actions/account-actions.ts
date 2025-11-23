@@ -38,7 +38,7 @@ export async function createAccount(payload: {
 
   const { data, error } = await supabase
     .from('accounts')
-    .insert([insertPayload])
+    .insert([insertPayload] as any)
     .select()
 
   if (error) {

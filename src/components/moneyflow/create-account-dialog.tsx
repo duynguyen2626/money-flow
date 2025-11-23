@@ -1,6 +1,11 @@
 "use client"
 
-import { FormEvent, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Controller, SubmitHandler, useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import { useRouter } from 'next/navigation'
+
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -11,578 +16,629 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { createAccount } from '@/actions/account-actions'
-import { CashbackCycleType } from '@/lib/cashback'
 import { Account } from '@/types/moneyflow.types'
-import type { Json } from '@/types/database.types'
 
-type TabValue = 'bank' | 'credit' | 'saving' | 'other'
-type SavingSubtype = 'savings' | 'investment' | 'asset'
-type OtherSubtype = 'cash' | 'ewallet'
+const ASSET_TYPES: Account['type'][] = ['savings', 'investment', 'asset']
 
-type StatusMessage = { text: string; variant: 'success' | 'error' } | null
+const ACCOUNT_TABS: { value: AccountTab; label: string; helper: string }[] = [
+  { value: 'bank', label: '🏦 Payment', helper: 'Bank accounts for daily spending' },
+  { value: 'credit', label: '💳 Credit Card', helper: 'Track limits, statements & cashback' },
+  { value: 'saving', label: '💰 Savings', helper: 'Term deposits and investment accounts' },
+  { value: 'other', label: '📦 Others', helper: 'Cash, e-wallets or miscellaneous funds' },
+]
+
+type AccountTab = 'bank' | 'credit' | 'saving' | 'other'
+const SAVING_VARIANTS: { value: Account['type']; label: string }[] = [
+  { value: 'savings', label: 'Savings' },
+  { value: 'investment', label: 'Investment' },
+  { value: 'asset', label: 'Secured Asset' },
+]
+
+const OTHER_VARIANTS: { value: Account['type']; label: string }[] = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'ewallet', label: 'E-wallet' },
+]
+
+type StatusMessage =
+  | { text: string; variant: 'success' | 'error' }
+  | null
+
+const formSchema = z.object({
+  name: z.string().min(1, { message: 'Account name is required' }),
+  imgUrl: z.string().optional(),
+  initialBalance: z.number(),
+  creditLimit: z.number().nullable().optional(),
+  isSecured: z.boolean(),
+  securedByAccountId: z.string().optional(),
+  otherSubtype: z.enum(['cash', 'ewallet']),
+  savingType: z.enum(['savings', 'investment', 'asset']),
+  interestRate: z.number().nullable().optional(),
+  termMonths: z.number().nullable().optional(),
+  maturityDate: z.string().nullable().optional(),
+  cashbackRate: z.number().nonnegative(),
+  cashbackMaxAmount: z.number().nullable().optional(),
+  cashbackMinSpend: z.number().nullable().optional(),
+  cashbackCycleType: z.enum(['calendar_month', 'statement_cycle']),
+  cashbackStatementDay: z.number().nullable().optional(),
+})
+
+type CreateAccountFormValues = z.infer<typeof formSchema>
+
+const DEFAULT_FORM_VALUES: CreateAccountFormValues = {
+  name: '',
+  imgUrl: '',
+  initialBalance: 0,
+  creditLimit: null,
+  isSecured: false,
+  securedByAccountId: '',
+  otherSubtype: 'cash',
+  savingType: 'savings',
+  interestRate: null,
+  termMonths: null,
+  maturityDate: '',
+  cashbackRate: 0,
+  cashbackMaxAmount: null,
+  cashbackMinSpend: null,
+  cashbackCycleType: 'calendar_month',
+  cashbackStatementDay: null,
+}
+
+const formatWithSeparators = (value: string) => {
+  const digits = value.replace(/[^0-9]/g, '')
+  if (!digits) return ''
+  return Number(digits).toLocaleString('en-US')
+}
+
+const parseOptionalNumber = (value: string) => {
+  const trimmed = value.trim().replace(/,/g, '')
+  if (trimmed === '') {
+    return null
+  }
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const parseStatementDayValue = (value: string) => {
+  const parsed = parseOptionalNumber(value)
+  if (parsed === null) {
+    return null
+  }
+  const normalized = Math.min(Math.max(Math.floor(parsed), 1), 31)
+  return normalized
+}
+
+const toNumericString = (value: number | null | undefined) =>
+  typeof value === 'number' ? String(value) : ''
 
 type CreateAccountDialogProps = {
   collateralAccounts?: Account[]
 }
 
-const TAB_OPTIONS: { value: TabValue; label: string }[] = [
-  { value: 'bank', label: '🏦 Payment' },
-  { value: 'credit', label: '💳 Credit Card' },
-  { value: 'saving', label: '💰 Savings / Invest' },
-  { value: 'other', label: '📦 Others' },
-]
-
-const SAVING_TYPE_OPTIONS: { value: SavingSubtype; label: string }[] = [
-  { value: 'savings', label: 'Savings account' },
-  { value: 'investment', label: 'Investment account' },
-  { value: 'asset', label: 'Secured asset' },
-]
-
-const OTHER_TYPE_OPTIONS: { value: OtherSubtype; label: string }[] = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'ewallet', label: 'E-wallet' },
-]
-
-const formatDecimalInput = (value: string) => {
-  if (!value) {
-    return ''
-  }
-
-  const withoutCommas = value.replace(/,/g, '')
-  if (withoutCommas === '.') {
-    return '0.'
-  }
-
-  const sanitized = withoutCommas.replace(/[^0-9.]/g, '')
-  if (!sanitized) {
-    return ''
-  }
-
-  const [rawInteger, ...fractionalParts] = sanitized.split('.')
-  const integerDigits = (rawInteger.replace(/[^0-9]/g, '') || '0').replace(
-    /\B(?=(\d{3})+(?!\d))/g,
-    ',',
-  )
-  const fraction = fractionalParts.join('').replace(/[^0-9]/g, '')
-
-  if (fractionalParts.length) {
-    return `${integerDigits}.${fraction}`
-  }
-
-  return integerDigits
-}
-
-const parseDecimalValue = (value: string) => {
-  const normalized = value.replace(/,/g, '').trim()
-  if (!normalized || normalized === '.' || normalized === '-' || normalized === '-.') {
-    return null
-  }
-  const parsed = Number(normalized)
-  return Number.isFinite(parsed) ? parsed : null
-}
-
-const parseStatementDayValue = (value: string) => {
-  const parsed = parseDecimalValue(value)
-  if (parsed === null) {
-    return null
-  }
-  return Math.min(Math.max(Math.floor(parsed), 1), 31)
-}
-
-const clearZeroValue = (value: string, setter: (next: string) => void) => {
-  if (parseDecimalValue(value) === 0) {
-    setter('')
-  }
-}
-
-type SharedFieldsProps = {
-  name: string
-  onNameChange: (value: string) => void
-  imgUrl: string
-  onImgUrlChange: (value: string) => void
-  initialBalance: string
-  onBalanceChange: (value: string) => void
-  onBalanceFocus: () => void
-}
-
-function SharedFields({
-  name,
-  onNameChange,
-  imgUrl,
-  onImgUrlChange,
-  initialBalance,
-  onBalanceChange,
-  onBalanceFocus,
-}: SharedFieldsProps) {
-  return (
-    <div className="space-y-4">
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-600">Name *</label>
-        <input
-          type="text"
-          value={name}
-          onChange={event => onNameChange(event.target.value)}
-          placeholder="Account name"
-          required
-          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-        />
-      </div>
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-600">Image URL</label>
-        <input
-          type="url"
-          value={imgUrl}
-          onChange={event => onImgUrlChange(event.target.value)}
-          placeholder="https://logo.example.com/bank.png"
-          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-        />
-        {imgUrl && (
-          <div className="flex items-center gap-3 text-sm text-slate-500">
-            <span>Preview:</span>
-            <img
-              src={imgUrl}
-              alt="Logo preview"
-              className="h-10 w-10 rounded-md border border-slate-200 object-contain"
-              loading="lazy"
-            />
-          </div>
-        )}
-      </div>
-      <div className="space-y-1">
-        <label className="text-sm font-medium text-slate-600">Initial Balance</label>
-        <input
-          type="text"
-          value={initialBalance}
-          onChange={event => onBalanceChange(event.target.value)}
-          onFocus={onBalanceFocus}
-          placeholder="0.00"
-          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-        />
-        <p className="text-xs text-slate-500">
-          Currency is fixed to VND. Decimal separators make large amounts easier to read.
-        </p>
-      </div>
-    </div>
-  )
-}
-
 export function CreateAccountDialog({ collateralAccounts = [] }: CreateAccountDialogProps) {
   const [open, setOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<AccountTab>('bank')
+  const router = useRouter()
   const [status, setStatus] = useState<StatusMessage>(null)
-  const [isPending, startTransition] = useTransition()
-  const [tabValue, setTabValue] = useState<TabValue>('bank')
-  const [savingSubtype, setSavingSubtype] = useState<SavingSubtype>('savings')
-  const [otherSubtype, setOtherSubtype] = useState<OtherSubtype>('cash')
-  const [name, setName] = useState('')
-  const [imgUrl, setImgUrl] = useState('')
-  const [initialBalance, setInitialBalance] = useState('0.00')
-  const [creditLimit, setCreditLimit] = useState('')
-  const [isSecured, setIsSecured] = useState(false)
-  const [securedByAccountId, setSecuredByAccountId] = useState('')
-  const [ratePercent, setRatePercent] = useState('0')
-  const [maxAmount, setMaxAmount] = useState('')
-  const [minSpend, setMinSpend] = useState('')
-  const [cycleType, setCycleType] = useState<CashbackCycleType>('calendar_month')
-  const [statementDay, setStatementDay] = useState('')
-  const [interestRate, setInterestRate] = useState('')
-  const [termMonths, setTermMonths] = useState('')
-  const [maturityDate, setMaturityDate] = useState('')
 
-  const handleBalanceChange = (value: string) => setInitialBalance(formatDecimalInput(value))
-  const handleCreditLimitChange = (value: string) => setCreditLimit(formatDecimalInput(value))
-  const handleMaxAmountChange = (value: string) => setMaxAmount(formatDecimalInput(value))
-  const handleMinSpendChange = (value: string) => setMinSpend(formatDecimalInput(value))
-  const handleBalanceFocus = () => clearZeroValue(initialBalance, setInitialBalance)
-  const handleCreditLimitFocus = () => clearZeroValue(creditLimit, setCreditLimit)
-  const handleMaxAmountFocus = () => clearZeroValue(maxAmount, setMaxAmount)
-  const handleMinSpendFocus = () => clearZeroValue(minSpend, setMinSpend)
+  const {
+    control,
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<CreateAccountFormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: DEFAULT_FORM_VALUES,
+  })
 
-  const selectedType: Account['type'] = (() => {
-    if (tabValue === 'credit') return 'credit_card'
-    if (tabValue === 'saving') return savingSubtype
-    if (tabValue === 'other') return otherSubtype
-    return 'bank'
-  })()
+  const watchedIsSecured = watch('isSecured')
+  const watchedOtherSubtype = watch('otherSubtype')
+  const watchedSavingType = watch('savingType')
+  const cashbackCycleType = watch('cashbackCycleType')
+  const logoUrl = watch('imgUrl')
 
-  const resetForm = () => {
-    setTabValue('bank')
-    setSavingSubtype('savings')
-    setOtherSubtype('cash')
-    setName('')
-    setImgUrl('')
-    setInitialBalance('0.00')
-    setCreditLimit('')
-    setIsSecured(false)
-    setSecuredByAccountId('')
-    setRatePercent('0')
-    setMaxAmount('')
-    setMinSpend('')
-    setCycleType('calendar_month')
-    setStatementDay('')
-    setInterestRate('')
-    setTermMonths('')
-    setMaturityDate('')
-    setStatus(null)
+  const collateralOptions = useMemo(
+    () => collateralAccounts.filter(acc => ASSET_TYPES.includes(acc.type)),
+    [collateralAccounts]
+  )
+
+  useEffect(() => {
+    if (!watchedIsSecured) {
+      setValue('securedByAccountId', '')
+    }
+  }, [setValue, watchedIsSecured])
+
+  const handleTabChange = (nextTab: AccountTab) => {
+    setActiveTab(nextTab)
+    if (nextTab !== 'credit') {
+      setValue('isSecured', false)
+      setValue('securedByAccountId', '')
+    }
   }
 
   const handleDialogOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
-      resetForm()
+      reset(DEFAULT_FORM_VALUES)
+      setActiveTab('bank')
+      setStatus(null)
     }
     setOpen(nextOpen)
   }
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    const trimmedName = name.trim()
+  const resolveAccountType = (): Account['type'] => {
+    switch (activeTab) {
+      case 'bank':
+        return 'bank'
+      case 'credit':
+        return 'credit_card'
+      case 'saving':
+        return watchedSavingType
+      case 'other':
+        return watchedOtherSubtype
+    }
+  }
+
+  const isCreditCard = activeTab === 'credit'
+  const isSavingVariant = activeTab === 'saving'
+
+  const onSubmit: SubmitHandler<CreateAccountFormValues> = async values => {
+    const trimmedName = values.name.trim()
     if (!trimmedName) {
-      setStatus({ text: 'Account name cannot be empty.', variant: 'error' })
       return
     }
+    setStatus(null)
 
-    startTransition(async () => {
-      setStatus(null)
-      const balanceValue = parseDecimalValue(initialBalance) ?? 0
-      const nextCreditLimit = selectedType === 'credit_card' ? parseDecimalValue(creditLimit) : null
-      const cleanedImgUrl = imgUrl.trim() || null
+    const finalType = resolveAccountType()
+    const creditLimitPayload = isCreditCard ? values.creditLimit ?? null : null
+    const securedBy =
+      isCreditCard && values.isSecured && values.securedByAccountId
+        ? values.securedByAccountId
+        : null
 
-      let configPayload: Json | null = null
-      if (selectedType === 'credit_card') {
-        const rateValue = parseDecimalValue(ratePercent) ?? 0
-        configPayload = {
-          rate: rateValue ? rateValue / 100 : 0,
-          maxAmount: parseDecimalValue(maxAmount),
-          minSpend: parseDecimalValue(minSpend),
-          cycleType,
-          statementDay: cycleType === 'statement_cycle' ? parseStatementDayValue(statementDay) : null,
-        }
-      } else if (['savings', 'investment', 'asset'].includes(selectedType)) {
-        configPayload = {
-          interestRate: parseDecimalValue(interestRate),
-          termMonths: parseDecimalValue(termMonths),
-          maturityDate: maturityDate.trim() || null,
-        }
+    let configPayload: Record<string, unknown> | undefined
+    if (isCreditCard) {
+      configPayload = {
+        rate: values.cashbackRate ?? 0,
+        maxAmount: values.cashbackMaxAmount ?? null,
+        minSpend: values.cashbackMinSpend ?? null,
+        cycleType: values.cashbackCycleType,
+        statementDay:
+          values.cashbackCycleType === 'statement_cycle'
+            ? values.cashbackStatementDay
+            : null,
       }
+    } else if (isSavingVariant) {
+      configPayload = {
+        interestRate: values.interestRate ?? null,
+        termMonths: values.termMonths ?? null,
+        maturityDate: values.maturityDate?.trim() || null,
+      }
+    }
 
-      const securedBy = selectedType === 'credit_card' && isSecured ? securedByAccountId || null : null
-
+    try {
       const result = await createAccount({
         name: trimmedName,
-        balance: balanceValue,
-        type: selectedType,
-        creditLimit: selectedType === 'credit_card' ? nextCreditLimit : null,
+        balance: values.initialBalance ?? 0,
+        type: finalType,
+        creditLimit: creditLimitPayload,
         cashbackConfig: configPayload,
         securedByAccountId: securedBy,
-        imgUrl: cleanedImgUrl,
+        imgUrl: values.imgUrl?.trim() || null,
       })
 
-      if ('error' in result && result.error) {
-        setStatus({ text: 'Unable to create account. Please try again.', variant: 'error' })
+      if (result?.error) {
+        setStatus({ text: result.error, variant: 'error' })
+        console.error('Error creating account:', result.error)
         return
       }
 
-      handleDialogOpenChange(false)
-    })
+      reset(DEFAULT_FORM_VALUES)
+      setActiveTab('bank')
+      setOpen(false)
+      router.refresh()
+    } catch (error) {
+      setStatus({ text: 'Unable to create the account. Please try again.', variant: 'error' })
+      console.error('Error creating account:', error)
+    }
   }
-
-  const creditHasCollateralOptions = collateralAccounts.length > 0
 
   return (
     <Dialog open={open} onOpenChange={handleDialogOpenChange}>
       <DialogTrigger asChild>
         <Button>Add New Account</Button>
       </DialogTrigger>
-      <DialogContent className="w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add New Account</DialogTitle>
-          <DialogDescription>
-            Pick an account type below and fill out the details to get started.
-          </DialogDescription>
+          <DialogDescription>Smart creation workflow for every account type.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <Tabs value={tabValue} onValueChange={setTabValue} className="space-y-4">
-            <TabsList className="grid grid-cols-4 gap-2">
-              {TAB_OPTIONS.map(option => (
-                <TabsTrigger
-                  key={option.value}
-                  value={option.value}
-                  className="whitespace-nowrap"
-                >
-                  <span className="text-sm font-semibold">{option.label}</span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
 
-            <TabsContent value="bank">
-              <div className="space-y-4">
-                <SharedFields
-                  name={name}
-                  onNameChange={setName}
-                  imgUrl={imgUrl}
-                  onImgUrlChange={setImgUrl}
-                  initialBalance={initialBalance}
-                  onBalanceChange={handleBalanceChange}
-                  onBalanceFocus={handleBalanceFocus}
-                />
-                <p className="text-sm text-slate-500">
-                  Use this tab for bank accounts, cash, or any payment providers that do not need extra metadata.
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="mt-3">
+          <TabsList className="grid w-full grid-cols-4 gap-2 rounded-full bg-slate-100 p-1 text-[13px] font-semibold text-slate-600">
+            {ACCOUNT_TABS.map(tab => (
+              <TabsTrigger key={tab.value} value={tab.value} className="rounded-full">
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+        <p className="mt-2 text-xs text-slate-500">
+          {ACCOUNT_TABS.find(tab => tab.value === activeTab)?.helper}
+        </p>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5">
+          <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/40 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Basics</p>
+
+            {activeTab === 'saving' && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Savings & invest category
                 </p>
+                <div className="flex flex-wrap gap-2">
+                  {SAVING_VARIANTS.map(option => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setValue('savingType', option.value)}
+                      className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                        watchedSavingType === option.value
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : 'border-slate-200 bg-white text-slate-600'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </TabsContent>
+            )}
 
-            <TabsContent value="credit">
-              <div className="space-y-4">
-                <SharedFields
-                  name={name}
-                  onNameChange={setName}
-                  imgUrl={imgUrl}
-                  onImgUrlChange={setImgUrl}
-                  initialBalance={initialBalance}
-                  onBalanceChange={handleBalanceChange}
-                  onBalanceFocus={handleBalanceFocus}
-                />
-                <div className="space-y-3 rounded-lg border border-slate-200 p-4">
-                  <div className="space-y-1">
-                    <label className="text-sm font-medium text-slate-600">Credit limit</label>
-                    <input
-                      type="text"
-                      value={creditLimit}
-                      onChange={event => handleCreditLimitChange(event.target.value)}
-                      onFocus={handleCreditLimitFocus}
-                      placeholder="0"
-                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            {activeTab === 'other' && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account type</p>
+                <div className="flex flex-wrap gap-2">
+                  {OTHER_VARIANTS.map(option => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setValue('otherSubtype', option.value)}
+                      className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
+                        watchedOtherSubtype === option.value
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : 'border-slate-200 bg-white text-slate-600'
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-600">
+                Account name <abbr title="Required">*</abbr>
+              </label>
+              <input
+                type="text"
+                {...register('name')}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="My bank account"
+              />
+              {errors.name && (
+                <p className="text-xs text-red-600">{errors.name.message}</p>
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-slate-600">Image URL (logo)</label>
+              <input
+                type="url"
+                {...register('imgUrl')}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="https://example.com/logo.png"
+              />
+              {logoUrl && (
+                <div className="mt-2 flex items-center gap-3">
+                  <div className="h-12 w-12 overflow-hidden rounded-md border border-slate-200 bg-white">
+                    <img
+                      src={logoUrl}
+                      alt="Logo preview"
+                      className="h-full w-full object-contain"
+                      onError={event => {
+                        const target = event.currentTarget
+                        target.style.display = 'none'
+                      }}
                     />
                   </div>
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                      <input
-                        type="checkbox"
-                        className={`h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 ${
-                          !creditHasCollateralOptions ? 'cursor-not-allowed opacity-60' : ''
-                        }`}
-                        checked={isSecured}
-                        disabled={!creditHasCollateralOptions}
-                        onChange={event => {
-                          const next = event.target.checked
-                          setIsSecured(next)
-                          if (!next) {
-                            setSecuredByAccountId('')
-                          }
-                        }}
-                      />
-                      Secured (collateral)
-                    </label>
-                    {!creditHasCollateralOptions && (
-                      <p className="text-xs text-slate-500">
-                        Add a savings or investment account before linking collateral.
-                      </p>
-                    )}
-                    {isSecured && (
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-600">Secured by</label>
-                        <select
-                          value={securedByAccountId}
-                          onChange={event => setSecuredByAccountId(event.target.value)}
-                          className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        >
-                          <option value="">None</option>
-                          {collateralAccounts.map(account => (
-                            <option key={account.id} value={account.id}>
-                              {account.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
+                  <p className="text-xs text-slate-500">Preview of the logo URL</p>
                 </div>
-                <fieldset className="space-y-4 rounded-lg border border-slate-200 p-4">
-                  <legend className="px-1 text-sm font-semibold text-slate-600">Cashback configuration</legend>
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-slate-600">Rate (%)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.01"
-                        value={ratePercent}
-                        onChange={event => setRatePercent(event.target.value)}
-                        placeholder="10"
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      />
-                      <p className="text-xs text-slate-500">Example: enter 10 for 10% cashback.</p>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-slate-600">Max amount</label>
-                      <input
-                        type="text"
-                        value={maxAmount}
-                        onChange={event => handleMaxAmountChange(event.target.value)}
-                        onFocus={handleMaxAmountFocus}
-                        placeholder="0"
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-slate-600">Min spend</label>
-                      <input
-                        type="text"
-                        value={minSpend}
-                        onChange={event => handleMinSpendChange(event.target.value)}
-                        onFocus={handleMinSpendFocus}
-                        placeholder="0"
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-slate-600">Cycle type</label>
-                      <select
-                        value={cycleType}
-                        onChange={event => setCycleType(event.target.value as CashbackCycleType)}
-                        className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      >
-                        <option value="calendar_month">Calendar month</option>
-                        <option value="statement_cycle">Statement cycle</option>
-                      </select>
-                    </div>
-                    {cycleType === 'statement_cycle' && (
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-600">Statement day</label>
-                        <input
-                          type="number"
-                          min="1"
-                          max="31"
-                          step="1"
-                          value={statementDay}
-                          onChange={event => setStatementDay(event.target.value)}
-                          placeholder="Day of month"
-                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        />
-                      </div>
-                    )}
-                  </div>
-                </fieldset>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="saving">
-              <div className="space-y-4">
-                <SharedFields
-                  name={name}
-                  onNameChange={setName}
-                  imgUrl={imgUrl}
-                  onImgUrlChange={setImgUrl}
-                  initialBalance={initialBalance}
-                  onBalanceChange={handleBalanceChange}
-                  onBalanceFocus={handleBalanceFocus}
+              )}
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Initial balance</label>
+                <Controller
+                  control={control}
+                  name="initialBalance"
+                  render={({ field }) => (
+                    <input
+                      type="text"
+                      value={formatWithSeparators(String(field.value ?? ''))}
+                      onChange={event => {
+                        const parsed = parseOptionalNumber(event.target.value)
+                        field.onChange(parsed ?? 0)
+                      }}
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="0"
+                    />
+                  )}
                 />
-                <div className="space-y-3">
-                  <label className="text-sm font-medium text-slate-600">Account subtype</label>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Currency</label>
+                <input
+                  type="text"
+                  readOnly
+                  value="VND"
+                  className="w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-600 shadow-sm"
+                />
+                <p className="text-xs text-slate-500">
+                  VND is currently the default currency for new accounts.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {activeTab === 'credit' && (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Credit limit</label>
+                <Controller
+                  control={control}
+                  name="creditLimit"
+                  render={({ field }) => (
+                    <input
+                      type="text"
+                      value={formatWithSeparators(toNumericString(field.value))}
+                      onChange={event => field.onChange(parseOptionalNumber(event.target.value))}
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                      placeholder="Credit limit"
+                    />
+                  )}
+                />
+              </div>
+
+              <div className="space-y-3 rounded-md border border-slate-200 p-3">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    {...register('isSecured')}
+                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Secured (collateral)
+                </label>
+                {watchedIsSecured && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-600">Secured by</label>
+                    <select
+                      {...register('securedByAccountId')}
+                      className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    >
+                      <option value="">None</option>
+                      {collateralOptions.map(option => (
+                        <option key={option.id} value={option.id}>
+                          {option.name}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-slate-500">
+                      Pick a savings or investment account as collateral for this card.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <fieldset className="space-y-4 rounded-lg border border-slate-200 p-4">
+                <legend className="px-2 text-sm font-semibold text-slate-600">Cashback configuration</legend>
+                <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-600">Rate (%)</label>
+                    <Controller
+                      control={control}
+                      name="cashbackRate"
+                      render={({ field }) => {
+                        const displayValue =
+                          field.value != null ? (field.value * 100).toString() : ''
+                        return (
+                          <input
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="any"
+                            value={displayValue}
+                            onChange={event => {
+                              const parsed = parseFloat(event.target.value)
+                              field.onChange(isNaN(parsed) ? 0 : parsed / 100)
+                            }}
+                            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            placeholder="10"
+                          />
+                        )
+                      }}
+                    />
+                    <p className="text-xs text-slate-500">Enter the percentage (like 10 for 10%).</p>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-600">Max amount</label>
+                      <Controller
+                        control={control}
+                        name="cashbackMaxAmount"
+                        render={({ field }) => (
+                          <input
+                            type="text"
+                            value={formatWithSeparators(toNumericString(field.value))}
+                            onChange={event => field.onChange(parseOptionalNumber(event.target.value))}
+                            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            placeholder="e.g. 100000"
+                          />
+                        )}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-600">Min spend</label>
+                      <Controller
+                        control={control}
+                        name="cashbackMinSpend"
+                        render={({ field }) => (
+                          <input
+                            type="text"
+                            value={formatWithSeparators(toNumericString(field.value))}
+                            onChange={event => field.onChange(parseOptionalNumber(event.target.value))}
+                            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            placeholder="e.g. 500000"
+                          />
+                        )}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-600">Cycle type</label>
+                    <select
+                      {...register('cashbackCycleType')}
+                      className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                    >
+                      <option value="calendar_month">Calendar month</option>
+                      <option value="statement_cycle">Statement cycle</option>
+                    </select>
+                  </div>
+
+                  {cashbackCycleType === 'statement_cycle' && (
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-slate-600">Statement day</label>
+                      <Controller
+                        control={control}
+                        name="cashbackStatementDay"
+                        render={({ field }) => (
+                          <input
+                            type="number"
+                            min="1"
+                            max="31"
+                            step="1"
+                            value={field.value ?? ''}
+                            onChange={event => {
+                              const normalized = parseStatementDayValue(event.target.value)
+                              field.onChange(normalized)
+                            }}
+                            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            placeholder="Day of month"
+                          />
+                        )}
+                      />
+                    </div>
+                  )}
+                </div>
+              </fieldset>
+            </>
+          )}
+
+          {activeTab === 'saving' && (
+            <fieldset className="space-y-4 rounded-lg border border-slate-200 p-4">
+              <legend className="px-2 text-sm font-semibold text-slate-600">
+                Interest information
+              </legend>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">Account category</label>
                   <select
-                    value={savingSubtype}
-                    onChange={event => setSavingSubtype(event.target.value as SavingSubtype)}
+                    {...register('savingType')}
                     className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                   >
-                    {SAVING_TYPE_OPTIONS.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
+                    <option value="savings">Savings</option>
+                    <option value="investment">Investment</option>
+                    <option value="asset">Secured asset</option>
                   </select>
                 </div>
-                <fieldset className="space-y-4 rounded-lg border border-slate-200 p-4">
-                  <legend className="px-1 text-sm font-semibold text-slate-600">Interest information</legend>
-                  <div className="space-y-3">
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-slate-600">Interest rate (%)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={interestRate}
-                        onChange={event => setInterestRate(event.target.value)}
-                        placeholder="7.2"
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-slate-600">Term (months)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        value={termMonths}
-                        onChange={event => setTermMonths(event.target.value)}
-                        placeholder="12"
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-slate-600">Maturity date</label>
-                      <input
-                        type="date"
-                        value={maturityDate}
-                        onChange={event => setMaturityDate(event.target.value)}
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      />
-                    </div>
-                  </div>
-                </fieldset>
-              </div>
-            </TabsContent>
 
-            <TabsContent value="other">
-              <div className="space-y-4">
-                <SharedFields
-                  name={name}
-                  onNameChange={setName}
-                  imgUrl={imgUrl}
-                  onImgUrlChange={setImgUrl}
-                  initialBalance={initialBalance}
-                  onBalanceChange={handleBalanceChange}
-                  onBalanceFocus={handleBalanceFocus}
-                />
-                <div className="space-y-3">
-                  <label className="text-sm font-medium text-slate-600">Account subtype</label>
-                  <div className="flex flex-wrap gap-2">
-                    {OTHER_TYPE_OPTIONS.map(option => (
-                      <label
-                        key={option.value}
-                        className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition ${otherSubtype === option.value ? 'border-blue-600 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-600'}`}
-                      >
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-600">Interest rate (%)</label>
+                    <Controller
+                      control={control}
+                      name="interestRate"
+                      render={({ field }) => (
                         <input
-                          type="radio"
-                          name="otherType"
-                          value={option.value}
-                          checked={otherSubtype === option.value}
-                          onChange={() => setOtherSubtype(option.value)}
-                          className="sr-only"
+                          type="number"
+                          step="any"
+                          min="0"
+                          value={field.value ?? ''}
+                          onChange={event => {
+                            const parsed = parseOptionalNumber(event.target.value)
+                            field.onChange(parsed)
+                          }}
+                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          placeholder="e.g. 7.2"
                         />
-                        {option.label}
-                      </label>
-                    ))}
+                      )}
+                    />
                   </div>
-                  <p className="text-xs text-slate-500">Choose cash for on-hand money or e-wallet for digital balances.</p>
+
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-slate-600">Term (months)</label>
+                    <Controller
+                      control={control}
+                      name="termMonths"
+                      render={({ field }) => (
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          value={field.value ?? ''}
+                          onChange={event => {
+                            const parsed = parseOptionalNumber(event.target.value)
+                            field.onChange(parsed)
+                          }}
+                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          placeholder="e.g. 12"
+                        />
+                      )}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-slate-600">Maturity date</label>
+                  <input
+                    type="date"
+                    {...register('maturityDate')}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
                 </div>
               </div>
-            </TabsContent>
-          </Tabs>
+            </fieldset>
+          )}
 
           {status && (
-            <p className={`text-sm ${status.variant === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+            <p
+              className={`text-sm ${
+                status.variant === 'error' ? 'text-red-600' : 'text-emerald-600'
+              }`}
+            >
               {status.text}
             </p>
           )}
 
-          <DialogFooter className="pt-0">
-            <Button type="button" variant="ghost" onClick={() => handleDialogOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isPending}>
-              {isPending ? 'Creating...' : 'Create account'}
+          <DialogFooter className="border-t-0">
+            <Button type="submit" disabled={isSubmitting}>
+              Create Account
             </Button>
           </DialogFooter>
         </form>
