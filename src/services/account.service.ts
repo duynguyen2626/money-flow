@@ -304,7 +304,7 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
     category_name: categoryName,
     account_name: accountName,
     category_id: categoryId,
-    tag: txn.tag || undefined,
+    tag: txn.tag ?? null,
     cashback_share_percent: rawPercent,
     cashback_share_fixed: fixedBack,
     cashback_share_amount: cashbackAmount,
