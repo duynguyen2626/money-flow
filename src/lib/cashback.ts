@@ -82,7 +82,8 @@ export function parseCashbackConfig(raw: unknown): ParsedCashbackConfig {
 
   if (typeof raw === 'string') {
     try {
-      return parseConfigCandidate(JSON.parse(raw))
+      const parsed = JSON.parse(raw) as Record<string, unknown> | null
+      return parseConfigCandidate(parsed)
     } catch {
       return {
         rate: 0,
