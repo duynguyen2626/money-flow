@@ -523,7 +523,8 @@ export async function updateAccountConfig(
 
   const { error } = await supabase
     .from('accounts')
-    .update(payload)
+    // Supabase type may be narrower; cast to any to satisfy TS while keeping runtime shape.
+    .update(payload as any)
     .eq('id', accountId)
 
   if (error) {
@@ -535,7 +536,7 @@ export async function updateAccountConfig(
       const { img_url: _ignored, ...retryPayload } = payload
       const { error: retryError } = await supabase
         .from('accounts')
-        .update(retryPayload)
+        .update(retryPayload as any)
         .eq('id', accountId)
 
       if (retryError) {
