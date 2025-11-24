@@ -71,7 +71,7 @@ export function CashbackDetailsDialog({ card, onClose }: CashbackDetailsDialogPr
         }
         const payload = (await response.json()) as CashbackCard[];
         if (!payload.length) {
-          throw new Error('Khong tim thay du lieu chu ky');
+          throw new Error('Không có dữ liệu hoàn tiền (No Data)');
         }
         setCycleCache(prev => ({ ...prev, [selectedOffset]: payload[0] }));
       })
@@ -106,7 +106,7 @@ export function CashbackDetailsDialog({ card, onClose }: CashbackDetailsDialogPr
           onClick={stopPropagation}
         >
           <p className="text-sm font-semibold text-slate-600">
-            Khong co du lieu cho ky nay.
+             Không có dữ liệu hoàn tiền (No Data)
           </p>
         </div>
       </div>

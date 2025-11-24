@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTagFilter } from '@/context/tag-filter-context'
 import { TransactionForm } from './transaction-form'
 import { Account, Category, DebtAccount, Person, Shop } from '@/types/moneyflow.types'
 import type { DebtByTagAggregatedResult } from '@/services/debt.service'
+import { Check, Plus } from 'lucide-react'
 
 type DebtCycle = DebtByTagAggregatedResult
 
@@ -14,7 +15,21 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 })
 
 function formatCurrency(value: number) {
-    return numberFormatter.format(value)
+    return numberFormatter.format(Math.abs(value))
+}
+
+function getYearFromTag(tag: string | null): number {
+    if (!tag || tag === 'UNTAGGED') return new Date().getFullYear();
+    const match = tag.match(/(\d{2})$/);
+    if (match) {
+        return 2000 + parseInt(match[1], 10);
+    }
+    // Try to parse YYYY if possible, though format is mostly MMMyy
+    const matchFull = tag.match(/(\d{4})$/);
+    if (matchFull) {
+        return parseInt(matchFull[1], 10);
+    }
+    return new Date().getFullYear();
 }
 
 function DebtCycleCard({
@@ -33,8 +48,7 @@ function DebtCycleCard({
         : cycle.netBalance >= 0
             ? 'text-emerald-700'
             : 'text-red-600'
-    const tagLabel = cycle.tag === 'UNTAGGED' ? 'No tag' : cycle.tag
-    const badgeLabel = cycle.tag === 'UNTAGGED' ? '-' : cycle.tag
+    const badgeLabel = cycle.tag === 'UNTAGGED' ? 'No tag' : cycle.tag
 
     const toggleTagFilter = () => {
         setSelectedTag(cycle.tag === selectedTag ? null : cycle.tag)
@@ -55,71 +69,60 @@ function DebtCycleCard({
             isSettled ? 'bg-slate-50' : 'bg-white'
         } cursor-pointer`}
     >
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-center gap-2">
-                    <button
-                        type="button"
-                        className="flex items-center gap-2"
-                        onClick={event => {
-                            event.stopPropagation()
-                            setSelectedTag(cycle.tag === selectedTag ? null : cycle.tag)
-                        }}
+            <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                     <span
+                        className={`inline-flex items-center justify-center rounded-md border bg-slate-50 px-2 py-1 text-[10px] font-semibold tracking-tight uppercase ${isSettled ? 'border-gray-200 text-gray-500' : 'border-slate-300 text-slate-700'}`}
+                        title={badgeLabel}
                     >
-                        <span
-                            className={`flex h-8 w-8 items-center justify-center rounded-md border bg-slate-50 text-[10px] font-semibold tracking-tight uppercase ${isSettled ? 'border-gray-200 text-gray-500' : 'border-slate-300 text-slate-700'}`}
-                            title={tagLabel}
+                        {badgeLabel}
+                    </span>
+                    <div className="flex items-center gap-1">
+                        <button
+                            type="button"
+                            onClick={event => {
+                                event.stopPropagation()
+                                onQuickAdd(cycle)
+                            }}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 transition"
+                            title="Add Debt"
                         >
-                            {badgeLabel}
-                        </span>
-                        <span className={`text-xs font-semibold ${cycle.tag === 'UNTAGGED' ? 'text-gray-500' : 'text-slate-700'}`}>
-                            {tagLabel}
-                        </span>
-                    </button>
+                           <Plus className="h-4 w-4" />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={event => {
+                                event.stopPropagation()
+                                onSettle(cycle)
+                            }}
+                            className="flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition"
+                            title="Settle"
+                        >
+                            <Check className="h-4 w-4" />
+                        </button>
+                    </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 sm:justify-end sm:flex-row">
-                    <button
-                        type="button"
-                        onClick={event => {
-                            event.stopPropagation()
-                            onQuickAdd(cycle)
-                        }}
-                        className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-100 whitespace-nowrap"
+                <div className="flex flex-col gap-0.5">
+                    <p className={`text-xl font-bold ${amountColor}`}>
+                        {formatCurrency(cycle.netBalance)}
+                    </p>
+                    <span
+                        className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
+                            isSettled
+                                ? 'bg-gray-200 text-gray-600'
+                                : cycle.netBalance > 0
+                                    ? 'bg-green-100 text-green-700'
+                                    : 'bg-red-100 text-red-700'
+                        }`}
                     >
-                        <span className="text-base leading-none">+</span>
-                        <span>Quick add debt</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={event => {
-                            event.stopPropagation()
-                            onSettle(cycle)
-                        }}
-                        className="rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 transition hover:bg-blue-100 whitespace-nowrap"
-                    >
-                        Settle
-                    </button>
+                        {isSettled ? 'Settled' : cycle.netBalance > 0 ? 'They owe me' : 'I owe them'}
+                    </span>
+                    <p className="text-[10px] text-gray-500 mt-1">
+                        <span>P: {formatCurrency(Math.abs(cycle.originalPrincipal))}</span>
+                        <span className="mx-1 text-slate-300">|</span>
+                        <span className="text-amber-600">CB: {formatCurrency(Math.abs(cycle.totalBack ?? 0))}</span>
+                    </p>
                 </div>
-            </div>
-            <div className="mt-3 flex flex-col gap-1.5">
-                <p className={`text-2xl font-bold ${amountColor}`}>
-                    {formatCurrency(cycle.netBalance)}
-                </p>
-                <span
-                    className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                        isSettled
-                            ? 'bg-gray-200 text-gray-600'
-                            : cycle.netBalance > 0
-                                ? 'bg-green-100 text-green-700'
-                                : 'bg-red-100 text-red-700'
-                    }`}
-                >
-                    {isSettled ? 'Settled' : cycle.netBalance > 0 ? 'They owe me' : 'I owe them'}
-                </span>
-                <p className="text-[11px] text-gray-600">
-                    <span>Principal: {formatCurrency(Math.abs(cycle.originalPrincipal))}</span>
-                    <span className="mx-1 text-slate-400">|</span>
-                    <span className="text-amber-600">Cashback: {formatCurrency(Math.abs(cycle.totalBack ?? 0))}</span>
-                </p>
             </div>
         </div>
     )
@@ -151,6 +154,19 @@ export function DebtCycleFilter({
     const router = useRouter()
     const [selectedCycle, setSelectedCycle] = useState<DebtCycle | null>(null)
     const [quickAddCycle, setQuickAddCycle] = useState<DebtCycle | null>(null)
+    const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear())
+
+    const years = useMemo(() => {
+        const uniqueYears = Array.from(new Set(allCycles.map(c => getYearFromTag(c.tag)))).sort((a, b) => b - a);
+        if (!uniqueYears.includes(new Date().getFullYear())) {
+            uniqueYears.unshift(new Date().getFullYear());
+        }
+        return uniqueYears;
+    }, [allCycles]);
+
+    const filteredCycles = useMemo(() => {
+        return displayedCycles.filter(cycle => getYearFromTag(cycle.tag) === selectedYear);
+    }, [displayedCycles, selectedYear]);
 
     const openSettleDialog = (cycle: DebtCycle) => setSelectedCycle(cycle)
     const closeSettleDialog = () => setSelectedCycle(null)
@@ -160,34 +176,50 @@ export function DebtCycleFilter({
         closeQuickAdd()
         if (onQuickAddSuccess) {
             await onQuickAddSuccess()
-        } else {
-            router.refresh()
         }
+        router.refresh()
     }
 
     const handleSettleSuccess = async () => {
         closeSettleDialog()
         if (onSettleSuccess) {
             await onSettleSuccess()
-        } else {
-            router.refresh()
         }
+        router.refresh()
     }
 
     return (
         <>
             <div className="space-y-4">
+                 {isExpanded && years.length > 0 && (
+                    <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-200">
+                        {years.map(year => (
+                            <button
+                                key={year}
+                                onClick={() => setSelectedYear(year)}
+                                className={`rounded-full px-3 py-1 text-xs font-medium transition whitespace-nowrap ${
+                                    selectedYear === year
+                                        ? 'bg-slate-800 text-white shadow-sm'
+                                        : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+                                }`}
+                            >
+                                {year}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
                 {isExpanded && (
                     <>
-                        {displayedCycles && displayedCycles.length > 0 ? (
-                            <div className="grid grid-cols-1 justify-items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                                {displayedCycles.map(cycle => (
+                        {filteredCycles && filteredCycles.length > 0 ? (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {filteredCycles.map(cycle => (
                                     <DebtCycleCard key={cycle.tag} cycle={cycle} onSettle={openSettleDialog} onQuickAdd={openQuickAdd} />
                                 ))}
                             </div>
                         ) : (
                             <div className="text-center rounded-lg bg-white py-8 px-4 shadow">
-                                <p className="text-gray-500">No debt cycles recorded.</p>
+                                <p className="text-gray-500">No debt cycles found for {selectedYear}.</p>
                             </div>
                         )}
                     </>

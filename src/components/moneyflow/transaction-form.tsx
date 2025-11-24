@@ -400,6 +400,18 @@ const debtAccountByPerson = useMemo(() => {
       if (shopeeShop) {
         form.setValue('shop_id', shopeeShop.id);
       }
+    } else if (transactionType === 'repayment') {
+        // Auto-select Category "Thu nợ người khác" (e0000000-0000-0000-0000-000000000097)
+        // I will search by ID first, then by name if not found.
+        const repaymentCatId = 'e0000000-0000-0000-0000-000000000097';
+        if (categories.some(c => c.id === repaymentCatId)) {
+             form.setValue('category_id', repaymentCatId);
+        } else {
+             const repaymentCat = categories.find(c => c.name === 'Thu nợ người khác' || c.name === 'Repayment');
+             if (repaymentCat) {
+                 form.setValue('category_id', repaymentCat.id);
+             }
+        }
     }
   }, [transactionType, categories, shops, form, isEditMode]);
 
