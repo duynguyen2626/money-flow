@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { FilterIcon, X } from 'lucide-react'
-import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
+import { TransactionTable } from '@/components/moneyflow/transaction-table'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
 import { Combobox } from '@/components/ui/combobox'
@@ -221,7 +221,7 @@ export function FilterableTransactions({
             const isPersonTxn = Boolean((txn as any).person_id ?? txn.person_id)
 
             if (isPersonTxn) {
-              if (kind === 'income') {
+              if (kind === 'income' || kind === 'repayment') { // Consider repayment as collect
                 acc.collect += value
               } else {
                 acc.lend += value
@@ -475,7 +475,7 @@ export function FilterableTransactions({
             </div>
             
             <div>
-                <RecentTransactions 
+                <TransactionTable
                     transactions={finalTransactions} 
                     accountType={accountType}
                     accounts={accounts}

@@ -113,7 +113,10 @@ type TransactionFormProps = {
   defaultSourceAccountId?: string;
   defaultDebtAccountId?: string;
   transactionId?: string;
-  initialValues?: Partial<TransactionFormValues>;
+  initialValues?: Partial<TransactionFormValues> & {
+    category_name?: string
+    account_name?: string
+  };
   mode?: 'create' | 'edit';
 }
 
@@ -306,12 +309,79 @@ const debtAccountByPerson = useMemo(() => {
     if (!initialValues) {
       return
     }
-    form.reset({
-      ...baseDefaults,
-      ...initialValues,
-    })
+
+    // Logic to detect correct type and swap Source/Dest if needed for Repayment
+    const newValues = { ...baseDefaults, ...initialValues };
+
+    const isRepayment = initialValues.category_name?.toLowerCase().includes('thu nợ')
+      || initialValues.category_name?.toLowerCase().includes('repayment')
+      || (initialValues.type === 'repayment');
+
+    const isDebt = initialValues.type === 'debt' || (initialValues.type as string) === 'lending';
+    const isIncomeWithPerson = initialValues.type === 'income' && initialValues.person_id;
+
+    if (isRepayment || (isIncomeWithPerson && !isDebt)) {
+        newValues.type = 'repayment';
+
+        // Ensure mapping:
+        // Source in form (User's Bank) -> Where Money goes IN (Debit)
+        // Dest in form (Person's Debt Account) -> Where Money comes FROM (Credit)
+
+        // In database 'repayment':
+        // Bank -> Debit (In)
+        // Debt -> Credit (Out)
+
+        // Our buildTransactionLines expects:
+        // source_account_id = Bank
+        // debt_account_id = Person
+
+        // When editing, initialValues usually come from `buildEditInitialValues` in `transaction-table` (or similar).
+        // Let's check where `initialValues` come from. They usually map:
+        // source_account_id -> Credit line (for Expense/Debt Lending) OR Debit line (for Income).
+
+        // For Repayment (Income for Bank):
+        // Bank is Debit. Debt is Credit.
+        // `buildEditInitialValues`:
+        // creditLine = Debt Account line
+        // debitLine = Bank Account line
+        // source_account_id = creditLine?.account_id ?? debitLine?.account_id
+        // So source_account_id = Debt Account.
+
+        // BUT `TransactionForm` expects `source_account_id` to be the Bank Account for Repayment logic (Source of transaction? No, Destination of Repayment).
+        // `buildTransactionLines` for repayment:
+        // account_id: input.source_account_id (The receiving bank)
+
+        // So we need to SWAP if source is Debt Account.
+
+        const sourceId = newValues.source_account_id;
+        const sourceAcc = allAccounts.find(a => a.id === sourceId);
+
+        // If source is currently mapped to a Debt Account, we must swap it with destination (or find bank line).
+        if (sourceAcc?.type === 'debt') {
+             // In edit mode `initialValues` might not have `debt_account_id` set correctly yet if `buildEditInitialValues` logic wasn't aware of Repayment.
+             // We need to find the OTHER account ID which is the Bank.
+             // But we don't have the full lines here, only `initialValues`.
+
+             // Wait, `TransactionForm` receives `initialValues`.
+             // If we rely on the parent to pass correct `initialValues`, we should fix `transaction-table.tsx`'s `buildEditInitialValues`.
+             // But `TransactionForm` can also patch it.
+
+             // If we are in this block, `newValues.source_account_id` is likely the Debt Account (Credit line).
+             // And we want `source_account_id` to be the Bank.
+             // And `debt_account_id` to be the Debt Account.
+
+             // If `newValues.debt_account_id` is set (likely the Debit line = Bank), we swap.
+             if (newValues.debt_account_id) {
+                 const temp = newValues.source_account_id;
+                 newValues.source_account_id = newValues.debt_account_id;
+                 newValues.debt_account_id = temp;
+             }
+        }
+    }
+
+    form.reset(newValues)
     setManualTagMode(true)
-  }, [baseDefaults, form, initialValues])
+  }, [baseDefaults, form, initialValues, allAccounts])
 
   async function onSubmit(values: TransactionFormValues) {
     setStatus(null)
