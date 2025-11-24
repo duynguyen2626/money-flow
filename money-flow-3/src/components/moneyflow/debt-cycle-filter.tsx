@@ -3,9 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTagFilter } from '@/context/tag-filter-context'
-import { SettleDebtDialog } from '@/components/moneyflow/settle-debt-dialog'
 import { TransactionForm } from '@/components/moneyflow/transaction-form'
-import { Account, Category, DebtAccount, Person } from '@/types/moneyflow.types'
+import { Account, Category, DebtAccount, Person, Shop } from '@/types/moneyflow.types'
 import type { DebtByTagAggregatedResult } from '@/services/debt.service'
 
 type DebtCycle = DebtByTagAggregatedResult
@@ -136,6 +135,7 @@ export function DebtCycleFilter({
     isExpanded,
     onQuickAddSuccess,
     onSettleSuccess,
+    shops,
 }: {
     allCycles: DebtCycle[]
     debtAccount: DebtAccount
@@ -144,6 +144,7 @@ export function DebtCycleFilter({
     people: Person[]
     displayedCycles: DebtCycle[]
     isExpanded: boolean
+    shops: Shop[]
     onQuickAddSuccess?: () => Promise<void> | void
     onSettleSuccess?: () => Promise<void> | void
 }) {
@@ -225,7 +226,7 @@ export function DebtCycleFilter({
                             accounts={accounts}
                             categories={categories}
                             people={people}
-                            shops={[]}
+                            shops={shops}
                             onSuccess={handleQuickAddSuccess}
                             defaultTag={quickAddCycle.tag === 'UNTAGGED' ? undefined : quickAddCycle.tag}
                             defaultPersonId={debtAccount.owner_id ?? debtAccount.id}
@@ -236,14 +237,46 @@ export function DebtCycleFilter({
             )}
 
             {selectedCycle && (
-                <SettleDebtDialog
-                    debt={debtAccount}
-                    accounts={accounts}
-                    onClose={closeSettleDialog}
-                    onSuccess={handleSettleSuccess}
-                    defaultTag={selectedCycle.tag === 'UNTAGGED' ? undefined : selectedCycle.tag}
-                    defaultAmount={Math.abs(selectedCycle.netBalance)}
-                />
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10"
+                    onClick={closeSettleDialog}
+                >
+                    <div
+                        className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+                        onClick={event => event.stopPropagation()}
+                    >
+                        <div className="mb-4 flex items-center justify-between gap-2">
+                            <div>
+                                <p className="text-xs font-semibold uppercase text-slate-500">Repay / Settle</p>
+                                <p className="text-lg font-semibold text-slate-800">
+                                    {selectedCycle.tag === 'UNTAGGED' ? 'No tag' : selectedCycle.tag}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                className="rounded p-1 text-gray-500 transition hover:text-gray-800"
+                                onClick={closeSettleDialog}
+                                aria-label="Close settle dialog"
+                            >
+                                X
+                            </button>
+                        </div>
+                        <TransactionForm
+                            key={`settle-${selectedCycle.tag}-${debtAccount.id}`}
+                            accounts={accounts}
+                            categories={categories}
+                            people={people}
+                            shops={shops}
+                            onSuccess={handleSettleSuccess}
+                            defaultTag={selectedCycle.tag === 'UNTAGGED' ? undefined : selectedCycle.tag}
+                            defaultPersonId={debtAccount.owner_id ?? debtAccount.id}
+                            defaultType={selectedCycle.netBalance > 0 ? 'repayment' : 'debt'}
+                            initialValues={{ amount: Math.abs(selectedCycle.netBalance) }}
+                        />
+                    </div>
+                </div>
             )}
         </>
     )
