@@ -225,6 +225,7 @@ export function DebtCycleFilter({
                             accounts={accounts}
                             categories={categories}
                             people={people}
+                            shops={[]}
                             onSuccess={handleQuickAddSuccess}
                             defaultTag={quickAddCycle.tag === 'UNTAGGED' ? undefined : quickAddCycle.tag}
                             defaultPersonId={debtAccount.owner_id ?? debtAccount.id}

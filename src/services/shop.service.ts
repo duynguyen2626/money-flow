@@ -45,7 +45,7 @@ export async function createShop(input: { name: string; logo_url?: string | null
 
 export async function updateShop(id: string, input: { name?: string; logo_url?: string | null }): Promise<boolean> {
   const supabase = createClient()
-  const payload: ShopUpdate = {}
+  const payload: Partial<ShopUpdate> = {}
 
   if (input.name) {
     payload.name = input.name.trim()
@@ -58,7 +58,7 @@ export async function updateShop(id: string, input: { name?: string; logo_url?: 
     return true
   }
 
-  const { error } = await supabase.from('shops').update(payload).eq('id', id)
+  const { error } = await (supabase.from('shops').update as any)(payload).eq('id', id)
   if (error) {
     console.error('Failed to update shop:', error)
     return false

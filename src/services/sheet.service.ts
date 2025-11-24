@@ -187,7 +187,14 @@ export async function syncAllTransactions(personId: string) {
       cashback_share_percent?: number | null
       cashback_share_fixed?: number | null
       metadata?: unknown
-      transactions: { id: string; occurred_at: string; note: string | null; tag: string | null } | null
+      transactions: { 
+        id: string; 
+        occurred_at: string; 
+        note: string | null; 
+        tag: string | null;
+        shop_id: string | null;
+        shops: { name: string | null } | null;
+      } | null
     }[]
 
     let sent = 0

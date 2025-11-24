@@ -1,72 +1,38 @@
-Console Error
-
-A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
-- A server/client branch `if (typeof window !== 'undefined')`.
-- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
-- Date formatting in a user's locale which doesn't match the server.
-- External changing data without sending a snapshot of it along with the HTML.
-- Invalid HTML tag nesting.
-
-It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
-
-See more info here: https://nextjs.org/docs/messages/react-hydration-error
-
-
-  ...
-    <SegmentViewNode type="page" pagePath="/Library/M...">
-      <SegmentTrieNode>
-      <AccountsPage>
-        <section className="space-y-4">
-          <header>
-          ...
-            <div className="flex flex-...">
-              <div>
-              <div className="flex items...">
-                <div>
-                <CreateAccountDialog collateralAccounts={[...]}>
-                  <Dialog open={false} onOpenChange={function onOpenChange}>
-                    <DialogProvider scope={undefined} triggerRef={{current:null}} contentRef={{current:null}} ...>
-                      <DialogTrigger asChild={true}>
-                        <Primitive.button type="button" aria-haspopup="dialog" aria-expanded={false} ...>
-                          <Primitive.button.Slot type="button" aria-haspopup="dialog" aria-expanded={false} ...>
-                            <Primitive.button.SlotClone type="button" aria-haspopup="dialog" aria-expanded={false} ...>
-                              <_c type="button" aria-haspopup="dialog" aria-expanded={false} ...>
-                                <button
-                                  className="inline-flex items-center justify-center rounded-md text-sm font-semibold ..."
-                                  type="button"
-                                  aria-haspopup="dialog"
-                                  aria-expanded={false}
-+                                 aria-controls="radix-_R_aclritqlb_"
--                                 aria-controls="radix-_R_19klritqlb_"
-                                  data-state="closed"
-                                  onClick={function handleEvent}
-                                  ref={function}
-                                >
-+                                 Add New Account
-                      ...
-../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/ui/button.tsx (36:7) @ _c
-
-
-  34 |     const Comp = asChild ? Slot : 'button'
-  35 |     return (
-> 36 |       <Comp
-     |       ^
-  37 |         className={cn(
-  38 |           'inline-flex items-center justify-center rounded-md text-sm font-semibold transition',
-  39 |           variants[variant],
-Call Stack
-25
-
-Show 19 ignore-listed frame(s)
-button
-<anonymous>
-_c
-../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/ui/button.tsx (36:7)
-CreateAccountDialog
-../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/moneyflow/create-account-dialog.tsx (145:9)
-CreateAccountDialog
-../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/moneyflow/create-account-dialog.tsx (144:7)
-AccountList
-../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/moneyflow/account-list.tsx (144:11)
-AccountsPage
-../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/app/accounts/page.tsx (57:7)│ > fix cho phép Rate (%) nhập  được thập phân, ví dụ 0.5 (hiểu là 0.5%)      
+11:26:45.470 Running build in Washington, D.C., USA (East) – iad1
+11:26:45.470 Build machine configuration: 2 cores, 8 GB
+11:26:45.594 Cloning github.com/rei6868/money-flow-3 (Branch: phase-17-and-17.5-shops-module-ui-english-translation-logic-refinement, Commit: 067524b)
+11:26:45.868 Cloning completed: 273.000ms
+11:26:47.479 Restored build cache from previous deployment (29THsnwdDpbQDqqhyNReKudEX9nM)
+11:26:48.143 Running "vercel build"
+11:26:48.546 Vercel CLI 48.10.5
+11:26:48.874 Installing dependencies...
+11:26:50.088 
+11:26:50.089 up to date in 1s
+11:26:50.090 
+11:26:50.090 148 packages are looking for funding
+11:26:50.090   run `npm fund` for details
+11:26:50.120 Detected Next.js version: 16.0.3
+11:26:50.124 Running "npm run build"
+11:26:50.231 
+11:26:50.232 > money-flow-3@0.1.0 build
+11:26:50.232 > next build
+11:26:50.232 
+11:26:51.301    ▲ Next.js 16.0.3 (Turbopack)
+11:26:51.301 
+11:26:51.367    Creating an optimized production build ...
+11:27:05.504  ✓ Compiled successfully in 13.6s
+11:27:05.509    Running TypeScript ...
+11:27:14.849 Failed to compile.
+11:27:14.850 
+11:27:14.850 ./money-flow-3/src/app/people/[id]/page.tsx:77:26
+11:27:14.850 Type error: Property 'shops' is missing in type '{ allCycles: DebtByTagAggregatedResult[]; debtAccount: { id: string; name: string; current_balance: number; owner_id: string | null; avatar_url: string | null; sheet_link: string | null; }; ... 4 more ...; isExpanded: true; }' but required in type '{ allCycles: DebtByTagAggregatedResult[]; debtAccount: DebtAccount; accounts: Account[]; categories: Category[]; people: Person[]; ... 4 more ...; onSettleSuccess?: (() => void | Promise<...>) | undefined; }'.
+11:27:14.850 
+11:27:14.850 [0m [90m 75 |[39m                             [33m<[39m[33mh2[39m className[33m=[39m[32m"text-lg font-semibold"[39m[33m>[39m[33mKy[39m no ([33mDebt[39m [33mCycles[39m)[33m<[39m[33m/[39m[33mh2[39m[33m>[39m
+11:27:14.850  [90m 76 |[39m                         [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m
+11:27:14.850 [31m[1m>[22m[39m[90m 77 |[39m                         [33m<[39m[33mDebtCycleFilter[39m
+11:27:14.850  [90m    |[39m                          [31m[1m^[22m[39m
+11:27:14.850  [90m 78 |[39m                             allCycles[33m=[39m{debtCycles}
+11:27:14.850  [90m 79 |[39m                             debtAccount[33m=[39m{person}
+11:27:14.850  [90m 80 |[39m                             accounts[33m=[39m{accounts}[0m
+11:27:14.886 Next.js build worker exited with code: 1 and signal: null
+11:27:14.920 Error: Command "npm run build" exited with 1

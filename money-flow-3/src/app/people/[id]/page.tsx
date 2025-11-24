@@ -82,6 +82,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                             people={people}
                             displayedCycles={debtCycles}
                             isExpanded
+                            shops={[]}
                         />
                     </div>
                 </section>

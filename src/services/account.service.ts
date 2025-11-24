@@ -256,7 +256,6 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     person_name: personLine?.profiles?.name ?? null,
     persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,
     metadata: txn.metadata ?? null,
-    metadata: txn.metadata ?? null,
     shop_id: txn.shop_id ?? null,
     shop_name: txn.shops?.name ?? null,
     shop_logo_url: txn.shops?.logo_url ?? null,
