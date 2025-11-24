@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal } from "lucide-react"
+import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
 import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
@@ -26,10 +26,12 @@ import { generateTag } from "@/lib/tag"
 
 type ColumnKey =
   | "date"
+  | "type"
   | "shop"
   | "note"
   | "category"
   | "account"
+  | "people"
   | "tag"
   | "cycle"
   | "percent"
@@ -37,7 +39,6 @@ type ColumnKey =
   | "sumBack"
   | "amount"
   | "finalPrice"
-  | "people"
   | "task"
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -105,20 +106,20 @@ interface RecentTransactionsProps {
 }
 
 const defaultColumns: ColumnConfig[] = [
-  { key: "date", label: "Date", defaultWidth: 120, minWidth: 100 },
-  { key: "shop", label: "Shop", defaultWidth: 160 },
-  { key: "note", label: "Note", defaultWidth: 200, minWidth: 140 },
+  { key: "date", label: "Date", defaultWidth: 110, minWidth: 100 },
+  { key: "type", label: "Type", defaultWidth: 100, minWidth: 90 },
+  { key: "shop", label: "Shop/Note", defaultWidth: 200, minWidth: 160 },
   { key: "category", label: "Category", defaultWidth: 140 },
-  { key: "account", label: "Account", defaultWidth: 140 },
-  { key: "tag", label: "Tag", defaultWidth: 100, minWidth: 90 },
-  { key: "cycle", label: "Cycle", defaultWidth: 120 },
-  { key: "percent", label: "% Back", defaultWidth: 110 },
-  { key: "fixed", label: "Fix Back", defaultWidth: 110 },
-  { key: "sumBack", label: "Sum Back", defaultWidth: 120 },
+  { key: "people", label: "People/Tag", defaultWidth: 160 },
+  { key: "account", label: "Source/Account", defaultWidth: 150 },
+  // { key: "tag", label: "Tag", defaultWidth: 100, minWidth: 90 },
+  { key: "cycle", label: "Cycle", defaultWidth: 100 },
+  { key: "percent", label: "% Back", defaultWidth: 80 },
+  { key: "fixed", label: "Fix Back", defaultWidth: 90 },
+  { key: "sumBack", label: "Sum Back", defaultWidth: 110 },
   { key: "amount", label: "Amount", defaultWidth: 120 },
   { key: "finalPrice", label: "Final Price", defaultWidth: 130 },
-  { key: "people", label: "People", defaultWidth: 140 },
-  { key: "task", label: "", defaultWidth: 56, minWidth: 48 },
+  { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
 ]
 
 function parseMetadata(value: TransactionWithDetails['metadata']) {
@@ -154,18 +155,19 @@ export function RecentTransactions({
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
     const map: Record<ColumnKey, boolean> = {
       date: true,
+      type: true,
       shop: true,
-      note: true,
+      note: false,
       category: true,
       account: true,
       people: true,
-      tag: true,
-      cycle: true,
+      tag: false,
+      cycle: false,
       percent: true,
-      fixed: true,
+      fixed: false,
       sumBack: true,
       amount: true,
-      finalPrice: true,
+      finalPrice: false,
       task: true,
     }
     return map
@@ -228,18 +230,19 @@ export function RecentTransactions({
     setColumnWidths(map)
     setVisibleColumns({
       date: true,
+      type: true,
       shop: true,
-      note: true,
+      note: false,
       category: true,
       account: true,
       people: true,
-      tag: true,
-      cycle: true,
+      tag: false,
+      cycle: false,
       percent: true,
-      fixed: true,
+      fixed: false,
       sumBack: true,
       amount: true,
-      finalPrice: true,
+      finalPrice: false,
       task: true,
     })
     setDateFormat("en-CA")
@@ -683,19 +686,77 @@ export function RecentTransactions({
               </div>
             )
 
+            // Smart Source Logic
+            let displayAccountName = txn.account_name ?? "-";
+
+            // If person_id is present, it's likely a debt-related transaction (Lending or Repayment)
+            // In this case, we want to show the REAL source (Bank) if possible.
+            if (txn.person_id) {
+                 const accountLines = (txn.transaction_lines ?? []).filter(l => l && l.account_id);
+                 // Find the Bank/Cash account (not the debt account)
+                 // Usually Debt transaction: Credit Bank, Debit DebtAccount.
+                 // Repayment: Debit Bank, Credit DebtAccount.
+                 // We look for an account that does NOT have "Nợ" or "Debt" in its name.
+                 // This is a heuristic, but often debt accounts are named specially.
+                 // Or we can check account type if we had it in line relations, but we only have 'accounts' name.
+                 const bankLine = accountLines.find(l => l.account_id && !l.accounts?.name?.toLowerCase().includes('nợ') && !l.accounts?.name?.toLowerCase().includes('debt'));
+                 if (bankLine && bankLine.accounts?.name) {
+                     displayAccountName = bankLine.accounts.name;
+                 }
+            }
+
             const renderCell = (key: ColumnKey) => {
               switch (key) {
                 case "date":
                   return formattedDate(txn.occurred_at)
+                case "type":
+                   if (txn.type === 'income') return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> In</span>
+                   if (txn.type === 'expense') return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Out</span>
+                   return <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
+                case "shop":
+                   // Merged Shop and Note
+                   return (
+                    <div className="flex flex-col gap-1">
+                      {txn.shop_name && (
+                        <div className="flex items-center gap-2">
+                          {txn.shop_logo_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={txn.shop_logo_url}
+                              alt={txn.shop_name}
+                              className="h-5 w-5 rounded-full object-cover"
+                            />
+                          ) : (
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
+                              {txn.shop_name.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                          <span className="font-medium truncate">{txn.shop_name}</span>
+                        </div>
+                      )}
+                      {txn.note && <span className="text-xs text-slate-500 truncate">{txn.note}</span>}
+                    </div>
+                   )
                 case "note":
                   return txn.note
                 case "category":
                   return txn.category_name || "-"
                 case "account":
-                  return txn.account_name || "-"
+                  return displayAccountName
                 case "people": {
+                   // Merged People and Tag
                   const personName = (txn as any).person_name ?? txn.person_name ?? null
-                  return personName || "-"
+                  const tag = txn.tag
+                  return (
+                    <div className="flex flex-col gap-1">
+                        {personName && <span className="font-medium text-slate-700">{personName}</span>}
+                        {tag && (
+                             <span className="inline-flex w-fit items-center rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                                {tag}
+                             </span>
+                        )}
+                    </div>
+                  )
                 }
                 case "tag":
                   return txn.tag ?? "-"
@@ -713,25 +774,6 @@ export function RecentTransactions({
                   return amountValue
                 case "finalPrice":
                   return numberFormatter.format(finalPrice)
-                case "shop":
-                  if (!txn.shop_name) return "-"
-                  return (
-                    <div className="flex items-center gap-2">
-                      {txn.shop_logo_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={txn.shop_logo_url}
-                          alt={txn.shop_name}
-                          className="h-6 w-6 rounded-full object-cover"
-                        />
-                      ) : (
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
-                          {txn.shop_name.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                      <span className="truncate">{txn.shop_name}</span>
-                    </div>
-                  )
                 case "task":
                   return taskCell
                 default:
