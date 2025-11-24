@@ -11,7 +11,7 @@ import {
   getAccountTypeLabel,
   getSharedLimitParentId,
 } from '@/lib/account-utils'
-import { Account, AccountCashbackSnapshot, Category, Person } from '@/types/moneyflow.types'
+import { Account, AccountCashbackSnapshot, Category, Person, Shop } from '@/types/moneyflow.types'
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { EditAccountDialog } from './edit-account-dialog'
 
@@ -22,6 +22,7 @@ type AccountCardProps = {
   people: Person[]
   collateralAccounts?: Account[]
   allAccounts?: Account[]
+  shops: Shop[]
 }
 
 function getDueStatus(dueDate: Date | null) {
@@ -86,6 +87,7 @@ export function AccountCard({
   people,
   collateralAccounts = [],
   allAccounts = [],
+  shops,
 }: AccountCardProps) {
   const router = useRouter()
   const dueDate = computeNextDueDate(account.cashback_config ?? null)
@@ -124,6 +126,12 @@ export function AccountCard({
   const cashbackLabel =
     cashbackLeft === null ? 'Unlimited' : formatCurrency(Math.max(0, cashbackLeft))
   const showTransfer = account.type !== 'credit_card'
+  const dialogBaseProps = {
+    accounts: allAccounts,
+    categories,
+    people,
+    shops,
+  }
 
   return (
     <article
@@ -230,9 +238,7 @@ export function AccountCard({
               <div className="flex flex-wrap items-center gap-2">
                 <ActionButton label="Pay card">
                   <AddTransactionDialog
-                    accounts={selectableAccounts}
-                    categories={categories}
-                    people={people}
+                    {...dialogBaseProps}
                     defaultType="transfer"
                     defaultDebtAccountId={account.id}
                     triggerContent={
@@ -245,9 +251,7 @@ export function AccountCard({
                 </ActionButton>
                 <ActionButton label="Income">
                   <AddTransactionDialog
-                    accounts={selectableAccounts}
-                    categories={categories}
-                    people={people}
+                    {...dialogBaseProps}
                     defaultType="income"
                     defaultSourceAccountId={account.id}
                     triggerContent={
@@ -260,9 +264,7 @@ export function AccountCard({
                 </ActionButton>
                 <ActionButton label="Expense">
                   <AddTransactionDialog
-                    accounts={selectableAccounts}
-                    categories={categories}
-                    people={people}
+                    {...dialogBaseProps}
                     defaultType="expense"
                     defaultSourceAccountId={account.id}
                     triggerContent={
@@ -282,13 +284,11 @@ export function AccountCard({
           ) : (
             <>
               {showTransfer ? (
-                <ActionButton label="Transfer">
-                  <AddTransactionDialog
-                    accounts={selectableAccounts}
-                    categories={categories}
-                    people={people}
-                    defaultType="transfer"
-                    defaultSourceAccountId={account.id}
+                  <ActionButton label="Transfer">
+                    <AddTransactionDialog
+                      {...dialogBaseProps}
+                      defaultType="transfer"
+                      defaultSourceAccountId={account.id}
                     triggerContent={
                       <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600">
                         <ArrowLeftRight className="h-4 w-4" />
@@ -298,13 +298,11 @@ export function AccountCard({
                   />
                 </ActionButton>
               ) : (
-                <ActionButton label="Pay card">
-                  <AddTransactionDialog
-                    accounts={selectableAccounts}
-                    categories={categories}
-                    people={people}
-                    defaultType="transfer"
-                    defaultDebtAccountId={account.id}
+                  <ActionButton label="Pay card">
+                    <AddTransactionDialog
+                      {...dialogBaseProps}
+                      defaultType="transfer"
+                      defaultDebtAccountId={account.id}
                     triggerContent={
                       <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-600">
                         <CreditCard className="h-4 w-4" />
@@ -316,9 +314,7 @@ export function AccountCard({
               )}
               <ActionButton label="Income">
                 <AddTransactionDialog
-                  accounts={selectableAccounts}
-                  categories={categories}
-                  people={people}
+                  {...dialogBaseProps}
                   defaultType="income"
                   defaultSourceAccountId={account.id}
                   triggerContent={
@@ -331,9 +327,7 @@ export function AccountCard({
               </ActionButton>
               <ActionButton label="Expense">
                 <AddTransactionDialog
-                  accounts={selectableAccounts}
-                  categories={categories}
-                  people={people}
+                  {...dialogBaseProps}
                   defaultType="expense"
                   defaultSourceAccountId={account.id}
                   triggerContent={
@@ -346,9 +340,7 @@ export function AccountCard({
               </ActionButton>
               <ActionButton label="Debt">
                 <AddTransactionDialog
-                  accounts={selectableAccounts}
-                  categories={categories}
-                  people={people}
+                  {...dialogBaseProps}
                   defaultType="debt"
                   defaultDebtAccountId={account.id}
                   defaultSourceAccountId={account.id}

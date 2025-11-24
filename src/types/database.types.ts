@@ -64,6 +64,7 @@ export interface Database {
           status: 'posted' | 'pending' | 'void'
           tag: string | null
           created_at: string
+          shop_id: string | null
         }
         Insert: {
           id?: string
@@ -72,6 +73,7 @@ export interface Database {
           status?: 'posted' | 'pending' | 'void'
           tag?: string | null
           created_at?: string
+          shop_id?: string | null
         }
         Update: {
           id?: string
@@ -79,6 +81,30 @@ export interface Database {
           note?: string | null
           status?: 'posted' | 'pending' | 'void'
           tag?: string | null
+          created_at?: string
+          shop_id?: string | null
+        }
+      }
+      shops: {
+        Row: {
+          id: string
+          name: string
+          logo_url: string | null
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          logo_url?: string | null
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          logo_url?: string | null
+          created_by?: string | null
           created_at?: string
         }
       }

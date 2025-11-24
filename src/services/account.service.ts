@@ -111,11 +111,18 @@ type TransactionRow = {
   occurred_at: string
   note: string | null
   tag: string | null // Thêm trường tag
+  metadata?: Json | null
   status?: 'posted' | 'pending' | 'void'
   created_at?: string
   cashback_share_percent?: number | null
   cashback_share_fixed?: number | null
   cashback_share_amount?: number | null
+  shop_id?: string | null
+  shops?: {
+    id: string
+    name?: string | null
+    logo_url?: string | null
+  } | null
   transaction_lines?: {
     amount: number
     type: 'debit' | 'credit'
@@ -248,6 +255,10 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     person_id: personLine?.person_id,
     person_name: personLine?.profiles?.name ?? null,
     persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,
+    metadata: txn.metadata ?? null,
+    shop_id: txn.shop_id ?? null,
+    shop_name: txn.shops?.name ?? null,
+    shop_logo_url: txn.shops?.logo_url ?? null,
     transaction_lines: (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[],
   }
 }
@@ -320,6 +331,9 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
     person_id: personLine?.person_id ?? null,
     person_name: personLine?.profiles?.name ?? null,
     persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,
+    shop_id: txn.shop_id ?? null,
+    shop_name: txn.shops?.name ?? null,
+    shop_logo_url: txn.shops?.logo_url ?? null,
     transaction_lines: (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[],
   }
 }
@@ -381,6 +395,9 @@ async function fetchTransactions(
           tag,
           status,
           created_at,
+          metadata,
+          shop_id,
+          shops ( id, name, logo_url ),
           transaction_lines (
             amount,
             type,
@@ -425,6 +442,8 @@ async function fetchTransactions(
         tag,
         status,
         created_at,
+        shop_id,
+        shops ( id, name, logo_url ),
         transaction_lines!inner (
           amount,
           type,

@@ -12,6 +12,12 @@ export type Category = {
   parent_id?: string | null
 }
 
+export type Shop = {
+  id: string
+  name: string
+  logo_url?: string | null
+}
+
 export type Account = {
   id: string;
   name: string;
@@ -114,4 +120,8 @@ export type TransactionWithDetails = TransactionRow & {
   person_name?: string | null;
   category_id?: string | null;
   persisted_cycle_tag?: string | null;
+  shop_id?: string | null;
+  shop_name?: string | null;
+  shop_logo_url?: string | null;
+  metadata?: Json | null;
 }

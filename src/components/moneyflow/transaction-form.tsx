@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { z } from 'zod'
 import { ensureDebtAccountAction } from '@/actions/people-actions'
 import { createTransaction, updateTransaction } from '@/services/transaction.service'
-import { Account, Category, Person } from '@/types/moneyflow.types'
+import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
 import { CashbackCard, AccountSpendingStats } from '@/types/cashback.types'
 import { Combobox } from '@/components/ui/combobox'
@@ -26,6 +26,7 @@ const formSchema = z.object({
   debt_account_id: z.string().optional(),
   cashback_share_percent: z.coerce.number().min(0).optional(),
   cashback_share_fixed: z.coerce.number().min(0).optional(),
+  shop_id: z.string().optional(),
 }).refine(data => {
   if ((data.type === 'expense' || data.type === 'income') && !data.category_id) {
     return false
@@ -104,6 +105,7 @@ type TransactionFormProps = {
   accounts: Account[];
   categories: Category[];
   people: Person[];
+  shops: Shop[];
   onSuccess?: () => void;
   defaultTag?: string;
   defaultPersonId?: string;
@@ -124,6 +126,7 @@ export function TransactionForm({
   accounts: allAccounts,
   categories,
   people,
+  shops,
   onSuccess,
   defaultTag,
   defaultPersonId,
@@ -205,6 +208,29 @@ const personOptions = useMemo(
   [peopleState]
 )
 
+const shopOptions = useMemo(
+  () =>
+    shops.map(shop => ({
+      value: shop.id,
+      label: shop.name,
+      description: 'Shop',
+      searchValue: shop.name,
+      icon: shop.logo_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={shop.logo_url}
+          alt={shop.name}
+          className="h-5 w-5 rounded-full object-cover"
+        />
+      ) : (
+        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+          {shop.name.charAt(0).toUpperCase()}
+        </span>
+      ),
+    })),
+  [shops]
+)
+
 const personMap = useMemo(() => {
   const map = new Map<string, Person>()
   peopleState.forEach(person => map.set(person.id, person))
@@ -242,6 +268,7 @@ const debtAccountByPerson = useMemo(() => {
       source_account_id: defaultSourceAccountId ?? undefined,
       person_id: undefined,
       debt_account_id: defaultDebtAccountId ?? undefined,
+      shop_id: undefined,
       cashback_share_percent: undefined,
       cashback_share_fixed: undefined,
     }),
@@ -301,6 +328,7 @@ const debtAccountByPerson = useMemo(() => {
     const payload: Parameters<typeof createTransaction>[0] = {
       ...values,
       occurred_at: values.occurred_at.toISOString(),
+      shop_id: values.shop_id ?? undefined,
       cashback_share_percent: sanitizedPercent > 0 ? sanitizedPercent : undefined,
       cashback_share_fixed: sanitizedFixed > 0 ? sanitizedFixed : undefined,
       note: values.note ?? '',
@@ -329,6 +357,7 @@ const debtAccountByPerson = useMemo(() => {
         category_id: undefined,
         person_id: undefined,
         debt_account_id: defaultDebtAccountId ?? undefined,
+        shop_id: undefined,
         cashback_share_percent: undefined,
         cashback_share_fixed: undefined,
       })
@@ -447,6 +476,12 @@ const debtAccountByPerson = useMemo(() => {
     const linkedAccountId = debtAccountByPerson.get(watchedPersonId)
     form.setValue('debt_account_id', linkedAccountId ?? undefined)
   }, [transactionType, watchedPersonId, debtAccountByPerson, form])
+
+  useEffect(() => {
+    if (transactionType !== 'expense') {
+      form.setValue('shop_id', undefined)
+    }
+  }, [transactionType, form])
 
   useEffect(() => {
     if (!watchedAccountId) {
@@ -837,6 +872,26 @@ const debtAccountByPerson = useMemo(() => {
               <p className="text-sm text-red-600">{errors.debt_account_id.message}</p>
             )}
           </div>
+        </div>
+      )}
+
+      {transactionType === 'expense' && (
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">Shop</label>
+          <Controller
+            control={control}
+            name="shop_id"
+            render={({ field }) => (
+              <Combobox
+                value={field.value}
+                onValueChange={field.onChange}
+                items={shopOptions}
+                placeholder="Select shop"
+                inputPlaceholder="Search shop..."
+                emptyState="No shops yet"
+              />
+            )}
+          />
         </div>
       )}
 

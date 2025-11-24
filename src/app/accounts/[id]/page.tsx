@@ -1,6 +1,7 @@
 import { getAccountDetails, getAccountTransactions, getAccountStats, getAccountTransactionDetails, getAccounts } from '@/services/account.service'
 import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
+import { getShops } from '@/services/shop.service'
 import { parseSavingsConfig, getSharedLimitParentId } from '@/lib/account-utils'
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
 import { TagFilterProvider } from '@/context/tag-filter-context'
@@ -33,13 +34,14 @@ export default async function AccountPage({ params }: PageProps) {
     )
   }
 
-  const [txns, stats, txnDetails, allAccounts, categories, people] = await Promise.all([
+  const [txns, stats, txnDetails, allAccounts, categories, people, shops] = await Promise.all([
     getAccountTransactions(id, 50),
     account.type === 'credit_card' ? getAccountStats(id) : Promise.resolve(null),
     getAccountTransactionDetails(id, 50),
     getAccounts(),
     getCategories(),
     getPeople(),
+    getShops(),
   ])
 
   const savingsAccounts = allAccounts.filter(acc =>
@@ -99,6 +101,7 @@ export default async function AccountPage({ params }: PageProps) {
             cashbackStats={cashbackStatsAvailable ? stats : null}
             isAssetAccount={isAssetAccount}
             assetConfig={formattedAssetConfig}
+            shops={shops}
           />
         </div>
       </section>

@@ -4,17 +4,19 @@ import { getAccounts } from '@/services/account.service'
 import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getRecentTransactions } from '@/services/transaction.service'
+import { getShops } from '@/services/shop.service'
 import { Account } from '@/types/moneyflow.types'
 import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Home() {
-  const [accounts, categories, people, recentTransactions] = await Promise.all([
+  const [accounts, categories, people, recentTransactions, shops] = await Promise.all([
     getAccounts(),
     getCategories(),
     getPeople(),
     getRecentTransactions(5),
+    getShops(),
   ])
 
   return (
@@ -22,11 +24,11 @@ export default async function Home() {
       <section className="bg-white shadow rounded-lg p-6">
         <div className="flex justify-between items-center mb-4 border-b pb-2">
           <div>
-            <h2 className="text-xl font-semibold">Tai khoan</h2>
-            <p className="text-sm text-slate-500">Thong tin so du cap nhat theo thoi gian thuc</p>
+            <h2 className="text-xl font-semibold">Accounts</h2>
+            <p className="text-sm text-slate-500">Real-time balance updates</p>
           </div>
           <Link href="/transactions" className="text-sm font-medium text-blue-600 hover:text-blue-800">
-            Quan ly
+            Manage
           </Link>
         </div>
 
@@ -71,11 +73,11 @@ export default async function Home() {
       <section className="bg-white shadow rounded-lg p-6">
         <div className="flex justify-between items-center mb-4 border-b pb-2">
           <div>
-            <h2 className="text-xl font-semibold">Tong quan giao dich</h2>
-            <p className="text-sm text-slate-500">Top 5 giao dich gan nhat</p>
+            <h2 className="text-xl font-semibold">Transaction overview</h2>
+            <p className="text-sm text-slate-500">Top 5 most recent transactions</p>
           </div>
           <Link href="/transactions" className="text-sm font-medium text-blue-600 hover:text-blue-800">
-            Xem tat ca
+            View all
           </Link>
         </div>
         <RecentTransactions
@@ -83,6 +85,7 @@ export default async function Home() {
           accounts={accounts}
           categories={categories}
           people={people}
+          shops={shops}
         />
       </section>
     </div>

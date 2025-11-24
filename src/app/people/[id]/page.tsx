@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { use, useEffect, useMemo, useState } from 'react';
 import { getPeoplePageData } from '@/actions/people-actions';
@@ -9,7 +9,7 @@ import { TagFilterProvider, useTagFilter } from '@/context/tag-filter-context';
 import { EditPersonDialog } from '@/components/people/edit-person-dialog';
 import { notFound } from 'next/navigation';
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog';
-import { Account, Category, Person, TransactionWithDetails, Subscription, DebtAccount } from '@/types/moneyflow.types';
+import { Account, Category, Person, Shop, TransactionWithDetails, Subscription, DebtAccount } from '@/types/moneyflow.types';
 import { DebtByTagAggregatedResult } from '@/services/debt.service';
 import { SheetSyncControls } from '@/components/people/sheet-sync-controls';
 
@@ -31,6 +31,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     const [personProfile, setPersonProfile] = useState<Person | null>(null);
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
     const [allPeople, setAllPeople] = useState<Person[]>([]);
+    const [shops, setShops] = useState<Shop[]>([]);
     const [loading, setLoading] = useState(true);
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -51,6 +52,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
             setPersonProfile(data.personProfile);
             setSubscriptions(data.subscriptions);
             setAllPeople(data.allPeople);
+            setShops(data.shops ?? []);
             if (!data.person) {
                 notFound();
             }
@@ -159,6 +161,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
                                     accounts={accounts}
                                     categories={categories}
                                     people={allPeople}
+                                    shops={shops}
                                     buttonText="Quick Add Debt"
                                     defaultType="debt"
                                     defaultPersonId={id}
@@ -179,15 +182,15 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
                         <div className="mb-4">
                             <div className="flex items-center justify-between gap-3">
                                 <div>
-                                    <p className="text-sm font-semibold text-slate-700">Google Sheet Sync</p>
-                                    <p className="text-xs text-slate-500">Test Kết Nối / Đồng bộ toàn bộ</p>
+                            <p className="text-sm font-semibold text-slate-700">Google Sheet Sync</p>
+                            <p className="text-xs text-slate-500">Test connection / Sync all transactions</p>
                                 </div>
                                 <button
                                     type="button"
                                     className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
                                     onClick={() => setShowSheetSettings(prev => !prev)}
                                 >
-                                    {showSheetSettings ? 'Thu gọn' : 'Mở Google Sheet Sync'}
+                                    {showSheetSettings ? 'Collapse' : 'Open Sheet settings'}
                                 </button>
                             </div>
                             {showSheetSettings && (
@@ -210,6 +213,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
                         isExpanded={isExpanded}
                         onQuickAddSuccess={refreshData}
                         onSettleSuccess={refreshData}
+                        shops={shops}
                     />
                 </div>
             </section>
@@ -247,6 +251,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
                         people={allPeople}
                         searchTerm={searchTerm}
                         onSearchChange={setSearchTerm}
+                        shops={shops}
                     />
                 </div>
             </section>
