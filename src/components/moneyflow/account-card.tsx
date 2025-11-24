@@ -338,20 +338,36 @@ export function AccountCard({
                   onOpen={stopCardNavigation}
                 />
               </ActionButton>
-              <ActionButton label="Debt">
-                <AddTransactionDialog
-                  {...dialogBaseProps}
-                  defaultType="debt"
-                  defaultDebtAccountId={account.id}
-                  defaultSourceAccountId={account.id}
-                  triggerContent={
-                    <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600">
-                      <User className="h-4 w-4" />
-                    </span>
-                  }
-                  onOpen={stopCardNavigation}
-                />
-              </ActionButton>
+              {account.type === 'debt' ? (
+                <ActionButton label="Repay / Settle">
+                  <AddTransactionDialog
+                    {...dialogBaseProps}
+                    defaultType={account.current_balance > 0 ? 'repayment' : 'debt'}
+                    defaultPersonId={account.id}
+                    defaultAmount={Math.abs(account.current_balance)}
+                    triggerContent={
+                      <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-green-200 hover:bg-green-50 hover:text-green-600">
+                        <User className="h-4 w-4" />
+                      </span>
+                    }
+                    onOpen={stopCardNavigation}
+                  />
+                </ActionButton>
+              ) : (
+                <ActionButton label="Debt">
+                  <AddTransactionDialog
+                    {...dialogBaseProps}
+                    defaultType="debt"
+                    defaultSourceAccountId={account.id}
+                    triggerContent={
+                      <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600">
+                        <User className="h-4 w-4" />
+                      </span>
+                    }
+                    onOpen={stopCardNavigation}
+                  />
+                </ActionButton>
+              )}
             </>
           )}
         </div>

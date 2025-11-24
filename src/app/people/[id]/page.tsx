@@ -2,7 +2,6 @@
 
 import { use, useEffect, useMemo, useState } from 'react';
 import { getPeoplePageData } from '@/actions/people-actions';
-import { SettleDebtButton } from '@/components/moneyflow/settle-debt-button';
 import { DebtCycleFilter } from '@/components/moneyflow/debt-cycle-filter';
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions';
 import { TagFilterProvider, useTagFilter } from '@/context/tag-filter-context';
@@ -156,7 +155,17 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
                                 {personProfile && (
                                     <EditPersonDialog person={personProfile} subscriptions={subscriptions} />
                                 )}
-                                <SettleDebtButton debtAccount={person} accounts={accounts} />
+                                <AddTransactionDialog
+                                    accounts={accounts}
+                                    categories={categories}
+                                    people={allPeople}
+                                    shops={shops}
+                                    buttonText="Repay / Settle"
+                                    defaultType={totalBalance > 0 ? 'repayment' : 'debt'}
+                                    defaultPersonId={id}
+                                    defaultAmount={Math.abs(totalBalance)}
+                                    buttonClassName="inline-flex items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                                />
                                 <AddTransactionDialog
                                     accounts={accounts}
                                     categories={categories}

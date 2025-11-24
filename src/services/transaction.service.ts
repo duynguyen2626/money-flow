@@ -13,7 +13,7 @@ type ShopRow = Database['public']['Tables']['shops']['Row'];
 export type CreateTransactionInput = {
   occurred_at: string;
   note: string;
-  type: 'expense' | 'income' | 'debt' | 'transfer';
+  type: 'expense' | 'income' | 'debt' | 'transfer' | 'repayment';
   source_account_id: string;
   person_id?: string | null;
   destination_account_id?: string | null;
@@ -155,6 +155,25 @@ async function buildTransactionLines(
       amount: -Math.abs(input.amount),
       type: 'credit',
     });
+  } else if (input.type === 'repayment' && input.debt_account_id) {
+    // Repayment: Money comes from Debt Account (Person pays back) -> To Bank Account
+    // However, usually 'source_account_id' in form is the Bank Account selected.
+    // In this model:
+    // Bank Account (source_account_id) -> Debit (+) (Receiving money)
+    // Debt Account (debt_account_id) -> Credit (-) (Reducing debt)
+
+    lines.push({
+      account_id: input.source_account_id, // The receiving bank
+      amount: Math.abs(input.amount),
+      type: 'debit',
+    });
+    lines.push({
+      account_id: input.debt_account_id, // The person paying
+      amount: -Math.abs(input.amount),
+      type: 'credit',
+      person_id: input.person_id ?? null,
+    });
+
   } else if ((input.type === 'debt' || input.type === 'transfer') && input.debt_account_id) {
     const originalAmount = Math.abs(input.amount);
     const sharePercentEntry = Math.max(0, Number(input.cashback_share_percent ?? 0));

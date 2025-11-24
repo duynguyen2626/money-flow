@@ -1,12 +1,13 @@
 ﻿import { getPersonDetails, getDebtByTags } from '@/services/debt.service';
 import { getAccounts, getAccountTransactions } from '@/services/account.service';
-import { SettleDebtButton } from '@/components/moneyflow/settle-debt-button';
+import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog';
 import { DebtCycleFilter } from '@/components/moneyflow/debt-cycle-filter';
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions';
 import { TagFilterProvider } from '@/context/tag-filter-context';
 import { SheetSyncControls } from '@/components/people/sheet-sync-controls';
 import { getCategories } from '@/services/category.service';
 import { getPeople } from '@/services/people.service';
+import { getShops } from '@/services/shop.service';
 import { notFound } from 'next/navigation';
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
@@ -26,13 +27,14 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
         notFound();
     }
 
-    const [person, debtCycles, transactions, accounts, categories, people] = await Promise.all([
+    const [person, debtCycles, transactions, accounts, categories, people, shops] = await Promise.all([
         getPersonDetails(id),
         getDebtByTags(id),
         getAccountTransactions(id, 100),
         getAccounts(),
         getCategories(),
         getPeople(),
+        getShops(),
     ]);
 
     if (!person) {
@@ -63,7 +65,17 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                         </div>
                         <div className="flex flex-col items-start gap-2 sm:items-end">
                             <p className={`text-3xl font-bold ${balanceColor}`}>{formatCurrency(totalBalance)}</p>
-                            <SettleDebtButton debtAccount={person} accounts={accounts} />
+                            <AddTransactionDialog
+                                accounts={accounts}
+                                categories={categories}
+                                people={people}
+                                shops={shops}
+                                buttonText="Tat toan / Tra no"
+                                defaultType={totalBalance > 0 ? 'repayment' : 'debt'}
+                                defaultPersonId={id}
+                                defaultAmount={Math.abs(totalBalance)}
+                                buttonClassName="inline-flex items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                            />
                         </div>
                     </div>
 
@@ -82,7 +94,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                             people={people}
                             displayedCycles={debtCycles}
                             isExpanded
-                            shops={[]}
+                            shops={shops}
                         />
                     </div>
                 </section>
