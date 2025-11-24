@@ -592,6 +592,10 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
       (personLine as { profiles?: { name?: string | null } | null })?.profiles?.name ??
       (personLine as any)?.people?.name ??
       null,
+    person_avatar_url:
+      (personLine as { profiles?: { name?: string | null; avatar_url?: string | null } | null })?.profiles?.avatar_url ??
+      (personLine as any)?.people?.avatar_url ??
+      null,
     shop_id: txn.shop_id ?? null,
     shop_name: txn.shops?.name ?? null,
     shop_logo_url: txn.shops?.logo_url ?? null,
@@ -623,7 +627,7 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
         original_amount,
         cashback_share_percent,
         cashback_share_fixed,
-        profiles ( name ),
+        profiles ( name, avatar_url ),
         accounts (name, type, logo_url),
         categories (name)
       )
@@ -665,7 +669,7 @@ export async function getTransactionsByShop(shopId: string, limit: number = 50):
         original_amount,
         cashback_share_percent,
         cashback_share_fixed,
-        profiles ( name ),
+        profiles ( name, avatar_url ),
         accounts (name, type, logo_url),
         categories (name)
       )
@@ -1289,7 +1293,7 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
         original_amount,
         cashback_share_percent,
         cashback_share_fixed,
-        profiles ( name ),
+        profiles ( name, avatar_url ),
         accounts (name, type, logo_url),
         categories (name)
       )

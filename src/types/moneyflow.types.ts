@@ -98,8 +98,8 @@ export type TransactionLine = {
 export type TransactionWithLineRelations = TransactionLineRow & {
   accounts: Pick<AccountRow, 'name' | 'logo_url' | 'type'> | null;
   categories: Pick<CategoryRow, 'name'> | null;
-  profiles?: { name?: string | null } | null;
-  people?: { name?: string | null } | null;
+  profiles?: { name?: string | null; avatar_url?: string | null } | null;
+  people?: { name?: string | null; avatar_url?: string | null } | null;
   person_id?: string | null;
 }
 
@@ -123,6 +123,7 @@ export type TransactionWithDetails = TransactionRow & {
   type?: 'income' | 'expense' | 'transfer';
   person_id?: string | null;
   person_name?: string | null;
+  person_avatar_url?: string | null;
   category_id?: string | null;
   persisted_cycle_tag?: string | null;
   shop_id?: string | null;

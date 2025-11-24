@@ -35,6 +35,9 @@ type ColumnKey =
   | "people" // Separated
   | "tag" // Separated
   | "amount"
+  | "cashback_percent"
+  | "cashback_fixed"
+  | "cashback_sum"
   | "task"
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -127,12 +130,15 @@ interface UnifiedTransactionTableProps {
 const defaultColumns: ColumnConfig[] = [
   { key: "date", label: "Date", defaultWidth: 100, minWidth: 90 },
   { key: "type", label: "Type", defaultWidth: 110, minWidth: 90 },
-  { key: "shop", label: "Shop / Note", defaultWidth: 220, minWidth: 160 },
+  { key: "shop", label: "Notes", defaultWidth: 220, minWidth: 160 },
   { key: "category", label: "Category", defaultWidth: 150 },
   { key: "people", label: "Person", defaultWidth: 140 },
   { key: "tag", label: "Tag", defaultWidth: 100 },
   { key: "account", label: "Account", defaultWidth: 180 },
   { key: "amount", label: "Amount", defaultWidth: 120 },
+  { key: "cashback_percent", label: "% Back", defaultWidth: 80 },
+  { key: "cashback_fixed", label: "Fix Back", defaultWidth: 80 },
+  { key: "cashback_sum", label: "Sum Back", defaultWidth: 100 },
   { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
 ]
 
@@ -169,6 +175,8 @@ export function UnifiedTransactionTable({
   const [showSelectedOnly, setShowSelectedOnly] = useState(false)
   const [internalSelection, setInternalSelection] = useState<Set<string>>(new Set())
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
+    // Default to visible for Global view (where accountId is undefined) and Account view
+    // User requested to "Unhide" them.
     return {
       date: true,
       type: true,
@@ -178,6 +186,9 @@ export function UnifiedTransactionTable({
       tag: true,
       account: true,
       amount: true,
+      cashback_percent: true,
+      cashback_fixed: true,
+      cashback_sum: false, // Default hidden
       task: true,
     }
   })
@@ -247,6 +258,9 @@ export function UnifiedTransactionTable({
         tag: true,
         account: true,
         amount: true,
+        cashback_percent: true,
+        cashback_fixed: true,
+        cashback_sum: false,
         task: true,
     })
   }
@@ -757,7 +771,7 @@ export function UnifiedTransactionTable({
                    return typeBadge
                 case "shop":
                    return (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-3">
                       {txn.shop_name && (
                         <>
                           {txn.shop_logo_url ? (
@@ -765,10 +779,10 @@ export function UnifiedTransactionTable({
                             <img
                               src={txn.shop_logo_url}
                               alt={txn.shop_name}
-                              className="h-5 w-5 object-cover border"
+                              className="h-8 w-8 object-contain"
                             />
                           ) : (
-                            <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 border">
+                            <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-[12px] font-semibold text-slate-600 rounded">
                               {txn.shop_name.charAt(0).toUpperCase()}
                             </span>
                           )}
@@ -779,11 +793,11 @@ export function UnifiedTransactionTable({
                         <img
                           src={txn.shop_logo_url}
                           alt="Shop"
-                          className="h-5 w-5 object-cover border"
+                          className="h-8 w-8 object-contain"
                         />
                       )}
                       {!txn.shop_name && !txn.shop_logo_url && (
-                        <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 border">
+                        <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-lg font-semibold text-slate-600 rounded">
                           🛍️
                         </span>
                       )}
@@ -795,22 +809,35 @@ export function UnifiedTransactionTable({
                     </div>
                    )
                 case "category":
-                  // TODO: Add Icon if available in category object? Currently only name.
                   return (
-                    <div className="flex items-center gap-2">
-                         <span className="font-medium text-slate-700">{txn.category_name || "-"}</span>
-                    </div>
+                    <span className="font-medium text-slate-700 text-sm">{txn.category_name || "-"}</span>
                   )
                 case "account":
+                  if (!accountId && txn.source_logo && txn.source_name) {
+                      // Global view fallback to enhanced display if logo available
+                      return (
+                        <div className="flex items-center gap-2">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={txn.source_logo} alt="Logo" className="h-5 w-5 object-contain rounded-full bg-slate-50" />
+                            {accountDisplay}
+                        </div>
+                      )
+                  }
                   return accountDisplay
                 case "people": {
                   const personName = (txn as any).person_name ?? txn.person_name ?? null
+                  const avatarUrl = (txn as any).person_avatar_url ?? null
                   if (!personName) return <span className="text-slate-400">-</span>
                   return (
                     <div className="flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 border">
-                            {personName.charAt(0).toUpperCase()}
-                        </span>
+                        {avatarUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={avatarUrl} alt={personName} className="h-6 w-6 rounded-full object-cover" />
+                        ) : (
+                            <span className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 border rounded-full">
+                                {personName.charAt(0).toUpperCase()}
+                            </span>
+                        )}
                         <span className="font-medium text-slate-700">{personName}</span>
                     </div>
                   )
@@ -823,6 +850,12 @@ export function UnifiedTransactionTable({
                   ) : <span className="text-slate-400">-</span>
                 case "amount":
                   return amountValue
+                case "cashback_percent":
+                  return txn.cashback_share_percent ? `${(txn.cashback_share_percent * 100).toFixed(0)}%` : "-"
+                case "cashback_fixed":
+                  return txn.cashback_share_fixed ? numberFormatter.format(txn.cashback_share_fixed) : "-"
+                case "cashback_sum":
+                  return txn.cashback_share_amount ? numberFormatter.format(txn.cashback_share_amount) : "-"
                 case "task":
                   return taskCell
                 default:
@@ -851,7 +884,9 @@ export function UnifiedTransactionTable({
                     key={`${txn.id}-${col.key}`}
                     className={`border-r text-sm ${col.key === "amount" ? "text-right" : ""} ${
                       col.key === "amount" ? "font-bold" : ""
-                    } ${col.key === "amount" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass}`}
+                    } ${col.key === "amount" ? amountClass : ""} ${
+                      col.key === "account" ? "font-bold" : ""
+                    } ${col.key === "task" ? "" : voidedTextClass}`}
                     style={{ width: columnWidths[col.key], maxWidth: columnWidths[col.key] }}
                   >
                     {renderCell(col.key)}
