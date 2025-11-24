@@ -89,11 +89,12 @@ function parseMetadata(value: Json | null): Record<string, unknown> {
 }
 
 function mergeMetadata(value: Json | null, extra: Record<string, unknown>): Json {
+  const parsed = parseMetadata(value);
   const next = {
-    ...parseMetadata(value),
+    ...parsed,
     ...extra,
   };
-  return next;
+  return next as Json;
 }
 
 async function resolveCurrentUserId(supabase: ReturnType<typeof createClient>) {
@@ -323,7 +324,6 @@ type TransactionRow = {
   occurred_at: string
   note: string
   tag: string | null
-  metadata?: Json | null
   cashback_share_percent?: number | null
   cashback_share_fixed?: number | null
   cashback_share_amount?: number | null
@@ -459,8 +459,6 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
       (personLine as { profiles?: { name?: string | null } | null })?.profiles?.name ??
       (personLine as any)?.people?.name ??
       null,
-    persisted_cycle_tag: (txn as any).metadata?.persisted_cycle_tag ?? null,
-    metadata: (txn as any).metadata ?? null,
     shop_id: txn.shop_id ?? null,
     shop_name: txn.shops?.name ?? null,
     shop_logo_url: txn.shops?.logo_url ?? null,
@@ -480,7 +478,6 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
       tag,
       status,
       created_at,
-      metadata,
       shop_id,
       shops ( id, name, logo_url ),
       transaction_lines (
@@ -778,7 +775,7 @@ export async function requestRefund(
 
   const supabase = createClient()
 
-  const { data: existing, error: fetchError } = await supabase
+  const { data: _existing, error: fetchError } = await supabase
     .from('transactions')
     .select(`
       id,
@@ -796,10 +793,12 @@ export async function requestRefund(
     .eq('id', transactionId)
     .maybeSingle()
 
-  if (fetchError || !existing) {
+  if (fetchError || !_existing) {
     console.error('Failed to load transaction for refund request:', fetchError)
     return { success: false, error: 'Không tìm thấy giao dịch hoặc đã xảy ra lỗi.' }
   }
+
+  const existing = _existing as any;
 
   const lines = (existing.transaction_lines ?? []) as RefundTransactionLine[]
   const categoryLine = lines.find(line => line?.category_id)
@@ -892,7 +891,7 @@ export async function confirmRefund(
   }
 
   const supabase = createClient()
-  const { data: pending, error: pendingError } = await supabase
+  const { data: _pending, error: pendingError } = await supabase
     .from('transactions')
     .select(`
       id,
@@ -908,13 +907,16 @@ export async function confirmRefund(
     .eq('id', pendingTransactionId)
     .maybeSingle()
 
-  if (pendingError || !pending) {
+  if (pendingError || !_pending) {
     console.error('Failed to load pending refund transaction:', pendingError)
     return { success: false, error: 'Không tìm thấy giao dịch hoàn tiền hoặc đã xảy ra lỗi.' }
   }
 
+  const pending = _pending as any;
+
   const pendingLine = (pending.transaction_lines ?? []).find(
-    line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
+    (line: { account_id?: string | null; type?: string | null }) =>
+      line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
   )
 
   if (!pendingLine) {
@@ -1001,7 +1003,7 @@ export async function confirmRefund(
         .maybeSingle()
 
       if (original) {
-        const updatedOriginalMeta = mergeMetadata(original.metadata, {
+        const updatedOriginalMeta = mergeMetadata((original as any).metadata, {
           refund_status: 'confirmed',
           refund_confirmed_transaction_id: confirmTxn.id,
           refund_confirmed_at: new Date().toISOString(),
