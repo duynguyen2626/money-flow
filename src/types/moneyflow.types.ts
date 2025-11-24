@@ -112,6 +112,7 @@ export type TransactionWithDetails = TransactionRow & {
   displayAccountName?: string;
   category_name?: string;
   account_name?: string;
+  source_name?: string;
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
   cashback_share_amount?: number | null;

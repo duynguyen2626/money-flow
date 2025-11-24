@@ -457,6 +457,29 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   const personLine = lines.find(line => line && line.person_id)
   const categoryId = categoryLine?.category_id ?? null
 
+  // Smart Source Logic
+  let sourceName = accountName;
+  if (personLine?.person_id) {
+       const accountLines = lines.filter(l => l && l.account_id);
+       // Find the Bank/Cash account (not the debt account)
+       // Usually Debt transaction: Credit Bank, Debit DebtAccount.
+       // Repayment: Debit Bank, Credit DebtAccount.
+       // We look for an account that does NOT have "Nợ" or "Debt" in its name.
+       const bankLine = accountLines.find(l => l && l.account_id && !l.accounts?.name?.toLowerCase().includes('nợ') && !l.accounts?.name?.toLowerCase().includes('debt'));
+       if (bankLine && bankLine.accounts?.name) {
+           sourceName = bankLine.accounts.name;
+           // Also fix type if necessary.
+           // If Lending (Debt Account Debit, Bank Credit), Bank is -, so Expense.
+           // If Repayment (Debt Account Credit, Bank Debit), Bank is +, so Income.
+           // Ensure type reflects Money Flow from Bank perspective.
+           if (bankLine.type === 'credit') {
+             type = 'expense';
+           } else if (bankLine.type === 'debit') {
+             type = 'income';
+           }
+       }
+  }
+
   return {
     id: txn.id,
     occurred_at: txn.occurred_at,
@@ -468,6 +491,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     type: type,
     category_name: categoryLine?.categories?.name,
     account_name: accountName,
+    source_name: sourceName,
     category_id: categoryId,
     cashback_share_percent: percentRaw ?? null,
     cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? null,

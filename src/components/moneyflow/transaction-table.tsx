@@ -23,8 +23,10 @@ import {
 } from "@/services/transaction.service"
 import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 type ColumnKey =
+  | "id"
   | "date"
   | "type"
   | "shop"
@@ -58,16 +60,42 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     typeof txn.original_amount === "number" ? txn.original_amount : txn.amount ?? 0;
   const percentValue =
     typeof txn.cashback_share_percent === "number" ? txn.cashback_share_percent : undefined;
-  const derivedType: TransactionFormValues["type"] =
-    personLine?.person_id
-      ? "debt"
-      : categoryLine
+
+  // Logic to determine type for Form
+  // If Person involved:
+  // - If txn.type == 'income' or Category 'Thu nợ' -> 'repayment' (handled in Form useEffect usually, but we can hint here)
+  // - Else -> 'debt' (Lending)
+  // But strictly based on lines:
+  // Lending: Credit Bank, Debit Debt. Form expect source=Bank, dest=Debt.
+  // Repayment: Debit Bank, Credit Debt. Form expect source=Bank, dest=Debt (swapped visually).
+
+  let derivedType: TransactionFormValues["type"] =
+      categoryLine
         ? ((txn.type ?? "expense") as TransactionFormValues["type"])
         : "transfer";
+
+  if (personLine?.person_id) {
+       // If it was lending: Expense (from Bank).
+       // If it was repayment: Income (to Bank).
+       if (txn.type === 'income') derivedType = 'repayment';
+       else derivedType = 'debt';
+  }
+
   const destinationAccountId =
     derivedType === "transfer" || derivedType === "debt"
       ? debitLine?.account_id ?? undefined
-      : undefined;
+      : derivedType === "repayment"
+        ? personLine?.account_id // In repayment, Person Account is Credit line (source of funds conceptually), but Bank is Debit. Form expects 'debt_account_id' to be Person's account?
+        // In Form:
+        // Repayment: Source = Bank (To Account). DebtAccount = Person Account.
+        // buildTransactionLines: Source(Debit+), Debt(Credit-).
+        // So debt_account_id is indeed the Person's account.
+        : undefined;
+
+  // For Repayment, `personLine` is the Credit line (Debt Account).
+  // `debitLine` is the Bank (Source in Form).
+
+  // If Repayment: debitLine is Bank. creditLine is Debt.
 
   return {
     occurred_at: txn.occurred_at ? new Date(txn.occurred_at) : new Date(),
@@ -75,10 +103,10 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     amount: Math.abs(baseAmount ?? 0),
     note: txn.note ?? "",
     tag: txn.tag ?? generateTag(new Date()),
-    source_account_id: creditLine?.account_id ?? debitLine?.account_id ?? undefined,
+    source_account_id: (derivedType === 'repayment' ? debitLine?.account_id : (creditLine?.account_id ?? debitLine?.account_id)) ?? undefined,
     category_id: categoryLine?.category_id ?? undefined,
     person_id: personLine?.person_id ?? undefined,
-    debt_account_id: destinationAccountId,
+    debt_account_id: (derivedType === 'repayment' ? creditLine?.account_id : destinationAccountId) ?? undefined, // Ensure we map correctly for repayment
     shop_id: txn.shop_id ?? undefined,
     cashback_share_percent:
       percentValue !== undefined && percentValue !== null ? percentValue * 100 : undefined,
@@ -94,7 +122,7 @@ interface ColumnConfig {
   minWidth?: number
 }
 
-interface RecentTransactionsProps {
+interface TransactionTableProps {
   transactions: TransactionWithDetails[]
   accountType?: Account['type']
   selectedTxnIds?: Set<string>
@@ -106,13 +134,14 @@ interface RecentTransactionsProps {
 }
 
 const defaultColumns: ColumnConfig[] = [
+  { key: "id", label: "ID", defaultWidth: 60, minWidth: 50 },
   { key: "date", label: "Date", defaultWidth: 110, minWidth: 100 },
   { key: "type", label: "Type", defaultWidth: 100, minWidth: 90 },
+  { key: "account", label: "Source/Account", defaultWidth: 150 },
   { key: "shop", label: "Shop/Note", defaultWidth: 200, minWidth: 160 },
   { key: "category", label: "Category", defaultWidth: 140 },
-  { key: "people", label: "People/Tag", defaultWidth: 160 },
-  { key: "account", label: "Source/Account", defaultWidth: 150 },
-  // { key: "tag", label: "Tag", defaultWidth: 100, minWidth: 90 },
+  { key: "people", label: "People", defaultWidth: 130 },
+  { key: "tag", label: "Tag", defaultWidth: 100, minWidth: 90 },
   { key: "cycle", label: "Cycle", defaultWidth: 100 },
   { key: "percent", label: "% Back", defaultWidth: 80 },
   { key: "fixed", label: "Fix Back", defaultWidth: 90 },
@@ -139,7 +168,7 @@ function parseMetadata(value: TransactionWithDetails['metadata']) {
   return null
 }
 
-export function RecentTransactions({
+export function TransactionTable({
   transactions,
   accountType,
   selectedTxnIds,
@@ -148,12 +177,13 @@ export function RecentTransactions({
   categories = [],
   people = [],
   shops = [],
-}: RecentTransactionsProps) {
+}: TransactionTableProps) {
   const router = useRouter()
-  const [showSelectedOnly, setShowSelectedOnly] = useState(false)
+  const [activeTab, setActiveTab] = useState<'active' | 'void'>('active');
   const [internalSelection, setInternalSelection] = useState<Set<string>>(new Set())
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
     const map: Record<ColumnKey, boolean> = {
+      id: false,
       date: true,
       type: true,
       shop: true,
@@ -161,7 +191,7 @@ export function RecentTransactions({
       category: true,
       account: true,
       people: true,
-      tag: false,
+      tag: true,
       cycle: false,
       percent: true,
       fixed: false,
@@ -179,12 +209,13 @@ export function RecentTransactions({
     })
     return map
   })
-  const [dateFormat, setDateFormat] = useState<"en-CA" | "DD-MM" | "custom">("en-CA")
-  const [customDatePattern, setCustomDatePattern] = useState<string>("YYYY-MM-DD")
+  const [dateFormat, setDateFormat] = useState<"en-CA" | "DD-MM" | "custom">("DD-MM") // Default to DD/MM/YYYY
+  const [customDatePattern, setCustomDatePattern] = useState<string>("DD/MM/YYYY")
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null)
   const [editingTxn, setEditingTxn] = useState<TransactionWithDetails | null>(null)
   const [confirmVoidTarget, setConfirmVoidTarget] = useState<TransactionWithDetails | null>(null)
+  const [confirmBulkVoid, setConfirmBulkVoid] = useState(false)
   const [isVoiding, setIsVoiding] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
   const [voidError, setVoidError] = useState<string | null>(null)
@@ -196,6 +227,7 @@ export function RecentTransactions({
   const [refundTargetAccountId, setRefundTargetAccountId] = useState<string | null>(null)
   const [isRefunding, setIsRefunding] = useState(false)
   const [refundDialogMode, setRefundDialogMode] = useState<'request' | 'confirm'>('request')
+
   const editingInitialValues = useMemo(
     () => (editingTxn ? buildEditInitialValues(editingTxn) : null),
     [editingTxn]
@@ -229,6 +261,7 @@ export function RecentTransactions({
     })
     setColumnWidths(map)
     setVisibleColumns({
+      id: false,
       date: true,
       type: true,
       shop: true,
@@ -236,7 +269,7 @@ export function RecentTransactions({
       category: true,
       account: true,
       people: true,
-      tag: false,
+      tag: true,
       cycle: false,
       percent: true,
       fixed: false,
@@ -245,12 +278,13 @@ export function RecentTransactions({
       finalPrice: false,
       task: true,
     })
-    setDateFormat("en-CA")
-    setCustomDatePattern("YYYY-MM-DD")
+    setDateFormat("DD-MM")
+    setCustomDatePattern("DD/MM/YYYY")
   }
 
   const closeVoidDialog = () => {
     setConfirmVoidTarget(null)
+    setConfirmBulkVoid(false)
     setVoidError(null)
     setIsVoiding(false)
   }
@@ -398,17 +432,39 @@ export function RecentTransactions({
       .finally(() => setIsVoiding(false))
   }
 
+  const handleBulkVoid = async () => {
+      setIsVoiding(true);
+      setVoidError(null);
+      let failed = 0;
+      for (const id of Array.from(selection)) {
+          const ok = await voidTransaction(id);
+          if (!ok) failed++;
+          else setStatusOverrides(prev => ({ ...prev, [id]: 'void' }));
+      }
+      setIsVoiding(false);
+      setConfirmBulkVoid(false);
+      updateSelection(new Set()); // Deselect all
+      router.refresh();
+      if (failed > 0) {
+          alert(`Failed to void ${failed} transactions.`);
+      }
+  }
+
   const handleEditSuccess = () => {
     setEditingTxn(null)
     router.refresh()
   }
 
-  const displayedTransactions = useMemo(() => {
-    if (showSelectedOnly) {
-      return transactions.filter(txn => selection.has(txn.id))
-    }
-    return transactions
-  }, [transactions, selection, showSelectedOnly])
+  const filteredTransactions = useMemo(() => {
+    return transactions.filter(txn => {
+        const effectiveStatus = statusOverrides[txn.id] ?? txn.status;
+        if (activeTab === 'active') return effectiveStatus !== 'void';
+        if (activeTab === 'void') return effectiveStatus === 'void';
+        return true;
+    });
+  }, [transactions, activeTab, statusOverrides]);
+
+  const displayedTransactions = filteredTransactions;
 
   const getCycleLabel = (txn: TransactionWithDetails) => {
     const persisted = txn.persisted_cycle_tag ?? txn.tag
@@ -455,7 +511,7 @@ export function RecentTransactions({
     }
 
     if (dateFormat === "DD-MM") {
-      return `${day}-${month}-${year}`
+      return `${day}/${month}/${year}`
     }
     if (dateFormat === "custom") {
       return formatWithPattern(customDatePattern || "YYYY-MM-DD")
@@ -510,20 +566,36 @@ export function RecentTransactions({
   }, [selection, transactions])
 
 
-  if (transactions.length === 0) {
-    return (
-      <div className="text-center py-10 text-gray-400">
-        <p>No transactions yet.</p>
-        <p className="text-sm mt-2">Add your first transaction to get started.</p>
-      </div>
-    );
-  }
-
-  const isAllSelected = selection.size > 0 && selection.size === displayedTransactions.length
+  const isAllSelected = selection.size > 0 && selection.size >= displayedTransactions.length && displayedTransactions.length > 0;
   const displayedColumns = defaultColumns.filter(col => visibleColumns[col.key])
 
   return (
+    <div className="space-y-4">
+        <div className="flex items-center justify-between">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'active' | 'void')} className="w-fit">
+                <TabsList>
+                    <TabsTrigger value="active">Active</TabsTrigger>
+                    <TabsTrigger value="void">Void</TabsTrigger>
+                </TabsList>
+            </Tabs>
+            {selection.size > 0 && (
+                <button
+                    className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm transition hover:bg-red-500"
+                    onClick={() => setConfirmBulkVoid(true)}
+                >
+                    <Ban className="mr-2 h-4 w-4" />
+                    Void Selected ({selection.size})
+                </button>
+            )}
+        </div>
+
     <div className="relative">
+      {transactions.length === 0 && activeTab === 'active' ? (
+        <div className="text-center py-10 text-gray-400">
+            <p>No transactions yet.</p>
+            <p className="text-sm mt-2">Add your first transaction to get started.</p>
+        </div>
+      ) : (
       <Table>
         <TableHeader className="bg-slate-50/80">
           <TableRow>
@@ -568,12 +640,28 @@ export function RecentTransactions({
         </TableHeader>
         <TableBody>
           {displayedTransactions.map(txn => {
+            // Updated Badge Logic
+            const hasShoppingCategory = (txn.category_name ?? '').toLowerCase().includes('shopping');
+            // If Shopping or Expense -> Red.
+            // If Income -> Green.
+            // If Transfer -> Blue.
+
+            // However, backend mapTransactionRow now tries to set 'type' smartly.
+            // If Lending (Debt), it might be 'expense'.
+
+            const renderTypeBadge = () => {
+                if (txn.type === 'income') return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> In</span>
+                if (txn.type === 'expense') return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Out</span>
+                return <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
+            };
+
             const amountClass =
               txn.type === "income"
                 ? "text-emerald-700"
                 : txn.type === "expense"
                 ? "text-red-500"
                 : "text-slate-600"
+
             const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount
             const amountValue = numberFormatter.format(Math.abs(originalAmount ?? 0))
             const percentValue = typeof txn.cashback_share_percent === "number" ? txn.cashback_share_percent : null
@@ -600,8 +688,6 @@ export function RecentTransactions({
             const txnMetadata = parseMetadata(txn.metadata)
             const refundStatus = typeof txnMetadata?.refund_status === "string" ? txnMetadata.refund_status : null
             const isPendingRefund = refundStatus === 'requested'
-            const categoryLabel = txn.category_name ?? ''
-            const hasShoppingCategory = categoryLabel.toLowerCase().includes('shopping')
             const canRequestRefund =
               txn.type === 'expense' && (Boolean(txn.shop_id) || hasShoppingCategory)
 
@@ -686,33 +772,17 @@ export function RecentTransactions({
               </div>
             )
 
-            // Smart Source Logic
-            let displayAccountName = txn.account_name ?? "-";
-
-            // If person_id is present, it's likely a debt-related transaction (Lending or Repayment)
-            // In this case, we want to show the REAL source (Bank) if possible.
-            if (txn.person_id) {
-                 const accountLines = (txn.transaction_lines ?? []).filter(l => l && l.account_id);
-                 // Find the Bank/Cash account (not the debt account)
-                 // Usually Debt transaction: Credit Bank, Debit DebtAccount.
-                 // Repayment: Debit Bank, Credit DebtAccount.
-                 // We look for an account that does NOT have "Nợ" or "Debt" in its name.
-                 // This is a heuristic, but often debt accounts are named specially.
-                 // Or we can check account type if we had it in line relations, but we only have 'accounts' name.
-                 const bankLine = accountLines.find(l => l.account_id && !l.accounts?.name?.toLowerCase().includes('nợ') && !l.accounts?.name?.toLowerCase().includes('debt'));
-                 if (bankLine && bankLine.accounts?.name) {
-                     displayAccountName = bankLine.accounts.name;
-                 }
-            }
+            // Smart Source Logic (already in backend, but fallback here)
+            const displayAccountName = txn.source_name ?? txn.account_name ?? "-";
 
             const renderCell = (key: ColumnKey) => {
               switch (key) {
+                case "id":
+                    return <span className="font-mono text-xs text-slate-400">{txn.id.slice(0, 8)}</span>
                 case "date":
                   return formattedDate(txn.occurred_at)
                 case "type":
-                   if (txn.type === 'income') return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> In</span>
-                   if (txn.type === 'expense') return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Out</span>
-                   return <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
+                   return renderTypeBadge()
                 case "shop":
                    // Merged Shop and Note
                    return (
@@ -744,22 +814,11 @@ export function RecentTransactions({
                 case "account":
                   return displayAccountName
                 case "people": {
-                   // Merged People and Tag
                   const personName = (txn as any).person_name ?? txn.person_name ?? null
-                  const tag = txn.tag
-                  return (
-                    <div className="flex flex-col gap-1">
-                        {personName && <span className="font-medium text-slate-700">{personName}</span>}
-                        {tag && (
-                             <span className="inline-flex w-fit items-center rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                                {tag}
-                             </span>
-                        )}
-                    </div>
-                  )
+                  return personName ? <span className="font-medium text-slate-700">{personName}</span> : "-"
                 }
                 case "tag":
-                  return txn.tag ?? "-"
+                  return txn.tag ? <span className="inline-flex w-fit items-center rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">{txn.tag}</span> : "-"
                 case "cycle":
                   return accountType === "credit_card" || txn.persisted_cycle_tag
                     ? getCycleLabel(txn)
@@ -781,7 +840,8 @@ export function RecentTransactions({
               }
             }
 
-            const voidedTextClass = effectiveStatus === 'void' ? "opacity-60 line-through text-gray-400" : ""
+            // In Void Tab, don't show strike-through
+            const voidedTextClass = effectiveStatus === 'void' && activeTab === 'active' ? "opacity-60 line-through text-gray-400" : ""
 
             return (
               <TableRow
@@ -842,6 +902,7 @@ export function RecentTransactions({
           </TableFooter>
         )}
       </Table>
+      )}
 
       {isCustomizerOpen && (
         <>
@@ -912,7 +973,7 @@ export function RecentTransactions({
                     checked={dateFormat === "DD-MM"}
                     onChange={() => setDateFormat("DD-MM")}
                   />
-                  DD-MM-YYYY
+                  DD/MM/YYYY
                 </label>
                 <label className="flex items-center gap-1">
                   <input
@@ -975,7 +1036,7 @@ export function RecentTransactions({
         document.body
       )}
 
-      {confirmVoidTarget && createPortal(
+      {(confirmVoidTarget || confirmBulkVoid) && createPortal(
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
           onClick={closeVoidDialog}
@@ -984,9 +1045,9 @@ export function RecentTransactions({
             className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
             onClick={event => event.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-slate-900">Void transaction?</h3>
+            <h3 className="text-lg font-semibold text-slate-900">{confirmBulkVoid ? `Void ${selection.size} transactions?` : 'Void transaction?'}</h3>
             <p className="mt-2 text-sm text-slate-600">
-              This action will mark the transaction as void and adjust the balances accordingly.
+              This action will mark the transaction(s) as void and adjust the balances accordingly.
             </p>
             {voidError && (
               <p className="mt-2 text-sm text-red-600">{voidError}</p>
@@ -1001,11 +1062,11 @@ export function RecentTransactions({
               </button>
               <button
                 className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-70"
-                onClick={handleVoidConfirm}
+                onClick={confirmBulkVoid ? handleBulkVoid : handleVoidConfirm}
                 disabled={isVoiding}
               >
                 {isVoiding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Void Transaction
+                {confirmBulkVoid ? 'Void All' : 'Void Transaction'}
               </button>
             </div>
           </div>
@@ -1117,6 +1178,7 @@ export function RecentTransactions({
         </div>,
         document.body
       )}
+    </div>
     </div>
   )
 }

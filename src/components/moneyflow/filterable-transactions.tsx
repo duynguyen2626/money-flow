@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { FilterIcon, X } from 'lucide-react'
-import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
+import { TransactionTable } from '@/components/moneyflow/transaction-table'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
 import { Combobox } from '@/components/ui/combobox'
@@ -475,7 +475,7 @@ export function FilterableTransactions({
             </div>
             
             <div>
-                <RecentTransactions 
+                <TransactionTable
                     transactions={finalTransactions} 
                     accountType={accountType}
                     accounts={accounts}

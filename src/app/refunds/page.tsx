@@ -3,7 +3,7 @@ import { getAccounts } from '@/services/account.service'
 import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
-import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
+import { TransactionTable } from '@/components/moneyflow/transaction-table'
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
@@ -40,7 +40,7 @@ export default async function RefundsPage() {
       </header>
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <RecentTransactions
+        <TransactionTable
             transactions={transactions}
             accounts={accounts}
             categories={categories}

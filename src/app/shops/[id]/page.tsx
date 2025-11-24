@@ -2,7 +2,7 @@ import { getAccounts } from '@/services/account.service'
 import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShopById, getShops } from '@/services/shop.service'
-import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
+import { TransactionTable } from '@/components/moneyflow/transaction-table'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 
@@ -59,7 +59,7 @@ export default async function ShopDetailsPage({ params }: ShopDetailsPageProps) 
       </header>
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <RecentTransactions
+        <TransactionTable
             transactions={transactions}
             accounts={accounts}
             categories={categories}

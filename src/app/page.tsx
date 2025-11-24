@@ -6,7 +6,7 @@ import { getPeople } from '@/services/people.service'
 import { getRecentTransactions } from '@/services/transaction.service'
 import { getShops } from '@/services/shop.service'
 import { Account } from '@/types/moneyflow.types'
-import { RecentTransactions } from '@/components/moneyflow/recent-transactions'
+import { TransactionTable } from '@/components/moneyflow/transaction-table'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,7 +80,7 @@ export default async function Home() {
             View all
           </Link>
         </div>
-        <RecentTransactions
+        <TransactionTable
           transactions={recentTransactions}
           accounts={accounts}
           categories={categories}

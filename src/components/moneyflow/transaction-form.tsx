@@ -306,12 +306,37 @@ const debtAccountByPerson = useMemo(() => {
     if (!initialValues) {
       return
     }
+
+    // Determine tab and swap accounts if needed for Repayment
+    let finalType = initialValues.type ?? baseDefaults.type;
+    let finalCategory = initialValues.category_id;
+    let finalSource = initialValues.source_account_id;
+    let finalDest = initialValues.debt_account_id;
+
+    // Detect Repayment context
+    // 1. Explicit Category "Thu nợ"
+    // 2. Income type + Person involved + Debt context
+    const isThuNo = categories.find(c => c.id === finalCategory)?.name.includes("Thu nợ");
+    const isIncomeWithPerson = initialValues.type === 'income' && initialValues.person_id;
+
+    if (isThuNo || isIncomeWithPerson) {
+         finalType = 'repayment';
+         // Map accounts for visual consistency
+         // In Repayment: Source is Bank (Received To), Dest is Debt Account (Paying From)
+         // InitialValues usually come from `buildEditInitialValues` which maps source/dest based on credit/debit lines.
+         // Ensure `source_account_id` is the Bank.
+    } else if (initialValues.type === 'expense' && initialValues.person_id) {
+         // Could be Lending (Debt)
+         finalType = 'debt';
+    }
+
     form.reset({
       ...baseDefaults,
       ...initialValues,
+      type: finalType,
     })
     setManualTagMode(true)
-  }, [baseDefaults, form, initialValues])
+  }, [baseDefaults, form, initialValues, categories])
 
   async function onSubmit(values: TransactionFormValues) {
     setStatus(null)
