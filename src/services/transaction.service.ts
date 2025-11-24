@@ -360,6 +360,7 @@ type TransactionRow = {
     profiles?: { name?: string | null } | null
     accounts?: {
       name: string
+      type: string
     } | null
     categories?: {
       name: string
@@ -412,12 +413,16 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
       : lines.find(line => line && line.type === 'credit') // Assume the credit line is the source account for general transactions
   }
   
-  const displayAmount =
+  // Calculate displayAmount.
+  // If accountLine is present, use its amount directly.
+  // If not, use avg of absolute values (legacy fallback).
+  // IMPORTANT: For Expense, we want negative if we are the payer.
+  let displayAmount =
     typeof accountLine?.amount === 'number'
       ? accountLine.amount
       : lines.reduce((sum, line) => sum + (line ? Math.abs(line.amount) : 0), 0) / 2
 
-  let type: 'income' | 'expense' | 'transfer' = 'transfer'
+  let type: 'income' | 'expense' | 'transfer' | 'repayment' = 'transfer'
   let categoryName: string | undefined
   let accountName: string | undefined
 
@@ -431,7 +436,10 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
 
   if (categoryLine) {
     categoryName = categoryLine.categories?.name
-    if (categoryLine.type === 'debit') {
+    // Check for Repayment by category name
+    if (categoryName?.toLowerCase().includes('thu nợ') || categoryName?.toLowerCase().includes('repayment')) {
+        type = 'repayment'
+    } else if (categoryLine.type === 'debit') {
       type = 'expense'
       accountName = creditAccountLine?.accounts?.name
     } else {
@@ -439,17 +447,77 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
       accountName = debitAccountLine?.accounts?.name
     }
   } else {
-    // For transfers, show the other account
+    // Transfer logic
+    // We want to show the "Other side" account name
     if (accountId) {
-        const otherLine = lines.find(line => line && line.account_id !== accountId)
-        accountName = otherLine?.accounts?.name
+        // We are viewing from 'accountId' perspective. Find the other account.
+        const otherLine = lines.find(line => line && line.account_id && line.account_id !== accountId)
+        if (otherLine && otherLine.accounts) {
+             accountName = otherLine.accounts.name
+        }
     } else {
+        // Fallback: Show 'To' account if it's a transfer
         accountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name
     }
   }
 
-  if (accountLine?.amount !== undefined) {
+  // Override type based on accountLine amount if not already set by category
+  if (!categoryLine && accountLine?.amount !== undefined) {
     type = accountLine.amount >= 0 ? 'income' : 'expense'
+    if (type === 'income' && debitAccountLine && creditAccountLine) type = 'transfer'
+    if (type === 'expense' && debitAccountLine && creditAccountLine) type = 'transfer'
+  }
+
+  // Ensure Expense is always negative for display consistency if it wasn't already
+  // (Though `accountLine.amount` should be negative for credit/outflow)
+  // If type is expense and amount is positive, flip it?
+  // Usually `accountLine.amount` is correct (- for expense).
+  // But let's check `displayAmount`
+
+  if (type === 'expense' && displayAmount > 0) {
+      displayAmount = -displayAmount
+  }
+
+  // Smart Source Logic
+  // If viewing from Debt Account, we want to see the Bank Name.
+  // If viewing from Bank Account, we want to see Shop/Person/Debt Account.
+  if (accountId) {
+      const myLine = lines.find(l => l && l.account_id === accountId);
+      if (myLine?.accounts?.type === 'debt') {
+          // I am a debt account. The counterpart is likely the Bank.
+          const bankLine = lines.find(l => l && l.account_id && l.account_id !== accountId && l.accounts?.type !== 'debt');
+          if (bankLine?.accounts) {
+              accountName = bankLine.accounts.name
+          }
+      }
+  } else {
+     // Not viewing from specific account context (e.g. Recent Transactions)
+     // Use "Smart Source" - Prefer Bank Account as Source? Or show Counterpart?
+     // Existing logic: "Source/Account" column.
+     // Usually we want to see where the money came from (Bank).
+     // Unless it's Income, then where it came into? Or from whom?
+
+     // Task says: "Display txn.source_name (The Bank Name) instead of Debt Account name."
+     // This implies when listing transactions involving Debt, show the Bank.
+
+     // Let's look for the Bank Account line.
+     const bankLine = lines.find(l => l && l.account_id && l.accounts?.type !== 'debt' && l.accounts?.type !== undefined);
+     if (bankLine && bankLine.accounts) {
+         // If there is a bank line, use it as the "Source/Account" display if we are not in Account Detail view.
+         // But wait, if it's an Expense, Source is Bank.
+         // If it's Income (Repayment), Source is Person (Debt Account)? No, user wants to see Bank usually in the "Account" column of the table.
+         // The table column is "Source/Account".
+
+         // Actually, let's just expose `account_name` as the "Other Side" or "Primary Bank Involved".
+
+         // If this transaction involves a Debt Account AND a Bank Account.
+         const debtLine = lines.find(l => l && l.account_id && l.accounts?.type === 'debt');
+         if (debtLine && bankLine) {
+             // It's a debt/repayment transaction.
+             // We want to show the Bank Name.
+             accountName = bankLine.accounts.name;
+         }
+     }
   }
 
   const percentRaw = txn.cashback_share_percent ?? cashbackFromLines.cashback_share_percent
@@ -465,8 +533,21 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     tag: txn.tag || null,
     created_at: (txn as any).created_at,
     amount: displayAmount,
-    type: type,
-    category_name: categoryLine?.categories?.name,
+    type: type as 'income' | 'expense' | 'transfer', // Cast back to allowed types, handling repayment as income/transfer maybe?
+    // Actually, UI handles 'repayment' if we add it to type definition, but standard types are income/expense/transfer.
+    // Let's stick to standard types but add a `is_repayment` flag or similar if needed, or just let it be 'income'/'transfer'.
+    // If I return 'repayment' as type, I need to update frontend types.
+    // The Plan said: "Ensure Repayment transactions are identified correctly."
+    // `type` property in `TransactionWithDetails` is optional string or specific union.
+    // Let's check `TransactionWithDetails` definition.
+    // It is `type?: 'income' | 'expense' | 'transfer';`
+    // I should map 'repayment' to 'income' or 'transfer' but maybe use `category_name` to distinguish.
+
+    // For now, if it is repayment, it is effectively a Transfer (Debt -> Bank) or Income (Bank).
+    // Let's keep it as 'income' if it increases Bank balance, or 'transfer'.
+    // Logic above: `type = accountLine.amount >= 0 ? 'income' : 'expense'` handles it if accountLine is the Bank.
+
+    category_name: categoryName,
     account_name: accountName,
     category_id: categoryId,
     cashback_share_percent: percentRaw ?? null,
@@ -510,7 +591,7 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
         cashback_share_percent,
         cashback_share_fixed,
         profiles ( name ),
-        accounts (name),
+        accounts (name, type),
         categories (name)
       )
     `)
@@ -552,7 +633,7 @@ export async function getTransactionsByShop(shopId: string, limit: number = 50):
         cashback_share_percent,
         cashback_share_fixed,
         profiles ( name ),
-        accounts (name),
+        accounts (name, type),
         categories (name)
       )
     `)
