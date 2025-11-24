@@ -6,6 +6,7 @@ import { createShop, updateShop } from '@/services/shop.service'
 export async function createShopAction(payload: {
   name: string
   logo_url?: string | null
+  default_category_id?: string | null
 }) {
   const result = await createShop(payload)
   if (result) {

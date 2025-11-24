@@ -404,6 +404,11 @@ const debtAccountByPerson = useMemo(() => {
     name: 'source_account_id',
   })
 
+  const watchedShopId = useWatch({
+    control,
+    name: 'shop_id',
+  })
+
   const watchedAmount = useWatch({
     control,
     name: 'amount',
@@ -438,6 +443,14 @@ const debtAccountByPerson = useMemo(() => {
     () => sourceAccounts.find(acc => acc.id === watchedAccountId),
     [sourceAccounts, watchedAccountId]
   )
+
+  useEffect(() => {
+    if (!watchedShopId) return
+    const shop = shops.find(s => s.id === watchedShopId)
+    if (shop?.default_category_id) {
+      form.setValue('category_id', shop.default_category_id)
+    }
+  }, [watchedShopId, shops, form])
 
   const cashbackMeta = useMemo(
     () =>
@@ -875,7 +888,7 @@ const debtAccountByPerson = useMemo(() => {
         </div>
       )}
 
-      {transactionType === 'expense' && (
+      {(transactionType === 'expense' || (isEditMode && transactionType !== 'income' && transactionType !== 'transfer' && transactionType !== 'debt')) && (
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Shop</label>
           <Controller

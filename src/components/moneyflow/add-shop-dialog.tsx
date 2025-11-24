@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,14 +14,31 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { createShopAction } from '@/actions/shop-actions'
+import { Category } from '@/types/moneyflow.types'
+import { Combobox } from '@/components/ui/combobox'
 
-export function AddShopDialog() {
+type AddShopDialogProps = {
+  categories?: Category[]
+}
+
+export function AddShopDialog({ categories = [] }: AddShopDialogProps) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
+  const [defaultCategoryId, setDefaultCategoryId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+
+  const categoryOptions = useMemo(() =>
+    categories
+      .filter(c => c.type === 'expense')
+      .map(c => ({
+        value: c.id,
+        label: c.name,
+        searchValue: c.name
+      }))
+  , [categories])
 
   const handleSubmit = () => {
     const trimmedName = name.trim()
@@ -34,6 +51,7 @@ export function AddShopDialog() {
       const result = await createShopAction({
         name: trimmedName,
         logo_url: logoUrl.trim() || null,
+        default_category_id: defaultCategoryId
       })
 
       if (!result) {
@@ -43,6 +61,7 @@ export function AddShopDialog() {
 
       setName('')
       setLogoUrl('')
+      setDefaultCategoryId(null)
       setOpen(false)
       router.refresh()
     })
@@ -55,7 +74,7 @@ export function AddShopDialog() {
           Add Shop
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="bg-white">
         <DialogHeader>
           <DialogTitle>Add Shop</DialogTitle>
           <DialogDescription>Save the store where you usually shop so it can be linked to expenses.</DialogDescription>
@@ -68,6 +87,18 @@ export function AddShopDialog() {
               onChange={event => setName(event.target.value)}
               placeholder="e.g. Shopee"
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Default Category (optional)</label>
+            <Combobox
+              items={categoryOptions}
+              value={defaultCategoryId ?? undefined}
+              onValueChange={val => setDefaultCategoryId(val ?? null)}
+              placeholder="Select default category"
+              inputPlaceholder="Search category..."
+              emptyState="No categories found"
+            />
+            <p className="mt-1 text-xs text-slate-500">Auto-fills the category when selecting this shop.</p>
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Logo URL (optional)</label>

@@ -1,11 +1,22 @@
 import { getShops } from '@/services/shop.service'
 import { AddShopDialog } from '@/components/moneyflow/add-shop-dialog'
 import { ShoppingBag } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
+import { Category } from '@/types/moneyflow.types'
 
 export const dynamic = 'force-dynamic'
 
+async function getCategories() {
+  const supabase = createClient()
+  const { data } = await supabase.from('categories').select('*').order('name')
+  return (data ?? []) as Category[]
+}
+
 export default async function ShopsPage() {
-  const shops = await getShops()
+  const [shops, categories] = await Promise.all([
+    getShops(),
+    getCategories()
+  ])
 
   return (
     <section className="space-y-6">
@@ -15,7 +26,7 @@ export default async function ShopsPage() {
           <h1 className="text-2xl font-semibold text-slate-900">Shops</h1>
           <p className="text-sm text-slate-500">List the marketplaces you use most often. Link them to expenses for more context.</p>
         </div>
-        <AddShopDialog />
+        <AddShopDialog categories={categories} />
       </header>
 
       {shops.length === 0 ? (

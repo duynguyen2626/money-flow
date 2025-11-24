@@ -739,7 +739,7 @@ export function RecentTransactions({
               }
             }
 
-            const voidedTextClass = isVoided ? "opacity-60 line-through text-gray-400" : ""
+            const voidedTextClass = effectiveStatus === 'void' ? "opacity-60 line-through text-gray-400" : ""
 
             return (
               <TableRow

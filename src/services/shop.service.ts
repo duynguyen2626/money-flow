@@ -11,7 +11,7 @@ export async function getShops(): Promise<ShopRow[]> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('shops')
-    .select('id, name, logo_url')
+    .select('id, name, logo_url, default_category_id')
     .order('name', { ascending: true })
 
   if (error) {
@@ -22,7 +22,11 @@ export async function getShops(): Promise<ShopRow[]> {
   return (data ?? []) as ShopRow[]
 }
 
-export async function createShop(input: { name: string; logo_url?: string | null }): Promise<ShopRow | null> {
+export async function createShop(input: {
+  name: string;
+  logo_url?: string | null;
+  default_category_id?: string | null
+}): Promise<ShopRow | null> {
   const supabase = createClient()
   const {
     data: { user },
@@ -32,6 +36,7 @@ export async function createShop(input: { name: string; logo_url?: string | null
   const payload: ShopInsert = {
     name: input.name.trim(),
     logo_url: input.logo_url ?? null,
+    default_category_id: input.default_category_id ?? null,
     created_by: userId,
   }
 
