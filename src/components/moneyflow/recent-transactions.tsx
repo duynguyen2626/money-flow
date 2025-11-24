@@ -688,20 +688,17 @@ export function RecentTransactions({
 
             // Smart Source Logic
             let displayAccountName = txn.account_name ?? "-";
-            const accountLines = (txn.transaction_lines ?? []).filter(l => l && l.account_id);
-            const mainAccountLine = accountLines.find(l => l.accounts?.name === txn.account_name);
-            // If the main displayed account is a Debt Account (based on naming convention or logic),
-            // we want to show the REAL source (Bank) if possible.
-            // Assumption: Debt accounts often have "Debt" or "Nợ" in name, OR we check if there is another account involved that is a Bank/CC.
 
-            // A better check: If type is 'debt' (Lending), source is usually Bank.
-            // In mapTransactionRow, 'account_name' for 'debt' might be the Debt Account if we considered the debit line.
-            // Let's refine based on type.
-
-            if (txn.type === 'debt' || txn.type === 'repayment') {
+            // If person_id is present, it's likely a debt-related transaction (Lending or Repayment)
+            // In this case, we want to show the REAL source (Bank) if possible.
+            if (txn.person_id) {
+                 const accountLines = (txn.transaction_lines ?? []).filter(l => l && l.account_id);
                  // Find the Bank/Cash account (not the debt account)
                  // Usually Debt transaction: Credit Bank, Debit DebtAccount.
                  // Repayment: Debit Bank, Credit DebtAccount.
+                 // We look for an account that does NOT have "Nợ" or "Debt" in its name.
+                 // This is a heuristic, but often debt accounts are named specially.
+                 // Or we can check account type if we had it in line relations, but we only have 'accounts' name.
                  const bankLine = accountLines.find(l => l.account_id && !l.accounts?.name?.toLowerCase().includes('nợ') && !l.accounts?.name?.toLowerCase().includes('debt'));
                  if (bankLine && bankLine.accounts?.name) {
                      displayAccountName = bankLine.accounts.name;
