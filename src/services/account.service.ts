@@ -656,3 +656,61 @@ export async function getAccountTransactionDetails(
 
   return Array.from(grouped.values())
 }
+
+/**
+ * Recalculate account balance based on transaction lines
+ * @param accountId The account ID to recalculate
+ * @returns Boolean indicating success
+ */
+export async function recalculateBalance(accountId: string): Promise<boolean> {
+  const supabase = createClient()
+
+  try {
+    // Get all transaction lines for this account
+    const { data: lines, error } = await supabase
+      .from('transaction_lines')
+      .select('amount, type')
+      .eq('account_id', accountId)
+
+    if (error) {
+      console.error('Error fetching transaction lines for recalculation:', error)
+      return false
+    }
+
+    // Calculate totals
+    let currentBalance = 0
+    let totalIn = 0
+    let totalOut = 0
+
+    lines.forEach(line => {
+      const amount = Math.abs(line.amount)
+      if (line.type === 'debit') {
+        currentBalance += amount
+        totalIn += amount
+      } else if (line.type === 'credit') {
+        currentBalance -= amount
+        totalOut += amount
+      }
+    })
+
+    // Update account with recalculated values
+    const { error: updateError } = await supabase
+      .from('accounts')
+      .update({
+        current_balance: currentBalance,
+        total_in: totalIn,
+        total_out: totalOut
+      })
+      .eq('id', accountId)
+
+    if (updateError) {
+      console.error('Error updating account with recalculated values:', updateError)
+      return false
+    }
+
+    return true
+  } catch (err) {
+    console.error('Unexpected error during balance recalculation:', err)
+    return false
+  }
+}

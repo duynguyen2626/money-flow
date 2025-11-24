@@ -251,13 +251,12 @@ export function UnifiedTransactionTable({
     })
   }
 
-  // --- Date Formatting (Hardcoded DD/MM/YYYY) ---
+  // --- Date Formatting (Updated to DD-MM format) ---
   const formattedDate = (value: string | number | Date) => {
     const d = new Date(value)
     const day = String(d.getDate()).padStart(2, "0")
     const month = String(d.getMonth() + 1).padStart(2, "0")
-    const year = String(d.getFullYear())
-    return `${day}/${month}/${year}`
+    return `${day}-${month}`
   }
 
   // --- Actions ---
@@ -758,9 +757,9 @@ export function UnifiedTransactionTable({
                    return typeBadge
                 case "shop":
                    return (
-                    <div className="flex flex-col gap-1">
+                    <div className="flex items-center gap-2">
                       {txn.shop_name && (
-                        <div className="flex items-center gap-2">
+                        <>
                           {txn.shop_logo_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -773,11 +772,23 @@ export function UnifiedTransactionTable({
                               {txn.shop_name.charAt(0).toUpperCase()}
                             </span>
                           )}
-                          <span className="font-bold text-sm text-slate-800 truncate">{txn.shop_name}</span>
-                        </div>
+                        </>
+                      )}
+                      {!txn.shop_name && txn.shop_logo_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={txn.shop_logo_url}
+                          alt="Shop"
+                          className="h-5 w-5 rounded-full object-cover border"
+                        />
+                      )}
+                      {!txn.shop_name && !txn.shop_logo_url && (
+                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600 border">
+                          🛍️
+                        </span>
                       )}
                       {txn.note && (
-                        <span className={cn("text-xs text-slate-500 truncate", !txn.shop_name && "text-sm text-slate-700 font-medium")}>
+                        <span className="text-sm text-slate-700 font-medium truncate">
                           {txn.note}
                         </span>
                       )}
