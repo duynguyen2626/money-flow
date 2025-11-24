@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight } from "lucide-react"
+import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ShoppingBag } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
 import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
@@ -219,7 +219,7 @@ export function TransactionTable({
     })
     return map
   })
-  const [dateFormat, setDateFormat] = useState<"en-CA" | "DD-MM" | "custom">("en-CA")
+  const [dateFormat, setDateFormat] = useState<"en-CA" | "DD-MM" | "custom">("DD-MM")
   const [customDatePattern, setCustomDatePattern] = useState<string>("YYYY-MM-DD")
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null)
@@ -524,12 +524,13 @@ export function TransactionTable({
     }
 
     if (dateFormat === "DD-MM") {
-      return `${day}-${month}-${year}`
+      return `${day}-${month}`
     }
     if (dateFormat === "custom") {
       return formatWithPattern(customDatePattern || "YYYY-MM-DD")
     }
-    return new Date(value).toLocaleDateString("en-CA")
+    // Default to dd-MM as requested in task
+    return `${day}-${month}`
   }
 
   const handleSelectAll = (checked: boolean) => {
@@ -777,18 +778,76 @@ export function TransactionTable({
             )
 
             // Smart Source Logic
-            let displayAccountName = txn.account_name ?? "-";
+            // Render logic for Account column:
+            // Transfer: Source Logo -> Dest Logo
+            // Expense: Source Logo (+ Name?)
+            // Income: Source (if person/category?) -> Dest Logo (+ Name?)
 
-            // If person_id is present, it's likely a debt-related transaction (Lending or Repayment)
-            // In this case, we want to show the REAL source (Bank) if possible.
-            // But we already did this in Backend Service! `txn.account_name` should be correct now.
-            // However, let's keep the frontend fallback just in case or for specific tweaks.
-            // The service returns `account_name` based on context.
-            // If we are in 'Account Detail' page (accountId passed), `account_name` is the OTHER side.
-            // If we are in 'People Detail' or 'Recent Transactions', `account_name` is also computed.
+            const renderAccountCell = () => {
+                const sName = txn.source_name;
+                const sLogo = txn.source_logo;
+                const dName = txn.destination_name;
+                const dLogo = txn.destination_logo;
 
-            // The only issue might be if `account_name` is still the Debt Account name when we want Bank.
-            // Let's trust the backend service update first.
+                if (txn.type === 'transfer' || txn.type === 'repayment' as any) {
+                    return (
+                        <div className="flex items-center gap-1.5">
+                             {/* Source */}
+                             <div className="flex items-center gap-1" title={sName ?? 'Unknown Source'}>
+                                {sLogo ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={sLogo} alt="" className="h-5 w-5 rounded-full object-cover border border-slate-100" />
+                                ) : (
+                                    <div className="h-5 w-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-500 font-bold border border-slate-200">
+                                        {(sName || "?").charAt(0).toUpperCase()}
+                                    </div>
+                                )}
+                             </div>
+
+                             <ArrowRight className="h-3 w-3 text-slate-400" />
+
+                             {/* Dest */}
+                             <div className="flex items-center gap-1" title={dName ?? 'Unknown Dest'}>
+                                {dLogo ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={dLogo} alt="" className="h-5 w-5 rounded-full object-cover border border-slate-100" />
+                                ) : (
+                                    <div className="h-5 w-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-500 font-bold border border-slate-200">
+                                        {(dName || "?").charAt(0).toUpperCase()}
+                                    </div>
+                                )}
+                             </div>
+                        </div>
+                    );
+                }
+
+                // Expense / Income
+                // Show primary account involved.
+                // For Expense: Source.
+                // For Income: Destination.
+
+                const showSource = txn.type === 'expense';
+                const name = showSource ? sName : dName;
+                const logo = showSource ? sLogo : dLogo;
+
+                // Fallback to old account_name if new fields are missing (though they should be populated)
+                const displayName = name ?? txn.account_name ?? "-";
+
+                return (
+                     <div className="flex items-center gap-2">
+                        {logo ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={logo} alt="" className="h-5 w-5 rounded-full object-cover border border-slate-100" />
+                        ) : (
+                             // Attempt to show initials or generic icon
+                             <div className="h-5 w-5 rounded-full bg-slate-100 flex items-center justify-center text-[10px] text-slate-500 font-bold border border-slate-200">
+                                {(displayName || "?").charAt(0).toUpperCase()}
+                             </div>
+                        )}
+                        <span className="truncate max-w-[120px] font-medium text-slate-700" title={displayName}>{displayName}</span>
+                     </div>
+                );
+            };
 
             const renderCell = (key: ColumnKey) => {
               switch (key) {
@@ -797,42 +856,63 @@ export function TransactionTable({
                 case "type":
                    if (txn.type === 'income') return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> In</span>
                    if (txn.type === 'expense') {
-                        // Check if it's Shopping to show Red? It is Expense so Red.
-                        // Task says "Fix logic to show Red for Shopping". Expense is Red.
-                        // Maybe they meant if it was showing Green before?
                         return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Out</span>
                    }
                    return <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
                 case "shop":
-                   // Merged Shop and Note
+                   // Merged Shop and Note: [Logo] Note
+                   // Hide Shop Name text as requested.
+                   const shopLogo = txn.shop_logo_url;
+                   const note = txn.note;
+
                    return (
                     <div className="flex flex-col gap-1">
-                      {txn.shop_name && (
-                        <div className="flex items-center gap-2">
-                          {txn.shop_logo_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={txn.shop_logo_url}
-                              alt={txn.shop_name}
-                              className="h-5 w-5 rounded-full object-cover"
-                            />
+                        <div className="flex items-start gap-2">
+                          {/* Logo always visible if shop exists, or generic bag */}
+                          {txn.shop_id || shopLogo ? (
+                              shopLogo ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={shopLogo}
+                                  alt={txn.shop_name ?? "Shop"}
+                                  className="h-5 w-5 rounded-full object-cover flex-shrink-0"
+                                  title={txn.shop_name ?? ""}
+                                />
+                              ) : (
+                                <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600" title={txn.shop_name ?? ""}>
+                                  {txn.shop_name?.charAt(0).toUpperCase()}
+                                </span>
+                              )
                           ) : (
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
-                              {txn.shop_name.charAt(0).toUpperCase()}
-                            </span>
+                              // No shop, use generic icon
+                              <div className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-slate-50 text-slate-400">
+                                  <ShoppingBag className="h-3 w-3" />
+                              </div>
                           )}
-                          <span className="font-medium truncate">{txn.shop_name}</span>
+
+                          {/* Note Text */}
+                          <div className="flex flex-col">
+                             {note ? (
+                                <span className="text-sm text-slate-700 line-clamp-2 leading-tight">{note}</span>
+                             ) : (
+                                <span className="text-xs text-slate-400 italic">No note</span>
+                             )}
+                          </div>
                         </div>
-                      )}
-                      {txn.note && <span className="text-xs text-slate-500 truncate">{txn.note}</span>}
                     </div>
                    )
                 case "note":
                   return txn.note
                 case "category":
+                   // Image + Name
+                   // Assuming we don't have category image yet in the type or data.
+                   // Task says: Display [Image] Name.
+                   // We don't have category image in TransactionWithDetails.
+                   // But let's check `categories` join. `categories(name)`.
+                   // If we can't get image, just show name.
                   return txn.category_name || "-"
                 case "account":
-                  return displayAccountName
+                  return renderAccountCell();
                 case "people": {
                    // Merged People and Tag
                   const personName = (txn as any).person_name ?? txn.person_name ?? null

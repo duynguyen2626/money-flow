@@ -106,6 +106,58 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
   }
 }
 
+export async function recalculateBalance(accountId: string): Promise<boolean> {
+  const supabase = createClient();
+
+  // Calculate total balance from transaction lines based on type
+  // Typically: Balance = Sum(Debit) - Sum(Credit)
+  // Assuming 'debit' increases asset account balance and 'credit' decreases it.
+  // For liability/credit accounts, usually Credit increases balance (liability), but in this system:
+  // Spending is Credit (-Amount logic in some places, or Credit Type).
+  // Let's check how balances are maintained.
+  // If I receive money (Income), it is Debit. Balance increases.
+  // If I spend money (Expense), it is Credit. Balance decreases.
+  // So Balance = Sum(Abs(Debit)) - Sum(Abs(Credit)) seems correct for 'current_balance' representing net worth/available.
+
+  const { data, error } = await supabase
+    .from('transaction_lines')
+    .select('amount, type')
+    .eq('account_id', accountId);
+
+  if (error) {
+    console.error('Error recalculating balance:', error);
+    return false;
+  }
+
+  const lines = (data ?? []) as { amount: number; type: string }[];
+
+  let totalDebit = 0;
+  let totalCredit = 0;
+
+  lines.forEach(line => {
+      if (line.type === 'debit') {
+          totalDebit += Math.abs(line.amount);
+      } else if (line.type === 'credit') {
+          totalCredit += Math.abs(line.amount);
+      }
+  });
+
+  const newBalance = totalDebit - totalCredit;
+
+  // Update account balance
+  const { error: updateError } = await supabase
+    .from('accounts')
+    .update({ current_balance: newBalance } as never)
+    .eq('id', accountId);
+
+  if (updateError) {
+    console.error('Error updating account balance:', updateError);
+    return false;
+  }
+
+  return true;
+}
+
 type TransactionRow = {
   id: string
   occurred_at: string
@@ -135,6 +187,8 @@ type TransactionRow = {
     profiles?: { name?: string | null } | null
     accounts?: {
       name: string
+      logo_url?: string | null
+      img_url?: string | null
     }
     categories?: {
       name: string
@@ -197,6 +251,12 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   let categoryName: string | undefined
   let accountName: string | undefined
 
+  // New fields for Unified Table
+  let sourceName: string | undefined
+  let sourceLogo: string | undefined
+  let destName: string | undefined
+  let destLogo: string | undefined
+
   const categoryLine = lines.find(line => Boolean(line.category_id))
   const creditAccountLine = lines.find(
     line => line.account_id && line.type === 'credit'
@@ -205,14 +265,30 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     line => line.account_id && line.type === 'debit'
   )
 
+  // Base assignment
+  if (creditAccountLine?.accounts) {
+    sourceName = creditAccountLine.accounts.name
+    sourceLogo = creditAccountLine.accounts.logo_url ?? creditAccountLine.accounts.img_url ?? undefined
+  }
+  if (debitAccountLine?.accounts) {
+    destName = debitAccountLine.accounts.name
+    destLogo = debitAccountLine.accounts.logo_url ?? debitAccountLine.accounts.img_url ?? undefined
+  }
+
   if (categoryLine) {
     categoryName = categoryLine.categories?.name
     if (categoryLine.type === 'debit') {
       type = 'expense'
       accountName = creditAccountLine?.accounts?.name
+      // Source is Bank. Dest is Shop/Category.
+      destName = txn.shops?.name ?? categoryName
+      destLogo = txn.shops?.logo_url ?? undefined
     } else {
       type = 'income'
       accountName = debitAccountLine?.accounts?.name
+      // Source is Category/Sender. Dest is Bank.
+      sourceName = categoryName
+      sourceLogo = undefined
     }
   } else {
     accountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name
@@ -244,6 +320,10 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     type,
     category_name: categoryName,
     account_name: accountName,
+    source_name: sourceName,
+    source_logo: sourceLogo,
+    destination_name: destName,
+    destination_logo: destLogo,
     category_id: categoryId,
     tag: txn.tag ?? null, // Thêm trường tag
     cashback_share_percent: percentRaw ?? undefined,
@@ -409,7 +489,7 @@ async function fetchTransactions(
             cashback_share_percent,
             cashback_share_fixed,
             profiles ( name ),
-            accounts (name),
+            accounts (name, logo_url, img_url),
             categories (name)
           )
         `)
@@ -455,7 +535,7 @@ async function fetchTransactions(
           cashback_share_percent,
           cashback_share_fixed,
           profiles ( name ),
-          accounts (name),
+          accounts (name, logo_url, img_url),
           categories (name)
         )
       `)

@@ -361,6 +361,8 @@ type TransactionRow = {
     accounts?: {
       name: string
       type: string
+      logo_url?: string | null
+      img_url?: string | null
     } | null
     categories?: {
       name: string
@@ -426,6 +428,12 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   let categoryName: string | undefined
   let accountName: string | undefined
 
+  // New fields for Unified Table
+  let sourceName: string | undefined
+  let sourceLogo: string | undefined
+  let destName: string | undefined
+  let destLogo: string | undefined
+
   const categoryLine = lines.find(line => line && Boolean(line.category_id))
   const creditAccountLine = lines.find(
     line => line && line.account_id && line.type === 'credit'
@@ -434,17 +442,39 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     line => line && line.account_id && line.type === 'debit'
   ) as (typeof lines)[0] | undefined
 
+  // Base assignment
+  if (creditAccountLine?.accounts) {
+    sourceName = creditAccountLine.accounts.name
+    sourceLogo = creditAccountLine.accounts.logo_url ?? creditAccountLine.accounts.img_url ?? undefined
+  }
+  if (debitAccountLine?.accounts) {
+    destName = debitAccountLine.accounts.name
+    destLogo = debitAccountLine.accounts.logo_url ?? debitAccountLine.accounts.img_url ?? undefined
+  }
+
   if (categoryLine) {
     categoryName = categoryLine.categories?.name
     // Check for Repayment by category name
     if (categoryName?.toLowerCase().includes('thu nợ') || categoryName?.toLowerCase().includes('repayment')) {
         type = 'repayment'
+        // For repayment: Money comes from Debt Account (Payer) -> To Bank (Receiver)
+        // But usually Repayment is visualized as "Bank <- Person".
+        // Let's ensure Source is Debt Account (or Person) and Dest is Bank.
+        // Existing logic `debitAccountLine` is Bank (Receiver, type debit). `creditAccountLine` is Debt (Payer, type credit).
+        // So sourceName (Credit) = Debt Account. destName (Debit) = Bank Account.
     } else if (categoryLine.type === 'debit') {
       type = 'expense'
       accountName = creditAccountLine?.accounts?.name
+      // Source is Bank. Dest is Shop/Category.
+      destName = txn.shops?.name ?? categoryName
+      destLogo = txn.shops?.logo_url ?? undefined
     } else {
       type = 'income'
       accountName = debitAccountLine?.accounts?.name
+      // Source is Category/Sender. Dest is Bank.
+      // Usually source is not account here, but category/sender.
+      sourceName = categoryName
+      sourceLogo = undefined // Maybe category icon?
     }
   } else {
     // Transfer logic
@@ -478,7 +508,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
       displayAmount = -displayAmount
   }
 
-  // Smart Source Logic
+  // Smart Source Logic for Legacy Account Name Field (Backup)
   // If viewing from Debt Account, we want to see the Bank Name.
   // If viewing from Bank Account, we want to see Shop/Person/Debt Account.
   if (accountId) {
@@ -549,6 +579,10 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
 
     category_name: categoryName,
     account_name: accountName,
+    source_name: sourceName,
+    source_logo: sourceLogo,
+    destination_name: destName,
+    destination_logo: destLogo,
     category_id: categoryId,
     cashback_share_percent: percentRaw ?? null,
     cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? null,
@@ -591,7 +625,7 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
         cashback_share_percent,
         cashback_share_fixed,
         profiles ( name ),
-        accounts (name, type),
+        accounts (name, type, logo_url, img_url),
         categories (name)
       )
     `)
@@ -633,7 +667,7 @@ export async function getTransactionsByShop(shopId: string, limit: number = 50):
         cashback_share_percent,
         cashback_share_fixed,
         profiles ( name ),
-        accounts (name, type),
+        accounts (name, type, logo_url, img_url),
         categories (name)
       )
     `)

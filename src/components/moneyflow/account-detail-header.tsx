@@ -1,13 +1,13 @@
 "use client"
 
 import { useState } from 'react'
-import { ArrowLeftRight, CreditCard, Minus, Plus, Settings, User, ChevronUp, ChevronDown, Archive, RotateCcw } from 'lucide-react'
+import { ArrowLeftRight, CreditCard, Minus, Plus, Settings, User, ChevronUp, ChevronDown, Archive, RotateCcw, RefreshCw } from 'lucide-react'
 
 import { useRouter } from 'next/navigation'
 
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { AccountSpendingStats } from '@/types/cashback.types'
-import { updateAccountConfigAction } from '@/actions/account-actions'
+import { updateAccountConfigAction, recalculateBalanceAction } from '@/actions/account-actions'
 import { AccountStatsHeader } from './account-stats-header'
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { EditAccountDialog } from './edit-account-dialog'
@@ -43,6 +43,7 @@ export function AccountDetailHeader({
   const toggle = () => setCollapsed(prev => !prev)
   const router = useRouter()
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [isRecalculating, setIsRecalculating] = useState(false)
   const isCurrentlyActive = account.is_active !== false
   const handleToggleAccountStatus = async () => {
     if (isUpdatingStatus) return
@@ -57,6 +58,26 @@ export function AccountDetailHeader({
       }
     } finally {
       setIsUpdatingStatus(false)
+    }
+  }
+
+  const handleRecalculate = async () => {
+    if (isRecalculating) return
+    setIsRecalculating(true)
+    try {
+      // We need to use server action for this
+      const success = await recalculateBalanceAction(account.id)
+      if (success) {
+        router.refresh()
+        alert('Balance recalculated successfully.')
+      } else {
+        alert('Failed to recalculate balance.')
+      }
+    } catch (e) {
+      console.error(e)
+      alert('Error recalculating balance.')
+    } finally {
+      setIsRecalculating(false)
     }
   }
 
@@ -138,6 +159,15 @@ export function AccountDetailHeader({
           </span>
         }
       />
+      <button
+        onClick={handleRecalculate}
+        disabled={isRecalculating}
+        title="Recalculate Balance"
+        className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+      >
+        <RefreshCw className={`h-3.5 w-3.5 ${isRecalculating ? 'animate-spin' : ''}`} />
+        Recalculate
+      </button>
     </>
   )
 

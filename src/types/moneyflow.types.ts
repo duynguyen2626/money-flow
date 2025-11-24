@@ -124,5 +124,9 @@ export type TransactionWithDetails = TransactionRow & {
   shop_id?: string | null;
   shop_name?: string | null;
   shop_logo_url?: string | null;
+  source_name?: string | null;
+  source_logo?: string | null;
+  destination_name?: string | null;
+  destination_logo?: string | null;
   metadata?: Json | null;
 }
