@@ -57,13 +57,16 @@ export function Combobox({
           )}
           aria-expanded={open}
         >
-          <span className="flex flex-col gap-0.5">
-            <span className="text-sm font-medium text-slate-900">
-              {selectedItem ? selectedItem.label : placeholder}
+          <span className="flex items-center gap-2">
+            {selectedItem?.icon && <span className="text-slate-500 flex-shrink-0">{selectedItem.icon}</span>}
+            <span className="flex flex-col gap-0.5">
+              <span className="text-sm font-medium text-slate-900">
+                {selectedItem ? selectedItem.label : placeholder}
+              </span>
+              {selectedItem?.description && (
+                <span className="text-[11px] text-slate-500">{selectedItem.description}</span>
+              )}
             </span>
-            {selectedItem?.description && (
-              <span className="text-[11px] text-slate-500">{selectedItem.description}</span>
-            )}
           </span>
           <ChevronDown className="h-4 w-4 text-slate-500" />
         </button>

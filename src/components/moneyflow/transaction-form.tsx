@@ -105,7 +105,7 @@ type TransactionFormProps = {
   accounts: Account[];
   categories: Category[];
   people: Person[];
-  shops: Shop[];
+  shops?: Shop[];
   onSuccess?: () => void;
   defaultTag?: string;
   defaultPersonId?: string;
@@ -126,7 +126,7 @@ export function TransactionForm({
   accounts: allAccounts,
   categories,
   people,
-  shops,
+  shops = [],
   onSuccess,
   defaultTag,
   defaultPersonId,
@@ -1072,19 +1072,6 @@ const debtAccountByPerson = useMemo(() => {
                 placeholder="Select account"
                 inputPlaceholder="Search account..."
                 emptyState="No account found"
-                icon={transactionType === 'repayment' && selectedAccount ? (
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
-                      {/* If it's repayment, and we selected an account (Bank), we want to show its logo in the "Shop/Source" area.
-                          But this is the Source Account selector itself.
-                          The requirement said: "Visual Trick: In the 'Shop/Source' display area, render the Bank's Logo".
-                          The "Shop" field is now displayed above.
-                          If I select a Bank here, maybe I should update the Shop field visually?
-                          Or maybe the user meant the Source Account icon IS the visual trick?
-                          Let's stick to standard behavior here.
-                      */}
-                      {getAccountInitial(selectedAccount.name)}
-                    </span>
-                ) : undefined}
               />
             )}
           />

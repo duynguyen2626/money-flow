@@ -10,7 +10,7 @@ type AddTransactionDialogProps = {
   accounts: Account[];
   categories: Category[];
   people: Person[];
-  shops: Shop[];
+  shops?: Shop[];
   buttonText?: string;
   defaultTag?: string;
   defaultPersonId?: string;
@@ -27,7 +27,7 @@ export function AddTransactionDialog({
   accounts, 
   categories, 
   people,
-  shops,
+  shops = [],
   buttonText = 'Add Transaction',
   defaultTag,
   defaultPersonId,
