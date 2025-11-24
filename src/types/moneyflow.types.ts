@@ -125,4 +125,6 @@ export type TransactionWithDetails = TransactionRow & {
   shop_name?: string | null;
   shop_logo_url?: string | null;
   metadata?: Json | null;
+  source_account_name?: string | null;
+  destination_account_name?: string | null;
 }
