@@ -1,10 +1,12 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { updateAccountConfig } from '@/services/account.service'
+import { recalculateBalance, updateAccountConfig } from '@/services/account.service'
+
 import { Database, Json } from '@/types/database.types'
 import { Account } from '@/types/moneyflow.types'
-import { revalidatePath } from 'next/cache'
 
 export async function createAccount(payload: { 
   name: string; 
@@ -122,4 +124,18 @@ export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
   }
 
   return updateAccountConfig(payload.id, updatePayload)
+}
+
+export async function recalculateAccountBalanceAction(accountId: string) {
+  try {
+    const success = await recalculateBalance(accountId)
+    if (success) {
+      revalidatePath(`/accounts/${accountId}`)
+      return { success: true }
+    }
+    return { success: false, error: 'Failed to recalculate balance' }
+  } catch (error) {
+    console.error('Error in recalculateAccountBalanceAction:', error)
+    return { success: false, error: 'An unexpected error occurred' }
+  }
 }

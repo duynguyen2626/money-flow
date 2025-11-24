@@ -361,12 +361,45 @@ type TransactionRow = {
     accounts?: {
       name: string
       type: string
+      logo_url?: string | null
     } | null
     categories?: {
       name: string
     } | null
     metadata?: Json | null
   } | null>
+}
+
+function resolveAccountMovementInfo(
+  lines: TransactionRow['transaction_lines'] | undefined,
+  txn: TransactionRow,
+  fallbackCategoryName?: string | null
+) {
+  const sanitizedLines = (lines ?? []).filter(Boolean)
+  const creditLine = sanitizedLines.find(line => line?.account_id && line.type === 'credit')
+  const debitLine = sanitizedLines.find(line => line?.account_id && line.type === 'debit')
+  let sourceLine = creditLine ?? sanitizedLines.find(line => line?.account_id)
+  let destinationLine = debitLine
+
+  if (destinationLine && destinationLine.account_id === sourceLine?.account_id) {
+    destinationLine = undefined
+  }
+
+  if (!destinationLine) {
+    destinationLine = sanitizedLines.find(
+      line => line?.account_id && line.account_id !== sourceLine?.account_id
+    )
+  }
+
+  const fallbackName = txn.shops?.name ?? fallbackCategoryName ?? null
+  const fallbackLogo = txn.shops?.logo_url ?? null
+
+  return {
+    source_name: sourceLine?.accounts?.name ?? null,
+    source_logo: sourceLine?.accounts?.logo_url ?? null,
+    destination_name: destinationLine?.accounts?.name ?? fallbackName,
+    destination_logo: destinationLine?.accounts?.logo_url ?? fallbackLogo ?? null,
+  }
 }
 
 function extractCashbackFromLines(lines: TransactionRow['transaction_lines']): {
@@ -526,6 +559,11 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   const categoryId = categoryLine?.category_id ?? null
   const source_account_name = creditAccountLine?.accounts?.name ?? null
   const destination_account_name = debitAccountLine?.accounts?.name ?? null
+  const { source_name, source_logo, destination_name, destination_logo } = resolveAccountMovementInfo(
+    txn.transaction_lines,
+    txn,
+    categoryName ?? null
+  )
 
   return {
     id: txn.id,
@@ -540,6 +578,10 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     account_name: accountName,
     source_account_name,
     destination_account_name,
+    source_name,
+    source_logo,
+    destination_name,
+    destination_logo,
     category_id: categoryId,
     cashback_share_percent: percentRaw ?? null,
     cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? null,
@@ -582,7 +624,7 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
         cashback_share_percent,
         cashback_share_fixed,
         profiles ( name ),
-        accounts (name, type),
+        accounts (name, type, logo_url),
         categories (name)
       )
     `)
@@ -624,7 +666,7 @@ export async function getTransactionsByShop(shopId: string, limit: number = 50):
         cashback_share_percent,
         cashback_share_fixed,
         profiles ( name ),
-        accounts (name, type),
+        accounts (name, type, logo_url),
         categories (name)
       )
     `)
@@ -1215,4 +1257,58 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
       }
     })
     .filter(Boolean) as PendingRefundItem[]
+}
+
+/**
+ * Get unified transactions with proper source/destination mapping
+ * @param accountId Optional account ID for context-specific view
+ * @param limit Number of transactions to fetch
+ * @returns Array of transactions with proper mapping
+ */
+export async function getUnifiedTransactions(accountId?: string, limit: number = 50): Promise<TransactionWithDetails[]> {
+  const supabase = createClient();
+
+  let query = supabase
+    .from('transactions')
+    .select(`
+      id,
+      occurred_at,
+      note,
+      tag,
+      status,
+      created_at,
+      shop_id,
+      shops ( id, name, logo_url ),
+      transaction_lines (
+        amount,
+        type,
+        account_id,
+        metadata,
+        category_id,
+        person_id,
+        original_amount,
+        cashback_share_percent,
+        cashback_share_fixed,
+        profiles ( name ),
+        accounts (name, type, logo_url),
+        categories (name)
+      )
+    `)
+    .order('occurred_at', { ascending: false })
+    .limit(limit);
+
+  if (accountId) {
+    query = query.eq('transaction_lines.account_id', accountId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('Error fetching unified transactions:', error);
+    return [];
+  }
+
+  const rows = (data ?? []) as TransactionRow[];
+
+  return rows.map(txn => mapTransactionRow(txn, accountId));
 }

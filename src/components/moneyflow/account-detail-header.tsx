@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { AccountSpendingStats } from '@/types/cashback.types'
 import { updateAccountConfigAction } from '@/actions/account-actions'
+import { recalculateAccountBalanceAction } from '@/actions/account-actions'
 import { AccountStatsHeader } from './account-stats-header'
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { EditAccountDialog } from './edit-account-dialog'
@@ -43,7 +44,9 @@ export function AccountDetailHeader({
   const toggle = () => setCollapsed(prev => !prev)
   const router = useRouter()
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
+  const [isRecalculating, setIsRecalculating] = useState(false)
   const isCurrentlyActive = account.is_active !== false
+  
   const handleToggleAccountStatus = async () => {
     if (isUpdatingStatus) return
     setIsUpdatingStatus(true)
@@ -57,6 +60,25 @@ export function AccountDetailHeader({
       }
     } finally {
       setIsUpdatingStatus(false)
+    }
+  }
+
+  const handleRecalculateBalance = async () => {
+    if (isRecalculating) return
+    setIsRecalculating(true)
+    try {
+      const result = await recalculateAccountBalanceAction(account.id)
+      if (result.success) {
+        // Show success message
+        alert('Balance recalculated successfully!')
+        router.refresh()
+      } else {
+        alert('Failed to recalculate balance: ' + (result.error || 'Unknown error'))
+      }
+    } catch (error) {
+      alert('An error occurred while recalculating balance')
+    } finally {
+      setIsRecalculating(false)
     }
   }
 
@@ -138,6 +160,20 @@ export function AccountDetailHeader({
           </span>
         }
       />
+      <button
+        type="button"
+        onClick={handleRecalculateBalance}
+        disabled={isRecalculating}
+        className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60"
+        title="Tính toán lại số dư (Recalculate)"
+      >
+        {isRecalculating ? (
+          <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-700 border-t-transparent"></div>
+        ) : (
+          <RotateCcw className="h-3.5 w-3.5" />
+        )}
+        Recalculate
+      </button>
     </>
   )
 
@@ -206,6 +242,19 @@ export function AccountDetailHeader({
           </span>
         }
       />
+      <button
+        type="button"
+        onClick={handleRecalculateBalance}
+        disabled={isRecalculating}
+        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60"
+        title="Tính toán lại số dư (Recalculate)"
+      >
+        {isRecalculating ? (
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-700 border-t-transparent"></div>
+        ) : (
+          <RotateCcw className="h-4 w-4" />
+        )}
+      </button>
     </div>
   )
 
