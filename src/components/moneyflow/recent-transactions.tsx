@@ -901,11 +901,11 @@ export function RecentTransactions({
       )}
       {editingTxn && editingInitialValues && createPortal(
         <div
-          className="fixed inset-0 z-40 flex items-start justify-center bg-black/50 px-4 py-10"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4 py-4 sm:py-10"
           onClick={() => setEditingTxn(null)}
         >
             <div
-              className="w-full max-w-lg rounded-lg bg-white p-6 shadow-2xl"
+              className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-2xl scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200"
               onClick={event => event.stopPropagation()}
             >
             <div className="mb-4 flex items-center justify-between">
