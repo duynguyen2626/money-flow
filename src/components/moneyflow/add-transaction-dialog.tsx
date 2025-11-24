@@ -14,10 +14,11 @@ type AddTransactionDialogProps = {
   buttonText?: string;
   defaultTag?: string;
   defaultPersonId?: string;
-  defaultType?: 'expense' | 'income' | 'debt' | 'transfer';
+  defaultType?: 'expense' | 'income' | 'debt' | 'transfer' | 'repayment';
   buttonClassName?: string;
   defaultSourceAccountId?: string;
   defaultDebtAccountId?: string;
+  defaultAmount?: number;
   triggerContent?: ReactNode;
   onOpen?: () => void;
 }
@@ -34,6 +35,7 @@ export function AddTransactionDialog({
   buttonClassName,
   defaultSourceAccountId,
   defaultDebtAccountId,
+  defaultAmount,
   triggerContent,
   onOpen,
 }: AddTransactionDialogProps) {
@@ -109,6 +111,7 @@ export function AddTransactionDialog({
                   defaultType={defaultType}
                   defaultSourceAccountId={defaultSourceAccountId}
                   defaultDebtAccountId={defaultDebtAccountId}
+                  initialValues={defaultAmount ? { amount: defaultAmount } : undefined}
                 />
               </div>
             </div>
