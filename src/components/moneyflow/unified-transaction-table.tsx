@@ -588,9 +588,9 @@ export function UnifiedTransactionTable({
             // --- Type Logic ---
             let typeBadge = null;
             if (txn.type === 'expense') {
-                typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Chi</span>
+                typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Expense</span>
             } else if (txn.type === 'income') {
-                 typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> Thu</span>
+                 typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> Income</span>
             } else {
                  // Transfer
                  if (accountId) {
@@ -609,13 +609,13 @@ export function UnifiedTransactionTable({
                      // Ideally `txn.amount` reflects the balance change for the context account.
                      // `mapTransactionRow` with accountId param computes amount for that account.
                      if (txn.amount < 0) {
-                         typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700"><ArrowRight className="mr-1 h-3 w-3" /> Chuyển đi</span>
+                         typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700"><ArrowRight className="mr-1 h-3 w-3" /> Transfer Out</span>
                      } else {
-                         typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> Nhận tiền</span>
+                         typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> Transfer In</span>
                      }
                  } else {
                      // Global View
-                     typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Chuyển khoản</span>
+                     typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
                  }
             }
 
@@ -765,10 +765,10 @@ export function UnifiedTransactionTable({
                             <img
                               src={txn.shop_logo_url}
                               alt={txn.shop_name}
-                              className="h-5 w-5 rounded-full object-cover border"
+                              className="h-5 w-5 object-cover border"
                             />
                           ) : (
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600 border">
+                            <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 border">
                               {txn.shop_name.charAt(0).toUpperCase()}
                             </span>
                           )}
@@ -779,11 +779,11 @@ export function UnifiedTransactionTable({
                         <img
                           src={txn.shop_logo_url}
                           alt="Shop"
-                          className="h-5 w-5 rounded-full object-cover border"
+                          className="h-5 w-5 object-cover border"
                         />
                       )}
                       {!txn.shop_name && !txn.shop_logo_url && (
-                        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600 border">
+                        <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 border">
                           🛍️
                         </span>
                       )}
@@ -808,7 +808,7 @@ export function UnifiedTransactionTable({
                   if (!personName) return <span className="text-slate-400">-</span>
                   return (
                     <div className="flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-600 border">
+                        <span className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 border">
                             {personName.charAt(0).toUpperCase()}
                         </span>
                         <span className="font-medium text-slate-700">{personName}</span>

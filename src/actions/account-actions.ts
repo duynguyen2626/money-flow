@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { recalculateBalance } from '@/services/account.service'
+import { recalculateBalance, updateAccountConfig } from '@/services/account.service'
 
 import { Database, Json } from '@/types/database.types'
 import { Account } from '@/types/moneyflow.types'

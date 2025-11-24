@@ -395,7 +395,6 @@ async function fetchTransactions(
           tag,
           status,
           created_at,
-          metadata,
           shop_id,
           shops ( id, name, logo_url ),
           transaction_lines (
@@ -682,7 +681,7 @@ export async function recalculateBalance(accountId: string): Promise<boolean> {
     let totalIn = 0
     let totalOut = 0
 
-    lines.forEach(line => {
+    lines.forEach((line: { amount: number; type: string }) => {
       const amount = Math.abs(line.amount)
       if (line.type === 'debit') {
         currentBalance += amount
@@ -694,9 +693,9 @@ export async function recalculateBalance(accountId: string): Promise<boolean> {
     })
 
     // Update account with recalculated values
-    const { error: updateError } = await supabase
+    const { error: updateError } = await (supabase
       .from('accounts')
-      .update({
+      .update as any)({
         current_balance: currentBalance,
         total_in: totalIn,
         total_out: totalOut
