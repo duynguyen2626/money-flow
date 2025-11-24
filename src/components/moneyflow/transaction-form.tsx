@@ -386,11 +386,13 @@ const debtAccountByPerson = useMemo(() => {
   })
 
   const categoryOptions = useMemo(() => {
-    if (transactionType !== 'expense' && transactionType !== 'income') {
+    // For debt, we usually allow 'expense' categories (e.g. Dining out, Shopping)
+    const targetType = transactionType === 'debt' ? 'expense' : transactionType
+    if (targetType !== 'expense' && targetType !== 'income') {
       return []
     }
     return categories
-      .filter(cat => cat.type === transactionType)
+      .filter(cat => cat.type === targetType)
       .map(cat => ({
         value: cat.id,
         label: cat.name,
@@ -402,6 +404,11 @@ const debtAccountByPerson = useMemo(() => {
   const watchedAccountId = useWatch({
     control,
     name: 'source_account_id',
+  })
+
+  const watchedShopId = useWatch({
+    control,
+    name: 'shop_id',
   })
 
   const watchedAmount = useWatch({
@@ -438,6 +445,14 @@ const debtAccountByPerson = useMemo(() => {
     () => sourceAccounts.find(acc => acc.id === watchedAccountId),
     [sourceAccounts, watchedAccountId]
   )
+
+  useEffect(() => {
+    if (!watchedShopId) return
+    const shop = shops.find(s => s.id === watchedShopId)
+    if (shop?.default_category_id) {
+      form.setValue('category_id', shop.default_category_id)
+    }
+  }, [watchedShopId, shops, form])
 
   const cashbackMeta = useMemo(
     () =>
@@ -875,7 +890,7 @@ const debtAccountByPerson = useMemo(() => {
         </div>
       )}
 
-      {transactionType === 'expense' && (
+      {(transactionType === 'expense' || transactionType === 'debt' || (isEditMode && transactionType !== 'income' && transactionType !== 'transfer')) && (
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Shop</label>
           <Controller
@@ -1069,7 +1084,7 @@ const debtAccountByPerson = useMemo(() => {
         )}
       </div>
 
-      {(transactionType === 'expense' || transactionType === 'income') && (
+      {(transactionType === 'expense' || transactionType === 'income' || transactionType === 'debt') && (
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Category</label>
           <Controller

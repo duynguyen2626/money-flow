@@ -11,7 +11,7 @@ export async function getShops(): Promise<ShopRow[]> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('shops')
-    .select('id, name, logo_url')
+    .select('id, name, logo_url, default_category_id')
     .order('name', { ascending: true })
 
   if (error) {
@@ -22,7 +22,27 @@ export async function getShops(): Promise<ShopRow[]> {
   return (data ?? []) as ShopRow[]
 }
 
-export async function createShop(input: { name: string; logo_url?: string | null }): Promise<ShopRow | null> {
+export async function getShopById(id: string): Promise<ShopRow | null> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('shops')
+    .select('id, name, logo_url, default_category_id')
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    console.error('Failed to fetch shop by id:', error)
+    return null
+  }
+
+  return data as ShopRow
+}
+
+export async function createShop(input: {
+  name: string;
+  logo_url?: string | null;
+  default_category_id?: string | null
+}): Promise<ShopRow | null> {
   const supabase = createClient()
   const {
     data: { user },
@@ -32,6 +52,7 @@ export async function createShop(input: { name: string; logo_url?: string | null
   const payload: ShopInsert = {
     name: input.name.trim(),
     logo_url: input.logo_url ?? null,
+    default_category_id: input.default_category_id ?? null,
     created_by: userId,
   }
 
@@ -43,7 +64,7 @@ export async function createShop(input: { name: string; logo_url?: string | null
   return data as ShopRow
 }
 
-export async function updateShop(id: string, input: { name?: string; logo_url?: string | null }): Promise<boolean> {
+export async function updateShop(id: string, input: { name?: string; logo_url?: string | null; default_category_id?: string | null }): Promise<boolean> {
   const supabase = createClient()
   const payload: Partial<ShopUpdate> = {}
 
@@ -52,6 +73,9 @@ export async function updateShop(id: string, input: { name?: string; logo_url?: 
   }
   if (typeof input.logo_url !== 'undefined') {
     payload.logo_url = input.logo_url
+  }
+  if (typeof input.default_category_id !== 'undefined') {
+    payload.default_category_id = input.default_category_id
   }
 
   if (!Object.keys(payload).length) {

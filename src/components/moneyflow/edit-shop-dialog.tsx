@@ -13,19 +13,21 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { createShopAction } from '@/actions/shop-actions'
-import { Category } from '@/types/moneyflow.types'
+import { updateShopAction } from '@/actions/shop-actions'
+import { Category, Shop } from '@/types/moneyflow.types'
 import { Combobox } from '@/components/ui/combobox'
+import { Pencil } from 'lucide-react'
 
-type AddShopDialogProps = {
+type EditShopDialogProps = {
+  shop: Shop
   categories?: Category[]
 }
 
-export function AddShopDialog({ categories = [] }: AddShopDialogProps) {
+export function EditShopDialog({ shop, categories = [] }: EditShopDialogProps) {
   const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [logoUrl, setLogoUrl] = useState('')
-  const [defaultCategoryId, setDefaultCategoryId] = useState<string | null>(null)
+  const [name, setName] = useState(shop.name)
+  const [logoUrl, setLogoUrl] = useState(shop.logo_url ?? '')
+  const [defaultCategoryId, setDefaultCategoryId] = useState<string | null>(shop.default_category_id ?? null)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -48,36 +50,49 @@ export function AddShopDialog({ categories = [] }: AddShopDialogProps) {
     }
     setError(null)
     startTransition(async () => {
-      const result = await createShopAction({
+      const result = await updateShopAction(shop.id, {
         name: trimmedName,
         logo_url: logoUrl.trim() || null,
         default_category_id: defaultCategoryId
       })
 
       if (!result) {
-        setError('Could not create shop. Please try again.')
+        setError('Could not update shop. Please try again.')
         return
       }
 
-      setName('')
-      setLogoUrl('')
-      setDefaultCategoryId(null)
       setOpen(false)
       router.refresh()
     })
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(val) => {
+      // Only allow closing, opening is handled by trigger
+      setOpen(val)
+    }}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          Add Shop
-        </Button>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setOpen(true)
+          }}
+          className="rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+        >
+          <Pencil className="h-4 w-4" />
+        </button>
       </DialogTrigger>
-      <DialogContent className="bg-white">
+      <DialogContent
+        className="bg-white"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
-          <DialogTitle>Add Shop</DialogTitle>
-          <DialogDescription>Save the store where you usually shop so it can be linked to expenses.</DialogDescription>
+          <DialogTitle>Edit Shop</DialogTitle>
+          <DialogDescription>Update shop details.</DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-3">
           <div>
@@ -117,7 +132,7 @@ export function AddShopDialog({ categories = [] }: AddShopDialogProps) {
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={isPending}>
-            {isPending ? 'Saving...' : 'Create Shop'}
+            {isPending ? 'Saving...' : 'Update Shop'}
           </Button>
         </DialogFooter>
       </DialogContent>

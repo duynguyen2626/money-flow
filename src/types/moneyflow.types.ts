@@ -16,6 +16,7 @@ export type Shop = {
   id: string
   name: string
   logo_url?: string | null
+  default_category_id?: string | null
 }
 
 export type Account = {

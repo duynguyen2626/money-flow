@@ -90,6 +90,7 @@ export interface Database {
           id: string
           name: string
           logo_url: string | null
+          default_category_id: string | null
           created_by: string | null
           created_at: string
         }
@@ -97,6 +98,7 @@ export interface Database {
           id?: string
           name: string
           logo_url?: string | null
+          default_category_id?: string | null
           created_by?: string | null
           created_at?: string
         }
@@ -104,6 +106,7 @@ export interface Database {
           id?: string
           name?: string
           logo_url?: string | null
+          default_category_id?: string | null
           created_by?: string | null
           created_at?: string
         }
