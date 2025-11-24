@@ -4,12 +4,13 @@ import { MouseEvent, ReactNode, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { TransactionForm } from './transaction-form'
 import { useRouter } from 'next/navigation'
-import { Account, Category, Person } from '@/types/moneyflow.types'
+import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 
 type AddTransactionDialogProps = {
   accounts: Account[];
   categories: Category[];
   people: Person[];
+  shops: Shop[];
   buttonText?: string;
   defaultTag?: string;
   defaultPersonId?: string;
@@ -25,6 +26,7 @@ export function AddTransactionDialog({
   accounts, 
   categories, 
   people,
+  shops,
   buttonText = 'Add Transaction',
   defaultTag,
   defaultPersonId,
@@ -96,13 +98,14 @@ export function AddTransactionDialog({
                 </button>
               </div>
               <div className="py-2">
-                <TransactionForm
-                  accounts={accounts}
-                  categories={categories}
-                  people={people}
-                  onSuccess={handleSuccess}
-                  defaultTag={defaultTag}
-                  defaultPersonId={defaultPersonId}
+              <TransactionForm
+                accounts={accounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+                onSuccess={handleSuccess}
+                defaultTag={defaultTag}
+                defaultPersonId={defaultPersonId}
                   defaultType={defaultType}
                   defaultSourceAccountId={defaultSourceAccountId}
                   defaultDebtAccountId={defaultDebtAccountId}

@@ -22,8 +22,8 @@ export function AutomationChecker() {
       if (result.processedCount > 0) {
         const names = (result.names ?? []).join(', ')
         setToast({
-          title: `Bot tao ${result.processedCount} giao dich`,
-          detail: names ? `Da xu ly: ${names}` : undefined,
+          title: `${result.processedCount} transactions created by bot`,
+          detail: names ? `Processed: ${names}` : undefined,
         })
       }
     } catch (error) {
@@ -46,7 +46,7 @@ export function AutomationChecker() {
       <button
         type="button"
         onClick={runCheck}
-        title="Quét dịch vụ định kỳ"
+        title="Scan recurring services"
         className="rounded-full p-2 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
       >
         {loading ? (

@@ -23,23 +23,23 @@ export function SheetSyncControls({ personId, sheetLink }: Props) {
 
   const runTest = () => {
     if (!personId) {
-      setToast({ title: 'Thiếu người dùng', tone: 'error' })
+      setToast({ title: 'Missing person', tone: 'error' })
       return
     }
     if (!hasLink) {
-      setToast({ title: 'Chưa có Sheet link', tone: 'error' })
+      setToast({ title: 'Sheet link unavailable', tone: 'error' })
       return
     }
 
     startTransition(async () => {
-      setToast({ title: 'Đang gửi tín hiệu test...', tone: 'info' })
+      setToast({ title: 'Sending test signal...', tone: 'info' })
       const result = await testSheetConnectionAction(personId)
       if (result?.success) {
-        setToast({ title: 'Đã bắn tín hiệu test. Kiểm tra Google Sheet nhé!', tone: 'success' })
+        setToast({ title: 'Test signal sent. Check your Google Sheet!', tone: 'success' })
       } else {
         setToast({
-          title: 'Test thất bại',
-          detail: result?.message ?? 'Không gửi được tín hiệu test',
+          title: 'Test failed',
+          detail: result?.message ?? 'Unable to send test signal',
           tone: 'error',
         })
       }
@@ -48,31 +48,31 @@ export function SheetSyncControls({ personId, sheetLink }: Props) {
 
   const runSyncAll = () => {
     if (!personId) {
-      setToast({ title: 'Thiếu người dùng', tone: 'error' })
+      setToast({ title: 'Missing person', tone: 'error' })
       return
     }
     if (!hasLink) {
-      setToast({ title: 'Chưa có Sheet link', tone: 'error' })
+      setToast({ title: 'Sheet link unavailable', tone: 'error' })
       return
     }
     const confirmed =
       typeof window !== 'undefined'
-        ? window.confirm('Việc này sẽ đẩy toàn bộ giao dịch cũ sang Sheet. Tiếp tục?')
+        ? window.confirm('This will push all past transactions to the sheet. Continue?')
         : true
     if (!confirmed) return
 
     startTransition(async () => {
-      setToast({ title: 'Đang đồng bộ toàn bộ...', tone: 'info' })
+      setToast({ title: 'Syncing all transactions...', tone: 'info' })
       const result = await syncAllSheetDataAction(personId)
       if (result?.success) {
         setToast({
-          title: `Đã đồng bộ ${result.count ?? 0} giao dịch`,
+          title: `Synced ${result.count ?? 0} transactions`,
           tone: 'success',
         })
       } else {
         setToast({
-          title: 'Đồng bộ thất bại',
-          detail: result?.message ?? 'Không thể đồng bộ',
+          title: 'Sync failed',
+          detail: result?.message ?? 'Unable to sync transactions',
           tone: 'error',
         })
       }
@@ -80,7 +80,7 @@ export function SheetSyncControls({ personId, sheetLink }: Props) {
   }
 
   const indicatorColor = hasLink ? 'bg-green-500' : 'bg-gray-300'
-  const indicatorText = hasLink ? 'Đã lưu Sheet link' : 'Chưa có Sheet link'
+  const indicatorText = hasLink ? 'Sheet link saved' : 'No Sheet link'
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm">
@@ -102,7 +102,7 @@ export function SheetSyncControls({ personId, sheetLink }: Props) {
           disabled={disabled}
           className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
-          {isPending ? 'Đang xử lý...' : 'Test Kết Nối'}
+          {isPending ? 'Processing...' : 'Test Connection'}
         </button>
         <button
           type="button"
@@ -110,7 +110,7 @@ export function SheetSyncControls({ personId, sheetLink }: Props) {
           disabled={disabled}
           className="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
         >
-          {isPending ? 'Đang đồng bộ...' : 'Đồng Bộ Tất Cả'}
+          {isPending ? 'Syncing...' : 'Sync All'}
         </button>
       </div>
       {toast && (

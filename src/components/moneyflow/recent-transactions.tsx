@@ -4,7 +4,7 @@ import { useMemo, useState } from "react"
 import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
-import { Account, Category, Person, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
+import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
 import {
   Table,
   TableBody,
@@ -15,11 +15,18 @@ import {
   TableFooter,
 } from "@/components/ui/table"
 import { TransactionForm, TransactionFormValues } from "./transaction-form"
-import { restoreTransaction, voidTransaction } from "@/services/transaction.service"
+import {
+  restoreTransaction,
+  voidTransaction,
+  requestRefund,
+  confirmRefund,
+} from "@/services/transaction.service"
+import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
 
 type ColumnKey =
   | "date"
+  | "shop"
   | "note"
   | "category"
   | "account"
@@ -71,6 +78,7 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     category_id: categoryLine?.category_id ?? undefined,
     person_id: personLine?.person_id ?? undefined,
     debt_account_id: destinationAccountId,
+    shop_id: txn.shop_id ?? undefined,
     cashback_share_percent:
       percentValue !== undefined && percentValue !== null ? percentValue * 100 : undefined,
     cashback_share_fixed:
@@ -93,10 +101,12 @@ interface RecentTransactionsProps {
   accounts?: Account[]
   categories?: Category[]
   people?: Person[]
+  shops?: Shop[]
 }
 
 const defaultColumns: ColumnConfig[] = [
   { key: "date", label: "Date", defaultWidth: 120, minWidth: 100 },
+  { key: "shop", label: "Shop", defaultWidth: 160 },
   { key: "note", label: "Note", defaultWidth: 200, minWidth: 140 },
   { key: "category", label: "Category", defaultWidth: 140 },
   { key: "account", label: "Account", defaultWidth: 140 },
@@ -111,6 +121,23 @@ const defaultColumns: ColumnConfig[] = [
   { key: "task", label: "", defaultWidth: 56, minWidth: 48 },
 ]
 
+function parseMetadata(value: TransactionWithDetails['metadata']) {
+  if (!value) return null
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as Record<string, unknown>
+    } catch {
+      return null
+    }
+  }
+
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+
+  return null
+}
+
 export function RecentTransactions({
   transactions,
   accountType,
@@ -119,6 +146,7 @@ export function RecentTransactions({
   accounts = [],
   categories = [],
   people = [],
+  shops = [],
 }: RecentTransactionsProps) {
   const router = useRouter()
   const [showSelectedOnly, setShowSelectedOnly] = useState(false)
@@ -126,6 +154,7 @@ export function RecentTransactions({
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
     const map: Record<ColumnKey, boolean> = {
       date: true,
+      shop: true,
       note: true,
       category: true,
       account: true,
@@ -158,9 +187,20 @@ export function RecentTransactions({
   const [isRestoring, setIsRestoring] = useState(false)
   const [voidError, setVoidError] = useState<string | null>(null)
   const [statusOverrides, setStatusOverrides] = useState<Record<string, TransactionWithDetails['status']>>({})
+  const [refundDialogTxn, setRefundDialogTxn] = useState<TransactionWithDetails | null>(null)
+  const [refundAmount, setRefundAmount] = useState(0)
+  const [refundInstant, setRefundInstant] = useState(false)
+  const [refundError, setRefundError] = useState<string | null>(null)
+  const [refundTargetAccountId, setRefundTargetAccountId] = useState<string | null>(null)
+  const [isRefunding, setIsRefunding] = useState(false)
+  const [refundDialogMode, setRefundDialogMode] = useState<'request' | 'confirm'>('request')
   const editingInitialValues = useMemo(
     () => (editingTxn ? buildEditInitialValues(editingTxn) : null),
     [editingTxn]
+  )
+  const refundAccountOptions = useMemo(
+    () => accounts.filter(acc => acc.id !== REFUND_PENDING_ACCOUNT_ID),
+    [accounts]
   )
   const selection = selectedTxnIds ?? internalSelection
   const updateSelection = (next: Set<string>) => {
@@ -188,6 +228,7 @@ export function RecentTransactions({
     setColumnWidths(map)
     setVisibleColumns({
       date: true,
+      shop: true,
       note: true,
       category: true,
       account: true,
@@ -216,7 +257,7 @@ export function RecentTransactions({
     void restoreTransaction(txn.id)
       .then(ok => {
         if (!ok) {
-          setVoidError('Không thể khôi phục giao dịch. Vui lòng thử lại.')
+          setVoidError('Unable to restore transaction. Please try again.')
           return
         }
         setActionMenuOpen(null)
@@ -226,9 +267,111 @@ export function RecentTransactions({
       })
       .catch(err => {
         console.error('Failed to restore transaction:', err)
-        setVoidError('Không thể khôi phục giao dịch. Vui lòng thử lại.')
+        setVoidError('Unable to restore transaction. Please try again.')
       })
       .finally(() => setIsRestoring(false))
+  }
+
+  const closeRefundDialog = () => {
+    setRefundDialogTxn(null)
+    setRefundError(null)
+    setIsRefunding(false)
+    setRefundInstant(false)
+    setRefundAmount(0)
+    setRefundTargetAccountId(null)
+    setRefundDialogMode('request')
+  }
+
+  const openRefundDialog = (txn: TransactionWithDetails) => {
+    const baseAmount = Math.abs(txn.original_amount ?? txn.amount ?? 0)
+    const sourceAccountLine = txn.transaction_lines?.find(
+      line => line?.type === "credit" && line.account_id
+    ) ?? txn.transaction_lines?.find(line => line?.type === "debit" && line.account_id)
+    const defaultAccountId = sourceAccountLine?.account_id ?? refundAccountOptions[0]?.id ?? null
+
+    setRefundAmount(baseAmount)
+    setRefundInstant(false)
+    setRefundTargetAccountId(defaultAccountId)
+    setRefundError(null)
+    setRefundDialogMode('request')
+    setRefundDialogTxn(txn)
+    setActionMenuOpen(null)
+  }
+
+  const openConfirmRefundDialog = (txn: TransactionWithDetails) => {
+    const pendingLine = txn.transaction_lines?.find(
+      line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
+    )
+    const amount = Math.abs(pendingLine?.amount ?? 0)
+    const defaultAccountId = refundAccountOptions[0]?.id ?? null
+
+    setRefundAmount(amount)
+    setRefundInstant(false)
+    setRefundTargetAccountId(defaultAccountId)
+    setRefundError(null)
+    setRefundDialogMode('confirm')
+    setRefundDialogTxn(txn)
+    setActionMenuOpen(null)
+  }
+
+  const handleRefundSubmit = async () => {
+    if (!refundDialogTxn) return
+    setRefundError(null)
+    setIsRefunding(true)
+    try {
+      if (refundDialogMode === 'confirm') {
+        if (!refundTargetAccountId) {
+          setRefundError('Please select a target account.')
+          return
+        }
+
+        const confirmResult = await confirmRefund(refundDialogTxn.id, refundTargetAccountId)
+        if (!confirmResult.success) {
+          setRefundError(confirmResult.error ?? 'Could not confirm refund.')
+          return
+        }
+
+        closeRefundDialog()
+        router.refresh()
+        return
+      }
+
+      const amountBase = Math.abs(refundDialogTxn.original_amount ?? refundDialogTxn.amount ?? 0)
+      const requestedAmount = Math.max(Number(refundAmount) || 0, 0)
+      const amountToUse = Math.min(requestedAmount || amountBase, amountBase)
+      if (amountToUse <= 0) {
+        setRefundError('Please enter an amount greater than 0.')
+        return
+      }
+
+      const isPartial = amountToUse < amountBase
+      const requestResult = await requestRefund(refundDialogTxn.id, amountToUse, isPartial)
+      if (!requestResult.success) {
+        setRefundError(requestResult.error ?? 'Unable to create refund request.')
+        return
+      }
+
+      if (refundInstant) {
+        if (!refundTargetAccountId) {
+          setRefundError('Please select the receiving account.')
+          return
+        }
+
+        const confirmResult = await confirmRefund(
+          requestResult.refundTransactionId ?? '',
+          refundTargetAccountId
+        )
+        if (!confirmResult.success) {
+          setRefundError(confirmResult.error ?? 'Could not confirm refund.')
+          return
+        }
+      }
+
+      closeRefundDialog()
+      router.refresh()
+    } finally {
+      setIsRefunding(false)
+    }
   }
 
   const handleVoidConfirm = () => {
@@ -238,7 +381,7 @@ export function RecentTransactions({
     void voidTransaction(confirmVoidTarget.id)
       .then(ok => {
         if (!ok) {
-          setVoidError('Không thể hủy giao dịch. Vui lòng thử lại.')
+          setVoidError('Unable to void transaction. Please try again.')
           return
         }
         setStatusOverrides(prev => ({ ...prev, [confirmVoidTarget.id]: 'void' }))
@@ -247,7 +390,7 @@ export function RecentTransactions({
       })
       .catch(err => {
         console.error('Failed to void transaction:', err)
-        setVoidError('Không thể hủy giao dịch. Vui lòng thử lại.')
+        setVoidError('Unable to void transaction. Please try again.')
       })
       .finally(() => setIsVoiding(false))
   }
@@ -451,12 +594,19 @@ export function RecentTransactions({
             const effectiveStatus = statusOverrides[txn.id] ?? txn.status
             const isVoided = effectiveStatus === 'void'
             const isMenuOpen = actionMenuOpen === txn.id
+            const txnMetadata = parseMetadata(txn.metadata)
+            const refundStatus = typeof txnMetadata?.refund_status === "string" ? txnMetadata.refund_status : null
+            const isPendingRefund = refundStatus === 'requested'
+            const categoryLabel = txn.category_name ?? ''
+            const hasShoppingCategory = categoryLabel.toLowerCase().includes('shopping')
+            const canRequestRefund =
+              txn.type === 'expense' && (Boolean(txn.shop_id) || hasShoppingCategory)
 
             const taskCell = (
               <div className="relative flex justify-end">
                 <button
                   className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-1 text-slate-600 shadow-sm transition hover:bg-slate-50"
-                  title="Thao tác"
+                  title="Actions"
                   onClick={event => {
                     event.stopPropagation()
                     setActionMenuOpen(prev => (prev === txn.id ? null : txn.id))
@@ -476,8 +626,32 @@ export function RecentTransactions({
                       disabled={isVoided}
                     >
                       <Pencil className="h-4 w-4 text-slate-600" />
-                      <span>Chỉnh sửa</span>
+                      <span>Edit</span>
                     </button>
+                    {canRequestRefund && !isPendingRefund && (
+                      <button
+                        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                        onClick={event => {
+                          event.stopPropagation()
+                          openRefundDialog(txn)
+                        }}
+                        disabled={isVoided}
+                      >
+                        <span>Request Refund</span>
+                      </button>
+                    )}
+                    {isPendingRefund && (
+                      <button
+                        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                        onClick={event => {
+                          event.stopPropagation()
+                          openConfirmRefundDialog(txn)
+                        }}
+                        disabled={isVoided}
+                      >
+                        <span>Confirm Refund</span>
+                      </button>
+                    )}
                     {isVoided && (
                       <button
                         className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -488,7 +662,7 @@ export function RecentTransactions({
                         }}
                       >
                         <RotateCcw className="h-4 w-4" />
-                        <span>{isRestoring ? 'Đang khôi phục...' : 'Khôi phục'}</span>
+                        <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
                       </button>
                     )}
                     <button
@@ -502,7 +676,7 @@ export function RecentTransactions({
                       }}
                     >
                       <Ban className="h-4 w-4" />
-                      <span>Hủy giao dịch</span>
+                      <span>Void Transaction</span>
                     </button>
                   </div>
                 )}
@@ -539,6 +713,25 @@ export function RecentTransactions({
                   return amountValue
                 case "finalPrice":
                   return numberFormatter.format(finalPrice)
+                case "shop":
+                  if (!txn.shop_name) return "-"
+                  return (
+                    <div className="flex items-center gap-2">
+                      {txn.shop_logo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={txn.shop_logo_url}
+                          alt={txn.shop_name}
+                          className="h-6 w-6 rounded-full object-cover"
+                        />
+                      ) : (
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+                          {txn.shop_name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      <span className="truncate">{txn.shop_name}</span>
+                    </div>
+                  )
                 case "task":
                   return taskCell
                 default:
@@ -711,16 +904,16 @@ export function RecentTransactions({
           className="fixed inset-0 z-40 flex items-start justify-center bg-black/50 px-4 py-10"
           onClick={() => setEditingTxn(null)}
         >
-          <div
-            className="w-full max-w-lg rounded-lg bg-white p-6 shadow-2xl"
-            onClick={event => event.stopPropagation()}
-          >
+            <div
+              className="w-full max-w-lg rounded-lg bg-white p-6 shadow-2xl"
+              onClick={event => event.stopPropagation()}
+            >
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-900">Chỉnh sửa giao dịch</h3>
+              <h3 className="text-lg font-semibold text-slate-900">Edit Transaction</h3>
               <button
                 className="rounded px-2 py-1 text-slate-500 transition hover:bg-slate-100"
                 onClick={() => setEditingTxn(null)}
-                aria-label="Đóng"
+                aria-label="Close"
               >
                 ×
               </button>
@@ -729,6 +922,7 @@ export function RecentTransactions({
               accounts={accounts}
               categories={categories}
               people={people}
+              shops={shops}
               transactionId={editingTxn.id}
               initialValues={editingInitialValues}
               mode="edit"
@@ -748,9 +942,9 @@ export function RecentTransactions({
             className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
             onClick={event => event.stopPropagation()}
           >
-            <h3 className="text-lg font-semibold text-slate-900">Hủy giao dịch?</h3>
+            <h3 className="text-lg font-semibold text-slate-900">Void transaction?</h3>
             <p className="mt-2 text-sm text-slate-600">
-              Hành động này sẽ chuyển trạng thái giao dịch thành void và cập nhật số dư.
+              This action will mark the transaction as void and adjust the balances accordingly.
             </p>
             {voidError && (
               <p className="mt-2 text-sm text-red-600">{voidError}</p>
@@ -761,7 +955,7 @@ export function RecentTransactions({
                 onClick={closeVoidDialog}
                 disabled={isVoiding}
               >
-                Giữ lại
+                Keep
               </button>
               <button
                 className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-70"
@@ -769,7 +963,112 @@ export function RecentTransactions({
                 disabled={isVoiding}
               >
                 {isVoiding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Hủy giao dịch
+                Void Transaction
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+      {refundDialogTxn && createPortal(
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+          onClick={closeRefundDialog}
+        >
+          <div
+            className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">
+                {refundDialogMode === 'confirm' ? 'Confirm Refund' : 'Request Refund'}
+              </h3>
+              <button
+                className="text-slate-500 transition hover:text-slate-700"
+                onClick={closeRefundDialog}
+              >
+                ×
+              </button>
+            </div>
+            <p className="text-sm text-slate-600 mb-4">
+              {refundDialogTxn.note ?? 'No note available'}
+            </p>
+            <div className="space-y-4">
+              {refundDialogMode === 'request' ? (
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">Refund amount (VND)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={refundAmount}
+                    onChange={event => setRefundAmount(Math.max(Number(event.target.value) || 0, 0))}
+                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-1 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Amount to confirm</p>
+                  <p className="text-lg font-semibold text-slate-900">
+                    {numberFormatter.format(
+                      Math.abs(
+                        refundDialogTxn.transaction_lines
+                          ?.find(line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit')
+                          ?.amount ?? 0
+                      )
+                    )}
+                  </p>
+                </div>
+              )}
+              {refundDialogMode === 'request' && (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={refundInstant}
+                    onChange={event => setRefundInstant(event.target.checked)}
+                  />
+                  <span>Money already returned?</span>
+                </label>
+              )}
+              {(refundDialogMode === 'confirm' || (refundDialogMode === 'request' && refundInstant)) && (
+                <div>
+                  <label className="text-sm font-semibold text-slate-700">Receiving account</label>
+                  <select
+                    value={refundTargetAccountId ?? ''}
+                    onChange={event => setRefundTargetAccountId(event.target.value || null)}
+                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                  >
+                    <option value="">Choose account</option>
+                    {refundAccountOptions.map(account => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {refundError && (
+                <p className="text-sm text-red-600">{refundError}</p>
+              )}
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={closeRefundDialog}
+                disabled={isRefunding}
+              >
+                Cancel
+              </button>
+              <button
+                className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
+                onClick={handleRefundSubmit}
+                disabled={isRefunding}
+              >
+                {isRefunding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {refundDialogMode === 'confirm'
+                  ? 'Confirm Refund'
+                  : refundInstant
+                    ? 'Confirm & Refund'
+                    : 'Create Request'}
               </button>
             </div>
           </div>

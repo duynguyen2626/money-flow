@@ -2,16 +2,18 @@ import { getAccounts } from '@/services/account.service'
 import { getCashbackProgress } from '@/services/cashback.service'
 import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
+import { getShops } from '@/services/shop.service'
 import { AccountList } from '@/components/moneyflow/account-list'
 import { AccountCashbackSnapshot } from '@/types/moneyflow.types'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AccountsPage() {
-  const [accounts, categories, people] = await Promise.all([
+  const [accounts, categories, people, shops] = await Promise.all([
     getAccounts(),
     getCategories(),
     getPeople(),
+    getShops(),
   ])
 
   const creditAccountIds = accounts.filter(acc => acc.type === 'credit_card').map(acc => acc.id)
@@ -54,7 +56,7 @@ export default async function AccountsPage() {
         </div>
       </header>
 
-      <AccountList accounts={accounts} cashbackById={cashbackById} categories={categories} people={people} />
+      <AccountList accounts={accounts} cashbackById={cashbackById} categories={categories} people={people} shops={shops} />
     </section>
   )
 }

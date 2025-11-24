@@ -122,7 +122,7 @@ export async function testConnection(personId: string) {
   try {
     const sheetLink = await getProfileSheetLink(personId)
     if (!sheetLink) {
-      return { success: false, message: 'Chưa có Sheet link hợp lệ' }
+      return { success: false, message: 'No valid sheet link configured' }
     }
 
     const today = new Date().toISOString().slice(0, 10)
@@ -131,7 +131,7 @@ export async function testConnection(personId: string) {
       type: 'TEST-CONNECTION',
       amount: 0,
       shop: 'MoneyFlow Bot',
-      notes: 'Kết nối thành công!',
+      notes: 'Connection successful!',
       date: today,
     }
 
@@ -139,7 +139,7 @@ export async function testConnection(personId: string) {
     return { success: true }
   } catch (err) {
     console.error('Test connection failed:', err)
-    return { success: false, message: 'Gửi tín hiệu test thất bại' }
+    return { success: false, message: 'Failed to send test signal' }
   }
 }
 
@@ -147,7 +147,7 @@ export async function syncAllTransactions(personId: string) {
   try {
     const sheetLink = await getProfileSheetLink(personId)
     if (!sheetLink) {
-      return { success: false, message: 'Chưa có Sheet link hợp lệ' }
+    return { success: false, message: 'No valid sheet link configured' }
     }
 
     const supabase = createClient()
@@ -162,14 +162,21 @@ export async function syncAllTransactions(personId: string) {
         cashback_share_fixed,
         metadata,
         person_id,
-        transactions!inner(id, occurred_at, note, tag)
+        transactions!inner(
+          id,
+          occurred_at,
+          note,
+          tag,
+          shop_id,
+          shops ( name )
+        )
       `)
       .eq('person_id', personId)
       .order('occurred_at', { foreignTable: 'transactions', ascending: true })
 
     if (error) {
       console.error('Failed to load transactions for sync:', error)
-      return { success: false, message: 'Không tải được danh sách giao dịch' }
+      return { success: false, message: 'Failed to load transactions' }
     }
 
     const rows = (data ?? []) as {
@@ -198,6 +205,7 @@ export async function syncAllTransactions(personId: string) {
           id: row.transactions.id,
           occurred_at: row.transactions.occurred_at,
           note: row.transactions.note,
+          shop_name: row.transactions.shops?.name ?? undefined,
           tag: row.transactions.tag ?? undefined,
           amount: row.amount,
           original_amount: row.original_amount ?? Math.abs(row.amount),
@@ -220,6 +228,6 @@ export async function syncAllTransactions(personId: string) {
     return { success: true, count: sent }
   } catch (err) {
     console.error('Sync all transactions failed:', err)
-    return { success: false, message: 'Đồng bộ thất bại' }
+    return { success: false, message: 'Sync failed' }
   }
 }

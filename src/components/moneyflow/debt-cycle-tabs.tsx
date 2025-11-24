@@ -39,26 +39,26 @@ export function DebtCycleTabs({
                 >
                     Tất cả ({allCycles.length})
                 </button>
-                <button
-                    className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                        activeTab === 'tagged'
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                    onClick={() => setActiveTab('tagged')}
-                >
-                    Kỳ nợ tồn tại ({taggedCycles.length})
-                </button>
-                <button
-                    className={`px-4 py-2 rounded-lg text-sm font-medium ${
-                        activeTab === 'untagged'
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                    }`}
-                    onClick={() => setActiveTab('untagged')}
-                >
-                    Kỳ nợ không tồn tại (No Tag) ({untaggedCycles.length})
-                </button>
+                    <button
+                        className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                            activeTab === 'tagged'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                        onClick={() => setActiveTab('tagged')}
+                    >
+                        Tagged cycles ({taggedCycles.length})
+                    </button>
+                    <button
+                        className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                            activeTab === 'untagged'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                        onClick={() => setActiveTab('untagged')}
+                    >
+                        Untagged cycles ({untaggedCycles.length})
+                    </button>
             </div>
             
             {displayedCycles && displayedCycles.length > 0 ? (
@@ -66,7 +66,7 @@ export function DebtCycleTabs({
                     {displayedCycles.map((cycle) => (
                         <div key={cycle.tag} className="p-4 rounded-lg shadow-sm border bg-white">
                             <h3 className="font-semibold text-gray-800">
-                                {cycle.tag === 'UNTAGGED' ? 'Không có tag' : cycle.tag}
+                                {cycle.tag === 'UNTAGGED' ? 'No tag' : cycle.tag}
                             </h3>
                             <p className={`text-xl font-bold ${
                                 cycle.status === 'settled' 
@@ -89,17 +89,17 @@ export function DebtCycleTabs({
                                         : 'bg-red-100 text-red-700'
                             }`}>
                                 {cycle.status === 'settled' 
-                                    ? 'Đã xong' 
+                                    ? 'Settled' 
                                     : cycle.balance > 0 
-                                        ? 'Họ nợ mình' 
-                                        : 'Mình nợ họ'}
+                                        ? 'They owe me' 
+                                        : 'I owe them'}
                             </span>
                         </div>
                     ))}
                 </div>
             ) : (
                 <div className="text-center py-8 px-4 bg-white rounded-lg shadow">
-                    <p className="text-gray-500">Không có kỳ nợ nào được ghi nhận.</p>
+                    <p className="text-gray-500">No debt cycles recorded.</p>
                 </div>
             )}
         </div>

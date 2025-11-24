@@ -63,7 +63,7 @@ export function DebugDebtCycle({
                     }`}
                     onClick={() => setActiveTab('untagged')}
                 >
-                    Kỳ nợ không tồn tại (No Tag) ({untaggedCycles.length})
+                    Untagged cycles (No Tag) ({untaggedCycles.length})
                 </button>
             </div>
             
@@ -89,7 +89,7 @@ export function DebugDebtCycle({
                 </div>
             ) : (
                 <div className="text-center py-8 px-4 bg-white rounded-lg shadow">
-                    <p className="text-gray-500">Không có kỳ nợ nào được ghi nhận.</p>
+                    <p className="text-gray-500">No debt cycles recorded.</p>
                 </div>
             )}
         </div>

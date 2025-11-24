@@ -461,12 +461,12 @@ export function CreateAccountDialog({
             <>
             {/* Thêm dropdown chọn tài khoản cha */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-600">Liên kết hạn mức (Thẻ phụ)?</label>
+              <label className="text-sm font-medium text-slate-600">Share limit with supplementary card?</label>
               <select
                 {...register('parentAccountId')}
                 className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               >
-                <option value="">Không liên kết (Thẻ chính)</option>
+                <option value="">No link (Primary card)</option>
                 {parentAccountOptions.map(option => (
                   <option key={option.id} value={option.id}>
                     {option.name}
@@ -476,20 +476,20 @@ export function CreateAccountDialog({
               {!parentAccountId && suggestedParent && (
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
                   <p className="flex-1">
-                    Có vẻ bạn đang thêm thẻ phụ của {suggestedParent.name}. Liên kết hạn mức để duy trì chia sẻ?
+                    It looks like you are adding a supplementary card for {suggestedParent.name}. Link the limit to share it?
                   </p>
                   <button
                     type="button"
                     onClick={() => setValue('parentAccountId', suggestedParent.id)}
                     className="rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-semibold text-blue-700 hover:border-blue-300 hover:bg-blue-50"
                   >
-                    Liên kết với {suggestedParent.name}
+                    Link with {suggestedParent.name}
                   </button>
                 </div>
               )}
               {parentAccountId && selectedParent && (
                 <p className="text-xs text-slate-500">
-                  Hạn mức sẽ được chia sẻ từ thẻ {selectedParent.name}.
+                  Limit will be shared from {selectedParent.name}.
                 </p>
               )}
             </div>
@@ -583,7 +583,7 @@ export function CreateAccountDialog({
                         {...register('isUnlimitedCashback')}
                         className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       />
-                      Không giới hạn
+                      Unlimited
                     </label>
                   </div>
 

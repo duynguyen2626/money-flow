@@ -2,6 +2,7 @@ import { getAccounts } from '@/services/account.service'
 import { getCategories } from '@/services/category.service'
 import { getRecentTransactions } from '@/services/transaction.service'
 import { getPeople } from '@/services/people.service'
+import { getShops } from '@/services/shop.service'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
 import { TagFilterProvider } from '@/context/tag-filter-context'
@@ -9,11 +10,12 @@ import { TagFilterProvider } from '@/context/tag-filter-context'
 export const dynamic = 'force-dynamic'
 
 export default async function TransactionsPage() {
-  const [accounts, categories, people, recentTransactions] = await Promise.all([
+  const [accounts, categories, people, recentTransactions, shops] = await Promise.all([
     getAccounts(),
     getCategories(),
     getPeople(),
     getRecentTransactions(50),
+    getShops(),
   ])
 
   return (
@@ -25,13 +27,14 @@ export default async function TransactionsPage() {
               <h1 className="text-2xl font-semibold">Transactions</h1>
               <p className="text-sm text-slate-500">Manage your income and expenses, with real-time synchronization.</p>
             </div>
-            <AddTransactionDialog accounts={accounts} categories={categories} people={people} />
+            <AddTransactionDialog accounts={accounts} categories={categories} people={people} shops={shops} />
           </div>
           <FilterableTransactions
             transactions={recentTransactions}
             categories={categories}
             accounts={accounts}
             people={people}
+            shops={shops}
           />
         </section>
       </div>

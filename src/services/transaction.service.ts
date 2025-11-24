@@ -3,9 +3,12 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { format } from 'date-fns';
-import { Json } from '@/types/database.types';
+import { Database, Json } from '@/types/database.types';
 import { TransactionLine, TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types';
 import { syncTransactionToSheet } from './sheet.service';
+import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds';
+
+type ShopRow = Database['public']['Tables']['shops']['Row'];
 
 export type CreateTransactionInput = {
   occurred_at: string;
@@ -21,6 +24,7 @@ export type CreateTransactionInput = {
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
   discount_category_id?: string | null;
+  shop_id?: string | null;
 };
 
 async function resolveDiscountCategoryId(
@@ -67,6 +71,58 @@ async function resolveDiscountCategoryId(
 
 function generateTag(date: Date): string {
   return format(date, 'MMMyy').toUpperCase();
+}
+
+function parseMetadata(value: Json | null): Record<string, unknown> {
+  if (!value) return {};
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  }
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function mergeMetadata(value: Json | null, extra: Record<string, unknown>): Json {
+  const next = {
+    ...parseMetadata(value),
+    ...extra,
+  };
+  return next;
+}
+
+async function resolveCurrentUserId(supabase: ReturnType<typeof createClient>) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user?.id ?? '917455ba-16c0-42f9-9cea-264f81a3db66';
+}
+
+async function loadShopInfo(
+  supabase: ReturnType<typeof createClient>,
+  shopId?: string | null
+): Promise<ShopRow | null> {
+  if (!shopId) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from('shops')
+    .select('id, name, logo_url')
+    .eq('id', shopId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Failed to load shop info:', error);
+    return null;
+  }
+
+  return data as ShopRow | null;
 }
 
 async function buildTransactionLines(
@@ -200,6 +256,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       note: input.note,
       status: 'posted',
       tag: tag,
+      shop_id: input.shop_id ?? null,
       created_by: userId, // Thêm created_by với ID người dùng
     })
     .select()
@@ -218,11 +275,14 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     return false;
   }
 
+  const shopInfo = await loadShopInfo(supabase, input.shop_id)
+
   const syncBase = {
     id: txn.id,
     occurred_at: input.occurred_at,
     note: input.note,
     tag,
+    shop_name: shopInfo?.name ?? null,
   };
 
   for (const line of linesWithId) {
@@ -263,9 +323,12 @@ type TransactionRow = {
   occurred_at: string
   note: string
   tag: string | null
+  metadata?: Json | null
   cashback_share_percent?: number | null
   cashback_share_fixed?: number | null
   cashback_share_amount?: number | null
+  shop_id?: string | null
+  shops?: ShopRow | null
   transaction_lines?: Array<{
     amount: number
     type: 'debit' | 'credit'
@@ -397,6 +460,10 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
       (personLine as any)?.people?.name ??
       null,
     persisted_cycle_tag: (txn as any).metadata?.persisted_cycle_tag ?? null,
+    metadata: (txn as any).metadata ?? null,
+    shop_id: txn.shop_id ?? null,
+    shop_name: txn.shops?.name ?? null,
+    shop_logo_url: txn.shops?.logo_url ?? null,
     transaction_lines: (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[],
   }
 }
@@ -413,6 +480,9 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
       tag,
       status,
       created_at,
+      metadata,
+      shop_id,
+      shops ( id, name, logo_url ),
       transaction_lines (
         amount,
         type,
@@ -595,6 +665,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   }
 
   const { lines, tag } = built;
+  const shopInfo = await loadShopInfo(supabase, input.shop_id);
 
   const { error: headerError } = await supabase
     .from('transactions')
@@ -603,6 +674,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       note: input.note,
       tag: tag,
       status: 'posted',
+      shop_id: input.shop_id ?? null,
     }] as never)
     .eq('id', id);
 
@@ -647,6 +719,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     occurred_at: input.occurred_at,
     note: input.note,
     tag,
+    shop_name: shopInfo?.name ?? null,
   };
 
   for (const line of linesWithId) {
@@ -662,4 +735,348 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   }
 
   return true;
+}
+
+type RefundTransactionLine = {
+  amount: number
+  type: 'debit' | 'credit'
+  account_id?: string | null
+  category_id?: string | null
+  categories?: {
+    name?: string | null
+  } | null
+}
+
+type RefundTransactionRow = {
+  id: string
+  note: string | null
+  tag: string | null
+  occurred_at: string
+  metadata: Json | null
+  transaction_lines?: RefundTransactionLine[]
+}
+
+export type PendingRefundItem = {
+  id: string
+  occurred_at: string
+  note: string | null
+  tag: string | null
+  amount: number
+  original_note: string | null
+  original_category: string | null
+  linked_transaction_id?: string
+}
+
+export async function requestRefund(
+  transactionId: string,
+  refundAmount: number,
+  partial: boolean
+): Promise<{ success: boolean; refundTransactionId?: string; error?: string }> {
+  if (!transactionId) {
+    return { success: false, error: 'Thiếu thông tin giao dịch cần hoàn tiền.' }
+  }
+
+  const supabase = createClient()
+
+  const { data: existing, error: fetchError } = await supabase
+    .from('transactions')
+    .select(`
+      id,
+      note,
+      tag,
+      metadata,
+      transaction_lines (
+        amount,
+        type,
+        account_id,
+        category_id,
+        categories ( name )
+      )
+    `)
+    .eq('id', transactionId)
+    .maybeSingle()
+
+  if (fetchError || !existing) {
+    console.error('Failed to load transaction for refund request:', fetchError)
+    return { success: false, error: 'Không tìm thấy giao dịch hoặc đã xảy ra lỗi.' }
+  }
+
+  const lines = (existing.transaction_lines ?? []) as RefundTransactionLine[]
+  const categoryLine = lines.find(line => line?.category_id)
+  if (!categoryLine) {
+    return { success: false, error: 'Giao dịch không có danh mục phí để hoàn.' }
+  }
+
+  const maxAmount = Math.abs(categoryLine.amount ?? 0)
+  if (maxAmount <= 0) {
+    return { success: false, error: 'Không thể hoàn tiền cho giao dịch giá trị 0.' }
+  }
+
+  const requestedAmount = Number.isFinite(refundAmount) ? Math.abs(refundAmount) : maxAmount
+  const safeAmount = Math.min(Math.max(requestedAmount, 0), maxAmount)
+  if (safeAmount <= 0) {
+    return { success: false, error: 'Số tiền hoàn không hợp lệ.' }
+  }
+
+  const userId = await resolveCurrentUserId(supabase)
+  const requestNote = `Refund Request for ${existing.note ?? transactionId}`
+  const metadata = {
+    refund_status: 'requested',
+    linked_transaction_id: transactionId,
+    refund_amount: safeAmount,
+    partial,
+    original_note: existing.note ?? null,
+    original_category_id: categoryLine.category_id,
+    original_category_name: categoryLine.categories?.name ?? null,
+  }
+
+  const { data: requestTxn, error: createError } = await (supabase
+    .from('transactions')
+    .insert as any)({
+    occurred_at: new Date().toISOString(),
+    note: requestNote,
+    status: 'posted',
+    tag: existing.tag,
+    created_by: userId,
+    metadata,
+  })
+    .select()
+    .single()
+
+  if (createError || !requestTxn) {
+    console.error('Failed to insert refund request transaction:', createError)
+    return { success: false, error: 'Không thể tạo giao dịch yêu cầu hoàn tiền.' }
+  }
+
+  const linesToInsert = [
+    {
+      transaction_id: requestTxn.id,
+      account_id: REFUND_PENDING_ACCOUNT_ID,
+      amount: safeAmount,
+      type: 'debit',
+    },
+    {
+      transaction_id: requestTxn.id,
+      category_id: categoryLine.category_id,
+      amount: -safeAmount,
+      type: 'credit',
+    },
+  ]
+
+  const { error: linesError } = await (supabase.from('transaction_lines').insert as any)(linesToInsert)
+  if (linesError) {
+    console.error('Failed to insert refund request lines:', linesError)
+    return { success: false, error: 'Không thể tạo dòng ghi sổ hoàn tiền.' }
+  }
+
+  try {
+    const originalMeta = mergeMetadata(existing.metadata, {
+      refund_request_id: requestTxn.id,
+      refund_requested_at: new Date().toISOString(),
+      has_refund_request: true,
+    })
+    await (supabase.from('transactions').update as any)({ metadata: originalMeta }).eq('id', transactionId)
+  } catch (err) {
+    console.error('Failed to tag original transaction with refund metadata:', err)
+  }
+
+  return { success: true, refundTransactionId: requestTxn.id }
+}
+
+export async function confirmRefund(
+  pendingTransactionId: string,
+  targetAccountId: string
+): Promise<{ success: boolean; confirmTransactionId?: string; error?: string }> {
+  if (!pendingTransactionId || !targetAccountId) {
+    return { success: false, error: 'Thiếu thông tin xác nhận hoàn tiền.' }
+  }
+
+  const supabase = createClient()
+  const { data: pending, error: pendingError } = await supabase
+    .from('transactions')
+    .select(`
+      id,
+      note,
+      tag,
+      metadata,
+      transaction_lines (
+        amount,
+        type,
+        account_id
+      )
+    `)
+    .eq('id', pendingTransactionId)
+    .maybeSingle()
+
+  if (pendingError || !pending) {
+    console.error('Failed to load pending refund transaction:', pendingError)
+    return { success: false, error: 'Không tìm thấy giao dịch hoàn tiền hoặc đã xảy ra lỗi.' }
+  }
+
+  const pendingLine = (pending.transaction_lines ?? []).find(
+    line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
+  )
+
+  if (!pendingLine) {
+    return { success: false, error: 'Không có dòng ghi sổ treo phù hợp để xác nhận.' }
+  }
+
+  const amountToConfirm = Math.abs(pendingLine.amount ?? 0)
+  if (amountToConfirm <= 0) {
+    return { success: false, error: 'Số tiền xác nhận không hợp lệ.' }
+  }
+
+  const userId = await resolveCurrentUserId(supabase)
+  const confirmNote = `Confirmed refund for ${pending.note ?? pending.id}`
+  const metadata = {
+    refund_status: 'confirmed',
+    linked_transaction_id: pendingTransactionId,
+  }
+
+  const { data: confirmTxn, error: confirmError } = await (supabase
+    .from('transactions')
+    .insert as any)({
+    occurred_at: new Date().toISOString(),
+    note: confirmNote,
+    status: 'posted',
+    tag: pending.tag,
+    created_by: userId,
+    metadata,
+  })
+    .select()
+    .single()
+
+  if (confirmError || !confirmTxn) {
+    console.error('Failed to insert refund confirm transaction:', confirmError)
+    return { success: false, error: 'Không thể tạo giao dịch xác nhận hoàn tiền.' }
+  }
+
+  const confirmLines = [
+    {
+      transaction_id: confirmTxn.id,
+      account_id: targetAccountId,
+      amount: amountToConfirm,
+      type: 'debit',
+    },
+    {
+      transaction_id: confirmTxn.id,
+      account_id: REFUND_PENDING_ACCOUNT_ID,
+      amount: -amountToConfirm,
+      type: 'credit',
+    },
+  ]
+
+  const { error: confirmLinesError } = await (supabase.from('transaction_lines').insert as any)(
+    confirmLines
+  )
+  if (confirmLinesError) {
+    console.error('Failed to insert refund confirmation lines:', confirmLinesError)
+    return { success: false, error: 'Không thể ghi sổ dòng hoàn tiền.' }
+  }
+
+  try {
+    const updatedPendingMeta = mergeMetadata(pending.metadata, {
+      refund_status: 'confirmed',
+      refund_confirmed_transaction_id: confirmTxn.id,
+      refunded_at: new Date().toISOString(),
+    })
+    await (supabase.from('transactions').update as any)({ metadata: updatedPendingMeta }).eq(
+      'id',
+      pendingTransactionId
+    )
+  } catch (err) {
+    console.error('Failed to update pending refund metadata:', err)
+  }
+
+  const pendingMeta = parseMetadata(pending.metadata)
+  const originalTransactionId =
+    typeof pendingMeta.linked_transaction_id === 'string' ? pendingMeta.linked_transaction_id : null
+
+  if (originalTransactionId) {
+    try {
+      const { data: original } = await supabase
+        .from('transactions')
+        .select('metadata')
+        .eq('id', originalTransactionId)
+        .maybeSingle()
+
+      if (original) {
+        const updatedOriginalMeta = mergeMetadata(original.metadata, {
+          refund_status: 'confirmed',
+          refund_confirmed_transaction_id: confirmTxn.id,
+          refund_confirmed_at: new Date().toISOString(),
+        })
+        await (supabase.from('transactions').update as any)([{ metadata: updatedOriginalMeta }]).eq(
+          'id',
+          originalTransactionId
+        )
+      }
+    } catch (err) {
+      console.error('Failed to tag original transaction after refund confirmation:', err)
+    }
+  }
+
+  return { success: true, confirmTransactionId: confirmTxn.id }
+}
+
+export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
+  const supabase = createClient()
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(`
+      id,
+      occurred_at,
+      note,
+      tag,
+      metadata,
+      transaction_lines (
+        amount,
+        type,
+        account_id,
+        category_id,
+        categories ( name )
+      )
+    `)
+    .filter('metadata->>refund_status', 'eq', 'requested')
+    .order('occurred_at', { ascending: false })
+
+  if (error) {
+    console.error('Failed to fetch pending refunds:', error)
+    return []
+  }
+
+  const rows = (data ?? []) as RefundTransactionRow[]
+
+  return rows
+    .map(row => {
+      const pendingLine = (row.transaction_lines ?? []).find(
+        line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
+      )
+
+      if (!pendingLine) {
+        return null
+      }
+
+      const metadata = parseMetadata(row.metadata)
+      const categoryLine = (row.transaction_lines ?? []).find(line => line?.category_id)
+      const amount = Math.abs(pendingLine.amount ?? 0)
+      const originalCategory =
+        (metadata.original_category_name as string) ??
+        categoryLine?.categories?.name ??
+        null
+
+      return {
+        id: row.id,
+        occurred_at: row.occurred_at,
+        note: row.note,
+        tag: row.tag,
+        amount,
+        original_note: (metadata.original_note as string) ?? null,
+        original_category: originalCategory,
+        linked_transaction_id:
+          typeof metadata.linked_transaction_id === 'string' ? metadata.linked_transaction_id : undefined,
+      }
+    })
+    .filter(Boolean) as PendingRefundItem[]
 }

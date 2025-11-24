@@ -5,7 +5,7 @@ import { LayoutGrid, List } from 'lucide-react'
 import { CreateAccountDialog } from './create-account-dialog'
 import { AccountCard } from './account-card'
 import { AccountTable } from './account-table'
-import { Account, AccountCashbackSnapshot, Category, Person } from '@/types/moneyflow.types'
+import { Account, AccountCashbackSnapshot, Category, Person, Shop } from '@/types/moneyflow.types'
 import { updateAccountConfigAction } from '@/actions/account-actions'
 
 type AccountListProps = {
@@ -13,6 +13,7 @@ type AccountListProps = {
   cashbackById?: Record<string, AccountCashbackSnapshot | undefined>
   categories: Category[]
   people: Person[]
+  shops: Shop[]
 }
 
 type ViewMode = 'grid' | 'table'
@@ -34,7 +35,7 @@ const FILTERS: { key: FilterKey; label: string; match: (account: Account) => boo
   { key: 'debt', label: 'Debt', match: account => account.type === 'debt' },
 ]
 
-export function AccountList({ accounts, cashbackById = {}, categories, people }: AccountListProps) {
+export function AccountList({ accounts, cashbackById = {}, categories, people, shops }: AccountListProps) {
   const [view, setView] = useState<ViewMode>('grid')
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all')
   const [items, setItems] = useState<Account[]>(accounts)
@@ -191,6 +192,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people }:
                     categories={categories}
                     people={people}
                     allAccounts={items}
+                    shops={shops}
                     collateralAccounts={collateralAccounts}
                   />
                 ))}
@@ -205,9 +207,9 @@ export function AccountList({ accounts, cashbackById = {}, categories, people }:
               open={showClosedAccounts}
               onToggle={event => setShowClosedAccounts(event.currentTarget.open)}
             >
-              <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
-                <div className="flex items-center gap-2">
-                  <span>Tài khoản đã đóng</span>
+                <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
+                  <div className="flex items-center gap-2">
+                    <span>Closed accounts</span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                     {closedItems.length}
                   </span>
@@ -223,6 +225,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people }:
                     categories={categories}
                     people={people}
                     allAccounts={items}
+                    shops={shops}
                     collateralAccounts={collateralAccounts}
                   />
                 ))}
@@ -247,9 +250,9 @@ export function AccountList({ accounts, cashbackById = {}, categories, people }:
               open={showClosedAccounts}
               onToggle={event => setShowClosedAccounts(event.currentTarget.open)}
             >
-              <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
-                <div className="flex items-center gap-2">
-                  <span>Tài khoản đã đóng</span>
+                <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
+                  <div className="flex items-center gap-2">
+                    <span>Closed accounts</span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                     {closedItems.length}
                   </span>

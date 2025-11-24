@@ -1,18 +1,20 @@
 "use client"
 
-import { Home, Receipt, Landmark, CreditCard, Wallet, Users, Clapperboard } from "lucide-react"
+import { Home, Receipt, Landmark, CreditCard, Wallet, Users, Clapperboard, Repeat, ShoppingBag } from "lucide-react"
 import Link from "next/link"
 
 import { SidebarNav, type NavItem } from "./sidebar-nav"
 import { AutomationChecker } from "./automation-checker"
 
 const navItems: NavItem[] = [
-  { label: "Tong quan", href: "/", icon: Home },
-  { label: "Tai khoan", href: "/accounts", icon: Wallet },
-  { label: "So Giao dich", href: "/transactions", icon: Receipt },
+  { label: "Overview", href: "/", icon: Home },
+  { label: "Accounts", href: "/accounts", icon: Wallet },
+  { label: "Shops", href: "/shops", icon: ShoppingBag },
+  { label: "Transactions", href: "/transactions", icon: Receipt },
+  { label: "Refunds", href: "/refunds", icon: Repeat },
   { label: "People", href: "/people", icon: Users },
-  { label: "Dich vu", href: "/services", icon: Clapperboard },
-  { label: "So No", href: "/debt", icon: Landmark },
+  { label: "Services", href: "/services", icon: Clapperboard },
+  { label: "Debts", href: "/debt", icon: Landmark },
   { label: "Cashback", href: "/cashback", icon: CreditCard },
 ]
 

@@ -5,7 +5,7 @@ import { ArrowLeftRight, CreditCard, Minus, Plus, Settings, User, ChevronUp, Che
 
 import { useRouter } from 'next/navigation'
 
-import { Account, Category, Person } from '@/types/moneyflow.types'
+import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { AccountSpendingStats } from '@/types/cashback.types'
 import { updateAccountConfigAction } from '@/actions/account-actions'
 import { AccountStatsHeader } from './account-stats-header'
@@ -23,6 +23,7 @@ type AccountDetailHeaderProps = {
   cashbackStats: AccountSpendingStats | null
   isAssetAccount: boolean
   assetConfig: { interestRate: number | null; termMonths: number | null; maturityDate: string | null } | null
+  shops: Shop[]
 }
 
 export function AccountDetailHeader({
@@ -36,6 +37,7 @@ export function AccountDetailHeader({
   cashbackStats,
   isAssetAccount,
   assetConfig,
+  shops,
 }: AccountDetailHeaderProps) {
   const [collapsed, setCollapsed] = useState(false)
   const toggle = () => setCollapsed(prev => !prev)
@@ -58,13 +60,18 @@ export function AccountDetailHeader({
     }
   }
 
+  const dialogBaseProps = {
+    accounts: allAccounts,
+    categories,
+    people,
+    shops,
+  }
+
   const actionButtons = (
     <>
       {account.type !== 'credit_card' ? (
         <AddTransactionDialog
-          accounts={allAccounts}
-          categories={categories}
-          people={people}
+          {...dialogBaseProps}
           defaultType="transfer"
           defaultSourceAccountId={account.id}
           triggerContent={
@@ -76,9 +83,7 @@ export function AccountDetailHeader({
         />
       ) : (
         <AddTransactionDialog
-          accounts={allAccounts}
-          categories={categories}
-          people={people}
+          {...dialogBaseProps}
           defaultType="transfer"
           defaultDebtAccountId={account.id}
           triggerContent={
@@ -90,9 +95,7 @@ export function AccountDetailHeader({
         />
       )}
       <AddTransactionDialog
-        accounts={allAccounts}
-        categories={categories}
-        people={people}
+        {...dialogBaseProps}
         defaultType="debt"
         defaultDebtAccountId={account.id}
         defaultSourceAccountId={account.id}
@@ -104,9 +107,7 @@ export function AccountDetailHeader({
         }
       />
       <AddTransactionDialog
-        accounts={allAccounts}
-        categories={categories}
-        people={people}
+        {...dialogBaseProps}
         defaultType="income"
         defaultSourceAccountId={account.id}
         triggerContent={
@@ -117,9 +118,7 @@ export function AccountDetailHeader({
         }
       />
       <AddTransactionDialog
-        accounts={allAccounts}
-        categories={categories}
-        people={people}
+        {...dialogBaseProps}
         defaultType="expense"
         defaultSourceAccountId={account.id}
         triggerContent={
@@ -146,9 +145,7 @@ export function AccountDetailHeader({
     <div className="flex items-center gap-2">
       {account.type !== 'credit_card' ? (
         <AddTransactionDialog
-          accounts={allAccounts}
-          categories={categories}
-          people={people}
+          {...dialogBaseProps}
           defaultType="transfer"
           defaultSourceAccountId={account.id}
           triggerContent={
@@ -159,9 +156,7 @@ export function AccountDetailHeader({
         />
       ) : (
         <AddTransactionDialog
-          accounts={allAccounts}
-          categories={categories}
-          people={people}
+          {...dialogBaseProps}
           defaultType="transfer"
           defaultDebtAccountId={account.id}
           triggerContent={
@@ -172,9 +167,7 @@ export function AccountDetailHeader({
         />
       )}
       <AddTransactionDialog
-        accounts={allAccounts}
-        categories={categories}
-        people={people}
+        {...dialogBaseProps}
         defaultType="debt"
         defaultDebtAccountId={account.id}
         defaultSourceAccountId={account.id}
@@ -185,9 +178,7 @@ export function AccountDetailHeader({
         }
       />
       <AddTransactionDialog
-        accounts={allAccounts}
-        categories={categories}
-        people={people}
+        {...dialogBaseProps}
         defaultType="income"
         defaultSourceAccountId={account.id}
         triggerContent={
@@ -197,9 +188,7 @@ export function AccountDetailHeader({
         }
       />
       <AddTransactionDialog
-        accounts={allAccounts}
-        categories={categories}
-        people={people}
+        {...dialogBaseProps}
         defaultType="expense"
         defaultSourceAccountId={account.id}
         triggerContent={
