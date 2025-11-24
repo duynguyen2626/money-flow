@@ -20,7 +20,7 @@ export async function createShopAction(payload: {
 
 export async function updateShopAction(
   id: string,
-  payload: { name?: string; logo_url?: string | null }
+  payload: { name?: string; logo_url?: string | null; default_category_id?: string | null }
 ) {
   const ok = await updateShop(id, payload)
   if (ok) {

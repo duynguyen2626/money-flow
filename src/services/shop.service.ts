@@ -48,7 +48,7 @@ export async function createShop(input: {
   return data as ShopRow
 }
 
-export async function updateShop(id: string, input: { name?: string; logo_url?: string | null }): Promise<boolean> {
+export async function updateShop(id: string, input: { name?: string; logo_url?: string | null; default_category_id?: string | null }): Promise<boolean> {
   const supabase = createClient()
   const payload: Partial<ShopUpdate> = {}
 
@@ -57,6 +57,9 @@ export async function updateShop(id: string, input: { name?: string; logo_url?: 
   }
   if (typeof input.logo_url !== 'undefined') {
     payload.logo_url = input.logo_url
+  }
+  if (typeof input.default_category_id !== 'undefined') {
+    payload.default_category_id = input.default_category_id
   }
 
   if (!Object.keys(payload).length) {

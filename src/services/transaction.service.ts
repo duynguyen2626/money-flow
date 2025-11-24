@@ -508,6 +508,49 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
   return rows.map(txn => mapTransactionRow(txn));
 }
 
+export async function getTransactionsByShop(shopId: string, limit: number = 50): Promise<TransactionWithDetails[]> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(`
+      id,
+      occurred_at,
+      note,
+      tag,
+      status,
+      created_at,
+      shop_id,
+      shops ( id, name, logo_url ),
+      transaction_lines (
+        amount,
+        type,
+        account_id,
+        metadata,
+        category_id,
+        person_id,
+        original_amount,
+        cashback_share_percent,
+        cashback_share_fixed,
+        profiles ( name ),
+        accounts (name),
+        categories (name)
+      )
+    `)
+    .eq('shop_id', shopId)
+    .order('occurred_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error fetching transactions for shop:', error);
+    return [];
+  }
+
+  const rows = (data ?? []) as TransactionRow[];
+
+  return rows.map(txn => mapTransactionRow(txn));
+}
+
 export async function voidTransaction(id: string): Promise<boolean> {
   const supabase = createClient();
 

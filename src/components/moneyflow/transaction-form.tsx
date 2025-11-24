@@ -386,11 +386,13 @@ const debtAccountByPerson = useMemo(() => {
   })
 
   const categoryOptions = useMemo(() => {
-    if (transactionType !== 'expense' && transactionType !== 'income') {
+    // For debt, we usually allow 'expense' categories (e.g. Dining out, Shopping)
+    const targetType = transactionType === 'debt' ? 'expense' : transactionType
+    if (targetType !== 'expense' && targetType !== 'income') {
       return []
     }
     return categories
-      .filter(cat => cat.type === transactionType)
+      .filter(cat => cat.type === targetType)
       .map(cat => ({
         value: cat.id,
         label: cat.name,
@@ -1082,7 +1084,7 @@ const debtAccountByPerson = useMemo(() => {
         )}
       </div>
 
-      {(transactionType === 'expense' || transactionType === 'income') && (
+      {(transactionType === 'expense' || transactionType === 'income' || transactionType === 'debt') && (
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Category</label>
           <Controller

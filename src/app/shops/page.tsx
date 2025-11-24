@@ -1,8 +1,10 @@
 import { getShops } from '@/services/shop.service'
 import { AddShopDialog } from '@/components/moneyflow/add-shop-dialog'
+import { EditShopDialog } from '@/components/moneyflow/edit-shop-dialog'
 import { ShoppingBag } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { Category } from '@/types/moneyflow.types'
+import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,25 +41,36 @@ export default async function ShopsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {shops.map(shop => (
-            <div key={shop.id} className="flex flex-col items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-center gap-3">
-                {shop.logo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={shop.logo_url}
-                    alt={shop.name}
-                    className="h-10 w-10 rounded-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
-                    {shop.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
-                <p className="text-lg font-semibold text-slate-900">{shop.name}</p>
+            <Link
+              key={shop.id}
+              href={`/shops/${shop.id}`}
+              className="relative flex flex-col items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md"
+            >
+              <div className="flex w-full items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {shop.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={shop.logo_url}
+                      alt={shop.name}
+                      className="h-10 w-10 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-sm font-semibold text-slate-600">
+                      {shop.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <p className="text-lg font-semibold text-slate-900">{shop.name}</p>
+                </div>
+                <EditShopDialog shop={shop} categories={categories} />
               </div>
-              <p className="text-xs uppercase tracking-wide text-slate-400">Shop ID</p>
-              <p className="text-sm text-slate-500">{shop.id}</p>
-            </div>
+              <div className="w-full">
+                <p className="text-xs uppercase tracking-wide text-slate-400">Default Category</p>
+                <p className="text-sm text-slate-500">
+                  {categories.find(c => c.id === shop.default_category_id)?.name ?? 'None'}
+                </p>
+              </div>
+            </Link>
           ))}
         </div>
       )}
