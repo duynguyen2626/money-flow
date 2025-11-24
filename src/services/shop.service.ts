@@ -22,6 +22,22 @@ export async function getShops(): Promise<ShopRow[]> {
   return (data ?? []) as ShopRow[]
 }
 
+export async function getShopById(id: string): Promise<ShopRow | null> {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('shops')
+    .select('id, name, logo_url, default_category_id')
+    .eq('id', id)
+    .single()
+
+  if (error) {
+    console.error('Failed to fetch shop by id:', error)
+    return null
+  }
+
+  return data as ShopRow
+}
+
 export async function createShop(input: {
   name: string;
   logo_url?: string | null;

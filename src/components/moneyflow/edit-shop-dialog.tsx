@@ -67,16 +67,29 @@ export function EditShopDialog({ shop, categories = [] }: EditShopDialogProps) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(val) => {
+      // Only allow closing, opening is handled by trigger
+      setOpen(val)
+    }}>
       <DialogTrigger asChild>
         <button
-          onClick={e => e.stopPropagation()}
+          type="button"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            setOpen(true)
+          }}
           className="rounded-full bg-slate-100 p-2 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
         >
           <Pencil className="h-4 w-4" />
         </button>
       </DialogTrigger>
-      <DialogContent className="bg-white">
+      <DialogContent
+        className="bg-white"
+        onClick={(e) => e.stopPropagation()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Edit Shop</DialogTitle>
           <DialogDescription>Update shop details.</DialogDescription>
