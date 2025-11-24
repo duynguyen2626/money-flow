@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { FilterIcon, X } from 'lucide-react'
-import { TransactionTable } from '@/components/moneyflow/transaction-table'
+import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
 import { Combobox } from '@/components/ui/combobox'
@@ -13,6 +13,7 @@ type FilterableTransactionsProps = {
     accounts?: Account[]
     people?: Person[]
     accountType?: Account['type']
+    accountId?: string
     searchTerm?: string
     onSearchChange?: (next: string) => void
     shops?: Shop[]
@@ -28,6 +29,7 @@ export function FilterableTransactions({
     accounts = [],
     people = [],
     accountType,
+    accountId,
     searchTerm: externalSearch,
     onSearchChange,
     shops = [],
@@ -475,9 +477,10 @@ export function FilterableTransactions({
             </div>
             
             <div>
-                <TransactionTable
+                <UnifiedTransactionTable
                     transactions={finalTransactions} 
                     accountType={accountType}
+                    accountId={accountId}
                     accounts={accounts}
                     categories={categories}
                     people={people}

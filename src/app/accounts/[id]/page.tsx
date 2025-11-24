@@ -119,6 +119,7 @@ export default async function AccountPage({ params }: PageProps) {
               accounts={allAccounts}
               people={people}
               accountType={account.type}
+              accountId={id}
             />
           </div>
         </section>

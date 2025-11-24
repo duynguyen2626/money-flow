@@ -524,6 +524,8 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   const cashbackAmount = txn.cashback_share_amount ?? cashbackFromLines.cashback_share_amount
   const personLine = lines.find(line => line && line.person_id)
   const categoryId = categoryLine?.category_id ?? null
+  const source_account_name = creditAccountLine?.accounts?.name ?? null
+  const destination_account_name = debitAccountLine?.accounts?.name ?? null
 
   return {
     id: txn.id,
@@ -533,22 +535,11 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     tag: txn.tag || null,
     created_at: (txn as any).created_at,
     amount: displayAmount,
-    type: type as 'income' | 'expense' | 'transfer', // Cast back to allowed types, handling repayment as income/transfer maybe?
-    // Actually, UI handles 'repayment' if we add it to type definition, but standard types are income/expense/transfer.
-    // Let's stick to standard types but add a `is_repayment` flag or similar if needed, or just let it be 'income'/'transfer'.
-    // If I return 'repayment' as type, I need to update frontend types.
-    // The Plan said: "Ensure Repayment transactions are identified correctly."
-    // `type` property in `TransactionWithDetails` is optional string or specific union.
-    // Let's check `TransactionWithDetails` definition.
-    // It is `type?: 'income' | 'expense' | 'transfer';`
-    // I should map 'repayment' to 'income' or 'transfer' but maybe use `category_name` to distinguish.
-
-    // For now, if it is repayment, it is effectively a Transfer (Debt -> Bank) or Income (Bank).
-    // Let's keep it as 'income' if it increases Bank balance, or 'transfer'.
-    // Logic above: `type = accountLine.amount >= 0 ? 'income' : 'expense'` handles it if accountLine is the Bank.
-
+    type: type as 'income' | 'expense' | 'transfer',
     category_name: categoryName,
     account_name: accountName,
+    source_account_name,
+    destination_account_name,
     category_id: categoryId,
     cashback_share_percent: percentRaw ?? null,
     cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? null,
