@@ -481,6 +481,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     }
   } else {
     // Transfer logic
+    categoryName = "Money Transfer"
     // We want to show the "Other side" account name
     if (accountId) {
         // We are viewing from 'accountId' perspective. Find the other account.

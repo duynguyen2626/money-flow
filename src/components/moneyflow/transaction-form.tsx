@@ -1201,6 +1201,114 @@ export function TransactionForm({
     </div>
   )
 
+  const CashbackInputs = showCashbackInputs ? (
+    <div className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/80 p-4 text-sm text-slate-600 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs font-semibold uppercase text-indigo-700">
+        <div className="space-y-0.5">
+          <div className="text-[11px] text-slate-500">Statement Cycle</div>
+          <div className="text-sm font-semibold text-slate-900">
+            {selectedCycleLabel ?? 'No cycle info'}
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] text-indigo-800">Rate: {(cashbackMeta?.rate ?? 0) * 100}%</span>
+          <span>
+            Budget:{' '}
+            {remainingBudget === null
+              ? 'Unlimited'
+              : numberFormatter.format(remainingBudget)}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">% Back</label>
+          <Controller
+            control={control}
+            name="cashback_share_percent"
+            render={({ field }) => (
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max={rateLimitPercent ?? undefined}
+                value={field.value ?? ''}
+                onChange={event => {
+                  const nextValue = event.target.value
+                  field.onChange(nextValue === '' ? undefined : Number(nextValue))
+                }}
+                disabled={budgetMaxed}
+                className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Enter percentage"
+              />
+            )}
+          />
+          {rateLimitPercent !== null && (
+            <p className="text-xs text-slate-500">
+              Up to {Math.min(50, rateLimitPercent).toFixed(2)}%
+            </p>
+          )}
+          {rateLimitPercent !== null && percentEntry > rateLimitPercent && (
+            <p className="text-xs text-amber-600">
+              Max {Math.min(50, rateLimitPercent).toFixed(2)}% according to card policy
+            </p>
+          )}
+
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">Fixed Back</label>
+          <Controller
+            control={control}
+            name="cashback_share_fixed"
+            render={({ field }) => (
+              <input
+                type="text"
+                inputMode="decimal"
+                value={field.value ? new Intl.NumberFormat('en-US').format(field.value) : ''}
+                onChange={event => {
+                  const rawValue = event.target.value
+                  const numericValue = rawValue.replace(/[^0-9]/g, '')
+                  if (numericValue === '') {
+                    field.onChange(undefined)
+                    return
+                  }
+                  const number = parseInt(numericValue, 10)
+                  if (Number.isNaN(number)) return
+                  const clamped = amountValue > 0 ? Math.min(number, amountValue) : number
+                  field.onChange(clamped)
+                }}
+                disabled={budgetMaxed}
+                max={amountValue > 0 ? amountValue : undefined}
+                className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Enter fixed amount"
+              />
+            )}
+          />
+          {budgetMaxed && (
+            <p className="text-xs text-rose-600">Budget exhausted, cannot add fixed amount.</p>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+        <span>Total shared with person</span>
+        <span className="font-semibold text-slate-900">
+          {numberFormatter.format(totalBackGiven)}
+        </span>
+      </div>
+      {budgetExceeded && remainingBudget !== null && (
+        <p className="text-xs text-amber-600">
+          Cashback budget only has {numberFormatter.format(remainingBudget)} remaining.
+        </p>
+      )}
+      {suggestedPercent !== null && budgetExceeded && (
+        <p className="text-xs text-amber-600">
+          Suggest lowering percentage to {suggestedPercent.toFixed(2)}% to not exceed budget.
+        </p>
+      )}
+    </div>
+  ) : null;
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       {transactionType !== 'transfer' && (
@@ -1213,6 +1321,7 @@ export function TransactionForm({
           {TagInput}
           {SourceAccountInput}
           {AmountInput}
+          {CashbackInputs}
           {NoteInput}
         </>
       )}
@@ -1228,114 +1337,6 @@ export function TransactionForm({
           {NoteInput}
         </>
       )}
-
-      {showCashbackInputs && (
-      <div className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/80 p-4 text-sm text-slate-600 shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs font-semibold uppercase text-indigo-700">
-          <div className="space-y-0.5">
-            <div className="text-[11px] text-slate-500">Statement Cycle</div>
-            <div className="text-sm font-semibold text-slate-900">
-              {selectedCycleLabel ?? 'No cycle info'}
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] text-indigo-800">Rate: {(cashbackMeta?.rate ?? 0) * 100}%</span>
-            <span>
-              Budget:{' '}
-              {remainingBudget === null
-                ? 'Unlimited'
-                : numberFormatter.format(remainingBudget)}
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-600">% Back</label>
-            <Controller
-              control={control}
-              name="cashback_share_percent"
-              render={({ field }) => (
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max={rateLimitPercent ?? undefined}
-                  value={field.value ?? ''}
-                  onChange={event => {
-                    const nextValue = event.target.value
-                    field.onChange(nextValue === '' ? undefined : Number(nextValue))
-                  }}
-                  disabled={budgetMaxed}
-                  className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder="Enter percentage"
-                />
-              )}
-            />
-            {rateLimitPercent !== null && (
-              <p className="text-xs text-slate-500">
-                Up to {Math.min(50, rateLimitPercent).toFixed(2)}%
-              </p>
-            )}
-            {rateLimitPercent !== null && percentEntry > rateLimitPercent && (
-              <p className="text-xs text-amber-600">
-                Max {Math.min(50, rateLimitPercent).toFixed(2)}% according to card policy
-              </p>
-            )}
-
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-600">Fixed Back</label>
-            <Controller
-              control={control}
-              name="cashback_share_fixed"
-              render={({ field }) => (
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={field.value ? new Intl.NumberFormat('en-US').format(field.value) : ''}
-                  onChange={event => {
-                    const rawValue = event.target.value
-                    const numericValue = rawValue.replace(/[^0-9]/g, '')
-                    if (numericValue === '') {
-                      field.onChange(undefined)
-                      return
-                    }
-                    const number = parseInt(numericValue, 10)
-                    if (Number.isNaN(number)) return
-                    const clamped = amountValue > 0 ? Math.min(number, amountValue) : number
-                    field.onChange(clamped)
-                  }}
-                  disabled={budgetMaxed}
-                  max={amountValue > 0 ? amountValue : undefined}
-                  className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder="Enter fixed amount"
-                />
-              )}
-            />
-            {budgetMaxed && (
-            <p className="text-xs text-rose-600">Budget exhausted, cannot add fixed amount.</p>
-            )}
-          </div>
-        </div>
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-            <span>Total shared with person</span>
-          <span className="font-semibold text-slate-900">
-            {numberFormatter.format(totalBackGiven)}
-          </span>
-        </div>
-        {budgetExceeded && remainingBudget !== null && (
-          <p className="text-xs text-amber-600">
-            Cashback budget only has {numberFormatter.format(remainingBudget)} remaining.
-          </p>
-        )}
-        {suggestedPercent !== null && budgetExceeded && (
-          <p className="text-xs text-amber-600">
-            Suggest lowering percentage to {suggestedPercent.toFixed(2)}% to not exceed budget.
-          </p>
-        )}
-      </div>
-    )}
 
       {status && (
         <p
