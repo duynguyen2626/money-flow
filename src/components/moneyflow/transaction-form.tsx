@@ -522,7 +522,7 @@ export function TransactionForm({
         ),
       })),
     [shops]
-  )
+  );
 
   const selectedAccount = useMemo(
     () => sourceAccounts.find(acc => acc.id === watchedAccountId),
@@ -869,17 +869,19 @@ export function TransactionForm({
               onValueChange={field.onChange}
               items={shopOptions}
               placeholder={
-                debtAccountForRepayment ? `To: ${debtAccountForRepayment.name}` : 'Select shop'
+                debtAccountForRepayment && !field.value ? (
+                  <span className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+                      {getAccountInitial(debtAccountForRepayment.name)}
+                    </span>
+                    <span>To: {debtAccountForRepayment.name}</span>
+                  </span>
+                ) : (
+                  'Select shop'
+                )
               }
               inputPlaceholder="Search shop..."
               emptyState="No shops yet"
-              icon={
-                debtAccountForRepayment && !field.value ? (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
-                    {getAccountInitial(debtAccountForRepayment.name)}
-                  </span>
-                ) : undefined
-              }
             />
           )}
         />

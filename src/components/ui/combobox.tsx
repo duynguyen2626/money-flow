@@ -19,7 +19,7 @@ type ComboboxProps = {
   items: ComboboxItem[]
   value?: string
   onValueChange: (value: string | undefined) => void
-  placeholder?: string
+  placeholder?: React.ReactNode
   inputPlaceholder?: string
   emptyState?: string
   disabled?: boolean
