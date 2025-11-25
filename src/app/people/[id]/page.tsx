@@ -3,14 +3,14 @@
 import { use, useEffect, useState } from 'react';
 import { getPeoplePageData } from '@/actions/people-actions';
 import { DebtCycleFilter } from '@/components/moneyflow/debt-cycle-filter';
-import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions';
 import { TagFilterProvider, useTagFilter } from '@/context/tag-filter-context';
 import { EditPersonDialog } from '@/components/people/edit-person-dialog';
 import { notFound } from 'next/navigation';
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog';
-import { Account, Category, Person, Shop, TransactionWithDetails, Subscription, DebtAccount } from '@/types/moneyflow.types';
+import { Account, Category, Person, Shop, Subscription, DebtAccount } from '@/types/moneyflow.types';
 import { DebtByTagAggregatedResult } from '@/services/debt.service';
 import { SheetSyncControls } from '@/components/people/sheet-sync-controls';
+import { ConstructionIcon } from 'lucide-react';
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
@@ -24,7 +24,6 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const [person, setPerson] = useState<DebtAccount | null>(null);
     const [debtCycles, setDebtCycles] = useState<DebtByTagAggregatedResult[]>([]);
-    const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
     const [personProfile, setPersonProfile] = useState<Person | null>(null);
@@ -44,7 +43,6 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
             const data = await getPeoplePageData(id);
             setPerson(data.person);
             setDebtCycles(data.debtCycles);
-            setTransactions(data.transactions);
             setAccounts(data.accounts);
             setCategories(data.categories);
             setPersonProfile(data.personProfile);
@@ -225,15 +223,13 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
                     <h2 className="text-lg font-semibold">Transaction History</h2>
                 </div>
                 <div className="mt-4">
-                    <FilterableTransactions
-                        transactions={transactions}
-                        categories={categories}
-                        accounts={accounts}
-                        people={allPeople}
-                        shops={shops}
-                        accountId={id}
-                        hidePeopleColumn={true}
-                    />
+                    <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-slate-500">
+                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-50">
+                        <ConstructionIcon className="h-6 w-6 text-slate-400" />
+                      </div>
+                      <p className="font-medium">Transaction History</p>
+                      <p className="text-xs">This module is being unified. Check the main Transactions page for details.</p>
+                    </div>
                 </div>
             </section>
         </div>

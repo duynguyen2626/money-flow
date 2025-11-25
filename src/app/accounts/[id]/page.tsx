@@ -1,11 +1,11 @@
-import { getAccountDetails, getAccountTransactions, getAccountStats, getAccountTransactionDetails, getAccounts } from '@/services/account.service'
+import { getAccountDetails, getAccountStats, getAccountTransactionDetails, getAccounts } from '@/services/account.service'
 import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
 import { parseSavingsConfig, getSharedLimitParentId } from '@/lib/account-utils'
-import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 import { AccountDetailHeader } from '@/components/moneyflow/account-detail-header'
+import { ConstructionIcon } from 'lucide-react'
 
 type PageProps = {
   params: Promise<{
@@ -34,8 +34,7 @@ export default async function AccountPage({ params }: PageProps) {
     )
   }
 
-  const [txns, stats, txnDetails, allAccounts, categories, people, shops] = await Promise.all([
-    getAccountTransactions(id, 50),
+  const [stats, txnDetails, allAccounts, categories, people, shops] = await Promise.all([
     account.type === 'credit_card' ? getAccountStats(id) : Promise.resolve(null),
     getAccountTransactionDetails(id, 50),
     getAccounts(),
@@ -110,17 +109,15 @@ export default async function AccountPage({ params }: PageProps) {
         <section className="bg-white shadow rounded-lg p-6">
           <div className="flex items-center justify-between border-b pb-3">
             <h2 className="text-lg font-semibold">Transaction History</h2>
-            <span className="text-sm text-slate-500">{txns.length} most recent</span>
           </div>
           <div className="mt-4">
-            <FilterableTransactions
-              transactions={txns}
-              categories={categories}
-              accounts={allAccounts}
-              people={people}
-              accountType={account.type}
-              accountId={id}
-            />
+            <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-slate-500">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-50">
+                <ConstructionIcon className="h-6 w-6 text-slate-400" />
+              </div>
+              <p className="font-medium">Transaction History</p>
+              <p className="text-xs">This module is being unified. Check the main Transactions page for details.</p>
+            </div>
           </div>
         </section>
       </TagFilterProvider>

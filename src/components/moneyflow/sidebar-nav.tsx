@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { LucideIcon } from 'lucide-react'
 import clsx from 'clsx'
+import { CustomTooltip } from '@/components/ui/custom-tooltip'
 
 export type NavItem = {
   label: string
@@ -23,9 +24,8 @@ export function SidebarNav({ items, isCollapsed }: SidebarNavProps) {
     <nav className="space-y-1">
       {items.map(item => {
         const isActive = pathname === item.href
-        return (
+        const link = (
           <Link
-            key={item.href}
             href={item.href}
             className={clsx(
               'flex items-center gap-3 py-2 rounded-lg text-sm font-medium transition-colors',
@@ -34,11 +34,24 @@ export function SidebarNav({ items, isCollapsed }: SidebarNavProps) {
                 : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
               isCollapsed ? 'justify-center px-2' : 'px-3'
             )}
-            title={isCollapsed ? item.label : undefined}
           >
             <item.icon className="h-4 w-4" />
             {!isCollapsed && <span>{item.label}</span>}
           </Link>
+        )
+
+        if (isCollapsed) {
+          return (
+            <CustomTooltip key={item.href} content={item.label} side="right">
+              {link}
+            </CustomTooltip>
+          )
+        }
+
+        return (
+          <div key={item.href}>
+            {link}
+          </div>
         )
       })}
     </nav>

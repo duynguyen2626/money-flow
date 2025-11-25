@@ -1,68 +1,57 @@
 "use client"
 
-import React, { useState, useRef, useEffect } from 'react'
-import { createPortal } from 'react-dom'
+import * as TooltipPrimitive from "@radix-ui/react-tooltip"
+import * as React from "react"
+import { cn } from "@/lib/utils"
+
+const TooltipProvider = TooltipPrimitive.Provider
+const Tooltip = TooltipPrimitive.Root
+const TooltipTrigger = TooltipPrimitive.Trigger
+
+const TooltipContent = React.forwardRef<
+  React.ElementRef<typeof TooltipPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
+>(({ className, sideOffset = 4, ...props }, ref) => (
+  <TooltipPrimitive.Portal>
+    <TooltipPrimitive.Content
+      ref={ref}
+      sideOffset={sideOffset}
+      className={cn(
+        "z-50 overflow-hidden rounded-md bg-slate-800 px-3 py-1.5 text-xs text-white animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        className
+      )}
+      {...props}
+    >
+      {props.children}
+      <TooltipPrimitive.Arrow className="fill-slate-800" />
+    </TooltipPrimitive.Content>
+  </TooltipPrimitive.Portal>
+))
+TooltipContent.displayName = TooltipPrimitive.Content.displayName
 
 interface CustomTooltipProps {
-  content: React.ReactNode
   children: React.ReactNode
-  className?: string
+  content: React.ReactNode
+  side?: "top" | "right" | "bottom" | "left"
+  delayDuration?: number
 }
 
-export function CustomTooltip({ content, children, className }: CustomTooltipProps) {
-  const [isVisible, setIsVisible] = useState(false)
-  const [position, setPosition] = useState({ top: 0, left: 0 })
-  const triggerRef = useRef<HTMLDivElement>(null)
-
-  const handleMouseEnter = () => {
-    if (triggerRef.current) {
-      const rect = triggerRef.current.getBoundingClientRect()
-      // Position above the element, centered
-      setPosition({
-        top: rect.top - 8, // 8px gap above
-        left: rect.left + rect.width / 2,
-      })
-      setIsVisible(true)
-    }
-  }
-
-  const handleMouseLeave = () => {
-    setIsVisible(false)
-  }
-
+export function CustomTooltip({
+  children,
+  content,
+  side,
+  delayDuration = 200,
+}: CustomTooltipProps) {
   return (
-    <div
-      ref={triggerRef}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      className={className}
-    >
-      {children}
-      {isVisible && (
-        <TooltipPortal>
-          <div
-            className="pointer-events-none fixed z-50 flex -translate-x-1/2 -translate-y-full items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white shadow-xl animate-in fade-in zoom-in-95 duration-100"
-            style={{ top: position.top, left: position.left }}
-          >
-            {content}
-            {/* Arrow */}
-            <div className="absolute left-1/2 top-full -translate-x-1/2 border-[6px] border-transparent border-t-indigo-600" />
-          </div>
-        </TooltipPortal>
-      )}
-    </div>
+    <TooltipProvider>
+      <Tooltip delayDuration={delayDuration}>
+        <TooltipTrigger asChild>{children}</TooltipTrigger>
+        <TooltipContent side={side}>
+          {content}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   )
 }
 
-function TooltipPortal({ children }: { children: React.ReactNode }) {
-  const [mounted, setMounted] = useState(false)
-
-  useEffect(() => {
-    setMounted(true)
-    return () => setMounted(false)
-  }, [])
-
-  if (!mounted) return null
-
-  return createPortal(children, document.body)
-}
+export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }
