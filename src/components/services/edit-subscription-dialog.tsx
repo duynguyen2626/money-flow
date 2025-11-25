@@ -4,7 +4,7 @@ import { MouseEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import { updateSubscriptionAction } from '@/actions/subscription-actions'
-import { Account, Person, Subscription } from '@/types/moneyflow.types'
+import { Account, Person, Shop, Subscription } from '@/types/moneyflow.types'
 
 import { SubscriptionForm } from './subscription-form'
 
@@ -12,6 +12,7 @@ type EditSubscriptionDialogProps = {
   subscription: Subscription
   people: Person[]
   accounts: Account[]
+  shops: Shop[]
   initiallyOpen?: boolean
   onClose?: () => void
 }
@@ -20,6 +21,7 @@ export function EditSubscriptionDialog({
   subscription,
   people,
   accounts,
+  shops,
   initiallyOpen,
   onClose,
 }: EditSubscriptionDialogProps) {
@@ -80,6 +82,7 @@ export function EditSubscriptionDialog({
               mode="edit"
               people={people}
               accounts={accounts}
+              shops={shops}
               initialData={subscription}
               onCancel={closeDialog}
               onSubmit={async values => {

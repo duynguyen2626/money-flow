@@ -1,9 +1,11 @@
 'use client'
 
 import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { ShoppingBag } from 'lucide-react'
 
+import { Combobox } from '@/components/ui/combobox'
 import { SubscriptionPayload } from '@/services/subscription.service'
-import { Account, Person, Subscription } from '@/types/moneyflow.types'
+import { Account, Person, Shop, Subscription } from '@/types/moneyflow.types'
 
 import { getServiceBranding } from './service-branding'
 
@@ -26,6 +28,7 @@ type SubscriptionFormProps = {
   mode: 'create' | 'edit'
   people: Person[]
   accounts: Account[]
+  shops: Shop[]
   initialData?: Subscription
   submitLabel?: string
   onCancel?: () => void
@@ -105,12 +108,14 @@ export function SubscriptionForm({
   mode,
   people,
   accounts,
+  shops,
   initialData,
   submitLabel,
   onCancel,
   onSubmit,
 }: SubscriptionFormProps) {
   const [name, setName] = useState(initialData?.name ?? '')
+  const [shopId, setShopId] = useState<string | null>(initialData?.shop_id ?? null)
   const [priceInput, setPriceInput] = useState(
     typeof initialData?.price === 'number' ? String(initialData.price) : ''
   )
@@ -130,6 +135,30 @@ export function SubscriptionForm({
   const [paymentAccountId, setPaymentAccountId] = useState<string | null>(
     paymentAccount?.id ?? null
   )
+
+  const shopItems = useMemo(
+    () =>
+      shops.map(shop => ({
+        value: shop.id,
+        label: shop.name,
+        icon: shop.logo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={shop.logo_url} alt="" className="h-5 w-5 object-contain" />
+        ) : (
+          <ShoppingBag className="h-4 w-4 text-slate-400" />
+        ),
+      })),
+    [shops]
+  )
+
+  useEffect(() => {
+    if (shopId) {
+      const selectedShop = shops.find(s => s.id === shopId)
+      if (selectedShop) {
+        setName(selectedShop.name)
+      }
+    }
+  }, [shopId, shops])
 
   const priceNumber = useMemo(() => {
     const parsed = Number(priceInput)
@@ -194,6 +223,7 @@ export function SubscriptionForm({
     try {
       await onSubmit({
         name: trimmedName,
+        shop_id: shopId,
         price: Number.isFinite(priceNumber) ? priceNumber : null,
         next_billing_date: nextBillingDate || null,
         payment_account_id: paymentAccountId,
@@ -324,6 +354,20 @@ export function SubscriptionForm({
               <span className="text-xs text-slate-500">Chon nguon thanh toan cho bot.</span>
             </label>
           </div>
+
+          <label className="space-y-1 text-sm block">
+            <span className="text-slate-600">Nhà cung cấp (Shop)</span>
+            <Combobox
+              items={shopItems}
+              value={shopId ?? undefined}
+              onValueChange={val => setShopId(val ?? null)}
+              placeholder="Chọn shop (VD: Youtube, Apple)..."
+              inputPlaceholder="Tìm shop..."
+            />
+            <span className="text-xs text-slate-500">
+              Logo shop se duoc dung cho giao dich.
+            </span>
+          </label>
 
           <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
             <div>
