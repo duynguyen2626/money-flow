@@ -138,14 +138,14 @@ const defaultColumns: ColumnConfig[] = [
   { key: "shop", label: "Notes", defaultWidth: 220, minWidth: 160 },
   { key: "category", label: "Category", defaultWidth: 150 },
   { key: "people", label: "Person", defaultWidth: 140 },
-  { key: "tag", label: "Tag", defaultWidth: 80 },
-  { key: "cycle", label: "Cycle", defaultWidth: 100 },
   { key: "account", label: "Account", defaultWidth: 180 },
+  { key: "cycle", label: "Cycle", defaultWidth: 100 },
   { key: "amount", label: "Amount", defaultWidth: 120 },
   { key: "cashback_percent", label: "% Back", defaultWidth: 70 },
   { key: "cashback_fixed", label: "Fix Back", defaultWidth: 80 },
   { key: "cashback_sum", label: "Sum Back", defaultWidth: 100 },
   { key: "final_price", label: "Final Price", defaultWidth: 120 },
+  { key: "tag", label: "Tag", defaultWidth: 80 },
   { key: "id", label: "ID", defaultWidth: 100 },
   { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
 ]
@@ -792,10 +792,10 @@ export function UnifiedTransactionTable({
                             <img
                               src={txn.shop_logo_url}
                               alt={txn.shop_name}
-                              className="h-8 w-8 object-contain"
+                              className="h-8 w-8 object-contain rounded-none"
                             />
                           ) : (
-                            <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 border">
+                            <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
                               {txn.shop_name.charAt(0).toUpperCase()}
                             </span>
                           )}
@@ -806,26 +806,25 @@ export function UnifiedTransactionTable({
                         <img
                           src={txn.shop_logo_url}
                           alt="Shop"
-                          className="h-5 w-5 object-cover border"
+                          className="h-5 w-5 object-cover rounded-none"
                         />
                       )}
                       {!txn.shop_name && !txn.shop_logo_url && (
-                        <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 border">
+                        <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
                           🛍️
                         </span>
                       )}
                       {txn.note && (
-                        <span className="text-sm text-slate-700 font-medium truncate">
+                        <span title={txn.note} className="text-sm text-slate-700 font-medium truncate cursor-help">
                           {txn.note}
                         </span>
                       )}
                     </div>
                    )
                 case "category":
-                  // TODO: Add Icon if available in category object? Currently only name.
                   return (
-                    <div className="flex items-center gap-2">
-                         <span className="font-medium text-slate-700">{txn.category_name || "-"}</span>
+                    <div className="flex items-center gap-2 max-w-full" title={txn.category_name ?? undefined}>
+                         <span className="font-medium text-slate-700 truncate whitespace-nowrap">{txn.category_name || "-"}</span>
                     </div>
                   )
                 case "account":
@@ -841,10 +840,10 @@ export function UnifiedTransactionTable({
                             <img
                               src={personAvatar}
                               alt={personName}
-                              className="h-6 w-6 rounded-full object-cover border"
+                              className="h-6 w-6 object-cover rounded-none"
                             />
                         ) : (
-                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-600 border">
+                            <span className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 rounded-none">
                                 {personName.charAt(0).toUpperCase()}
                             </span>
                         )}
@@ -858,8 +857,20 @@ export function UnifiedTransactionTable({
                         {txn.tag}
                      </span>
                   ) : <span className="text-slate-400">-</span>
+                case "cycle":
+                  return <span className="text-slate-600">{cycleLabel}</span>
                 case "amount":
                   return amountValue
+                case "cashback_percent":
+                  return percentRaw ? <span className="text-slate-600">{(percentRaw * 100).toFixed(2)}%</span> : <span className="text-slate-300">-</span>
+                case "cashback_fixed":
+                  return fixedRaw ? <span className="text-slate-600">{numberFormatter.format(fixedRaw)}</span> : <span className="text-slate-300">-</span>
+                case "cashback_sum":
+                   return calculatedSum > 0 ? <span className="text-slate-600 font-medium">{numberFormatter.format(calculatedSum)}</span> : <span className="text-slate-300">-</span>
+                case "final_price":
+                   return <span className="text-emerald-700 font-bold">{numberFormatter.format(finalPrice)}</span>
+                case "id":
+                   return <span className="text-xs text-slate-400 font-mono" title={txn.id}>{txn.id.slice(0, 8)}...</span>
                 case "task":
                   return taskCell
                 default:

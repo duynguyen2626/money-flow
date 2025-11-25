@@ -368,6 +368,11 @@ export function TransactionForm({
                  form.setValue('category_id', repaymentCat.id);
              }
         }
+    } else if (transactionType === 'transfer') {
+        const transferCat = categories.find(c => c.name === 'Chuyển tiền' || c.name === 'Money Transfer');
+        if (transferCat) {
+            form.setValue('category_id', transferCat.id);
+        }
     }
   }, [transactionType, categories, shops, form, isEditMode]);
 
