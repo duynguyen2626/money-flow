@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { EditPersonDialog } from './edit-person-dialog'
-import { Person, Subscription } from '@/types/moneyflow.types'
+import { Person, Shop, Subscription } from '@/types/moneyflow.types'
 import { ensureDebtAccountAction } from '@/actions/people-actions'
 import { Zap, Pencil } from 'lucide-react'
 import { EditSubscriptionDialog } from '@/components/services/edit-subscription-dialog'
@@ -12,6 +12,7 @@ import { getServiceBranding } from '@/components/services/service-branding'
 type PeopleGridProps = {
   people: Person[]
   subscriptions: Subscription[]
+  shops: Shop[]
 }
 
 const getInitial = (name: string) => {
@@ -19,7 +20,7 @@ const getInitial = (name: string) => {
   return first ? first.toUpperCase() : '?'
 }
 
-export function PeopleGrid({ people, subscriptions }: PeopleGridProps) {
+export function PeopleGrid({ people, subscriptions, shops }: PeopleGridProps) {
   const peopleMap = useMemo(() => {
     const map = new Map<string, Person>()
     people.forEach(p => map.set(p.id, p))
@@ -168,6 +169,7 @@ export function PeopleGrid({ people, subscriptions }: PeopleGridProps) {
           subscription={subscriptionMap.get(editServiceId)!}
           people={people}
           accounts={[]}
+          shops={shops}
           initiallyOpen
           onClose={() => {
             setEditServiceId(null)

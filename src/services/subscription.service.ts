@@ -23,6 +23,7 @@ type SubscriptionWithMembersRow = SubscriptionRow & {
   subscription_members?: (SubscriptionMemberRow & {
     profiles?: { id: string; name: string; avatar_url: string | null } | null
   })[] | null
+  shop_id?: string | null
 }
 
 function formatNoteTemplate(row: SubscriptionWithMembersRow, billingDate: string, memberCount: number) {
@@ -43,6 +44,7 @@ export type SubscriptionPayload = {
   payment_account_id?: string | null
   note_template?: string | null
   members?: { profile_id: string; fixed_amount?: number | null }[]
+  shop_id?: string | null
 }
 
 function dateOnly(date: Date) {
@@ -115,6 +117,7 @@ function mapSubscriptionRow(
     is_active: row.is_active ?? undefined,
     payment_account_id: row.payment_account_id ?? undefined,
     note_template: row.note_template ?? undefined,
+    shop_id: row.shop_id ?? undefined,
     members,
   }
 }
@@ -124,7 +127,7 @@ export async function getSubscriptions(): Promise<Subscription[]> {
     const supabase = createClient()
 
     const baseSelect = `
-      id, name, price, next_billing_date, is_active, payment_account_id, note_template,
+      id, name, price, next_billing_date, is_active, payment_account_id, note_template, shop_id,
       subscription_members (
         profile_id,
         fixed_amount,
@@ -147,7 +150,7 @@ export async function getSubscriptions(): Promise<Subscription[]> {
           .from('subscriptions')
           .select(
             `
-            id, name, price, next_billing_date,
+            id, name, price, next_billing_date, shop_id,
             subscription_members (
               profile_id,
               fixed_amount,
@@ -215,7 +218,7 @@ async function syncSubscriptionMembers(
 export async function createSubscription(payload: SubscriptionPayload): Promise<Subscription | null> {
   try {
     const supabase = createClient()
-    const body: SubscriptionInsert = {
+    const body: SubscriptionInsert & { shop_id?: string | null } = {
       id: randomUUID(),
       name: payload.name?.trim(),
       price: typeof payload.price === 'number' ? payload.price : null,
@@ -223,16 +226,17 @@ export async function createSubscription(payload: SubscriptionPayload): Promise<
       is_active: typeof payload.is_active === 'boolean' ? payload.is_active : undefined,
       payment_account_id: payload.payment_account_id ?? null,
       note_template: payload.note_template ?? null,
+      shop_id: payload.shop_id ?? null,
     }
 
-    const performInsert = async (fields: SubscriptionInsert, select: string) =>
+    const performInsert = async (fields: any, select: string) =>
       (supabase.from('subscriptions').insert as any)(fields).select(select).single()
 
-    let { data, error } = await performInsert(body, 'id, name, price, next_billing_date, is_active, payment_account_id, note_template')
+    let { data, error } = await performInsert(body, 'id, name, price, next_billing_date, is_active, payment_account_id, note_template, shop_id')
 
     if (error?.code === '42703') {
       // Schema missing new columns
-      const { is_active: _ignored, payment_account_id: _ignoredPay, note_template: _ignoredTemplate, ...rest } = body
+      const { is_active: _ignored, payment_account_id: _ignoredPay, note_template: _ignoredTemplate, shop_id: _ignoredShop, ...rest } = body
       const fallback = await performInsert(rest, 'id, name, price, next_billing_date')
       data = fallback.data
       error = fallback.error as typeof error
@@ -253,6 +257,7 @@ export async function createSubscription(payload: SubscriptionPayload): Promise<
       is_active: data.is_active ?? undefined,
       payment_account_id: data.payment_account_id ?? undefined,
       note_template: data.note_template ?? undefined,
+      shop_id: data.shop_id ?? undefined,
       members: payload.members?.map(member => ({
         profile_id: member.profile_id,
         fixed_amount: member.fixed_amount,
@@ -266,7 +271,7 @@ export async function createSubscription(payload: SubscriptionPayload): Promise<
 
 export async function updateSubscription(id: string, payload: SubscriptionPayload): Promise<boolean> {
   const supabase = createClient()
-  const updatePayload: SubscriptionUpdate = {}
+  const updatePayload: SubscriptionUpdate & { shop_id?: string | null } = {}
 
   if (typeof payload.name === 'string') updatePayload.name = payload.name.trim()
   if (typeof payload.price !== 'undefined') updatePayload.price = payload.price ?? null
@@ -277,9 +282,11 @@ export async function updateSubscription(id: string, payload: SubscriptionPayloa
     updatePayload.payment_account_id = payload.payment_account_id ?? null
   if (typeof payload.note_template !== 'undefined')
     updatePayload.note_template = payload.note_template ?? null
+  if (typeof payload.shop_id !== 'undefined')
+    updatePayload.shop_id = payload.shop_id ?? null
 
   if (Object.keys(updatePayload).length > 0) {
-    const attemptUpdate = async (data: SubscriptionUpdate) =>
+    const attemptUpdate = async (data: any) =>
       (supabase.from('subscriptions').update as any)(data).eq('id', id) // TODO: Fix strict types later
 
     let { error } = await attemptUpdate(updatePayload)
@@ -305,17 +312,19 @@ export async function updateSubscription(id: string, payload: SubscriptionPayloa
 }
 
 async function resolveExpenseCategoryId(supabase: ReturnType<typeof createClient>) {
-  const targetNames = ['My Expense', 'Subscriptions', 'Dich vu dinh ky']
+  // Ordered by preference: Utilities -> Shopping -> Subscriptions -> others
+  const targetNames = ['Utilities', 'Shopping', 'My Expense', 'Subscriptions', 'Dich vu dinh ky']
   const { data, error } = await supabase
     .from('categories')
     .select('id, name, type')
     .eq('type', 'expense')
     .in('name', targetNames)
-    .limit(1)
 
   if (!error && (data?.length ?? 0) > 0) {
-    const row = (data as Pick<CategoryRow, 'id'>[])[0]
-    return row.id
+    const rows = (data as Pick<CategoryRow, 'id' | 'name'>[])
+    // Sort based on targetNames index to ensure preference order
+    rows.sort((a, b) => targetNames.indexOf(a.name) - targetNames.indexOf(b.name))
+    return rows[0].id
   }
 
   const { data: created, error: createError } = await (supabase
@@ -383,7 +392,7 @@ export async function checkAndProcessSubscriptions(): Promise<{
     .from('subscriptions')
     .select(
       `
-      id, name, price, next_billing_date, is_active, payment_account_id,
+      id, name, price, next_billing_date, is_active, payment_account_id, shop_id,
       subscription_members (
         profile_id,
         fixed_amount,
@@ -402,7 +411,7 @@ export async function checkAndProcessSubscriptions(): Promise<{
         .from('subscriptions')
         .select(
           `
-          id, name, price, next_billing_date, payment_account_id,
+          id, name, price, next_billing_date, payment_account_id, shop_id,
           subscription_members (
             profile_id,
             fixed_amount,
@@ -465,6 +474,7 @@ export async function checkAndProcessSubscriptions(): Promise<{
         status: 'posted',
         tag: txnTag,
         created_by: userId,
+        shop_id: row.shop_id,
       })
       .select('id')
       .single()

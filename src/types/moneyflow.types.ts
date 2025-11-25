@@ -79,6 +79,7 @@ export type Subscription = {
   payment_account_id?: string | null
   note_template?: string | null
   members?: SubscriptionMember[]
+  shop_id?: string | null
 }
 
 export type TransactionLine = {
