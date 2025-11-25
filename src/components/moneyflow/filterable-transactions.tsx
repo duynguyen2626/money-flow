@@ -1,7 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { FilterIcon, X } from 'lucide-react'
+import { FilterIcon, X, Ban, Loader2, RotateCcw } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { voidTransaction, restoreTransaction } from '@/services/transaction.service'
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
@@ -50,6 +52,49 @@ export function FilterableTransactions({
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
     const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(null)
     const [activeTab, setActiveTab] = useState<'active' | 'void'>('active')
+    const [isVoiding, setIsVoiding] = useState(false)
+    const [isRestoring, setIsRestoring] = useState(false)
+    const router = useRouter()
+
+    const handleBulkVoid = async () => {
+        if (selectedTxnIds.size === 0) return;
+        if (!confirm('Are you sure you want to void ' + selectedTxnIds.size + ' transactions?')) return;
+
+        setIsVoiding(true);
+        let errorCount = 0;
+        for (const id of Array.from(selectedTxnIds)) {
+            const ok = await voidTransaction(id);
+            if (!ok) {
+                errorCount++;
+            }
+        }
+        setIsVoiding(false);
+        setSelectedTxnIds(new Set());
+        router.refresh();
+        if (errorCount > 0) {
+            alert(`Failed to void ${errorCount} transactions.`);
+        }
+    }
+
+    const handleBulkRestore = async () => {
+        if (selectedTxnIds.size === 0) return;
+        if (!confirm('Are you sure you want to restore ' + selectedTxnIds.size + ' transactions?')) return;
+
+        setIsRestoring(true);
+        let errorCount = 0;
+        for (const id of Array.from(selectedTxnIds)) {
+            const ok = await restoreTransaction(id);
+            if (!ok) {
+                errorCount++;
+            }
+        }
+        setIsRestoring(false);
+        setSelectedTxnIds(new Set());
+        router.refresh();
+        if (errorCount > 0) {
+            alert(`Failed to restore ${errorCount} transactions.`);
+        }
+    }
 
     const categoryById = useMemo(() => {
         const map = new Map<string, Category>()
@@ -259,7 +304,7 @@ export function FilterableTransactions({
     }
 
     return (
-        <div className="space-y-4">
+        <div>
             {!onSearchChange && (
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
                     <div className="relative flex-1">
@@ -372,7 +417,7 @@ export function FilterableTransactions({
                 </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border rounded-md border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border rounded-md border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="flex flex-wrap items-center gap-2">
                     <div className="flex items-center rounded-lg bg-slate-200/50 p-1 text-sm font-medium text-slate-600 mr-2">
                         <button
@@ -473,6 +518,25 @@ export function FilterableTransactions({
                             >
                                 Deselect All ({selectedTxnIds.size})
                             </button>
+                            {activeTab === 'void' ? (
+                                <button
+                                    className="inline-flex items-center gap-2 rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-green-500 disabled:opacity-70"
+                                    onClick={handleBulkRestore}
+                                    disabled={isRestoring}
+                                >
+                                    {isRestoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                                    Restore Selected ({selectedTxnIds.size})
+                                </button>
+                            ) : (
+                                <button
+                                    className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-70"
+                                    onClick={handleBulkVoid}
+                                    disabled={isVoiding}
+                                >
+                                    {isVoiding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+                                    Void Selected ({selectedTxnIds.size})
+                                </button>
+                            )}
                             <button
                                 className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200"
                                 onClick={() => setShowSelectedOnly(prev => !prev)}

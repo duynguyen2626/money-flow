@@ -88,7 +88,7 @@ function formatRangeLabel(range: { start: Date; end: Date }, targetDate: Date) {
   const diffTime = range.end.getTime() - targetDate.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-  return `Cycle: ${fmt(range.start)} - ${fmt(range.end)} (${diffDays} days left)`;
+  return `Cycle: ${fmt(range.start)} - ${fmt(range.end)} (Remaining: ${diffDays} days)`;
 }
 
 function getCycleLabelForDate(
@@ -1231,8 +1231,8 @@ export function TransactionForm({
           Suggest lowering percentage to {suggestedPercent.toFixed(2)}% to not exceed budget.
         </p>
       )}
-      <div className="border-t border-indigo-200/80 pt-2 text-xs text-slate-500 space-y-1">
-        <p>
+      <div className="border-t border-indigo-200/80 pt-2 text-slate-500 space-y-1">
+        <p className="text-xs">
             <span className="font-semibold text-slate-700">Cycle:</span> {selectedCycleLabel ?? 'N/A'}
         </p>
         {statsLoading && <p>Loading min spend...</p>}
