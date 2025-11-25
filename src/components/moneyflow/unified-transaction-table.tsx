@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
@@ -44,6 +44,15 @@ type ColumnKey =
   | "final_price"
   | "id"
   | "task"
+
+type BulkActionState = {
+  selectionCount: number
+  currentTab: 'active' | 'void'
+  onVoidSelected: () => Promise<void> | void
+  onRestoreSelected: () => Promise<void> | void
+  isVoiding: boolean
+  isRestoring: boolean
+}
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -131,25 +140,10 @@ interface UnifiedTransactionTableProps {
   people?: Person[]
   shops?: Shop[]
   activeTab?: 'active' | 'void'
+  hidePeopleColumn?: boolean
+  onBulkActionStateChange?: (state: BulkActionState) => void
 }
 
-const defaultColumns: ColumnConfig[] = [
-  { key: "date", label: "Date", defaultWidth: 60, minWidth: 50 },
-  { key: "type", label: "Type", defaultWidth: 110, minWidth: 90 },
-  { key: "shop", label: "Notes", defaultWidth: 220, minWidth: 160 },
-  { key: "category", label: "Category", defaultWidth: 150 },
-  { key: "people", label: "Person", defaultWidth: 140 },
-  { key: "account", label: "Account", defaultWidth: 180 },
-  { key: "cycle", label: "Cycle", defaultWidth: 100 },
-  { key: "amount", label: "Amount", defaultWidth: 120 },
-  { key: "cashback_percent", label: "% Back", defaultWidth: 70 },
-  { key: "cashback_fixed", label: "Fix Back", defaultWidth: 80 },
-  { key: "cashback_sum", label: "Sum Back", defaultWidth: 100 },
-  { key: "final_price", label: "Final Price", defaultWidth: 120 },
-  { key: "tag", label: "Tag", defaultWidth: 80 },
-  { key: "id", label: "ID", defaultWidth: 100 },
-  { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
-]
 
 function parseMetadata(value: TransactionWithDetails['metadata']) {
   if (!value) return null
@@ -179,7 +173,26 @@ export function UnifiedTransactionTable({
   people = [],
   shops = [],
   activeTab,
+  hidePeopleColumn,
+  onBulkActionStateChange,
 }: UnifiedTransactionTableProps) {
+  const defaultColumns: ColumnConfig[] = [
+    { key: "date", label: "Date", defaultWidth: 60, minWidth: 50 },
+    { key: "type", label: "Type", defaultWidth: 110, minWidth: 90 },
+    { key: "shop", label: "Notes", defaultWidth: 220, minWidth: 160 },
+    { key: "category", label: "Category", defaultWidth: 150 },
+    ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 140 } as ColumnConfig] : []),
+    { key: "account", label: "Account", defaultWidth: 180 },
+    { key: "cycle", label: "Cycle", defaultWidth: 100 },
+    { key: "amount", label: "Amount", defaultWidth: 120 },
+    { key: "cashback_percent", label: "% Back", defaultWidth: 70 },
+    { key: "cashback_fixed", label: "Fix Back", defaultWidth: 80 },
+    { key: "cashback_sum", label: "Sum Back", defaultWidth: 100 },
+    { key: "final_price", label: "Final Price", defaultWidth: 120 },
+    { key: "tag", label: "Tag", defaultWidth: 80 },
+    { key: "id", label: "ID", defaultWidth: 100 },
+    { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
+  ]
   const router = useRouter()
   // Internal state removed for activeTab, now using prop with fallback
   const [showSelectedOnly, setShowSelectedOnly] = useState(false)
@@ -190,7 +203,7 @@ export function UnifiedTransactionTable({
       type: true,
       shop: true,
       category: true,
-      people: true,
+      people: !hidePeopleColumn,
       tag: true,
       cycle: true,
       account: true,
@@ -210,6 +223,10 @@ export function UnifiedTransactionTable({
     })
     return map
   })
+
+  useEffect(() => {
+    setVisibleColumns(prev => ({ ...prev, people: !hidePeopleColumn }))
+  }, [hidePeopleColumn])
 
   // State for actions
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
@@ -265,7 +282,7 @@ export function UnifiedTransactionTable({
         type: true,
         shop: true,
         category: true,
-        people: true,
+        people: !hidePeopleColumn,
         tag: true,
         cycle: true,
         account: true,
@@ -437,7 +454,7 @@ export function UnifiedTransactionTable({
       .finally(() => setIsVoiding(false))
   }
 
-  const handleBulkVoid = async () => {
+  const handleBulkVoid = useCallback(async () => {
     if (selection.size === 0) return;
     if (!confirm('Are you sure you want to void ' + selection.size + ' transactions?')) return;
 
@@ -457,14 +474,56 @@ export function UnifiedTransactionTable({
     if (errorCount > 0) {
         alert(`Failed to void ${errorCount} transactions.`);
     }
-  }
+  }, [router, selection, updateSelection])
+
+  const handleBulkRestore = useCallback(async () => {
+    if (selection.size === 0) return;
+    if (!confirm('Are you sure you want to restore ' + selection.size + ' transactions?')) return;
+
+    setIsRestoring(true);
+    let errorCount = 0;
+    for (const id of Array.from(selection)) {
+        const ok = await restoreTransaction(id);
+        if (ok) {
+            setStatusOverrides(prev => ({ ...prev, [id]: 'posted' }));
+        } else {
+            errorCount++;
+        }
+    }
+    setIsRestoring(false);
+    updateSelection(new Set());
+    router.refresh();
+    if (errorCount > 0) {
+        alert(`Failed to restore ${errorCount} transactions.`);
+    }
+  }, [router, selection, updateSelection])
+
+  const currentTab = activeTab ?? 'active';
+
+  useEffect(() => {
+    if (!onBulkActionStateChange) return
+    onBulkActionStateChange({
+      selectionCount: selection.size,
+      currentTab,
+      onVoidSelected: handleBulkVoid,
+      onRestoreSelected: handleBulkRestore,
+      isVoiding,
+      isRestoring,
+    })
+  }, [
+    currentTab,
+    handleBulkRestore,
+    handleBulkVoid,
+    isRestoring,
+    isVoiding,
+    onBulkActionStateChange,
+    selection.size,
+  ])
 
   const handleEditSuccess = () => {
     setEditingTxn(null)
     router.refresh()
   }
-
-  const currentTab = activeTab ?? 'active';
 
   const displayedTransactions = useMemo(() => {
     let list = transactions;
@@ -528,25 +587,12 @@ export function UnifiedTransactionTable({
   const displayedColumns = defaultColumns.filter(col => visibleColumns[col.key])
 
   return (
-    <div className="relative space-y-4">
-      <div className="flex items-center justify-end min-h-[36px]">
-        {selection.size > 0 && (
-            <button
-                className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-70"
-                onClick={handleBulkVoid}
-                disabled={isVoiding}
-            >
-                {isVoiding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-                Void Selected ({selection.size})
-            </button>
-        )}
-      </div>
-
+    <div className="relative space-y-3">
       <div className="rounded-md border bg-white shadow-sm overflow-hidden">
       <Table>
         <TableHeader className="bg-slate-50/80">
           <TableRow>
-            <TableHead className="border-r" style={{ width: 52 }}>
+            <TableHead className="border-r whitespace-nowrap" style={{ width: 52 }}>
               <input
                 type="checkbox"
                 className="rounded border-gray-300"
@@ -559,7 +605,7 @@ export function UnifiedTransactionTable({
                 return (
                   <TableHead
                     key={col.key}
-                    className="text-right border-l bg-slate-100"
+                    className="text-right border-l bg-slate-100 whitespace-nowrap"
                     style={{ width: columnWidths[col.key] }}
                   >
                     <button
@@ -576,7 +622,7 @@ export function UnifiedTransactionTable({
               return (
                 <TableHead
                   key={col.key}
-                  className={`border-r bg-slate-100 font-semibold text-slate-700 ${col.key === "tag" ? "whitespace-nowrap" : ""}`}
+                  className="border-r bg-slate-100 font-semibold text-slate-700 whitespace-nowrap"
                   style={{ width: columnWidths[col.key] }}
                 >
                   {col.label}
@@ -725,68 +771,67 @@ export function UnifiedTransactionTable({
                 </button>
                 {isMenuOpen && (
                   <div className="absolute right-0 top-8 z-20 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg">
-                    <button
-                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
-                      onClick={event => {
-                        event.stopPropagation()
-                        setEditingTxn(txn)
-                        setActionMenuOpen(null)
-                      }}
-                      disabled={isVoided}
-                    >
-                      <Pencil className="h-4 w-4 text-slate-600" />
-                      <span>Edit</span>
-                    </button>
-                    {canRequestRefund && !isPendingRefund && (
-                      <button
-                        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
-                        onClick={event => {
-                          event.stopPropagation()
-                          openRefundDialog(txn)
-                        }}
-                        disabled={isVoided}
-                      >
-                        <span>Request Refund</span>
-                      </button>
+                    {currentTab === 'void' || isVoided ? (
+                        <button
+                            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={isRestoring}
+                            onClick={event => {
+                                event.stopPropagation();
+                                handleRestore(txn);
+                            }}
+                        >
+                            <RotateCcw className="h-4 w-4" />
+                            <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
+                        </button>
+                    ) : (
+                        <>
+                            <button
+                                className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                                onClick={event => {
+                                    event.stopPropagation();
+                                    setEditingTxn(txn);
+                                    setActionMenuOpen(null);
+                                }}
+                            >
+                                <Pencil className="h-4 w-4 text-slate-600" />
+                                <span>Edit</span>
+                            </button>
+                            {canRequestRefund && !isPendingRefund && (
+                                <button
+                                    className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                                    onClick={event => {
+                                        event.stopPropagation();
+                                        openRefundDialog(txn);
+                                    }}
+                                >
+                                    <span>Request Refund</span>
+                                </button>
+                            )}
+                            {isPendingRefund && (
+                                <button
+                                    className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                                    onClick={event => {
+                                        event.stopPropagation();
+                                        openConfirmRefundDialog(txn);
+                                    }}
+                                >
+                                    <span>Confirm Refund</span>
+                                </button>
+                            )}
+                            <button
+                                className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                                onClick={event => {
+                                    event.stopPropagation();
+                                    setConfirmVoidTarget(txn);
+                                    setVoidError(null);
+                                    setActionMenuOpen(null);
+                                }}
+                            >
+                                <Ban className="h-4 w-4" />
+                                <span>Void Transaction</span>
+                            </button>
+                        </>
                     )}
-                    {isPendingRefund && (
-                      <button
-                        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
-                        onClick={event => {
-                          event.stopPropagation()
-                          openConfirmRefundDialog(txn)
-                        }}
-                        disabled={isVoided}
-                      >
-                        <span>Confirm Refund</span>
-                      </button>
-                    )}
-                    {isVoided && (
-                      <button
-                        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={isRestoring}
-                        onClick={event => {
-                          event.stopPropagation()
-                          handleRestore(txn)
-                        }}
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                        <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
-                      </button>
-                    )}
-                    <button
-                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={isVoiding || isVoided}
-                      onClick={event => {
-                        event.stopPropagation()
-                        setConfirmVoidTarget(txn)
-                        setVoidError(null)
-                        setActionMenuOpen(null)
-                      }}
-                    >
-                      <Ban className="h-4 w-4" />
-                      <span>Void Transaction</span>
-                    </button>
                   </div>
                 )}
               </div>
@@ -800,7 +845,7 @@ export function UnifiedTransactionTable({
                    return typeBadge
                 case "shop":
                    return (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 max-w-[220px] overflow-hidden">
                       {txn.shop_name && (
                         <>
                           {txn.shop_logo_url ? (
@@ -832,7 +877,7 @@ export function UnifiedTransactionTable({
                       )}
                       {txn.note && (
                         <CustomTooltip content={txn.note}>
-                            <span className="text-sm text-slate-700 font-medium truncate cursor-help">
+                            <span className="text-sm text-slate-700 font-medium truncate cursor-help max-w-[200px]">
                             {txn.note}
                             </span>
                         </CustomTooltip>
@@ -842,7 +887,7 @@ export function UnifiedTransactionTable({
                 case "category":
                   return (
                     <CustomTooltip content={txn.category_name ?? "No Category"}>
-                        <div className="flex items-center gap-2 max-w-full">
+                        <div className="flex items-center gap-2 max-w-[200px]">
                             {txn.category_image_url ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
@@ -862,7 +907,19 @@ export function UnifiedTransactionTable({
                     </CustomTooltip>
                   )
                 case "account":
-                  return accountDisplay
+                  const accountContent = accountDisplay ?? <span className="text-slate-400">-</span>
+                  return (
+                    <CustomTooltip
+                      content={
+                        txn.account_name ??
+                        txn.source_account_name ??
+                        txn.destination_account_name ??
+                        'Account'
+                      }
+                    >
+                      <div className="max-w-[150px] whitespace-nowrap truncate">{accountContent}</div>
+                    </CustomTooltip>
+                  )
                 case "people": {
                   const personName = (txn as any).person_name ?? txn.person_name ?? null
                   const personAvatar = (txn as any).person_avatar_url ?? txn.person_avatar_url ?? null

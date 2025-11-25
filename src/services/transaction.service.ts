@@ -97,6 +97,18 @@ function mergeMetadata(value: Json | null, extra: Record<string, unknown>): Json
   return next as Json;
 }
 
+function extractLineMetadata(
+  lines?: Array<{ metadata?: Json | null } | null> | null
+): Json | null {
+  if (!lines) return null;
+  for (const line of lines) {
+    if (line?.metadata) {
+      return line.metadata;
+    }
+  }
+  return null;
+}
+
 async function resolveCurrentUserId(supabase: ReturnType<typeof createClient>) {
   const {
     data: { user },
@@ -651,6 +663,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     shop_id: txn.shop_id ?? null,
     shop_name: txn.shops?.name ?? null,
     shop_logo_url: txn.shops?.logo_url ?? null,
+    metadata: extractLineMetadata(txn.transaction_lines),
     transaction_lines: (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[],
   }
 }
@@ -974,10 +987,12 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
 }
 
 type RefundTransactionLine = {
+  id?: string
   amount: number
   type: 'debit' | 'credit'
   account_id?: string | null
   category_id?: string | null
+  metadata?: Json | null
   categories?: {
     name?: string | null
   } | null
@@ -988,7 +1003,7 @@ type RefundTransactionRow = {
   note: string | null
   tag: string | null
   occurred_at: string
-  metadata: Json | null
+  metadata?: Json | null
   transaction_lines?: RefundTransactionLine[]
 }
 
@@ -1008,6 +1023,7 @@ export async function requestRefund(
   refundAmount: number,
   partial: boolean
 ): Promise<{ success: boolean; refundTransactionId?: string; error?: string }> {
+  console.log('Requesting refund for:', transactionId);
   if (!transactionId) {
     return { success: false, error: 'Thiếu thông tin giao dịch cần hoàn tiền.' }
   }
@@ -1020,12 +1036,14 @@ export async function requestRefund(
       id,
       note,
       tag,
-      metadata,
+      shop_id,
       transaction_lines (
+        id,
         amount,
         type,
         account_id,
         category_id,
+        metadata,
         categories ( name )
       )
     `)
@@ -1038,6 +1056,7 @@ export async function requestRefund(
   }
 
   const existing = _existing as any;
+  const existingMetadata = extractLineMetadata(existing.transaction_lines)
 
   const lines = (existing.transaction_lines ?? []) as RefundTransactionLine[]
   const categoryLine = lines.find(line => line?.category_id)
@@ -1058,7 +1077,7 @@ export async function requestRefund(
 
   const userId = await resolveCurrentUserId(supabase)
   const requestNote = `Refund Request for ${existing.note ?? transactionId}`
-  const metadata = {
+  const lineMetadata = {
     refund_status: 'requested',
     linked_transaction_id: transactionId,
     refund_amount: safeAmount,
@@ -1076,7 +1095,7 @@ export async function requestRefund(
     status: 'posted',
     tag: existing.tag,
     created_by: userId,
-    metadata,
+    shop_id: existing.shop_id ?? null,
   })
     .select()
     .single()
@@ -1092,12 +1111,14 @@ export async function requestRefund(
       account_id: REFUND_PENDING_ACCOUNT_ID,
       amount: safeAmount,
       type: 'debit',
+      metadata: lineMetadata,
     },
     {
       transaction_id: requestTxn.id,
       category_id: categoryLine.category_id,
       amount: -safeAmount,
       type: 'credit',
+      metadata: lineMetadata,
     },
   ]
 
@@ -1108,12 +1129,22 @@ export async function requestRefund(
   }
 
   try {
-    const originalMeta = mergeMetadata(existing.metadata, {
+    const originalLines = (existing.transaction_lines ?? []) as Array<{
+      id?: string
+      metadata?: Json | null
+    }>
+    const mergedOriginalMeta = mergeMetadata(existingMetadata, {
       refund_request_id: requestTxn.id,
       refund_requested_at: new Date().toISOString(),
       has_refund_request: true,
     })
-    await (supabase.from('transactions').update as any)({ metadata: originalMeta }).eq('id', transactionId)
+    for (const line of originalLines) {
+      if (!line?.id) continue
+      await (supabase.from('transaction_lines').update as any)({ metadata: mergedOriginalMeta }).eq(
+        'id',
+        line.id
+      )
+    }
   } catch (err) {
     console.error('Failed to tag original transaction with refund metadata:', err)
   }
@@ -1136,11 +1167,12 @@ export async function confirmRefund(
       id,
       note,
       tag,
-      metadata,
       transaction_lines (
+        id,
         amount,
         type,
-        account_id
+        account_id,
+        metadata
       )
     `)
     .eq('id', pendingTransactionId)
@@ -1152,6 +1184,7 @@ export async function confirmRefund(
   }
 
   const pending = _pending as any;
+  const pendingMetadata = extractLineMetadata(pending.transaction_lines)
 
   const pendingLine = (pending.transaction_lines ?? []).find(
     (line: { account_id?: string | null; type?: string | null }) =>
@@ -1169,7 +1202,7 @@ export async function confirmRefund(
 
   const userId = await resolveCurrentUserId(supabase)
   const confirmNote = `Confirmed refund for ${pending.note ?? pending.id}`
-  const metadata = {
+  const confirmationMetadata = {
     refund_status: 'confirmed',
     linked_transaction_id: pendingTransactionId,
   }
@@ -1182,7 +1215,6 @@ export async function confirmRefund(
     status: 'posted',
     tag: pending.tag,
     created_by: userId,
-    metadata,
   })
     .select()
     .single()
@@ -1198,12 +1230,14 @@ export async function confirmRefund(
       account_id: targetAccountId,
       amount: amountToConfirm,
       type: 'debit',
+      metadata: confirmationMetadata,
     },
     {
       transaction_id: confirmTxn.id,
       account_id: REFUND_PENDING_ACCOUNT_ID,
       amount: -amountToConfirm,
       type: 'credit',
+      metadata: confirmationMetadata,
     },
   ]
 
@@ -1216,40 +1250,49 @@ export async function confirmRefund(
   }
 
   try {
-    const updatedPendingMeta = mergeMetadata(pending.metadata, {
+    const updatedPendingMeta = mergeMetadata(pendingMetadata, {
       refund_status: 'confirmed',
       refund_confirmed_transaction_id: confirmTxn.id,
       refunded_at: new Date().toISOString(),
     })
-    await (supabase.from('transactions').update as any)({ metadata: updatedPendingMeta }).eq(
-      'id',
-      pendingTransactionId
-    )
+    const pendingLines = (pending.transaction_lines ?? []) as Array<{
+      id?: string
+      metadata?: Json | null
+    }>
+    for (const line of pendingLines) {
+      if (!line?.id) continue
+      await (supabase.from('transaction_lines').update as any)({ metadata: updatedPendingMeta }).eq(
+        'id',
+        line.id
+      )
+    }
   } catch (err) {
     console.error('Failed to update pending refund metadata:', err)
   }
 
-  const pendingMeta = parseMetadata(pending.metadata)
+  const pendingMeta = parseMetadata(pendingMetadata)
   const originalTransactionId =
     typeof pendingMeta.linked_transaction_id === 'string' ? pendingMeta.linked_transaction_id : null
 
   if (originalTransactionId) {
     try {
-      const { data: original } = await supabase
-        .from('transactions')
-        .select('metadata')
-        .eq('id', originalTransactionId)
-        .maybeSingle()
+      const { data: originalLines } = await supabase
+        .from('transaction_lines')
+        .select('id, metadata')
+        .eq('transaction_id', originalTransactionId)
 
-      if (original) {
-        const updatedOriginalMeta = mergeMetadata((original as any).metadata, {
-          refund_status: 'confirmed',
-          refund_confirmed_transaction_id: confirmTxn.id,
-          refund_confirmed_at: new Date().toISOString(),
-        })
-        await (supabase.from('transactions').update as any)([{ metadata: updatedOriginalMeta }]).eq(
+      const originalMeta = extractLineMetadata(originalLines as Array<{ metadata?: Json | null }>)
+      const updatedOriginalMeta = mergeMetadata(originalMeta, {
+        refund_status: 'confirmed',
+        refund_confirmed_transaction_id: confirmTxn.id,
+        refund_confirmed_at: new Date().toISOString(),
+      })
+
+      for (const line of (originalLines ?? []) as Array<{ id?: string }>) {
+        if (!line?.id) continue
+        await (supabase.from('transaction_lines').update as any)({ metadata: updatedOriginalMeta }).eq(
           'id',
-          originalTransactionId
+          line.id
         )
       }
     } catch (err) {
@@ -1270,16 +1313,16 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
       occurred_at,
       note,
       tag,
-      metadata,
-      transaction_lines (
+      transaction_lines!inner (
         amount,
         type,
         account_id,
         category_id,
+        metadata,
         categories ( name )
       )
     `)
-    .filter('metadata->>refund_status', 'eq', 'requested')
+    .filter('transaction_lines.metadata->>refund_status', 'eq', 'requested')
     .order('occurred_at', { ascending: false })
 
   if (error) {
@@ -1299,7 +1342,7 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
         return null
       }
 
-      const metadata = parseMetadata(row.metadata)
+      const metadata = parseMetadata(extractLineMetadata(row.transaction_lines))
       const categoryLine = (row.transaction_lines ?? []).find(line => line?.category_id)
       const amount = Math.abs(pendingLine.amount ?? 0)
       const originalCategory =

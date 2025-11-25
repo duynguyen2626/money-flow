@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import { getPeoplePageData } from '@/actions/people-actions';
 import { DebtCycleFilter } from '@/components/moneyflow/debt-cycle-filter';
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions';
@@ -33,7 +33,6 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     const [shops, setShops] = useState<Shop[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const [searchTerm, setSearchTerm] = useState('');
     const { selectedTag, setSelectedTag } = useTagFilter();
     const [activeTab, setActiveTab] = useState<'all' | 'tagged' | 'untagged'>('all');
     const [isExpanded, setIsExpanded] = useState(true);
@@ -64,12 +63,6 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
         setLoading(true);
         refreshData().finally(() => setLoading(false));
     }, [id]);
-
-    const filteredTransactions = useMemo(() => {
-        return transactions.filter(txn => 
-            txn.note?.toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [transactions, searchTerm]);
 
     if (loading) {
         return <div>Loading...</div>;
@@ -230,37 +223,16 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
             <section className="bg-white shadow rounded-lg p-6">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
                     <h2 className="text-lg font-semibold">Transaction History</h2>
-                    <div className="flex items-center gap-3 flex-1 justify-end min-w-0">
-                        <div className="relative flex-1 max-w-[520px] min-w-[240px]">
-                            <input
-                                type="text"
-                                placeholder="Search by note..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                className="w-full rounded-md border border-gray-300 px-3 py-2 pr-10 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            />
-                            {searchTerm && (
-                                <button
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                                    onClick={() => setSearchTerm('')}
-                                    title="Clear search"
-                                >
-                                    ×
-                                </button>
-                            )}
-                        </div>
-                        <span className="whitespace-nowrap text-sm text-slate-500">{filteredTransactions.length} transactions</span>
-                    </div>
                 </div>
                 <div className="mt-4">
                     <FilterableTransactions
-                        transactions={filteredTransactions}
+                        transactions={transactions}
                         categories={categories}
                         accounts={accounts}
                         people={allPeople}
-                        searchTerm={searchTerm}
-                        onSearchChange={setSearchTerm}
                         shops={shops}
+                        accountId={id}
+                        hidePeopleColumn={true}
                     />
                 </div>
             </section>

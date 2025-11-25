@@ -66,6 +66,10 @@ export function CashbackDashboard({ cards }: CashbackDashboardProps) {
             safeSpendTarget !== null
               ? currencyFormatter.format(safeSpendTarget)
               : 'Khong gioi han'
+          const remainingLabel =
+            typeof card.remainingBudget === 'number'
+              ? currencyFormatter.format(Math.max(0, card.remainingBudget))
+              : null
 
           const progressValue = calculateProgress(card.totalEarned, card.maxCashback)
           const earnedLabel = currencyFormatter.format(card.totalEarned)
@@ -88,7 +92,14 @@ export function CashbackDashboard({ cards }: CashbackDashboardProps) {
                 </div>
               </div>
 
-              <div className="mt-3 text-xs text-slate-400">{card.cycleLabel}</div>
+              <div className="mt-3 text-xs text-slate-500">
+                <span className="font-semibold text-slate-700">Cycle:</span> {card.cycleLabel}
+                {remainingLabel && (
+                  <span className="ml-2 text-slate-500">
+                    <span className="font-semibold text-slate-700">Remaining:</span> {remainingLabel}
+                  </span>
+                )}
+              </div>
 
               <div className="mt-6">
                 <p className="text-sm text-slate-500">Da hoan</p>

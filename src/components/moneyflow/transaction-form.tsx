@@ -88,7 +88,7 @@ function formatRangeLabel(range: { start: Date; end: Date }, targetDate: Date) {
   const diffTime = range.end.getTime() - targetDate.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-  return `Kỳ sao kê: ${fmt(range.start)} - ${fmt(range.end)} (Còn ${diffDays} ngày)`;
+  return `Cycle: ${fmt(range.start)} - ${fmt(range.end)} (Remaining: ${diffDays} days)`;
 }
 
 function getCycleLabelForDate(
@@ -683,75 +683,6 @@ export function TransactionForm({
 
   const amountValue = typeof watchedAmount === 'number' ? Math.abs(watchedAmount) : 0
   const projectedSpend = (spendingStats?.currentSpend ?? 0) + amountValue
-  const minSpendHint = useMemo(() => {
-    if (!spendingStats?.minSpend || spendingStats.minSpend <= 0) {
-      return null
-    }
-
-    const formattedTarget = numberFormatter.format(spendingStats.minSpend)
-    const ratePercent = Math.round(spendingStats.rate * 100)
-
-    if (projectedSpend < spendingStats.minSpend) {
-      const remaining = Math.max(0, spendingStats.minSpend - projectedSpend)
-      return {
-        text: `Spend ${numberFormatter.format(remaining)} more to reach min spend of ${formattedTarget} (${ratePercent}% cashback).`,
-        className: 'text-amber-600',
-      }
-    }
-
-    if (spendingStats.currentSpend < spendingStats.minSpend) {
-      return {
-        text: `Great! This transaction helps you meet the minimum spend requirement (${formattedTarget}).`,
-        className: 'text-emerald-600',
-      }
-    }
-
-    return {
-      text: `Min spend target met (${formattedTarget}). Accumulating ${ratePercent}% cashback.`,
-      className: 'text-blue-600',
-    }
-  }, [projectedSpend, spendingStats])
-  const limitWarning = useMemo(() => {
-    if (
-      !spendingStats ||
-      spendingStats.maxCashback === null ||
-      spendingStats.rate <= 0
-    ) {
-      return null
-    }
-
-    const minSpendSatisfied =
-      spendingStats.minSpend === null ||
-      spendingStats.currentSpend >= spendingStats.minSpend
-
-    if (!minSpendSatisfied) {
-      return null
-    }
-
-    const potentialNewEarn = amountValue * spendingStats.rate
-    const remaining =
-      spendingStats.maxCashback - spendingStats.earnedSoFar
-
-    if (remaining <= 0) {
-      return {
-        text: 'Cashback budget exhausted. This transaction will not earn further cashback.',
-        className: 'text-amber-600',
-      }
-    }
-
-    if (potentialNewEarn > remaining) {
-      return {
-        text: `Cashback budget has only ${numberFormatter.format(
-          Math.max(0, remaining)
-        )} left. You should only claim a maximum of ${numberFormatter.format(
-          Math.max(0, remaining)
-        )} for this transaction.`,
-        className: 'text-amber-600',
-      }
-    }
-
-    return null
-  }, [amountValue, spendingStats])
   const rateLimitPercent =
     typeof cashbackProgress?.rate === 'number'
       ? cashbackProgress.rate * 100
@@ -1214,25 +1145,7 @@ export function TransactionForm({
   )
 
   const CashbackInputs = showCashbackInputs ? (
-    <div className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/80 p-4 text-sm text-slate-600 shadow-sm">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs font-semibold uppercase text-indigo-700">
-        <div className="space-y-0.5">
-          <div className="text-[11px] text-slate-500">Statement Cycle</div>
-          <div className="text-sm font-semibold text-slate-900">
-            {selectedCycleLabel ?? 'No cycle info'}
-          </div>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-[11px] text-indigo-800">Rate: {(cashbackMeta?.rate ?? 0) * 100}%</span>
-          <span>
-            Budget:{' '}
-            {remainingBudget === null
-              ? 'Unlimited'
-              : numberFormatter.format(remainingBudget)}
-          </span>
-        </div>
-      </div>
-
+    <div className="space-y-3 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 text-sm text-slate-600">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">% Back</label>
@@ -1318,6 +1231,29 @@ export function TransactionForm({
           Suggest lowering percentage to {suggestedPercent.toFixed(2)}% to not exceed budget.
         </p>
       )}
+      <div className="border-t border-indigo-200/80 pt-2 text-slate-500 space-y-1">
+        <p className="text-xs">
+            <span className="font-semibold text-slate-700">Cycle:</span> {selectedCycleLabel ?? 'N/A'}
+        </p>
+        {statsLoading && <p>Loading min spend...</p>}
+        {statsError && <p className="text-rose-600">{statsError}</p>}
+        {spendingStats && spendingStats.minSpend && spendingStats.minSpend > 0 && (
+            <p>
+                <span className="font-semibold text-slate-700">Min Spend:</span>
+                {projectedSpend >= spendingStats.minSpend ? (
+                    <span className="text-emerald-600"> Met ({numberFormatter.format(projectedSpend)} / {numberFormatter.format(spendingStats.minSpend)})</span>
+                ) : (
+                    <span className="text-amber-600"> Pending ({numberFormatter.format(projectedSpend)} / {numberFormatter.format(spendingStats.minSpend)})</span>
+                )}
+            </p>
+        )}
+        {spendingStats && spendingStats.maxCashback && spendingStats.maxCashback > 0 && (
+            <p>
+                <span className="font-semibold text-slate-700">Budget:</span>
+                {numberFormatter.format(spendingStats.maxCashback - spendingStats.earnedSoFar)} remaining
+            </p>
+        )}
+      </div>
     </div>
   ) : null;
 

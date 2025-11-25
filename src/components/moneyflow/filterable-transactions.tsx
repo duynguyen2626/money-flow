@@ -17,6 +17,16 @@ type FilterableTransactionsProps = {
     searchTerm?: string
     onSearchChange?: (next: string) => void
     shops?: Shop[]
+    hidePeopleColumn?: boolean
+}
+
+type BulkActionState = {
+    selectionCount: number
+    currentTab: 'active' | 'void'
+    onVoidSelected: () => Promise<void> | void
+    onRestoreSelected: () => Promise<void> | void
+    isVoiding: boolean
+    isRestoring: boolean
 }
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -33,6 +43,7 @@ export function FilterableTransactions({
     searchTerm: externalSearch,
     onSearchChange,
     shops = [],
+    hidePeopleColumn,
 }: FilterableTransactionsProps) {
     const { selectedTag, setSelectedTag } = useTagFilter()
     const [searchTermInternal, setSearchTermInternal] = useState('');
@@ -48,6 +59,26 @@ export function FilterableTransactions({
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
     const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(null)
     const [activeTab, setActiveTab] = useState<'active' | 'void'>('active')
+    const [bulkActions, setBulkActions] = useState<BulkActionState | null>(null)
+    const handleBulkActionStateChange = useMemo(
+        () =>
+            (next: BulkActionState) =>
+                setBulkActions(prev => {
+                    if (
+                        !prev ||
+                        prev.selectionCount !== next.selectionCount ||
+                        prev.currentTab !== next.currentTab ||
+                        prev.isVoiding !== next.isVoiding ||
+                        prev.isRestoring !== next.isRestoring ||
+                        prev.onVoidSelected !== next.onVoidSelected ||
+                        prev.onRestoreSelected !== next.onRestoreSelected
+                    ) {
+                        return next
+                    }
+                    return prev
+                }),
+        []
+    )
 
     const categoryById = useMemo(() => {
         const map = new Map<string, Category>()
@@ -246,6 +277,14 @@ export function FilterableTransactions({
         )
     }, [finalTransactions, selectedTxnIds])
 
+    const currentBulkTab = bulkActions?.currentTab ?? activeTab
+    const bulkActionLabel = currentBulkTab === 'void' ? 'Restore Selected' : 'Void Selected'
+    const bulkActionHandler =
+        currentBulkTab === 'void' ? bulkActions?.onRestoreSelected : bulkActions?.onVoidSelected
+    const bulkActionBusy = currentBulkTab === 'void' ? bulkActions?.isRestoring : bulkActions?.isVoiding
+    const bulkActionDisabled =
+        !bulkActionHandler || (bulkActions?.selectionCount ?? 0) === 0 || !!bulkActionBusy
+
     const clearTagFilter = () => {
         setSelectedTag(null)
         setSelectedCycle(null)
@@ -257,7 +296,7 @@ export function FilterableTransactions({
     }
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
             {!onSearchChange && (
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
                     <div className="relative flex-1">
@@ -370,7 +409,7 @@ export function FilterableTransactions({
                 </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-3 border rounded-md border-slate-200 bg-slate-50 px-3 py-2">
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border rounded-md border-slate-200 bg-slate-50 px-3 py-2">
                 <div className="flex flex-wrap items-center gap-2">
                     <div className="flex items-center rounded-lg bg-slate-200/50 p-1 text-sm font-medium text-slate-600 mr-2">
                         <button
@@ -472,6 +511,17 @@ export function FilterableTransactions({
                                 Deselect All ({selectedTxnIds.size})
                             </button>
                             <button
+                                className={`px-3 py-1 rounded-full text-sm font-semibold shadow-sm ${
+                                    currentBulkTab === 'void'
+                                        ? 'bg-green-600 text-white hover:bg-green-500'
+                                        : 'bg-red-600 text-white hover:bg-red-500'
+                                }`}
+                                onClick={() => bulkActionHandler?.()}
+                                disabled={bulkActionDisabled}
+                            >
+                                {bulkActionBusy ? 'Working...' : `${bulkActionLabel} (${selectedTxnIds.size})`}
+                            </button>
+                            <button
                                 className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200"
                                 onClick={() => setShowSelectedOnly(prev => !prev)}
                             >
@@ -500,7 +550,7 @@ export function FilterableTransactions({
                 </div>
             </div>
             
-            <div>
+            <div className="mt-2">
                 <UnifiedTransactionTable
                     transactions={finalTransactions} 
                     accountType={accountType}
@@ -512,6 +562,8 @@ export function FilterableTransactions({
                     selectedTxnIds={selectedTxnIds}
                     onSelectionChange={setSelectedTxnIds}
                     activeTab={activeTab}
+                    hidePeopleColumn={hidePeopleColumn}
+                    onBulkActionStateChange={handleBulkActionStateChange}
                 />
             </div>
         </div>
