@@ -134,23 +134,6 @@ interface UnifiedTransactionTableProps {
   hidePeopleColumn?: boolean
 }
 
-const defaultColumns: ColumnConfig[] = [
-  { key: "date", label: "Date", defaultWidth: 60, minWidth: 50 },
-  { key: "type", label: "Type", defaultWidth: 110, minWidth: 90 },
-  { key: "shop", label: "Notes", defaultWidth: 220, minWidth: 160 },
-  { key: "category", label: "Category", defaultWidth: 150 },
-  { key: "people", label: "Person", defaultWidth: 140 },
-  { key: "account", label: "Account", defaultWidth: 180 },
-  { key: "cycle", label: "Cycle", defaultWidth: 100 },
-  { key: "amount", label: "Amount", defaultWidth: 120 },
-  { key: "cashback_percent", label: "% Back", defaultWidth: 70 },
-  { key: "cashback_fixed", label: "Fix Back", defaultWidth: 80 },
-  { key: "cashback_sum", label: "Sum Back", defaultWidth: 100 },
-  { key: "final_price", label: "Final Price", defaultWidth: 120 },
-  { key: "tag", label: "Tag", defaultWidth: 80 },
-  { key: "id", label: "ID", defaultWidth: 100 },
-  { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
-]
 
 function parseMetadata(value: TransactionWithDetails['metadata']) {
   if (!value) return null
@@ -182,6 +165,23 @@ export function UnifiedTransactionTable({
   activeTab,
   hidePeopleColumn,
 }: UnifiedTransactionTableProps) {
+  const defaultColumns: ColumnConfig[] = [
+    { key: "date", label: "Date", defaultWidth: 60, minWidth: 50 },
+    { key: "type", label: "Type", defaultWidth: 110, minWidth: 90 },
+    { key: "shop", label: "Notes", defaultWidth: 220, minWidth: 160 },
+    { key: "category", label: "Category", defaultWidth: 150 },
+    ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 140 } as ColumnConfig] : []),
+    { key: "account", label: "Account", defaultWidth: 180 },
+    { key: "cycle", label: "Cycle", defaultWidth: 100 },
+    { key: "amount", label: "Amount", defaultWidth: 120 },
+    { key: "cashback_percent", label: "% Back", defaultWidth: 70 },
+    { key: "cashback_fixed", label: "Fix Back", defaultWidth: 80 },
+    { key: "cashback_sum", label: "Sum Back", defaultWidth: 100 },
+    { key: "final_price", label: "Final Price", defaultWidth: 120 },
+    { key: "tag", label: "Tag", defaultWidth: 80 },
+    { key: "id", label: "ID", defaultWidth: 100 },
+    { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
+  ]
   const router = useRouter()
   // Internal state removed for activeTab, now using prop with fallback
   const [showSelectedOnly, setShowSelectedOnly] = useState(false)
@@ -552,31 +552,7 @@ export function UnifiedTransactionTable({
   const displayedColumns = defaultColumns.filter(col => visibleColumns[col.key])
 
   return (
-    <div className="relative space-y-4">
-      <div className="flex items-center justify-end min-h-[36px]">
-        {selection.size > 0 && (
-            currentTab === 'void' ? (
-                <button
-                    className="inline-flex items-center gap-2 rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-green-500 disabled:opacity-70"
-                    onClick={handleBulkRestore}
-                    disabled={isRestoring}
-                >
-                    {isRestoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                    Restore Selected ({selection.size})
-                </button>
-            ) : (
-                <button
-                    className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-70"
-                    onClick={handleBulkVoid}
-                    disabled={isVoiding}
-                >
-                    {isVoiding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-                    Void Selected ({selection.size})
-                </button>
-            )
-        )}
-      </div>
-
+    <div className="relative">
       <div className="rounded-md border bg-white shadow-sm overflow-hidden">
       <Table>
         <TableHeader className="bg-slate-50/80">
@@ -760,7 +736,7 @@ export function UnifiedTransactionTable({
                 </button>
                 {isMenuOpen && (
                   <div className="absolute right-0 top-8 z-20 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg">
-                    {!isVoided ? (
+                    {activeTab !== 'void' ? (
                         <>
                             <button
                                 className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
@@ -896,7 +872,11 @@ export function UnifiedTransactionTable({
                     </CustomTooltip>
                   )
                 case "account":
-                  return <div className="max-w-[200px] truncate">{accountDisplay}</div>
+                  return (
+                    <CustomTooltip content={txn.account_name ?? ''}>
+                      <div className="max-w-[150px] truncate whitespace-nowrap">{accountDisplay}</div>
+                    </CustomTooltip>
+                  )
                 case "people": {
                   const personName = (txn as any).person_name ?? txn.person_name ?? null
                   const personAvatar = (txn as any).person_avatar_url ?? txn.person_avatar_url ?? null

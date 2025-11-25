@@ -398,7 +398,7 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
     .from('subscriptions')
     .select(
       `
-      id, name, price, next_billing_date, is_active, payment_account_id, shop_id,
+      id, name, price, next_billing_date, payment_account_id, shop_id,
       subscription_members (
         profile_id,
         fixed_amount,
@@ -406,7 +406,6 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
       )
     `
     )
-    .or('is_active.is.null,is_active.eq.true')
 
   if (!isManualForce) {
     query = query.lte('next_billing_date', todayStr)
