@@ -100,7 +100,7 @@ export type TransactionLine = {
 
 export type TransactionWithLineRelations = TransactionLineRow & {
   accounts: Pick<AccountRow, 'name' | 'logo_url' | 'type'> | null;
-  categories: Pick<CategoryRow, 'name'> & { image_url?: string | null; icon?: string | null } | null;
+  categories: Pick<CategoryRow, 'name' | 'type'> & { image_url?: string | null; icon?: string | null } | null;
   profiles?: { name?: string | null; avatar_url?: string | null } | null;
   people?: { name?: string | null; avatar_url?: string | null } | null;
   person_id?: string | null;

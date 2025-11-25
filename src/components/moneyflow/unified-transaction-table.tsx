@@ -659,27 +659,22 @@ export function UnifiedTransactionTable({
             // --- Type Logic ---
             let typeBadge = null;
             if (txn.type === 'repayment') {
-                // In account-specific view (People page), show as "Transfer In"
-                if (accountId) {
-                    typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> Transfer In</span>;
-                } else {
-                    typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeft className="mr-1 h-3 w-3" /> Repayment</span>;
-                }
+              typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> TF In</span>;
             } else if (txn.type === 'expense') {
-                typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Expense</span>
+              typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Out</span>
             } else if (txn.type === 'income') {
-                 typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> Income</span>
+              typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> In</span>
             } else {
-                 // Transfer
-                 if (accountId) {
-                     if (txn.amount >= 0) {
-                         typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> Transfer In</span>
-                     } else {
-                         typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700"><ArrowRight className="mr-1 h-3 w-3" /> Transfer Out</span>
-                     }
-                 } else {
-                     typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
-                 }
+              // Transfer
+              if (accountId) {
+                if (txn.amount >= 0) {
+                  typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> TF In</span>
+                } else {
+                  typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700"><ArrowRight className="mr-1 h-3 w-3" /> TF Out</span>
+                }
+              } else {
+                typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
+              }
             }
 
             const taskCell = (
@@ -764,7 +759,7 @@ export function UnifiedTransactionTable({
             const renderCell = (key: ColumnKey) => {
               switch (key) {
                 case "date":
-                  return formattedDate(txn.occurred_at)
+                  return <span className="whitespace-nowrap">{formattedDate(txn.occurred_at)}</span>
                 case "type":
                    return typeBadge
                 case "shop": {
@@ -817,7 +812,12 @@ export function UnifiedTransactionTable({
                     </div>
                    );
                  }
-                case "category":
+                case "category": {
+                    if (!txn.category_name) {
+                        if (txn.type === 'repayment') return <span className="text-slate-500">Repayment</span>;
+                        if (txn.type === 'transfer') return <span className="text-slate-500">Transfer</span>;
+                        return <span className="text-red-500">Uncategorized</span>;
+                    }
                   return (
                     <CustomTooltip content={txn.category_name ?? "No Category"}>
                         <div className="flex items-center gap-2 max-w-[200px]">
@@ -839,44 +839,44 @@ export function UnifiedTransactionTable({
                         </div>
                     </CustomTooltip>
                   )
+                }
                 case "account": {
-                  // 1. Determine Source & Destination Icons
                   const sourceIcon = txn.source_logo ? (
-                    <img src={txn.source_logo} alt="" className="h-8 w-8 object-contain rounded-none" />
+                    <img src={txn.source_logo} alt={txn.source_name ?? ''} className="h-8 w-8 object-contain rounded-none" />
                   ) : (
                     <div className="flex h-8 w-8 items-center justify-center bg-slate-100 text-sm font-bold border rounded-none">
-                        {(txn.source_account_name ?? '?').charAt(0).toUpperCase()}
+                        {(txn.source_name ?? '?').charAt(0).toUpperCase()}
                     </div>
                   );
 
                   const destIcon = txn.destination_logo ? (
-                    <img src={txn.destination_logo} alt="" className="h-8 w-8 object-contain rounded-none" />
+                    <img src={txn.destination_logo} alt={txn.destination_name ?? ''} className="h-8 w-8 object-contain rounded-none" />
                   ) : (
                     <div className="flex h-8 w-8 items-center justify-center bg-slate-100 text-sm font-bold border rounded-none">
-                        {(txn.destination_account_name ?? '?').charAt(0).toUpperCase()}
+                        {(txn.destination_name ?? '?').charAt(0).toUpperCase()}
                     </div>
                   );
 
-                  // 2. Render for Transfer / Debt
+                  // Render for Transfer / Debt / Repayment
                   if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
                       return (
-                        <CustomTooltip content={`${txn.source_account_name} ➡️ ${txn.destination_account_name}`}>
+                        <CustomTooltip content={`${txn.source_name ?? 'Unknown'} ➡️ ${txn.destination_name ?? 'Unknown'}`}>
                             <div className="flex items-center gap-2 cursor-help">
-                              {sourceIcon}
-                              <span className="text-xl">➡️</span>
-                              {destIcon}
+                              {txn.source_name && sourceIcon}
+                              {txn.source_name && txn.destination_name && <span className="text-xl">➡️</span>}
+                              {txn.destination_name && destIcon}
                             </div>
                         </CustomTooltip>
                       );
                   }
 
-                  // 3. Render for Single Account (Expense/Income)
+                  // Render for Single Account (Expense/Income)
                   return (
                      <div className="flex items-center gap-2">
-                        {sourceIcon}
+                        {txn.source_name && sourceIcon}
                         <CustomTooltip content={txn.account_name}>
                            <span className="truncate max-w-[120px] cursor-help">
-                              {txn.account_name}
+                              {txn.account_name ?? 'Unknown'}
                            </span>
                         </CustomTooltip>
                      </div>
@@ -906,7 +906,7 @@ export function UnifiedTransactionTable({
                 }
                 case "tag":
                   return txn.tag ? (
-                    <span className="inline-flex w-fit items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 border border-slate-200">
+                    <span className="inline-block max-w-[80px] truncate items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 border border-slate-200">
                         {txn.tag}
                      </span>
                   ) : <span className="text-slate-400">-</span>
