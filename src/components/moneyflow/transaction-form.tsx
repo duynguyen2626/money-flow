@@ -77,11 +77,18 @@ const cycleDateFormatter = new Intl.DateTimeFormat('en-US', {
   month: '2-digit',
 })
 
-function formatRangeLabel(range: { start: Date; end: Date }) {
-  const fmt = (date: Date) => `${String(date.getDate()).padStart(2, '0')}/${String(
-    date.getMonth() + 1
-  ).padStart(2, '0')}`
-  return `${fmt(range.start)} - ${fmt(range.end)}`
+function formatRangeLabel(range: { start: Date; end: Date }, targetDate: Date) {
+  const fmt = (date: Date) => {
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  }
+
+  const diffTime = range.end.getTime() - targetDate.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+  return `Kỳ sao kê: ${fmt(range.start)} - ${fmt(range.end)} (Còn ${diffDays} ngày)`;
 }
 
 function getCycleLabelForDate(
@@ -94,7 +101,7 @@ function getCycleLabelForDate(
 
   const referenceDate = targetDate ?? new Date()
   const range = getCashbackCycleRange(config, referenceDate)
-  return formatRangeLabel(range)
+  return formatRangeLabel(range, referenceDate)
 }
 
 function getAccountInitial(name: string) {

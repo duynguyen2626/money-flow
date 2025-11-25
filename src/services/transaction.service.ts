@@ -2,7 +2,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
-import { format } from 'date-fns';
+import { format, setDate, subMonths } from 'date-fns';
 import { Database, Json } from '@/types/database.types';
 import { TransactionLine, TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types';
 import { syncTransactionToSheet } from './sheet.service';
@@ -223,6 +223,42 @@ async function buildTransactionLines(
   return { lines, tag };
 }
 
+async function calculatePersistedCycleTag(
+  supabase: ReturnType<typeof createClient>,
+  accountId: string,
+  transactionDate: Date
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('accounts')
+    .select('type, cashback_config')
+    .eq('id', accountId)
+    .single();
+
+  const account = data as { type: string; cashback_config: Json } | null;
+
+  if (error || !account || account.type !== 'credit_card') {
+    return null;
+  }
+
+  const config = account.cashback_config as { statement_day?: number } | null;
+  if (!config?.statement_day) {
+    return null;
+  }
+
+  const statementDay = config.statement_day;
+  const transactionDay = transactionDate.getDate();
+
+  let cycleStartDate: Date;
+  if (transactionDay >= statementDay) {
+    cycleStartDate = setDate(transactionDate, statementDay);
+  } else {
+    const previousMonth = subMonths(transactionDate, 1);
+    cycleStartDate = setDate(previousMonth, statementDay);
+  }
+
+  return format(cycleStartDate, 'yyyy-MM-dd');
+}
+
 function buildSheetPayload(
   txn: { id: string; occurred_at: string; note?: string | null; tag?: string | null },
   line:
@@ -269,6 +305,12 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   }
   const { lines, tag } = built;
 
+  const persistedCycleTag = await calculatePersistedCycleTag(
+    supabase,
+    input.source_account_id,
+    new Date(input.occurred_at)
+  );
+
   const { data: txn, error: txnError } = await (supabase
     .from('transactions')
     .insert as any)({
@@ -276,6 +318,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       note: input.note,
       status: 'posted',
       tag: tag,
+      persisted_cycle_tag: persistedCycleTag,
       shop_id: input.shop_id ?? null,
       created_by: userId, // Thêm created_by với ID người dùng
     })
@@ -853,6 +896,12 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   const { lines, tag } = built;
   const shopInfo = await loadShopInfo(supabase, input.shop_id);
 
+  const persistedCycleTag = await calculatePersistedCycleTag(
+    supabase,
+    input.source_account_id,
+    new Date(input.occurred_at)
+  );
+
   const { error: headerError } = await supabase
     .from('transactions')
     .update([{
@@ -860,6 +909,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       note: input.note,
       tag: tag,
       status: 'posted',
+      persisted_cycle_tag: persistedCycleTag,
       shop_id: input.shop_id ?? null,
     }] as never)
     .eq('id', id);
