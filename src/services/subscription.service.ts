@@ -439,7 +439,9 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
     if (existingTxnsError) {
       console.error('Failed to check for existing transactions:', existingTxnsError)
     } else if (existingTxns && existingTxns.length > 0) {
-      existingTxnsSet = new Set(existingTxns.map(t => `${t.shop_id}-${t.tag}`))
+      existingTxnsSet = new Set(
+        (existingTxns as { shop_id: string; tag: string }[]).map(t => `${t.shop_id}-${t.tag}`)
+      )
     }
   }
 
