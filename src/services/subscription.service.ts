@@ -379,16 +379,22 @@ function buildMemberShareList(
   })
 }
 
-export async function checkAndProcessSubscriptions(): Promise<{
+export async function checkAndProcessSubscriptions(isManualForce: boolean = false): Promise<{
   processedCount: number
   names: string[]
+  skippedCount: number
+  skippedNames: string[]
 }> {
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
   const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66'
-  const today = parseBillingDate()
+  const today = new Date()
+  const todayStr = dateOnly(today)
+  const currentMonthTag = format(today, 'MMMyy').toUpperCase()
 
-  const query = supabase
+  let query = supabase
     .from('subscriptions')
     .select(
       `
@@ -400,38 +406,43 @@ export async function checkAndProcessSubscriptions(): Promise<{
       )
     `
     )
-    .lte('next_billing_date', today)
     .or('is_active.is.null,is_active.eq.true')
+
+  if (!isManualForce) {
+    query = query.lte('next_billing_date', todayStr)
+  }
 
   let { data, error } = await query
 
   if (error) {
-    if (error.code === '42703') {
-      const fallback = await supabase
-        .from('subscriptions')
-        .select(
-          `
-          id, name, price, next_billing_date, payment_account_id, shop_id,
-          subscription_members (
-            profile_id,
-            fixed_amount,
-            profiles ( name )
-          )
-        `
-        )
-        .lte('next_billing_date', today)
-      data = fallback.data
-      error = fallback.error as typeof error
-    }
-    if (error) {
-      console.error('Failed to scan due subscriptions:', error)
-      return { processedCount: 0, names: [] }
-    }
+    console.error('Failed to scan due subscriptions:', error)
+    return { processedCount: 0, names: [], skippedCount: 0, skippedNames: [] }
   }
 
   const dueRows = (data ?? []) as DueSubscription[]
   if (dueRows.length === 0) {
-    return { processedCount: 0, names: [] }
+    return { processedCount: 0, names: [], skippedCount: 0, skippedNames: [] }
+  }
+
+  let existingTxnsSet = new Set<string>()
+  if (isManualForce) {
+    const { data: existingTxns, error: existingTxnsError } = await supabase
+      .from('transactions')
+      .select('shop_id, tag')
+      .in(
+        'shop_id',
+        dueRows.map(s => s.shop_id).filter(Boolean) as string[]
+      )
+      .eq('tag', currentMonthTag)
+      .eq('status', 'posted')
+
+    if (existingTxnsError) {
+      console.error('Failed to check for existing transactions:', existingTxnsError)
+    } else if (existingTxns && existingTxns.length > 0) {
+      existingTxnsSet = new Set(
+        (existingTxns as { shop_id: string; tag: string }[]).map(t => `${t.shop_id}-${t.tag}`)
+      )
+    }
   }
 
   const memberIds = new Set<string>()
@@ -444,18 +455,30 @@ export async function checkAndProcessSubscriptions(): Promise<{
   const paymentAccountId = await resolvePaymentAccountId(supabase)
   const expenseCategoryId = await resolveExpenseCategoryId(supabase)
   if (!paymentAccountId || !expenseCategoryId) {
-    return { processedCount: 0, names: [] }
+    return {
+      processedCount: 0,
+      names: [],
+      skippedCount: 0,
+      skippedNames: [],
+    }
   }
 
   const processedNames: string[] = []
+  const skippedNames: string[] = []
 
   for (const row of dueRows) {
+    if (isManualForce && existingTxnsSet.has(`${row.shop_id}-${currentMonthTag}`)) {
+      skippedNames.push(row.name)
+      continue
+    }
     const price = Math.max(0, Number(row.price ?? 0))
     if (!price) {
       continue
     }
 
-    const billingDate = parseBillingDate(row.next_billing_date ?? today)
+    const billingDate = isManualForce
+      ? todayStr
+      : parseBillingDate(row.next_billing_date ?? todayStr)
     const txnNote = formatNoteTemplate(row, billingDate, row.subscription_members?.length ?? 0)
     const txnTag = format(parseISO(billingDate), 'MMMyy').toUpperCase()
     const members = buildMemberShareList(row, debtMap)
@@ -605,5 +628,7 @@ export async function checkAndProcessSubscriptions(): Promise<{
   return {
     processedCount: processedNames.length,
     names: processedNames,
+    skippedCount: skippedNames.length,
+    skippedNames: skippedNames,
   }
 }
