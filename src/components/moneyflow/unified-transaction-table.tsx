@@ -1,6 +1,6 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
@@ -44,6 +44,15 @@ type ColumnKey =
   | "final_price"
   | "id"
   | "task"
+
+type BulkActionState = {
+  selectionCount: number
+  currentTab: 'active' | 'void'
+  onVoidSelected: () => Promise<void> | void
+  onRestoreSelected: () => Promise<void> | void
+  isVoiding: boolean
+  isRestoring: boolean
+}
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -132,6 +141,7 @@ interface UnifiedTransactionTableProps {
   shops?: Shop[]
   activeTab?: 'active' | 'void'
   hidePeopleColumn?: boolean
+  onBulkActionStateChange?: (state: BulkActionState) => void
 }
 
 
@@ -164,6 +174,7 @@ export function UnifiedTransactionTable({
   shops = [],
   activeTab,
   hidePeopleColumn,
+  onBulkActionStateChange,
 }: UnifiedTransactionTableProps) {
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 60, minWidth: 50 },
@@ -212,6 +223,10 @@ export function UnifiedTransactionTable({
     })
     return map
   })
+
+  useEffect(() => {
+    setVisibleColumns(prev => ({ ...prev, people: !hidePeopleColumn }))
+  }, [hidePeopleColumn])
 
   // State for actions
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
@@ -439,7 +454,7 @@ export function UnifiedTransactionTable({
       .finally(() => setIsVoiding(false))
   }
 
-  const handleBulkVoid = async () => {
+  const handleBulkVoid = useCallback(async () => {
     if (selection.size === 0) return;
     if (!confirm('Are you sure you want to void ' + selection.size + ' transactions?')) return;
 
@@ -459,9 +474,9 @@ export function UnifiedTransactionTable({
     if (errorCount > 0) {
         alert(`Failed to void ${errorCount} transactions.`);
     }
-  }
+  }, [router, selection, updateSelection])
 
-  const handleBulkRestore = async () => {
+  const handleBulkRestore = useCallback(async () => {
     if (selection.size === 0) return;
     if (!confirm('Are you sure you want to restore ' + selection.size + ' transactions?')) return;
 
@@ -481,14 +496,34 @@ export function UnifiedTransactionTable({
     if (errorCount > 0) {
         alert(`Failed to restore ${errorCount} transactions.`);
     }
-  }
+  }, [router, selection, updateSelection])
+
+  const currentTab = activeTab ?? 'active';
+
+  useEffect(() => {
+    if (!onBulkActionStateChange) return
+    onBulkActionStateChange({
+      selectionCount: selection.size,
+      currentTab,
+      onVoidSelected: handleBulkVoid,
+      onRestoreSelected: handleBulkRestore,
+      isVoiding,
+      isRestoring,
+    })
+  }, [
+    currentTab,
+    handleBulkRestore,
+    handleBulkVoid,
+    isRestoring,
+    isVoiding,
+    onBulkActionStateChange,
+    selection.size,
+  ])
 
   const handleEditSuccess = () => {
     setEditingTxn(null)
     router.refresh()
   }
-
-  const currentTab = activeTab ?? 'active';
 
   const displayedTransactions = useMemo(() => {
     let list = transactions;
@@ -552,12 +587,12 @@ export function UnifiedTransactionTable({
   const displayedColumns = defaultColumns.filter(col => visibleColumns[col.key])
 
   return (
-    <div className="relative">
+    <div className="relative space-y-3">
       <div className="rounded-md border bg-white shadow-sm overflow-hidden">
       <Table>
         <TableHeader className="bg-slate-50/80">
           <TableRow>
-            <TableHead className="border-r" style={{ width: 52 }}>
+            <TableHead className="border-r whitespace-nowrap" style={{ width: 52 }}>
               <input
                 type="checkbox"
                 className="rounded border-gray-300"
@@ -570,7 +605,7 @@ export function UnifiedTransactionTable({
                 return (
                   <TableHead
                     key={col.key}
-                    className="text-right border-l bg-slate-100"
+                    className="text-right border-l bg-slate-100 whitespace-nowrap"
                     style={{ width: columnWidths[col.key] }}
                   >
                     <button
@@ -736,7 +771,19 @@ export function UnifiedTransactionTable({
                 </button>
                 {isMenuOpen && (
                   <div className="absolute right-0 top-8 z-20 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg">
-                    {activeTab !== 'void' ? (
+                    {currentTab === 'void' || isVoided ? (
+                        <button
+                            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={isRestoring}
+                            onClick={event => {
+                                event.stopPropagation();
+                                handleRestore(txn);
+                            }}
+                        >
+                            <RotateCcw className="h-4 w-4" />
+                            <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
+                        </button>
+                    ) : (
                         <>
                             <button
                                 className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
@@ -784,18 +831,6 @@ export function UnifiedTransactionTable({
                                 <span>Void Transaction</span>
                             </button>
                         </>
-                    ) : (
-                        <button
-                            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={isRestoring}
-                            onClick={event => {
-                                event.stopPropagation();
-                                handleRestore(txn);
-                            }}
-                        >
-                            <RotateCcw className="h-4 w-4" />
-                            <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
-                        </button>
                     )}
                   </div>
                 )}
@@ -810,7 +845,7 @@ export function UnifiedTransactionTable({
                    return typeBadge
                 case "shop":
                    return (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 max-w-[220px] overflow-hidden">
                       {txn.shop_name && (
                         <>
                           {txn.shop_logo_url ? (
@@ -872,9 +907,17 @@ export function UnifiedTransactionTable({
                     </CustomTooltip>
                   )
                 case "account":
+                  const accountContent = accountDisplay ?? <span className="text-slate-400">-</span>
                   return (
-                    <CustomTooltip content={txn.account_name ?? ''}>
-                      <div className="max-w-[150px] truncate whitespace-nowrap">{accountDisplay}</div>
+                    <CustomTooltip
+                      content={
+                        txn.account_name ??
+                        txn.source_account_name ??
+                        txn.destination_account_name ??
+                        'Account'
+                      }
+                    >
+                      <div className="max-w-[150px] whitespace-nowrap truncate">{accountContent}</div>
                     </CustomTooltip>
                   )
                 case "people": {

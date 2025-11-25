@@ -182,6 +182,15 @@ function extractCashbackFromLines(lines: TransactionRow['transaction_lines']): {
   return {}
 }
 
+function extractMetadataFromLines(lines: TransactionRow['transaction_lines']): Json | null {
+  for (const line of lines ?? []) {
+    if (line?.metadata) {
+      return line.metadata
+    }
+  }
+  return null
+}
+
 function mapTransactionRow(txn: TransactionRow, accountId?: string): TransactionWithDetails {
   const lines = txn.transaction_lines ?? []
   const cashbackFromLines = extractCashbackFromLines(lines)
@@ -255,7 +264,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     person_id: personLine?.person_id,
     person_name: personLine?.profiles?.name ?? null,
     persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,
-    metadata: txn.metadata ?? null,
+    metadata: extractMetadataFromLines(lines),
     shop_id: txn.shop_id ?? null,
     shop_name: txn.shops?.name ?? null,
     shop_logo_url: txn.shops?.logo_url ?? null,
@@ -331,6 +340,7 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
     person_id: personLine?.person_id ?? null,
     person_name: personLine?.profiles?.name ?? null,
     persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,
+    metadata: extractMetadataFromLines(lines),
     shop_id: txn.shop_id ?? null,
     shop_name: txn.shops?.name ?? null,
     shop_logo_url: txn.shops?.logo_url ?? null,

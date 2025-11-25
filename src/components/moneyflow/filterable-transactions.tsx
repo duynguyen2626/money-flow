@@ -1,9 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { FilterIcon, X, Ban, Loader2, RotateCcw } from 'lucide-react'
-import { useRouter } from 'next/navigation'
-import { voidTransaction, restoreTransaction } from '@/services/transaction.service'
+import { FilterIcon, X } from 'lucide-react'
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
@@ -20,6 +18,15 @@ type FilterableTransactionsProps = {
     onSearchChange?: (next: string) => void
     shops?: Shop[]
     hidePeopleColumn?: boolean
+}
+
+type BulkActionState = {
+    selectionCount: number
+    currentTab: 'active' | 'void'
+    onVoidSelected: () => Promise<void> | void
+    onRestoreSelected: () => Promise<void> | void
+    isVoiding: boolean
+    isRestoring: boolean
 }
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -52,49 +59,26 @@ export function FilterableTransactions({
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
     const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(null)
     const [activeTab, setActiveTab] = useState<'active' | 'void'>('active')
-    const [isVoiding, setIsVoiding] = useState(false)
-    const [isRestoring, setIsRestoring] = useState(false)
-    const router = useRouter()
-
-    const handleBulkVoid = async () => {
-        if (selectedTxnIds.size === 0) return;
-        if (!confirm('Are you sure you want to void ' + selectedTxnIds.size + ' transactions?')) return;
-
-        setIsVoiding(true);
-        let errorCount = 0;
-        for (const id of Array.from(selectedTxnIds)) {
-            const ok = await voidTransaction(id);
-            if (!ok) {
-                errorCount++;
-            }
-        }
-        setIsVoiding(false);
-        setSelectedTxnIds(new Set());
-        router.refresh();
-        if (errorCount > 0) {
-            alert(`Failed to void ${errorCount} transactions.`);
-        }
-    }
-
-    const handleBulkRestore = async () => {
-        if (selectedTxnIds.size === 0) return;
-        if (!confirm('Are you sure you want to restore ' + selectedTxnIds.size + ' transactions?')) return;
-
-        setIsRestoring(true);
-        let errorCount = 0;
-        for (const id of Array.from(selectedTxnIds)) {
-            const ok = await restoreTransaction(id);
-            if (!ok) {
-                errorCount++;
-            }
-        }
-        setIsRestoring(false);
-        setSelectedTxnIds(new Set());
-        router.refresh();
-        if (errorCount > 0) {
-            alert(`Failed to restore ${errorCount} transactions.`);
-        }
-    }
+    const [bulkActions, setBulkActions] = useState<BulkActionState | null>(null)
+    const handleBulkActionStateChange = useMemo(
+        () =>
+            (next: BulkActionState) =>
+                setBulkActions(prev => {
+                    if (
+                        !prev ||
+                        prev.selectionCount !== next.selectionCount ||
+                        prev.currentTab !== next.currentTab ||
+                        prev.isVoiding !== next.isVoiding ||
+                        prev.isRestoring !== next.isRestoring ||
+                        prev.onVoidSelected !== next.onVoidSelected ||
+                        prev.onRestoreSelected !== next.onRestoreSelected
+                    ) {
+                        return next
+                    }
+                    return prev
+                }),
+        []
+    )
 
     const categoryById = useMemo(() => {
         const map = new Map<string, Category>()
@@ -293,6 +277,14 @@ export function FilterableTransactions({
         )
     }, [finalTransactions, selectedTxnIds])
 
+    const currentBulkTab = bulkActions?.currentTab ?? activeTab
+    const bulkActionLabel = currentBulkTab === 'void' ? 'Restore Selected' : 'Void Selected'
+    const bulkActionHandler =
+        currentBulkTab === 'void' ? bulkActions?.onRestoreSelected : bulkActions?.onVoidSelected
+    const bulkActionBusy = currentBulkTab === 'void' ? bulkActions?.isRestoring : bulkActions?.isVoiding
+    const bulkActionDisabled =
+        !bulkActionHandler || (bulkActions?.selectionCount ?? 0) === 0 || !!bulkActionBusy
+
     const clearTagFilter = () => {
         setSelectedTag(null)
         setSelectedCycle(null)
@@ -304,7 +296,7 @@ export function FilterableTransactions({
     }
 
     return (
-        <div>
+        <div className="space-y-3">
             {!onSearchChange && (
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
                     <div className="relative flex-1">
@@ -518,25 +510,17 @@ export function FilterableTransactions({
                             >
                                 Deselect All ({selectedTxnIds.size})
                             </button>
-                            {activeTab === 'void' ? (
-                                <button
-                                    className="inline-flex items-center gap-2 rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-green-500 disabled:opacity-70"
-                                    onClick={handleBulkRestore}
-                                    disabled={isRestoring}
-                                >
-                                    {isRestoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                                    Restore Selected ({selectedTxnIds.size})
-                                </button>
-                            ) : (
-                                <button
-                                    className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-70"
-                                    onClick={handleBulkVoid}
-                                    disabled={isVoiding}
-                                >
-                                    {isVoiding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-                                    Void Selected ({selectedTxnIds.size})
-                                </button>
-                            )}
+                            <button
+                                className={`px-3 py-1 rounded-full text-sm font-semibold shadow-sm ${
+                                    currentBulkTab === 'void'
+                                        ? 'bg-green-600 text-white hover:bg-green-500'
+                                        : 'bg-red-600 text-white hover:bg-red-500'
+                                }`}
+                                onClick={() => bulkActionHandler?.()}
+                                disabled={bulkActionDisabled}
+                            >
+                                {bulkActionBusy ? 'Working...' : `${bulkActionLabel} (${selectedTxnIds.size})`}
+                            </button>
                             <button
                                 className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200"
                                 onClick={() => setShowSelectedOnly(prev => !prev)}
@@ -579,6 +563,7 @@ export function FilterableTransactions({
                     onSelectionChange={setSelectedTxnIds}
                     activeTab={activeTab}
                     hidePeopleColumn={hidePeopleColumn}
+                    onBulkActionStateChange={handleBulkActionStateChange}
                 />
             </div>
         </div>
