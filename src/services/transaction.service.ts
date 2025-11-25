@@ -228,11 +228,13 @@ async function calculatePersistedCycleTag(
   accountId: string,
   transactionDate: Date
 ): Promise<string | null> {
-  const { data: account, error } = await supabase
+  const { data, error } = await supabase
     .from('accounts')
     .select('type, cashback_config')
     .eq('id', accountId)
     .single();
+
+  const account = data as { type: string; cashback_config: Json } | null;
 
   if (error || !account || account.type !== 'credit_card') {
     return null;

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
+import { CustomTooltip } from "@/components/ui/custom-tooltip"
 import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
 import {
   Table,
@@ -609,7 +610,6 @@ export function TransactionTable({
   const isAllSelected = displayedTransactions.length > 0 && selection.size >= displayedTransactions.length
   const displayedColumns = defaultColumns.filter(col => visibleColumns[col.key])
 
-import { CustomTooltip } from "@/components/ui/custom-tooltip"
   return (
     <div className="relative space-y-2">
       <div className="flex items-center justify-between">
