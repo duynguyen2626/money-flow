@@ -4,6 +4,7 @@ import { useMemo, useState } from "react"
 import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
+import { CustomTooltip } from "@/components/ui/custom-tooltip"
 import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
 import {
   Table,
@@ -662,13 +663,28 @@ export function UnifiedTransactionTable({
                 if (txn.type === 'transfer') {
                     const source = txn.source_account_name ?? '?';
                     const dest = txn.destination_account_name ?? '?';
-                    accountDisplay = (
-                        <div className="flex items-center gap-1 text-xs text-slate-700 font-bold">
-                            <span className="text-slate-500 font-normal">{source}</span>
-                            <ArrowRight className="h-3 w-3 text-slate-400" />
-                            <span className="text-slate-700">{dest}</span>
-                        </div>
-                    )
+
+                    if (txn.source_logo && txn.destination_logo) {
+                        accountDisplay = (
+                            <CustomTooltip content={`${source} -> ${dest}`}>
+                                <div className="flex items-center gap-1 cursor-help">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={txn.source_logo} alt={source} className="h-8 w-8 object-contain" />
+                                    <ArrowRight className="h-3 w-3 text-slate-300" />
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={txn.destination_logo} alt={dest} className="h-8 w-8 object-contain" />
+                                </div>
+                            </CustomTooltip>
+                        )
+                    } else {
+                        accountDisplay = (
+                            <div className="flex items-center gap-1 text-xs text-slate-700 font-bold">
+                                <span className="text-slate-500 font-normal">{source}</span>
+                                <ArrowRight className="h-3 w-3 text-slate-400" />
+                                <span className="text-slate-700">{dest}</span>
+                            </div>
+                        )
+                    }
                 } else if (txn.type === 'income') {
                      // Show Destination (Bank)
                      accountDisplay = (
@@ -815,17 +831,23 @@ export function UnifiedTransactionTable({
                         </span>
                       )}
                       {txn.note && (
-                        <span title={txn.note} className="text-sm text-slate-700 font-medium truncate cursor-help">
-                          {txn.note}
-                        </span>
+                        <CustomTooltip content={txn.note}>
+                            <span className="text-sm text-slate-700 font-medium truncate cursor-help">
+                            {txn.note}
+                            </span>
+                        </CustomTooltip>
                       )}
                     </div>
                    )
                 case "category":
                   return (
-                    <div className="flex items-center gap-2 max-w-full" title={txn.category_name ?? undefined}>
-                         <span className="font-medium text-slate-700 truncate whitespace-nowrap">{txn.category_name || "-"}</span>
-                    </div>
+                    <CustomTooltip content={txn.category_name ?? "No Category"}>
+                        <div className="flex items-center gap-2 max-w-full">
+                            <span className="font-medium text-slate-700 truncate whitespace-nowrap cursor-help">
+                                {txn.category_name || "-"}
+                            </span>
+                        </div>
+                    </CustomTooltip>
                   )
                 case "account":
                   return accountDisplay
