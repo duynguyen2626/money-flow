@@ -781,8 +781,7 @@ export function TransactionForm({
     transactionType !== 'income' &&
     selectedAccount?.type === 'credit_card' &&
     amountValue > 0 &&
-    transactionType !== 'transfer' &&
-    (transactionType !== 'transfer' || Boolean(watchedDebtAccountId))
+    transactionType !== 'transfer'
 
   useEffect(() => {
     if (amountValue <= 0) {
