@@ -460,6 +460,28 @@ export function TransactionTable({
     }
   }
 
+  const handleBulkRestore = async () => {
+    if (selection.size === 0) return;
+    if (!confirm('Are you sure you want to restore ' + selection.size + ' transactions?')) return;
+
+    setIsRestoring(true);
+    let errorCount = 0;
+    for (const id of Array.from(selection)) {
+        const ok = await restoreTransaction(id);
+        if (ok) {
+            setStatusOverrides(prev => ({ ...prev, [id]: 'posted' }));
+        } else {
+            errorCount++;
+        }
+    }
+    setIsRestoring(false);
+    updateSelection(new Set()); // Clear selection
+    router.refresh();
+    if (errorCount > 0) {
+        alert(`Failed to restore ${errorCount} transactions.`);
+    }
+  }
+
   const handleEditSuccess = () => {
     setEditingTxn(null)
     router.refresh()
@@ -480,31 +502,27 @@ export function TransactionTable({
   }, [transactions, selection, showSelectedOnly, activeTab, statusOverrides])
 
   const getCycleLabel = (txn: TransactionWithDetails) => {
-    const persisted = txn.persisted_cycle_tag ?? txn.tag
-    const normalize = (value: string | null | undefined) => {
-      if (!value) return "-"
-      const yMonth = value.match(/^(\d{4})-(0[1-9]|1[0-2])$/)
-      if (yMonth) {
-        return value
+    if (txn.persisted_cycle_tag) {
+      try {
+        const date = new Date(txn.persisted_cycle_tag);
+        // Add 1 day to handle timezone issues where it might be the day before
+        date.setDate(date.getDate() + 1);
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const year = date.getFullYear();
+        return `${month}-${year}`;
+      } catch (e) {
+        return txn.persisted_cycle_tag; // fallback to raw value
       }
-      const abbrev = value.slice(0, 3).toLowerCase()
-      const map: Record<string, string> = {
-        jan: "January", feb: "February", mar: "March", apr: "April", may: "May", jun: "June",
-        jul: "July", aug: "August", sep: "September", oct: "October", nov: "November", dec: "December",
-      }
-      if (map[abbrev]) return map[abbrev]
-      return value
     }
     if (accountType === "credit_card") {
-      if (persisted) return normalize(persisted)
-      const rawDate = txn.occurred_at ?? (txn as { created_at?: string }).created_at
-      const parsed = rawDate ? new Date(rawDate) : null
+      const rawDate = txn.occurred_at ?? (txn as { created_at?: string }).created_at;
+      const parsed = rawDate ? new Date(rawDate) : null;
       if (parsed && !Number.isNaN(parsed.getTime())) {
-        const month = String(parsed.getMonth() + 1).padStart(2, "0")
-        return normalize(`${parsed.getFullYear()}-${month}`)
+        const month = String(parsed.getMonth() + 1).padStart(2, "0");
+        return `${month}-${parsed.getFullYear()}`;
       }
     }
-    return normalize(txn.tag ?? "-")
+    return txn.tag ?? "-";
   }
 
   const formattedDate = (value: string | number | Date) => {
@@ -591,8 +609,9 @@ export function TransactionTable({
   const isAllSelected = displayedTransactions.length > 0 && selection.size >= displayedTransactions.length
   const displayedColumns = defaultColumns.filter(col => visibleColumns[col.key])
 
+import { CustomTooltip } from "@/components/ui/custom-tooltip"
   return (
-    <div className="relative space-y-4">
+    <div className="relative space-y-2">
       <div className="flex items-center justify-between">
         <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'active' | 'void')}>
           <TabsList>
@@ -602,6 +621,7 @@ export function TransactionTable({
         </Tabs>
 
         {selection.size > 0 && (
+          activeTab === 'active' ? (
             <button
                 className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-70"
                 onClick={handleBulkVoid}
@@ -610,6 +630,16 @@ export function TransactionTable({
                 {isVoiding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
                 Void Selected ({selection.size})
             </button>
+          ) : (
+            <button
+                className="inline-flex items-center gap-2 rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-green-500 disabled:opacity-70"
+                onClick={handleBulkRestore}
+                disabled={isRestoring}
+            >
+                {isRestoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                Restore Selected ({selection.size})
+            </button>
+          )
         )}
       </div>
 
@@ -824,7 +854,11 @@ export function TransactionTable({
                           <span className="font-medium truncate">{txn.shop_name}</span>
                         </div>
                       )}
-                      {txn.note && <span className="text-xs text-slate-500 truncate">{txn.note}</span>}
+                      {txn.note && (
+                        <CustomTooltip content={<div className="max-w-xs break-words">{txn.note}</div>}>
+                          <span className="text-xs text-slate-500 truncate max-w-[200px]">{txn.note}</span>
+                        </CustomTooltip>
+                      )}
                     </div>
                    )
                 case "note":
