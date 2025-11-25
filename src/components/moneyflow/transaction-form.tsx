@@ -366,15 +366,15 @@ export function TransactionForm({
         form.setValue('shop_id', shopeeShop.id);
       }
     } else if (transactionType === 'repayment') {
-        const repaymentCatId = 'e0000000-0000-0000-0000-000000000097';
-        if (categories.some(c => c.id === repaymentCatId)) {
-             form.setValue('category_id', repaymentCatId);
-        } else {
-             const repaymentCat = categories.find(c => c.name === 'Thu nợ người khác' || c.name === 'Repayment');
-             if (repaymentCat) {
-                 form.setValue('category_id', repaymentCat.id);
-             }
+      const repaymentCatId = 'e0000000-0000-0000-0000-000000000096';
+      if (categories.some(c => c.id === repaymentCatId)) {
+        form.setValue('category_id', repaymentCatId);
+      } else {
+        const repaymentCat = categories.find(c => c.name === 'Thu nợ người khác' || c.name === 'Debt Repayment');
+        if (repaymentCat) {
+          form.setValue('category_id', repaymentCat.id);
         }
+      }
     } else if (transactionType === 'transfer') {
         const transferCat = categories.find(c => c.name === 'Chuyển tiền' || c.name === 'Money Transfer');
         if (transferCat) {

@@ -573,6 +573,13 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
       displayAmount = -displayAmount
   }
 
+  const isRepayment = type === 'repayment';
+  if (isRepayment) {
+      if (displayAmount < 0) {
+          displayAmount = -displayAmount;
+      }
+  }
+
   // Smart Source Logic
   // If viewing from Debt Account, we want to see the Bank Name.
   // If viewing from Bank Account, we want to see Shop/Person/Debt Account.
@@ -635,7 +642,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     tag: txn.tag || null,
     created_at: (txn as any).created_at,
     amount: displayAmount,
-    type: type as 'income' | 'expense' | 'transfer',
+    type: isRepayment ? 'transfer' : (type as 'income' | 'expense' | 'transfer'),
     category_name: categoryName,
     category_icon: categoryIcon ?? null,
     category_image_url: categoryImageUrl ?? null,
@@ -707,6 +714,48 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
 
   const rows = (data ?? []) as TransactionRow[];
 
+  return rows.map(txn => mapTransactionRow(txn));
+}
+
+export async function getTransactionsByPersonId(personId: string, limit: number = 50): Promise<TransactionWithDetails[]> {
+  const supabase = createClient();
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(`
+      id,
+      occurred_at,
+      note,
+      tag,
+      status,
+      created_at,
+      shop_id,
+      shops ( id, name, logo_url ),
+      transaction_lines!inner (
+        amount,
+        type,
+        account_id,
+        metadata,
+        category_id,
+        person_id,
+        original_amount,
+        cashback_share_percent,
+        cashback_share_fixed,
+        profiles ( name, avatar_url ),
+        accounts (name, type, logo_url),
+        categories (name, image_url, icon)
+      )
+    `)
+    .eq('transaction_lines.person_id', personId)
+    .order('occurred_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error fetching transactions for person:', error);
+    return [];
+  }
+
+  const rows = (data ?? []) as TransactionRow[];
   return rows.map(txn => mapTransactionRow(txn));
 }
 
@@ -1115,7 +1164,7 @@ export async function requestRefund(
     },
     {
       transaction_id: requestTxn.id,
-      category_id: categoryLine.category_id,
+      category_id: 'e0000000-0000-0000-0000-000000000095',
       amount: -safeAmount,
       type: 'credit',
       metadata: lineMetadata,
