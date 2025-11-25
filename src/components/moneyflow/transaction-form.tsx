@@ -821,7 +821,7 @@ export function TransactionForm({
     </div>
   )
 
-  const CategoryInput = (transactionType === 'expense' || transactionType === 'debt' || transactionType === 'repayment' || transactionType === 'transfer') ? (
+  const CategoryInput = (transactionType === 'expense' || transactionType === 'debt' || transactionType === 'transfer') ? (
     <div className="space-y-2">
       <label className="text-sm font-medium text-gray-700">Category {transactionType === 'transfer' ? '(Optional)' : ''}</label>
       <Controller

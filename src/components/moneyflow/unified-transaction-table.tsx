@@ -657,7 +657,7 @@ export function UnifiedTransactionTable({
 
             // --- Type Logic ---
             let typeBadge = null;
-            if ((txn as any).type === 'repayment') {
+            if (txn.type === 'repayment') {
                 typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeft className="mr-1 h-3 w-3" /> Repayment</span>;
             } else if (txn.type === 'expense') {
                 typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Expense</span>
@@ -666,10 +666,11 @@ export function UnifiedTransactionTable({
             } else {
                  // Transfer
                  if (accountId) {
-                     if (txn.amount < 0) {
-                         typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700"><ArrowRight className="mr-1 h-3 w-3" /> Transfer Out</span>
-                     } else {
+                     // For repayment, always show "Transfer In" regardless of amount sign
+                     if (txn.type === 'repayment' || txn.amount >= 0) {
                          typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> Transfer In</span>
+                     } else {
+                         typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700"><ArrowRight className="mr-1 h-3 w-3" /> Transfer Out</span>
                      }
                  } else {
                      typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
@@ -762,33 +763,41 @@ export function UnifiedTransactionTable({
                 case "type":
                    return typeBadge
                 case "shop":
+                   let displayIcon = txn.shop_logo_url;
+                   let displayName = txn.shop_name;
+
+                   if (txn.type === 'repayment' && !displayIcon) {
+                       displayIcon = txn.destination_logo;
+                       displayName = txn.destination_name;
+                   }
+
                    return (
                     <div className="flex items-center gap-2 max-w-[220px] overflow-hidden">
-                      {txn.shop_name && (
+                      {displayName && (
                         <>
-                          {txn.shop_logo_url ? (
+                          {displayIcon ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={txn.shop_logo_url}
-                              alt={txn.shop_name}
+                              src={displayIcon}
+                              alt={displayName}
                               className="h-8 w-8 object-contain rounded-none"
                             />
                           ) : (
                             <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
-                              {txn.shop_name.charAt(0).toUpperCase()}
+                              {displayName.charAt(0).toUpperCase()}
                             </span>
                           )}
                         </>
                       )}
-                      {!txn.shop_name && txn.shop_logo_url && (
+                      {!displayName && displayIcon && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={txn.shop_logo_url}
+                          src={displayIcon}
                           alt="Shop"
                           className="h-5 w-5 object-cover rounded-none"
                         />
                       )}
-                      {!txn.shop_name && !txn.shop_logo_url && (
+                      {!displayName && !displayIcon && (
                         <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
                           🛍️
                         </span>
@@ -843,7 +852,7 @@ export function UnifiedTransactionTable({
                   );
 
                   // 2. Render for Transfer / Debt
-                  if (txn.type === 'transfer' || txn.type === 'debt' || (txn as any).type === 'repayment') {
+                  if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
                       return (
                         <CustomTooltip content={`${txn.source_account_name} ➡️ ${txn.destination_account_name}`}>
                             <div className="flex items-center gap-2 cursor-help">

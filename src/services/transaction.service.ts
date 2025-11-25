@@ -310,6 +310,56 @@ function buildSheetPayload(
   };
 }
 
+async function syncRepaymentTransaction(
+    supabase: ReturnType<typeof createClient>,
+    transactionId: string,
+    input: CreateTransactionInput,
+    lines: any[],
+    shopInfo: ShopRow | null
+) {
+    try {
+        const { data: destAccount } = await supabase
+            .from('accounts')
+            .select('name')
+            .eq('id', input.debt_account_id ?? '')
+            .single();
+
+        for (const line of lines) {
+            if (!line.person_id) continue;
+
+            const originalAmount =
+                typeof line.original_amount === 'number' ? line.original_amount : line.amount;
+            const cashbackPercent =
+                typeof line.cashback_share_percent === 'number' ? line.cashback_share_percent : undefined;
+            const cashbackFixed =
+                typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
+
+            void syncTransactionToSheet(
+                line.person_id,
+                {
+                    id: transactionId,
+                    occurred_at: input.occurred_at,
+                    note: input.note,
+                    tag: input.tag,
+                    shop_name: shopInfo?.name ?? destAccount?.name ?? null,
+                    amount: line.amount,
+                    type: 'In',
+                    original_amount: originalAmount,
+                    cashback_share_percent: cashbackPercent,
+                    cashback_share_fixed: cashbackFixed,
+                },
+                'create'
+            ).then(() => {
+                console.log(`[Sheet Sync] Triggered for Repayment to Person ${line.person_id}`);
+            }).catch(err => {
+                console.error('Sheet Sync Error (Repayment):', err);
+            });
+        }
+    } catch (error) {
+        console.error("Failed to sync repayment transaction:", error);
+    }
+}
+
 export async function createTransaction(input: CreateTransactionInput): Promise<boolean> {
   const supabase = createClient();
   
@@ -357,36 +407,39 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
 
   const shopInfo = await loadShopInfo(supabase, input.shop_id)
 
-  const syncBase = {
-    id: txn.id,
-    occurred_at: input.occurred_at,
-    note: input.note,
-    tag,
-    shop_name: shopInfo?.name ?? null,
-  };
+  if (input.type === 'repayment') {
+    await syncRepaymentTransaction(supabase, txn.id, input, linesWithId, shopInfo);
+  } else {
+    const syncBase = {
+      id: txn.id,
+      occurred_at: input.occurred_at,
+      note: input.note,
+      tag,
+      shop_name: shopInfo?.name ?? null,
+    };
 
-  for (const line of linesWithId) {
-    const personId = line.person_id;
-    if (!personId) continue;
+    for (const line of linesWithId) {
+      const personId = line.person_id;
+      if (!personId) continue;
 
-    const originalAmount =
-      typeof line.original_amount === 'number' ? line.original_amount : line.amount;
-    const cashbackPercent =
-      typeof line.cashback_share_percent === 'number' ? line.cashback_share_percent : undefined;
-    const cashbackFixed =
-      typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
+      const originalAmount =
+        typeof line.original_amount === 'number' ? line.original_amount : line.amount;
+      const cashbackPercent =
+        typeof line.cashback_share_percent === 'number' ? line.cashback_share_percent : undefined;
+      const cashbackFixed =
+        typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
 
-    void syncTransactionToSheet(
-      personId,
-      {
-        ...syncBase,
-        original_amount: originalAmount,
-        cashback_share_percent: cashbackPercent,
-        cashback_share_fixed: cashbackFixed,
-        amount: line.amount,
-      },
-      'create'
-    )
+      void syncTransactionToSheet(
+        personId,
+        {
+          ...syncBase,
+          original_amount: originalAmount,
+          cashback_share_percent: cashbackPercent,
+          cashback_share_fixed: cashbackFixed,
+          amount: line.amount,
+        },
+        'create'
+      )
       .then(() => {
         console.log(`[Sheet Sync] Triggered for Person ${personId}`);
       })
@@ -540,6 +593,9 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
       type = 'income'
       accountName = debitAccountLine?.accounts?.name
     }
+  }
+  if (categoryName === 'Repayment') {
+    type = 'repayment';
   } else {
     categoryName = "Money Transfer"
     if (accountId) {
@@ -896,24 +952,28 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     });
   }
 
-  const syncBase = {
-    id,
-    occurred_at: input.occurred_at,
-    note: input.note,
-    tag,
-    shop_name: shopInfo?.name ?? null,
-  };
+  if (input.type === 'repayment') {
+    await syncRepaymentTransaction(supabase, id, input, linesWithId, shopInfo);
+  } else {
+    const syncBase = {
+      id,
+      occurred_at: input.occurred_at,
+      note: input.note,
+      tag,
+      shop_name: shopInfo?.name ?? null,
+    };
 
-  for (const line of linesWithId) {
-    const personId = line.person_id;
-    if (!personId) continue;
+    for (const line of linesWithId) {
+      const personId = line.person_id;
+      if (!personId) continue;
 
-    const payload = buildSheetPayload(syncBase, line);
-    if (!payload) continue;
+      const payload = buildSheetPayload(syncBase, line);
+      if (!payload) continue;
 
-    void syncTransactionToSheet(personId, payload, 'create').catch(err => {
-      console.error('Sheet Sync Error (Update/Create):', err);
-    });
+      void syncTransactionToSheet(personId, payload, 'create').catch(err => {
+        console.error('Sheet Sync Error (Update/Create):', err);
+      });
+    }
   }
 
   return true;
