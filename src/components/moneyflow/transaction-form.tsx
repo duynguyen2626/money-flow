@@ -522,7 +522,7 @@ export function TransactionForm({
         ),
       })),
     [shops]
-  )
+  );
 
   const selectedAccount = useMemo(
     () => sourceAccounts.find(acc => acc.id === watchedAccountId),
@@ -821,48 +821,72 @@ export function TransactionForm({
     </div>
   )
 
-  const CategoryInput = (transactionType === 'expense' || transactionType === 'debt' || transactionType === 'repayment' || transactionType === 'transfer') ? (
-    <div className="space-y-2">
-      <label className="text-sm font-medium text-gray-700">Category {transactionType === 'transfer' ? '(Optional)' : ''}</label>
-      <Controller
-        control={control}
-        name="category_id"
-        render={({ field }) => (
-          <Combobox
-            value={field.value}
-            onValueChange={field.onChange}
-            items={categoryOptions}
-            placeholder="Select category"
-            inputPlaceholder="Search category..."
-            emptyState="No matching category"
-          />
+  const CategoryInput =
+    transactionType !== 'repayment' &&
+    (transactionType === 'expense' || transactionType === 'debt' || transactionType === 'transfer') ? (
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-700">
+          Category {transactionType === 'transfer' ? '(Optional)' : ''}
+        </label>
+        <Controller
+          control={control}
+          name="category_id"
+          render={({ field }) => (
+            <Combobox
+              value={field.value}
+              onValueChange={field.onChange}
+              items={categoryOptions}
+              placeholder="Select category"
+              inputPlaceholder="Search category..."
+              emptyState="No matching category"
+            />
+          )}
+        />
+        {errors.category_id && (
+          <p className="text-sm text-red-600">{errors.category_id.message}</p>
         )}
-      />
-      {errors.category_id && (
-        <p className="text-sm text-red-600">{errors.category_id.message}</p>
-      )}
-    </div>
-  ) : null
+      </div>
+    ) : null
 
-  const ShopInput = (transactionType === 'expense' || transactionType === 'debt' || transactionType === 'repayment' || (isEditMode && transactionType !== 'income' && transactionType !== 'transfer')) ? (
-    <div className="space-y-2">
-      <label className="text-sm font-medium text-gray-700">Shop</label>
-      <Controller
-        control={control}
-        name="shop_id"
-        render={({ field }) => (
-          <Combobox
-            value={field.value}
-            onValueChange={field.onChange}
-            items={shopOptions}
-            placeholder="Select shop"
-            inputPlaceholder="Search shop..."
-            emptyState="No shops yet"
-          />
-        )}
-      />
-    </div>
-  ) : null
+  const debtAccountForRepayment = useMemo(() => {
+    if (transactionType !== 'repayment' || !watchedDebtAccountId) return null;
+    return allAccounts.find(acc => acc.id === watchedDebtAccountId) ?? null;
+  }, [transactionType, watchedDebtAccountId, allAccounts]);
+
+  const ShopInput =
+    transactionType === 'expense' ||
+    transactionType === 'debt' ||
+    transactionType === 'repayment' ||
+    (isEditMode && transactionType !== 'income' && transactionType !== 'transfer') ? (
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-700">Shop</label>
+        <Controller
+          control={control}
+          name="shop_id"
+          render={({ field }) => (
+            <Combobox
+              value={field.value}
+              onValueChange={field.onChange}
+              items={shopOptions}
+              placeholder={
+                debtAccountForRepayment && !field.value ? (
+                  <span className="flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+                      {getAccountInitial(debtAccountForRepayment.name)}
+                    </span>
+                    <span>To: {debtAccountForRepayment.name}</span>
+                  </span>
+                ) : (
+                  'Select shop'
+                )
+              }
+              inputPlaceholder="Search shop..."
+              emptyState="No shops yet"
+            />
+          )}
+        />
+      </div>
+    ) : null
 
   const PersonInput = (transactionType === 'debt' || transactionType === 'repayment') ? (
     <div className="space-y-3">
