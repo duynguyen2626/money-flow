@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft } from "lucide-react"
+import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
 import { CustomTooltip } from "@/components/ui/custom-tooltip"
@@ -666,11 +666,11 @@ export function UnifiedTransactionTable({
 
                     if (txn.source_logo && txn.destination_logo) {
                         accountDisplay = (
-                            <CustomTooltip content={`${source} -> ${dest}`}>
-                                <div className="flex items-center gap-1 cursor-help">
+                            <CustomTooltip content={`${source} ➡️ ${dest}`}>
+                                <div className="flex items-center gap-1 cursor-help overflow-hidden whitespace-nowrap">
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img src={txn.source_logo} alt={source} className="h-8 w-8 object-contain" />
-                                    <ArrowRight className="h-3 w-3 text-slate-300" />
+                                    <span className="text-slate-300">➡️</span>
                                     {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img src={txn.destination_logo} alt={dest} className="h-8 w-8 object-contain" />
                                 </div>
@@ -678,10 +678,10 @@ export function UnifiedTransactionTable({
                         )
                     } else {
                         accountDisplay = (
-                            <div className="flex items-center gap-1 text-xs text-slate-700 font-bold">
-                                <span className="text-slate-500 font-normal">{source}</span>
-                                <ArrowRight className="h-3 w-3 text-slate-400" />
-                                <span className="text-slate-700">{dest}</span>
+                            <div className="flex items-center gap-1 text-xs text-slate-700 font-bold overflow-hidden whitespace-nowrap">
+                                <span className="text-slate-500 font-normal truncate max-w-[80px]" title={source}>{source}</span>
+                                <span className="text-slate-400">➡️</span>
+                                <span className="text-slate-700 truncate max-w-[80px]" title={dest}>{dest}</span>
                             </div>
                         )
                     }
@@ -843,6 +843,18 @@ export function UnifiedTransactionTable({
                   return (
                     <CustomTooltip content={txn.category_name ?? "No Category"}>
                         <div className="flex items-center gap-2 max-w-full">
+                            {txn.category_image_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    src={txn.category_image_url}
+                                    alt={txn.category_name ?? 'Category'}
+                                    className="h-8 w-8 object-contain rounded-none"
+                                />
+                            ) : (
+                                <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
+                                    {txn.category_icon ?? (txn.category_name ? txn.category_name.charAt(0).toUpperCase() : '?')}
+                                </span>
+                            )}
                             <span className="font-medium text-slate-700 truncate whitespace-nowrap cursor-help">
                                 {txn.category_name || "-"}
                             </span>
@@ -890,9 +902,27 @@ export function UnifiedTransactionTable({
                 case "cashback_sum":
                    return calculatedSum > 0 ? <span className="text-slate-600 font-medium">{numberFormatter.format(calculatedSum)}</span> : <span className="text-slate-300">-</span>
                 case "final_price":
-                   return <span className="text-emerald-700 font-bold">{numberFormatter.format(finalPrice)}</span>
+                   return <span className={cn("font-bold", amountClass)}>{numberFormatter.format(finalPrice)}</span>
                 case "id":
-                   return <span className="text-xs text-slate-400 font-mono" title={txn.id}>{txn.id.slice(0, 8)}...</span>
+                   return (
+                       <CustomTooltip content={txn.id}>
+                           <div className="flex items-center gap-2">
+                               <button
+                                   onClick={(e) => {
+                                       e.stopPropagation();
+                                       navigator.clipboard.writeText(txn.id);
+                                   }}
+                                   className="text-slate-400 hover:text-slate-600 transition-colors"
+                                   title="Copy ID"
+                               >
+                                   <Copy className="h-3 w-3" />
+                               </button>
+                               <span className="text-xs text-slate-400 font-mono cursor-help">
+                                   {txn.id.slice(0, 8)}...
+                               </span>
+                           </div>
+                       </CustomTooltip>
+                   )
                 case "task":
                   return taskCell
                 default:

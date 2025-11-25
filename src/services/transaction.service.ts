@@ -365,6 +365,8 @@ type TransactionRow = {
     } | null
     categories?: {
       name: string
+      image_url?: string | null
+      icon?: string | null
     } | null
     metadata?: Json | null
   } | null>
@@ -457,6 +459,8 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
 
   let type: 'income' | 'expense' | 'transfer' | 'repayment' = 'transfer'
   let categoryName: string | undefined
+  let categoryIcon: string | undefined
+  let categoryImageUrl: string | undefined
   let accountName: string | undefined
 
   const categoryLine = lines.find(line => line && Boolean(line.category_id))
@@ -469,6 +473,8 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
 
   if (categoryLine) {
     categoryName = categoryLine.categories?.name
+    categoryIcon = categoryLine.categories?.icon ?? undefined
+    categoryImageUrl = categoryLine.categories?.image_url ?? undefined
     // Check for Repayment by category name
     if (categoryName?.toLowerCase().includes('thu nợ') || categoryName?.toLowerCase().includes('repayment')) {
         type = 'repayment'
@@ -576,6 +582,8 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     amount: displayAmount,
     type: type as 'income' | 'expense' | 'transfer',
     category_name: categoryName,
+    category_icon: categoryIcon ?? null,
+    category_image_url: categoryImageUrl ?? null,
     account_name: accountName,
     source_account_name,
     destination_account_name,
@@ -630,7 +638,7 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
         cashback_share_fixed,
         profiles ( name, avatar_url ),
         accounts (name, type, logo_url),
-        categories (name)
+        categories (name, image_url, icon)
       )
     `)
     .order('occurred_at', { ascending: false })
@@ -672,7 +680,7 @@ export async function getTransactionsByShop(shopId: string, limit: number = 50):
         cashback_share_fixed,
         profiles ( name, avatar_url ),
         accounts (name, type, logo_url),
-        categories (name)
+        categories (name, image_url, icon)
       )
     `)
     .eq('shop_id', shopId)
@@ -1296,7 +1304,7 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
         cashback_share_fixed,
         profiles ( name, avatar_url ),
         accounts (name, type, logo_url),
-        categories (name)
+        categories (name, image_url, icon)
       )
     `)
     .order('occurred_at', { ascending: false })

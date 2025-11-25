@@ -201,7 +201,8 @@ export function FilterableTransactions({
             return filteredByCategory;
         }
         return filteredByCategory.filter(txn =>
-            txn.note?.toLowerCase().includes(searchTerm.toLowerCase())
+            txn.note?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            txn.id.toLowerCase().includes(searchTerm.toLowerCase())
         );
     }, [filteredByCategory, searchTerm]);
 
