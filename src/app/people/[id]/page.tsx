@@ -11,6 +11,9 @@ import { Account, Category, Person, Shop, Subscription, DebtAccount } from '@/ty
 import { DebtByTagAggregatedResult } from '@/services/debt.service';
 import { SheetSyncControls } from '@/components/people/sheet-sync-controls';
 import { ConstructionIcon } from 'lucide-react';
+import { getTransactionsByPersonId } from '@/services/transaction.service';
+import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table';
+import { TransactionWithDetails } from '@/types/moneyflow.types';
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
@@ -30,6 +33,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
     const [allPeople, setAllPeople] = useState<Person[]>([]);
     const [shops, setShops] = useState<Shop[]>([]);
+    const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
     const [loading, setLoading] = useState(true);
 
     const { selectedTag, setSelectedTag } = useTagFilter();
@@ -40,7 +44,10 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     const refreshData = async () => {
         if (!id) return;
         try {
-            const data = await getPeoplePageData(id);
+            const [data, transactionsData] = await Promise.all([
+                getPeoplePageData(id),
+                getTransactionsByPersonId(id)
+            ]);
             setPerson(data.person);
             setDebtCycles(data.debtCycles);
             setAccounts(data.accounts);
@@ -49,6 +56,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
             setSubscriptions(data.subscriptions);
             setAllPeople(data.allPeople);
             setShops(data.shops ?? []);
+            setTransactions(transactionsData);
             if (!data.person) {
                 notFound();
             }
@@ -223,13 +231,14 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
                     <h2 className="text-lg font-semibold">Transaction History</h2>
                 </div>
                 <div className="mt-4">
-                    <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-slate-500">
-                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-50">
-                        <ConstructionIcon className="h-6 w-6 text-slate-400" />
-                      </div>
-                      <p className="font-medium">Transaction History</p>
-                      <p className="text-xs">This module is being unified. Check the main Transactions page for details.</p>
-                    </div>
+                    <UnifiedTransactionTable
+                        transactions={transactions}
+                        accounts={accounts}
+                        categories={categories}
+                        people={allPeople}
+                        shops={shops}
+                        hidePeopleColumn={true}
+                    />
                 </div>
             </section>
         </div>
