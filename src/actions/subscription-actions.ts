@@ -27,6 +27,6 @@ export async function updateSubscriptionAction(id: string, payload: Subscription
   return ok
 }
 
-export async function runSubscriptionBotAction() {
-  return checkAndProcessSubscriptions()
+export async function runSubscriptionBotAction(isManualForce: boolean = false) {
+  return checkAndProcessSubscriptions(isManualForce)
 }
