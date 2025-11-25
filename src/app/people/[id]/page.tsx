@@ -1,3 +1,4 @@
+
 'use client';
 
 import { use, useEffect, useState } from 'react';
@@ -7,10 +8,11 @@ import { TagFilterProvider, useTagFilter } from '@/context/tag-filter-context';
 import { EditPersonDialog } from '@/components/people/edit-person-dialog';
 import { notFound } from 'next/navigation';
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog';
-import { Account, Category, Person, Shop, Subscription, DebtAccount } from '@/types/moneyflow.types';
+import { Account, Category, Person, Shop, Subscription, DebtAccount, TransactionWithDetails } from '@/types/moneyflow.types';
 import { DebtByTagAggregatedResult } from '@/services/debt.service';
 import { SheetSyncControls } from '@/components/people/sheet-sync-controls';
-import { ConstructionIcon } from 'lucide-react';
+import { getUnifiedTransactions } from '@/services/transaction.service';
+import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions';
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
@@ -23,6 +25,7 @@ function formatCurrency(value: number) {
 function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     const { id } = use(params);
     const [person, setPerson] = useState<DebtAccount | null>(null);
+    const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
     const [debtCycles, setDebtCycles] = useState<DebtByTagAggregatedResult[]>([]);
     const [accounts, setAccounts] = useState<Account[]>([]);
     const [categories, setCategories] = useState<Category[]>([]);
@@ -51,6 +54,10 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
             setShops(data.shops ?? []);
             if (!data.person) {
                 notFound();
+            } else {
+                // Also fetch transactions for this person's debt account
+                const txnData = await getUnifiedTransactions(data.person.id, 200);
+                setTransactions(txnData);
             }
         } catch (error) {
             console.error("Failed to fetch person details:", error);
@@ -218,20 +225,15 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
                 </div>
             </section>
 
-            <section className="bg-white shadow rounded-lg p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-3">
-                    <h2 className="text-lg font-semibold">Transaction History</h2>
-                </div>
-                <div className="mt-4">
-                    <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-slate-500">
-                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-50">
-                        <ConstructionIcon className="h-6 w-6 text-slate-400" />
-                      </div>
-                      <p className="font-medium">Transaction History</p>
-                      <p className="text-xs">This module is being unified. Check the main Transactions page for details.</p>
-                    </div>
-                </div>
-            </section>
+            <FilterableTransactions
+              transactions={transactions}
+              categories={categories}
+              accounts={accounts}
+              people={allPeople}
+              shops={shops}
+              accountId={id}
+              hidePeopleColumn={true}
+            />
         </div>
     );
 }

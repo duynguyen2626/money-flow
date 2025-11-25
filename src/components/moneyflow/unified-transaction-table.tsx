@@ -1,3 +1,4 @@
+
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
@@ -72,7 +73,8 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
   const percentValue =
     typeof txn.cashback_share_percent === "number" ? txn.cashback_share_percent : undefined;
 
-  let derivedType: TransactionFormValues["type"] = txn.type as TransactionFormValues["type"] || "expense";
+  let derivedType: TransactionFormValues["type"] = (txn.type as any) === 'repayment' ? 'repayment' : txn.type as TransactionFormValues["type"] || "expense";
+
 
   if (personLine?.person_id) {
      if (categoryLine?.categories?.name?.toLowerCase().includes('thu nợ')
@@ -633,7 +635,7 @@ export function UnifiedTransactionTable({
         <TableBody>
           {displayedTransactions.map(txn => {
             const amountClass =
-              txn.type === "income"
+              txn.type === "income" || (txn as any).type === "repayment"
                 ? "text-emerald-700"
                 : txn.type === "expense"
                 ? "text-red-500"
@@ -655,34 +657,21 @@ export function UnifiedTransactionTable({
 
             // --- Type Logic ---
             let typeBadge = null;
-            if (txn.type === 'expense') {
+            if ((txn as any).type === 'repayment') {
+                typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeft className="mr-1 h-3 w-3" /> Repayment</span>;
+            } else if (txn.type === 'expense') {
                 typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Expense</span>
             } else if (txn.type === 'income') {
                  typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> Income</span>
             } else {
                  // Transfer
                  if (accountId) {
-                     // Context View
-                     const isOut = txn.amount < 0; // Relative to this account.
-                     // But wait, amount logic might differ.
-                     // In `mapTransactionRow`, displayAmount is calculated.
-                     // Expense is negative. Income positive.
-                     // Transfer: If viewing Account A (Source), amount should be negative.
-                     // Let's rely on amount sign if accountId matches?
-                     // Or check account names?
-
-                     // If type is 'transfer' and we are viewing an account.
-                     // If I am the source, it is 'Chuyển đi' (Out).
-                     // If I am the dest, it is 'Nhận tiền' (In).
-                     // Ideally `txn.amount` reflects the balance change for the context account.
-                     // `mapTransactionRow` with accountId param computes amount for that account.
                      if (txn.amount < 0) {
                          typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700"><ArrowRight className="mr-1 h-3 w-3" /> Transfer Out</span>
                      } else {
                          typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> Transfer In</span>
                      }
                  } else {
-                     // Global View
                      typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
                  }
             }
@@ -854,7 +843,7 @@ export function UnifiedTransactionTable({
                   );
 
                   // 2. Render for Transfer / Debt
-                  if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
+                  if (txn.type === 'transfer' || txn.type === 'debt' || (txn as any).type === 'repayment') {
                       return (
                         <CustomTooltip content={`${txn.source_account_name} ➡️ ${txn.destination_account_name}`}>
                             <div className="flex items-center gap-2 cursor-help">

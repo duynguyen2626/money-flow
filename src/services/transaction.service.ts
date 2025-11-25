@@ -4,7 +4,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { format, setDate, subMonths } from 'date-fns';
 import { Database, Json } from '@/types/database.types';
-import { TransactionLine, TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types';
+import { TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types';
 import { syncTransactionToSheet } from './sheet.service';
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds';
 
@@ -27,6 +27,27 @@ export type CreateTransactionInput = {
   shop_id?: string | null;
 };
 
+async function resolveSystemCategory(
+  supabase: ReturnType<typeof createClient>,
+  name: string,
+  type: 'income' | 'expense'
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('name', name)
+    .eq('type', type)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    console.error(`Error fetching system category "${name}":`, error);
+    return null;
+  }
+
+  return (data as { id: string } | null)?.id ?? null;
+}
+
 async function resolveDiscountCategoryId(
   supabase: ReturnType<typeof createClient>,
   overrideCategoryId?: string
@@ -35,25 +56,14 @@ async function resolveDiscountCategoryId(
     return overrideCategoryId;
   }
 
-  const { data, error } = await supabase
-    .from('categories')
-    .select('id, name, type')
-    .in('name', ['Chiết khấu / Quà tặng', 'Chi phí khác', 'Discount Given'])
-    .eq('type', 'expense')
-    .limit(3);
-
-  const rows = (data ?? []) as { id: string; name: string; type: 'expense' | 'income' }[];
-
-  if (error) {
-    console.error('Error fetching fallback discount categories:', error);
+  // Chain of fallbacks
+  const namesToTry = ['Chiết khấu / Quà tặng', 'Discount Given', 'Chi phí khác'];
+  for (const name of namesToTry) {
+      const id = await resolveSystemCategory(supabase, name, 'expense');
+      if (id) return id;
   }
 
-  const preferredOrder = ['Chiết khấu / Quà tặng', 'Chi phí khác', 'Discount Given'];
-  for (const name of preferredOrder) {
-    const match = rows.find(row => row.name === name && row.type === 'expense');
-    if (match) return match.id;
-  }
-
+  // Final fallback if no named category found
   const { data: fallback, error: fallbackError } = await supabase
     .from('categories')
     .select('id')
@@ -67,10 +77,6 @@ async function resolveDiscountCategoryId(
 
   const fallbackRows = (fallback ?? []) as { id: string }[];
   return fallbackRows[0]?.id ?? null;
-}
-
-function generateTag(date: Date): string {
-  return format(date, 'MMMyy').toUpperCase();
 }
 
 function parseMetadata(value: Json | null): Record<string, unknown> {
@@ -168,19 +174,19 @@ async function buildTransactionLines(
       type: 'credit',
     });
   } else if (input.type === 'repayment' && input.debt_account_id) {
-    // Repayment: Money comes from Debt Account (Person pays back) -> To Bank Account
-    // However, usually 'source_account_id' in form is the Bank Account selected.
-    // In this model:
-    // Bank Account (source_account_id) -> Debit (+) (Receiving money)
-    // Debt Account (debt_account_id) -> Credit (-) (Reducing debt)
+    const repaymentCategoryId = await resolveSystemCategory(supabase, 'Repayment', 'income');
+    if (!repaymentCategoryId) {
+        console.error('FATAL: "Repayment" system category not found.');
+    }
 
     lines.push({
-      account_id: input.source_account_id, // The receiving bank
+      account_id: input.source_account_id,
       amount: Math.abs(input.amount),
       type: 'debit',
+      category_id: repaymentCategoryId,
     });
     lines.push({
-      account_id: input.debt_account_id, // The person paying
+      account_id: input.debt_account_id,
       amount: -Math.abs(input.amount),
       type: 'credit',
       person_id: input.person_id ?? null,
@@ -307,7 +313,6 @@ function buildSheetPayload(
 export async function createTransaction(input: CreateTransactionInput): Promise<boolean> {
   const supabase = createClient();
   
-  // Sử dụng ID người dùng mặc định nếu chưa đăng nhập
   const { data: { user } } = await supabase.auth.getUser();
   const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66';
 
@@ -332,7 +337,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       tag: tag,
       persisted_cycle_tag: persistedCycleTag,
       shop_id: input.shop_id ?? null,
-      created_by: userId, // Thêm created_by với ID người dùng
+      created_by: userId,
     })
     .select()
     .single();
@@ -361,7 +366,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   };
 
   for (const line of linesWithId) {
-    const personId = (line as { person_id?: string | null }).person_id;
+    const personId = line.person_id;
     if (!personId) continue;
 
     const originalAmount =
@@ -396,14 +401,16 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
 type TransactionRow = {
   id: string
   occurred_at: string
-  note: string
+  note: string | null
+  status: 'posted' | 'pending' | 'void'
   tag: string | null
+  created_at: string
   cashback_share_percent?: number | null
   cashback_share_fixed?: number | null
   cashback_share_amount?: number | null
   shop_id?: string | null
   shops?: ShopRow | null
-  transaction_lines?: Array<{
+  transaction_lines: Array<{
     amount: number
     type: 'debit' | 'credit'
     account_id?: string | null
@@ -412,7 +419,7 @@ type TransactionRow = {
     original_amount?: number | null
     cashback_share_percent?: number | null
     cashback_share_fixed?: number | null
-    profiles?: { name?: string | null } | null
+    profiles?: { name?: string | null, avatar_url?: string | null } | null
     accounts?: {
       name: string
       type: string
@@ -424,7 +431,7 @@ type TransactionRow = {
       icon?: string | null
     } | null
     metadata?: Json | null
-  } | null>
+  }>
 }
 
 function resolveAccountMovementInfo(
@@ -435,7 +442,7 @@ function resolveAccountMovementInfo(
   const sanitizedLines = (lines ?? []).filter(Boolean)
   const creditLine = sanitizedLines.find(line => line?.account_id && line.type === 'credit')
   const debitLine = sanitizedLines.find(line => line?.account_id && line.type === 'debit')
-  let sourceLine = creditLine ?? sanitizedLines.find(line => line?.account_id)
+  const sourceLine = creditLine ?? sanitizedLines.find(line => line?.account_id)
   let destinationLine = debitLine
 
   if (destinationLine && destinationLine.account_id === sourceLine?.account_id) {
@@ -493,20 +500,14 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   const lines = txn.transaction_lines ?? []
   const cashbackFromLines = extractCashbackFromLines(lines)
 
-  // Prioritize finding the line with debt/cashback info (original_amount is a good marker)
   let accountLine = lines.find(line => line && typeof line.original_amount === 'number');
 
-  // If no specific debt line, fall back to the original logic
   if (!accountLine) {
       accountLine = accountId
       ? lines.find(line => line && line.account_id === accountId)
-      : lines.find(line => line && line.type === 'credit') // Assume the credit line is the source account for general transactions
+      : lines.find(line => line && line.type === 'credit')
   }
   
-  // Calculate displayAmount.
-  // If accountLine is present, use its amount directly.
-  // If not, use avg of absolute values (legacy fallback).
-  // IMPORTANT: For Expense, we want negative if we are the payer.
   let displayAmount =
     typeof accountLine?.amount === 'number'
       ? accountLine.amount
@@ -521,16 +522,15 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   const categoryLine = lines.find(line => line && Boolean(line.category_id))
   const creditAccountLine = lines.find(
     line => line && line.account_id && line.type === 'credit'
-  ) as (typeof lines)[0] | undefined
+  )
   const debitAccountLine = lines.find(
     line => line && line.account_id && line.type === 'debit'
-  ) as (typeof lines)[0] | undefined
+  )
 
   if (categoryLine) {
     categoryName = categoryLine.categories?.name
     categoryIcon = categoryLine.categories?.icon ?? undefined
     categoryImageUrl = categoryLine.categories?.image_url ?? undefined
-    // Check for Repayment by category name
     if (categoryName?.toLowerCase().includes('thu nợ') || categoryName?.toLowerCase().includes('repayment')) {
         type = 'repayment'
     } else if (categoryLine.type === 'debit') {
@@ -541,75 +541,40 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
       accountName = debitAccountLine?.accounts?.name
     }
   } else {
-    // Transfer logic
     categoryName = "Money Transfer"
-    // We want to show the "Other side" account name
     if (accountId) {
-        // We are viewing from 'accountId' perspective. Find the other account.
         const otherLine = lines.find(line => line && line.account_id && line.account_id !== accountId)
         if (otherLine && otherLine.accounts) {
              accountName = otherLine.accounts.name
         }
     } else {
-        // Fallback: Show 'To' account if it's a transfer
         accountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name
     }
   }
 
-  // Override type based on accountLine amount if not already set by category
   if (!categoryLine && accountLine?.amount !== undefined) {
     type = accountLine.amount >= 0 ? 'income' : 'expense'
     if (type === 'income' && debitAccountLine && creditAccountLine) type = 'transfer'
     if (type === 'expense' && debitAccountLine && creditAccountLine) type = 'transfer'
   }
 
-  // Ensure Expense is always negative for display consistency if it wasn't already
-  // (Though `accountLine.amount` should be negative for credit/outflow)
-  // If type is expense and amount is positive, flip it?
-  // Usually `accountLine.amount` is correct (- for expense).
-  // But let's check `displayAmount`
-
   if (type === 'expense' && displayAmount > 0) {
       displayAmount = -displayAmount
   }
 
-  // Smart Source Logic
-  // If viewing from Debt Account, we want to see the Bank Name.
-  // If viewing from Bank Account, we want to see Shop/Person/Debt Account.
   if (accountId) {
       const myLine = lines.find(l => l && l.account_id === accountId);
       if (myLine?.accounts?.type === 'debt') {
-          // I am a debt account. The counterpart is likely the Bank.
           const bankLine = lines.find(l => l && l.account_id && l.account_id !== accountId && l.accounts?.type !== 'debt');
           if (bankLine?.accounts) {
               accountName = bankLine.accounts.name
           }
       }
   } else {
-     // Not viewing from specific account context (e.g. Recent Transactions)
-     // Use "Smart Source" - Prefer Bank Account as Source? Or show Counterpart?
-     // Existing logic: "Source/Account" column.
-     // Usually we want to see where the money came from (Bank).
-     // Unless it's Income, then where it came into? Or from whom?
-
-     // Task says: "Display txn.source_name (The Bank Name) instead of Debt Account name."
-     // This implies when listing transactions involving Debt, show the Bank.
-
-     // Let's look for the Bank Account line.
      const bankLine = lines.find(l => l && l.account_id && l.accounts?.type !== 'debt' && l.accounts?.type !== undefined);
      if (bankLine && bankLine.accounts) {
-         // If there is a bank line, use it as the "Source/Account" display if we are not in Account Detail view.
-         // But wait, if it's an Expense, Source is Bank.
-         // If it's Income (Repayment), Source is Person (Debt Account)? No, user wants to see Bank usually in the "Account" column of the table.
-         // The table column is "Source/Account".
-
-         // Actually, let's just expose `account_name` as the "Other Side" or "Primary Bank Involved".
-
-         // If this transaction involves a Debt Account AND a Bank Account.
          const debtLine = lines.find(l => l && l.account_id && l.accounts?.type === 'debt');
          if (debtLine && bankLine) {
-             // It's a debt/repayment transaction.
-             // We want to show the Bank Name.
              accountName = bankLine.accounts.name;
          }
      }
@@ -631,9 +596,9 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     id: txn.id,
     occurred_at: txn.occurred_at,
     note: txn.note || null,
-    status: (txn as any).status as 'posted' | 'pending' | 'void',
+    status: txn.status,
     tag: txn.tag || null,
-    created_at: (txn as any).created_at,
+    created_at: txn.created_at,
     amount: displayAmount,
     type: type as 'income' | 'expense' | 'transfer',
     category_name: categoryName,
@@ -652,14 +617,8 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     cashback_share_amount: cashbackAmount ?? null,
     original_amount: accountLine?.original_amount ?? null,
     person_id: personLine?.person_id ?? null,
-    person_name:
-      (personLine as { profiles?: { name?: string | null } | null })?.profiles?.name ??
-      (personLine as any)?.people?.name ??
-      null,
-    person_avatar_url:
-      (personLine as { profiles?: { name?: string | null; avatar_url?: string | null } | null })?.profiles?.avatar_url ??
-      (personLine as any)?.people?.avatar_url ??
-      null,
+    person_name: personLine?.profiles?.name ?? null,
+    person_avatar_url: personLine?.profiles?.avatar_url ?? null,
     shop_id: txn.shop_id ?? null,
     shop_name: txn.shops?.name ?? null,
     shop_logo_url: txn.shops?.logo_url ?? null,
@@ -705,9 +664,7 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
     return [];
   }
 
-  const rows = (data ?? []) as TransactionRow[];
-
-  return rows.map(txn => mapTransactionRow(txn));
+  return (data as TransactionRow[]).map(txn => mapTransactionRow(txn));
 }
 
 export async function getTransactionsByShop(shopId: string, limit: number = 50): Promise<TransactionWithDetails[]> {
@@ -748,9 +705,7 @@ export async function getTransactionsByShop(shopId: string, limit: number = 50):
     return [];
   }
 
-  const rows = (data ?? []) as TransactionRow[];
-
-  return rows.map(txn => mapTransactionRow(txn));
+  return (data as TransactionRow[]).map(txn => mapTransactionRow(txn));
 }
 
 export async function voidTransaction(id: string): Promise<boolean> {
@@ -782,18 +737,18 @@ export async function voidTransaction(id: string): Promise<boolean> {
     return false;
   }
 
-  const { error: updateError } = await supabase.from('transactions').update([{ status: 'void' }] as never).eq('id', id);
+  const { error: updateError } = await (supabase.from('transactions').update as any)({ status: 'void' }).eq('id', id);
 
   if (updateError) {
     console.error('Failed to void transaction:', updateError);
     return false;
   }
 
-  const lines = (existing as any).transaction_lines ?? [];
-  const personLine = lines.find((line: any) => line?.person_id);
+  const lines = ((existing as any).transaction_lines as any[]) ?? [];
+  const personLine = lines.find((line) => line?.person_id);
 
   if (personLine?.person_id) {
-    const payload = buildSheetPayload(existing, personLine);
+    const payload = buildSheetPayload(existing as any, personLine);
     if (payload) {
       void syncTransactionToSheet(personLine.person_id, payload, 'delete').catch(err => {
         console.error('Sheet Sync Error (Void):', err);
@@ -833,9 +788,9 @@ export async function restoreTransaction(id: string): Promise<boolean> {
     return false;
   }
 
-  const { error: updateError } = await supabase
+  const { error: updateError } = await (supabase
     .from('transactions')
-    .update([{ status: 'posted' }] as never)
+    .update as any)({ status: 'posted' })
     .eq('id', id);
 
   if (updateError) {
@@ -843,11 +798,11 @@ export async function restoreTransaction(id: string): Promise<boolean> {
     return false;
   }
 
-  const lines = (existing as any).transaction_lines ?? [];
+  const lines = ((existing as any).transaction_lines as any[]) ?? [];
 
   for (const line of lines) {
     if (!line?.person_id) continue;
-    const payload = buildSheetPayload(existing, line);
+    const payload = buildSheetPayload(existing as any, line);
     if (!payload) continue;
     void syncTransactionToSheet(line.person_id, payload, 'create').catch(err => {
       console.error('Sheet Sync Error (Restore):', err);
@@ -860,48 +815,33 @@ export async function restoreTransaction(id: string): Promise<boolean> {
 export async function updateTransaction(id: string, input: CreateTransactionInput): Promise<boolean> {
   const supabase = createClient();
 
-  const [existing, built] = await Promise.all([
-    supabase
-      .from('transactions')
-      .select(
-        `
-        id,
-        occurred_at,
-        note,
-        tag,
-        transaction_lines (
-          amount,
-          original_amount,
-          cashback_share_percent,
-          cashback_share_fixed,
-          metadata,
-          person_id
-        )
+  const { data: existingData, error: existingError } = await supabase
+    .from('transactions')
+    .select(
       `
+      id,
+      occurred_at,
+      note,
+      tag,
+      transaction_lines (
+        amount,
+        original_amount,
+        cashback_share_percent,
+        cashback_share_fixed,
+        metadata,
+        person_id
       )
-      .eq('id', id)
-      .maybeSingle(),
-    buildTransactionLines(supabase, input),
-  ]);
+    `
+    )
+    .eq('id', id)
+    .maybeSingle();
 
-  const existingData = existing.data as
-    | (TransactionRow & {
-        transaction_lines?: Array<{
-          amount: number
-          original_amount?: number | null
-          cashback_share_percent?: number | null
-          cashback_share_fixed?: number | null
-          metadata?: Json | null
-          person_id?: string | null
-        } | null>
-      })
-    | null;
-
-  if (existing.error || !existingData) {
-    console.error('Failed to fetch transaction before update:', existing.error);
+  if (existingError || !existingData) {
+    console.error('Failed to fetch transaction before update:', existingError);
     return false;
   }
 
+  const built = await buildTransactionLines(supabase, input);
   if (!built) {
     return false;
   }
@@ -915,16 +855,16 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     new Date(input.occurred_at)
   );
 
-  const { error: headerError } = await supabase
+  const { error: headerError } = await (supabase
     .from('transactions')
-    .update([{
+    .update as any)({
       occurred_at: input.occurred_at,
       note: input.note,
       tag: tag,
       status: 'posted',
       persisted_cycle_tag: persistedCycleTag,
       shop_id: input.shop_id ?? null,
-    }] as never)
+    })
     .eq('id', id);
 
   if (headerError) {
@@ -945,18 +885,11 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     return false;
   }
 
-  const existingLines = (existingData.transaction_lines ?? []).filter(Boolean) as {
-    amount: number
-    original_amount?: number | null
-    cashback_share_percent?: number | null
-    cashback_share_fixed?: number | null
-    metadata?: Json | null
-    person_id?: string | null
-  }[];
+  const existingLines = ((existingData as any).transaction_lines as any[]) ?? [];
 
   for (const line of existingLines) {
     if (!line.person_id) continue;
-    const payload = buildSheetPayload(existingData, line);
+    const payload = buildSheetPayload(existingData as any, line);
     if (!payload) continue;
     void syncTransactionToSheet(line.person_id, payload, 'delete').catch(err => {
       console.error('Sheet Sync Error (Update/Delete):', err);
@@ -972,7 +905,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   };
 
   for (const line of linesWithId) {
-    const personId = (line as { person_id?: string | null }).person_id;
+    const personId = line.person_id;
     if (!personId) continue;
 
     const payload = buildSheetPayload(syncBase, line);
@@ -1030,7 +963,7 @@ export async function requestRefund(
 
   const supabase = createClient()
 
-  const { data: _existing, error: fetchError } = await supabase
+  const { data: existing, error: fetchError } = await supabase
     .from('transactions')
     .select(`
       id,
@@ -1048,17 +981,16 @@ export async function requestRefund(
       )
     `)
     .eq('id', transactionId)
-    .maybeSingle()
+    .maybeSingle();
 
-  if (fetchError || !_existing) {
+  if (fetchError || !existing) {
     console.error('Failed to load transaction for refund request:', fetchError)
     return { success: false, error: 'Không tìm thấy giao dịch hoặc đã xảy ra lỗi.' }
   }
 
-  const existing = _existing as any;
-  const existingMetadata = extractLineMetadata(existing.transaction_lines)
+  const existingMetadata = extractLineMetadata((existing as any).transaction_lines as Array<{ metadata?: Json | null }>)
 
-  const lines = (existing.transaction_lines ?? []) as RefundTransactionLine[]
+  const lines = ((existing as any).transaction_lines as RefundTransactionLine[]) ?? []
   const categoryLine = lines.find(line => line?.category_id)
   if (!categoryLine) {
     return { success: false, error: 'Giao dịch không có danh mục phí để hoàn.' }
@@ -1076,13 +1008,13 @@ export async function requestRefund(
   }
 
   const userId = await resolveCurrentUserId(supabase)
-  const requestNote = `Refund Request for ${existing.note ?? transactionId}`
+  const requestNote = `Refund Request for ${(existing as any).note ?? transactionId}`
   const lineMetadata = {
     refund_status: 'requested',
     linked_transaction_id: transactionId,
     refund_amount: safeAmount,
     partial,
-    original_note: existing.note ?? null,
+    original_note: (existing as any).note ?? null,
     original_category_id: categoryLine.category_id,
     original_category_name: categoryLine.categories?.name ?? null,
   }
@@ -1093,9 +1025,9 @@ export async function requestRefund(
     occurred_at: new Date().toISOString(),
     note: requestNote,
     status: 'posted',
-    tag: existing.tag,
+    tag: (existing as any).tag,
     created_by: userId,
-    shop_id: existing.shop_id ?? null,
+    shop_id: (existing as any).shop_id ?? null,
   })
     .select()
     .single()
@@ -1105,7 +1037,13 @@ export async function requestRefund(
     return { success: false, error: 'Không thể tạo giao dịch yêu cầu hoàn tiền.' }
   }
 
-  const linesToInsert = [
+  const refundCategoryId = await resolveSystemCategory(supabase, 'Refund', 'expense');
+  if (!refundCategoryId) {
+      console.error('FATAL: "Refund" system category not found.');
+      return { success: false, error: 'Hệ thống chưa cấu hình danh mục Hoàn tiền.' }
+  }
+
+  const linesToInsert: any[] = [
     {
       transaction_id: requestTxn.id,
       account_id: REFUND_PENDING_ACCOUNT_ID,
@@ -1115,7 +1053,7 @@ export async function requestRefund(
     },
     {
       transaction_id: requestTxn.id,
-      category_id: categoryLine.category_id,
+      category_id: refundCategoryId,
       amount: -safeAmount,
       type: 'credit',
       metadata: lineMetadata,
@@ -1129,10 +1067,7 @@ export async function requestRefund(
   }
 
   try {
-    const originalLines = (existing.transaction_lines ?? []) as Array<{
-      id?: string
-      metadata?: Json | null
-    }>
+    const originalLines = ((existing as any).transaction_lines as Array<{ id?: string, metadata?: Json | null }>) ?? []
     const mergedOriginalMeta = mergeMetadata(existingMetadata, {
       refund_request_id: requestTxn.id,
       refund_requested_at: new Date().toISOString(),
@@ -1161,7 +1096,7 @@ export async function confirmRefund(
   }
 
   const supabase = createClient()
-  const { data: _pending, error: pendingError } = await supabase
+  const { data: pending, error: pendingError } = await supabase
     .from('transactions')
     .select(`
       id,
@@ -1176,19 +1111,17 @@ export async function confirmRefund(
       )
     `)
     .eq('id', pendingTransactionId)
-    .maybeSingle()
+    .maybeSingle();
 
-  if (pendingError || !_pending) {
+  if (pendingError || !pending) {
     console.error('Failed to load pending refund transaction:', pendingError)
     return { success: false, error: 'Không tìm thấy giao dịch hoàn tiền hoặc đã xảy ra lỗi.' }
   }
 
-  const pending = _pending as any;
-  const pendingMetadata = extractLineMetadata(pending.transaction_lines)
+  const pendingMetadata = extractLineMetadata((pending as any).transaction_lines as Array<{ metadata?: Json | null }>)
 
-  const pendingLine = (pending.transaction_lines ?? []).find(
-    (line: { account_id?: string | null; type?: string | null }) =>
-      line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
+  const pendingLine = ((pending as any).transaction_lines as any[]).find(
+    (line) => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
   )
 
   if (!pendingLine) {
@@ -1201,7 +1134,7 @@ export async function confirmRefund(
   }
 
   const userId = await resolveCurrentUserId(supabase)
-  const confirmNote = `Confirmed refund for ${pending.note ?? pending.id}`
+  const confirmNote = `Confirmed refund for ${(pending as any).note ?? (pending as any).id}`
   const confirmationMetadata = {
     refund_status: 'confirmed',
     linked_transaction_id: pendingTransactionId,
@@ -1213,7 +1146,7 @@ export async function confirmRefund(
     occurred_at: new Date().toISOString(),
     note: confirmNote,
     status: 'posted',
-    tag: pending.tag,
+    tag: (pending as any).tag,
     created_by: userId,
   })
     .select()
@@ -1224,7 +1157,7 @@ export async function confirmRefund(
     return { success: false, error: 'Không thể tạo giao dịch xác nhận hoàn tiền.' }
   }
 
-  const confirmLines = [
+  const confirmLines: any[] = [
     {
       transaction_id: confirmTxn.id,
       account_id: targetAccountId,
@@ -1255,10 +1188,7 @@ export async function confirmRefund(
       refund_confirmed_transaction_id: confirmTxn.id,
       refunded_at: new Date().toISOString(),
     })
-    const pendingLines = (pending.transaction_lines ?? []) as Array<{
-      id?: string
-      metadata?: Json | null
-    }>
+    const pendingLines = ((pending as any).transaction_lines as Array<{ id?: string, metadata?: Json | null }>) ?? []
     for (const line of pendingLines) {
       if (!line?.id) continue
       await (supabase.from('transaction_lines').update as any)({ metadata: updatedPendingMeta }).eq(
@@ -1330,12 +1260,10 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
     return []
   }
 
-  const rows = (data ?? []) as RefundTransactionRow[]
-
-  return rows
+  return (data as any[])
     .map(row => {
       const pendingLine = (row.transaction_lines ?? []).find(
-        line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
+        (line: any) => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
       )
 
       if (!pendingLine) {
@@ -1343,7 +1271,7 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
       }
 
       const metadata = parseMetadata(extractLineMetadata(row.transaction_lines))
-      const categoryLine = (row.transaction_lines ?? []).find(line => line?.category_id)
+      const categoryLine = (row.transaction_lines ?? []).find((line: any) => line?.category_id)
       const amount = Math.abs(pendingLine.amount ?? 0)
       const originalCategory =
         (metadata.original_category_name as string) ??
@@ -1360,17 +1288,11 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
         original_category: originalCategory,
         linked_transaction_id:
           typeof metadata.linked_transaction_id === 'string' ? metadata.linked_transaction_id : undefined,
-      }
+      } as PendingRefundItem
     })
-    .filter(Boolean) as PendingRefundItem[]
+    .filter((item): item is PendingRefundItem => Boolean(item))
 }
 
-/**
- * Get unified transactions with proper source/destination mapping
- * @param accountId Optional account ID for context-specific view
- * @param limit Number of transactions to fetch
- * @returns Array of transactions with proper mapping
- */
 export async function getUnifiedTransactions(accountId?: string, limit: number = 50): Promise<TransactionWithDetails[]> {
   const supabase = createClient();
 
@@ -1414,7 +1336,5 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
     return [];
   }
 
-  const rows = (data ?? []) as TransactionRow[];
-
-  return rows.map(txn => mapTransactionRow(txn, accountId));
+  return (data as any[]).map(txn => mapTransactionRow(txn, accountId));
 }
