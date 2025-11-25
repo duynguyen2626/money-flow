@@ -10,6 +10,8 @@ export type Category = {
   name: string
   type: 'expense' | 'income'
   parent_id?: string | null
+  icon?: string | null
+  image_url?: string | null
 }
 
 export type Shop = {
@@ -98,9 +100,9 @@ export type TransactionLine = {
 
 export type TransactionWithLineRelations = TransactionLineRow & {
   accounts: Pick<AccountRow, 'name' | 'logo_url' | 'type'> | null;
-  categories: Pick<CategoryRow, 'name'> | null;
-  profiles?: { name?: string | null } | null;
-  people?: { name?: string | null } | null;
+  categories: Pick<CategoryRow, 'name'> & { image_url?: string | null; icon?: string | null } | null;
+  profiles?: { name?: string | null; avatar_url?: string | null } | null;
+  people?: { name?: string | null; avatar_url?: string | null } | null;
   person_id?: string | null;
 }
 
@@ -112,6 +114,8 @@ export type TransactionWithDetails = TransactionRow & {
   displayCategoryName?: string;
   displayAccountName?: string;
   category_name?: string;
+  category_icon?: string | null;
+  category_image_url?: string | null;
   account_name?: string;
   source_name?: string | null;
   destination_name?: string | null;
@@ -124,6 +128,7 @@ export type TransactionWithDetails = TransactionRow & {
   type?: 'income' | 'expense' | 'transfer';
   person_id?: string | null;
   person_name?: string | null;
+  person_avatar_url?: string | null;
   category_id?: string | null;
   persisted_cycle_tag?: string | null;
   shop_id?: string | null;

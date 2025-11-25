@@ -365,6 +365,8 @@ type TransactionRow = {
     } | null
     categories?: {
       name: string
+      image_url?: string | null
+      icon?: string | null
     } | null
     metadata?: Json | null
   } | null>
@@ -457,6 +459,8 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
 
   let type: 'income' | 'expense' | 'transfer' | 'repayment' = 'transfer'
   let categoryName: string | undefined
+  let categoryIcon: string | undefined
+  let categoryImageUrl: string | undefined
   let accountName: string | undefined
 
   const categoryLine = lines.find(line => line && Boolean(line.category_id))
@@ -469,6 +473,8 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
 
   if (categoryLine) {
     categoryName = categoryLine.categories?.name
+    categoryIcon = categoryLine.categories?.icon ?? undefined
+    categoryImageUrl = categoryLine.categories?.image_url ?? undefined
     // Check for Repayment by category name
     if (categoryName?.toLowerCase().includes('thu nợ') || categoryName?.toLowerCase().includes('repayment')) {
         type = 'repayment'
@@ -481,6 +487,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     }
   } else {
     // Transfer logic
+    categoryName = "Money Transfer"
     // We want to show the "Other side" account name
     if (accountId) {
         // We are viewing from 'accountId' perspective. Find the other account.
@@ -575,6 +582,8 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     amount: displayAmount,
     type: type as 'income' | 'expense' | 'transfer',
     category_name: categoryName,
+    category_icon: categoryIcon ?? null,
+    category_image_url: categoryImageUrl ?? null,
     account_name: accountName,
     source_account_name,
     destination_account_name,
@@ -591,6 +600,10 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     person_name:
       (personLine as { profiles?: { name?: string | null } | null })?.profiles?.name ??
       (personLine as any)?.people?.name ??
+      null,
+    person_avatar_url:
+      (personLine as { profiles?: { name?: string | null; avatar_url?: string | null } | null })?.profiles?.avatar_url ??
+      (personLine as any)?.people?.avatar_url ??
       null,
     shop_id: txn.shop_id ?? null,
     shop_name: txn.shops?.name ?? null,
@@ -623,9 +636,9 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
         original_amount,
         cashback_share_percent,
         cashback_share_fixed,
-        profiles ( name ),
+        profiles ( name, avatar_url ),
         accounts (name, type, logo_url),
-        categories (name)
+        categories (name, image_url, icon)
       )
     `)
     .order('occurred_at', { ascending: false })
@@ -665,9 +678,9 @@ export async function getTransactionsByShop(shopId: string, limit: number = 50):
         original_amount,
         cashback_share_percent,
         cashback_share_fixed,
-        profiles ( name ),
+        profiles ( name, avatar_url ),
         accounts (name, type, logo_url),
-        categories (name)
+        categories (name, image_url, icon)
       )
     `)
     .eq('shop_id', shopId)
@@ -1289,9 +1302,9 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
         original_amount,
         cashback_share_percent,
         cashback_share_fixed,
-        profiles ( name ),
+        profiles ( name, avatar_url ),
         accounts (name, type, logo_url),
-        categories (name)
+        categories (name, image_url, icon)
       )
     `)
     .order('occurred_at', { ascending: false })

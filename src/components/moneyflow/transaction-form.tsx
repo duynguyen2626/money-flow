@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { format, subMonths } from 'date-fns'
 import { Controller, Resolver, useForm, useWatch } from 'react-hook-form'
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { z } from 'zod'
 import { ensureDebtAccountAction } from '@/actions/people-actions'
 import { createTransaction, updateTransaction } from '@/services/transaction.service'
@@ -163,92 +164,21 @@ export function TransactionForm({
     return [...new Set(tags)];
   }, []);
 
-const accountOptions = useMemo(
-  () =>
-    sourceAccounts.map(acc => ({
-      value: acc.id,
-      label: acc.name,
-      description: `${acc.type.replace('_', ' ')} - ${numberFormatter.format(acc.current_balance)}`,
-      searchValue: `${acc.name} ${acc.type.replace('_', ' ')} ${acc.current_balance}`,
-      icon: (
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
-          {getAccountInitial(acc.name)}
-          </span>
-        ),
-      })),
-    [sourceAccounts]
-  )
+  const personMap = useMemo(() => {
+    const map = new Map<string, Person>()
+    peopleState.forEach(person => map.set(person.id, person))
+    return map
+  }, [peopleState])
 
-const destinationAccountOptions = useMemo(
-  () =>
-    allAccounts.map(acc => ({
-      value: acc.id,
-      label: acc.name,
-      description: `${acc.type.replace('_', ' ')} - ${numberFormatter.format(acc.current_balance)}`,
-      searchValue: `${acc.name} ${acc.type.replace('_', ' ')} ${acc.current_balance}`,
-      icon: (
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
-          {getAccountInitial(acc.name)}
-        </span>
-      ),
-    })),
-  [allAccounts]
-)
-
-const personOptions = useMemo(
-  () =>
-    peopleState.map(person => ({
-      value: person.id,
-      label: person.name,
-      description: person.email || 'No email',
-      searchValue: `${person.name} ${person.email ?? ''}`.trim(),
-      icon: (
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
-          {getAccountInitial(person.name)}
-        </span>
-      ),
-    })),
-  [peopleState]
-)
-
-const shopOptions = useMemo(
-  () =>
-    shops.map(shop => ({
-      value: shop.id,
-      label: shop.name,
-      description: 'Shop',
-      searchValue: shop.name,
-      icon: shop.logo_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={shop.logo_url}
-          alt={shop.name}
-          className="h-5 w-5 rounded-full object-cover"
-        />
-      ) : (
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
-          {shop.name.charAt(0).toUpperCase()}
-        </span>
-      ),
-    })),
-  [shops]
-)
-
-const personMap = useMemo(() => {
-  const map = new Map<string, Person>()
-  peopleState.forEach(person => map.set(person.id, person))
-  return map
-}, [peopleState])
-
-const debtAccountByPerson = useMemo(() => {
-  const map = new Map<string, string>()
-  peopleState.forEach(person => {
-    if (person.debt_account_id) {
-      map.set(person.id, person.debt_account_id)
-    }
-  })
-  return map
-}, [peopleState])
+  const debtAccountByPerson = useMemo(() => {
+    const map = new Map<string, string>()
+    peopleState.forEach(person => {
+      if (person.debt_account_id) {
+        map.set(person.id, person.debt_account_id)
+      }
+    })
+    return map
+  }, [peopleState])
 
   const [status, setStatus] = useState<StatusMessage>(null)
   const [cashbackProgress, setCashbackProgress] = useState<CashbackCard | null>(null)
@@ -260,6 +190,7 @@ const debtAccountByPerson = useMemo(() => {
   const [debtEnsureError, setDebtEnsureError] = useState<string | null>(null)
   const [isEnsuringDebt, startEnsuringDebt] = useTransition()
   const isEditMode = mode === 'edit' || Boolean(transactionId)
+  const router = useRouter()
 
   const baseDefaults = useMemo(
     () => ({
@@ -310,7 +241,6 @@ const debtAccountByPerson = useMemo(() => {
       return
     }
 
-    // Logic to detect correct type and swap Source/Dest if needed for Repayment
     const newValues = { ...baseDefaults, ...initialValues };
 
     const isRepayment = initialValues.category_name?.toLowerCase().includes('thu nợ')
@@ -322,55 +252,10 @@ const debtAccountByPerson = useMemo(() => {
 
     if (isRepayment || (isIncomeWithPerson && !isDebt)) {
         newValues.type = 'repayment';
-
-        // Ensure mapping:
-        // Source in form (User's Bank) -> Where Money goes IN (Debit)
-        // Dest in form (Person's Debt Account) -> Where Money comes FROM (Credit)
-
-        // In database 'repayment':
-        // Bank -> Debit (In)
-        // Debt -> Credit (Out)
-
-        // Our buildTransactionLines expects:
-        // source_account_id = Bank
-        // debt_account_id = Person
-
-        // When editing, initialValues usually come from `buildEditInitialValues` in `transaction-table` (or similar).
-        // Let's check where `initialValues` come from. They usually map:
-        // source_account_id -> Credit line (for Expense/Debt Lending) OR Debit line (for Income).
-
-        // For Repayment (Income for Bank):
-        // Bank is Debit. Debt is Credit.
-        // `buildEditInitialValues`:
-        // creditLine = Debt Account line
-        // debitLine = Bank Account line
-        // source_account_id = creditLine?.account_id ?? debitLine?.account_id
-        // So source_account_id = Debt Account.
-
-        // BUT `TransactionForm` expects `source_account_id` to be the Bank Account for Repayment logic (Source of transaction? No, Destination of Repayment).
-        // `buildTransactionLines` for repayment:
-        // account_id: input.source_account_id (The receiving bank)
-
-        // So we need to SWAP if source is Debt Account.
-
         const sourceId = newValues.source_account_id;
         const sourceAcc = allAccounts.find(a => a.id === sourceId);
 
-        // If source is currently mapped to a Debt Account, we must swap it with destination (or find bank line).
         if (sourceAcc?.type === 'debt') {
-             // In edit mode `initialValues` might not have `debt_account_id` set correctly yet if `buildEditInitialValues` logic wasn't aware of Repayment.
-             // We need to find the OTHER account ID which is the Bank.
-             // But we don't have the full lines here, only `initialValues`.
-
-             // Wait, `TransactionForm` receives `initialValues`.
-             // If we rely on the parent to pass correct `initialValues`, we should fix `transaction-table.tsx`'s `buildEditInitialValues`.
-             // But `TransactionForm` can also patch it.
-
-             // If we are in this block, `newValues.source_account_id` is likely the Debt Account (Credit line).
-             // And we want `source_account_id` to be the Bank.
-             // And `debt_account_id` to be the Debt Account.
-
-             // If `newValues.debt_account_id` is set (likely the Debit line = Bank), we swap.
              if (newValues.debt_account_id) {
                  const temp = newValues.source_account_id;
                  newValues.source_account_id = newValues.debt_account_id;
@@ -409,6 +294,7 @@ const debtAccountByPerson = useMemo(() => {
       : await createTransaction(payload)
 
     if (result) {
+      router.refresh()
       setStatus({
         type: 'success',
         text: isEditMode ? 'Transaction updated successfully.' : 'Transaction created successfully.',
@@ -455,24 +341,24 @@ const debtAccountByPerson = useMemo(() => {
     name: 'type',
   })
 
-  // Smart Effects
+  const watchedCategoryId = useWatch({
+    control,
+    name: 'category_id',
+  })
+
   useEffect(() => {
     if (isEditMode) return;
 
     if (transactionType === 'debt') {
-      // Auto-set category to "People Shopping"
       const peopleShoppingCat = categories.find(c => c.name === 'People Shopping' || c.name === 'Shopping');
       if (peopleShoppingCat) {
         form.setValue('category_id', peopleShoppingCat.id);
       }
-      // Auto-set shop to "Shopee"
       const shopeeShop = shops.find(s => s.name === 'Shopee');
       if (shopeeShop) {
         form.setValue('shop_id', shopeeShop.id);
       }
     } else if (transactionType === 'repayment') {
-        // Auto-select Category "Thu nợ người khác" (e0000000-0000-0000-0000-000000000097)
-        // I will search by ID first, then by name if not found.
         const repaymentCatId = 'e0000000-0000-0000-0000-000000000097';
         if (categories.some(c => c.id === repaymentCatId)) {
              form.setValue('category_id', repaymentCatId);
@@ -482,11 +368,15 @@ const debtAccountByPerson = useMemo(() => {
                  form.setValue('category_id', repaymentCat.id);
              }
         }
+    } else if (transactionType === 'transfer') {
+        const transferCat = categories.find(c => c.name === 'Chuyển tiền' || c.name === 'Money Transfer');
+        if (transferCat) {
+            form.setValue('category_id', transferCat.id);
+        }
     }
   }, [transactionType, categories, shops, form, isEditMode]);
 
   const categoryOptions = useMemo(() => {
-    // For debt, we usually allow 'expense' categories (e.g. Dining out, Shopping)
     const targetType = transactionType === 'debt' ? 'expense' : transactionType
     if (targetType !== 'expense' && targetType !== 'income') {
       return []
@@ -540,6 +430,92 @@ const debtAccountByPerson = useMemo(() => {
     control,
     name: 'cashback_share_fixed',
   })
+
+  const accountOptions = useMemo(
+    () => {
+      const currentCategory = categories.find(c => c.id === watchedCategoryId);
+      const isCreditPayment = currentCategory?.name === 'Credit Payment' || currentCategory?.name?.toLowerCase().includes('credit payment');
+
+      let filteredAccounts = sourceAccounts;
+      if (isCreditPayment || transactionType === 'transfer') {
+          filteredAccounts = sourceAccounts.filter(a => a.type !== 'credit_card');
+      }
+
+      return filteredAccounts.map(acc => ({
+        value: acc.id,
+        label: acc.name,
+        description: `${acc.type.replace('_', ' ')} - ${numberFormatter.format(acc.current_balance)}`,
+        searchValue: `${acc.name} ${acc.type.replace('_', ' ')} ${acc.current_balance}`,
+        icon: (
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+            {getAccountInitial(acc.name)}
+            </span>
+          ),
+        }))
+    },
+    [sourceAccounts, watchedCategoryId, categories, transactionType]
+  )
+
+  const destinationAccountOptions = useMemo(
+    () => {
+      let filteredAccounts = allAccounts;
+      if (watchedAccountId) {
+          filteredAccounts = allAccounts.filter(a => a.id !== watchedAccountId);
+      }
+
+      return filteredAccounts.map(acc => ({
+        value: acc.id,
+        label: acc.name,
+        description: `${acc.type.replace('_', ' ')} - ${numberFormatter.format(acc.current_balance)}`,
+        searchValue: `${acc.name} ${acc.type.replace('_', ' ')} ${acc.current_balance}`,
+        icon: (
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+            {getAccountInitial(acc.name)}
+          </span>
+        ),
+      }))
+    },
+    [allAccounts, watchedAccountId]
+  )
+
+  const personOptions = useMemo(
+    () =>
+      peopleState.map(person => ({
+        value: person.id,
+        label: person.name,
+        description: person.email || 'No email',
+        searchValue: `${person.name} ${person.email ?? ''}`.trim(),
+        icon: (
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+            {getAccountInitial(person.name)}
+          </span>
+        ),
+      })),
+    [peopleState]
+  )
+
+  const shopOptions = useMemo(
+    () =>
+      shops.map(shop => ({
+        value: shop.id,
+        label: shop.name,
+        description: 'Shop',
+        searchValue: shop.name,
+        icon: shop.logo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={shop.logo_url}
+            alt={shop.name}
+            className="h-5 w-5 rounded-full object-cover"
+          />
+        ) : (
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+            {shop.name.charAt(0).toUpperCase()}
+          </span>
+        ),
+      })),
+    [shops]
+  )
 
   const selectedAccount = useMemo(
     () => sourceAccounts.find(acc => acc.id === watchedAccountId),
@@ -810,7 +786,7 @@ const debtAccountByPerson = useMemo(() => {
     transactionType !== 'income' &&
     selectedAccount?.type === 'credit_card' &&
     amountValue > 0 &&
-    (transactionType !== 'transfer' || Boolean(watchedDebtAccountId))
+    transactionType !== 'transfer'
 
   useEffect(() => {
     if (amountValue <= 0) {
@@ -883,452 +859,489 @@ const debtAccountByPerson = useMemo(() => {
     return account?.name ?? null
   }, [watchedDebtAccountId, allAccounts])
 
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+  const TypeInput = (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700">Type</label>
+      <Controller
+        control={control}
+        name="type"
+        render={({ field }) => (
+          <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
+            <TabsList className="grid w-full grid-cols-5 gap-1">
+              <TabsTrigger value="expense">Expense</TabsTrigger>
+              <TabsTrigger value="income">Income</TabsTrigger>
+              <TabsTrigger value="transfer">Transfer</TabsTrigger>
+              <TabsTrigger value="debt">Lending</TabsTrigger>
+              <TabsTrigger value="repayment">Repay</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        )}
+      />
+      {errors.type && (
+        <p className="text-sm text-red-600">{errors.type.message}</p>
+      )}
+    </div>
+  )
+
+  const CategoryInput = (transactionType === 'expense' || transactionType === 'debt' || transactionType === 'repayment' || transactionType === 'transfer') ? (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700">Category {transactionType === 'transfer' ? '(Optional)' : ''}</label>
+      <Controller
+        control={control}
+        name="category_id"
+        render={({ field }) => (
+          <Combobox
+            value={field.value}
+            onValueChange={field.onChange}
+            items={categoryOptions}
+            placeholder="Select category"
+            inputPlaceholder="Search category..."
+            emptyState="No matching category"
+          />
+        )}
+      />
+      {errors.category_id && (
+        <p className="text-sm text-red-600">{errors.category_id.message}</p>
+      )}
+    </div>
+  ) : null
+
+  const ShopInput = (transactionType === 'expense' || transactionType === 'debt' || transactionType === 'repayment' || (isEditMode && transactionType !== 'income' && transactionType !== 'transfer')) ? (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700">Shop</label>
+      <Controller
+        control={control}
+        name="shop_id"
+        render={({ field }) => (
+          <Combobox
+            value={field.value}
+            onValueChange={field.onChange}
+            items={shopOptions}
+            placeholder="Select shop"
+            inputPlaceholder="Search shop..."
+            emptyState="No shops yet"
+          />
+        )}
+      />
+    </div>
+  ) : null
+
+  const PersonInput = (transactionType === 'debt' || transactionType === 'repayment') ? (
+    <div className="space-y-3">
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Type</label>
+        <label className="text-sm font-medium text-gray-700">
+          Person
+        </label>
         <Controller
           control={control}
-          name="type"
+          name="person_id"
           render={({ field }) => (
-            <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
-              <TabsList className="grid w-full grid-cols-5 gap-1">
-                <TabsTrigger value="expense">Expense</TabsTrigger>
-                <TabsTrigger value="income">Income</TabsTrigger>
-                <TabsTrigger value="transfer">Transfer</TabsTrigger>
-                <TabsTrigger value="debt">Lending</TabsTrigger>
-                <TabsTrigger value="repayment">Repay</TabsTrigger>
-              </TabsList>
-            </Tabs>
+            <Combobox
+              value={field.value}
+              onValueChange={value => {
+                field.onChange(value)
+                const linkedAccount = value ? debtAccountByPerson.get(value) : undefined
+                form.setValue('debt_account_id', linkedAccount ?? undefined, { shouldValidate: true })
+              }}
+              items={personOptions}
+              placeholder="Select person"
+              inputPlaceholder="Search person..."
+              emptyState="No person found"
+            />
           )}
         />
-        {errors.type && (
-          <p className="text-sm text-red-600">{errors.type.message}</p>
+        {errors.person_id && (
+          <p className="text-sm text-red-600">{errors.person_id.message}</p>
         )}
+         {debtAccountName && (
+          <p className="text-xs text-slate-500 mt-1">
+              Debt Account: <span className="font-semibold text-slate-700">{debtAccountName}</span>
+          </p>
+         )}
       </div>
 
-      {(transactionType === 'expense' || transactionType === 'debt' || transactionType === 'repayment') && (
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">Category</label>
-          <Controller
-            control={control}
-            name="category_id"
-            render={({ field }) => (
-              <Combobox
-                value={field.value}
-                onValueChange={field.onChange}
-                items={categoryOptions}
-                placeholder="Select category"
-                inputPlaceholder="Search category..."
-                emptyState="No matching category"
-              />
+      {watchedPersonId && !debtAccountByPerson.get(watchedPersonId) && (
+        <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <div className="space-y-1">
+            <p className="font-semibold">This person does not have a debt account.</p>
+            <p>A debt account will be created automatically when you click the button.</p>
+            {debtEnsureError && (
+              <p className="text-rose-600">{debtEnsureError}</p>
             )}
-          />
-          {errors.category_id && (
-            <p className="text-sm text-red-600">{errors.category_id.message}</p>
-          )}
-        </div>
-      )}
-
-      {(transactionType === 'expense' || transactionType === 'debt' || transactionType === 'repayment' || (isEditMode && transactionType !== 'income' && transactionType !== 'transfer')) && (
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">Shop</label>
-          <Controller
-            control={control}
-            name="shop_id"
-            render={({ field }) => (
-              <Combobox
-                value={field.value}
-                onValueChange={field.onChange}
-                items={shopOptions}
-                placeholder="Select shop"
-                inputPlaceholder="Search shop..."
-                emptyState="No shops yet"
-              />
-            )}
-          />
-        </div>
-      )}
-
-      {(transactionType === 'debt' || transactionType === 'repayment') && (
-      <div className="space-y-3">
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            Person
-          </label>
-          <Controller
-            control={control}
-            name="person_id"
-            render={({ field }) => (
-              <Combobox
-                value={field.value}
-                onValueChange={value => {
-                  field.onChange(value)
-                  const linkedAccount = value ? debtAccountByPerson.get(value) : undefined
-                  form.setValue('debt_account_id', linkedAccount ?? undefined, { shouldValidate: true })
-                }}
-                items={personOptions}
-                placeholder="Select person"
-                inputPlaceholder="Search person..."
-                emptyState="No person found"
-              />
-            )}
-          />
-          {errors.person_id && (
-            <p className="text-sm text-red-600">{errors.person_id.message}</p>
-          )}
-           {debtAccountName && (
-            <p className="text-xs text-slate-500 mt-1">
-                Debt Account: <span className="font-semibold text-slate-700">{debtAccountName}</span>
-            </p>
-           )}
-        </div>
-
-        {watchedPersonId && !debtAccountByPerson.get(watchedPersonId) && (
-          <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-            <div className="space-y-1">
-              <p className="font-semibold">This person does not have a debt account.</p>
-              <p>A debt account will be created automatically when you click the button.</p>
-              {debtEnsureError && (
-                <p className="text-rose-600">{debtEnsureError}</p>
-              )}
-            </div>
-            <button
-              type="button"
-              className="rounded-md bg-amber-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
-              onClick={handleEnsureDebtAccount}
-              disabled={isEnsuringDebt}
-            >
-              {isEnsuringDebt ? 'Creating...' : 'Create & Link Now'}
-            </button>
           </div>
-        )}
+          <button
+            type="button"
+            className="rounded-md bg-amber-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
+            onClick={handleEnsureDebtAccount}
+            disabled={isEnsuringDebt}
+          >
+            {isEnsuringDebt ? 'Creating...' : 'Create & Link Now'}
+          </button>
+        </div>
+      )}
+      {errors.debt_account_id && (
+        <p className="text-sm text-red-600">{errors.debt_account_id.message}</p>
+      )}
+    </div>
+  ) : null
+
+  const DestinationAccountInput = (transactionType === 'transfer') ? (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-700">Destination account</label>
+        <Controller
+          control={control}
+          name="debt_account_id"
+          render={({ field }) => (
+            <Combobox
+              value={field.value}
+              onValueChange={field.onChange}
+              items={destinationAccountOptions}
+              placeholder="Select destination"
+              inputPlaceholder="Search account..."
+              emptyState="No account found"
+            />
+          )}
+        />
         {errors.debt_account_id && (
           <p className="text-sm text-red-600">{errors.debt_account_id.message}</p>
         )}
       </div>
-    )}
+    </div>
+  ) : null
 
-      {transactionType === 'transfer' && (
-        <div className="space-y-3">
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Destination account</label>
-            <Controller
-              control={control}
-              name="debt_account_id"
-              render={({ field }) => (
-                <Combobox
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  items={destinationAccountOptions}
-                  placeholder="Select destination"
-                  inputPlaceholder="Search account..."
-                  emptyState="No account found"
-                />
-              )}
-            />
-            {errors.debt_account_id && (
-              <p className="text-sm text-red-600">{errors.debt_account_id.message}</p>
-            )}
-          </div>
-        </div>
+  const DateInput = (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700">Date</label>
+      <Controller
+        control={control}
+        name="occurred_at"
+        render={({ field }) => (
+          <input
+            type="date"
+            value={field.value ? format(field.value, 'yyyy-MM-dd') : ''}
+            onChange={event => {
+              const nextValue = event.target.value
+              field.onChange(nextValue ? new Date(nextValue) : undefined)
+            }}
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          />
+        )}
+      />
+      {errors.occurred_at && (
+        <p className="text-sm text-red-600">{errors.occurred_at.message}</p>
       )}
+      {transactionType !== 'debt' && transactionType !== 'repayment' && <p className="text-xs text-gray-500 pt-1">Cycle Tag: <span className="font-semibold">{watch('tag')}</span></p>}
+    </div>
+  )
 
-
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Date</label>
-        <Controller
-          control={control}
-          name="occurred_at"
-          render={({ field }) => (
+  const TagInput = (transactionType === 'debt' || transactionType === 'repayment') ? (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700">Debt Cycle (Tag)</label>
+      <Controller
+        control={control}
+        name="tag"
+        render={({ field }) => (
+          <div className="space-y-2">
             <input
-              type="date"
-              value={field.value ? format(field.value, 'yyyy-MM-dd') : ''}
-              onChange={event => {
-                const nextValue = event.target.value
-                field.onChange(nextValue ? new Date(nextValue) : undefined)
+              {...field}
+              onChange={(e) => {
+                field.onChange(e);
+                if (!manualTagMode) {
+                  setManualTagMode(true);
+                }
               }}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              placeholder="Enter tag (e.g., NOV25)"
+            />
+          </div>
+        )}
+      />
+      {errors.tag && (
+        <p className="text-sm text-red-600">{errors.tag.message}</p>
+      )}
+
+      <div className="mt-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-gray-500 mr-1">Recent:</span>
+          <button
+            type="button"
+            onClick={() => {
+              form.setValue('tag', generateTag(new Date()), { shouldValidate: true });
+              setManualTagMode(true);
+            }}
+            className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
+            aria-label="Reset to current month"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/></svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const currentDate = watchedDate || new Date();
+              const previousMonth = subMonths(currentDate, 1);
+              const previousTag = generateTag(previousMonth);
+              form.setValue('tag', previousTag, { shouldValidate: true });
+              setManualTagMode(true);
+            }}
+            className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
+            aria-label="Previous month"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          {suggestedTags.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => {
+                form.setValue('tag', tag, { shouldValidate: true });
+                setManualTagMode(true);
+              }}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                watch('tag') === tag
+                  ? 'bg-blue-500 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+              }`}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  ) : null
+
+  const SourceAccountInput = (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <label className="text-sm font-medium text-gray-700">
+          {transactionType === 'income' || transactionType === 'repayment'
+            ? 'To Account'
+            : transactionType === 'transfer'
+              ? 'Source of Funds'
+              : 'From Account'}
+        </label>
+        <Controller
+          control={control}
+          name="source_account_id"
+          render={({ field }) => (
+            <Combobox
+              value={field.value}
+              onValueChange={field.onChange}
+              items={accountOptions}
+              placeholder="Select account"
+              inputPlaceholder="Search account..."
+              emptyState="No account found"
             />
           )}
         />
-        {errors.occurred_at && (
-          <p className="text-sm text-red-600">{errors.occurred_at.message}</p>
+        {errors.source_account_id && (
+          <p className="text-sm text-red-600">{errors.source_account_id.message}</p>
         )}
-        {transactionType !== 'debt' && transactionType !== 'repayment' && <p className="text-xs text-gray-500 pt-1">Cycle Tag: <span className="font-semibold">{watch('tag')}</span></p>}
       </div>
+    </div>
+  )
 
-      {(transactionType === 'debt' || transactionType === 'repayment') && (
+  const AmountInput = (
+    <div className="space-y-3">
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Debt Cycle (Tag)</label>
+        <label className="text-sm font-medium text-gray-700">Amount</label>
         <Controller
           control={control}
-          name="tag"
+          name="amount"
           render={({ field }) => (
-            <div className="space-y-2">
-              <input
-                {...field}
-                onChange={(e) => {
-                  field.onChange(e);
-                  if (!manualTagMode) {
-                    setManualTagMode(true);
-                  }
-                }}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                placeholder="Enter tag (e.g., NOV25)"
-              />
-            </div>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={field.value ? new Intl.NumberFormat('en-US').format(field.value) : ''}
+              onFocus={() => {
+                if (field.value === 0) {
+                  field.onChange(undefined);
+                }
+              }}
+              onChange={event => {
+                const rawValue = event.target.value;
+                const numericValue = rawValue.replace(/[^0-9]/g, '');
+
+                if (numericValue === '') {
+                  field.onChange(undefined);
+                  return;
+                }
+
+                const number = parseInt(numericValue, 10);
+                if (!isNaN(number)) {
+                  field.onChange(number);
+                }
+              }}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              placeholder="0"
+            />
           )}
         />
-        {errors.tag && (
-          <p className="text-sm text-red-600">{errors.tag.message}</p>
+        {errors.amount && (
+          <p className="text-sm text-red-600">{errors.amount.message}</p>
         )}
-        
-        <div className="mt-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-gray-500 mr-1">Recent:</span>
-            <button
-              type="button"
-              onClick={() => {
-                form.setValue('tag', generateTag(new Date()), { shouldValidate: true });
-                setManualTagMode(true);
-              }}
-              className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
-              aria-label="Reset to current month"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/></svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const currentDate = watchedDate || new Date();
-                const previousMonth = subMonths(currentDate, 1);
-                const previousTag = generateTag(previousMonth);
-                form.setValue('tag', previousTag, { shouldValidate: true });
-                setManualTagMode(true);
-              }}
-              className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
-              aria-label="Previous month"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-            </button>
-            {suggestedTags.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => {
-                  form.setValue('tag', tag, { shouldValidate: true });
-                  setManualTagMode(true);
-                }}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                  watch('tag') === tag 
-                    ? 'bg-blue-500 text-white shadow-sm' 
-                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
+      </div>
+
+      {progressLoading && (
+        <p className="text-xs text-slate-400">Loading cashback history...</p>
+      )}
+      {progressError && (
+        <p className="text-xs text-rose-600">{progressError}</p>
+      )}
+    </div>
+  )
+
+  const NoteInput = (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700">Note</label>
+      <textarea
+        {...register('note')}
+        placeholder="Add a note..."
+        className="min-h-[60px] w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+      />
+      {errors.note && (
+        <p className="text-sm text-red-600">{errors.note.message}</p>
+      )}
+    </div>
+  )
+
+  const CashbackInputs = showCashbackInputs ? (
+    <div className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/80 p-4 text-sm text-slate-600 shadow-sm">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs font-semibold uppercase text-indigo-700">
+        <div className="space-y-0.5">
+          <div className="text-[11px] text-slate-500">Statement Cycle</div>
+          <div className="text-sm font-semibold text-slate-900">
+            {selectedCycleLabel ?? 'No cycle info'}
           </div>
         </div>
+        <div className="flex items-center gap-3">
+          <span className="text-[11px] text-indigo-800">Rate: {(cashbackMeta?.rate ?? 0) * 100}%</span>
+          <span>
+            Budget:{' '}
+            {remainingBudget === null
+              ? 'Unlimited'
+              : numberFormatter.format(remainingBudget)}
+          </span>
+        </div>
       </div>
-      )}
 
-      <div className="space-y-3">
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            {transactionType === 'income' || transactionType === 'repayment'
-              ? 'To Account'
-              : transactionType === 'transfer'
-                ? 'Source of Funds'
-                : 'From Account'}
-          </label>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">% Back</label>
           <Controller
             control={control}
-            name="source_account_id"
+            name="cashback_share_percent"
             render={({ field }) => (
-              <Combobox
-                value={field.value}
-                onValueChange={field.onChange}
-                items={accountOptions}
-                placeholder="Select account"
-                inputPlaceholder="Search account..."
-                emptyState="No account found"
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max={rateLimitPercent ?? undefined}
+                value={field.value ?? ''}
+                onChange={event => {
+                  const nextValue = event.target.value
+                  field.onChange(nextValue === '' ? undefined : Number(nextValue))
+                }}
+                disabled={budgetMaxed}
+                className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Enter percentage"
               />
             )}
           />
-          {errors.source_account_id && (
-            <p className="text-sm text-red-600">{errors.source_account_id.message}</p>
+          {rateLimitPercent !== null && (
+            <p className="text-xs text-slate-500">
+              Up to {Math.min(50, rateLimitPercent).toFixed(2)}%
+            </p>
           )}
-        </div>
+          {rateLimitPercent !== null && percentEntry > rateLimitPercent && (
+            <p className="text-xs text-amber-600">
+              Max {Math.min(50, rateLimitPercent).toFixed(2)}% according to card policy
+            </p>
+          )}
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">Amount</label>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">Fixed Back</label>
           <Controller
             control={control}
-            name="amount"
+            name="cashback_share_fixed"
             render={({ field }) => (
               <input
                 type="text"
                 inputMode="decimal"
                 value={field.value ? new Intl.NumberFormat('en-US').format(field.value) : ''}
-                onFocus={() => {
-                  if (field.value === 0) {
-                    field.onChange(undefined);
-                  }
-                }}
                 onChange={event => {
-                  const rawValue = event.target.value;
-                  const numericValue = rawValue.replace(/[^0-9]/g, '');
-                  
+                  const rawValue = event.target.value
+                  const numericValue = rawValue.replace(/[^0-9]/g, '')
                   if (numericValue === '') {
-                    field.onChange(undefined);
-                    return;
+                    field.onChange(undefined)
+                    return
                   }
-
-                  const number = parseInt(numericValue, 10);
-                  if (!isNaN(number)) {
-                    field.onChange(number);
-                  }
+                  const number = parseInt(numericValue, 10)
+                  if (Number.isNaN(number)) return
+                  const clamped = amountValue > 0 ? Math.min(number, amountValue) : number
+                  field.onChange(clamped)
                 }}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                placeholder="0"
+                disabled={budgetMaxed}
+                max={amountValue > 0 ? amountValue : undefined}
+                className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+                placeholder="Enter fixed amount"
               />
             )}
           />
-          {errors.amount && (
-            <p className="text-sm text-red-600">{errors.amount.message}</p>
+          {budgetMaxed && (
+            <p className="text-xs text-rose-600">Budget exhausted, cannot add fixed amount.</p>
           )}
         </div>
-
-        {progressLoading && (
-          <p className="text-xs text-slate-400">Loading cashback history...</p>
-        )}
-        {progressError && (
-          <p className="text-xs text-rose-600">{progressError}</p>
-        )}
       </div>
-
-
-    {showCashbackInputs && (
-      <div className="space-y-3 rounded-2xl border border-indigo-100 bg-indigo-50/80 p-4 text-sm text-slate-600 shadow-sm">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between text-xs font-semibold uppercase text-indigo-700">
-          <div className="space-y-0.5">
-            <div className="text-[11px] text-slate-500">Statement Cycle</div>
-            <div className="text-sm font-semibold text-slate-900">
-              {selectedCycleLabel ?? 'No cycle info'}
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] text-indigo-800">Rate: {(cashbackMeta?.rate ?? 0) * 100}%</span>
-            <span>
-              Budget:{' '}
-              {remainingBudget === null
-                ? 'Unlimited'
-                : numberFormatter.format(remainingBudget)}
-            </span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-600">% Back</label>
-            <Controller
-              control={control}
-              name="cashback_share_percent"
-              render={({ field }) => (
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max={rateLimitPercent ?? undefined}
-                  value={field.value ?? ''}
-                  onChange={event => {
-                    const nextValue = event.target.value
-                    field.onChange(nextValue === '' ? undefined : Number(nextValue))
-                  }}
-                  disabled={budgetMaxed}
-                  className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder="Enter percentage"
-                />
-              )}
-            />
-            {rateLimitPercent !== null && (
-              <p className="text-xs text-slate-500">
-                Up to {Math.min(50, rateLimitPercent).toFixed(2)}%
-              </p>
-            )}
-            {rateLimitPercent !== null && percentEntry > rateLimitPercent && (
-              <p className="text-xs text-amber-600">
-                Max {Math.min(50, rateLimitPercent).toFixed(2)}% according to card policy
-              </p>
-            )}
-
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs font-medium text-slate-600">Fixed Back</label>
-            <Controller
-              control={control}
-              name="cashback_share_fixed"
-              render={({ field }) => (
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={field.value ? new Intl.NumberFormat('en-US').format(field.value) : ''}
-                  onChange={event => {
-                    const rawValue = event.target.value
-                    const numericValue = rawValue.replace(/[^0-9]/g, '')
-                    if (numericValue === '') {
-                      field.onChange(undefined)
-                      return
-                    }
-                    const number = parseInt(numericValue, 10)
-                    if (Number.isNaN(number)) return
-                    const clamped = amountValue > 0 ? Math.min(number, amountValue) : number
-                    field.onChange(clamped)
-                  }}
-                  disabled={budgetMaxed}
-                  max={amountValue > 0 ? amountValue : undefined}
-                  className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
-                  placeholder="Enter fixed amount"
-                />
-              )}
-            />
-            {budgetMaxed && (
-            <p className="text-xs text-rose-600">Budget exhausted, cannot add fixed amount.</p>
-            )}
-          </div>
-        </div>
-          <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-            <span>Total shared with person</span>
-          <span className="font-semibold text-slate-900">
-            {numberFormatter.format(totalBackGiven)}
-          </span>
-        </div>
-        {budgetExceeded && remainingBudget !== null && (
-          <p className="text-xs text-amber-600">
-            Cashback budget only has {numberFormatter.format(remainingBudget)} remaining.
-          </p>
-        )}
-        {suggestedPercent !== null && budgetExceeded && (
-          <p className="text-xs text-amber-600">
-            Suggest lowering percentage to {suggestedPercent.toFixed(2)}% to not exceed budget.
-          </p>
-        )}
+      <div className="flex items-center justify-between text-xs font-medium text-slate-500">
+        <span>Total shared with person</span>
+        <span className="font-semibold text-slate-900">
+          {numberFormatter.format(totalBackGiven)}
+        </span>
       </div>
-    )}
+      {budgetExceeded && remainingBudget !== null && (
+        <p className="text-xs text-amber-600">
+          Cashback budget only has {numberFormatter.format(remainingBudget)} remaining.
+        </p>
+      )}
+      {suggestedPercent !== null && budgetExceeded && (
+        <p className="text-xs text-amber-600">
+          Suggest lowering percentage to {suggestedPercent.toFixed(2)}% to not exceed budget.
+        </p>
+      )}
+    </div>
+  ) : null;
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Note</label>
-        <textarea
-          {...register('note')}
-          placeholder="Add a note..."
-          className="min-h-[60px] w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-        />
-        {errors.note && (
-          <p className="text-sm text-red-600">{errors.note.message}</p>
-        )}
-      </div>
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      {transactionType !== 'transfer' && (
+        <>
+          {TypeInput}
+          {CategoryInput}
+          {ShopInput}
+          {PersonInput}
+          {DateInput}
+          {TagInput}
+          {SourceAccountInput}
+          {AmountInput}
+          {CashbackInputs}
+          {NoteInput}
+        </>
+      )}
+
+      {transactionType === 'transfer' && (
+        <>
+          {TypeInput}
+          {CategoryInput}
+          {SourceAccountInput}
+          {DestinationAccountInput}
+          {AmountInput}
+          {DateInput}
+          {NoteInput}
+        </>
+      )}
 
       {status && (
         <p

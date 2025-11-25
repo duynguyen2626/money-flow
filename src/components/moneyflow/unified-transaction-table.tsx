@@ -1,9 +1,10 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft } from "lucide-react"
+import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
+import { CustomTooltip } from "@/components/ui/custom-tooltip"
 import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
 import {
   Table,
@@ -25,16 +26,23 @@ import {
 import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
 import { cn } from "@/lib/utils"
+import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
 
 type ColumnKey =
   | "date"
   | "type"
   | "shop" // Merged Shop/Note
   | "category"
-  | "account" // Smart Account
   | "people" // Separated
   | "tag" // Separated
+  | "cycle"
+  | "account" // Smart Account
   | "amount"
+  | "cashback_percent"
+  | "cashback_fixed"
+  | "cashback_sum"
+  | "final_price"
+  | "id"
   | "task"
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -122,17 +130,24 @@ interface UnifiedTransactionTableProps {
   categories?: Category[]
   people?: Person[]
   shops?: Shop[]
+  activeTab?: 'active' | 'void'
 }
 
 const defaultColumns: ColumnConfig[] = [
-  { key: "date", label: "Date", defaultWidth: 100, minWidth: 90 },
+  { key: "date", label: "Date", defaultWidth: 60, minWidth: 50 },
   { key: "type", label: "Type", defaultWidth: 110, minWidth: 90 },
-  { key: "shop", label: "Shop / Note", defaultWidth: 220, minWidth: 160 },
+  { key: "shop", label: "Notes", defaultWidth: 220, minWidth: 160 },
   { key: "category", label: "Category", defaultWidth: 150 },
   { key: "people", label: "Person", defaultWidth: 140 },
-  { key: "tag", label: "Tag", defaultWidth: 100 },
   { key: "account", label: "Account", defaultWidth: 180 },
+  { key: "cycle", label: "Cycle", defaultWidth: 100 },
   { key: "amount", label: "Amount", defaultWidth: 120 },
+  { key: "cashback_percent", label: "% Back", defaultWidth: 70 },
+  { key: "cashback_fixed", label: "Fix Back", defaultWidth: 80 },
+  { key: "cashback_sum", label: "Sum Back", defaultWidth: 100 },
+  { key: "final_price", label: "Final Price", defaultWidth: 120 },
+  { key: "tag", label: "Tag", defaultWidth: 80 },
+  { key: "id", label: "ID", defaultWidth: 100 },
   { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
 ]
 
@@ -163,9 +178,10 @@ export function UnifiedTransactionTable({
   categories = [],
   people = [],
   shops = [],
+  activeTab,
 }: UnifiedTransactionTableProps) {
   const router = useRouter()
-  const [activeTab, setActiveTab] = useState<'active' | 'void'>('active')
+  // Internal state removed for activeTab, now using prop with fallback
   const [showSelectedOnly, setShowSelectedOnly] = useState(false)
   const [internalSelection, setInternalSelection] = useState<Set<string>>(new Set())
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
@@ -176,8 +192,14 @@ export function UnifiedTransactionTable({
       category: true,
       people: true,
       tag: true,
+      cycle: true,
       account: true,
       amount: true,
+      cashback_percent: true,
+      cashback_fixed: true,
+      cashback_sum: false, // Default hidden as per user request
+      final_price: true,
+      id: false,
       task: true,
     }
   })
@@ -245,8 +267,14 @@ export function UnifiedTransactionTable({
         category: true,
         people: true,
         tag: true,
+        cycle: true,
         account: true,
         amount: true,
+        cashback_percent: true,
+        cashback_fixed: true,
+        cashback_sum: false,
+        final_price: true,
+        id: false,
         task: true,
     })
   }
@@ -436,9 +464,11 @@ export function UnifiedTransactionTable({
     router.refresh()
   }
 
+  const currentTab = activeTab ?? 'active';
+
   const displayedTransactions = useMemo(() => {
     let list = transactions;
-    if (activeTab === 'active') {
+    if (currentTab === 'active') {
         list = transactions.filter(t => (statusOverrides[t.id] ?? t.status) !== 'void');
     } else {
         list = transactions.filter(t => (statusOverrides[t.id] ?? t.status) === 'void');
@@ -448,7 +478,7 @@ export function UnifiedTransactionTable({
       return list.filter(txn => selection.has(txn.id))
     }
     return list
-  }, [transactions, selection, showSelectedOnly, activeTab, statusOverrides])
+  }, [transactions, selection, showSelectedOnly, currentTab, statusOverrides])
 
 
   const handleSelectAll = (checked: boolean) => {
@@ -499,14 +529,7 @@ export function UnifiedTransactionTable({
 
   return (
     <div className="relative space-y-4">
-      <div className="flex items-center justify-between">
-        <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as 'active' | 'void')}>
-          <TabsList>
-            <TabsTrigger value="active">Active</TabsTrigger>
-            <TabsTrigger value="void">Void</TabsTrigger>
-          </TabsList>
-        </Tabs>
-
+      <div className="flex items-center justify-end min-h-[36px]">
         {selection.size > 0 && (
             <button
                 className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-70"
@@ -628,42 +651,62 @@ export function UnifiedTransactionTable({
                  const isOut = txn.amount < 0;
                  if (txn.type === 'transfer') {
                     if (isOut) {
-                        accountDisplay = <span className="text-slate-700 flex items-center gap-1"><ArrowRight className="h-3 w-3 text-slate-400"/> {partnerName}</span>
+                        accountDisplay = <span className="text-slate-700 font-bold flex items-center gap-1"><ArrowRight className="h-3 w-3 text-slate-400"/> {partnerName}</span>
                     } else {
-                        accountDisplay = <span className="text-slate-700 flex items-center gap-1"><ArrowLeft className="h-3 w-3 text-slate-400"/> {partnerName}</span>
+                        accountDisplay = <span className="text-slate-700 font-bold flex items-center gap-1"><ArrowLeft className="h-3 w-3 text-slate-400"/> {partnerName}</span>
                     }
                  } else {
-                    // For Expense/Income in Account Detail, usually we don't show the account itself (it's redundant),
-                    // but we might show "Partner" if it's a debt repayment?
-                    // Standard Expense: No partner usually (unless Shop?).
-                    // Let's just show txn.account_name if it differs from current, or just blank?
-                    // But typically the table needs to fill the column.
-                    // If Expense, account_name might be the Bank itself?
-                    // mapTransactionRow logic:
-                    //   If Expense: accountName = creditAccountLine?.accounts?.name
-                    //   If viewing that account, accountName IS the account name.
-                    // Let's show it anyway, or maybe '-'?
-                    // Task says: "If Transfer: Show -> [Partner] or <- [Partner]. Else: Show Account Name"
-                    accountDisplay = <span className="text-slate-700">{txn.account_name}</span>
+                    accountDisplay = <span className="text-slate-700 font-bold">{txn.account_name}</span>
                  }
             } else {
                 // Global View
                 if (txn.type === 'transfer') {
                     const source = txn.source_account_name ?? '?';
                     const dest = txn.destination_account_name ?? '?';
-                    accountDisplay = (
-                        <div className="flex items-center gap-1 text-xs text-slate-700 font-medium">
-                            <span className="text-slate-500">{source}</span>
-                            <ArrowRight className="h-3 w-3 text-slate-400" />
-                            <span className="text-slate-700">{dest}</span>
-                        </div>
-                    )
+
+                    if (txn.source_logo && txn.destination_logo) {
+                        accountDisplay = (
+                            <CustomTooltip content={`${source} ➡️ ${dest}`}>
+                                <div className="flex items-center gap-1 cursor-help overflow-hidden whitespace-nowrap">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={txn.source_logo} alt={source} className="h-8 w-8 object-contain" />
+                                    <span className="text-slate-300">➡️</span>
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={txn.destination_logo} alt={dest} className="h-8 w-8 object-contain" />
+                                </div>
+                            </CustomTooltip>
+                        )
+                    } else {
+                        accountDisplay = (
+                            <div className="flex items-center gap-1 text-xs text-slate-700 font-bold overflow-hidden whitespace-nowrap">
+                                <span className="text-slate-500 font-normal truncate max-w-[80px]" title={source}>{source}</span>
+                                <span className="text-slate-400">➡️</span>
+                                <span className="text-slate-700 truncate max-w-[80px]" title={dest}>{dest}</span>
+                            </div>
+                        )
+                    }
                 } else if (txn.type === 'income') {
                      // Show Destination (Bank)
-                     accountDisplay = <span className="text-slate-700">{txn.destination_account_name ?? txn.account_name}</span>
+                     accountDisplay = (
+                        <div className="flex items-center gap-2">
+                             {txn.destination_logo && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={txn.destination_logo} alt="Bank" className="h-8 w-8 object-contain" />
+                             )}
+                             <span className="text-slate-700 font-bold">{txn.destination_account_name ?? txn.account_name}</span>
+                        </div>
+                     )
                 } else {
                      // Expense: Show Source (Bank)
-                     accountDisplay = <span className="text-slate-700">{txn.source_account_name ?? txn.account_name}</span>
+                     accountDisplay = (
+                        <div className="flex items-center gap-2">
+                             {txn.source_logo && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={txn.source_logo} alt="Bank" className="h-8 w-8 object-contain" />
+                             )}
+                             <span className="text-slate-700 font-bold">{txn.source_account_name ?? txn.account_name}</span>
+                        </div>
+                     )
                 }
             }
 
@@ -765,10 +808,10 @@ export function UnifiedTransactionTable({
                             <img
                               src={txn.shop_logo_url}
                               alt={txn.shop_name}
-                              className="h-5 w-5 object-cover border"
+                              className="h-8 w-8 object-contain rounded-none"
                             />
                           ) : (
-                            <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 border">
+                            <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
                               {txn.shop_name.charAt(0).toUpperCase()}
                             </span>
                           )}
@@ -779,38 +822,65 @@ export function UnifiedTransactionTable({
                         <img
                           src={txn.shop_logo_url}
                           alt="Shop"
-                          className="h-5 w-5 object-cover border"
+                          className="h-5 w-5 object-cover rounded-none"
                         />
                       )}
                       {!txn.shop_name && !txn.shop_logo_url && (
-                        <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 border">
+                        <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
                           🛍️
                         </span>
                       )}
                       {txn.note && (
-                        <span className="text-sm text-slate-700 font-medium truncate">
-                          {txn.note}
-                        </span>
+                        <CustomTooltip content={txn.note}>
+                            <span className="text-sm text-slate-700 font-medium truncate cursor-help">
+                            {txn.note}
+                            </span>
+                        </CustomTooltip>
                       )}
                     </div>
                    )
                 case "category":
-                  // TODO: Add Icon if available in category object? Currently only name.
                   return (
-                    <div className="flex items-center gap-2">
-                         <span className="font-medium text-slate-700">{txn.category_name || "-"}</span>
-                    </div>
+                    <CustomTooltip content={txn.category_name ?? "No Category"}>
+                        <div className="flex items-center gap-2 max-w-full">
+                            {txn.category_image_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    src={txn.category_image_url}
+                                    alt={txn.category_name ?? 'Category'}
+                                    className="h-8 w-8 object-contain rounded-none"
+                                />
+                            ) : (
+                                <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
+                                    {txn.category_icon ?? (txn.category_name ? txn.category_name.charAt(0).toUpperCase() : '?')}
+                                </span>
+                            )}
+                            <span className="font-medium text-slate-700 truncate whitespace-nowrap cursor-help">
+                                {txn.category_name || "-"}
+                            </span>
+                        </div>
+                    </CustomTooltip>
                   )
                 case "account":
                   return accountDisplay
                 case "people": {
                   const personName = (txn as any).person_name ?? txn.person_name ?? null
+                  const personAvatar = (txn as any).person_avatar_url ?? txn.person_avatar_url ?? null
                   if (!personName) return <span className="text-slate-400">-</span>
                   return (
                     <div className="flex items-center gap-2">
-                        <span className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 border">
-                            {personName.charAt(0).toUpperCase()}
-                        </span>
+                        {personAvatar ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={personAvatar}
+                              alt={personName}
+                              className="h-6 w-6 object-cover rounded-none"
+                            />
+                        ) : (
+                            <span className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 rounded-none">
+                                {personName.charAt(0).toUpperCase()}
+                            </span>
+                        )}
                         <span className="font-medium text-slate-700">{personName}</span>
                     </div>
                   )
@@ -821,8 +891,38 @@ export function UnifiedTransactionTable({
                         {txn.tag}
                      </span>
                   ) : <span className="text-slate-400">-</span>
+                case "cycle":
+                  return <span className="text-slate-600">{cycleLabel}</span>
                 case "amount":
                   return amountValue
+                case "cashback_percent":
+                  return percentRaw ? <span className="text-slate-600">{(percentRaw * 100).toFixed(2)}%</span> : <span className="text-slate-300">-</span>
+                case "cashback_fixed":
+                  return fixedRaw ? <span className="text-slate-600">{numberFormatter.format(fixedRaw)}</span> : <span className="text-slate-300">-</span>
+                case "cashback_sum":
+                   return calculatedSum > 0 ? <span className="text-slate-600 font-medium">{numberFormatter.format(calculatedSum)}</span> : <span className="text-slate-300">-</span>
+                case "final_price":
+                   return <span className={cn("font-bold", amountClass)}>{numberFormatter.format(finalPrice)}</span>
+                case "id":
+                   return (
+                       <CustomTooltip content={txn.id}>
+                           <div className="flex items-center gap-2">
+                               <button
+                                   onClick={(e) => {
+                                       e.stopPropagation();
+                                       navigator.clipboard.writeText(txn.id);
+                                   }}
+                                   className="text-slate-400 hover:text-slate-600 transition-colors"
+                                   title="Copy ID"
+                               >
+                                   <Copy className="h-3 w-3" />
+                               </button>
+                               <span className="text-xs text-slate-400 font-mono cursor-help">
+                                   {txn.id.slice(0, 8)}...
+                               </span>
+                           </div>
+                       </CustomTooltip>
+                   )
                 case "task":
                   return taskCell
                 default:
@@ -830,7 +930,27 @@ export function UnifiedTransactionTable({
               }
             }
 
-            const voidedTextClass = effectiveStatus === 'void' && activeTab !== 'void' ? "opacity-60 line-through text-gray-400" : ""
+            const voidedTextClass = effectiveStatus === 'void' && currentTab !== 'void' ? "opacity-60 line-through text-gray-400" : ""
+            const percentRaw = txn.cashback_share_percent
+            const fixedRaw = txn.cashback_share_fixed
+            const calculatedSum = txn.cashback_share_amount ?? ((Math.abs(originalAmount ?? 0) * (percentRaw ?? 0)) + (fixedRaw ?? 0))
+            const finalPrice = Math.abs(originalAmount ?? 0) - calculatedSum
+
+            // Cycle Logic
+            let cycleLabel = "-"
+            const sourceAccountId = txn.transaction_lines?.find(l => l.account_id && l.type === 'credit')?.account_id
+              ?? txn.transaction_lines?.find(l => l.account_id)?.account_id;
+
+            if (sourceAccountId) {
+                const acc = accounts.find(a => a.id === sourceAccountId)
+                if (acc && acc.cashback_config) {
+                    const config = parseCashbackConfig(acc.cashback_config)
+                    const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
+                    // Format: DD/MM - DD/MM
+                    const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+                    cycleLabel = `${fmt(range.start)} - ${fmt(range.end)}`
+                }
+            }
 
             return (
               <TableRow
