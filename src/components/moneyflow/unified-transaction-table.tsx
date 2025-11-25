@@ -634,8 +634,9 @@ export function UnifiedTransactionTable({
         </TableHeader>
         <TableBody>
           {displayedTransactions.map(txn => {
+            const isRepayment = txn.type === 'repayment';
             const amountClass =
-              txn.type === "income" || (txn as any).type === "repayment"
+              txn.type === "income" || isRepayment
                 ? "text-emerald-700"
                 : txn.type === "expense"
                 ? "text-red-500"
@@ -658,7 +659,12 @@ export function UnifiedTransactionTable({
             // --- Type Logic ---
             let typeBadge = null;
             if (txn.type === 'repayment') {
-                typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeft className="mr-1 h-3 w-3" /> Repayment</span>;
+                // In account-specific view (People page), show as "Transfer In"
+                if (accountId) {
+                    typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> Transfer In</span>;
+                } else {
+                    typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeft className="mr-1 h-3 w-3" /> Repayment</span>;
+                }
             } else if (txn.type === 'expense') {
                 typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Expense</span>
             } else if (txn.type === 'income') {
@@ -666,8 +672,7 @@ export function UnifiedTransactionTable({
             } else {
                  // Transfer
                  if (accountId) {
-                     // For repayment, always show "Transfer In" regardless of amount sign
-                     if (txn.type === 'repayment' || txn.amount >= 0) {
+                     if (txn.amount >= 0) {
                          typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> Transfer In</span>
                      } else {
                          typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700"><ArrowRight className="mr-1 h-3 w-3" /> Transfer Out</span>
@@ -762,11 +767,11 @@ export function UnifiedTransactionTable({
                   return formattedDate(txn.occurred_at)
                 case "type":
                    return typeBadge
-                case "shop":
+                case "shop": {
                    let displayIcon = txn.shop_logo_url;
                    let displayName = txn.shop_name;
 
-                   if (txn.type === 'repayment' && !displayIcon) {
+                   if (txn.type === 'repayment' && !displayName) {
                        displayIcon = txn.destination_logo;
                        displayName = txn.destination_name;
                    }
@@ -810,7 +815,8 @@ export function UnifiedTransactionTable({
                         </CustomTooltip>
                       )}
                     </div>
-                   )
+                   );
+                 }
                 case "category":
                   return (
                     <CustomTooltip content={txn.category_name ?? "No Category"}>
