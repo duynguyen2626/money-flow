@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { FilterIcon, X } from 'lucide-react'
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
@@ -60,25 +60,9 @@ export function FilterableTransactions({
     const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(null)
     const [activeTab, setActiveTab] = useState<'active' | 'void'>('active')
     const [bulkActions, setBulkActions] = useState<BulkActionState | null>(null)
-    const handleBulkActionStateChange = useMemo(
-        () =>
-            (next: BulkActionState) =>
-                setBulkActions(prev => {
-                    if (
-                        !prev ||
-                        prev.selectionCount !== next.selectionCount ||
-                        prev.currentTab !== next.currentTab ||
-                        prev.isVoiding !== next.isVoiding ||
-                        prev.isRestoring !== next.isRestoring ||
-                        prev.onVoidSelected !== next.onVoidSelected ||
-                        prev.onRestoreSelected !== next.onRestoreSelected
-                    ) {
-                        return next
-                    }
-                    return prev
-                }),
-        []
-    )
+    const handleBulkActionStateChange = useCallback((next: BulkActionState) => {
+        setBulkActions(next);
+    }, [])
 
     const categoryById = useMemo(() => {
         const map = new Map<string, Category>()

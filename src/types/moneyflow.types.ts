@@ -125,7 +125,7 @@ export type TransactionWithDetails = TransactionRow & {
   cashback_share_fixed?: number | null;
   cashback_share_amount?: number | null;
   original_amount?: number | null;
-  type?: 'income' | 'expense' | 'transfer';
+  type?: 'income' | 'expense' | 'transfer' | 'debt' | 'repayment';
   person_id?: string | null;
   person_name?: string | null;
   person_avatar_url?: string | null;

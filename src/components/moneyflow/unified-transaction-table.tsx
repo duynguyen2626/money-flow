@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
-import { CustomTooltip } from "@/components/ui/custom-tooltip"
+import { CustomTooltip, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/custom-tooltip'
 import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
 import {
   Table,
@@ -254,13 +254,13 @@ export function UnifiedTransactionTable({
     [accounts]
   )
   const selection = selectedTxnIds ?? internalSelection
-  const updateSelection = (next: Set<string>) => {
+  const updateSelection = useCallback((next: Set<string>) => {
     if (onSelectionChange) {
       onSelectionChange(next)
       return
     }
     setInternalSelection(next)
-  }
+  }, [onSelectionChange])
 
   const toggleColumnVisibility = (key: ColumnKey) => {
     setVisibleColumns(prev => ({ ...prev, [key]: !prev[key] }))
@@ -611,7 +611,6 @@ export function UnifiedTransactionTable({
                     <button
                       className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50"
                       onClick={() => setIsCustomizerOpen(prev => !prev)}
-                      title="Customize columns"
                     >
                       <SlidersHorizontal className="h-4 w-4" />
                     </button>
@@ -688,80 +687,10 @@ export function UnifiedTransactionTable({
                  }
             }
 
-            // --- Smart Account Logic ---
-            let accountDisplay = null;
-            if (accountId) {
-                 // Context View: Show Partner
-                 // `txn.account_name` is set to "Other Side" in mapTransactionRow when accountId is provided.
-                 const partnerName = txn.account_name ?? 'Unknown';
-                 const isOut = txn.amount < 0;
-                 if (txn.type === 'transfer') {
-                    if (isOut) {
-                        accountDisplay = <span className="text-slate-700 font-bold flex items-center gap-1"><ArrowRight className="h-3 w-3 text-slate-400"/> {partnerName}</span>
-                    } else {
-                        accountDisplay = <span className="text-slate-700 font-bold flex items-center gap-1"><ArrowLeft className="h-3 w-3 text-slate-400"/> {partnerName}</span>
-                    }
-                 } else {
-                    accountDisplay = <span className="text-slate-700 font-bold">{txn.account_name}</span>
-                 }
-            } else {
-                // Global View
-                if (txn.type === 'transfer') {
-                    const source = txn.source_account_name ?? '?';
-                    const dest = txn.destination_account_name ?? '?';
-
-                    if (txn.source_logo && txn.destination_logo) {
-                        accountDisplay = (
-                            <CustomTooltip content={`${source} ➡️ ${dest}`}>
-                                <div className="flex items-center gap-1 cursor-help overflow-hidden whitespace-nowrap">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={txn.source_logo} alt={source} className="h-8 w-8 object-contain" />
-                                    <span className="text-slate-300">➡️</span>
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={txn.destination_logo} alt={dest} className="h-8 w-8 object-contain" />
-                                </div>
-                            </CustomTooltip>
-                        )
-                    } else {
-                        accountDisplay = (
-                            <div className="flex items-center gap-1 text-xs text-slate-700 font-bold overflow-hidden whitespace-nowrap">
-                                <span className="text-slate-500 font-normal truncate max-w-[80px]" title={source}>{source}</span>
-                                <span className="text-slate-400">➡️</span>
-                                <span className="text-slate-700 truncate max-w-[80px]" title={dest}>{dest}</span>
-                            </div>
-                        )
-                    }
-                } else if (txn.type === 'income') {
-                     // Show Destination (Bank)
-                     accountDisplay = (
-                        <div className="flex items-center gap-2">
-                             {txn.destination_logo && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={txn.destination_logo} alt="Bank" className="h-8 w-8 object-contain" />
-                             )}
-                             <span className="text-slate-700 font-bold">{txn.destination_account_name ?? txn.account_name}</span>
-                        </div>
-                     )
-                } else {
-                     // Expense: Show Source (Bank)
-                     accountDisplay = (
-                        <div className="flex items-center gap-2">
-                             {txn.source_logo && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img src={txn.source_logo} alt="Bank" className="h-8 w-8 object-contain" />
-                             )}
-                             <span className="text-slate-700 font-bold">{txn.source_account_name ?? txn.account_name}</span>
-                        </div>
-                     )
-                }
-            }
-
-
             const taskCell = (
               <div className="relative flex justify-end">
                 <button
                   className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-1 text-slate-600 shadow-sm transition hover:bg-slate-50"
-                  title="Actions"
                   onClick={event => {
                     event.stopPropagation()
                     setActionMenuOpen(prev => (prev === txn.id ? null : txn.id))
@@ -876,7 +805,7 @@ export function UnifiedTransactionTable({
                         </span>
                       )}
                       {txn.note && (
-                        <CustomTooltip content={txn.note}>
+                        <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
                             <span className="text-sm text-slate-700 font-medium truncate cursor-help max-w-[200px]">
                             {txn.note}
                             </span>
@@ -906,20 +835,49 @@ export function UnifiedTransactionTable({
                         </div>
                     </CustomTooltip>
                   )
-                case "account":
-                  const accountContent = accountDisplay ?? <span className="text-slate-400">-</span>
+                case "account": {
+                  // 1. Determine Source & Destination Icons
+                  const sourceIcon = txn.source_logo ? (
+                    <img src={txn.source_logo} alt="" className="h-8 w-8 object-contain rounded-none" />
+                  ) : (
+                    <div className="flex h-8 w-8 items-center justify-center bg-slate-100 text-sm font-bold border rounded-none">
+                        {(txn.source_account_name ?? '?').charAt(0).toUpperCase()}
+                    </div>
+                  );
+
+                  const destIcon = txn.destination_logo ? (
+                    <img src={txn.destination_logo} alt="" className="h-8 w-8 object-contain rounded-none" />
+                  ) : (
+                    <div className="flex h-8 w-8 items-center justify-center bg-slate-100 text-sm font-bold border rounded-none">
+                        {(txn.destination_account_name ?? '?').charAt(0).toUpperCase()}
+                    </div>
+                  );
+
+                  // 2. Render for Transfer / Debt
+                  if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
+                      return (
+                        <CustomTooltip content={`${txn.source_account_name} ➡️ ${txn.destination_account_name}`}>
+                            <div className="flex items-center gap-2 cursor-help">
+                              {sourceIcon}
+                              <span className="text-xl">➡️</span>
+                              {destIcon}
+                            </div>
+                        </CustomTooltip>
+                      );
+                  }
+
+                  // 3. Render for Single Account (Expense/Income)
                   return (
-                    <CustomTooltip
-                      content={
-                        txn.account_name ??
-                        txn.source_account_name ??
-                        txn.destination_account_name ??
-                        'Account'
-                      }
-                    >
-                      <div className="max-w-[150px] whitespace-nowrap truncate">{accountContent}</div>
-                    </CustomTooltip>
-                  )
+                     <div className="flex items-center gap-2">
+                        {sourceIcon}
+                        <CustomTooltip content={txn.account_name}>
+                           <span className="truncate max-w-[120px] cursor-help">
+                              {txn.account_name}
+                           </span>
+                        </CustomTooltip>
+                     </div>
+                  );
+                }
                 case "people": {
                   const personName = (txn as any).person_name ?? txn.person_name ?? null
                   const personAvatar = (txn as any).person_avatar_url ?? txn.person_avatar_url ?? null
@@ -970,7 +928,6 @@ export function UnifiedTransactionTable({
                                        navigator.clipboard.writeText(txn.id);
                                    }}
                                    className="text-slate-400 hover:text-slate-600 transition-colors"
-                                   title="Copy ID"
                                >
                                    <Copy className="h-3 w-3" />
                                </button>
