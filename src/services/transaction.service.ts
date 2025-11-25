@@ -283,7 +283,7 @@ function buildSheetPayload(
       }
     | null
 )
-  : (Record<string, unknown> & { type?: string | null })
+  : (Record<string, unknown> & { type?: string | null }) | null
 {
   if (!line) return null;
   const meta = (line.metadata as Record<string, unknown> | null) ?? null;
