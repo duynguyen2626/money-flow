@@ -131,6 +131,7 @@ interface UnifiedTransactionTableProps {
   people?: Person[]
   shops?: Shop[]
   activeTab?: 'active' | 'void'
+  hidePeopleColumn?: boolean
 }
 
 const defaultColumns: ColumnConfig[] = [
@@ -179,6 +180,7 @@ export function UnifiedTransactionTable({
   people = [],
   shops = [],
   activeTab,
+  hidePeopleColumn,
 }: UnifiedTransactionTableProps) {
   const router = useRouter()
   // Internal state removed for activeTab, now using prop with fallback
@@ -190,7 +192,7 @@ export function UnifiedTransactionTable({
       type: true,
       shop: true,
       category: true,
-      people: true,
+      people: !hidePeopleColumn,
       tag: true,
       cycle: true,
       account: true,
@@ -265,7 +267,7 @@ export function UnifiedTransactionTable({
         type: true,
         shop: true,
         category: true,
-        people: true,
+        people: !hidePeopleColumn,
         tag: true,
         cycle: true,
         account: true,
@@ -459,6 +461,28 @@ export function UnifiedTransactionTable({
     }
   }
 
+  const handleBulkRestore = async () => {
+    if (selection.size === 0) return;
+    if (!confirm('Are you sure you want to restore ' + selection.size + ' transactions?')) return;
+
+    setIsRestoring(true);
+    let errorCount = 0;
+    for (const id of Array.from(selection)) {
+        const ok = await restoreTransaction(id);
+        if (ok) {
+            setStatusOverrides(prev => ({ ...prev, [id]: 'posted' }));
+        } else {
+            errorCount++;
+        }
+    }
+    setIsRestoring(false);
+    updateSelection(new Set());
+    router.refresh();
+    if (errorCount > 0) {
+        alert(`Failed to restore ${errorCount} transactions.`);
+    }
+  }
+
   const handleEditSuccess = () => {
     setEditingTxn(null)
     router.refresh()
@@ -531,14 +555,25 @@ export function UnifiedTransactionTable({
     <div className="relative space-y-4">
       <div className="flex items-center justify-end min-h-[36px]">
         {selection.size > 0 && (
-            <button
-                className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-70"
-                onClick={handleBulkVoid}
-                disabled={isVoiding}
-            >
-                {isVoiding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-                Void Selected ({selection.size})
-            </button>
+            currentTab === 'void' ? (
+                <button
+                    className="inline-flex items-center gap-2 rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-green-500 disabled:opacity-70"
+                    onClick={handleBulkRestore}
+                    disabled={isRestoring}
+                >
+                    {isRestoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                    Restore Selected ({selection.size})
+                </button>
+            ) : (
+                <button
+                    className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-70"
+                    onClick={handleBulkVoid}
+                    disabled={isVoiding}
+                >
+                    {isVoiding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+                    Void Selected ({selection.size})
+                </button>
+            )
         )}
       </div>
 
@@ -576,7 +611,7 @@ export function UnifiedTransactionTable({
               return (
                 <TableHead
                   key={col.key}
-                  className={`border-r bg-slate-100 font-semibold text-slate-700 ${col.key === "tag" ? "whitespace-nowrap" : ""}`}
+                  className="border-r bg-slate-100 font-semibold text-slate-700 whitespace-nowrap"
                   style={{ width: columnWidths[col.key] }}
                 >
                   {col.label}
@@ -725,68 +760,67 @@ export function UnifiedTransactionTable({
                 </button>
                 {isMenuOpen && (
                   <div className="absolute right-0 top-8 z-20 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg">
-                    <button
-                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
-                      onClick={event => {
-                        event.stopPropagation()
-                        setEditingTxn(txn)
-                        setActionMenuOpen(null)
-                      }}
-                      disabled={isVoided}
-                    >
-                      <Pencil className="h-4 w-4 text-slate-600" />
-                      <span>Edit</span>
-                    </button>
-                    {canRequestRefund && !isPendingRefund && (
-                      <button
-                        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
-                        onClick={event => {
-                          event.stopPropagation()
-                          openRefundDialog(txn)
-                        }}
-                        disabled={isVoided}
-                      >
-                        <span>Request Refund</span>
-                      </button>
+                    {!isVoided ? (
+                        <>
+                            <button
+                                className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                                onClick={event => {
+                                    event.stopPropagation();
+                                    setEditingTxn(txn);
+                                    setActionMenuOpen(null);
+                                }}
+                            >
+                                <Pencil className="h-4 w-4 text-slate-600" />
+                                <span>Edit</span>
+                            </button>
+                            {canRequestRefund && !isPendingRefund && (
+                                <button
+                                    className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                                    onClick={event => {
+                                        event.stopPropagation();
+                                        openRefundDialog(txn);
+                                    }}
+                                >
+                                    <span>Request Refund</span>
+                                </button>
+                            )}
+                            {isPendingRefund && (
+                                <button
+                                    className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                                    onClick={event => {
+                                        event.stopPropagation();
+                                        openConfirmRefundDialog(txn);
+                                    }}
+                                >
+                                    <span>Confirm Refund</span>
+                                </button>
+                            )}
+                            <button
+                                className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                                onClick={event => {
+                                    event.stopPropagation();
+                                    setConfirmVoidTarget(txn);
+                                    setVoidError(null);
+                                    setActionMenuOpen(null);
+                                }}
+                            >
+                                <Ban className="h-4 w-4" />
+                                <span>Void Transaction</span>
+                            </button>
+                        </>
+                    ) : (
+                        <button
+                            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={isRestoring}
+                            onClick={event => {
+                                event.stopPropagation();
+                                handleRestore(txn);
+                            }}
+                        >
+                            <RotateCcw className="h-4 w-4" />
+                            <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
+                        </button>
                     )}
-                    {isPendingRefund && (
-                      <button
-                        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
-                        onClick={event => {
-                          event.stopPropagation()
-                          openConfirmRefundDialog(txn)
-                        }}
-                        disabled={isVoided}
-                      >
-                        <span>Confirm Refund</span>
-                      </button>
-                    )}
-                    {isVoided && (
-                      <button
-                        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={isRestoring}
-                        onClick={event => {
-                          event.stopPropagation()
-                          handleRestore(txn)
-                        }}
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                        <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
-                      </button>
-                    )}
-                    <button
-                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={isVoiding || isVoided}
-                      onClick={event => {
-                        event.stopPropagation()
-                        setConfirmVoidTarget(txn)
-                        setVoidError(null)
-                        setActionMenuOpen(null)
-                      }}
-                    >
-                      <Ban className="h-4 w-4" />
-                      <span>Void Transaction</span>
-                    </button>
                   </div>
                 )}
               </div>
@@ -832,7 +866,7 @@ export function UnifiedTransactionTable({
                       )}
                       {txn.note && (
                         <CustomTooltip content={txn.note}>
-                            <span className="text-sm text-slate-700 font-medium truncate cursor-help">
+                            <span className="text-sm text-slate-700 font-medium truncate cursor-help max-w-[200px]">
                             {txn.note}
                             </span>
                         </CustomTooltip>
@@ -842,7 +876,7 @@ export function UnifiedTransactionTable({
                 case "category":
                   return (
                     <CustomTooltip content={txn.category_name ?? "No Category"}>
-                        <div className="flex items-center gap-2 max-w-full">
+                        <div className="flex items-center gap-2 max-w-[200px]">
                             {txn.category_image_url ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
@@ -862,7 +896,7 @@ export function UnifiedTransactionTable({
                     </CustomTooltip>
                   )
                 case "account":
-                  return accountDisplay
+                  return <div className="max-w-[200px] truncate">{accountDisplay}</div>
                 case "people": {
                   const personName = (txn as any).person_name ?? txn.person_name ?? null
                   const personAvatar = (txn as any).person_avatar_url ?? txn.person_avatar_url ?? null

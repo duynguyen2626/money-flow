@@ -13,9 +13,10 @@ export type NavItem = {
 
 type SidebarNavProps = {
   items: NavItem[]
+  isCollapsed?: boolean
 }
 
-export function SidebarNav({ items }: SidebarNavProps) {
+export function SidebarNav({ items, isCollapsed }: SidebarNavProps) {
   const pathname = usePathname()
 
   return (
@@ -27,14 +28,16 @@ export function SidebarNav({ items }: SidebarNavProps) {
             key={item.href}
             href={item.href}
             className={clsx(
-              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
+              'flex items-center gap-3 py-2 rounded-lg text-sm font-medium transition-colors',
               isActive
                 ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+              isCollapsed ? 'justify-center px-2' : 'px-3'
             )}
+            title={isCollapsed ? item.label : undefined}
           >
             <item.icon className="h-4 w-4" />
-            <span>{item.label}</span>
+            {!isCollapsed && <span>{item.label}</span>}
           </Link>
         )
       })}

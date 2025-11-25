@@ -17,6 +17,7 @@ type FilterableTransactionsProps = {
     searchTerm?: string
     onSearchChange?: (next: string) => void
     shops?: Shop[]
+    hidePeopleColumn?: boolean
 }
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -33,6 +34,7 @@ export function FilterableTransactions({
     searchTerm: externalSearch,
     onSearchChange,
     shops = [],
+    hidePeopleColumn,
 }: FilterableTransactionsProps) {
     const { selectedTag, setSelectedTag } = useTagFilter()
     const [searchTermInternal, setSearchTermInternal] = useState('');
@@ -500,7 +502,7 @@ export function FilterableTransactions({
                 </div>
             </div>
             
-            <div>
+            <div className="mt-2">
                 <UnifiedTransactionTable
                     transactions={finalTransactions} 
                     accountType={accountType}
@@ -512,6 +514,7 @@ export function FilterableTransactions({
                     selectedTxnIds={selectedTxnIds}
                     onSelectionChange={setSelectedTxnIds}
                     activeTab={activeTab}
+                    hidePeopleColumn={hidePeopleColumn}
                 />
             </div>
         </div>

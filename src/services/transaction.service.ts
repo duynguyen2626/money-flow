@@ -1008,6 +1008,7 @@ export async function requestRefund(
   refundAmount: number,
   partial: boolean
 ): Promise<{ success: boolean; refundTransactionId?: string; error?: string }> {
+  console.log('Requesting refund for:', transactionId);
   if (!transactionId) {
     return { success: false, error: 'Thiếu thông tin giao dịch cần hoàn tiền.' }
   }

@@ -1,10 +1,12 @@
 "use client"
 
-import { Home, Receipt, Landmark, CreditCard, Wallet, Users, Clapperboard, Repeat, ShoppingBag } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Home, Receipt, Landmark, CreditCard, Wallet, Users, Clapperboard, Repeat, ShoppingBag, ChevronLeft, ChevronRight } from "lucide-react"
 import Link from "next/link"
 
 import { SidebarNav, type NavItem } from "./sidebar-nav"
 import { AutomationChecker } from "./automation-checker"
+import { cn } from "@/lib/utils"
 
 const navItems: NavItem[] = [
   { label: "Overview", href: "/", icon: Home },
@@ -23,15 +25,42 @@ type AppLayoutProps = {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
+  const [isCollapsed, setIsCollapsed] = useState(true);
+
+  useEffect(() => {
+    const savedState = localStorage.getItem("sidebar-collapsed");
+    if (savedState) {
+      setIsCollapsed(JSON.parse(savedState));
+    }
+  }, []);
+
+  const toggleSidebar = () => {
+    const nextState = !isCollapsed;
+    setIsCollapsed(nextState);
+    localStorage.setItem("sidebar-collapsed", JSON.stringify(nextState));
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 flex">
-      <aside className="flex w-64 flex-col border-r bg-white px-6 py-8">
-        <div className="text-2xl font-bold text-blue-700 mb-10">Money Flow</div>
-        <SidebarNav items={navItems} />
-        <div className="mt-auto text-xs text-slate-400">
-          <p>v3.0 dashboard</p>
-          <p>Track cashflow, debts & more.</p>
+      <aside className={cn("relative flex flex-col border-r bg-white py-8 transition-all duration-300", isCollapsed ? "w-16 px-2" : "w-64 px-6")}>
+        <div className={cn("text-2xl font-bold text-blue-700 mb-10", isCollapsed ? "text-center" : "")}>
+            {isCollapsed ? "MF" : "Money Flow"}
         </div>
+        <SidebarNav items={navItems} isCollapsed={isCollapsed} />
+        <div className="mt-auto text-xs text-slate-400">
+          {!isCollapsed && (
+            <>
+              <p>v3.0 dashboard</p>
+              <p>Track cashflow, debts & more.</p>
+            </>
+          )}
+        </div>
+        <button
+            onClick={toggleSidebar}
+            className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 h-6 w-6 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-500 hover:text-slate-800"
+        >
+            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </button>
       </aside>
 
       <div className="flex-1 flex flex-col">
