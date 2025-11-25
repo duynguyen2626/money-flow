@@ -14,16 +14,23 @@ export function AutomationChecker() {
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<BotToast | null>(null)
 
-  const checkAndProcessSubscriptions = useCallback(async () => {
+  const checkAndProcessSubscriptions = useCallback(async (isManualForce: boolean = false) => {
     setLoading(true)
     try {
-      const result = await runSubscriptionBotAction()
+      const result = await runSubscriptionBotAction(isManualForce)
       if (!result) return
+
       if (result.processedCount > 0) {
         const names = (result.names ?? []).join(', ')
         setToast({
-          title: `${result.processedCount} transactions created by bot`,
-          detail: names ? `Processed: ${names}` : undefined,
+          title: `⚡ Created: ${names}`,
+        })
+      } else if (result.skippedCount > 0) {
+        setToast({
+          title: `✅ All services are up to date for ${new Date().toLocaleString('default', {
+            month: 'short',
+            year: '2-digit',
+          })}`,
         })
       }
     } catch (error) {
@@ -34,11 +41,11 @@ export function AutomationChecker() {
   }, [])
 
   useEffect(() => {
-    checkAndProcessSubscriptions()
+    checkAndProcessSubscriptions(false)
   }, [checkAndProcessSubscriptions])
 
   const runCheck = () => {
-    checkAndProcessSubscriptions()
+    checkAndProcessSubscriptions(true)
   }
 
   return (
