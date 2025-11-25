@@ -7,10 +7,10 @@ import { TagFilterProvider, useTagFilter } from '@/context/tag-filter-context';
 import { EditPersonDialog } from '@/components/people/edit-person-dialog';
 import { notFound } from 'next/navigation';
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog';
-import { Account, Category, Person, Shop, Subscription, DebtAccount } from '@/types/moneyflow.types';
+import { Account, Category, Person, Shop, Subscription, DebtAccount, TransactionWithDetails } from '@/types/moneyflow.types';
 import { DebtByTagAggregatedResult } from '@/services/debt.service';
 import { SheetSyncControls } from '@/components/people/sheet-sync-controls';
-import { ConstructionIcon } from 'lucide-react';
+import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table';
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
@@ -30,6 +30,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
     const [allPeople, setAllPeople] = useState<Person[]>([]);
     const [shops, setShops] = useState<Shop[]>([]);
+    const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
     const [loading, setLoading] = useState(true);
 
     const { selectedTag, setSelectedTag } = useTagFilter();
@@ -49,6 +50,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
             setSubscriptions(data.subscriptions);
             setAllPeople(data.allPeople);
             setShops(data.shops ?? []);
+            setTransactions(data.transactions ?? []);
             if (!data.person) {
                 notFound();
             }
@@ -223,13 +225,14 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
                     <h2 className="text-lg font-semibold">Transaction History</h2>
                 </div>
                 <div className="mt-4">
-                    <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-slate-500">
-                      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-50">
-                        <ConstructionIcon className="h-6 w-6 text-slate-400" />
-                      </div>
-                      <p className="font-medium">Transaction History</p>
-                      <p className="text-xs">This module is being unified. Check the main Transactions page for details.</p>
-                    </div>
+                    <UnifiedTransactionTable
+                        transactions={transactions}
+                        accounts={accounts}
+                        categories={categories}
+                        people={allPeople}
+                        shops={shops}
+                        hiddenColumns={['people', 'shop']}
+                    />
                 </div>
             </section>
         </div>

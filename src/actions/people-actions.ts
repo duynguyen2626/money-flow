@@ -3,10 +3,11 @@
 import { revalidatePath } from 'next/cache'
 import { createPerson, ensureDebtAccount, updatePerson, getPersonWithSubs, getPeople } from '@/services/people.service'
 import { getPersonDetails, getDebtByTags } from '@/services/debt.service';
-import { getAccounts, getAccountTransactions } from '@/services/account.service';
+import { getAccounts } from '@/services/account.service';
 import { getCategories } from '@/services/category.service';
 import { getShops } from '@/services/shop.service';
 import { getSubscriptions } from '@/services/subscription.service';
+import { getUnifiedTransactions } from '@/services/transaction.service';
 import { syncAllTransactions, testConnection } from '@/services/sheet.service';
 
 export async function createPersonAction(payload: {
@@ -69,7 +70,7 @@ export async function getPeoplePageData(id: string) {
         allPeople,
     ] = await Promise.all([
         getDebtByTags(id),
-        getAccountTransactions(id, 100),
+        getUnifiedTransactions(id, 100),
         getAccounts(),
         getCategories(),
         getPersonWithSubs(ownerId),

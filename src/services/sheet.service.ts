@@ -15,6 +15,7 @@ type SheetSyncTransaction = {
   cashback_share_percent_input?: number | null
   cashback_share_fixed?: number | null
   cashback_share_amount?: number | null
+  type?: string | null
 }
 
 function isValidWebhook(url: string | null | undefined): url is string {
@@ -87,10 +88,11 @@ async function postToSheet(sheetLink: string, payload: Record<string, unknown>) 
 
 function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete') {
   const { originalAmount, percentRate, fixedBack, totalBack } = calculateTotals(txn)
+  const normalizedType = txn.type ?? 'Debt'
   return {
     action,
     id: txn.id,
-    type: 'Debt',
+    type: normalizedType,
     date: txn.occurred_at ?? txn.date ?? null,
     shop: txn.shop_name ?? '',
     notes: txn.note ?? '',

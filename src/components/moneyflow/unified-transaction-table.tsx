@@ -142,6 +142,8 @@ interface UnifiedTransactionTableProps {
   activeTab?: 'active' | 'void'
   hidePeopleColumn?: boolean
   onBulkActionStateChange?: (state: BulkActionState) => void
+  hiddenColumns?: ColumnKey[]
+  context?: string
 }
 
 
@@ -175,7 +177,9 @@ export function UnifiedTransactionTable({
   activeTab,
   hidePeopleColumn,
   onBulkActionStateChange,
+  hiddenColumns,
 }: UnifiedTransactionTableProps) {
+  const hiddenColumnsSet = useMemo(() => new Set(hiddenColumns ?? []), [hiddenColumns])
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 60, minWidth: 50 },
     { key: "type", label: "Type", defaultWidth: 110, minWidth: 90 },
@@ -201,9 +205,9 @@ export function UnifiedTransactionTable({
     return {
       date: true,
       type: true,
-      shop: true,
+      shop: !hiddenColumnsSet.has('shop'),
       category: true,
-      people: !hidePeopleColumn,
+      people: !hidePeopleColumn && !hiddenColumnsSet.has('people'),
       tag: true,
       cycle: true,
       account: true,
@@ -225,8 +229,14 @@ export function UnifiedTransactionTable({
   })
 
   useEffect(() => {
-    setVisibleColumns(prev => ({ ...prev, people: !hidePeopleColumn }))
-  }, [hidePeopleColumn])
+    setVisibleColumns(prev => {
+      const next = { ...prev, people: !hidePeopleColumn && !hiddenColumnsSet.has('people') }
+      if (hiddenColumnsSet.has('shop')) {
+        next.shop = false
+      }
+      return next
+    })
+  }, [hidePeopleColumn, hiddenColumnsSet])
 
   // State for actions
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
@@ -280,9 +290,9 @@ export function UnifiedTransactionTable({
     setVisibleColumns({
         date: true,
         type: true,
-        shop: true,
+        shop: !hiddenColumnsSet.has('shop'),
         category: true,
-        people: !hidePeopleColumn,
+        people: !hidePeopleColumn && !hiddenColumnsSet.has('people'),
         tag: true,
         cycle: true,
         account: true,
@@ -632,10 +642,11 @@ export function UnifiedTransactionTable({
         </TableHeader>
         <TableBody>
           {displayedTransactions.map(txn => {
+            const uiType = txn.displayType ?? txn.type ?? "expense"
             const amountClass =
-              txn.type === "income"
+              uiType === "income"
                 ? "text-emerald-700"
-                : txn.type === "expense"
+                : uiType === "expense"
                 ? "text-red-500"
                 : "text-slate-600"
             const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount
@@ -655,9 +666,9 @@ export function UnifiedTransactionTable({
 
             // --- Type Logic ---
             let typeBadge = null;
-            if (txn.type === 'expense') {
+            if (uiType === 'expense') {
                 typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Expense</span>
-            } else if (txn.type === 'income') {
+            } else if (uiType === 'income') {
                  typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> Income</span>
             } else {
                  // Transfer

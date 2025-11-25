@@ -366,11 +366,11 @@ export function TransactionForm({
         form.setValue('shop_id', shopeeShop.id);
       }
     } else if (transactionType === 'repayment') {
-        const repaymentCatId = 'e0000000-0000-0000-0000-000000000097';
+        const repaymentCatId = 'e0000000-0000-0000-0000-000000000096';
         if (categories.some(c => c.id === repaymentCatId)) {
              form.setValue('category_id', repaymentCatId);
         } else {
-             const repaymentCat = categories.find(c => c.name === 'Thu nợ người khác' || c.name === 'Repayment');
+             const repaymentCat = categories.find(c => c.name === 'Thu nợ người khác' || c.name === 'Repayment' || c.name === 'Debt Repayment');
              if (repaymentCat) {
                  form.setValue('category_id', repaymentCat.id);
              }
@@ -384,12 +384,23 @@ export function TransactionForm({
   }, [transactionType, categories, shops, form, isEditMode]);
 
   const categoryOptions = useMemo(() => {
-    const targetType = transactionType === 'debt' ? 'expense' : transactionType
+    const targetType = transactionType === 'debt'
+      ? 'expense'
+      : transactionType === 'repayment'
+        ? 'income'
+        : transactionType
     if (targetType !== 'expense' && targetType !== 'income') {
-      return []
+      return categories
+        .filter(cat => cat.id === 'e0000000-0000-0000-0000-000000000096')
+        .map(cat => ({
+          value: cat.id,
+          label: cat.name,
+          description: cat.type === 'expense' ? 'Expense' : 'Income',
+          searchValue: `${cat.name} ${cat.type}`,
+        }))
     }
     return categories
-      .filter(cat => cat.type === targetType)
+      .filter(cat => cat.type === targetType || cat.id === 'e0000000-0000-0000-0000-000000000096')
       .map(cat => ({
         value: cat.id,
         label: cat.name,

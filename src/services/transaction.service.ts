@@ -272,7 +272,7 @@ async function calculatePersistedCycleTag(
 }
 
 function buildSheetPayload(
-  txn: { id: string; occurred_at: string; note?: string | null; tag?: string | null },
+  txn: { id: string; occurred_at: string; note?: string | null; tag?: string | null; type?: string | null },
   line:
     | {
         amount: number
@@ -282,7 +282,9 @@ function buildSheetPayload(
         metadata?: Json | null
       }
     | null
-) {
+)
+  : (Record<string, unknown> & { type?: string | null })
+{
   if (!line) return null;
   const meta = (line.metadata as Record<string, unknown> | null) ?? null;
   const cashbackAmount =
@@ -301,6 +303,7 @@ function buildSheetPayload(
     cashback_share_fixed:
       typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined,
     cashback_share_amount: cashbackAmount,
+    type: txn.type ?? null,
   };
 }
 
@@ -371,6 +374,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     const cashbackFixed =
       typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
 
+    const sheetType = input.type === 'repayment' ? 'In' : null
     void syncTransactionToSheet(
       personId,
       {
@@ -379,6 +383,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
         cashback_share_percent: cashbackPercent,
         cashback_share_fixed: cashbackFixed,
         amount: line.amount,
+        type: sheetType,
       },
       'create'
     )
@@ -513,6 +518,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
       : lines.reduce((sum, line) => sum + (line ? Math.abs(line.amount) : 0), 0) / 2
 
   let type: 'income' | 'expense' | 'transfer' | 'repayment' = 'transfer'
+  let displayType: TransactionWithDetails['displayType'] | undefined
   let categoryName: string | undefined
   let categoryIcon: string | undefined
   let categoryImageUrl: string | undefined
@@ -621,11 +627,28 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   const categoryId = categoryLine?.category_id ?? null
   const source_account_name = creditAccountLine?.accounts?.name ?? null
   const destination_account_name = debitAccountLine?.accounts?.name ?? null
-  const { source_name, source_logo, destination_name, destination_logo } = resolveAccountMovementInfo(
+  let { source_name, source_logo, destination_name, destination_logo } = resolveAccountMovementInfo(
     txn.transaction_lines,
     txn,
     categoryName ?? null
   )
+
+  if (type === 'repayment') {
+    displayType = 'transfer'
+    const debtLine = lines.find(line => line?.accounts?.type === 'debt')
+    const bankLine = lines.find(line => line?.accounts?.type && line.accounts.type !== 'debt')
+
+    if (debtLine?.accounts?.name) {
+      source_name = debtLine.accounts.name
+    }
+    if (bankLine?.accounts?.name) {
+      destination_name = bankLine.accounts.name
+    }
+  }
+
+  if (!displayType) {
+    displayType = type === 'transfer' ? 'transfer' : type
+  }
 
   return {
     id: txn.id,
@@ -635,7 +658,8 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     tag: txn.tag || null,
     created_at: (txn as any).created_at,
     amount: displayAmount,
-    type: type as 'income' | 'expense' | 'transfer',
+    type: type as TransactionWithDetails['type'],
+    displayType,
     category_name: categoryName,
     category_icon: categoryIcon ?? null,
     category_image_url: categoryImageUrl ?? null,
@@ -1018,6 +1042,8 @@ export type PendingRefundItem = {
   linked_transaction_id?: string
 }
 
+const REFUND_CATEGORY_ID = 'e0000000-0000-0000-0000-000000000095'
+
 export async function requestRefund(
   transactionId: string,
   refundAmount: number,
@@ -1115,7 +1141,7 @@ export async function requestRefund(
     },
     {
       transaction_id: requestTxn.id,
-      category_id: categoryLine.category_id,
+      category_id: REFUND_CATEGORY_ID,
       amount: -safeAmount,
       type: 'credit',
       metadata: lineMetadata,
