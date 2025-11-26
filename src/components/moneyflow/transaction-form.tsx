@@ -571,6 +571,15 @@ export function TransactionForm({
     name: 'cashback_share_fixed',
   })
 
+  const debugCategoryClick = useCallback(() => {
+    console.log('[Refund Category Debug]', {
+      isRefundMode,
+      categoryValue: form.getValues('category_id'),
+      refundCategoryId,
+      categoryOptions,
+    })
+  }, [categoryOptions, form, isRefundMode, refundCategoryId])
+
   const accountOptions = useMemo(
     () => {
       const currentCategory = categories.find(c => c.id === watchedCategoryId);
@@ -1053,15 +1062,17 @@ export function TransactionForm({
           control={control}
           name="category_id"
           render={({ field }) => (
-            <Combobox
-              value={field.value}
-              onValueChange={field.onChange}
-              items={categoryOptions}
-              placeholder="Select category"
-              inputPlaceholder="Search category..."
-              emptyState="No matching category"
-              disabled={isRefundMode}
-            />
+            <div onClick={debugCategoryClick}>
+              <Combobox
+                value={field.value}
+                onValueChange={field.onChange}
+                items={categoryOptions}
+                placeholder="Select category"
+                inputPlaceholder="Search category..."
+                emptyState="No matching category"
+                disabled={false} // Explicitly allow selecting category in refund modal
+              />
+            </div>
           )}
         />
         {errors.category_id && (

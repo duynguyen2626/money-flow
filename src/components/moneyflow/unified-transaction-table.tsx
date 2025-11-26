@@ -602,12 +602,30 @@ export function UnifiedTransactionTable({
               const isVoided = effectiveStatus === 'void'
               const isMenuOpen = actionMenuOpen === txn.id
               const txnMetadata = parseMetadata(txn.metadata)
-              const refundStatus = typeof txnMetadata?.refund_status === "string" ? txnMetadata.refund_status : null
-              const isPendingRefund = refundStatus === 'requested'
+              const refundStatusMeta = typeof txnMetadata?.refund_status === "string" ? txnMetadata.refund_status : null
+              const refundedAmount = typeof txnMetadata?.refunded_amount === "number" ? Math.abs(txnMetadata.refunded_amount) : 0
+              const effectiveOriginalAmount = Math.abs(originalAmount ?? 0)
+              const refundStatus =
+                refundStatusMeta === 'full' || refundStatusMeta === 'partial'
+                  ? refundStatusMeta
+                  : refundedAmount > 0
+                    ? refundedAmount >= effectiveOriginalAmount && effectiveOriginalAmount > 0
+                      ? 'full'
+                      : 'partial'
+                    : refundStatusMeta
+              const isPendingRefund = refundStatusMeta === 'requested'
               const categoryLabel = txn.category_name ?? ''
               const hasShoppingCategory = categoryLabel.toLowerCase().includes('shopping')
+              const isFullyRefunded =
+                refundStatus === 'full' ||
+                (refundedAmount > 0 && effectiveOriginalAmount > 0 && refundedAmount >= effectiveOriginalAmount)
+              const isPartialRefund =
+                !isFullyRefunded &&
+                refundedAmount > 0
               const canRequestRefund =
-                (visualType === 'expense' || txn.type === 'expense') && (Boolean(txn.shop_id) || hasShoppingCategory)
+                (visualType === 'expense' || txn.type === 'expense') &&
+                (Boolean(txn.shop_id) || hasShoppingCategory) &&
+                !isFullyRefunded
 
               // --- Type Logic ---
               let typeBadge = null;
@@ -725,7 +743,21 @@ export function UnifiedTransactionTable({
                     )
                   }
                   case "type":
-                    return typeBadge
+                    return (
+                      <div className="flex flex-col gap-1 items-start">
+                        {typeBadge}
+                        {(refundStatus === 'partial' || isPartialRefund) && (
+                          <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-800">
+                            Partial Refund
+                          </span>
+                        )}
+                        {(refundStatus === 'full' || isFullyRefunded) && (
+                          <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-800">
+                            Refunded
+                          </span>
+                        )}
+                      </div>
+                    )
                   case "shop": {
                     let displayIcon = txn.shop_logo_url;
                     let displayName = txn.shop_name;

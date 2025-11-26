@@ -6,9 +6,17 @@ import { format, setDate, subMonths } from 'date-fns';
 import { Database, Json } from '@/types/database.types';
 import { TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types';
 import { syncTransactionToSheet } from './sheet.service';
+import {
+  ShopRow,
+  TransactionRow,
+  parseMetadata,
+  extractLineMetadata,
+  loadShopInfo,
+  mapTransactionRow
+} from '@/lib/transaction-mapper';
+
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds';
 
-type ShopRow = Database['public']['Tables']['shops']['Row'];
 const REFUND_CATEGORY_ID = 'e0000000-0000-0000-0000-000000000095';
 
 export type CreateTransactionInput = {
@@ -60,8 +68,8 @@ async function resolveDiscountCategoryId(
   // Chain of fallbacks
   const namesToTry = ['Chiết khấu / Quà tặng', 'Discount Given', 'Chi phí khác'];
   for (const name of namesToTry) {
-      const id = await resolveSystemCategory(supabase, name, 'expense');
-      if (id) return id;
+    const id = await resolveSystemCategory(supabase, name, 'expense');
+    if (id) return id;
   }
 
   // Final fallback if no named category found
@@ -80,20 +88,7 @@ async function resolveDiscountCategoryId(
   return fallbackRows[0]?.id ?? null;
 }
 
-function parseMetadata(value: Json | null): Record<string, unknown> {
-  if (!value) return {};
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value) as Record<string, unknown>;
-    } catch {
-      return {};
-    }
-  }
-  if (typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
-}
+
 
 function mergeMetadata(value: Json | null, extra: Record<string, unknown>): Json {
   const parsed = parseMetadata(value);
@@ -104,17 +99,7 @@ function mergeMetadata(value: Json | null, extra: Record<string, unknown>): Json
   return next as Json;
 }
 
-function extractLineMetadata(
-  lines?: Array<{ metadata?: Json | null } | null> | null
-): Json | null {
-  if (!lines) return null;
-  for (const line of lines) {
-    if (line?.metadata) {
-      return line.metadata;
-    }
-  }
-  return null;
-}
+
 
 async function resolveCurrentUserId(supabase: ReturnType<typeof createClient>) {
   const {
@@ -123,27 +108,7 @@ async function resolveCurrentUserId(supabase: ReturnType<typeof createClient>) {
   return user?.id ?? '917455ba-16c0-42f9-9cea-264f81a3db66';
 }
 
-async function loadShopInfo(
-  supabase: ReturnType<typeof createClient>,
-  shopId?: string | null
-): Promise<ShopRow | null> {
-  if (!shopId) {
-    return null;
-  }
 
-  const { data, error } = await supabase
-    .from('shops')
-    .select('id, name, logo_url')
-    .eq('id', shopId)
-    .maybeSingle();
-
-  if (error) {
-    console.error('Failed to load shop info:', error);
-    return null;
-  }
-
-  return data as ShopRow | null;
-}
 
 async function buildTransactionLines(
   supabase: ReturnType<typeof createClient>,
@@ -177,7 +142,7 @@ async function buildTransactionLines(
   } else if (input.type === 'repayment' && input.debt_account_id) {
     const repaymentCategoryId = await resolveSystemCategory(supabase, 'Repayment', 'income');
     if (!repaymentCategoryId) {
-        console.error('FATAL: "Repayment" system category not found.');
+      console.error('FATAL: "Repayment" system category not found.');
     }
 
     lines.push({
@@ -282,12 +247,12 @@ function buildSheetPayload(
   txn: { id: string; occurred_at: string; note?: string | null; tag?: string | null },
   line:
     | {
-        amount: number
-        original_amount?: number | null
-        cashback_share_percent?: number | null
-        cashback_share_fixed?: number | null
-        metadata?: Json | null
-      }
+      amount: number
+      original_amount?: number | null
+      cashback_share_percent?: number | null
+      cashback_share_fixed?: number | null
+      metadata?: Json | null
+    }
     | null
 ) {
   if (!line) return null;
@@ -312,472 +277,158 @@ function buildSheetPayload(
 }
 
 async function syncRepaymentTransaction(
-    supabase: ReturnType<typeof createClient>,
-    transactionId: string,
-    input: CreateTransactionInput,
-    lines: any[],
-    shopInfo: ShopRow | null
+  supabase: ReturnType<typeof createClient>,
+  transactionId: string,
+  input: CreateTransactionInput,
+  lines: any[],
+  shopInfo: ShopRow | null
 ) {
-    try {
-        const { data: destAccountResult } = await supabase
-            .from('accounts')
-            .select('name')
-            .eq('id', input.debt_account_id ?? '')
-            .single();
-        const destAccount = destAccountResult as { name: string } | null;
+  try {
+    const { data: destAccountResult } = await supabase
+      .from('accounts')
+      .select('name')
+      .eq('id', input.debt_account_id ?? '')
+      .single();
+    const destAccount = destAccountResult as { name: string } | null;
 
-        for (const line of lines) {
-            if (!line.person_id) continue;
+    for (const line of lines) {
+      if (!line.person_id) continue;
 
-            const originalAmount =
-                typeof line.original_amount === 'number' ? line.original_amount : line.amount;
-            const cashbackPercent =
-                typeof line.cashback_share_percent === 'number' ? line.cashback_share_percent : undefined;
-            const cashbackFixed =
-                typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
+      const originalAmount =
+        typeof line.original_amount === 'number' ? line.original_amount : line.amount;
+      const cashbackPercent =
+        typeof line.cashback_share_percent === 'number' ? line.cashback_share_percent : undefined;
+      const cashbackFixed =
+        typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
 
-            void syncTransactionToSheet(
-                line.person_id,
-                {
-                    id: transactionId,
-                    occurred_at: input.occurred_at,
-                    note: input.note,
-                    tag: input.tag,
-                    shop_name: shopInfo?.name ?? destAccount?.name ?? null,
-                    amount: line.amount,
-                    original_amount: originalAmount,
-                    cashback_share_percent: cashbackPercent,
-                    cashback_share_fixed: cashbackFixed,
-                },
-                'create'
-            ).then(() => {
-                console.log(`[Sheet Sync] Triggered for Repayment to Person ${line.person_id}`);
-            }).catch(err => {
-                console.error('Sheet Sync Error (Repayment):', err);
-            });
-        }
-    } catch (error) {
-        console.error("Failed to sync repayment transaction:", error);
+      void syncTransactionToSheet(
+        line.person_id,
+        {
+          id: transactionId,
+          occurred_at: input.occurred_at,
+          note: input.note,
+          tag: input.tag,
+          shop_name: shopInfo?.name ?? destAccount?.name ?? null,
+          amount: line.amount,
+          original_amount: originalAmount,
+          cashback_share_percent: cashbackPercent,
+          cashback_share_fixed: cashbackFixed,
+        },
+        'create'
+      ).then(() => {
+        console.log(`[Sheet Sync] Triggered for Repayment to Person ${line.person_id}`);
+      }).catch(err => {
+        console.error('Sheet Sync Error (Repayment):', err);
+      });
     }
+  } catch (error) {
+    console.error("Failed to sync repayment transaction:", error);
+  }
 }
 
 export async function createTransaction(input: CreateTransactionInput): Promise<boolean> {
-    try {
-        const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
-        const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66';
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66';
 
-        const built = await buildTransactionLines(supabase, input);
-        if (!built) {
-            return false;
-        }
-        const { lines, tag } = built;
-
-        const persistedCycleTag = await calculatePersistedCycleTag(
-            supabase,
-            input.source_account_id,
-            new Date(input.occurred_at)
-        );
-
-        const { data: txn, error: txnError } = await (supabase
-            .from('transactions')
-            .insert as any)({
-            occurred_at: input.occurred_at,
-            note: input.note,
-            status: 'posted',
-            tag: tag,
-            persisted_cycle_tag: persistedCycleTag,
-            shop_id: input.shop_id ?? null,
-            created_by: userId,
-        })
-            .select()
-            .single();
-
-        if (txnError || !txn) {
-            console.error('Error creating transaction header:', txnError);
-            return false;
-        }
-
-        const linesWithId = lines.map(l => ({ ...l, transaction_id: txn.id }));
-        const { error: linesError } = await (supabase.from('transaction_lines').insert as any)(linesWithId);
-
-        if (linesError) {
-            console.error('Error creating transaction lines:', linesError);
-            return false;
-        }
-
-        const shopInfo = await loadShopInfo(supabase, input.shop_id)
-
-        if (input.type === 'repayment') {
-            await syncRepaymentTransaction(supabase, txn.id, input, linesWithId, shopInfo);
-        } else {
-            const syncBase = {
-                id: txn.id,
-                occurred_at: input.occurred_at,
-                note: input.note,
-                tag,
-                shop_name: shopInfo?.name ?? null,
-            };
-
-            for (const line of linesWithId) {
-                const personId = line.person_id;
-                if (!personId) continue;
-
-                const originalAmount =
-                    typeof line.original_amount === 'number' ? line.original_amount : line.amount;
-                const cashbackPercent =
-                    typeof line.cashback_share_percent === 'number' ? line.cashback_share_percent : undefined;
-                const cashbackFixed =
-                    typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
-
-                void syncTransactionToSheet(
-                    personId,
-                    {
-                        ...syncBase,
-                        original_amount: originalAmount,
-                        cashback_share_percent: cashbackPercent,
-                        cashback_share_fixed: cashbackFixed,
-                        amount: line.amount,
-                    },
-                    'create'
-                )
-                    .then(() => {
-                        console.log(`[Sheet Sync] Triggered for Person ${personId}`);
-                    })
-                    .catch(err => {
-                        console.error('Sheet Sync Error (Background):', err);
-                    });
-            }
-        }
-
-        return true;
-    } catch (error) {
-        console.error('Unhandled error in createTransaction:', error);
-        return false;
+    const built = await buildTransactionLines(supabase, input);
+    if (!built) {
+      return false;
     }
-}
+    const { lines, tag } = built;
 
-type TransactionRow = {
-  id: string
-  occurred_at: string
-  note: string | null
-  status: 'posted' | 'pending' | 'void'
-  tag: string | null
-  created_at: string
-  cashback_share_percent?: number | null
-  cashback_share_fixed?: number | null
-  cashback_share_amount?: number | null
-  shop_id?: string | null
-  shops?: ShopRow | null
-  transaction_lines: Array<{
-    amount: number
-    type: 'debit' | 'credit'
-    account_id?: string | null
-    category_id?: string | null
-    person_id?: string | null
-    original_amount?: number | null
-    cashback_share_percent?: number | null
-    cashback_share_fixed?: number | null
-    profiles?: { name?: string | null, avatar_url?: string | null } | null
-    accounts?: {
-      name: string
-      type: string
-      logo_url?: string | null
-    } | null
-    categories?: {
-      name: string
-      type: 'income' | 'expense'
-      image_url?: string | null
-      icon?: string | null
-    } | null
-    metadata?: Json | null
-  }>
-}
+    const persistedCycleTag = await calculatePersistedCycleTag(
+      supabase,
+      input.source_account_id,
+      new Date(input.occurred_at)
+    );
 
-function resolveAccountMovementInfo(
-  lines: TransactionRow['transaction_lines'] | undefined,
-  txn: TransactionRow,
-  type: 'income' | 'expense' | 'transfer' | 'repayment',
-  fallbackCategoryName?: string | null
-) {
-  const accountLines = (lines ?? []).filter(line => line && line.account_id);
+    const { data: txn, error: txnError } = await (supabase
+      .from('transactions')
+      .insert as any)({
+        occurred_at: input.occurred_at,
+        note: input.note,
+        status: 'posted',
+        tag: tag,
+        persisted_cycle_tag: persistedCycleTag,
+        shop_id: input.shop_id ?? null,
+        created_by: userId,
+      })
+      .select()
+      .single();
 
-  let sourceLine: (typeof accountLines[0]) | undefined;
-  let destinationLine: (typeof accountLines[0]) | undefined;
-
-  if (type === 'repayment') {
-    // Source = Debt Account (credited), Destination = Bank Account (debited)
-    sourceLine = accountLines.find(line => line.type === 'credit');
-    destinationLine = accountLines.find(line => line.type === 'debit');
-  } else if (type === 'transfer') {
-    // Source = From Account (credited), Destination = To Account (debited)
-    sourceLine = accountLines.find(line => line.type === 'credit');
-    destinationLine = accountLines.find(line => line.type === 'debit');
-  } else if (type === 'expense') {
-    // Source = Bank/Card (credited), Destination = N/A (it's a category)
-    sourceLine = accountLines.find(line => line.type === 'credit');
-  } else if (type === 'income') {
-    // Source = N/A (it's a category), Destination = Bank/Card (debited)
-    destinationLine = accountLines.find(line => line.type === 'debit');
-  } else {
-    // Fallback for debt or other types, assuming standard credit/debit flow
-    sourceLine = accountLines.find(line => line.type === 'credit');
-    destinationLine = accountLines.find(line => line.type === 'debit');
-  }
-
-
-  const fallbackName = txn.shops?.name ?? fallbackCategoryName ?? null
-  const fallbackLogo = txn.shops?.logo_url ?? null
-
-  return {
-    source_name: sourceLine?.accounts?.name ?? null,
-    source_logo: sourceLine?.accounts?.logo_url ?? null,
-    destination_name: destinationLine?.accounts?.name ?? fallbackName,
-    destination_logo: destinationLine?.accounts?.logo_url ?? fallbackLogo ?? null,
-  }
-}
-
-function extractCashbackFromLines(lines: TransactionRow['transaction_lines']): {
-  cashback_share_percent?: number
-  cashback_share_fixed?: number
-  cashback_share_amount?: number
-  original_amount?: number
-} {
-  for (const line of lines ?? []) {
-    const meta = (line?.metadata as Record<string, unknown> | null) ?? null
-    const readMetaNumber = (key: string) => {
-      if (!meta) return undefined
-      const value = meta[key]
-      return typeof value === 'number' ? value : undefined
-    }
-    const percent =
-      typeof line?.cashback_share_percent === 'number'
-        ? line.cashback_share_percent
-        : readMetaNumber('cashback_share_percent')
-    const fixed =
-      typeof line?.cashback_share_fixed === 'number'
-        ? line.cashback_share_fixed
-        : readMetaNumber('cashback_share_fixed')
-    const amount = readMetaNumber('cashback_share_amount')
-    const original_amount = typeof line?.original_amount === 'number' ? line.original_amount : undefined
-    if (percent !== undefined || fixed !== undefined || amount !== undefined || original_amount !== undefined) {
-      return { cashback_share_percent: percent, cashback_share_fixed: fixed, cashback_share_amount: amount, original_amount }
-    }
-  }
-  return {}
-}
-
-function mapTransactionRow(
-  txn: TransactionRow,
-  accountId?: string,
-  context?: { mode?: 'person' }
-): TransactionWithDetails {
-  const lines = txn.transaction_lines ?? []
-  const cashbackFromLines = extractCashbackFromLines(lines)
-  const isPersonContext = context?.mode === 'person'
-
-  let accountLine = lines.find(line => line && typeof line.original_amount === 'number')
-
-  if (!accountLine) {
-    accountLine = accountId
-      ? lines.find(line => line && line.account_id === accountId)
-      : lines.find(line => line && line.type === 'credit')
-  }
-
-  let displayAmount =
-    typeof accountLine?.amount === 'number'
-      ? accountLine.amount
-      : lines.reduce((sum, line) => sum + (line ? Math.abs(line.amount) : 0), 0) / 2
-
-  let type: 'income' | 'expense' | 'transfer' | 'repayment' = 'transfer'
-  let displayType: TransactionWithDetails['displayType'] | undefined
-  let categoryName: string | undefined
-  let categoryIcon: string | undefined
-  let categoryImageUrl: string | undefined
-  let accountName: string | undefined
-
-  const categoryLine = lines.find(line => line && Boolean(line.category_id))
-  const accountLines = lines.filter(line => line && line.account_id)
-  const creditAccountLine = accountLines.find(line => line && line.type === 'credit')
-  const debitAccountLine = accountLines.find(line => line && line.type === 'debit')
-  const nonDebtCreditLine = accountLines.find(
-    line => line && line.type === 'credit' && line.accounts?.type !== 'debt'
-  )
-  const nonDebtDebitLine = accountLines.find(
-    line => line && line.type === 'debit' && line.accounts?.type !== 'debt'
-  )
-  const debtCreditLine = accountLines.find(
-    line => line && line.type === 'credit' && line.accounts?.type === 'debt'
-  )
-  const debtDebitLine = accountLines.find(
-    line => line && line.type === 'debit' && line.accounts?.type === 'debt'
-  )
-
-  if (categoryLine && categoryLine.categories) {
-    categoryName = categoryLine.categories.name
-    categoryIcon = categoryLine.categories.icon ?? undefined
-    categoryImageUrl = categoryLine.categories.image_url ?? undefined
-
-    if (categoryLine.categories.type === 'expense') {
-      type = 'expense'
-    } else if (categoryLine.categories.type === 'income') {
-      type = 'income'
+    if (txnError || !txn) {
+      console.error('Error creating transaction header:', txnError);
+      return false;
     }
 
-    const lowerCategoryName = categoryName?.toLowerCase() ?? ''
-    if (lowerCategoryName.includes('thu nợ') || lowerCategoryName.includes('repayment')) {
-      type = 'repayment'
+    const linesWithId = lines.map(l => ({ ...l, transaction_id: txn.id }));
+    const { error: linesError } = await (supabase.from('transaction_lines').insert as any)(linesWithId);
+
+    if (linesError) {
+      console.error('Error creating transaction lines:', linesError);
+      return false;
     }
-  } else if (creditAccountLine && debitAccountLine) {
-    type = 'transfer'
-    categoryName = 'Money Transfer'
-  } else if (accountLine?.amount !== undefined) {
-    type = accountLine.amount >= 0 ? 'income' : 'expense'
-  }
 
-  if (categoryLine?.category_id === REFUND_CATEGORY_ID) {
-    type = 'income'
-    displayType = 'income'
-  }
+    const shopInfo = await loadShopInfo(supabase, input.shop_id)
 
-  displayType = displayType ?? (type === 'repayment' ? 'income' : type)
-
-  if (isPersonContext && (debtCreditLine || debtDebitLine)) {
-    displayType = debtDebitLine ? 'expense' : 'income'
-  }
-
-  if (type === 'expense' && displayAmount > 0) {
-    displayAmount = -Math.abs(displayAmount)
-  }
-
-  const typeForAccount = displayType ?? type
-
-  if (typeForAccount === 'expense') {
-    accountName = creditAccountLine?.accounts?.name
-  } else if (typeForAccount === 'income') {
-    accountName = debitAccountLine?.accounts?.name
-  } else if (typeForAccount === 'transfer') {
-    if (accountId) {
-      const otherLine = lines.find(line => line && line.account_id && line.account_id !== accountId)
-      if (otherLine?.accounts) {
-        accountName = otherLine.accounts.name
-      }
+    if (input.type === 'repayment') {
+      await syncRepaymentTransaction(supabase, txn.id, input, linesWithId, shopInfo);
     } else {
-      accountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name
-    }
-  }
+      const syncBase = {
+        id: txn.id,
+        occurred_at: input.occurred_at,
+        note: input.note,
+        tag,
+        shop_name: shopInfo?.name ?? null,
+      };
 
-  if (accountId) {
-    const myLine = lines.find(l => l && l.account_id === accountId)
-    if (myLine?.accounts?.type === 'debt') {
-      const bankLine = lines.find(
-        l => l && l.account_id && l.account_id !== accountId && l.accounts?.type !== 'debt'
-      )
-      if (bankLine?.accounts) {
-        accountName = bankLine.accounts.name
+      for (const line of linesWithId) {
+        const personId = line.person_id;
+        if (!personId) continue;
+
+        const originalAmount =
+          typeof line.original_amount === 'number' ? line.original_amount : line.amount;
+        const cashbackPercent =
+          typeof line.cashback_share_percent === 'number' ? line.cashback_share_percent : undefined;
+        const cashbackFixed =
+          typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
+
+        void syncTransactionToSheet(
+          personId,
+          {
+            ...syncBase,
+            original_amount: originalAmount,
+            cashback_share_percent: cashbackPercent,
+            cashback_share_fixed: cashbackFixed,
+            amount: line.amount,
+          },
+          'create'
+        )
+          .then(() => {
+            console.log(`[Sheet Sync] Triggered for Person ${personId}`);
+          })
+          .catch(err => {
+            console.error('Sheet Sync Error (Background):', err);
+          });
       }
     }
-  } else {
-    const bankLine = lines.find(
-      l => l && l.account_id && l.accounts?.type !== 'debt' && l.accounts?.type !== undefined
-    )
-    if (bankLine?.accounts) {
-      const debtLine = lines.find(l => l && l.account_id && l.accounts?.type === 'debt')
-      if (debtLine) {
-        accountName = bankLine.accounts.name
-      }
-    }
-  }
 
-  if (isPersonContext) {
-    accountName = nonDebtCreditLine?.accounts?.name ?? nonDebtDebitLine?.accounts?.name ?? accountName
-  }
-
-  const percentRaw = txn.cashback_share_percent ?? cashbackFromLines.cashback_share_percent
-  const cashbackAmount = txn.cashback_share_amount ?? cashbackFromLines.cashback_share_amount
-  const personLine = lines.find(line => line && line.person_id)
-  let categoryId = categoryLine?.category_id ?? null
-  const source_account_name = creditAccountLine?.accounts?.name ?? null
-  const destination_account_name = debitAccountLine?.accounts?.name ?? null
-  const { source_name: resolvedSourceName, source_logo: resolvedSourceLogo, destination_name: resolvedDestinationName, destination_logo: resolvedDestinationLogo } =
-    resolveAccountMovementInfo(txn.transaction_lines, txn, type, categoryName ?? null)
-
-  const shopDefaultCategory = ((txn as any).shops?.categories as {
-    id?: string
-    name?: string | null
-    image_url?: string | null
-    icon?: string | null
-  } | null) ?? null
-
-  if (!categoryName && shopDefaultCategory) {
-    categoryName = shopDefaultCategory.name ?? undefined
-    categoryIcon = shopDefaultCategory.icon ?? undefined
-    categoryImageUrl = shopDefaultCategory.image_url ?? undefined
-    categoryId = shopDefaultCategory.id ?? categoryId
-  }
-
-  let source_name = resolvedSourceName
-  let source_logo = resolvedSourceLogo
-  let destination_name = resolvedDestinationName
-  let destination_logo = resolvedDestinationLogo
-
-  if (isPersonContext) {
-    if (displayType === 'expense' && nonDebtCreditLine?.accounts) {
-      source_name = nonDebtCreditLine.accounts.name ?? source_name
-      source_logo = nonDebtCreditLine.accounts.logo_url ?? source_logo ?? null
-    }
-    if (displayType === 'income' && nonDebtDebitLine?.accounts) {
-      destination_name = nonDebtDebitLine.accounts.name ?? destination_name
-      destination_logo = nonDebtDebitLine.accounts.logo_url ?? destination_logo ?? null
-    }
-  }
-
-  const display_direction = displayType
-    ? displayType === 'income'
-      ? 'IN'
-      : displayType === 'expense'
-        ? 'OUT'
-        : 'TRANSFER'
-    : undefined
-
-  return {
-    id: txn.id,
-    occurred_at: txn.occurred_at,
-    note: txn.note || null,
-    status: txn.status,
-    tag: txn.tag || null,
-    created_at: txn.created_at,
-    amount: displayAmount,
-    type,
-    displayType: displayType ?? type,
-    display_type: display_direction,
-    category_name: categoryName,
-    category_icon: categoryIcon ?? null,
-    category_image_url: categoryImageUrl ?? null,
-    account_name: accountName,
-    source_account_name,
-    destination_account_name,
-    source_name,
-    source_logo,
-    destination_name,
-    destination_logo,
-    category_id: categoryId,
-    cashback_share_percent: percentRaw ?? null,
-    cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? null,
-    cashback_share_amount: cashbackAmount ?? null,
-    original_amount:
-      accountLine?.original_amount ??
-      (typeof accountLine?.amount === 'number' ? Math.abs(accountLine.amount) : null),
-    person_id: personLine?.person_id ?? null,
-    person_name: personLine?.profiles?.name ?? null,
-    person_avatar_url: personLine?.profiles?.avatar_url ?? null,
-    shop_id: txn.shop_id ?? null,
-    shop_name: txn.shops?.name ?? null,
-    shop_logo_url: txn.shops?.logo_url ?? null,
-    metadata: extractLineMetadata(txn.transaction_lines),
-    transaction_lines: (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[],
+    return true;
+  } catch (error) {
+    console.error('Unhandled error in createTransaction:', error);
+    return false;
   }
 }
+
+
+
+
+
+
+
+
 
 export async function getRecentTransactions(limit: number = 10): Promise<TransactionWithDetails[]> {
   const supabase = createClient();
@@ -872,12 +523,16 @@ export async function voidTransaction(id: string): Promise<boolean> {
       note,
       tag,
       transaction_lines (
+        id,
         amount,
         original_amount,
         cashback_share_percent,
         cashback_share_fixed,
         metadata,
-        person_id
+        person_id,
+        account_id,
+        category_id,
+        type
       )
     `
     )
@@ -896,7 +551,7 @@ export async function voidTransaction(id: string): Promise<boolean> {
     return false;
   }
 
-  const lines = ((existing as any).transaction_lines as any[]) ?? [];
+  const lines = ((existing as any).transaction_lines as RefundTransactionLine[]) ?? [];
   const personLine = lines.find((line) => line?.person_id);
 
   if (personLine?.person_id) {
@@ -905,6 +560,115 @@ export async function voidTransaction(id: string): Promise<boolean> {
       void syncTransactionToSheet(personLine.person_id, payload, 'delete').catch(err => {
         console.error('Sheet Sync Error (Void):', err);
       });
+    }
+  }
+
+  // --- ROLLBACK LOGIC FOR REFUNDS ---
+  const metadata = extractLineMetadata(lines) as Record<string, any> | null;
+  const metaRecord = metadata as Record<string, unknown> | null;
+  let targetOriginalId =
+    typeof metaRecord?.original_transaction_id === 'string'
+      ? metaRecord.original_transaction_id
+      : typeof metaRecord?.linked_transaction_id === 'string'
+        ? metaRecord.linked_transaction_id
+        : null;
+  const pendingRefundId =
+    typeof metaRecord?.pending_refund_transaction_id === 'string'
+      ? metaRecord.pending_refund_transaction_id
+      : null;
+
+  let refundAmount =
+    typeof metaRecord?.refund_amount === 'number' ? Math.abs(metaRecord.refund_amount) : null;
+
+  if (!refundAmount) {
+    const derivedAmount = deriveRefundAmountFromLines(lines);
+    if (derivedAmount !== null) {
+      refundAmount = derivedAmount;
+    }
+  }
+
+  if (!targetOriginalId && pendingRefundId) {
+    const { data: pendingTx, error: pendingError } = await supabase
+      .from('transactions')
+      .select('id, transaction_lines(id, amount, original_amount, type, metadata)')
+      .eq('id', pendingRefundId)
+      .maybeSingle();
+
+    if (!pendingError && pendingTx) {
+      const pendingLines = ((pendingTx as any)?.transaction_lines as RefundTransactionLine[]) ?? [];
+      const pendingMeta = extractLineMetadata(pendingLines as Array<{ metadata?: Json | null }>) as Record<string, any> | null;
+
+      if (!refundAmount) {
+        const pendingAmount =
+          typeof pendingMeta?.refund_amount === 'number' ? Math.abs(pendingMeta.refund_amount) : null;
+        refundAmount = pendingAmount ?? deriveRefundAmountFromLines(pendingLines);
+      }
+
+      if (!targetOriginalId) {
+        targetOriginalId =
+          typeof pendingMeta?.original_transaction_id === 'string'
+            ? pendingMeta.original_transaction_id
+            : typeof pendingMeta?.linked_transaction_id === 'string'
+              ? pendingMeta.linked_transaction_id
+              : null;
+      }
+    }
+  }
+
+  if (targetOriginalId && refundAmount && refundAmount > 0) {
+    console.log(`Rollback: Voiding a refund transaction. Restoring original transaction ${targetOriginalId}`);
+
+    const { data: original, error: originalError } = await supabase
+      .from('transactions')
+      .select('id, transaction_lines(id, metadata, amount, original_amount, type)')
+      .eq('id', targetOriginalId)
+      .maybeSingle();
+
+    if (original && !originalError) {
+      let originalLines = ((original as any).transaction_lines as RefundTransactionLine[]) ?? [];
+      let originalMetadata = extractLineMetadata(originalLines as Array<{ metadata?: Json | null }>) as Record<string, any> | null;
+
+      if (
+        typeof originalMetadata?.linked_transaction_id === 'string' &&
+        originalMetadata.linked_transaction_id !== targetOriginalId
+      ) {
+        const fallbackOriginalId = originalMetadata.linked_transaction_id as string;
+        if (!refundAmount && typeof originalMetadata?.refund_amount === 'number') {
+          refundAmount = Math.abs(originalMetadata.refund_amount);
+        }
+        const { data: parentTx, error: parentError } = await supabase
+          .from('transactions')
+          .select('id, transaction_lines(id, metadata, amount, original_amount, type)')
+          .eq('id', fallbackOriginalId)
+          .maybeSingle();
+
+        if (!parentError && parentTx) {
+          targetOriginalId = fallbackOriginalId;
+          originalLines = ((parentTx as any).transaction_lines as RefundTransactionLine[]) ?? [];
+          originalMetadata = extractLineMetadata(originalLines as Array<{ metadata?: Json | null }>) as Record<string, any> | null;
+        }
+      }
+
+      const currentRefunded =
+        typeof originalMetadata?.refunded_amount === 'number' ? originalMetadata.refunded_amount : 0;
+      const originalTotal = calculateOriginalAmountTotal(originalLines);
+      const newRefunded = Math.max(0, currentRefunded - refundAmount);
+      const newStatus = deriveRefundStatus(originalTotal, newRefunded);
+      const priorFlowStatus =
+        typeof (originalMetadata as Record<string, unknown> | null)?.refund_flow_status === 'string'
+          ? (originalMetadata as Record<string, unknown>).refund_flow_status
+          : undefined;
+
+      const updatedMeta = mergeMetadata(originalMetadata, {
+        refunded_amount: newRefunded,
+        refund_status: newStatus,
+        refund_flow_status: newStatus === 'none' ? 'voided' : priorFlowStatus,
+      });
+
+      for (const line of originalLines) {
+        if (!line?.id) continue;
+        await (supabase.from('transaction_lines').update as any)({ metadata: updatedMeta }).eq('id', line.id);
+      }
     }
   }
 
@@ -1081,6 +845,7 @@ type RefundTransactionLine = {
   type: 'debit' | 'credit'
   account_id?: string | null
   category_id?: string | null
+  original_amount?: number | null
   metadata?: Json | null
   categories?: {
     name?: string | null
@@ -1106,6 +871,36 @@ export type PendingRefundItem = {
   original_note: string | null
   original_category: string | null
   linked_transaction_id?: string
+}
+
+function calculateOriginalAmountTotal(lines: RefundTransactionLine[]): number {
+  return lines
+    .filter(line => line.type === 'debit')
+    .reduce((sum, line) => {
+      const raw = typeof line.original_amount === 'number' ? line.original_amount : line.amount ?? 0
+      return sum + Math.abs(raw)
+    }, 0)
+}
+
+function deriveRefundStatus(total: number, refunded: number): 'none' | 'partial' | 'full' {
+  if (total <= 0 || refunded <= 0) return 'none'
+  if (refunded >= total) return 'full'
+  return 'partial'
+}
+
+function deriveRefundAmountFromLines(lines: RefundTransactionLine[]): number | null {
+  const pendingLine = lines.find(
+    line => line?.account_id === REFUND_PENDING_ACCOUNT_ID
+  )
+  if (pendingLine) {
+    return Math.abs(pendingLine.amount ?? 0)
+  }
+
+  const refundCategoryTotal = lines
+    .filter(line => line?.category_id === REFUND_CATEGORY_ID)
+    .reduce((sum, line) => sum + Math.abs(line.amount ?? 0), 0)
+
+  return refundCategoryTotal > 0 ? refundCategoryTotal : null
 }
 
 export async function requestRefund(
@@ -1134,6 +929,8 @@ export async function requestRefund(
         type,
         account_id,
         category_id,
+        original_amount,
+        person_id,
         metadata,
         categories ( name )
       )
@@ -1147,49 +944,66 @@ export async function requestRefund(
   }
 
   const existingMetadata = extractLineMetadata((existing as any).transaction_lines as Array<{ metadata?: Json | null }>)
+  const currentRefundedAmount =
+    typeof (existingMetadata as any)?.refunded_amount === 'number'
+      ? (existingMetadata as any).refunded_amount
+      : 0
 
   const lines = ((existing as any).transaction_lines as RefundTransactionLine[]) ?? []
-  const categoryLine = lines.find(line => line?.category_id)
-  const personLine = lines.find(line => line?.person_id)
-  const debtAccountId = personLine?.account_id ?? null
-  const personId = personLine?.person_id ?? null
-  if (!categoryLine) {
-    return { success: false, error: 'Giao dịch không có danh mục phí để hoàn.' }
+
+  // Find the "Debit" lines that represent the expense or debt given
+  // We exclude the source account (Credit) usually.
+  const debitLines = lines.filter(l => l.type === 'debit');
+
+  if (debitLines.length === 0) {
+    return { success: false, error: 'Giao dich khong co dong ghi de hoan.' };
   }
 
-  const maxAmount = Math.abs(categoryLine.amount ?? 0)
-  if (maxAmount <= 0) {
-    return { success: false, error: 'Không thể hoàn tiền cho giao dịch giá trị 0.' }
+  // Calculate total original amount from debit lines (use original_amount when available)
+  const totalOriginalAmount = calculateOriginalAmountTotal(debitLines);
+
+  if (totalOriginalAmount <= 0) {
+    return { success: false, error: 'Khong the hoan tien cho giao dich co gia tri 0.' }
   }
 
-  const requestedAmount = Number.isFinite(refundAmount) ? Math.abs(refundAmount) : maxAmount
-  const safeAmount = Math.min(Math.max(requestedAmount, 0), maxAmount)
-  if (safeAmount <= 0) {
-    return { success: false, error: 'Số tiền hoàn không hợp lệ.' }
+  const requestedAmountRaw = Number.isFinite(refundAmount) ? Math.abs(refundAmount) : totalOriginalAmount
+  const requestedAmount = Math.max(0, requestedAmountRaw)
+
+  if (requestedAmount === 0) {
+    return { success: false, error: 'So tien hoan khong hop le.' }
+  }
+
+  // Validation: Check if refund exceeds original amount (considering previous refunds)
+  if (currentRefundedAmount + requestedAmount > totalOriginalAmount) {
+    return {
+      success: false,
+      error: `Refund amount (${requestedAmount}) plus refunded (${currentRefundedAmount}) exceeds original total (${totalOriginalAmount}).`,
+    }
   }
 
   const userId = await resolveCurrentUserId(supabase)
   const requestNote = options?.note ?? `Refund Request for ${(existing as any).note ?? transactionId}`
+
+  // Prepare metadata for the new refund transaction lines
   const lineMetadata = {
     refund_status: 'requested',
     linked_transaction_id: transactionId,
-    refund_amount: safeAmount,
+    original_transaction_id: transactionId,
+    refund_amount: requestedAmount,
     partial,
     original_note: (existing as any).note ?? null,
-    original_category_id: categoryLine.category_id,
-    original_category_name: categoryLine.categories?.name ?? null,
   }
 
   const { data: requestTxn, error: createError } = await (supabase
     .from('transactions')
     .insert as any)({
-    occurred_at: new Date().toISOString(),
-    note: requestNote,
-    status: 'posted',
-    tag: (existing as any).tag,
-    created_by: userId,
-    shop_id: options?.shop_id ?? (existing as any).shop_id ?? null,
-  })
+      occurred_at: new Date().toISOString(),
+      note: requestNote,
+      status: 'posted',
+      tag: (existing as any).tag,
+      created_by: userId,
+      shop_id: options?.shop_id ?? (existing as any).shop_id ?? null,
+    })
     .select()
     .single()
 
@@ -1199,33 +1013,67 @@ export async function requestRefund(
   }
 
   const refundCategoryId = REFUND_CATEGORY_ID
+  const linesToInsert: any[] = [];
 
-  const linesToInsert: any[] = [
-    {
-      transaction_id: requestTxn.id,
-      account_id: REFUND_PENDING_ACCOUNT_ID,
-      amount: safeAmount,
-      type: 'debit',
-      metadata: lineMetadata,
-    },
-    {
-      transaction_id: requestTxn.id,
-      category_id: refundCategoryId,
-      amount: -safeAmount,
-      type: 'credit',
-      metadata: lineMetadata,
-    },
-  ]
+  // 1. Debit the Pending Account (Money coming back is pending)
+  linesToInsert.push({
+    transaction_id: requestTxn.id,
+    account_id: REFUND_PENDING_ACCOUNT_ID,
+    amount: requestedAmount,
+    type: 'debit',
+    metadata: lineMetadata,
+  });
 
-  if (personId && debtAccountId) {
+  // 2. Credit the original destination (Category or Debt Account)
+  // We need to distribute the refund amount across the debit lines if there are multiple.
+  // For simplicity, if there's 1 line, we use it. If multiple, we might need logic.
+  // Current logic: We iterate and try to match.
+
+  let remainingRefund = requestedAmount;
+
+  for (const line of debitLines) {
+    if (remainingRefund <= 0) break;
+
+    const lineAmount = Math.abs(line.amount);
+    const refundForLine = Math.min(lineAmount, remainingRefund);
+
+    // If it's a Debt line (has person_id), we credit the Debt Account
+    if (line.person_id && line.account_id) {
+      linesToInsert.push({
+        transaction_id: requestTxn.id,
+        account_id: line.account_id,
+        amount: -refundForLine,
+        type: 'credit',
+        person_id: line.person_id,
+        metadata: { ...lineMetadata, original_category_id: line.category_id },
+      });
+    } else if (line.category_id) {
+      // If it's an Expense line, we credit the Refund Category (or the original category? Usually Refund Category for tracking)
+      // The original code used REFUND_CATEGORY_ID.
+      // If we want to reverse the expense exactly, we might credit the original category?
+      // But usually "Refund" is a separate income or contra-expense.
+      // Using REFUND_CATEGORY_ID is safer for now to avoid messing up reports unless requested.
+      linesToInsert.push({
+        transaction_id: requestTxn.id,
+        category_id: refundCategoryId, // Keep using Refund Category for expenses
+        amount: -refundForLine,
+        type: 'credit',
+        metadata: { ...lineMetadata, original_category_id: line.category_id },
+      });
+    }
+
+    remainingRefund -= refundForLine;
+  }
+
+  // If we still have remaining refund (e.g. rounding or logic error), dump it to Refund Category
+  if (remainingRefund > 0) {
     linesToInsert.push({
       transaction_id: requestTxn.id,
-      account_id: debtAccountId,
-      amount: -safeAmount,
+      category_id: refundCategoryId,
+      amount: -remainingRefund,
       type: 'credit',
-      person_id: personId,
       metadata: lineMetadata,
-    })
+    });
   }
 
   const { error: linesError } = await (supabase.from('transaction_lines').insert as any)(linesToInsert)
@@ -1234,13 +1082,21 @@ export async function requestRefund(
     return { success: false, error: 'Không thể tạo dòng ghi sổ hoàn tiền.' }
   }
 
+  // 3. Update Original Transaction Metadata
   try {
+    const newRefundedTotal = currentRefundedAmount + requestedAmount;
+    const newRefundStatus = deriveRefundStatus(totalOriginalAmount, newRefundedTotal);
+
     const originalLines = ((existing as any).transaction_lines as Array<{ id?: string, metadata?: Json | null }>) ?? []
     const mergedOriginalMeta = mergeMetadata(existingMetadata, {
       refund_request_id: requestTxn.id,
       refund_requested_at: new Date().toISOString(),
       has_refund_request: true,
+      refunded_amount: newRefundedTotal,
+      refund_status: newRefundStatus,
+      refund_flow_status: 'requested',
     })
+
     for (const line of originalLines) {
       if (!line?.id) continue
       await (supabase.from('transaction_lines').update as any)({ metadata: mergedOriginalMeta }).eq(
@@ -1287,36 +1143,43 @@ export async function confirmRefund(
   }
 
   const pendingMetadata = extractLineMetadata((pending as any).transaction_lines as Array<{ metadata?: Json | null }>)
+  const pendingMeta = parseMetadata(pendingMetadata)
 
   const pendingLine = ((pending as any).transaction_lines as any[]).find(
     (line) => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
   )
 
   if (!pendingLine) {
-    return { success: false, error: 'Không có dòng ghi sổ treo phù hợp để xác nhận.' }
+    return { success: false, error: 'Khong co dong ghi treo hop le de xac nhan.' }
   }
 
   const amountToConfirm = Math.abs(pendingLine.amount ?? 0)
   if (amountToConfirm <= 0) {
-    return { success: false, error: 'Số tiền xác nhận không hợp lệ.' }
+    return { success: false, error: 'So tien xac nhan khong hop le.' }
   }
+
+  const originalTransactionId =
+    typeof pendingMeta?.linked_transaction_id === 'string' ? pendingMeta.linked_transaction_id : null
 
   const userId = await resolveCurrentUserId(supabase)
   const confirmNote = `Confirmed refund for ${(pending as any).note ?? (pending as any).id}`
   const confirmationMetadata = {
     refund_status: 'confirmed',
-    linked_transaction_id: pendingTransactionId,
+    linked_transaction_id: originalTransactionId ?? pendingTransactionId,
+    pending_refund_transaction_id: pendingTransactionId,
+    refund_amount: amountToConfirm,
+    ...(originalTransactionId ? { original_transaction_id: originalTransactionId } : {}),
   }
 
   const { data: confirmTxn, error: confirmError } = await (supabase
     .from('transactions')
     .insert as any)({
-    occurred_at: new Date().toISOString(),
-    note: confirmNote,
-    status: 'posted',
-    tag: (pending as any).tag,
-    created_by: userId,
-  })
+      occurred_at: new Date().toISOString(),
+      note: confirmNote,
+      status: 'posted',
+      tag: (pending as any).tag,
+      created_by: userId,
+    })
     .select()
     .single()
 
@@ -1355,6 +1218,8 @@ export async function confirmRefund(
       refund_status: 'confirmed',
       refund_confirmed_transaction_id: confirmTxn.id,
       refunded_at: new Date().toISOString(),
+      refund_amount: amountToConfirm,
+      refund_flow_status: 'confirmed',
     })
     const pendingLines = ((pending as any).transaction_lines as Array<{ id?: string, metadata?: Json | null }>) ?? []
     for (const line of pendingLines) {
@@ -1368,25 +1233,29 @@ export async function confirmRefund(
     console.error('Failed to update pending refund metadata:', err)
   }
 
-  const pendingMeta = parseMetadata(pendingMetadata)
-  const originalTransactionId =
-    typeof pendingMeta.linked_transaction_id === 'string' ? pendingMeta.linked_transaction_id : null
-
   if (originalTransactionId) {
     try {
       const { data: originalLines } = await supabase
         .from('transaction_lines')
-        .select('id, metadata')
+        .select('id, metadata, amount, original_amount, type')
         .eq('transaction_id', originalTransactionId)
 
-      const originalMeta = extractLineMetadata(originalLines as Array<{ metadata?: Json | null }>)
+      const originalLinesTyped = (originalLines ?? []) as RefundTransactionLine[]
+      const originalMeta = extractLineMetadata(originalLinesTyped as Array<{ metadata?: Json | null }>)
+      const originalTotal = calculateOriginalAmountTotal(originalLinesTyped)
+      const existingRefunded =
+        typeof (originalMeta as Record<string, unknown> | null)?.refunded_amount === 'number'
+          ? (originalMeta as any).refunded_amount
+          : 0
+      const updatedStatus = deriveRefundStatus(originalTotal, existingRefunded)
       const updatedOriginalMeta = mergeMetadata(originalMeta, {
-        refund_status: 'confirmed',
+        refund_status: updatedStatus,
+        refund_flow_status: 'confirmed',
         refund_confirmed_transaction_id: confirmTxn.id,
         refund_confirmed_at: new Date().toISOString(),
       })
 
-      for (const line of (originalLines ?? []) as Array<{ id?: string }>) {
+      for (const line of originalLinesTyped as Array<{ id?: string }>) {
         if (!line?.id) continue
         await (supabase.from('transaction_lines').update as any)({ metadata: updatedOriginalMeta }).eq(
           'id',
