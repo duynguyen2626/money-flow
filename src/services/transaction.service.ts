@@ -877,7 +877,8 @@ export async function voidTransaction(id: string): Promise<boolean> {
         cashback_share_percent,
         cashback_share_fixed,
         metadata,
-        person_id
+        person_id,
+        category_id
       )
     `
     )
@@ -888,6 +889,43 @@ export async function voidTransaction(id: string): Promise<boolean> {
     console.error('Failed to load transaction for void:', fetchError);
     return false;
   }
+
+  // --- Start Refund Rollback Logic ---
+  const metadata = parseMetadata(extractLineMetadata((existing as any).transaction_lines));
+  const isRefund = (metadata?.linked_transaction_id && metadata?.refund_amount) ||
+                   (existing as any).transaction_lines.some((l: any) => l.category_id === REFUND_CATEGORY_ID);
+
+  if (isRefund) {
+    const linkedTxnId = metadata?.linked_transaction_id as string;
+    const refundAmount = metadata?.refund_amount as number;
+
+    if (linkedTxnId && refundAmount > 0) {
+      const { data: parentTxn, error: parentError } = await supabase
+        .from('transactions')
+        .select('refunded_amount, transaction_lines(amount, type, category_id)')
+        .eq('id', linkedTxnId)
+        .single();
+
+      if (parentError || !parentTxn) {
+        console.error('Parent transaction for refund rollback not found:', parentError);
+      } else {
+        const parentCategoryLine = (parentTxn.transaction_lines as any[]).find(l => l.category_id && l.type === 'debit');
+        const parentOriginalAmount = parentCategoryLine ? Math.abs(parentCategoryLine.amount) : 0;
+
+        const newRefundedAmount = (parentTxn.refunded_amount ?? 0) - refundAmount;
+        const newStatus = newRefundedAmount <= 0 ? 'none' : 'partial';
+
+        await supabase
+          .from('transactions')
+          .update({
+            refunded_amount: Math.max(0, newRefundedAmount),
+            refund_status: newStatus
+          })
+          .eq('id', linkedTxnId);
+      }
+    }
+  }
+  // --- End Refund Rollback Logic ---
 
   const { error: updateError } = await (supabase.from('transactions').update as any)({ status: 'void' }).eq('id', id);
 
@@ -1128,12 +1166,15 @@ export async function requestRefund(
       note,
       tag,
       shop_id,
+      refunded_amount,
+      refund_status,
       transaction_lines (
         id,
         amount,
         type,
         account_id,
         category_id,
+        person_id,
         metadata,
         categories ( name )
       )
@@ -1146,27 +1187,31 @@ export async function requestRefund(
     return { success: false, error: 'Không tìm thấy giao dịch hoặc đã xảy ra lỗi.' }
   }
 
-  const existingMetadata = extractLineMetadata((existing as any).transaction_lines as Array<{ metadata?: Json | null }>)
-
   const lines = ((existing as any).transaction_lines as RefundTransactionLine[]) ?? []
-  const categoryLine = lines.find(line => line?.category_id)
-  const personLine = lines.find(line => line?.person_id)
-  const debtAccountId = personLine?.account_id ?? null
-  const personId = personLine?.person_id ?? null
+  const categoryLine = lines.find(line => line?.category_id && line.type === 'debit')
   if (!categoryLine) {
     return { success: false, error: 'Giao dịch không có danh mục phí để hoàn.' }
   }
 
-  const maxAmount = Math.abs(categoryLine.amount ?? 0)
-  if (maxAmount <= 0) {
-    return { success: false, error: 'Không thể hoàn tiền cho giao dịch giá trị 0.' }
+  const originalAmount = Math.abs(categoryLine.amount ?? 0);
+  const currentRefunded = existing.refunded_amount ?? 0;
+
+  if (currentRefunded >= originalAmount) {
+      return { success: false, error: 'Giao dịch đã được hoàn tiền đầy đủ.' };
   }
 
-  const requestedAmount = Number.isFinite(refundAmount) ? Math.abs(refundAmount) : maxAmount
-  const safeAmount = Math.min(Math.max(requestedAmount, 0), maxAmount)
+  const maxRefundableAmount = originalAmount - currentRefunded;
+  const requestedAmount = Number.isFinite(refundAmount) ? Math.abs(refundAmount) : maxRefundableAmount;
+  const safeAmount = Math.min(Math.max(requestedAmount, 0), maxRefundableAmount);
+
   if (safeAmount <= 0) {
     return { success: false, error: 'Số tiền hoàn không hợp lệ.' }
   }
+
+  // Person/Debt Logic Fix
+  const personLine = lines.find(line => line?.person_id);
+  const debtAccountId = personLine?.account_id ?? null;
+  const personId = personLine?.person_id ?? null;
 
   const userId = await resolveCurrentUserId(supabase)
   const requestNote = options?.note ?? `Refund Request for ${(existing as any).note ?? transactionId}`
@@ -1234,22 +1279,22 @@ export async function requestRefund(
     return { success: false, error: 'Không thể tạo dòng ghi sổ hoàn tiền.' }
   }
 
-  try {
-    const originalLines = ((existing as any).transaction_lines as Array<{ id?: string, metadata?: Json | null }>) ?? []
-    const mergedOriginalMeta = mergeMetadata(existingMetadata, {
-      refund_request_id: requestTxn.id,
-      refund_requested_at: new Date().toISOString(),
-      has_refund_request: true,
+  // Update Original Transaction
+  const newTotalRefunded = currentRefunded + safeAmount;
+  const newStatus = newTotalRefunded >= originalAmount ? 'full' : 'partial';
+
+  const { error: updateError } = await supabase
+    .from('transactions')
+    .update({
+      refunded_amount: newTotalRefunded,
+      refund_status: newStatus,
     })
-    for (const line of originalLines) {
-      if (!line?.id) continue
-      await (supabase.from('transaction_lines').update as any)({ metadata: mergedOriginalMeta }).eq(
-        'id',
-        line.id
-      )
-    }
-  } catch (err) {
-    console.error('Failed to tag original transaction with refund metadata:', err)
+    .eq('id', transactionId);
+
+  if (updateError) {
+    console.error('Failed to update original transaction refund status:', updateError);
+    // Note: The refund was created, but the parent status update failed.
+    // This is a situation that might require manual correction or a retry mechanism.
   }
 
   return { success: true, refundTransactionId: requestTxn.id }

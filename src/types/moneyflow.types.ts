@@ -138,4 +138,6 @@ export type TransactionWithDetails = TransactionRow & {
   metadata?: Json | null;
   source_account_name?: string | null;
   destination_account_name?: string | null;
+  refunded_amount?: number;
+  refund_status?: 'none' | 'partial' | 'full';
 }

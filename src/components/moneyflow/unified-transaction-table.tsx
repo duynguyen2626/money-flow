@@ -602,12 +602,20 @@ export function UnifiedTransactionTable({
               const isVoided = effectiveStatus === 'void'
               const isMenuOpen = actionMenuOpen === txn.id
               const txnMetadata = parseMetadata(txn.metadata)
-              const refundStatus = typeof txnMetadata?.refund_status === "string" ? txnMetadata.refund_status : null
+              const refundStatus = txn.refund_status
               const isPendingRefund = refundStatus === 'requested'
               const categoryLabel = txn.category_name ?? ''
               const hasShoppingCategory = categoryLabel.toLowerCase().includes('shopping')
               const canRequestRefund =
                 (visualType === 'expense' || txn.type === 'expense') && (Boolean(txn.shop_id) || hasShoppingCategory)
+
+              // --- Refund Badge Logic ---
+              let refundBadge = null;
+              if (refundStatus === 'partial') {
+                refundBadge = <span className="ml-2 inline-flex items-center rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">Partial Refund</span>;
+              } else if (refundStatus === 'full') {
+                refundBadge = <span className="ml-2 inline-flex items-center rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-medium text-purple-800">Refunded</span>;
+              }
 
               // --- Type Logic ---
               let typeBadge = null;
@@ -668,7 +676,7 @@ export function UnifiedTransactionTable({
                             <Pencil className="h-4 w-4 text-slate-600" />
                             <span>Edit</span>
                           </button>
-                          {canRequestRefund && !isPendingRefund && (
+                          {canRequestRefund && !isPendingRefund && txn.refund_status !== 'full' && (
                             <button
                               className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
                               onClick={event => {
@@ -725,7 +733,7 @@ export function UnifiedTransactionTable({
                     )
                   }
                   case "type":
-                    return typeBadge
+                    return <div className="flex items-center">{typeBadge}{refundBadge}</div>
                   case "shop": {
                     let displayIcon = txn.shop_logo_url;
                     let displayName = txn.shop_name;
