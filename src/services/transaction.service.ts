@@ -485,6 +485,7 @@ type TransactionRow = {
     } | null
     categories?: {
       name: string
+      type: 'income' | 'expense'
       image_url?: string | null
       icon?: string | null
     } | null
@@ -495,23 +496,34 @@ type TransactionRow = {
 function resolveAccountMovementInfo(
   lines: TransactionRow['transaction_lines'] | undefined,
   txn: TransactionRow,
+  type: 'income' | 'expense' | 'transfer' | 'repayment',
   fallbackCategoryName?: string | null
 ) {
-  const sanitizedLines = (lines ?? []).filter(Boolean)
-  const creditLine = sanitizedLines.find(line => line?.account_id && line.type === 'credit')
-  const debitLine = sanitizedLines.find(line => line?.account_id && line.type === 'debit')
-  const sourceLine = creditLine ?? sanitizedLines.find(line => line?.account_id)
-  let destinationLine = debitLine
+  const accountLines = (lines ?? []).filter(line => line && line.account_id);
 
-  if (destinationLine && destinationLine.account_id === sourceLine?.account_id) {
-    destinationLine = undefined
+  let sourceLine: (typeof accountLines[0]) | undefined;
+  let destinationLine: (typeof accountLines[0]) | undefined;
+
+  if (type === 'repayment') {
+    // Source = Debt Account (credited), Destination = Bank Account (debited)
+    sourceLine = accountLines.find(line => line.type === 'credit');
+    destinationLine = accountLines.find(line => line.type === 'debit');
+  } else if (type === 'transfer') {
+    // Source = From Account (credited), Destination = To Account (debited)
+    sourceLine = accountLines.find(line => line.type === 'credit');
+    destinationLine = accountLines.find(line => line.type === 'debit');
+  } else if (type === 'expense') {
+    // Source = Bank/Card (credited), Destination = N/A (it's a category)
+    sourceLine = accountLines.find(line => line.type === 'credit');
+  } else if (type === 'income') {
+    // Source = N/A (it's a category), Destination = Bank/Card (debited)
+    destinationLine = accountLines.find(line => line.type === 'debit');
+  } else {
+    // Fallback for debt or other types, assuming standard credit/debit flow
+    sourceLine = accountLines.find(line => line.type === 'credit');
+    destinationLine = accountLines.find(line => line.type === 'debit');
   }
 
-  if (!destinationLine) {
-    destinationLine = sanitizedLines.find(
-      line => line?.account_id && line.account_id !== sourceLine?.account_id
-    )
-  }
 
   const fallbackName = txn.shops?.name ?? fallbackCategoryName ?? null
   const fallbackLogo = txn.shops?.logo_url ?? null
@@ -585,25 +597,41 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     line => line && line.account_id && line.type === 'debit'
   );
 
-  if (categoryLine) {
-    categoryName = categoryLine.categories?.name;
-    categoryIcon = categoryLine.categories?.icon ?? undefined;
-    categoryImageUrl = categoryLine.categories?.image_url ?? undefined;
+  if (categoryLine && categoryLine.categories) {
+    categoryName = categoryLine.categories.name;
+    categoryIcon = categoryLine.categories.icon ?? undefined;
+    categoryImageUrl = categoryLine.categories.image_url ?? undefined;
+
+    // Explicitly check the category's type first.
+    if (categoryLine.categories.type === 'expense') {
+        type = 'expense';
+    } else if (categoryLine.categories.type === 'income') {
+        type = 'income';
+    }
 
     const lowerCategoryName = categoryName?.toLowerCase() ?? '';
     if (lowerCategoryName.includes('thu nợ') || lowerCategoryName.includes('repayment')) {
         type = 'repayment';
-    } else if (categoryLine.type === 'debit') {
-      type = 'expense';
-      accountName = creditAccountLine?.accounts?.name;
-    } else {
-      type = 'income';
-      accountName = debitAccountLine?.accounts?.name;
     }
   } else if (creditAccountLine && debitAccountLine) {
     type = 'transfer';
     categoryName = "Money Transfer";
-    if (accountId) {
+  } else if (accountLine?.amount !== undefined) {
+    // Fallback for older transactions or transfers without category
+    type = accountLine.amount >= 0 ? 'income' : 'expense';
+  }
+
+  if (type === 'expense' && displayAmount > 0) {
+      displayAmount = -Math.abs(displayAmount);
+  }
+
+  // Final determination of accountName based on context
+  if (type === 'expense') {
+    accountName = creditAccountLine?.accounts?.name;
+  } else if (type === 'income') {
+    accountName = debitAccountLine?.accounts?.name;
+  } else if (type === 'transfer') {
+     if (accountId) {
         const otherLine = lines.find(line => line && line.account_id && line.account_id !== accountId);
         if (otherLine && otherLine.accounts) {
              accountName = otherLine.accounts.name;
@@ -611,12 +639,6 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     } else {
         accountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name;
     }
-  } else if (accountLine?.amount !== undefined) {
-    type = accountLine.amount >= 0 ? 'income' : 'expense';
-  }
-
-  if (type === 'expense' && displayAmount > 0) {
-      displayAmount = -displayAmount
   }
 
   if (accountId) {
@@ -646,6 +668,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
   const { source_name, source_logo, destination_name, destination_logo } = resolveAccountMovementInfo(
     txn.transaction_lines,
     txn,
+    type,
     categoryName ?? null
   )
 
@@ -657,7 +680,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     tag: txn.tag || null,
     created_at: txn.created_at,
     amount: displayAmount,
-    type: type as 'income' | 'expense' | 'transfer',
+    type: type,
     category_name: categoryName,
     category_icon: categoryIcon ?? null,
     category_image_url: categoryImageUrl ?? null,
@@ -710,7 +733,7 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
         cashback_share_fixed,
         profiles ( name, avatar_url ),
         accounts (name, type, logo_url),
-        categories (name, image_url, icon)
+        categories (name, type, image_url, icon)
       )
     `)
     .order('occurred_at', { ascending: false })
@@ -750,7 +773,7 @@ export async function getTransactionsByShop(shopId: string, limit: number = 50):
         cashback_share_fixed,
         profiles ( name, avatar_url ),
         accounts (name, type, logo_url),
-        categories (name, image_url, icon)
+        categories (name, type, image_url, icon)
       )
     `)
     .eq('shop_id', shopId)
@@ -1380,7 +1403,7 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
         cashback_share_fixed,
         profiles ( name, avatar_url ),
         accounts (name, type, logo_url),
-        categories (name, image_url, icon)
+        categories (name, type, image_url, icon)
       )
     `)
     .order('occurred_at', { ascending: false })
