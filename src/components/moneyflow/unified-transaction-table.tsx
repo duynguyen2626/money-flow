@@ -21,8 +21,6 @@ import { TransactionForm, TransactionFormValues } from "./transaction-form"
 import {
   restoreTransaction,
   voidTransaction,
-  requestRefund,
-  confirmRefund,
 } from "@/services/transaction.service"
 import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
@@ -45,6 +43,9 @@ type ColumnKey =
   | "final_price"
   | "id"
   | "task"
+
+type SortKey = 'date' | 'amount'
+type SortDir = 'asc' | 'desc'
 
 type BulkActionState = {
   selectionCount: number
@@ -239,13 +240,10 @@ export function UnifiedTransactionTable({
   const [isRestoring, setIsRestoring] = useState(false)
   const [voidError, setVoidError] = useState<string | null>(null)
   const [statusOverrides, setStatusOverrides] = useState<Record<string, TransactionWithDetails['status']>>({})
-  const [refundDialogTxn, setRefundDialogTxn] = useState<TransactionWithDetails | null>(null)
-  const [refundAmount, setRefundAmount] = useState(0)
-  const [refundInstant, setRefundInstant] = useState(false)
-  const [refundError, setRefundError] = useState<string | null>(null)
-  const [refundTargetAccountId, setRefundTargetAccountId] = useState<string | null>(null)
-  const [isRefunding, setIsRefunding] = useState(false)
-  const [refundDialogMode, setRefundDialogMode] = useState<'request' | 'confirm'>('request')
+  const [refundFormTxn, setRefundFormTxn] = useState<TransactionWithDetails | null>(null)
+  const [refundFormStage, setRefundFormStage] = useState<'request' | 'confirm'>('request')
+  const [sortState, setSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
+  const [bulkDialog, setBulkDialog] = useState<{ mode: 'void' | 'restore'; open: boolean } | null>(null)
 
   const editingInitialValues = useMemo(
     () => (editingTxn ? buildEditInitialValues(editingTxn) : null),
@@ -333,107 +331,16 @@ export function UnifiedTransactionTable({
       .finally(() => setIsRestoring(false))
   }
 
-  const closeRefundDialog = () => {
-    setRefundDialogTxn(null)
-    setRefundError(null)
-    setIsRefunding(false)
-    setRefundInstant(false)
-    setRefundAmount(0)
-    setRefundTargetAccountId(null)
-    setRefundDialogMode('request')
-  }
-
-  const openRefundDialog = (txn: TransactionWithDetails) => {
-    const baseAmount = Math.abs(txn.original_amount ?? txn.amount ?? 0)
-    const sourceAccountLine = txn.transaction_lines?.find(
-      line => line?.type === "credit" && line.account_id
-    ) ?? txn.transaction_lines?.find(line => line?.type === "debit" && line.account_id)
-    const defaultAccountId = sourceAccountLine?.account_id ?? refundAccountOptions[0]?.id ?? null
-
-    setRefundAmount(baseAmount)
-    setRefundInstant(false)
-    setRefundTargetAccountId(defaultAccountId)
-    setRefundError(null)
-    setRefundDialogMode('request')
-    setRefundDialogTxn(txn)
+  const openRefundForm = (txn: TransactionWithDetails, stage: 'request' | 'confirm') => {
+    setRefundFormStage(stage)
+    setRefundFormTxn(txn)
     setActionMenuOpen(null)
   }
 
-  const openConfirmRefundDialog = (txn: TransactionWithDetails) => {
-    const pendingLine = txn.transaction_lines?.find(
-      line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
-    )
-    const amount = Math.abs(pendingLine?.amount ?? 0)
-    const defaultAccountId = refundAccountOptions[0]?.id ?? null
-
-    setRefundAmount(amount)
-    setRefundInstant(false)
-    setRefundTargetAccountId(defaultAccountId)
-    setRefundError(null)
-    setRefundDialogMode('confirm')
-    setRefundDialogTxn(txn)
-    setActionMenuOpen(null)
-  }
-
-  const handleRefundSubmit = async () => {
-    if (!refundDialogTxn) return
-    setRefundError(null)
-    setIsRefunding(true)
-    try {
-      if (refundDialogMode === 'confirm') {
-        if (!refundTargetAccountId) {
-          setRefundError('Please select a target account.')
-          return
-        }
-
-        const confirmResult = await confirmRefund(refundDialogTxn.id, refundTargetAccountId)
-        if (!confirmResult.success) {
-          setRefundError(confirmResult.error ?? 'Could not confirm refund.')
-          return
-        }
-
-        closeRefundDialog()
-        router.refresh()
-        return
-      }
-
-      const amountBase = Math.abs(refundDialogTxn.original_amount ?? refundDialogTxn.amount ?? 0)
-      const requestedAmount = Math.max(Number(refundAmount) || 0, 0)
-      const amountToUse = Math.min(requestedAmount || amountBase, amountBase)
-      if (amountToUse <= 0) {
-        setRefundError('Please enter an amount greater than 0.')
-        return
-      }
-
-      const isPartial = amountToUse < amountBase
-      const requestResult = await requestRefund(refundDialogTxn.id, amountToUse, isPartial)
-      if (!requestResult.success) {
-        setRefundError(requestResult.error ?? 'Unable to create refund request.')
-        return
-      }
-
-      if (refundInstant) {
-        if (!refundTargetAccountId) {
-          setRefundError('Please select the receiving account.')
-          return
-        }
-
-        const confirmResult = await confirmRefund(
-          requestResult.refundTransactionId ?? '',
-          refundTargetAccountId
-        )
-        if (!confirmResult.success) {
-          setRefundError(confirmResult.error ?? 'Could not confirm refund.')
-          return
-        }
-      }
-
-      closeRefundDialog()
-      router.refresh()
-    } finally {
-      setIsRefunding(false)
-    }
-  }
+  const handleRefundFormSuccess = useCallback(() => {
+    setRefundFormTxn(null)
+    router.refresh()
+  }, [router])
 
   const handleVoidConfirm = () => {
     if (!confirmVoidTarget) return
@@ -458,47 +365,13 @@ export function UnifiedTransactionTable({
 
   const handleBulkVoid = useCallback(async () => {
     if (selection.size === 0) return;
-    if (!confirm('Are you sure you want to void ' + selection.size + ' transactions?')) return;
-
-    setIsVoiding(true);
-    let errorCount = 0;
-    for (const id of Array.from(selection)) {
-        const ok = await voidTransaction(id);
-        if (ok) {
-            setStatusOverrides(prev => ({ ...prev, [id]: 'void' }));
-        } else {
-            errorCount++;
-        }
-    }
-    setIsVoiding(false);
-    updateSelection(new Set());
-    router.refresh();
-    if (errorCount > 0) {
-        alert(`Failed to void ${errorCount} transactions.`);
-    }
-  }, [router, selection, updateSelection])
+    setBulkDialog({ mode: 'void', open: true })
+  }, [selection.size])
 
   const handleBulkRestore = useCallback(async () => {
     if (selection.size === 0) return;
-    if (!confirm('Are you sure you want to restore ' + selection.size + ' transactions?')) return;
-
-    setIsRestoring(true);
-    let errorCount = 0;
-    for (const id of Array.from(selection)) {
-        const ok = await restoreTransaction(id);
-        if (ok) {
-            setStatusOverrides(prev => ({ ...prev, [id]: 'posted' }));
-        } else {
-            errorCount++;
-        }
-    }
-    setIsRestoring(false);
-    updateSelection(new Set());
-    router.refresh();
-    if (errorCount > 0) {
-        alert(`Failed to restore ${errorCount} transactions.`);
-    }
-  }, [router, selection, updateSelection])
+    setBulkDialog({ mode: 'restore', open: true })
+  }, [selection.size])
 
   const currentTab = activeTab ?? 'active';
 
@@ -527,6 +400,46 @@ export function UnifiedTransactionTable({
     router.refresh()
   }
 
+  const executeBulk = async (mode: 'void' | 'restore') => {
+    if (selection.size === 0) return
+    if (mode === 'void') {
+      setIsVoiding(true)
+      let errorCount = 0
+      for (const id of Array.from(selection)) {
+        const ok = await voidTransaction(id)
+        if (ok) {
+          setStatusOverrides(prev => ({ ...prev, [id]: 'void' }))
+        } else {
+          errorCount++
+        }
+      }
+      setIsVoiding(false)
+      updateSelection(new Set())
+      router.refresh()
+      if (errorCount > 0) {
+        alert(`Failed to void ${errorCount} transactions.`)
+      }
+    } else {
+      setIsRestoring(true)
+      let errorCount = 0
+      for (const id of Array.from(selection)) {
+        const ok = await restoreTransaction(id)
+        if (ok) {
+          setStatusOverrides(prev => ({ ...prev, [id]: 'posted' }))
+        } else {
+          errorCount++
+        }
+      }
+      setIsRestoring(false)
+      updateSelection(new Set())
+      router.refresh()
+      if (errorCount > 0) {
+        alert(`Failed to restore ${errorCount} transactions.`)
+      }
+    }
+    setBulkDialog(null)
+  }
+
   const displayedTransactions = useMemo(() => {
     let list = transactions;
     if (currentTab === 'active') {
@@ -538,8 +451,18 @@ export function UnifiedTransactionTable({
     if (showSelectedOnly) {
       return list.filter(txn => selection.has(txn.id))
     }
-    return list
-  }, [transactions, selection, showSelectedOnly, currentTab, statusOverrides])
+    const sorted = [...list].sort((a, b) => {
+      if (sortState.key === 'date') {
+        const aDate = new Date(a.occurred_at ?? a.created_at ?? '').getTime()
+        const bDate = new Date(b.occurred_at ?? b.created_at ?? '').getTime()
+        return sortState.dir === 'asc' ? aDate - bDate : bDate - aDate
+      }
+      const aAmt = typeof a.original_amount === 'number' ? a.original_amount : a.amount
+      const bAmt = typeof b.original_amount === 'number' ? b.original_amount : b.amount
+      return sortState.dir === 'asc' ? aAmt - bAmt : bAmt - aAmt
+    })
+    return sorted
+  }, [transactions, selection, showSelectedOnly, currentTab, statusOverrides, sortState])
 
 
   const handleSelectAll = (checked: boolean) => {
@@ -626,7 +549,25 @@ export function UnifiedTransactionTable({
                   className="border-r bg-slate-100 font-semibold text-slate-700 whitespace-nowrap"
                   style={{ width: columnWidths[col.key] }}
                 >
-                  {col.label}
+                  {col.key === 'date' || col.key === 'amount' ? (
+                    <button
+                      className="flex items-center gap-1"
+                      onClick={() => {
+                        setSortState(prev => {
+                          const nextDir =
+                            prev.key === col.key ? (prev.dir === 'asc' ? 'desc' : 'asc') : 'desc'
+                          return { key: col.key as SortKey, dir: nextDir }
+                        })
+                      }}
+                    >
+                      {col.label}
+                      {sortState.key === col.key && (
+                        <span className="text-xs text-slate-500">{sortState.dir === 'asc' ? '↑' : '↓'}</span>
+                      )}
+                    </button>
+                  ) : (
+                    col.label
+                  )}
                 </TableHead>
               )
             })}
@@ -635,10 +576,12 @@ export function UnifiedTransactionTable({
         <TableBody>
           {displayedTransactions.map(txn => {
             const isRepayment = txn.type === 'repayment';
+            const visualType = (txn as any).displayType ?? txn.type;
+            const displayDirection = (txn as any).display_type as string | undefined;
             const amountClass =
-              txn.type === "income" || isRepayment
+              visualType === "income" || isRepayment
                 ? "text-emerald-700"
-                : txn.type === "expense"
+                : visualType === "expense"
                 ? "text-red-500"
                 : "text-slate-600"
             const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount
@@ -654,16 +597,16 @@ export function UnifiedTransactionTable({
             const categoryLabel = txn.category_name ?? ''
             const hasShoppingCategory = categoryLabel.toLowerCase().includes('shopping')
             const canRequestRefund =
-              txn.type === 'expense' && (Boolean(txn.shop_id) || hasShoppingCategory)
+              (visualType === 'expense' || txn.type === 'expense') && (Boolean(txn.shop_id) || hasShoppingCategory)
 
             // --- Type Logic ---
             let typeBadge = null;
             if (txn.type === 'repayment') {
               typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> TF In</span>;
-            } else if (txn.type === 'expense') {
-              typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Out</span>
-            } else if (txn.type === 'income') {
-              typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> In</span>
+            } else if (visualType === 'expense') {
+              typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> {displayDirection === 'OUT' ? 'Out' : 'Out'}</span>
+            } else if (visualType === 'income') {
+              typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> {displayDirection === 'IN' ? 'In' : 'In'}</span>
             } else {
               // Transfer
               if (accountId) {
@@ -720,7 +663,7 @@ export function UnifiedTransactionTable({
                                     className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
                                     onClick={event => {
                                         event.stopPropagation();
-                                        openRefundDialog(txn);
+                                        openRefundForm(txn, 'request');
                                     }}
                                 >
                                     <span>Request Refund</span>
@@ -731,7 +674,7 @@ export function UnifiedTransactionTable({
                                     className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
                                     onClick={event => {
                                         event.stopPropagation();
-                                        openConfirmRefundDialog(txn);
+                                        openRefundForm(txn, 'confirm');
                                     }}
                                 >
                                     <span>Confirm Refund</span>
@@ -758,8 +701,19 @@ export function UnifiedTransactionTable({
 
             const renderCell = (key: ColumnKey) => {
               switch (key) {
-                case "date":
-                  return <span className="whitespace-nowrap">{formattedDate(txn.occurred_at)}</span>
+                case "date": {
+                  const d = new Date(txn.occurred_at ?? txn.created_at ?? Date.now())
+                  const day = String(d.getDate()).padStart(2, "0")
+                  const month = String(d.getMonth() + 1).padStart(2, "0")
+                  const hours = String(d.getHours()).padStart(2, "0")
+                  const minutes = String(d.getMinutes()).padStart(2, "0")
+                  return (
+                    <div className="flex flex-col">
+                      <span className="font-semibold">{`${day}/${month}`}</span>
+                      <span className="text-xs text-gray-500">{`${hours}:${minutes}`}</span>
+                    </div>
+                  )
+                }
                 case "type":
                    return typeBadge
                 case "shop": {
@@ -1096,7 +1050,7 @@ export function UnifiedTransactionTable({
                 onClick={() => setEditingTxn(null)}
                 aria-label="Close"
               >
-                ×
+                X
               </button>
             </div>
             <TransactionForm
@@ -1151,111 +1105,115 @@ export function UnifiedTransactionTable({
         </div>,
         document.body
       )}
-      {refundDialogTxn && createPortal(
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
-          onClick={closeRefundDialog}
-        >
-          <div
-            className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl"
-            onClick={event => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-900">
-                {refundDialogMode === 'confirm' ? 'Confirm Refund' : 'Request Refund'}
-              </h3>
-              <button
-                className="text-slate-500 transition hover:text-slate-700"
-                onClick={closeRefundDialog}
+      {refundFormTxn &&
+        (() => {
+          const pendingLine = refundFormTxn.transaction_lines?.find(
+            line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
+          )
+          const baseAmount =
+            refundFormStage === 'confirm'
+              ? Math.abs(pendingLine?.amount ?? refundFormTxn.original_amount ?? refundFormTxn.amount ?? 0)
+              : Math.abs(refundFormTxn.original_amount ?? refundFormTxn.amount ?? 0)
+          const sourceAccountLine =
+            refundFormTxn.transaction_lines?.find(
+              line => line?.type === 'credit' && line.account_id && line.account_id !== REFUND_PENDING_ACCOUNT_ID
+            ) ??
+            refundFormTxn.transaction_lines?.find(
+              line => line?.type === 'debit' && line.account_id && line.account_id !== REFUND_PENDING_ACCOUNT_ID
+            )
+          const defaultAccountId = sourceAccountLine?.account_id ?? refundAccountOptions[0]?.id ?? null
+          const initialNote =
+            refundFormStage === 'confirm'
+              ? refundFormTxn.note ?? 'Confirm refund'
+              : `Refund: ${refundFormTxn.note ?? refundFormTxn.id}`
+
+          return createPortal(
+            <div
+              className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+              onClick={() => setRefundFormTxn(null)}
+            >
+              <div
+                className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl"
+                onClick={event => event.stopPropagation()}
               >
-                ×
-              </button>
-            </div>
-            <p className="text-sm text-slate-600 mb-4">
-              {refundDialogTxn.note ?? 'No note available'}
-            </p>
-            <div className="space-y-4">
-              {refundDialogMode === 'request' ? (
-                <div>
-                  <label className="text-sm font-semibold text-slate-700">Refund amount (VND)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={refundAmount}
-                    onChange={event => setRefundAmount(Math.max(Number(event.target.value) || 0, 0))}
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  />
-                </div>
-              ) : (
-                <div className="space-y-1 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Amount to confirm</p>
-                  <p className="text-lg font-semibold text-slate-900">
-                    {numberFormatter.format(
-                      Math.abs(
-                        refundDialogTxn.transaction_lines
-                          ?.find(line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit')
-                          ?.amount ?? 0
-                      )
-                    )}
-                  </p>
-                </div>
-              )}
-              {refundDialogMode === 'request' && (
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={refundInstant}
-                    onChange={event => setRefundInstant(event.target.checked)}
-                  />
-                  <span>Money already returned?</span>
-                </label>
-              )}
-              {(refundDialogMode === 'confirm' || (refundDialogMode === 'request' && refundInstant)) && (
-                <div>
-                  <label className="text-sm font-semibold text-slate-700">Receiving account</label>
-                  <select
-                    value={refundTargetAccountId ?? ''}
-                    onChange={event => setRefundTargetAccountId(event.target.value || null)}
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    {refundFormStage === 'confirm' ? 'Confirm Refund' : 'Request Refund'}
+                  </h3>
+                  <button
+                    className="text-slate-500 transition hover:text-slate-700"
+                    onClick={() => setRefundFormTxn(null)}
                   >
-                    <option value="">Choose account</option>
-                    {refundAccountOptions.map(account => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
+                    X
+                  </button>
                 </div>
-              )}
-              {refundError && (
-                <p className="text-sm text-red-600">{refundError}</p>
-              )}
+                <TransactionForm
+                  accounts={accounts}
+                  categories={categories}
+                  people={people}
+                  shops={shops}
+                  mode="refund"
+                  refundTransactionId={refundFormTxn.id}
+                  refundAction={refundFormStage}
+                  refundMaxAmount={baseAmount}
+                  defaultRefundStatus={refundFormStage === 'confirm' ? 'received' : 'pending'}
+                  defaultSourceAccountId={defaultAccountId ?? undefined}
+                  initialValues={{
+                    amount: baseAmount,
+                    note: initialNote,
+                    shop_id: refundFormTxn.shop_id ?? undefined,
+                    tag: refundFormTxn.tag ?? undefined,
+                    occurred_at: refundFormTxn.occurred_at ? new Date(refundFormTxn.occurred_at) : new Date(),
+                    source_account_id: defaultAccountId ?? undefined,
+                  }}
+                  onSuccess={handleRefundFormSuccess}
+                />
+              </div>
+            </div>,
+            document.body
+          )
+        })()}
+      {bulkDialog?.open &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4"
+            onClick={() => setBulkDialog(null)}
+          >
+            <div
+              className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
+              onClick={event => event.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-slate-900">
+                {bulkDialog.mode === 'void' ? 'Bulk Void' : 'Bulk Restore'}
+              </h3>
+              <p className="mt-2 text-sm text-slate-600">
+                Bạn có chắc muốn {bulkDialog.mode === 'void' ? 'hủy' : 'khôi phục'}{' '}
+                <span className="font-semibold">{selection.size}</span> giao dịch đã chọn?
+              </p>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  className="rounded-md px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100"
+                  onClick={() => setBulkDialog(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className={`inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm transition ${
+                    bulkDialog.mode === 'void'
+                      ? 'bg-red-600 hover:bg-red-500'
+                      : 'bg-green-600 hover:bg-green-500'
+                  }`}
+                  onClick={() => void executeBulk(bulkDialog.mode)}
+                  disabled={isVoiding || isRestoring}
+                >
+                  {(isVoiding || isRestoring) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {bulkDialog.mode === 'void' ? 'Confirm Void' : 'Confirm Restore'}
+                </button>
+              </div>
             </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={closeRefundDialog}
-                disabled={isRefunding}
-              >
-                Cancel
-              </button>
-              <button
-                className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-70"
-                onClick={handleRefundSubmit}
-                disabled={isRefunding}
-              >
-                {isRefunding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {refundDialogMode === 'confirm'
-                  ? 'Confirm Refund'
-                  : refundInstant
-                    ? 'Confirm & Refund'
-                    : 'Create Request'}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

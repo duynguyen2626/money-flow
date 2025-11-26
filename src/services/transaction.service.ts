@@ -9,6 +9,7 @@ import { syncTransactionToSheet } from './sheet.service';
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds';
 
 type ShopRow = Database['public']['Tables']['shops']['Row'];
+const REFUND_CATEGORY_ID = 'e0000000-0000-0000-0000-000000000095';
 
 export type CreateTransactionInput = {
   occurred_at: string;
@@ -566,111 +567,178 @@ function extractCashbackFromLines(lines: TransactionRow['transaction_lines']): {
   return {}
 }
 
-function mapTransactionRow(txn: TransactionRow, accountId?: string): TransactionWithDetails {
+function mapTransactionRow(
+  txn: TransactionRow,
+  accountId?: string,
+  context?: { mode?: 'person' }
+): TransactionWithDetails {
   const lines = txn.transaction_lines ?? []
   const cashbackFromLines = extractCashbackFromLines(lines)
+  const isPersonContext = context?.mode === 'person'
 
-  let accountLine = lines.find(line => line && typeof line.original_amount === 'number');
+  let accountLine = lines.find(line => line && typeof line.original_amount === 'number')
 
   if (!accountLine) {
-      accountLine = accountId
+    accountLine = accountId
       ? lines.find(line => line && line.account_id === accountId)
       : lines.find(line => line && line.type === 'credit')
   }
-  
+
   let displayAmount =
     typeof accountLine?.amount === 'number'
       ? accountLine.amount
       : lines.reduce((sum, line) => sum + (line ? Math.abs(line.amount) : 0), 0) / 2
 
-  let type: 'income' | 'expense' | 'transfer' | 'repayment' = 'transfer';
-  let categoryName: string | undefined;
-  let categoryIcon: string | undefined;
-  let categoryImageUrl: string | undefined;
-  let accountName: string | undefined;
+  let type: 'income' | 'expense' | 'transfer' | 'repayment' = 'transfer'
+  let displayType: TransactionWithDetails['displayType'] | undefined
+  let categoryName: string | undefined
+  let categoryIcon: string | undefined
+  let categoryImageUrl: string | undefined
+  let accountName: string | undefined
 
-  const categoryLine = lines.find(line => line && Boolean(line.category_id));
-  const creditAccountLine = lines.find(
-    line => line && line.account_id && line.type === 'credit'
-  );
-  const debitAccountLine = lines.find(
-    line => line && line.account_id && line.type === 'debit'
-  );
+  const categoryLine = lines.find(line => line && Boolean(line.category_id))
+  const accountLines = lines.filter(line => line && line.account_id)
+  const creditAccountLine = accountLines.find(line => line && line.type === 'credit')
+  const debitAccountLine = accountLines.find(line => line && line.type === 'debit')
+  const nonDebtCreditLine = accountLines.find(
+    line => line && line.type === 'credit' && line.accounts?.type !== 'debt'
+  )
+  const nonDebtDebitLine = accountLines.find(
+    line => line && line.type === 'debit' && line.accounts?.type !== 'debt'
+  )
+  const debtCreditLine = accountLines.find(
+    line => line && line.type === 'credit' && line.accounts?.type === 'debt'
+  )
+  const debtDebitLine = accountLines.find(
+    line => line && line.type === 'debit' && line.accounts?.type === 'debt'
+  )
 
   if (categoryLine && categoryLine.categories) {
-    categoryName = categoryLine.categories.name;
-    categoryIcon = categoryLine.categories.icon ?? undefined;
-    categoryImageUrl = categoryLine.categories.image_url ?? undefined;
+    categoryName = categoryLine.categories.name
+    categoryIcon = categoryLine.categories.icon ?? undefined
+    categoryImageUrl = categoryLine.categories.image_url ?? undefined
 
-    // Explicitly check the category's type first.
     if (categoryLine.categories.type === 'expense') {
-        type = 'expense';
+      type = 'expense'
     } else if (categoryLine.categories.type === 'income') {
-        type = 'income';
+      type = 'income'
     }
 
-    const lowerCategoryName = categoryName?.toLowerCase() ?? '';
+    const lowerCategoryName = categoryName?.toLowerCase() ?? ''
     if (lowerCategoryName.includes('thu nợ') || lowerCategoryName.includes('repayment')) {
-        type = 'repayment';
+      type = 'repayment'
     }
   } else if (creditAccountLine && debitAccountLine) {
-    type = 'transfer';
-    categoryName = "Money Transfer";
+    type = 'transfer'
+    categoryName = 'Money Transfer'
   } else if (accountLine?.amount !== undefined) {
-    // Fallback for older transactions or transfers without category
-    type = accountLine.amount >= 0 ? 'income' : 'expense';
+    type = accountLine.amount >= 0 ? 'income' : 'expense'
+  }
+
+  if (categoryLine?.category_id === REFUND_CATEGORY_ID) {
+    type = 'income'
+    displayType = 'income'
+  }
+
+  displayType = displayType ?? (type === 'repayment' ? 'income' : type)
+
+  if (isPersonContext && (debtCreditLine || debtDebitLine)) {
+    displayType = debtDebitLine ? 'expense' : 'income'
   }
 
   if (type === 'expense' && displayAmount > 0) {
-      displayAmount = -Math.abs(displayAmount);
+    displayAmount = -Math.abs(displayAmount)
   }
 
-  // Final determination of accountName based on context
-  if (type === 'expense') {
-    accountName = creditAccountLine?.accounts?.name;
-  } else if (type === 'income') {
-    accountName = debitAccountLine?.accounts?.name;
-  } else if (type === 'transfer') {
-     if (accountId) {
-        const otherLine = lines.find(line => line && line.account_id && line.account_id !== accountId);
-        if (otherLine && otherLine.accounts) {
-             accountName = otherLine.accounts.name;
-        }
+  const typeForAccount = displayType ?? type
+
+  if (typeForAccount === 'expense') {
+    accountName = creditAccountLine?.accounts?.name
+  } else if (typeForAccount === 'income') {
+    accountName = debitAccountLine?.accounts?.name
+  } else if (typeForAccount === 'transfer') {
+    if (accountId) {
+      const otherLine = lines.find(line => line && line.account_id && line.account_id !== accountId)
+      if (otherLine?.accounts) {
+        accountName = otherLine.accounts.name
+      }
     } else {
-        accountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name;
+      accountName = debitAccountLine?.accounts?.name ?? creditAccountLine?.accounts?.name
     }
   }
 
   if (accountId) {
-      const myLine = lines.find(l => l && l.account_id === accountId);
-      if (myLine?.accounts?.type === 'debt') {
-          const bankLine = lines.find(l => l && l.account_id && l.account_id !== accountId && l.accounts?.type !== 'debt');
-          if (bankLine?.accounts) {
-              accountName = bankLine.accounts.name
-          }
+    const myLine = lines.find(l => l && l.account_id === accountId)
+    if (myLine?.accounts?.type === 'debt') {
+      const bankLine = lines.find(
+        l => l && l.account_id && l.account_id !== accountId && l.accounts?.type !== 'debt'
+      )
+      if (bankLine?.accounts) {
+        accountName = bankLine.accounts.name
       }
+    }
   } else {
-     const bankLine = lines.find(l => l && l.account_id && l.accounts?.type !== 'debt' && l.accounts?.type !== undefined);
-     if (bankLine && bankLine.accounts) {
-         const debtLine = lines.find(l => l && l.account_id && l.accounts?.type === 'debt');
-         if (debtLine && bankLine) {
-             accountName = bankLine.accounts.name;
-         }
-     }
+    const bankLine = lines.find(
+      l => l && l.account_id && l.accounts?.type !== 'debt' && l.accounts?.type !== undefined
+    )
+    if (bankLine?.accounts) {
+      const debtLine = lines.find(l => l && l.account_id && l.accounts?.type === 'debt')
+      if (debtLine) {
+        accountName = bankLine.accounts.name
+      }
+    }
+  }
+
+  if (isPersonContext) {
+    accountName = nonDebtCreditLine?.accounts?.name ?? nonDebtDebitLine?.accounts?.name ?? accountName
   }
 
   const percentRaw = txn.cashback_share_percent ?? cashbackFromLines.cashback_share_percent
   const cashbackAmount = txn.cashback_share_amount ?? cashbackFromLines.cashback_share_amount
   const personLine = lines.find(line => line && line.person_id)
-  const categoryId = categoryLine?.category_id ?? null
+  let categoryId = categoryLine?.category_id ?? null
   const source_account_name = creditAccountLine?.accounts?.name ?? null
   const destination_account_name = debitAccountLine?.accounts?.name ?? null
-  const { source_name, source_logo, destination_name, destination_logo } = resolveAccountMovementInfo(
-    txn.transaction_lines,
-    txn,
-    type,
-    categoryName ?? null
-  )
+  const { source_name: resolvedSourceName, source_logo: resolvedSourceLogo, destination_name: resolvedDestinationName, destination_logo: resolvedDestinationLogo } =
+    resolveAccountMovementInfo(txn.transaction_lines, txn, type, categoryName ?? null)
+
+  const shopDefaultCategory = ((txn as any).shops?.categories as {
+    id?: string
+    name?: string | null
+    image_url?: string | null
+    icon?: string | null
+  } | null) ?? null
+
+  if (!categoryName && shopDefaultCategory) {
+    categoryName = shopDefaultCategory.name ?? undefined
+    categoryIcon = shopDefaultCategory.icon ?? undefined
+    categoryImageUrl = shopDefaultCategory.image_url ?? undefined
+    categoryId = shopDefaultCategory.id ?? categoryId
+  }
+
+  let source_name = resolvedSourceName
+  let source_logo = resolvedSourceLogo
+  let destination_name = resolvedDestinationName
+  let destination_logo = resolvedDestinationLogo
+
+  if (isPersonContext) {
+    if (displayType === 'expense' && nonDebtCreditLine?.accounts) {
+      source_name = nonDebtCreditLine.accounts.name ?? source_name
+      source_logo = nonDebtCreditLine.accounts.logo_url ?? source_logo ?? null
+    }
+    if (displayType === 'income' && nonDebtDebitLine?.accounts) {
+      destination_name = nonDebtDebitLine.accounts.name ?? destination_name
+      destination_logo = nonDebtDebitLine.accounts.logo_url ?? destination_logo ?? null
+    }
+  }
+
+  const display_direction = displayType
+    ? displayType === 'income'
+      ? 'IN'
+      : displayType === 'expense'
+        ? 'OUT'
+        : 'TRANSFER'
+    : undefined
 
   return {
     id: txn.id,
@@ -680,7 +748,9 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     tag: txn.tag || null,
     created_at: txn.created_at,
     amount: displayAmount,
-    type: type,
+    type,
+    displayType: displayType ?? type,
+    display_type: display_direction,
     category_name: categoryName,
     category_icon: categoryIcon ?? null,
     category_image_url: categoryImageUrl ?? null,
@@ -695,7 +765,9 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     cashback_share_percent: percentRaw ?? null,
     cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? null,
     cashback_share_amount: cashbackAmount ?? null,
-    original_amount: accountLine?.original_amount ?? null,
+    original_amount:
+      accountLine?.original_amount ??
+      (typeof accountLine?.amount === 'number' ? Math.abs(accountLine.amount) : null),
     person_id: personLine?.person_id ?? null,
     person_name: personLine?.profiles?.name ?? null,
     person_avatar_url: personLine?.profiles?.avatar_url ?? null,
@@ -720,7 +792,7 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
       status,
       created_at,
       shop_id,
-      shops ( id, name, logo_url ),
+      shops ( id, name, logo_url, default_category_id, categories ( id, name, type, image_url, icon ) ),
       transaction_lines (
         amount,
         type,
@@ -760,7 +832,7 @@ export async function getTransactionsByShop(shopId: string, limit: number = 50):
       status,
       created_at,
       shop_id,
-      shops ( id, name, logo_url ),
+      shops ( id, name, logo_url, default_category_id, categories ( id, name, type, image_url, icon ) ),
       transaction_lines (
         amount,
         type,
@@ -1013,6 +1085,7 @@ type RefundTransactionLine = {
   categories?: {
     name?: string | null
   } | null
+  person_id?: string | null
 }
 
 type RefundTransactionRow = {
@@ -1038,7 +1111,8 @@ export type PendingRefundItem = {
 export async function requestRefund(
   transactionId: string,
   refundAmount: number,
-  partial: boolean
+  partial: boolean,
+  options?: { note?: string | null; shop_id?: string | null }
 ): Promise<{ success: boolean; refundTransactionId?: string; error?: string }> {
   console.log('Requesting refund for:', transactionId);
   if (!transactionId) {
@@ -1076,6 +1150,9 @@ export async function requestRefund(
 
   const lines = ((existing as any).transaction_lines as RefundTransactionLine[]) ?? []
   const categoryLine = lines.find(line => line?.category_id)
+  const personLine = lines.find(line => line?.person_id)
+  const debtAccountId = personLine?.account_id ?? null
+  const personId = personLine?.person_id ?? null
   if (!categoryLine) {
     return { success: false, error: 'Giao dịch không có danh mục phí để hoàn.' }
   }
@@ -1092,7 +1169,7 @@ export async function requestRefund(
   }
 
   const userId = await resolveCurrentUserId(supabase)
-  const requestNote = `Refund Request for ${(existing as any).note ?? transactionId}`
+  const requestNote = options?.note ?? `Refund Request for ${(existing as any).note ?? transactionId}`
   const lineMetadata = {
     refund_status: 'requested',
     linked_transaction_id: transactionId,
@@ -1111,7 +1188,7 @@ export async function requestRefund(
     status: 'posted',
     tag: (existing as any).tag,
     created_by: userId,
-    shop_id: (existing as any).shop_id ?? null,
+    shop_id: options?.shop_id ?? (existing as any).shop_id ?? null,
   })
     .select()
     .single()
@@ -1121,11 +1198,7 @@ export async function requestRefund(
     return { success: false, error: 'Không thể tạo giao dịch yêu cầu hoàn tiền.' }
   }
 
-  const refundCategoryId = await resolveSystemCategory(supabase, 'Refund', 'expense');
-  if (!refundCategoryId) {
-      console.error('FATAL: "Refund" system category not found.');
-      return { success: false, error: 'Hệ thống chưa cấu hình danh mục Hoàn tiền.' }
-  }
+  const refundCategoryId = REFUND_CATEGORY_ID
 
   const linesToInsert: any[] = [
     {
@@ -1143,6 +1216,17 @@ export async function requestRefund(
       metadata: lineMetadata,
     },
   ]
+
+  if (personId && debtAccountId) {
+    linesToInsert.push({
+      transaction_id: requestTxn.id,
+      account_id: debtAccountId,
+      amount: -safeAmount,
+      type: 'credit',
+      person_id: personId,
+      metadata: lineMetadata,
+    })
+  }
 
   const { error: linesError } = await (supabase.from('transaction_lines').insert as any)(linesToInsert)
   if (linesError) {
@@ -1377,12 +1461,18 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
     .filter((item): item is PendingRefundItem => Boolean(item))
 }
 
-export async function getUnifiedTransactions(accountId?: string, limit: number = 50): Promise<TransactionWithDetails[]> {
-  const supabase = createClient();
+type UnifiedTransactionParams = {
+  accountId?: string
+  limit?: number
+  context?: 'person'
+}
 
-  let query = supabase
-    .from('transactions')
-    .select(`
+export async function getUnifiedTransactions(
+  accountOrOptions?: string | UnifiedTransactionParams,
+  limitArg: number = 50
+): Promise<TransactionWithDetails[]> {
+  const supabase = createClient()
+  const selection = `
       id,
       occurred_at,
       note,
@@ -1390,7 +1480,7 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
       status,
       created_at,
       shop_id,
-      shops ( id, name, logo_url ),
+      shops ( id, name, logo_url, default_category_id, categories ( id, name, type, image_url, icon ) ),
       transaction_lines (
         amount,
         type,
@@ -1405,20 +1495,63 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
         accounts (name, type, logo_url),
         categories (name, type, image_url, icon)
       )
-    `)
-    .order('occurred_at', { ascending: false })
-    .limit(limit);
+    `
+
+  const parsed =
+    typeof accountOrOptions === 'object' && accountOrOptions !== null
+      ? accountOrOptions
+      : { accountId: accountOrOptions as string | undefined, limit: limitArg }
+
+  const accountId = parsed.accountId
+  const limit = parsed.limit ?? limitArg
+  const context = parsed.context
 
   if (accountId) {
-    query = query.eq('transaction_lines.account_id', accountId);
+    const { data: txnIds, error: idsError } = await supabase
+      .from('transaction_lines')
+      .select('transaction_id, transactions!inner(occurred_at)')
+      .eq('account_id', accountId)
+      .order('transactions(occurred_at)', { ascending: false })
+      .limit(limit)
+
+    if (idsError) {
+      console.error('Error fetching transaction ids for unified view:', idsError)
+      return []
+    }
+
+    const uniqueIds = Array.from(
+      new Set(
+        ((txnIds ?? []) as Array<{ transaction_id: string | null }>).map(row => row.transaction_id).filter(Boolean)
+      )
+    ) as string[]
+    if (uniqueIds.length === 0) {
+      return []
+    }
+
+    const { data, error } = await supabase
+      .from('transactions')
+      .select(selection)
+      .in('id', uniqueIds)
+      .order('occurred_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching unified transactions:', error)
+      return []
+    }
+
+    return (data as any[]).map(txn => mapTransactionRow(txn, accountId, { mode: context }))
   }
 
-  const { data, error } = await query;
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(selection)
+    .order('occurred_at', { ascending: false })
+    .limit(limit)
 
   if (error) {
-    console.error('Error fetching unified transactions:', error);
-    return [];
+    console.error('Error fetching unified transactions:', error)
+    return []
   }
 
-  return (data as any[]).map(txn => mapTransactionRow(txn, accountId));
+  return (data as any[]).map(txn => mapTransactionRow(txn, accountId, { mode: context }))
 }

@@ -7,13 +7,15 @@ import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { z } from 'zod'
 import { ensureDebtAccountAction } from '@/actions/people-actions'
-import { createTransaction, updateTransaction } from '@/services/transaction.service'
+import { createTransaction, updateTransaction, requestRefund, confirmRefund } from '@/services/transaction.service'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
 import { CashbackCard, AccountSpendingStats } from '@/types/cashback.types'
 import { Combobox } from '@/components/ui/combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateTag } from '@/lib/tag'
+import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
+import { Lock } from 'lucide-react'
 
 const formSchema = z.object({
   occurred_at: z.date(),
@@ -69,6 +71,7 @@ const formSchema = z.object({
 const numberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 })
+const REFUND_CATEGORY_ID = 'e0000000-0000-0000-0000-000000000095'
 
 export type TransactionFormValues = z.infer<typeof formSchema>
 
@@ -125,7 +128,11 @@ type TransactionFormProps = {
     category_name?: string
     account_name?: string
   };
-  mode?: 'create' | 'edit';
+  mode?: 'create' | 'edit' | 'refund';
+  refundTransactionId?: string;
+  refundAction?: 'request' | 'confirm';
+  refundMaxAmount?: number;
+  defaultRefundStatus?: 'pending' | 'received';
 }
 
 type StatusMessage = {
@@ -147,6 +154,10 @@ export function TransactionForm({
   transactionId,
   initialValues,
   mode = 'create',
+  refundTransactionId,
+  refundAction = 'request',
+  refundMaxAmount,
+  defaultRefundStatus = 'pending',
 }: TransactionFormProps) {
   const sourceAccounts = useMemo(
     () => allAccounts.filter(a => a.type !== 'debt'),
@@ -187,6 +198,13 @@ export function TransactionForm({
     return map
   }, [peopleState])
 
+  const refundCategoryId = useMemo(() => {
+    const direct = categories.find(cat => cat.id === REFUND_CATEGORY_ID)
+    if (direct) return direct.id
+    const byName = categories.find(cat => (cat.name ?? '').toLowerCase().includes('refund'))
+    return byName?.id ?? REFUND_CATEGORY_ID
+  }, [categories])
+
   const [status, setStatus] = useState<StatusMessage>(null)
   const [cashbackProgress, setCashbackProgress] = useState<CashbackCard | null>(null)
   const [progressLoading, setProgressLoading] = useState(false)
@@ -196,24 +214,30 @@ export function TransactionForm({
   const [statsError, setStatsError] = useState<string | null>(null)
   const [debtEnsureError, setDebtEnsureError] = useState<string | null>(null)
   const [isEnsuringDebt, startEnsuringDebt] = useTransition()
-  const isEditMode = mode === 'edit' || Boolean(transactionId)
+  const isEditMode = mode === 'edit' || (mode !== 'refund' && Boolean(transactionId))
+  const isRefundMode = mode === 'refund'
+  const isConfirmRefund = isRefundMode && refundAction === 'confirm'
+  const [refundStatus, setRefundStatus] = useState<'pending' | 'received'>(
+    isConfirmRefund ? 'received' : defaultRefundStatus
+  )
   const router = useRouter()
 
   const baseDefaults = useMemo(
     () => ({
       occurred_at: new Date(),
-      type: defaultType ?? 'expense',
+      type: defaultType ?? (isRefundMode ? 'income' : 'expense'),
       amount: 0,
       note: '',
       tag: defaultTag ?? generateTag(new Date()),
       source_account_id: defaultSourceAccountId ?? undefined,
       person_id: undefined,
       debt_account_id: defaultDebtAccountId ?? undefined,
+      category_id: isRefundMode ? refundCategoryId ?? undefined : undefined,
       shop_id: undefined,
       cashback_share_percent: undefined,
       cashback_share_fixed: undefined,
     }),
-    [defaultDebtAccountId, defaultSourceAccountId, defaultTag, defaultType]
+    [defaultDebtAccountId, defaultSourceAccountId, defaultTag, defaultType, isRefundMode, refundCategoryId]
   )
 
   const form = useForm<TransactionFormValues>({
@@ -275,8 +299,93 @@ export function TransactionForm({
     setManualTagMode(true)
   }, [baseDefaults, form, initialValues, allAccounts])
 
+  useEffect(() => {
+    if (!isRefundMode) return
+    form.setValue('type', 'income')
+    form.setValue('category_id', refundCategoryId ?? REFUND_CATEGORY_ID, { shouldValidate: true })
+    const currentNote = form.getValues('note')
+    if (!currentNote || currentNote.trim().length === 0) {
+      const baseNote = initialValues?.note ?? ''
+      const nextNote = baseNote ? `Refund: ${baseNote}` : 'Refund'
+      form.setValue('note', nextNote)
+    }
+  }, [form, initialValues?.note, isRefundMode, refundCategoryId])
+
   async function onSubmit(values: TransactionFormValues) {
     setStatus(null)
+
+    if (isRefundMode) {
+      const targetTransactionId = refundTransactionId ?? transactionId
+      if (!targetTransactionId) {
+        setStatus({ type: 'error', text: 'Missing target transaction to refund.' })
+        return
+      }
+
+      const maxRefund = typeof refundMaxAmount === 'number' ? Math.abs(refundMaxAmount) : Math.abs(values.amount ?? 0)
+      const safeAmount = Math.min(Math.abs(values.amount ?? 0), maxRefund)
+      if (!Number.isFinite(safeAmount) || safeAmount <= 0) {
+        setStatus({ type: 'error', text: 'Please enter a valid refund amount.' })
+        return
+      }
+
+      const partialFlag = safeAmount < maxRefund
+
+      if (isConfirmRefund) {
+        const targetAccountId = values.source_account_id
+        if (!targetAccountId || targetAccountId === REFUND_PENDING_ACCOUNT_ID) {
+          setStatus({ type: 'error', text: 'Choose the receiving account for this refund.' })
+          return
+        }
+        const confirmResult = await confirmRefund(targetTransactionId, targetAccountId)
+        if (!confirmResult.success) {
+          setStatus({ type: 'error', text: confirmResult.error ?? 'Unable to confirm refund.' })
+          return
+        }
+        router.refresh()
+        setStatus({ type: 'success', text: 'Refund confirmed successfully.' })
+        onSuccess?.()
+        return
+      }
+
+      const requestResult = await requestRefund(targetTransactionId, safeAmount, partialFlag, {
+        note: values.note ?? undefined,
+        shop_id: values.shop_id ?? undefined,
+      })
+
+      if (!requestResult.success) {
+        setStatus({ type: 'error', text: requestResult.error ?? 'Unable to create refund request.' })
+        return
+      }
+
+      if (refundStatus === 'received') {
+        const preferredAccount =
+          values.source_account_id === REFUND_PENDING_ACCOUNT_ID
+            ? defaultSourceAccountId ?? initialValues?.source_account_id ?? null
+            : values.source_account_id ?? null
+
+        if (!preferredAccount) {
+          setStatus({ type: 'error', text: 'Select where the refunded money was received.' })
+          return
+        }
+
+        const confirmResult = await confirmRefund(
+          requestResult.refundTransactionId ?? '',
+          preferredAccount
+        )
+        if (!confirmResult.success) {
+          setStatus({ type: 'error', text: confirmResult.error ?? 'Unable to confirm refund.' })
+          return
+        }
+      }
+
+      router.refresh()
+      setStatus({
+        type: 'success',
+        text: refundStatus === 'received' ? 'Refund confirmed successfully.' : 'Refund request created.',
+      })
+      onSuccess?.()
+      return
+    }
 
     const percentLimit = cashbackProgress ? cashbackProgress.rate * 100 : null
     const rawPercent = Number(values.cashback_share_percent ?? 0)
@@ -384,6 +493,24 @@ export function TransactionForm({
   }, [transactionType, categories, shops, form, isEditMode]);
 
   const categoryOptions = useMemo(() => {
+    if (isRefundMode && refundCategoryId) {
+      const refundCat =
+        categories.find(cat => cat.id === refundCategoryId) ??
+        categories.find(cat => (cat.name ?? '').toLowerCase().includes('refund')) ??
+        null
+      return [
+        {
+          value: refundCategoryId,
+          label: refundCat?.name ?? 'Refund',
+          description: refundCat?.type === 'income' ? 'Income' : 'Expense',
+          searchValue: refundCat?.name ?? 'Refund',
+          icon: refundCat?.icon ? (
+            <span className="text-lg">{refundCat.icon}</span>
+          ) : undefined,
+        },
+      ]
+    }
+
     const targetType = transactionType === 'debt' ? 'expense' : transactionType
     if (targetType !== 'expense' && targetType !== 'income') {
       return []
@@ -396,7 +523,7 @@ export function TransactionForm({
         description: cat.type === 'expense' ? 'Expense' : 'Income',
         searchValue: `${cat.name} ${cat.type}`,
       }))
-  }, [categories, transactionType])
+  }, [categories, transactionType, isRefundMode, refundCategoryId])
 
   const watchedAccountId = useWatch({
     control,
@@ -537,6 +664,31 @@ export function TransactionForm({
     }
   }, [watchedShopId, shops, form])
 
+  useEffect(() => {
+    if (!isRefundMode) return
+    if (refundStatus === 'pending') {
+      form.setValue('source_account_id', REFUND_PENDING_ACCOUNT_ID, { shouldValidate: true })
+      return
+    }
+    const preferredAccount =
+      (watchedAccountId && watchedAccountId !== REFUND_PENDING_ACCOUNT_ID ? watchedAccountId : undefined) ??
+      defaultSourceAccountId ??
+      initialValues?.source_account_id ??
+      sourceAccounts.find(acc => acc.id !== REFUND_PENDING_ACCOUNT_ID)?.id
+
+    if (preferredAccount) {
+      form.setValue('source_account_id', preferredAccount, { shouldValidate: true })
+    }
+  }, [
+    defaultSourceAccountId,
+    form,
+    initialValues?.source_account_id,
+    isRefundMode,
+    refundStatus,
+    sourceAccounts,
+    watchedAccountId,
+  ])
+
   const cashbackMeta = useMemo(
     () =>
       selectedAccount ? parseCashbackConfig(selectedAccount.cashback_config) : null,
@@ -582,6 +734,20 @@ export function TransactionForm({
   }, [transactionType, form])
 
   useEffect(() => {
+    if (!isRefundMode) return
+    const amt = Math.abs(watchedAmount ?? 0)
+    const noteValue = `Refund: ${numberFormatter.format(amt)}`
+    form.setValue('note', noteValue)
+  }, [form, isRefundMode, watchedAmount])
+
+  useEffect(() => {
+    if (isRefundMode) {
+      setSpendingStats(null)
+      setStatsError(null)
+      setStatsLoading(false)
+      return
+    }
+
     if (!watchedAccountId) {
       setSpendingStats(null)
       setStatsError(null)
@@ -625,7 +791,7 @@ export function TransactionForm({
     return () => {
       controller.abort()
     }
-  }, [watchedAccountId, watchedDate])
+  }, [isRefundMode, watchedAccountId, watchedDate])
 
   useEffect(() => {
     if (!selectedAccount?.id) {
@@ -771,11 +937,16 @@ export function TransactionForm({
   }, [defaultTag, form, initialValues?.tag, isEditMode]);
 
   useEffect(() => {
-    if (isEditMode) return
+    if (isEditMode || isRefundMode) return
     if (defaultType) {
       form.setValue('type', defaultType);
     }
-  }, [defaultType, form, isEditMode]);
+  }, [defaultType, form, isEditMode, isRefundMode]);
+
+  useEffect(() => {
+    if (!isRefundMode) return
+    form.setValue('type', 'income')
+  }, [form, isRefundMode])
 
   useEffect(() => {
     if (isEditMode && initialValues?.source_account_id) return
@@ -797,7 +968,14 @@ export function TransactionForm({
     return account?.name ?? null
   }, [watchedDebtAccountId, allAccounts])
 
-  const TypeInput = (
+  const TypeInput = isRefundMode ? (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700">Type</label>
+      <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-semibold text-slate-700">
+        Refund
+      </div>
+    </div>
+  ) : (
     <div className="space-y-2">
       <label className="text-sm font-medium text-gray-700">Type</label>
       <Controller
@@ -821,9 +999,48 @@ export function TransactionForm({
     </div>
   )
 
+  const RefundStatusInput = isRefundMode ? (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700">Refund Status</label>
+      <div className="inline-flex rounded-lg bg-slate-100 p-1 text-sm font-semibold text-slate-600">
+        <button
+          type="button"
+          className={`rounded-md px-3 py-1 transition ${
+            refundStatus === 'received' ? 'bg-white text-slate-900 shadow-sm' : 'hover:text-slate-900'
+          }`}
+          onClick={() => setRefundStatus('received')}
+        >
+          Received
+        </button>
+        <button
+          type="button"
+          className={`rounded-md px-3 py-1 transition ${
+            refundStatus === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'hover:text-slate-900'
+          } ${isConfirmRefund ? 'opacity-60 cursor-not-allowed' : ''}`}
+          onClick={() => {
+            if (isConfirmRefund) return
+            setRefundStatus('pending')
+          }}
+          disabled={isConfirmRefund}
+        >
+          Pending
+        </button>
+      </div>
+      <p className="text-xs text-slate-500">
+        {refundStatus === 'pending'
+          ? 'Money will stay in the system account until you confirm it.'
+          : 'Use the receiving account to mark the refund as received.'}
+      </p>
+    </div>
+  ) : null
+
   const CategoryInput =
     transactionType !== 'repayment' &&
-    (transactionType === 'expense' || transactionType === 'debt' || transactionType === 'transfer') ? (
+    (transactionType === 'expense' ||
+      transactionType === 'debt' ||
+      transactionType === 'transfer' ||
+      (transactionType === 'income' && isRefundMode) ||
+      isRefundMode) ? (
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">
           Category {transactionType === 'transfer' ? '(Optional)' : ''}
@@ -839,6 +1056,7 @@ export function TransactionForm({
               placeholder="Select category"
               inputPlaceholder="Search category..."
               emptyState="No matching category"
+              disabled={isRefundMode}
             />
           )}
         />
@@ -1077,11 +1295,15 @@ export function TransactionForm({
     <div className="space-y-3">
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">
-          {transactionType === 'income' || transactionType === 'repayment'
-            ? 'To Account'
-            : transactionType === 'transfer'
-              ? 'Source of Funds'
-              : 'From Account'}
+          {isRefundMode
+            ? refundStatus === 'pending'
+              ? 'Holding Account'
+              : 'Receiving Account'
+            : transactionType === 'income' || transactionType === 'repayment'
+              ? 'To Account'
+              : transactionType === 'transfer'
+                ? 'Source of Funds'
+                : 'From Account'}
         </label>
         <Controller
           control={control}
@@ -1091,9 +1313,10 @@ export function TransactionForm({
               value={field.value}
               onValueChange={field.onChange}
               items={accountOptions}
-              placeholder="Select account"
+              placeholder={isRefundMode && refundStatus === 'pending' ? 'System Account' : 'Select account'}
               inputPlaceholder="Search account..."
               emptyState="No account found"
+              disabled={isRefundMode && refundStatus === 'pending'}
             />
           )}
         />
@@ -1108,38 +1331,45 @@ export function TransactionForm({
     <div className="space-y-3">
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Amount</label>
-        <Controller
-          control={control}
-          name="amount"
-          render={({ field }) => (
-            <input
-              type="text"
-              inputMode="decimal"
-              value={field.value ? new Intl.NumberFormat('en-US').format(field.value) : ''}
-              onFocus={() => {
-                if (field.value === 0) {
-                  field.onChange(undefined);
-                }
-              }}
-              onChange={event => {
-                const rawValue = event.target.value;
-                const numericValue = rawValue.replace(/[^0-9]/g, '');
+        <div className="relative">
+          <Controller
+            control={control}
+            name="amount"
+            render={({ field }) => (
+              <input
+                type="text"
+                inputMode="decimal"
+                value={field.value ? new Intl.NumberFormat('en-US').format(field.value) : ''}
+                onFocus={() => {
+                  if (field.value === 0) {
+                    field.onChange(undefined);
+                  }
+                }}
+                onChange={event => {
+                  const rawValue = event.target.value;
+                  const numericValue = rawValue.replace(/[^0-9]/g, '');
 
-                if (numericValue === '') {
-                  field.onChange(undefined);
-                  return;
-                }
+                  if (numericValue === '') {
+                    field.onChange(undefined);
+                    return;
+                  }
 
-                const number = parseInt(numericValue, 10);
-                if (!isNaN(number)) {
-                  field.onChange(number);
-                }
-              }}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="0"
-            />
+                  const number = parseInt(numericValue, 10);
+                  if (!isNaN(number)) {
+                    field.onChange(number);
+                  }
+                }}
+                disabled={isConfirmRefund}
+                title={isConfirmRefund ? 'This field is locked in Refund mode' : undefined}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-slate-500 pr-9"
+                placeholder="0"
+              />
+            )}
+          />
+          {isConfirmRefund && (
+            <Lock className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
           )}
-        />
+        </div>
         {errors.amount && (
           <p className="text-sm text-red-600">{errors.amount.message}</p>
         )}
@@ -1281,10 +1511,21 @@ export function TransactionForm({
     </div>
   ) : null;
 
+  const submitLabel = isSubmitting
+    ? 'Saving...'
+    : isRefundMode
+      ? refundStatus === 'received'
+        ? 'Confirm Refund'
+        : 'Request Refund'
+      : isEditMode
+        ? 'Update Transaction'
+        : 'Add Transaction'
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       {transactionType !== 'transfer' && (
         <>
+          {RefundStatusInput}
           {TypeInput}
           {CategoryInput}
           {ShopInput}
@@ -1325,7 +1566,7 @@ export function TransactionForm({
         disabled={isSubmitting}
         className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
       >
-        {isSubmitting ? 'Saving...' : isEditMode ? 'Update Transaction' : 'Add Transaction'}
+        {submitLabel}
       </button>
     </form>
   )
