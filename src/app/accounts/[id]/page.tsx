@@ -55,8 +55,20 @@ export default async function AccountPage({ params }: PageProps) {
     ? allAccounts.find(acc => acc.id === parentAccountId) ?? null
     : null
 
-  const totalInflow = stats?.total_inflow ?? 0
-  const totalOutflow = stats?.total_outflow ?? 0
+  let totalInflow = 0
+  let totalOutflow = 0
+  transactions.forEach(txn => {
+    txn.transaction_lines?.forEach(line => {
+      if (line.account_id === id) {
+        if (line.type === 'debit') {
+          totalInflow += Math.abs(line.amount)
+        } else if (line.type === 'credit') {
+          totalOutflow += Math.abs(line.amount)
+        }
+      }
+    })
+  })
+
   const netBalance = totalInflow - totalOutflow
   const isCreditCard = account.type === 'credit_card'
   const isAssetAccount =
