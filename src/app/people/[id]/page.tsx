@@ -32,6 +32,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
     return notFound()
   }
 
+  const sheetProfileId = person.owner_id ?? personId
   const balance = person.current_balance ?? 0
   const balanceLabel = balance > 0 ? 'They owe you' : balance < 0 ? 'You owe them' : 'Settled'
   const balanceClass = balance > 0 ? 'text-emerald-600' : balance < 0 ? 'text-red-600' : 'text-slate-600'
@@ -107,7 +108,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
             <CollapsibleSection title="Sheet Sync & Debt Cycles" defaultOpen={true}>
               <div className="space-y-6">
                 {/* Sheet Sync Controls */}
-                <SheetSyncControls personId={personId} sheetLink={person.sheet_link} />
+                <SheetSyncControls personId={sheetProfileId} sheetLink={person.sheet_link} />
 
                 {/* Debt Cycle Cards */}
                 <DebtCycleTabs
