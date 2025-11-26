@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown, Lock } from 'lucide-react'
 import * as PopoverPrimitive from '@radix-ui/react-popover'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from 'cmdk'
 
@@ -53,8 +53,10 @@ export function Combobox({
           className={cn(
             'flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm text-slate-600 shadow-sm transition hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-0',
             open ? 'border-blue-500' : '',
+            disabled ? 'bg-gray-100 text-slate-500 cursor-not-allowed' : '',
             className
           )}
+          title={disabled ? 'This field is locked in Refund mode' : undefined}
           aria-expanded={open}
         >
           <span className="flex items-center gap-2">
@@ -68,7 +70,10 @@ export function Combobox({
               )}
             </span>
           </span>
-          <ChevronDown className="h-4 w-4 text-slate-500" />
+          <span className="flex items-center gap-1">
+            {disabled && <Lock className="h-4 w-4 text-slate-400" aria-hidden />}
+            <ChevronDown className="h-4 w-4 text-slate-500" />
+          </span>
         </button>
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Content

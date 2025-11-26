@@ -59,6 +59,7 @@ export function FilterableTransactions({
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
     const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(null)
     const [activeTab, setActiveTab] = useState<'active' | 'void'>('active')
+    const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
     const [bulkActions, setBulkActions] = useState<BulkActionState | null>(null)
     const handleBulkActionStateChange = useCallback((next: BulkActionState) => {
         setBulkActions(next);
@@ -173,6 +174,11 @@ export function FilterableTransactions({
         [topLevelCategories]
     )
 
+    const peopleItems = useMemo(
+        () => people.map(person => ({ value: person.id, label: person.name })),
+        [people]
+    )
+
     const subcategoryItems = useMemo(
         () => availableSubcategories.map(cat => ({ value: cat.id, label: cat.name })),
         [availableSubcategories]
@@ -187,12 +193,17 @@ export function FilterableTransactions({
         ? filteredByYear.filter(txn => getDisplayTag(txn) === effectiveTag)
         : filteredByYear
 
+    const filteredByPerson = useMemo(() => {
+        if (!selectedPersonId || hidePeopleColumn) return filteredByTag
+        return filteredByTag.filter(txn => ((txn as any).person_id ?? txn.person_id) === selectedPersonId)
+    }, [filteredByTag, hidePeopleColumn, selectedPersonId])
+
     const filteredByCategory = useMemo(() => {
         if (!selectedCategoryId) {
-            return filteredByTag
+            return filteredByPerson
         }
         const subSet = new Set(availableSubcategories.map(cat => cat.id))
-        return filteredByTag.filter(txn => {
+        return filteredByPerson.filter(txn => {
             const txnCategoryId = txn.category_id ?? null
             if (selectedSubcategoryId) {
                 return txnCategoryId === selectedSubcategoryId
@@ -309,24 +320,32 @@ export function FilterableTransactions({
                         {showFilterMenu && (
                             <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-md border border-slate-200 bg-white p-3 text-xs shadow space-y-3">
                                 <div className="space-y-2">
-                                    <p className="text-[11px] font-semibold text-slate-700">Tag/Cycle</p>
+                                    <p className="text-[11px] font-semibold text-slate-700">Tags</p>
                                     <Combobox
                                         items={tagOptions}
-                                        value={effectiveTag ?? undefined}
+                                        value={selectedTag ?? undefined}
                                         onValueChange={value => {
                                             const next = value ?? null
-                                            if (accountType === 'credit_card') {
-                                                setSelectedCycle(next)
-                                                setSelectedTag(next)
-                                            } else {
-                                                setSelectedTag(next)
-                                            }
+                                            setSelectedTag(next)
                                         }}
                                         placeholder="All tags"
                                         inputPlaceholder="Search tag..."
                                         emptyState="No tags found"
                                     />
                                 </div>
+                                {accountType === 'credit_card' && (
+                                    <div className="space-y-2">
+                                        <p className="text-[11px] font-semibold text-slate-700">Cycle</p>
+                                        <Combobox
+                                            items={tagOptions}
+                                            value={selectedCycle ?? undefined}
+                                            onValueChange={value => setSelectedCycle(value ?? null)}
+                                            placeholder="All cycles"
+                                            inputPlaceholder="Search cycle..."
+                                            emptyState="No cycles"
+                                        />
+                                    </div>
+                                )}
                                 <div className="space-y-2">
                                     <p className="text-[11px] font-semibold text-slate-700">Category</p>
                                     <Combobox
@@ -374,8 +393,17 @@ export function FilterableTransactions({
                             </div>
                         )}
                     </div>
-                    <div className="w-full md:w-32">
-                        <label className="sr-only" htmlFor="year-filter">Year</label>
+                    <div className="flex w-full flex-col gap-2 md:w-64 md:flex-row md:items-center md:gap-3">
+                        {!hidePeopleColumn && (
+                            <Combobox
+                                items={peopleItems}
+                                value={selectedPersonId ?? undefined}
+                                onValueChange={val => setSelectedPersonId(val ?? null)}
+                                placeholder="All people"
+                                inputPlaceholder="Search person..."
+                                emptyState="No people"
+                            />
+                        )}
                         <select
                             id="year-filter"
                             className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"

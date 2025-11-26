@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Home, Receipt, Landmark, CreditCard, Wallet, Users, Clapperboard, Repeat, ShoppingBag, ChevronLeft, ChevronRight } from "lucide-react"
+import { Home, Landmark, CreditCard, Wallet, Users, Clapperboard, ShoppingBag, ChevronLeft, ChevronRight, ArrowLeftRight, ArrowRight } from "lucide-react"
 import Link from "next/link"
 
 import { SidebarNav, type NavItem } from "./sidebar-nav"
@@ -12,8 +12,8 @@ const navItems: NavItem[] = [
   { label: "Overview", href: "/", icon: Home },
   { label: "Accounts", href: "/accounts", icon: Wallet },
   { label: "Shops", href: "/shops", icon: ShoppingBag },
-  { label: "Transactions", href: "/transactions", icon: Receipt },
-  { label: "Refunds", href: "/refunds", icon: Repeat },
+  { label: "Transactions", href: "/transactions", icon: ArrowLeftRight },
+  { label: "Refunds", href: "/refunds", icon: ArrowRight },
   { label: "People", href: "/people", icon: Users },
   { label: "Services", href: "/services", icon: Clapperboard },
   { label: "Debts", href: "/debt", icon: Landmark },
@@ -42,7 +42,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen bg-slate-100 flex">
-      <aside className={cn("relative flex flex-col border-r bg-white py-8 transition-all duration-300", isCollapsed ? "w-16 px-2" : "w-64 px-6")}>
+      <aside className={cn("sticky top-0 h-screen flex flex-col border-r bg-white py-8 transition-all duration-300", isCollapsed ? "w-16 px-2" : "w-64 px-6")}>
         <div className={cn("text-2xl font-bold text-blue-700 mb-10", isCollapsed ? "text-center" : "")}>
             {isCollapsed ? "MF" : "Money Flow"}
         </div>

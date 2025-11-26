@@ -1,52 +1,77 @@
-Terminal
- ○ Compiling /transactions ...
-C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\93926_3515b189._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
- ⨯ Error: `Tooltip` must be used within `TooltipProvider`
-    at useContext2 (C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\93926_3515b189._.js:11361:19)   
-    at Tooltip (C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\93926_3515b189._.js:15828:29) {     
-  digest: '3204686871'
-}
- GET /transactions 500 in 19.3s (compile: 16.8s, render: 2.5s)
-C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\93926_3515b189._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
- ⨯ Error: `Tooltip` must be used within `TooltipProvider`
-    at useContext2 (C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\93926_3515b189._.js:11361:19)   
-    at Tooltip (C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\93926_3515b189._.js:15828:29) {     
-  digest: '3204686871'
-}
- GET /transactions 500 in 755ms (compile: 19ms, render: 736ms)
+Console Error
+Server
 
 
-
-Console:
-
-`Tooltip` must be used within `TooltipProvider`
-src/components/moneyflow/unified-transaction-table.tsx (859:25) @ renderCell
+C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\93926_51a4f394._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+src\app\people\[id]\page.tsx (15:27) @ PeopleDetailPage
 
 
-  857 |                   if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
-  858 |                       return (
-> 859 |                         <Tooltip>
-      |                         ^
-  860 |                           <TooltipTrigger asChild>
-  861 |                             <div className="flex items-center gap-2 cursor-help">
-  862 |                               {sourceIcon}
+  13 |
+  14 | export default async function PeopleDetailPage({ params }: { params: { id: string } }) {
+> 15 |   const personId = params.id
+     |                           ^
+  16 |
+  17 |   const [person, accounts, categories, people, shops, transactions] = await Promise.all([
+  18 |     getPersonDetails(personId),
 Call Stack
-21
+11
 
-Show 13 ignore-listed frame(s)
-renderCell
-src/components/moneyflow/unified-transaction-table.tsx (859:25)
-<unknown>
-src/components/moneyflow/unified-transaction-table.tsx (994:22)
-Array.map
+Show 9 ignore-listed frame(s)
+PeopleDetailPage
+src\app\people\[id]\page.tsx (15:27)
+PeopleDetailPage
 <anonymous>
-<unknown>
-src/components/moneyflow/unified-transaction-table.tsx (986:35)
-Array.map
+1
+2
+2/3
+Console Error
+Server
+
+
+C:\Users\nam.thanhnguyen\Github\money-flow-3\.next\dev\server\chunks\ssr\[root-of-the-server]__23aa1cd6._.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+src\app\people\[id]\page.tsx (15:27) @ PeopleDetailPage
+
+
+  13 |
+  14 | export default async function PeopleDetailPage({ params }: { params: { id: string } }) {
+> 15 |   const personId = params.id
+     |                           ^
+  16 |
+  17 |   const [person, accounts, categories, people, shops, transactions] = await Promise.all([
+  18 |     getPersonDetails(personId),
+Call Stack
+11
+
+Show 9 ignore-listed frame(s)
+PeopleDetailPage
+src\app\people\[id]\page.tsx (15:27)
+PeopleDetailPage
 <anonymous>
-UnifiedTransactionTable
-src/components/moneyflow/unified-transaction-table.tsx (634:34)
-FilterableTransactions
-src/components/moneyflow/filterable-transactions.tsx (538:17)
-TransactionsPage
-src\app\transactions\page.tsx (32:11)
+3/3
+Console Error
+Server
+
+
+Error fetching person details: {}
+src\services\debt.service.ts (79:13) @ getPersonDetails
+
+
+  77 |
+  78 |   if (error) {
+> 79 |     console.error('Error fetching person details:', error)
+     |             ^
+  80 |     return null
+  81 |   }
+  82 |
+Call Stack
+13
+
+Show 9 ignore-listed frame(s)
+getPersonDetails
+src\services\debt.service.ts (79:13)
+Function.all
+<anonymous>
+PeopleDetailPage
+src\app\people\[id]\page.tsx (17:71)
+PeopleDetailPage
+<anonymous>
