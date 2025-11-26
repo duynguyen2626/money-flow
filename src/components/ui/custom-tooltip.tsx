@@ -43,15 +43,11 @@ export function CustomTooltip({
   delayDuration = 200,
 }: CustomTooltipProps) {
   return (
-    <TooltipProvider>
-      <Tooltip delayDuration={delayDuration}>
-        <TooltipTrigger asChild>{children}</TooltipTrigger>
-        <TooltipContent side={side}>
-          {content}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  )
+    <Tooltip delayDuration={delayDuration}>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side={side}>{content}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider }

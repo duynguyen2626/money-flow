@@ -1,11 +1,11 @@
 
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
-import { CustomTooltip, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/custom-tooltip'
+import { CustomTooltip, Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/custom-tooltip'
 import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
 import {
   Table,
@@ -264,6 +264,11 @@ export function UnifiedTransactionTable({
     setInternalSelection(next)
   }, [onSelectionChange])
 
+  const selectionRef = useRef(selection)
+  useEffect(() => {
+    selectionRef.current = selection
+  }, [selection])
+
   const toggleColumnVisibility = (key: ColumnKey) => {
     setVisibleColumns(prev => ({ ...prev, [key]: !prev[key] }))
   }
@@ -457,12 +462,13 @@ export function UnifiedTransactionTable({
   }
 
   const handleBulkVoid = useCallback(async () => {
-    if (selection.size === 0) return;
-    if (!confirm('Are you sure you want to void ' + selection.size + ' transactions?')) return;
+    const currentSelection = selectionRef.current
+    if (currentSelection.size === 0) return;
+    if (!confirm('Are you sure you want to void ' + currentSelection.size + ' transactions?')) return;
 
     setIsVoiding(true);
     let errorCount = 0;
-    for (const id of Array.from(selection)) {
+    for (const id of Array.from(currentSelection)) {
         const ok = await voidTransaction(id);
         if (ok) {
             setStatusOverrides(prev => ({ ...prev, [id]: 'void' }));
@@ -476,15 +482,16 @@ export function UnifiedTransactionTable({
     if (errorCount > 0) {
         alert(`Failed to void ${errorCount} transactions.`);
     }
-  }, [router, selection, updateSelection])
+  }, [router, updateSelection])
 
   const handleBulkRestore = useCallback(async () => {
-    if (selection.size === 0) return;
-    if (!confirm('Are you sure you want to restore ' + selection.size + ' transactions?')) return;
+    const currentSelection = selectionRef.current
+    if (currentSelection.size === 0) return;
+    if (!confirm('Are you sure you want to restore ' + currentSelection.size + ' transactions?')) return;
 
     setIsRestoring(true);
     let errorCount = 0;
-    for (const id of Array.from(selection)) {
+    for (const id of Array.from(currentSelection)) {
         const ok = await restoreTransaction(id);
         if (ok) {
             setStatusOverrides(prev => ({ ...prev, [id]: 'posted' }));
@@ -498,7 +505,7 @@ export function UnifiedTransactionTable({
     if (errorCount > 0) {
         alert(`Failed to restore ${errorCount} transactions.`);
     }
-  }, [router, selection, updateSelection])
+  }, [router, updateSelection])
 
   const currentTab = activeTab ?? 'active';
 
@@ -589,6 +596,7 @@ export function UnifiedTransactionTable({
   const displayedColumns = defaultColumns.filter(col => visibleColumns[col.key])
 
   return (
+    <TooltipProvider>
     <div className="relative space-y-3">
       <div className="rounded-md border bg-white shadow-sm overflow-hidden">
       <Table>
@@ -658,22 +666,23 @@ export function UnifiedTransactionTable({
 
             // --- Type Logic ---
             let typeBadge = null;
+            const typeBadgeBaseClass = "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap";
             if (txn.type === 'repayment') {
-              typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> TF In</span>;
+              typeBadge = <span className={`${typeBadgeBaseClass} bg-blue-600 text-white`}><ArrowLeft className="mr-1 h-3 w-3" /> TF In</span>;
             } else if (txn.type === 'expense') {
-              typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Out</span>
+              typeBadge = <span className={`${typeBadgeBaseClass} bg-red-100 text-red-800`}><ArrowUpRight className="mr-1 h-3 w-3" /> Out</span>
             } else if (txn.type === 'income') {
-              typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> In</span>
+              typeBadge = <span className={`${typeBadgeBaseClass} bg-emerald-100 text-emerald-800`}><ArrowDownLeft className="mr-1 h-3 w-3" /> In</span>
             } else {
               // Transfer
               if (accountId) {
                 if (txn.amount >= 0) {
-                  typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> TF In</span>
+                  typeBadge = <span className={`${typeBadgeBaseClass} bg-blue-600 text-white`}><ArrowLeft className="mr-1 h-3 w-3" /> TF In</span>
                 } else {
-                  typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700"><ArrowRight className="mr-1 h-3 w-3" /> TF Out</span>
+                  typeBadge = <span className={`${typeBadgeBaseClass} bg-blue-100 text-blue-700`}><ArrowRight className="mr-1 h-3 w-3" /> TF Out</span>
                 }
               } else {
-                typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
+                typeBadge = <span className={`${typeBadgeBaseClass} bg-blue-100 text-blue-800`}><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
               }
             }
 
@@ -813,30 +822,33 @@ export function UnifiedTransactionTable({
                    );
                  }
                 case "category": {
-                    if (!txn.category_name) {
-                        if (txn.type === 'repayment') return <span className="text-slate-500">Repayment</span>;
-                        if (txn.type === 'transfer') return <span className="text-slate-500">Transfer</span>;
-                        return <span className="text-red-500">Uncategorized</span>;
-                    }
+                  if (!txn.category_name) {
+                    if (txn.type === "repayment") return <span className="text-slate-500">Repayment</span>
+                    if (txn.type === "transfer") return <span className="text-slate-500">Transfer</span>
+                    return <span className="text-red-500">Uncategorized</span>
+                  }
+                  const displayIcon = txn.shop_logo_url ?? txn.category_image_url
+                  const displayName = txn.category_name
+                  const displayInitial = txn.category_icon ?? displayName.charAt(0).toUpperCase()
+
                   return (
-                    <CustomTooltip content={txn.category_name ?? "No Category"}>
-                        <div className="flex items-center gap-2 max-w-[200px]">
-                            {txn.category_image_url ? (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                    src={txn.category_image_url}
-                                    alt={txn.category_name ?? 'Category'}
-                                    className="h-8 w-8 object-contain rounded-none"
-                                />
-                            ) : (
-                                <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
-                                    {txn.category_icon ?? (txn.category_name ? txn.category_name.charAt(0).toUpperCase() : '?')}
-                                </span>
-                            )}
-                            <span className="font-medium text-slate-700 truncate whitespace-nowrap cursor-help">
-                                {txn.category_name || "-"}
-                            </span>
-                        </div>
+                    <CustomTooltip content={displayName}>
+                      <div className="flex items-center gap-2 max-w-[200px]">
+                        {displayIcon ? (
+                          <img
+                            src={displayIcon}
+                            alt={displayName}
+                            className="h-8 w-8 object-contain rounded-none"
+                          />
+                        ) : (
+                          <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-base font-semibold text-slate-600 rounded-none">
+                            {displayInitial}
+                          </span>
+                        )}
+                        <span className="font-medium text-slate-700 truncate whitespace-nowrap cursor-help">
+                          {displayName}
+                        </span>
+                      </div>
                     </CustomTooltip>
                   )
                 }
@@ -1257,5 +1269,6 @@ export function UnifiedTransactionTable({
         document.body
       )}
     </div>
+    </TooltipProvider>
   )
 }

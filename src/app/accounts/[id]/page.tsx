@@ -1,11 +1,12 @@
-import { getAccountDetails, getAccountStats, getAccountTransactionDetails, getAccounts } from '@/services/account.service'
+import { getAccountDetails, getAccountStats, getAccounts } from '@/services/account.service'
 import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
+import { getUnifiedTransactions } from '@/services/transaction.service'
 import { parseSavingsConfig, getSharedLimitParentId } from '@/lib/account-utils'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 import { AccountDetailHeader } from '@/components/moneyflow/account-detail-header'
-import { ConstructionIcon } from 'lucide-react'
+import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
 
 type PageProps = {
   params: Promise<{
@@ -34,9 +35,9 @@ export default async function AccountPage({ params }: PageProps) {
     )
   }
 
-  const [stats, txnDetails, allAccounts, categories, people, shops] = await Promise.all([
-    account.type === 'credit_card' ? getAccountStats(id) : Promise.resolve(null),
-    getAccountTransactionDetails(id, 50),
+  const [stats, transactions, allAccounts, categories, people, shops] = await Promise.all([
+    getAccountStats(id),
+    getUnifiedTransactions(id, 200),
     getAccounts(),
     getCategories(),
     getPeople(),
@@ -54,21 +55,8 @@ export default async function AccountPage({ params }: PageProps) {
     ? allAccounts.find(acc => acc.id === parentAccountId) ?? null
     : null
 
-  let totalInflow = 0
-  let totalOutflow = 0
-
-  txnDetails.forEach(txn => {
-    txn.transaction_lines?.forEach((line: { account_id: string; type: string; amount: number }) => {
-      if (line.account_id === id) {
-        if (line.type === 'debit') {
-          totalOutflow += Math.abs(line.amount)
-        } else if (line.type === 'credit') {
-          totalInflow += Math.abs(line.amount)
-        }
-      }
-    })
-  })
-
+  const totalInflow = stats?.total_inflow ?? 0
+  const totalOutflow = stats?.total_outflow ?? 0
   const netBalance = totalInflow - totalOutflow
   const isCreditCard = account.type === 'credit_card'
   const isAssetAccount =
@@ -106,20 +94,15 @@ export default async function AccountPage({ params }: PageProps) {
       </section>
 
       <TagFilterProvider>
-        <section className="bg-white shadow rounded-lg p-6">
-          <div className="flex items-center justify-between border-b pb-3">
-            <h2 className="text-lg font-semibold">Transaction History</h2>
-          </div>
-          <div className="mt-4">
-            <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-slate-500">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-50">
-                <ConstructionIcon className="h-6 w-6 text-slate-400" />
-              </div>
-              <p className="font-medium">Transaction History</p>
-              <p className="text-xs">This module is being unified. Check the main Transactions page for details.</p>
-            </div>
-          </div>
-        </section>
+        <FilterableTransactions
+          transactions={transactions}
+          categories={categories}
+          accounts={allAccounts}
+          people={people}
+          shops={shops}
+          accountId={id}
+          accountType={account.type}
+        />
       </TagFilterProvider>
     </div>
   )

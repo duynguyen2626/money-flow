@@ -529,9 +529,9 @@ function resolveAccountMovementInfo(
   const fallbackLogo = txn.shops?.logo_url ?? null
 
   return {
-    source_name: sourceLine?.accounts?.name ?? null,
+    source_name: sourceLine?.accounts?.name ?? 'Unknown',
     source_logo: sourceLine?.accounts?.logo_url ?? null,
-    destination_name: destinationLine?.accounts?.name ?? fallbackName,
+    destination_name: destinationLine?.accounts?.name ?? fallbackName ?? 'Unknown',
     destination_logo: destinationLine?.accounts?.logo_url ?? fallbackLogo ?? null,
   }
 }
