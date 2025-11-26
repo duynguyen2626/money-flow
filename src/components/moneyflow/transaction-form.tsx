@@ -171,7 +171,7 @@ export function TransactionForm({
   }, [people])
 
   const [manualTagMode, setManualTagMode] = useState(() => Boolean(defaultTag || initialValues?.tag));
-  
+
   const suggestedTags = useMemo(() => {
     const tags = [];
     const today = new Date();
@@ -282,17 +282,17 @@ export function TransactionForm({
     const isIncomeWithPerson = initialValues.type === 'income' && initialValues.person_id;
 
     if (isRepayment || (isIncomeWithPerson && !isDebt)) {
-        newValues.type = 'repayment';
-        const sourceId = newValues.source_account_id;
-        const sourceAcc = allAccounts.find(a => a.id === sourceId);
+      newValues.type = 'repayment';
+      const sourceId = newValues.source_account_id;
+      const sourceAcc = allAccounts.find(a => a.id === sourceId);
 
-        if (sourceAcc?.type === 'debt') {
-             if (newValues.debt_account_id) {
-                 const temp = newValues.source_account_id;
-                 newValues.source_account_id = newValues.debt_account_id;
-                 newValues.debt_account_id = temp;
-             }
+      if (sourceAcc?.type === 'debt') {
+        if (newValues.debt_account_id) {
+          const temp = newValues.source_account_id;
+          newValues.source_account_id = newValues.debt_account_id;
+          newValues.debt_account_id = temp;
         }
+      }
     }
 
     form.reset(newValues)
@@ -322,7 +322,13 @@ export function TransactionForm({
       }
 
       const maxRefund = typeof refundMaxAmount === 'number' ? Math.abs(refundMaxAmount) : Math.abs(values.amount ?? 0)
-      const safeAmount = Math.min(Math.abs(values.amount ?? 0), maxRefund)
+
+      if (Math.abs(values.amount ?? 0) > maxRefund) {
+        setStatus({ type: 'error', text: `Refund amount cannot exceed ${numberFormatter.format(maxRefund)}` })
+        return
+      }
+
+      const safeAmount = Math.abs(values.amount ?? 0)
       if (!Number.isFinite(safeAmount) || safeAmount <= 0) {
         setStatus({ type: 'error', text: 'Please enter a valid refund amount.' })
         return
@@ -449,7 +455,7 @@ export function TransactionForm({
     handleSubmit,
     formState: { errors, isSubmitting },
     register,
-    watch, 
+    watch,
   } = form
 
   const transactionType = useWatch({
@@ -475,20 +481,20 @@ export function TransactionForm({
         form.setValue('shop_id', shopeeShop.id);
       }
     } else if (transactionType === 'repayment') {
-        const repaymentCatId = 'e0000000-0000-0000-0000-000000000097';
-        if (categories.some(c => c.id === repaymentCatId)) {
-             form.setValue('category_id', repaymentCatId);
-        } else {
-             const repaymentCat = categories.find(c => c.name === 'Thu nợ người khác' || c.name === 'Repayment');
-             if (repaymentCat) {
-                 form.setValue('category_id', repaymentCat.id);
-             }
+      const repaymentCatId = 'e0000000-0000-0000-0000-000000000097';
+      if (categories.some(c => c.id === repaymentCatId)) {
+        form.setValue('category_id', repaymentCatId);
+      } else {
+        const repaymentCat = categories.find(c => c.name === 'Thu nợ người khác' || c.name === 'Repayment');
+        if (repaymentCat) {
+          form.setValue('category_id', repaymentCat.id);
         }
+      }
     } else if (transactionType === 'transfer') {
-        const transferCat = categories.find(c => c.name === 'Chuyển tiền' || c.name === 'Money Transfer');
-        if (transferCat) {
-            form.setValue('category_id', transferCat.id);
-        }
+      const transferCat = categories.find(c => c.name === 'Chuyển tiền' || c.name === 'Money Transfer');
+      if (transferCat) {
+        form.setValue('category_id', transferCat.id);
+      }
     }
   }, [transactionType, categories, shops, form, isEditMode]);
 
@@ -572,7 +578,7 @@ export function TransactionForm({
 
       let filteredAccounts = sourceAccounts;
       if (isCreditPayment || transactionType === 'transfer') {
-          filteredAccounts = sourceAccounts.filter(a => a.type !== 'credit_card');
+        filteredAccounts = sourceAccounts.filter(a => a.type !== 'credit_card');
       }
 
       return filteredAccounts.map(acc => ({
@@ -583,9 +589,9 @@ export function TransactionForm({
         icon: (
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
             {getAccountInitial(acc.name)}
-            </span>
-          ),
-        }))
+          </span>
+        ),
+      }))
     },
     [sourceAccounts, watchedCategoryId, categories, transactionType]
   )
@@ -594,7 +600,7 @@ export function TransactionForm({
     () => {
       let filteredAccounts = allAccounts;
       if (watchedAccountId) {
-          filteredAccounts = allAccounts.filter(a => a.id !== watchedAccountId);
+        filteredAccounts = allAccounts.filter(a => a.id !== watchedAccountId);
       }
 
       return filteredAccounts.map(acc => ({
@@ -814,8 +820,8 @@ export function TransactionForm({
         }
         const payload = (await response.json()) as CashbackCard[]
         if (!payload.length) {
-        setCashbackProgress(null)
-        setProgressError('Could not find cashback cycle data')
+          setCashbackProgress(null)
+          setProgressError('Could not find cashback cycle data')
           return
         }
         setCashbackProgress(payload[0])
@@ -879,12 +885,12 @@ export function TransactionForm({
   const suggestedPercent =
     typeof remainingBudget === 'number' && amountValue > 0
       ? Math.max(
-          0,
-          Math.min(
-            rateLimitPercent ?? Infinity,
-            ((remainingBudget - fixedEntry) / amountValue) * 100
-          )
+        0,
+        Math.min(
+          rateLimitPercent ?? Infinity,
+          ((remainingBudget - fixedEntry) / amountValue) * 100
         )
+      )
       : null
   const showCashbackInputs =
     transactionType !== 'income' &&
@@ -1005,18 +1011,16 @@ export function TransactionForm({
       <div className="inline-flex rounded-lg bg-slate-100 p-1 text-sm font-semibold text-slate-600">
         <button
           type="button"
-          className={`rounded-md px-3 py-1 transition ${
-            refundStatus === 'received' ? 'bg-white text-slate-900 shadow-sm' : 'hover:text-slate-900'
-          }`}
+          className={`rounded-md px-3 py-1 transition ${refundStatus === 'received' ? 'bg-white text-slate-900 shadow-sm' : 'hover:text-slate-900'
+            }`}
           onClick={() => setRefundStatus('received')}
         >
           Received
         </button>
         <button
           type="button"
-          className={`rounded-md px-3 py-1 transition ${
-            refundStatus === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'hover:text-slate-900'
-          } ${isConfirmRefund ? 'opacity-60 cursor-not-allowed' : ''}`}
+          className={`rounded-md px-3 py-1 transition ${refundStatus === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'hover:text-slate-900'
+            } ${isConfirmRefund ? 'opacity-60 cursor-not-allowed' : ''}`}
           onClick={() => {
             if (isConfirmRefund) return
             setRefundStatus('pending')
@@ -1036,11 +1040,11 @@ export function TransactionForm({
 
   const CategoryInput =
     transactionType !== 'repayment' &&
-    (transactionType === 'expense' ||
-      transactionType === 'debt' ||
-      transactionType === 'transfer' ||
-      (transactionType === 'income' && isRefundMode) ||
-      isRefundMode) ? (
+      (transactionType === 'expense' ||
+        transactionType === 'debt' ||
+        transactionType === 'transfer' ||
+        (transactionType === 'income' && isRefundMode) ||
+        isRefundMode) ? (
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">
           Category {transactionType === 'transfer' ? '(Optional)' : ''}
@@ -1073,9 +1077,9 @@ export function TransactionForm({
 
   const ShopInput =
     transactionType === 'expense' ||
-    transactionType === 'debt' ||
-    transactionType === 'repayment' ||
-    (isEditMode && transactionType !== 'income' && transactionType !== 'transfer') ? (
+      transactionType === 'debt' ||
+      transactionType === 'repayment' ||
+      (isEditMode && transactionType !== 'income' && transactionType !== 'transfer') ? (
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Shop</label>
         <Controller
@@ -1133,11 +1137,11 @@ export function TransactionForm({
         {errors.person_id && (
           <p className="text-sm text-red-600">{errors.person_id.message}</p>
         )}
-         {debtAccountName && (
+        {debtAccountName && (
           <p className="text-xs text-slate-500 mt-1">
-              Debt Account: <span className="font-semibold text-slate-700">{debtAccountName}</span>
+            Debt Account: <span className="font-semibold text-slate-700">{debtAccountName}</span>
           </p>
-         )}
+        )}
       </div>
 
       {watchedPersonId && !debtAccountByPerson.get(watchedPersonId) && (
@@ -1253,7 +1257,7 @@ export function TransactionForm({
             className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
             aria-label="Reset to current month"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2v6h6"/><path d="M21 12A9 9 0 0 0 6 5.3L3 8"/><path d="M21 22v-6h-6"/><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2v6h6" /><path d="M21 12A9 9 0 0 0 6 5.3L3 8" /><path d="M21 22v-6h-6" /><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7" /></svg>
           </button>
           <button
             type="button"
@@ -1267,7 +1271,7 @@ export function TransactionForm({
             className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
             aria-label="Previous month"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
           </button>
           {suggestedTags.map((tag) => (
             <button
@@ -1277,11 +1281,10 @@ export function TransactionForm({
                 form.setValue('tag', tag, { shouldValidate: true });
                 setManualTagMode(true);
               }}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                watch('tag') === tag
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${watch('tag') === tag
                   ? 'bg-blue-500 text-white shadow-sm'
                   : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-              }`}
+                }`}
             >
               {tag}
             </button>
@@ -1487,25 +1490,25 @@ export function TransactionForm({
       )}
       <div className="border-t border-indigo-200/80 pt-2 text-slate-500 space-y-1">
         <p className="text-xs">
-            <span className="font-semibold text-slate-700">Cycle:</span> {selectedCycleLabel ?? 'N/A'}
+          <span className="font-semibold text-slate-700">Cycle:</span> {selectedCycleLabel ?? 'N/A'}
         </p>
         {statsLoading && <p>Loading min spend...</p>}
         {statsError && <p className="text-rose-600">{statsError}</p>}
         {spendingStats && spendingStats.minSpend && spendingStats.minSpend > 0 && (
-            <p>
-                <span className="font-semibold text-slate-700">Min Spend:</span>
-                {projectedSpend >= spendingStats.minSpend ? (
-                    <span className="text-emerald-600"> Met ({numberFormatter.format(projectedSpend)} / {numberFormatter.format(spendingStats.minSpend)})</span>
-                ) : (
-                    <span className="text-amber-600"> Pending ({numberFormatter.format(projectedSpend)} / {numberFormatter.format(spendingStats.minSpend)})</span>
-                )}
-            </p>
+          <p>
+            <span className="font-semibold text-slate-700">Min Spend:</span>
+            {projectedSpend >= spendingStats.minSpend ? (
+              <span className="text-emerald-600"> Met ({numberFormatter.format(projectedSpend)} / {numberFormatter.format(spendingStats.minSpend)})</span>
+            ) : (
+              <span className="text-amber-600"> Pending ({numberFormatter.format(projectedSpend)} / {numberFormatter.format(spendingStats.minSpend)})</span>
+            )}
+          </p>
         )}
         {spendingStats && spendingStats.maxCashback && spendingStats.maxCashback > 0 && (
-            <p>
-                <span className="font-semibold text-slate-700">Budget:</span>
-                {numberFormatter.format(spendingStats.maxCashback - spendingStats.earnedSoFar)} remaining
-            </p>
+          <p>
+            <span className="font-semibold text-slate-700">Budget:</span>
+            {numberFormatter.format(spendingStats.maxCashback - spendingStats.earnedSoFar)} remaining
+          </p>
         )}
       </div>
     </div>
@@ -1553,9 +1556,8 @@ export function TransactionForm({
 
       {status && (
         <p
-          className={`text-sm ${
-            status.type === 'success' ? 'text-green-600' : 'text-red-600'
-          }`}
+          className={`text-sm ${status.type === 'success' ? 'text-green-600' : 'text-red-600'
+            }`}
         >
           {status.text}
         </p>

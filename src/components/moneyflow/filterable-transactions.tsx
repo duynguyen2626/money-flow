@@ -7,6 +7,9 @@ import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types
 import { useTagFilter } from '@/context/tag-filter-context'
 import { Combobox } from '@/components/ui/combobox'
 
+type SortKey = 'date' | 'amount'
+type SortDir = 'asc' | 'desc'
+
 type FilterableTransactionsProps = {
     transactions: TransactionWithDetails[]
     categories?: Category[]
@@ -33,7 +36,7 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
 });
 
-export function FilterableTransactions({ 
+export function FilterableTransactions({
     transactions,
     categories = [],
     accounts = [],
@@ -61,9 +64,13 @@ export function FilterableTransactions({
     const [activeTab, setActiveTab] = useState<'active' | 'void'>('active')
     const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
     const [bulkActions, setBulkActions] = useState<BulkActionState | null>(null)
+    const [sortState, setSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
+
     const handleBulkActionStateChange = useCallback((next: BulkActionState) => {
         setBulkActions(next);
     }, [])
+
+    // ... (memoized values remain same)
 
     const categoryById = useMemo(() => {
         const map = new Map<string, Category>()
@@ -143,7 +150,7 @@ export function FilterableTransactions({
         }
         return txn.tag || 'UNTAGGED'
     }
-    
+
     const tagMeta = useMemo(() => {
         const map = new Map<string, { tag: string; last: number }>()
         filteredByYear.forEach(txn => {
@@ -189,7 +196,7 @@ export function FilterableTransactions({
 
     const effectiveTag = accountType === 'credit_card' ? selectedCycle ?? selectedTag : selectedTag
 
-    const filteredByTag = effectiveTag 
+    const filteredByTag = effectiveTag
         ? filteredByYear.filter(txn => getDisplayTag(txn) === effectiveTag)
         : filteredByYear
 
@@ -241,34 +248,34 @@ export function FilterableTransactions({
 
     const totals = useMemo(() => {
         const source = selectedTxnIds.size > 0
-          ? finalTransactions.filter(txn => selectedTxnIds.has(txn.id))
-          : finalTransactions
+            ? finalTransactions.filter(txn => selectedTxnIds.has(txn.id))
+            : finalTransactions
 
         return source.reduce(
-          (acc, txn) => {
-            const kind = txn.type ?? (txn as any).displayType ?? 'expense'
-            const value = Math.abs(txn.amount ?? 0)
-            const isPersonTxn = Boolean((txn as any).person_id ?? txn.person_id)
+            (acc, txn) => {
+                const kind = txn.type ?? (txn as any).displayType ?? 'expense'
+                const value = Math.abs(txn.amount ?? 0)
+                const isPersonTxn = Boolean((txn as any).person_id ?? txn.person_id)
 
-            if (isPersonTxn) {
-              if (kind === 'income' || kind === 'repayment') { // Consider repayment as collect
-                acc.collect += value
-              } else {
-                acc.lend += value
-              }
-              return acc
-            }
+                if (isPersonTxn) {
+                    if (kind === 'income' || kind === 'repayment') { // Consider repayment as collect
+                        acc.collect += value
+                    } else {
+                        acc.lend += value
+                    }
+                    return acc
+                }
 
-            if (kind === 'income') {
-              acc.income += value
-            } else if (kind === 'expense') {
-              acc.expense += value
-            } else {
-              acc.expense += value
-            }
-            return acc
-          },
-          { income: 0, expense: 0, lend: 0, collect: 0 }
+                if (kind === 'income') {
+                    acc.income += value
+                } else if (kind === 'expense') {
+                    acc.expense += value
+                } else {
+                    acc.expense += value
+                }
+                return acc
+            },
+            { income: 0, expense: 0, lend: 0, collect: 0 }
         )
     }, [finalTransactions, selectedTxnIds])
 
@@ -289,6 +296,8 @@ export function FilterableTransactions({
         setSelectedCategoryId(null)
         setSelectedSubcategoryId(null)
     }
+
+    const isSortActive = sortState.key !== 'date' || sortState.dir !== 'desc'
 
     return (
         <div className="space-y-3">
@@ -371,6 +380,19 @@ export function FilterableTransactions({
                                         />
                                     )}
                                 </div>
+                                {!hidePeopleColumn && (
+                                    <div className="space-y-2">
+                                        <p className="text-[11px] font-semibold text-slate-700">People</p>
+                                        <Combobox
+                                            items={peopleItems}
+                                            value={selectedPersonId ?? undefined}
+                                            onValueChange={val => setSelectedPersonId(val ?? null)}
+                                            placeholder="All people"
+                                            inputPlaceholder="Search person..."
+                                            emptyState="No people"
+                                        />
+                                    </div>
+                                )}
                                 <div className="flex items-center justify-between gap-2">
                                     <button
                                         className="text-xs font-semibold text-blue-600 hover:text-blue-800"
@@ -378,6 +400,7 @@ export function FilterableTransactions({
                                             setSelectedTag(null)
                                             setSelectedCycle(null)
                                             clearCategoryFilters()
+                                            setSelectedPersonId(null)
                                             setSelectedYear(currentYear)
                                         }}
                                     >
@@ -394,16 +417,6 @@ export function FilterableTransactions({
                         )}
                     </div>
                     <div className="flex w-full flex-col gap-2 md:w-64 md:flex-row md:items-center md:gap-3">
-                        {!hidePeopleColumn && (
-                            <Combobox
-                                items={peopleItems}
-                                value={selectedPersonId ?? undefined}
-                                onValueChange={val => setSelectedPersonId(val ?? null)}
-                                placeholder="All people"
-                                inputPlaceholder="Search person..."
-                                emptyState="No people"
-                            />
-                        )}
                         <select
                             id="year-filter"
                             className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
@@ -425,32 +438,37 @@ export function FilterableTransactions({
                 <div className="flex flex-wrap items-center gap-2">
                     <div className="flex items-center rounded-lg bg-slate-200/50 p-1 text-sm font-medium text-slate-600 mr-2">
                         <button
-                            className={`rounded-md px-3 py-1 transition-all text-xs ${
-                                activeTab === 'active'
+                            className={`rounded-md px-3 py-1 transition-all text-xs ${activeTab === 'active'
                                     ? 'bg-white text-slate-900 shadow-sm'
                                     : 'text-slate-500 hover:text-slate-900'
-                            }`}
+                                }`}
                             onClick={() => setActiveTab('active')}
                         >
                             Active
                         </button>
                         <button
-                            className={`rounded-md px-3 py-1 transition-all text-xs ${
-                                activeTab === 'void'
+                            className={`rounded-md px-3 py-1 transition-all text-xs ${activeTab === 'void'
                                     ? 'bg-white text-slate-900 shadow-sm'
                                     : 'text-slate-500 hover:text-slate-900'
-                            }`}
+                                }`}
                             onClick={() => setActiveTab('void')}
                         >
                             Void
                         </button>
                     </div>
+                    {isSortActive && (
+                        <button
+                            className="px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-700 hover:bg-orange-200"
+                            onClick={() => setSortState({ key: 'date', dir: 'desc' })}
+                        >
+                            Reset Sort
+                        </button>
+                    )}
                     <button
-                        className={`px-3 py-1 rounded-full text-sm font-medium ${
-                            selectedTag === null
+                        className={`px-3 py-1 rounded-full text-sm font-medium ${selectedTag === null
                                 ? 'bg-blue-500 text-white'
                                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
+                            }`}
                         onClick={clearTagFilter}
                     >
                         All
@@ -458,11 +476,10 @@ export function FilterableTransactions({
                     {primaryTags.map(tag => (
                         <button
                             key={tag}
-                            className={`px-3 py-1 rounded-full text-sm font-medium ${
-                                selectedTag === tag
+                            className={`px-3 py-1 rounded-full text-sm font-medium ${selectedTag === tag
                                     ? 'bg-blue-500 text-white'
                                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                            }`}
+                                }`}
                             onClick={() => {
                                 const next = selectedTag === tag ? null : tag
                                 setSelectedTag(next)
@@ -487,16 +504,15 @@ export function FilterableTransactions({
                                     {extraTags.map(tag => (
                                         <button
                                             key={tag}
-                                            className={`block w-full px-3 py-2 text-left text-sm ${
-                                                selectedTag === tag ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50'
-                                            }`}
-                                            onClick={() => { 
+                                            className={`block w-full px-3 py-2 text-left text-sm ${selectedTag === tag ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50'
+                                                }`}
+                                            onClick={() => {
                                                 const next = selectedTag === tag ? null : tag
-                                                setSelectedTag(next); 
+                                                setSelectedTag(next);
                                                 if (accountType === 'credit_card') {
                                                     setSelectedCycle(next)
                                                 }
-                                                setMoreTagsOpen(false) 
+                                                setMoreTagsOpen(false)
                                             }}
                                         >
                                             {formatCycleLabel(tag)}
@@ -523,11 +539,10 @@ export function FilterableTransactions({
                                 Deselect All ({selectedTxnIds.size})
                             </button>
                             <button
-                                className={`px-3 py-1 rounded-full text-sm font-semibold shadow-sm ${
-                                    currentBulkTab === 'void'
+                                className={`px-3 py-1 rounded-full text-sm font-semibold shadow-sm ${currentBulkTab === 'void'
                                         ? 'bg-green-600 text-white hover:bg-green-500'
                                         : 'bg-red-600 text-white hover:bg-red-500'
-                                }`}
+                                    }`}
                                 onClick={() => bulkActionHandler?.()}
                                 disabled={bulkActionDisabled}
                             >
@@ -561,10 +576,10 @@ export function FilterableTransactions({
                     )}
                 </div>
             </div>
-            
+
             <div className="mt-2">
                 <UnifiedTransactionTable
-                    transactions={finalTransactions} 
+                    transactions={finalTransactions}
                     accountType={accountType}
                     accountId={accountId}
                     accounts={accounts}
@@ -576,6 +591,8 @@ export function FilterableTransactions({
                     activeTab={activeTab}
                     hidePeopleColumn={hidePeopleColumn}
                     onBulkActionStateChange={handleBulkActionStateChange}
+                    sortState={sortState}
+                    onSortChange={setSortState}
                 />
             </div>
         </div>
