@@ -603,7 +603,7 @@ export function UnifiedTransactionTable({
               const isMenuOpen = actionMenuOpen === txn.id
               const txnMetadata = parseMetadata(txn.metadata)
               const refundStatus = txn.refund_status
-              const isPendingRefund = refundStatus === 'requested'
+              const isPendingRefund = txnMetadata?.has_refund_request === true && txnMetadata?.refund_status !== 'confirmed'
               const categoryLabel = txn.category_name ?? ''
               const hasShoppingCategory = categoryLabel.toLowerCase().includes('shopping')
               const canRequestRefund =
