@@ -900,16 +900,20 @@ export async function voidTransaction(id: string): Promise<boolean> {
     const refundAmount = metadata?.refund_amount as number;
 
     if (linkedTxnId && refundAmount > 0) {
-      const { data: parentTxn, error: parentError } = await supabase
+      const { data, error: parentError } = await supabase
         .from('transactions')
         .select('refunded_amount, transaction_lines(amount, type, category_id)')
         .eq('id', linkedTxnId)
         .single();
 
-      if (parentError || !parentTxn) {
+      if (parentError || !data) {
         console.error('Parent transaction for refund rollback not found:', parentError);
       } else {
-        const parentCategoryLine = (parentTxn.transaction_lines as any[]).find(l => l.category_id && l.type === 'debit');
+        const parentTxn = data as {
+            refunded_amount: number | null;
+            transaction_lines: { amount: number; type: string; category_id: string | null }[];
+        };
+        const parentCategoryLine = parentTxn.transaction_lines.find(l => l.category_id && l.type === 'debit');
         const parentOriginalAmount = parentCategoryLine ? Math.abs(parentCategoryLine.amount) : 0;
 
         const newRefundedAmount = (parentTxn.refunded_amount ?? 0) - refundAmount;
