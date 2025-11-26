@@ -14,6 +14,7 @@ import { CashbackCard, AccountSpendingStats } from '@/types/cashback.types'
 import { Combobox } from '@/components/ui/combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateTag } from '@/lib/tag'
+import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 
 const formSchema = z.object({
   occurred_at: z.date(),
@@ -125,7 +126,7 @@ type TransactionFormProps = {
     category_name?: string
     account_name?: string
   };
-  mode?: 'create' | 'edit';
+  mode?: 'create' | 'edit' | 'refund';
 }
 
 type StatusMessage = {
@@ -148,6 +149,8 @@ export function TransactionForm({
   initialValues,
   mode = 'create',
 }: TransactionFormProps) {
+  const [refundStatus, setRefundStatus] = useState<'pending' | 'received'>('received');
+  const isRefundMode = mode === 'refund';
   const sourceAccounts = useMemo(
     () => allAccounts.filter(a => a.type !== 'debt'),
     [allAccounts]
@@ -244,7 +247,33 @@ export function TransactionForm({
   }, [defaultPersonId, form, peopleState, personMap])
 
   useEffect(() => {
-    if (!initialValues) {
+    if (mode !== 'refund' || !initialValues) return;
+
+    const isDebtLending = initialValues.type === 'debt' || initialValues.person_id;
+
+    const newValues: Partial<TransactionFormValues> = {
+      ...initialValues,
+      note: `Refund: ${initialValues.note || ''}`,
+    };
+
+    if (isDebtLending) {
+      newValues.type = 'repayment';
+      newValues.category_id = 'e0000000-0000-0000-0000-000000000096'; // Debt Repayment
+    } else {
+      newValues.type = 'income';
+      newValues.category_id = 'e0000000-0000-0000-0000-000000000095'; // Refund
+    }
+
+    form.reset({
+      ...baseDefaults,
+      ...newValues,
+    });
+    setRefundStatus('received');
+
+  }, [mode, initialValues, form, baseDefaults]);
+
+  useEffect(() => {
+    if (!initialValues || mode === 'refund') {
       return
     }
 
@@ -273,7 +302,7 @@ export function TransactionForm({
 
     form.reset(newValues)
     setManualTagMode(true)
-  }, [baseDefaults, form, initialValues, allAccounts])
+  }, [baseDefaults, form, initialValues, allAccounts, mode])
 
   async function onSubmit(values: TransactionFormValues) {
     setStatus(null)
@@ -462,6 +491,16 @@ export function TransactionForm({
     },
     [sourceAccounts, watchedCategoryId, categories, transactionType]
   )
+
+  useEffect(() => {
+    if (!isRefundMode) return;
+
+    if (refundStatus === 'pending') {
+      form.setValue('source_account_id', REFUND_PENDING_ACCOUNT_ID, { shouldValidate: true });
+    } else {
+      form.setValue('source_account_id', initialValues?.source_account_id ?? undefined, { shouldValidate: true });
+    }
+  }, [isRefundMode, refundStatus, form, initialValues]);
 
   const destinationAccountOptions = useMemo(
     () => {
@@ -797,6 +836,18 @@ export function TransactionForm({
     return account?.name ?? null
   }, [watchedDebtAccountId, allAccounts])
 
+  const RefundStatusToggle = isRefundMode ? (
+    <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3">
+      <label className="text-sm font-medium text-amber-900">Refund Status</label>
+      <Tabs value={refundStatus} onValueChange={(value) => setRefundStatus(value as 'pending' | 'received')} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 gap-1 bg-amber-100">
+          <TabsTrigger value="received">🟢 Đã nhận tiền (Immediate)</TabsTrigger>
+          <TabsTrigger value="pending">⏳ Chờ hoàn (Pending)</TabsTrigger>
+        </TabsList>
+      </Tabs>
+    </div>
+  ) : null
+
   const TypeInput = (
     <div className="space-y-2">
       <label className="text-sm font-medium text-gray-700">Type</label>
@@ -806,11 +857,11 @@ export function TransactionForm({
         render={({ field }) => (
           <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
             <TabsList className="grid w-full grid-cols-5 gap-1">
-              <TabsTrigger value="expense">Expense</TabsTrigger>
-              <TabsTrigger value="income">Income</TabsTrigger>
-              <TabsTrigger value="transfer">Transfer</TabsTrigger>
-              <TabsTrigger value="debt">Lending</TabsTrigger>
-              <TabsTrigger value="repayment">Repay</TabsTrigger>
+              <TabsTrigger value="expense" disabled={isRefundMode}>Expense</TabsTrigger>
+              <TabsTrigger value="income" disabled={isRefundMode}>Income</TabsTrigger>
+              <TabsTrigger value="transfer" disabled={isRefundMode}>Transfer</TabsTrigger>
+              <TabsTrigger value="debt" disabled={isRefundMode}>Lending</TabsTrigger>
+              <TabsTrigger value="repayment" disabled={isRefundMode}>Repay</TabsTrigger>
             </TabsList>
           </Tabs>
         )}
@@ -823,7 +874,7 @@ export function TransactionForm({
 
   const CategoryInput =
     transactionType !== 'repayment' &&
-    (transactionType === 'expense' || transactionType === 'debt' || transactionType === 'transfer') ? (
+    (transactionType === 'expense' || transactionType === 'debt' || transactionType === 'transfer' || transactionType === 'income') ? (
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">
           Category {transactionType === 'transfer' ? '(Optional)' : ''}
@@ -839,6 +890,7 @@ export function TransactionForm({
               placeholder="Select category"
               inputPlaceholder="Search category..."
               emptyState="No matching category"
+              disabled={isRefundMode}
             />
           )}
         />
@@ -909,6 +961,7 @@ export function TransactionForm({
               placeholder="Select person"
               inputPlaceholder="Search person..."
               emptyState="No person found"
+              disabled={isRefundMode}
             />
           )}
         />
@@ -962,6 +1015,7 @@ export function TransactionForm({
               placeholder="Select destination"
               inputPlaceholder="Search account..."
               emptyState="No account found"
+              disabled={isRefundMode && transactionType === 'repayment' && refundStatus === 'pending'}
             />
           )}
         />
@@ -1094,6 +1148,7 @@ export function TransactionForm({
               placeholder="Select account"
               inputPlaceholder="Search account..."
               emptyState="No account found"
+              disabled={isRefundMode && refundStatus === 'pending'}
             />
           )}
         />
@@ -1283,22 +1338,35 @@ export function TransactionForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      {transactionType !== 'transfer' && (
+      {transactionType !== 'transfer' ? (
         <>
+          {RefundStatusToggle}
           {TypeInput}
-          {CategoryInput}
-          {ShopInput}
-          {PersonInput}
-          {DateInput}
-          {TagInput}
-          {SourceAccountInput}
-          {AmountInput}
-          {CashbackInputs}
-          {NoteInput}
+          {transactionType === 'repayment' ? (
+            <>
+              {PersonInput}
+              {DestinationAccountInput}
+              {SourceAccountInput}
+              {AmountInput}
+              {DateInput}
+              {TagInput}
+              {NoteInput}
+            </>
+          ) : (
+            <>
+              {CategoryInput}
+              {ShopInput}
+              {PersonInput}
+              {DateInput}
+              {TagInput}
+              {SourceAccountInput}
+              {AmountInput}
+              {CashbackInputs}
+              {NoteInput}
+            </>
+          )}
         </>
-      )}
-
-      {transactionType === 'transfer' && (
+      ) : (
         <>
           {TypeInput}
           {CategoryInput}

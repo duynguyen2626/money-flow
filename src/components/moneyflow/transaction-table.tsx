@@ -20,7 +20,6 @@ import { TransactionForm, TransactionFormValues } from "./transaction-form"
 import {
   restoreTransaction,
   voidTransaction,
-  requestRefund,
   confirmRefund,
 } from "@/services/transaction.service"
 import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
@@ -225,22 +224,21 @@ export function TransactionTable({
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null)
   const [editingTxn, setEditingTxn] = useState<TransactionWithDetails | null>(null)
+  const [refundingTxn, setRefundingTxn] = useState<TransactionWithDetails | null>(null);
   const [confirmVoidTarget, setConfirmVoidTarget] = useState<TransactionWithDetails | null>(null)
   const [isVoiding, setIsVoiding] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
   const [voidError, setVoidError] = useState<string | null>(null)
   const [statusOverrides, setStatusOverrides] = useState<Record<string, TransactionWithDetails['status']>>({})
-  const [refundDialogTxn, setRefundDialogTxn] = useState<TransactionWithDetails | null>(null)
-  const [refundAmount, setRefundAmount] = useState(0)
-  const [refundInstant, setRefundInstant] = useState(false)
-  const [refundError, setRefundError] = useState<string | null>(null)
-  const [refundTargetAccountId, setRefundTargetAccountId] = useState<string | null>(null)
   const [isRefunding, setIsRefunding] = useState(false)
-  const [refundDialogMode, setRefundDialogMode] = useState<'request' | 'confirm'>('request')
   const editingInitialValues = useMemo(
     () => (editingTxn ? buildEditInitialValues(editingTxn) : null),
     [editingTxn]
   )
+  const refundingInitialValues = useMemo(
+    () => (refundingTxn ? buildEditInitialValues(refundingTxn) : null),
+    [refundingTxn]
+  );
   const refundAccountOptions = useMemo(
     () => accounts.filter(acc => acc.id !== REFUND_PENDING_ACCOUNT_ID),
     [accounts]
@@ -316,106 +314,10 @@ export function TransactionTable({
       .finally(() => setIsRestoring(false))
   }
 
-  const closeRefundDialog = () => {
-    setRefundDialogTxn(null)
-    setRefundError(null)
-    setIsRefunding(false)
-    setRefundInstant(false)
-    setRefundAmount(0)
-    setRefundTargetAccountId(null)
-    setRefundDialogMode('request')
-  }
-
-  const openRefundDialog = (txn: TransactionWithDetails) => {
-    const baseAmount = Math.abs(txn.original_amount ?? txn.amount ?? 0)
-    const sourceAccountLine = txn.transaction_lines?.find(
-      line => line?.type === "credit" && line.account_id
-    ) ?? txn.transaction_lines?.find(line => line?.type === "debit" && line.account_id)
-    const defaultAccountId = sourceAccountLine?.account_id ?? refundAccountOptions[0]?.id ?? null
-
-    setRefundAmount(baseAmount)
-    setRefundInstant(false)
-    setRefundTargetAccountId(defaultAccountId)
-    setRefundError(null)
-    setRefundDialogMode('request')
-    setRefundDialogTxn(txn)
-    setActionMenuOpen(null)
-  }
-
   const openConfirmRefundDialog = (txn: TransactionWithDetails) => {
-    const pendingLine = txn.transaction_lines?.find(
-      line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
-    )
-    const amount = Math.abs(pendingLine?.amount ?? 0)
-    const defaultAccountId = refundAccountOptions[0]?.id ?? null
-
-    setRefundAmount(amount)
-    setRefundInstant(false)
-    setRefundTargetAccountId(defaultAccountId)
-    setRefundError(null)
-    setRefundDialogMode('confirm')
-    setRefundDialogTxn(txn)
-    setActionMenuOpen(null)
-  }
-
-  const handleRefundSubmit = async () => {
-    if (!refundDialogTxn) return
-    setRefundError(null)
-    setIsRefunding(true)
-    try {
-      if (refundDialogMode === 'confirm') {
-        if (!refundTargetAccountId) {
-          setRefundError('Please select a target account.')
-          return
-        }
-
-        const confirmResult = await confirmRefund(refundDialogTxn.id, refundTargetAccountId)
-        if (!confirmResult.success) {
-          setRefundError(confirmResult.error ?? 'Could not confirm refund.')
-          return
-        }
-
-        closeRefundDialog()
-        router.refresh()
-        return
-      }
-
-      const amountBase = Math.abs(refundDialogTxn.original_amount ?? refundDialogTxn.amount ?? 0)
-      const requestedAmount = Math.max(Number(refundAmount) || 0, 0)
-      const amountToUse = Math.min(requestedAmount || amountBase, amountBase)
-      if (amountToUse <= 0) {
-        setRefundError('Please enter an amount greater than 0.')
-        return
-      }
-
-      const isPartial = amountToUse < amountBase
-      const requestResult = await requestRefund(refundDialogTxn.id, amountToUse, isPartial)
-      if (!requestResult.success) {
-        setRefundError(requestResult.error ?? 'Unable to create refund request.')
-        return
-      }
-
-      if (refundInstant) {
-        if (!refundTargetAccountId) {
-          setRefundError('Please select the receiving account.')
-          return
-        }
-
-        const confirmResult = await confirmRefund(
-          requestResult.refundTransactionId ?? '',
-          refundTargetAccountId
-        )
-        if (!confirmResult.success) {
-          setRefundError(confirmResult.error ?? 'Could not confirm refund.')
-          return
-        }
-      }
-
-      closeRefundDialog()
-      router.refresh()
-    } finally {
-      setIsRefunding(false)
-    }
+    // This logic might be deprecated or moved. For now, it will open the main form.
+    setRefundingTxn(txn);
+    setActionMenuOpen(null);
   }
 
   const handleVoidConfirm = () => {
@@ -487,6 +389,11 @@ export function TransactionTable({
     setEditingTxn(null)
     router.refresh()
   }
+
+  const handleRefundSuccess = () => {
+    setRefundingTxn(null);
+    router.refresh();
+  };
 
   const displayedTransactions = useMemo(() => {
     let list = transactions;
@@ -756,7 +663,8 @@ export function TransactionTable({
                         className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
                         onClick={event => {
                           event.stopPropagation()
-                          openRefundDialog(txn)
+                          setRefundingTxn(txn);
+                          setActionMenuOpen(null);
                         }}
                         disabled={isVoided}
                       >
@@ -1111,6 +1019,39 @@ export function TransactionTable({
         document.body
       )}
 
+    {refundingTxn && refundingInitialValues && createPortal(
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4 py-4 sm:py-10"
+          onClick={() => setRefundingTxn(null)}
+        >
+          <div
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-2xl scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">Request Refund</h3>
+              <button
+                className="rounded px-2 py-1 text-slate-500 transition hover:bg-slate-100"
+                onClick={() => setRefundingTxn(null)}
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
+            <TransactionForm
+              accounts={accounts}
+              categories={categories}
+              people={people}
+              shops={shops}
+              initialValues={refundingInitialValues}
+              mode="refund"
+              onSuccess={handleRefundSuccess}
+            />
+          </div>
+        </div>,
+        document.body
+      )}
+
       {confirmVoidTarget && createPortal(
         <div
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
@@ -1142,111 +1083,6 @@ export function TransactionTable({
               >
                 {isVoiding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Void Transaction
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-      {refundDialogTxn && createPortal(
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
-          onClick={closeRefundDialog}
-        >
-          <div
-            className="w-full max-w-md rounded-lg bg-white p-6 shadow-2xl"
-            onClick={event => event.stopPropagation()}
-          >
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-900">
-                {refundDialogMode === 'confirm' ? 'Confirm Refund' : 'Request Refund'}
-              </h3>
-              <button
-                className="text-slate-500 transition hover:text-slate-700"
-                onClick={closeRefundDialog}
-              >
-                ×
-              </button>
-            </div>
-            <p className="text-sm text-slate-600 mb-4">
-              {refundDialogTxn.note ?? 'No note available'}
-            </p>
-            <div className="space-y-4">
-              {refundDialogMode === 'request' ? (
-                <div>
-                  <label className="text-sm font-semibold text-slate-700">Refund amount (VND)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={refundAmount}
-                    onChange={event => setRefundAmount(Math.max(Number(event.target.value) || 0, 0))}
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  />
-                </div>
-              ) : (
-                <div className="space-y-1 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                  <p className="text-[11px] uppercase tracking-wide text-slate-400">Amount to confirm</p>
-                  <p className="text-lg font-semibold text-slate-900">
-                    {numberFormatter.format(
-                      Math.abs(
-                        refundDialogTxn.transaction_lines
-                          ?.find(line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit')
-                          ?.amount ?? 0
-                      )
-                    )}
-                  </p>
-                </div>
-              )}
-              {refundDialogMode === 'request' && (
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={refundInstant}
-                    onChange={event => setRefundInstant(event.target.checked)}
-                  />
-                  <span>Money already returned?</span>
-                </label>
-              )}
-              {(refundDialogMode === 'confirm' || (refundDialogMode === 'request' && refundInstant)) && (
-                <div>
-                  <label className="text-sm font-semibold text-slate-700">Receiving account</label>
-                  <select
-                    value={refundTargetAccountId ?? ''}
-                    onChange={event => setRefundTargetAccountId(event.target.value || null)}
-                    className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  >
-                    <option value="">Choose account</option>
-                    {refundAccountOptions.map(account => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {refundError && (
-                <p className="text-sm text-red-600">{refundError}</p>
-              )}
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
-                onClick={closeRefundDialog}
-                disabled={isRefunding}
-              >
-                Cancel
-              </button>
-              <button
-                className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
-                onClick={handleRefundSubmit}
-                disabled={isRefunding}
-              >
-                {isRefunding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {refundDialogMode === 'confirm'
-                  ? 'Confirm Refund'
-                  : refundInstant
-                    ? 'Confirm & Refund'
-                    : 'Create Request'}
               </button>
             </div>
           </div>
