@@ -485,6 +485,7 @@ type TransactionRow = {
     } | null
     categories?: {
       name: string
+      type: 'income' | 'expense'
       image_url?: string | null
       icon?: string | null
     } | null
