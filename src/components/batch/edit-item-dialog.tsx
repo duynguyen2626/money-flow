@@ -27,7 +27,7 @@ import { Pencil } from 'lucide-react'
 
 const formSchema = z.object({
     receiver_name: z.string().optional(),
-    amount: z.coerce.number().min(1, 'Amount must be greater than 0'),
+    amount: z.number().min(1, 'Amount must be greater than 0'),
     note: z.string().optional(),
     bank_name: z.string().optional(),
     bank_number: z.string().optional(),

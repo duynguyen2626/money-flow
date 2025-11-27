@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Trash2, CheckCircle2, Clock } from 'lucide-react'
-import { deleteBatchItemAction, updateBatchItemAction } from '@/actions/batch.actions'
+import { deleteBatchItemAction, updateBatchItemAction, confirmBatchItemAction } from '@/actions/batch.actions'
 import { Checkbox } from '@/components/ui/checkbox'
 import { EditItemDialog } from './edit-item-dialog'
 
@@ -32,7 +32,7 @@ export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProp
     }
 
     async function handleConfirm(id: string) {
-        await updateBatchItemAction(id, { status: 'confirmed' })
+        await confirmBatchItemAction(id, batchId)
     }
 
     const handleSelectAll = (checked: boolean) => {

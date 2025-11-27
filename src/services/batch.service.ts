@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { addMonths, format, parse } from 'date-fns'
+import { SYSTEM_ACCOUNTS } from '@/lib/constants'
 
 export type Batch = Database['public']['Tables']['batches']['Row']
 export type BatchItem = Database['public']['Tables']['batch_items']['Row']
@@ -96,6 +97,74 @@ export async function deleteBatchItem(id: string) {
         .eq('id', id)
 
     if (error) throw error
+}
+
+export async function confirmBatchItem(itemId: string) {
+    const supabase: any = createClient()
+
+    // 1. Fetch Item
+    const { data: item, error: itemError } = await supabase
+        .from('batch_items')
+        .select('*, batch:batches(name)')
+        .eq('id', itemId)
+        .single()
+
+    if (itemError || !item) throw new Error('Item not found')
+    if (item.status === 'confirmed') return // Already confirmed
+
+    // 2. Create Transaction (CKL -> Target)
+    const { data: txn, error: txnError } = await supabase
+        .from('transactions')
+        .insert({
+            occurred_at: new Date().toISOString(),
+            note: item.note,
+            status: 'posted',
+            tag: 'BATCH_AUTO',
+            created_by: SYSTEM_ACCOUNTS.DEFAULT_USER_ID
+        })
+        .select()
+        .single()
+
+    if (txnError) throw txnError
+
+    // 3. Create Transaction Lines
+    const lines = [
+        {
+            transaction_id: txn.id,
+            account_id: SYSTEM_ACCOUNTS.BATCH_CLEARING,
+            amount: -Math.abs(item.amount),
+            type: 'credit'
+        },
+        {
+            transaction_id: txn.id,
+            account_id: item.target_account_id,
+            amount: Math.abs(item.amount),
+            type: 'debit',
+            receiver_name: item.receiver_name,
+            bank_name: item.bank_name,
+            bank_number: item.bank_number
+        }
+    ]
+
+    const { error: linesError } = await supabase
+        .from('transaction_lines')
+        .insert(lines)
+
+    if (linesError) throw linesError
+
+    // 4. Update Item Status
+    const { error: updateError } = await supabase
+        .from('batch_items')
+        .update({
+            status: 'confirmed',
+            transaction_id: txn.id,
+            is_confirmed: true
+        })
+        .eq('id', itemId)
+
+    if (updateError) throw updateError
+
+    return true
 }
 
 

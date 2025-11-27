@@ -306,6 +306,8 @@ export interface Database {
           created_at: string
           bank_name: string | null
           bank_number: string | null
+          transaction_id: string | null
+          is_confirmed: boolean | null
         }
         Insert: {
           id?: string
@@ -318,6 +320,8 @@ export interface Database {
           created_at?: string
           bank_name?: string | null
           bank_number?: string | null
+          transaction_id?: string | null
+          is_confirmed?: boolean | null
         }
         Update: {
           id?: string
@@ -330,6 +334,8 @@ export interface Database {
           created_at?: string
           bank_name?: string | null
           bank_number?: string | null
+          transaction_id?: string | null
+          is_confirmed?: boolean | null
         }
       }
     }

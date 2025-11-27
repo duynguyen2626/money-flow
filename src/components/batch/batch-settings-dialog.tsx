@@ -31,7 +31,7 @@ const formSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     sheet_link: z.string().optional(),
     is_template: z.boolean().default(false),
-    auto_clone_day: z.coerce.number().min(1).max(31).optional().or(z.literal(0)),
+    auto_clone_day: z.number().min(1).max(31).optional().or(z.literal(0)),
 })
 
 export function BatchSettingsDialog({ batch }: { batch: any }) {
@@ -44,7 +44,7 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
             name: batch.name,
             sheet_link: batch.sheet_link || '',
             is_template: batch.is_template || false,
-            auto_clone_day: batch.auto_clone_day || 1,
+            auto_clone_day: Number(batch.auto_clone_day) || 1,
         },
     })
 
@@ -135,7 +135,13 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
                                         <FormItem>
                                             <FormLabel>Auto Clone Day (1-31)</FormLabel>
                                             <FormControl>
-                                                <Input type="number" min={1} max={31} {...field} />
+                                                <Input
+                                                    type="number"
+                                                    min={1}
+                                                    max={31}
+                                                    {...field}
+                                                    onChange={(e) => field.onChange(e.target.valueAsNumber)}
+                                                />
                                             </FormControl>
                                             <FormDescription>
                                                 Day of the month to automatically clone this batch

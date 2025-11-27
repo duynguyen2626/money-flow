@@ -12,10 +12,16 @@ import {
     sendBatchToSheet,
     cloneBatch,
     checkAndAutoCloneBatches,
+    confirmBatchItem,
     Batch,
     BatchItem
 } from '@/services/batch.service'
 import { revalidatePath } from 'next/cache'
+
+export async function confirmBatchItemAction(itemId: string, batchId: string) {
+    await confirmBatchItem(itemId)
+    revalidatePath(`/batch/${batchId}`)
+}
 
 export async function checkAndAutoCloneBatchesAction() {
     const result = await checkAndAutoCloneBatches()

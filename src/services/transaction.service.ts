@@ -15,9 +15,9 @@ import {
   mapTransactionRow
 } from '@/lib/transaction-mapper';
 
-import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds';
+import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants';
 
-const REFUND_CATEGORY_ID = 'e0000000-0000-0000-0000-000000000095';
+const REFUND_CATEGORY_ID = SYSTEM_CATEGORIES.REFUND;
 
 export type CreateTransactionInput = {
   occurred_at: string;
@@ -105,7 +105,7 @@ async function resolveCurrentUserId(supabase: ReturnType<typeof createClient>) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  return user?.id ?? '917455ba-16c0-42f9-9cea-264f81a3db66';
+  return user?.id ?? SYSTEM_ACCOUNTS.DEFAULT_USER_ID;
 }
 
 
@@ -330,7 +330,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   try {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66';
+    const userId = user?.id || SYSTEM_ACCOUNTS.DEFAULT_USER_ID;
 
     const built = await buildTransactionLines(supabase, input);
     if (!built) {
@@ -890,7 +890,7 @@ function deriveRefundStatus(total: number, refunded: number): 'none' | 'partial'
 
 function deriveRefundAmountFromLines(lines: RefundTransactionLine[]): number | null {
   const pendingLine = lines.find(
-    line => line?.account_id === REFUND_PENDING_ACCOUNT_ID
+    line => line?.account_id === SYSTEM_ACCOUNTS.PENDING_REFUNDS
   )
   if (pendingLine) {
     return Math.abs(pendingLine.amount ?? 0)
@@ -1018,7 +1018,7 @@ export async function requestRefund(
   // 1. Debit the Pending Account (Money coming back is pending)
   linesToInsert.push({
     transaction_id: requestTxn.id,
-    account_id: REFUND_PENDING_ACCOUNT_ID,
+    account_id: SYSTEM_ACCOUNTS.PENDING_REFUNDS,
     amount: requestedAmount,
     type: 'debit',
     metadata: lineMetadata,
@@ -1146,7 +1146,7 @@ export async function confirmRefund(
   const pendingMeta = parseMetadata(pendingMetadata)
 
   const pendingLine = ((pending as any).transaction_lines as any[]).find(
-    (line) => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
+    (line) => line?.account_id === SYSTEM_ACCOUNTS.PENDING_REFUNDS && line.type === 'debit'
   )
 
   if (!pendingLine) {
@@ -1198,7 +1198,7 @@ export async function confirmRefund(
     },
     {
       transaction_id: confirmTxn.id,
-      account_id: REFUND_PENDING_ACCOUNT_ID,
+      account_id: SYSTEM_ACCOUNTS.PENDING_REFUNDS,
       amount: -amountToConfirm,
       type: 'credit',
       metadata: confirmationMetadata,
@@ -1300,7 +1300,7 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
   return (data as any[])
     .map(row => {
       const pendingLine = (row.transaction_lines ?? []).find(
-        (line: any) => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
+        (line: any) => line?.account_id === SYSTEM_ACCOUNTS.PENDING_REFUNDS && line.type === 'debit'
       )
 
       if (!pendingLine) {

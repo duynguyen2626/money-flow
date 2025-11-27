@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AddItemDialog } from './add-item-dialog'
 import { ItemsTable } from './items-table'
-import { sendBatchToSheetAction, updateBatchAction, deleteBatchAction, updateBatchItemAction } from '@/actions/batch.actions'
+import { sendBatchToSheetAction, updateBatchAction, deleteBatchAction, updateBatchItemAction, confirmBatchItemAction } from '@/actions/batch.actions'
 import { Loader2, CheckCircle2, DollarSign, Trash2, Send } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { CloneBatchDialog } from './clone-batch-dialog'
@@ -75,7 +75,7 @@ export function BatchDetail({ batch, accounts }: { batch: any, accounts: any[] }
 
         setConfirming(true)
         try {
-            await Promise.all(selectedItemIds.map(id => updateBatchItemAction(id, { status: 'confirmed' })))
+            await Promise.all(selectedItemIds.map(id => confirmBatchItemAction(id, batch.id)))
             router.refresh()
             setSelectedItemIds([])
             toast.success('Items confirmed')
