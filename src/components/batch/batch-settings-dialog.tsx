@@ -30,7 +30,7 @@ import { useRouter } from 'next/navigation'
 const formSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     sheet_link: z.string().optional(),
-    is_template: z.boolean().default(false),
+    is_template: z.boolean().optional(),
     auto_clone_day: z.number().min(1).max(31).optional().or(z.literal(0)),
 })
 
@@ -53,7 +53,7 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
             await updateBatchAction(batch.id, {
                 name: values.name,
                 sheet_link: values.sheet_link,
-                is_template: values.is_template,
+                is_template: values.is_template ?? false,
                 auto_clone_day: values.is_template ? (values.auto_clone_day ?? null) : null
             })
             setOpen(false)
