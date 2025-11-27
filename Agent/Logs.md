@@ -1,119 +1,91 @@
-1/3 
+1/2
 ## Error Type
 Console Error
 
 ## Error Message
-In HTML, <button> cannot be a descendant of <button>.
+In HTML, <a> cannot be a descendant of <a>.
 This will cause a hydration error.
 
   ...
-    <InnerLayoutRouter url="/people/90..." tree={[...]} params={{id:"900000..."}} cacheNode={{lazyData:null, ...}} ...>
-      <SegmentViewNode type="page" pagePath="/money-flo...">
-        <SegmentTrieNode>
-        <PeopleDetailPage>
-          <TagFilterProvider>
-            <div className="space-y-6">
-              <section className="bg-white s...">
-                <div>
-                <div className="mt-6 space...">
-                  <SheetSyncControls>
-                  <DebtCycleTabs allCycles={[...]} accounts={[...]} categories={[...]} people={[...]} shops={[...]} ...>
-                    <div className="space-y-4">
-                      <div>
-                      <div className="grid grid-...">
-                        <div className="flex flex-...">
-                          <div>
-                          <div className="grid grid-...">
-                            <AddTransactionDialog accounts={[...]} categories={[...]} people={[...]} shops={[...]} ...>
->                             <button
->                               type="button"
->                               className="inline-flex items-center justify-center rounded-md p-0 bg-transparent text-..."
->                               onMouseDown={undefined}
+    <BatchList batches={[...]}>
+      <Tabs defaultValue="processing" className="w-full">
+        <TabsProvider scope={undefined} baseId="radix-_r_4_" value="processing" ...>
+          <Primitive.div dir="ltr" data-orientation="horizontal" className="w-full" ref={null}>
+            <div dir="ltr" data-orientation="horizontal" className="w-full" ref={null}>
+              <_c>
+              <_c4 value="processing" className="mt-4">
+                <TabsContent ref={null} className="mt-2 focus..." value="processing">
+                  <Presence present={true}>
+                    <Primitive.div data-state="active" data-orientation="horizontal" role="tabpanel" ...>
+                      <div data-state="active" data-orientation="horizontal" role="tabpanel" ...>
+                        <BatchGrid items={[...]}>
+                          <div className="grid gap-4...">
+                            <LinkComponent href="/batch/84e...">
+>                             <a
+>                               ref={function}
 >                               onClick={function onClick}
->                               aria-label="Add Transaction"
+>                               onMouseEnter={function onMouseEnter}
+>                               onTouchStart={function onTouchStart}
+>                               href="/batch/84e91be5-62ee-49b9-aa8f-cfef5c09de25"
 >                             >
->                               <button
->                                 className="flex flex-col items-center justify-center gap-1 w-full p-2 rounded bg-red..."
->                               >
-                            ...
-                ...
-      ...
+                                ...
+                                  <_c8>
+                                    <div ref={null} className="p-6 pt-0">
+                                      <div>
+                                      <div className="mt-3 pt-3 ..." onClick={function onClick}>
+                                        <ExternalLink>
+>                                       <a
+>                                         href="https://script.google.com/macros/s/AKfycbyT7X18rO1rwso4xjwUCPE-w83Ew1P..."
+>                                         target="_blank"
+>                                         rel="noopener noreferrer"
+>                                         className="hover:underline truncate max-w-[200px]"
+>                                         title="https://script.google.com/macros/s/AKfycbyT7X18rO1rwso4xjwUCPE-w83Ew1..."
+>                                       >
+              ...
 
 
 
-    at button (<anonymous>:null:null)
-    at <unknown> (src/components/moneyflow/debt-cycle-tabs.tsx:120:41)
+    at a (<anonymous>:null:null)
+    at <unknown> (src/components/batch/batch-list.tsx:68:37)
     at Array.map (<anonymous>:null:null)
-    at DebtCycleTabs (src/components/moneyflow/debt-cycle-tabs.tsx:78:38)
-    at PeopleDetailPage (src\app\people\[id]\page.tsx:99:13)
+    at BatchGrid (src/components/batch/batch-list.tsx:35:20)
+    at BatchList (src/components/batch/batch-list.tsx:94:21)
+    at BatchPage (src\app\batch\page.tsx:16:13)
 
 ## Code Frame
-  118 |                                     defaultTag={cycle.tag === 'UNTAGGED' ? undefined : cycle.tag}
-  119 |                                     triggerContent={
-> 120 |                                         <button className="flex flex-col items-center justify-center gap-1 w-full p-2 rounded bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
-      |                                         ^
-  121 |                                             <Plus className="h-4 w-4" />
-  122 |                                             <span className="text-xs font-medium">Debt</span>
-  123 |                                         </button>
+  66 |                                 <div className="mt-3 pt-3 border-t flex items-center gap-2 text-xs text-blue-600" onClick={(e) => e.stopPropagation()}>
+  67 |                                     <ExternalLink className="h-3 w-3 flex-shrink-0" />
+> 68 |                                     <a
+     |                                     ^
+  69 |                                         href={batch.sheet_link}
+  70 |                                         target="_blank"
+  71 |                                         rel="noopener noreferrer"
 
 Next.js version: 16.0.3 (Turbopack)
-2/3
+
+2/2
 ## Error Type
 Console Error
 
 ## Error Message
-<button> cannot contain a nested <button>.
+<a> cannot contain a nested <a>.
 See this log for the ancestor stack trace.
 
 
-    at button (<anonymous>:null:null)
-    at AddTransactionDialog (src/components/moneyflow/add-transaction-dialog.tsx:63:7)
-    at <unknown> (src/components/moneyflow/debt-cycle-tabs.tsx:111:33)
+    at a (<anonymous>:null:null)
+    at <unknown> (src/components/batch/batch-list.tsx:36:17)
     at Array.map (<anonymous>:null:null)
-    at DebtCycleTabs (src/components/moneyflow/debt-cycle-tabs.tsx:78:38)
-    at PeopleDetailPage (src\app\people\[id]\page.tsx:99:13)
+    at BatchGrid (src/components/batch/batch-list.tsx:35:20)
+    at BatchList (src/components/batch/batch-list.tsx:94:21)
+    at BatchPage (src\app\batch\page.tsx:16:13)
 
 ## Code Frame
-  61 |   return (
-  62 |     <>
-> 63 |       <button
-     |       ^
-  64 |         type="button"
-  65 |         className={buttonClassName || defaultClassName}
-  66 |         onMouseDown={onOpen}
-
-Next.js version: 16.0.3 (Turbopack)
-3/3
-## Error Type
-Recoverable Error
-
-## Error Message
-Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
-
-- A server/client branch `if (typeof window !== 'undefined')`.
-- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
-- Date formatting in a user's locale which doesn't match the server.
-- External changing data without sending a snapshot of it along with the HTML.
-- Invalid HTML tag nesting.
-
-It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
-
-https://react.dev/link/hydration-mismatch
-
-
-    at button (<anonymous>:null:null)
-    at <unknown> (src/components/moneyflow/debt-cycle-tabs.tsx:120:41)
-    at Array.map (<anonymous>:null:null)
-    at DebtCycleTabs (src/components/moneyflow/debt-cycle-tabs.tsx:78:38)
-    at PeopleDetailPage (src\app\people\[id]\page.tsx:99:13)
-
-## Code Frame
-  118 |                                     defaultTag={cycle.tag === 'UNTAGGED' ? undefined : cycle.tag}
-  119 |                                     triggerContent={
-> 120 |                                         <button className="flex flex-col items-center justify-center gap-1 w-full p-2 rounded bg-red-50 text-red-700 hover:bg-red-100 transition-colors">
-      |                                         ^
-  121 |                                             <Plus className="h-4 w-4" />
-  122 |                                             <span className="text-xs font-medium">Debt</span>
-  123 |                                         </button>
+  34 |         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+  35 |             {items.map((batch) => (
+> 36 |                 <Link key={batch.id} href={`/batch/${batch.id}`}>
+     |                 ^
+  37 |                     <Card className="hover:bg-accent transition-colors cursor-pointer group relative">
+  38 |                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+  39 |                             <CardTitle className="text-base font-medium truncate pr-8">
 
 Next.js version: 16.0.3 (Turbopack)

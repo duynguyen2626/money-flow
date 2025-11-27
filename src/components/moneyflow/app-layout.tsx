@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Home, Landmark, CreditCard, Wallet, Users, Clapperboard, ShoppingBag, ChevronLeft, ChevronRight, ArrowLeftRight, ArrowRight } from "lucide-react"
+import { Home, Landmark, CreditCard, Wallet, Users, Clapperboard, ShoppingBag, ChevronLeft, ChevronRight, ArrowLeftRight, ArrowRight, Layers } from "lucide-react"
 import Link from "next/link"
 
 import { SidebarNav, type NavItem } from "./sidebar-nav"
@@ -18,6 +18,7 @@ const navItems: NavItem[] = [
   { label: "Services", href: "/services", icon: Clapperboard },
   { label: "Debts", href: "/debt", icon: Landmark },
   { label: "Cashback", href: "/cashback", icon: CreditCard },
+  { label: "Batch", href: "/batch", icon: Layers },
 ]
 
 type AppLayoutProps = {
@@ -44,7 +45,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div className="min-h-screen bg-slate-100 flex">
       <aside className={cn("sticky top-0 h-screen flex flex-col border-r bg-white py-8 transition-all duration-300", isCollapsed ? "w-16 px-2" : "w-64 px-6")}>
         <div className={cn("text-2xl font-bold text-blue-700 mb-10", isCollapsed ? "text-center" : "")}>
-            {isCollapsed ? "MF" : "Money Flow"}
+          {isCollapsed ? "MF" : "Money Flow"}
         </div>
         <SidebarNav items={navItems} isCollapsed={isCollapsed} />
         <div className="mt-auto text-xs text-slate-400">
@@ -56,10 +57,10 @@ export function AppLayout({ children }: AppLayoutProps) {
           )}
         </div>
         <button
-            onClick={toggleSidebar}
-            className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 h-6 w-6 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-500 hover:text-slate-800"
+          onClick={toggleSidebar}
+          className="absolute -right-3 top-1/2 -translate-y-1/2 z-10 h-6 w-6 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-500 hover:text-slate-800"
         >
-            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </button>
       </aside>
 
