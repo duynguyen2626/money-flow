@@ -1333,7 +1333,7 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
 type UnifiedTransactionParams = {
   accountId?: string
   limit?: number
-  context?: 'person'
+  context?: 'person' | 'account'
 }
 
 export async function getUnifiedTransactions(
@@ -1375,6 +1375,18 @@ export async function getUnifiedTransactions(
   const limit = parsed.limit ?? limitArg
   const context = parsed.context
 
+  let accountInfo: { type: string; cashback_config: Json | null } | undefined
+  if (accountId) {
+    const { data: accData } = await supabase
+      .from('accounts')
+      .select('type, cashback_config')
+      .eq('id', accountId)
+      .maybeSingle()
+    if (accData) {
+      accountInfo = accData
+    }
+  }
+
   if (accountId) {
     const { data: txnIds, error: idsError } = await supabase
       .from('transaction_lines')
@@ -1408,7 +1420,9 @@ export async function getUnifiedTransactions(
       return []
     }
 
-    return (data as any[]).map(txn => mapTransactionRow(txn, accountId, { mode: context }))
+    return (data as any[]).map(txn =>
+      mapTransactionRow(txn, accountId, { mode: context ?? 'account', accountInfo })
+    )
   }
 
   const { data, error } = await supabase

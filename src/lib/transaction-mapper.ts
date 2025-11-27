@@ -1,6 +1,8 @@
 import { Database, Json } from '@/types/database.types';
 import { TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types';
 import { createClient } from '@/lib/supabase/server';
+import { parseCashbackConfig, getCashbackCycleRange } from './cashback';
+import { format } from 'date-fns';
 
 const REFUND_CATEGORY_ID = 'e0000000-0000-0000-0000-000000000095';
 
@@ -168,11 +170,15 @@ function extractCashbackFromLines(lines: TransactionRow['transaction_lines']): {
 export function mapTransactionRow(
     txn: TransactionRow,
     accountId?: string,
-    context?: { mode?: 'person' }
+    context?: {
+        mode?: 'person' | 'account';
+        accountInfo?: { type: string; cashback_config: Json | null }
+    }
 ): TransactionWithDetails {
     const lines = txn.transaction_lines ?? []
     const cashbackFromLines = extractCashbackFromLines(lines)
     const isPersonContext = context?.mode === 'person'
+    const isAccountContext = context?.mode === 'account'
 
     let accountLine = lines.find(line => line && typeof line.original_amount === 'number')
 
@@ -330,6 +336,51 @@ export function mapTransactionRow(
         }
     }
 
+    // --- Arrow Logic for Account Context ---
+    // Debt is typically mapped as 'transfer' or 'repayment' in this function's local scope
+    if (isAccountContext && accountId && (type === 'transfer' || type === 'repayment')) {
+        const myLine = lines.find(l => l && l.account_id === accountId)
+        if (myLine) {
+            const otherLine = lines.find(l => l && l.account_id && l.account_id !== accountId)
+            const partnerName = otherLine?.accounts?.name ?? 'Unknown'
+
+            if (myLine.amount < 0) {
+                // Money leaving -> Arrow to Partner
+                source_name = `➡️ ${partnerName}`
+                // Note: We don't change destination_name, or we could set it to null to simplify UI rendering
+                destination_name = null
+            } else {
+                // Money entering <- Arrow from Partner
+                source_name = `⬅️ ${partnerName}`
+                destination_name = null
+            }
+            // Ensure logo is hidden or set to partner's?
+            // The table uses source_logo. Maybe we want to show partner's logo?
+            // "Display Name: ➡️ + PartnerAccountName"
+            // Let's use Partner's logo as source_logo so it shows up next to arrow?
+            if (otherLine?.accounts?.logo_url) {
+                source_logo = otherLine.accounts.logo_url
+            } else {
+                source_logo = null
+            }
+        }
+    }
+
+    // --- Credit Cycle Logic for Account Context ---
+    let tag = txn.tag || null
+    if (isAccountContext && context.accountInfo?.type === 'credit_card' && context.accountInfo.cashback_config) {
+        try {
+            const config = parseCashbackConfig(context.accountInfo.cashback_config)
+            if (config.cycleType === 'statement_cycle' && config.statementDay) {
+                const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
+                const fmt = (d: Date) => format(d, 'dd/MM')
+                tag = `${fmt(range.start)} - ${fmt(range.end)}`
+            }
+        } catch (e) {
+            console.error('Error calculating cycle tag:', e)
+        }
+    }
+
     const display_direction = displayType
         ? displayType === 'income'
             ? 'IN'
@@ -343,7 +394,7 @@ export function mapTransactionRow(
         occurred_at: txn.occurred_at,
         note: txn.note || null,
         status: txn.status,
-        tag: txn.tag || null,
+        tag: tag,
         created_at: txn.created_at,
         amount: displayAmount,
         type,

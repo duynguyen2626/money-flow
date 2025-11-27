@@ -143,9 +143,11 @@ interface UnifiedTransactionTableProps {
   shops?: Shop[]
   activeTab?: 'active' | 'void'
   hidePeopleColumn?: boolean
+  hiddenColumns?: ColumnKey[]
   onBulkActionStateChange?: (state: BulkActionState) => void
   sortState?: { key: SortKey; dir: SortDir }
   onSortChange?: (state: { key: SortKey; dir: SortDir }) => void
+  context?: 'account' | 'person' | 'general'
 }
 
 
@@ -178,9 +180,11 @@ export function UnifiedTransactionTable({
   shops = [],
   activeTab,
   hidePeopleColumn,
+  hiddenColumns = [],
   onBulkActionStateChange,
   sortState: externalSortState,
   onSortChange,
+  context,
 }: UnifiedTransactionTableProps) {
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 60, minWidth: 50 },
@@ -195,7 +199,7 @@ export function UnifiedTransactionTable({
     { key: "cashback_fixed", label: "Fix Back", defaultWidth: 80 },
     { key: "cashback_sum", label: "Sum Back", defaultWidth: 100 },
     { key: "final_price", label: "Final Price", defaultWidth: 120 },
-    { key: "tag", label: "Tag", defaultWidth: 80 },
+    { key: "tag", label: accountType === 'credit_card' ? "Cycle" : "Tag", defaultWidth: 80 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
   ]
@@ -204,7 +208,7 @@ export function UnifiedTransactionTable({
   const [showSelectedOnly, setShowSelectedOnly] = useState(false)
   const [internalSelection, setInternalSelection] = useState<Set<string>>(new Set())
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
-    return {
+    const initial: Record<ColumnKey, boolean> = {
       date: true,
       type: true,
       shop: true,
@@ -221,6 +225,14 @@ export function UnifiedTransactionTable({
       id: false,
       task: true,
     }
+
+    if (hiddenColumns.length > 0) {
+      hiddenColumns.forEach(col => {
+        initial[col] = false
+      })
+    }
+
+    return initial
   })
   const [columnWidths, setColumnWidths] = useState<Record<ColumnKey, number>>(() => {
     const map = {} as Record<ColumnKey, number>
@@ -231,8 +243,16 @@ export function UnifiedTransactionTable({
   })
 
   useEffect(() => {
-    setVisibleColumns(prev => ({ ...prev, people: !hidePeopleColumn }))
-  }, [hidePeopleColumn])
+    setVisibleColumns(prev => {
+      const next = { ...prev, people: !hidePeopleColumn }
+      if (hiddenColumns.length > 0) {
+        hiddenColumns.forEach(col => {
+          next[col] = false
+        })
+      }
+      return next
+    })
+  }, [hidePeopleColumn, hiddenColumns])
 
   // State for actions
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
@@ -844,6 +864,22 @@ export function UnifiedTransactionTable({
                         {(txn.source_name ?? '?').charAt(0).toUpperCase()}
                       </div>
                     );
+
+                    // Special Account Context Logic (Pre-formatted Arrow)
+                    if (context === 'account' && accountId) {
+                      return (
+                        <div className="flex items-center gap-2">
+                          {/* Instructions say: Display the source_name text directly (which now contains the Arrow ➡️/⬅️) */}
+                          {/* We might want to show logo if available (handled in mapper logic now?) */}
+                          {txn.source_logo && sourceIcon}
+                          <CustomTooltip content={txn.source_name}>
+                            <span className="truncate max-w-[150px] cursor-help font-medium">
+                              {txn.source_name ?? 'Unknown'}
+                            </span>
+                          </CustomTooltip>
+                        </div>
+                      )
+                    }
 
                     const destIcon = txn.destination_logo ? (
                       <img src={txn.destination_logo} alt={txn.destination_name ?? ''} className="h-8 w-8 object-contain rounded-none" />
