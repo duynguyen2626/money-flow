@@ -261,9 +261,6 @@ export function UnifiedTransactionTable({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hidePeopleColumn, JSON.stringify(hiddenColumns)])
-      return next
-    })
-  }, [hidePeopleColumn, hiddenColumns])
 
   // State for actions
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
