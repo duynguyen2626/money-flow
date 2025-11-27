@@ -124,6 +124,10 @@ export interface Database {
           cashback_share_fixed: number | null
           metadata: Json | null
           created_at: string
+          bank_name: string | null
+          bank_number: string | null
+          card_name: string | null
+          receiver_name: string | null
         }
         Insert: {
           id?: string
@@ -137,6 +141,10 @@ export interface Database {
           cashback_share_fixed?: number | null
           metadata?: Json | null
           created_at?: string
+          bank_name?: string | null
+          bank_number?: string | null
+          card_name?: string | null
+          receiver_name?: string | null
         }
         Update: {
           id?: string
@@ -150,6 +158,10 @@ export interface Database {
           cashback_share_fixed?: number | null
           metadata?: Json | null
           created_at?: string
+          bank_name?: string | null
+          bank_number?: string | null
+          card_name?: string | null
+          receiver_name?: string | null
         }
       }
       categories: {

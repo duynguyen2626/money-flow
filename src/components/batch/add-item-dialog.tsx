@@ -82,15 +82,7 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
         }
     }, [bankName, cardName, batchName, form])
 
-    // Auto-fill Receiver Name from Target Account
-    useEffect(() => {
-        if (targetAccountId && targetAccountId !== 'none') {
-            const account = accounts.find(a => a.id === targetAccountId)
-            if (account) {
-                form.setValue('receiver_name', account.name)
-            }
-        }
-    }, [targetAccountId, accounts, form])
+    // Note: Receiver name is kept as default "NGUYEN THANH NAM" and not auto-filled from account
 
     async function onSubmit(values: FormValues) {
         try {

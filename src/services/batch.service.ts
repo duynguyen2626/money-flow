@@ -142,7 +142,8 @@ export async function confirmBatchItem(itemId: string) {
             type: 'debit',
             receiver_name: item.receiver_name,
             bank_name: item.bank_name,
-            bank_number: item.bank_number
+            bank_number: item.bank_number,
+            card_name: item.card_name
         }
     ]
 

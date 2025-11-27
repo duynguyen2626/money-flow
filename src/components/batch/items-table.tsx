@@ -80,20 +80,23 @@ export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProp
                         </TableCell>
                         <TableCell>{index + 1}</TableCell>
                         <TableCell>
-                            {item.target_account_id ? (
-                                <Link href={`/accounts/${item.target_account_id}`} className="text-blue-600 hover:underline">
-                                    {item.receiver_name || item.target_account?.name || 'Unknown'}
-                                </Link>
-                            ) : (
-                                <span>{item.receiver_name || 'Unknown'}</span>
-                            )}
+                            {item.receiver_name || 'Unknown'}
                         </TableCell>
                         <TableCell>{item.bank_number || '-'}</TableCell>
                         <TableCell>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.amount)}</TableCell>
                         <TableCell>{item.note}</TableCell>
                         <TableCell>
-                            {item.bank_name || '-'}
-                            {item.card_name && ` (${item.card_name})`}
+                            {item.target_account_id ? (
+                                <Link href={`/accounts/${item.target_account_id}`} className="text-blue-600 hover:underline">
+                                    {item.bank_name || item.target_account?.name || '-'}
+                                    {item.card_name && ` (${item.card_name})`}
+                                </Link>
+                            ) : (
+                                <span>
+                                    {item.bank_name || '-'}
+                                    {item.card_name && ` (${item.card_name})`}
+                                </span>
+                            )}
                         </TableCell>
                         <TableCell>
                             {item.status === 'confirmed' ? (
