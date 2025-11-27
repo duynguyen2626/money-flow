@@ -238,11 +238,13 @@ export async function updatePerson(
 ): Promise<boolean> {
   const supabase = createClient()
   const payload: ProfileUpdate = {}
+  const normalizedSheetLink =
+    typeof data.sheet_link === 'undefined' ? undefined : data.sheet_link?.trim() || null
 
   if (typeof data.name === 'string') payload.name = data.name.trim()
   if (typeof data.email !== 'undefined') payload.email = data.email?.trim() || null
   if (typeof data.avatar_url !== 'undefined') payload.avatar_url = data.avatar_url?.trim() || null
-  if (typeof data.sheet_link !== 'undefined') payload.sheet_link = data.sheet_link?.trim() || null
+  if (normalizedSheetLink !== undefined) payload.sheet_link = normalizedSheetLink
 
   if (Object.keys(payload).length > 0) {
     const { error } = await (supabase.from('profiles').update as any)(payload).eq('id', id)

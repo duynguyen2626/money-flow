@@ -111,6 +111,7 @@ export type TransactionWithDetails = TransactionRow & {
   transaction_lines?: TransactionWithLineRelations[];
   totalAmount?: number; // For aggregated display
   displayType?: 'income' | 'expense' | 'transfer';
+  display_type?: 'IN' | 'OUT' | 'TRANSFER';
   displayCategoryName?: string;
   displayAccountName?: string;
   category_name?: string;

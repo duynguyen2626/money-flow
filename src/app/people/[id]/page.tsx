@@ -195,57 +195,141 @@ function PeoplePageInner({ params }: { params: { id: string } }) {
                             </div>
                         </div>
                     </div>
-                </div>
+import { notFound } from 'next/navigation'
+import { getAccounts } from '@/services/account.service'
+import { getCategories } from '@/services/category.service'
+import { getPeople } from '@/services/people.service'
+import { getShops } from '@/services/shop.service'
+import { getPersonDetails, getDebtByTags } from '@/services/debt.service'
+import { getUnifiedTransactions } from '@/services/transaction.service'
+import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
+import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
+import { TagFilterProvider } from '@/context/tag-filter-context'
+import { DebtCycleTabs } from '@/components/moneyflow/debt-cycle-tabs'
+import { SheetSyncControls } from '@/components/people/sheet-sync-controls'
+import { Plus, CheckCheck } from 'lucide-react'
+import { CollapsibleSection } from '@/components/ui/collapsible-section'
 
-                <div className="border-t pt-5">
-                    {canShowSheetControls && (
-                        <div className="mb-4">
-                            <div className="flex items-center justify-between gap-3">
-                                <div>
-                            <p className="text-sm font-semibold text-slate-700">Google Sheet Sync</p>
-                            <p className="text-xs text-slate-500">Test connection / Sync all transactions</p>
-                                </div>
-                                <button
-                                    type="button"
-                                    className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100"
-                                    onClick={() => setShowSheetSettings(prev => !prev)}
-                                >
-                                    {showSheetSettings ? 'Collapse' : 'Open Sheet settings'}
-                                </button>
-                            </div>
-                            {showSheetSettings && (
-                                <div className="mt-3">
-                                    <SheetSyncControls
-                                        personId={person.owner_id ?? personProfile?.id ?? null}
-                                        sheetLink={displaySheetLink}
-                                    />
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    <DebtCycleFilter
-                        allCycles={debtCycles}
-                        debtAccount={person}
-                        accounts={accounts}
-                        categories={categories}
-                        people={allPeople}
-                        displayedCycles={displayedCycles}
-                        isExpanded={isExpanded}
-                        onQuickAddSuccess={refreshData}
-                        onSettleSuccess={refreshData}
-                        shops={shops}
-                    />
-                </div>
-            </section>
+export const dynamic = 'force-dynamic'
 
+export default async function PeopleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: personId } = await params
+
+  const [person, accounts, categories, people, shops, transactions, debtCycles] = await Promise.all([
+    getPersonDetails(personId),
+    getAccounts(),
+    getCategories(),
+    getPeople(),
+    getShops(),
+    getUnifiedTransactions({ accountId: personId, limit: 200, context: 'person' }),
+    getDebtByTags(personId),
+  ])
+
+  if (!person) {
+    return notFound()
+  }
+
+  const sheetProfileId = person.owner_id ?? personId
+  const balance = person.current_balance ?? 0
+  const balanceLabel = balance > 0 ? 'They owe you' : balance < 0 ? 'You owe them' : 'Settled'
+  const balanceClass = balance > 0 ? 'text-emerald-600' : balance < 0 ? 'text-red-600' : 'text-slate-600'
+
+  // Map service result to component props
+  const mappedCycles = debtCycles.map(c => ({
+    tag: c.tag,
+    balance: c.netBalance,
+    status: c.status,
+    last_activity: c.last_activity
+  }))
+
+  return (
+    <TagFilterProvider>
+      <div className="space-y-6">
+        <section className="bg-white shadow rounded-lg p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b pb-4">
+            <div className="flex items-center gap-4">
+              {person.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={person.avatar_url} alt={person.name} className="h-14 w-14 rounded-full object-cover" />
+              ) : (
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-lg font-bold text-slate-600">
+                  {person.name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div>
+                <h1 className="text-2xl font-semibold text-slate-900">{person.name}</h1>
+                <p className="text-sm text-slate-500">{balanceLabel}</p>
+                <p className={`text-xl font-bold ${balanceClass}`}>{balance.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+              </div>
+            </div>
+
+            {/* Header Actions */}
+            <div className="flex items-center gap-2">
+              <AddTransactionDialog
+                accounts={accounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+                buttonText="Settle"
+                defaultType="repayment"
+                defaultPersonId={personId}
+                defaultAmount={Math.abs(balance)}
+                buttonClassName="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md shadow-sm transition-colors flex items-center gap-2"
+                triggerContent={
+                  <>
+                    <CheckCheck className="h-4 w-4" />
+                    <span>Settle</span>
+                  </>
+                }
+              />
+              <AddTransactionDialog
+                accounts={accounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+                buttonText="Add Debt"
+                defaultType="debt"
+                defaultPersonId={personId}
+                buttonClassName="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md shadow-sm transition-colors flex items-center gap-2"
+                triggerContent={
+                  <>
+                    <Plus className="h-4 w-4" />
+                    <span>Add Debt</span>
+                  </>
+                }
+              />
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <CollapsibleSection title="Sheet Sync & Debt Cycles" defaultOpen={true}>
+              <div className="space-y-6">
+                {/* Sheet Sync Controls */}
+                <SheetSyncControls personId={sheetProfileId} sheetLink={person.sheet_link} />
+
+                {/* Debt Cycle Cards */}
+                <DebtCycleTabs
+                  allCycles={mappedCycles}
+                  accounts={accounts}
+                  categories={categories}
+                  people={people}
+                  shops={shops}
+                  personId={personId}
+                />
+              </div>
+            </CollapsibleSection>
+          </div>
+
+          <div className="mt-6">
             <FilterableTransactions
               transactions={transactions}
               categories={categories}
               accounts={accounts}
-              people={allPeople}
+              people={people}
               shops={shops}
-              accountId={id}
-              hidePeopleColumn={true}
+              accountId={personId}
+              accountType="debt"
+              hidePeopleColumn
             />
         </div>
     );
@@ -257,4 +341,9 @@ export default function PeopleDetailPage({ params }: { params: { id: string } })
             <PeoplePageInner params={params} />
         </TagFilterProvider>
     );
+          </div>
+        </section>
+      </div>
+    </TagFilterProvider>
+  )
 }

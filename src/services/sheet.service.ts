@@ -58,21 +58,57 @@ async function getProfileSheetLink(personId: string): Promise<string | null> {
   const supabase = createClient()
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('sheet_link')
+    .select('id, sheet_link')
     .eq('id', personId)
     .maybeSingle()
 
   if (error) {
     console.error('Failed to fetch profile for sheet sync:', error)
-    return null
   }
 
-  const sheetLink = (profile as any)?.sheet_link?.trim() ?? null
-  if (!isValidWebhook(sheetLink)) {
-    return null
+  const profileRow = profile as { id?: string; sheet_link?: string | null } | null
+  if (profileRow) {
+    const sheetLink = profileRow.sheet_link?.trim() ?? null
+    console.log('[Sheet] Profile lookup result', {
+      lookupId: personId,
+      profileId: profileRow.id ?? null,
+      sheet_link: sheetLink,
+    })
+    if (isValidWebhook(sheetLink)) {
+      return sheetLink
+    }
   }
 
-  return sheetLink
+  const { data: accountRow, error: accountError } = await supabase
+    .from('accounts')
+    .select('owner_id, profiles (id, sheet_link)')
+    .eq('id', personId)
+    .eq('type', 'debt')
+    .maybeSingle()
+
+  if (accountError) {
+    console.error('Failed to fetch account for sheet sync:', accountError)
+  }
+
+  const ownerProfile = (accountRow as any)?.profiles as { id?: string; sheet_link?: string | null } | null
+  const ownerProfileId = ((accountRow as any)?.owner_id as string | null) ?? ownerProfile?.id ?? null
+  if (ownerProfile) {
+    const sheetLink = ownerProfile.sheet_link?.trim() ?? null
+    console.log('[Sheet] Account-owner lookup result', {
+      lookupId: personId,
+      profileId: ownerProfileId,
+      sheet_link: sheetLink,
+    })
+    if (isValidWebhook(sheetLink)) {
+      return sheetLink
+    }
+  }
+
+  console.warn('[Sheet] No valid sheet link configured', {
+    lookupId: personId,
+    profileId: ownerProfileId ?? profileRow?.id ?? null,
+  })
+  return null
 }
 
 async function postToSheet(sheetLink: string, payload: Record<string, unknown>) {

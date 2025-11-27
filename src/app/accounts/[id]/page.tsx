@@ -1,4 +1,5 @@
-import { getAccountDetails, getAccountStats, getAccountTransactionDetails, getAccounts } from '@/services/account.service'
+import { getAccountDetails, getAccountStats, getAccounts } from '@/services/account.service'
+import { getUnifiedTransactions } from '@/services/transaction.service'
 import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
@@ -7,6 +8,7 @@ import { TagFilterProvider } from '@/context/tag-filter-context'
 import { AccountDetailHeader } from '@/components/moneyflow/account-detail-header'
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
 import { getUnifiedTransactions } from '@/services/transaction.service'
+import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 
 type PageProps = {
   params: Promise<{
@@ -39,6 +41,9 @@ export default async function AccountPage({ params }: PageProps) {
     account.type === 'credit_card' ? getAccountStats(id) : Promise.resolve(null),
     getAccountTransactionDetails(id, 50),
     getUnifiedTransactions(id, 200),
+  const [stats, transactions, allAccounts, categories, people, shops] = await Promise.all([
+    account.type === 'credit_card' ? getAccountStats(id) : Promise.resolve(null),
+    getUnifiedTransactions({ accountId: id, context: 'account', limit: 100 }),
     getAccounts(),
     getCategories(),
     getPeople(),
@@ -59,17 +64,31 @@ export default async function AccountPage({ params }: PageProps) {
   let totalInflow = 0
   let totalOutflow = 0
 
-  txnDetails.forEach(txn => {
-    txn.transaction_lines?.forEach((line: { account_id: string; type: string; amount: number }) => {
-      if (line.account_id === id) {
-        if (line.type === 'debit') {
-          totalOutflow += Math.abs(line.amount)
-        } else if (line.type === 'credit') {
-          totalInflow += Math.abs(line.amount)
+  // Calculate stats from unified transactions if possible, or use stats service
+  // The original code calculated from txnDetails (getAccountTransactionDetails).
+  // getUnifiedTransactions returns TransactionWithDetails.
+  // We can roughly estimate inflow/outflow from transactions.
+
+  transactions.forEach(txn => {
+     // This is a rough estimation. Accurate stats should come from getAccountStats or similar service.
+     // But for "netBalance" display in Header (if header relies on it passed from here), we might need it.
+     // AccountDetailHeader uses `statTotals`.
+
+     // Logic from previous code:
+     // txnDetails.forEach(txn => { txn.transaction_lines?.forEach(...) })
+
+     // In UnifiedTransaction:
+     const lines = txn.transaction_lines ?? [];
+     lines.forEach(line => {
+        if (line.account_id === id) {
+             if (line.type === 'debit') {
+                 totalOutflow += Math.abs(line.amount);
+             } else if (line.type === 'credit') {
+                 totalInflow += Math.abs(line.amount);
+             }
         }
-      }
-    })
-  })
+     });
+  });
 
   const netBalance = totalInflow - totalOutflow
   const isCreditCard = account.type === 'credit_card'
@@ -122,7 +141,20 @@ export default async function AccountPage({ params }: PageProps) {
               accountType={account.type}
               accountId={account.id}
             />
+          <div className="flex items-center justify-between border-b pb-3 mb-4">
+            <h2 className="text-lg font-semibold">Lịch sử giao dịch</h2>
           </div>
+          <UnifiedTransactionTable
+            transactions={transactions}
+            context="account"
+            accountId={id}
+            accountType={account.type}
+            accounts={allAccounts}
+            categories={categories}
+            people={people}
+            shops={shops}
+            hiddenColumns={['shop']}
+          />
         </section>
       </TagFilterProvider>
     </div>
