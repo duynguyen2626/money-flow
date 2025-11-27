@@ -132,7 +132,8 @@ interface ColumnConfig {
 }
 
 interface UnifiedTransactionTableProps {
-  transactions: TransactionWithDetails[]
+  data?: TransactionWithDetails[]
+  transactions?: TransactionWithDetails[] // Keeping for backward compatibility or alias
   accountType?: Account['type']
   accountId?: string // Specific Account Context
   selectedTxnIds?: Set<string>
@@ -143,9 +144,11 @@ interface UnifiedTransactionTableProps {
   shops?: Shop[]
   activeTab?: 'active' | 'void'
   hidePeopleColumn?: boolean
+  hiddenColumns?: ColumnKey[]
   onBulkActionStateChange?: (state: BulkActionState) => void
   sortState?: { key: SortKey; dir: SortDir }
   onSortChange?: (state: { key: SortKey; dir: SortDir }) => void
+  context?: 'account' | 'person' | 'general'
 }
 
 
@@ -167,6 +170,7 @@ function parseMetadata(value: TransactionWithDetails['metadata']) {
 }
 
 export function UnifiedTransactionTable({
+  data,
   transactions,
   accountType,
   accountId,
@@ -178,10 +182,13 @@ export function UnifiedTransactionTable({
   shops = [],
   activeTab,
   hidePeopleColumn,
+  hiddenColumns = [],
   onBulkActionStateChange,
   sortState: externalSortState,
   onSortChange,
+  context,
 }: UnifiedTransactionTableProps) {
+  const tableData = data ?? transactions ?? []
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 60, minWidth: 50 },
     { key: "type", label: "Type", defaultWidth: 110, minWidth: 90 },
@@ -195,7 +202,7 @@ export function UnifiedTransactionTable({
     { key: "cashback_fixed", label: "Fix Back", defaultWidth: 80 },
     { key: "cashback_sum", label: "Sum Back", defaultWidth: 100 },
     { key: "final_price", label: "Final Price", defaultWidth: 120 },
-    { key: "tag", label: "Tag", defaultWidth: 80 },
+    { key: "tag", label: accountType === 'credit_card' ? "Cycle" : "Tag", defaultWidth: 80 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
   ]
@@ -204,7 +211,7 @@ export function UnifiedTransactionTable({
   const [showSelectedOnly, setShowSelectedOnly] = useState(false)
   const [internalSelection, setInternalSelection] = useState<Set<string>>(new Set())
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
-    return {
+    const initial: Record<ColumnKey, boolean> = {
       date: true,
       type: true,
       shop: true,
@@ -221,6 +228,14 @@ export function UnifiedTransactionTable({
       id: false,
       task: true,
     }
+
+    if (hiddenColumns.length > 0) {
+      hiddenColumns.forEach(col => {
+        initial[col] = false
+      })
+    }
+
+    return initial
   })
   const [columnWidths, setColumnWidths] = useState<Record<ColumnKey, number>>(() => {
     const map = {} as Record<ColumnKey, number>
@@ -231,8 +246,21 @@ export function UnifiedTransactionTable({
   })
 
   useEffect(() => {
-    setVisibleColumns(prev => ({ ...prev, people: !hidePeopleColumn }))
-  }, [hidePeopleColumn])
+    setVisibleColumns(prev => {
+      const next = { ...prev, people: !hidePeopleColumn }
+      if (hiddenColumns.length > 0) {
+        hiddenColumns.forEach(col => {
+          next[col] = false
+        })
+      }
+      // Simple deep equality check to prevent infinite loop
+      if (JSON.stringify(prev) === JSON.stringify(next)) {
+        return prev
+      }
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hidePeopleColumn, JSON.stringify(hiddenColumns)])
 
   // State for actions
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
@@ -447,11 +475,11 @@ export function UnifiedTransactionTable({
   }
 
   const displayedTransactions = useMemo(() => {
-    let list = transactions;
+    let list = tableData;
     if (currentTab === 'active') {
-      list = transactions.filter(t => (statusOverrides[t.id] ?? t.status) !== 'void');
+      list = tableData.filter(t => (statusOverrides[t.id] ?? t.status) !== 'void');
     } else {
-      list = transactions.filter(t => (statusOverrides[t.id] ?? t.status) === 'void');
+      list = tableData.filter(t => (statusOverrides[t.id] ?? t.status) === 'void');
     }
 
     if (showSelectedOnly) {
@@ -491,7 +519,7 @@ export function UnifiedTransactionTable({
 
   // --- Summary Calculation ---
   const summary = useMemo(() => {
-    const selectedTxns = transactions.filter(txn => selection.has(txn.id))
+    const selectedTxns = tableData.filter(txn => selection.has(txn.id))
     const initialSummary = { sumAmount: 0 };
     const incomeSummary = { ...initialSummary };
     const expenseSummary = { ...initialSummary };
@@ -502,10 +530,10 @@ export function UnifiedTransactionTable({
       targetSummary.sumAmount += Math.abs(originalAmount ?? 0);
     }
     return { incomeSummary, expenseSummary }
-  }, [selection, transactions])
+  }, [selection, tableData])
 
 
-  if (transactions.length === 0 && activeTab === 'active') {
+  if (tableData.length === 0 && activeTab === 'active') {
     return (
       <div className="text-center py-10 text-gray-400">
         <p>No transactions yet.</p>
@@ -845,6 +873,22 @@ export function UnifiedTransactionTable({
                       </div>
                     );
 
+                    // Special Account Context Logic (Pre-formatted Arrow)
+                    if (context === 'account' && accountId) {
+                      return (
+                        <div className="flex items-center gap-2">
+                          {/* Instructions say: Display the source_name text directly (which now contains the Arrow ➡️/⬅️) */}
+                          {/* We might want to show logo if available (handled in mapper logic now?) */}
+                          {txn.source_logo && sourceIcon}
+                          <CustomTooltip content={txn.source_name}>
+                            <span className="truncate max-w-[150px] cursor-help font-medium">
+                              {txn.source_name ?? 'Unknown'}
+                            </span>
+                          </CustomTooltip>
+                        </div>
+                      )
+                    }
+
                     const destIcon = txn.destination_logo ? (
                       <img src={txn.destination_logo} alt={txn.destination_name ?? ''} className="h-8 w-8 object-contain rounded-none" />
                     ) : (
@@ -907,13 +951,17 @@ export function UnifiedTransactionTable({
                       </span>
                     ) : <span className="text-slate-400">-</span>
                   case "cycle":
-                    return <span className="text-slate-600">{cycleLabel}</span>
+                    return (
+                      <CustomTooltip content="Kỳ sao kê thẻ tín dụng">
+                        <span className="text-slate-600 cursor-help border-b border-dotted border-slate-400">{cycleLabel}</span>
+                      </CustomTooltip>
+                    )
                   case "amount":
                     return amountValue
                   case "cashback_percent":
-                    return percentRaw ? <span className="text-slate-600">{(percentRaw * 100).toFixed(2)}%</span> : <span className="text-slate-300">-</span>
+                    return typeof percentRaw === 'number' ? <span className="text-slate-600">{(percentRaw * 100).toFixed(2)}%</span> : <span className="text-slate-300">-</span>
                   case "cashback_fixed":
-                    return fixedRaw ? <span className="text-slate-600">{numberFormatter.format(fixedRaw)}</span> : <span className="text-slate-300">-</span>
+                    return typeof fixedRaw === 'number' ? <span className="text-slate-600">{numberFormatter.format(fixedRaw)}</span> : <span className="text-slate-300">-</span>
                   case "cashback_sum":
                     return calculatedSum > 0 ? <span className="text-slate-600 font-medium">{numberFormatter.format(calculatedSum)}</span> : <span className="text-slate-300">-</span>
                   case "final_price":
