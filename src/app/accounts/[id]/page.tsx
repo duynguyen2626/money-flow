@@ -5,7 +5,8 @@ import { getShops } from '@/services/shop.service'
 import { parseSavingsConfig, getSharedLimitParentId } from '@/lib/account-utils'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 import { AccountDetailHeader } from '@/components/moneyflow/account-detail-header'
-import { ConstructionIcon } from 'lucide-react'
+import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
+import { getUnifiedTransactions } from '@/services/transaction.service'
 
 type PageProps = {
   params: Promise<{
@@ -34,9 +35,10 @@ export default async function AccountPage({ params }: PageProps) {
     )
   }
 
-  const [stats, txnDetails, allAccounts, categories, people, shops] = await Promise.all([
+  const [stats, txnDetails, transactions, allAccounts, categories, people, shops] = await Promise.all([
     account.type === 'credit_card' ? getAccountStats(id) : Promise.resolve(null),
     getAccountTransactionDetails(id, 50),
+    getUnifiedTransactions(id, 200),
     getAccounts(),
     getCategories(),
     getPeople(),
@@ -111,13 +113,15 @@ export default async function AccountPage({ params }: PageProps) {
             <h2 className="text-lg font-semibold">Transaction History</h2>
           </div>
           <div className="mt-4">
-            <div className="rounded-lg border border-dashed border-slate-200 p-8 text-center text-slate-500">
-              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-50">
-                <ConstructionIcon className="h-6 w-6 text-slate-400" />
-              </div>
-              <p className="font-medium">Transaction History</p>
-              <p className="text-xs">This module is being unified. Check the main Transactions page for details.</p>
-            </div>
+            <FilterableTransactions
+              transactions={transactions}
+              categories={categories}
+              accounts={allAccounts}
+              people={people}
+              shops={shops}
+              accountType={account.type}
+              accountId={account.id}
+            />
           </div>
         </section>
       </TagFilterProvider>

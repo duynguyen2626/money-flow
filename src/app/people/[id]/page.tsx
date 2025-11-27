@@ -1,7 +1,7 @@
 
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getPeoplePageData } from '@/actions/people-actions';
 import { DebtCycleFilter } from '@/components/moneyflow/debt-cycle-filter';
 import { TagFilterProvider, useTagFilter } from '@/context/tag-filter-context';
@@ -22,8 +22,8 @@ function formatCurrency(value: number) {
     return numberFormatter.format(value);
 }
 
-function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = use(params);
+function PeoplePageInner({ params }: { params: { id: string } }) {
+    const { id } = params;
     const [person, setPerson] = useState<DebtAccount | null>(null);
     const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
     const [debtCycles, setDebtCycles] = useState<DebtByTagAggregatedResult[]>([]);
@@ -40,10 +40,21 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     const [isExpanded, setIsExpanded] = useState(true);
     const [showSheetSettings, setShowSheetSettings] = useState(true);
 
-    const refreshData = async () => {
-        if (!id) return;
+    const refreshData = useCallback(async (signal?: AbortSignal) => {
+        if (!id || signal?.aborted) return;
+
         try {
             const data = await getPeoplePageData(id);
+            if (signal?.aborted) return;
+
+            if (!data.person) {
+                notFound();
+                return;
+            }
+
+            const txnData = await getUnifiedTransactions(data.person.id, 200);
+            if (signal?.aborted) return;
+
             setPerson(data.person);
             setDebtCycles(data.debtCycles);
             setAccounts(data.accounts);
@@ -52,22 +63,24 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
             setSubscriptions(data.subscriptions);
             setAllPeople(data.allPeople);
             setShops(data.shops ?? []);
-            if (!data.person) {
-                notFound();
-            } else {
-                // Also fetch transactions for this person's debt account
-                const txnData = await getUnifiedTransactions(data.person.id, 200);
-                setTransactions(txnData);
-            }
+            setTransactions(txnData);
         } catch (error) {
             console.error("Failed to fetch person details:", error);
         }
-    }
+    }, [id]);
 
     useEffect(() => {
+        const controller = new AbortController();
         setLoading(true);
-        refreshData().finally(() => setLoading(false));
-    }, [id]);
+
+        refreshData(controller.signal).finally(() => {
+            if (!controller.signal.aborted) {
+                setLoading(false);
+            }
+        });
+
+        return () => controller.abort();
+    }, [refreshData]);
 
     if (loading) {
         return <div>Loading...</div>;
@@ -238,7 +251,7 @@ function PeoplePageInner({ params }: { params: Promise<{ id: string }> }) {
     );
 }
 
-export default function PeopleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function PeopleDetailPage({ params }: { params: { id: string } }) {
     return (
         <TagFilterProvider>
             <PeoplePageInner params={params} />
