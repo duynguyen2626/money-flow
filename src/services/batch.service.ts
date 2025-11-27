@@ -254,6 +254,7 @@ export async function cloneBatch(originalBatchId: string, forcedNewTag?: string)
                 note: newNote,
                 bank_name: item.bank_name,
                 bank_number: item.bank_number,
+                card_name: item.card_name,
                 status: 'pending'
             }
         })

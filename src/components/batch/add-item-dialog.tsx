@@ -32,6 +32,7 @@ const formSchema = z.object({
     note: z.string().optional(),
     bank_name: z.string().optional(),
     bank_number: z.string().optional(),
+    card_name: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -47,27 +48,39 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
             note: '',
             bank_name: '',
             bank_number: '',
+            card_name: '',
         },
     })
 
     const bankName = form.watch('bank_name')
+    const cardName = form.watch('card_name')
     const targetAccountId = form.watch('target_account_id')
 
     // Smart Note Logic
     useEffect(() => {
         if (bankName) {
             const parts = bankName.split('-')
-            const shortBank = parts.length > 1 ? parts[1].trim() : parts[0].trim()
+            // Take the part BEFORE the dash (e.g., "VCB" from "VCB - Ngoại Thương")
+            const shortBank = parts[0].trim()
 
             // Extract Tag from Batch Name (assuming format "CKL TAG")
             const batchParts = batchName.split(' ')
             const tag = batchParts.length > 1 ? batchParts[batchParts.length - 1] : ''
 
-            if (shortBank && tag) {
-                form.setValue('note', `${shortBank} ${tag}`)
+            // Construct note: BankName [CardName] MMMYY
+            let noteValue = shortBank
+            if (cardName && cardName.trim()) {
+                noteValue += ` ${cardName.trim()}`
+            }
+            if (tag) {
+                noteValue += ` ${tag}`
+            }
+
+            if (noteValue.trim()) {
+                form.setValue('note', noteValue)
             }
         }
-    }, [bankName, batchName, form])
+    }, [bankName, cardName, batchName, form])
 
     // Auto-fill Receiver Name from Target Account
     useEffect(() => {
@@ -91,6 +104,7 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
                 note: values.note,
                 bank_name: values.bank_name,
                 bank_number: values.bank_number,
+                card_name: values.card_name,
             })
             setOpen(false)
             form.reset({
@@ -100,6 +114,7 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
                 note: '',
                 bank_name: '',
                 bank_number: '',
+                card_name: '',
             })
             toast.success('Item added successfully')
         } catch (error) {
@@ -184,6 +199,19 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
                                     <FormLabel>Receiver Name</FormLabel>
                                     <FormControl>
                                         <Input placeholder="e.g., John Doe" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="card_name"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Card Name (Optional)</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="e.g., Amex, Visa" {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

@@ -306,6 +306,7 @@ export interface Database {
           created_at: string
           bank_name: string | null
           bank_number: string | null
+          card_name: string | null
           transaction_id: string | null
           is_confirmed: boolean | null
         }
@@ -320,6 +321,7 @@ export interface Database {
           created_at?: string
           bank_name?: string | null
           bank_number?: string | null
+          card_name?: string | null
           transaction_id?: string | null
           is_confirmed?: boolean | null
         }
@@ -334,6 +336,7 @@ export interface Database {
           created_at?: string
           bank_name?: string | null
           bank_number?: string | null
+          card_name?: string | null
           transaction_id?: string | null
           is_confirmed?: boolean | null
         }

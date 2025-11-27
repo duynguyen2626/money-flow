@@ -31,6 +31,7 @@ const formSchema = z.object({
     note: z.string().optional(),
     bank_name: z.string().optional(),
     bank_number: z.string().optional(),
+    card_name: z.string().optional(),
 })
 
 type FormValues = z.infer<typeof formSchema>
@@ -45,6 +46,7 @@ export function EditItemDialog({ item }: { item: any }) {
             note: item.note || '',
             bank_name: item.bank_name || '',
             bank_number: item.bank_number || '',
+            card_name: item.card_name || '',
         },
     })
 
@@ -56,6 +58,7 @@ export function EditItemDialog({ item }: { item: any }) {
                 note: values.note,
                 bank_name: values.bank_name,
                 bank_number: values.bank_number,
+                card_name: values.card_name,
             })
             setOpen(false)
             toast.success('Item updated successfully')
@@ -122,6 +125,19 @@ export function EditItemDialog({ item }: { item: any }) {
                                     <FormLabel>Receiver Name</FormLabel>
                                     <FormControl>
                                         <Input placeholder="e.g., John Doe" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="card_name"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Card Name (Optional)</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="e.g., Amex, Visa" {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

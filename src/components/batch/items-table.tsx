@@ -91,7 +91,10 @@ export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProp
                         <TableCell>{item.bank_number || '-'}</TableCell>
                         <TableCell>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.amount)}</TableCell>
                         <TableCell>{item.note}</TableCell>
-                        <TableCell>{item.bank_name || '-'}</TableCell>
+                        <TableCell>
+                            {item.bank_name || '-'}
+                            {item.card_name && ` (${item.card_name})`}
+                        </TableCell>
                         <TableCell>
                             {item.status === 'confirmed' ? (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
