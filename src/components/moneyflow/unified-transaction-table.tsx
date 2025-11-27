@@ -132,7 +132,8 @@ interface ColumnConfig {
 }
 
 interface UnifiedTransactionTableProps {
-  transactions: TransactionWithDetails[]
+  data?: TransactionWithDetails[]
+  transactions?: TransactionWithDetails[] // Keeping for backward compatibility or alias
   accountType?: Account['type']
   accountId?: string // Specific Account Context
   selectedTxnIds?: Set<string>
@@ -169,6 +170,7 @@ function parseMetadata(value: TransactionWithDetails['metadata']) {
 }
 
 export function UnifiedTransactionTable({
+  data,
   transactions,
   accountType,
   accountId,
@@ -186,6 +188,7 @@ export function UnifiedTransactionTable({
   onSortChange,
   context,
 }: UnifiedTransactionTableProps) {
+  const tableData = data ?? transactions ?? []
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 60, minWidth: 50 },
     { key: "type", label: "Type", defaultWidth: 110, minWidth: 90 },
@@ -250,9 +253,14 @@ export function UnifiedTransactionTable({
           next[col] = false
         })
       }
+      // Simple deep equality check to prevent infinite loop
+      if (JSON.stringify(prev) === JSON.stringify(next)) {
+        return prev
+      }
       return next
     })
-  }, [hidePeopleColumn, hiddenColumns])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hidePeopleColumn, JSON.stringify(hiddenColumns)])
 
   // State for actions
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
@@ -467,11 +475,11 @@ export function UnifiedTransactionTable({
   }
 
   const displayedTransactions = useMemo(() => {
-    let list = transactions;
+    let list = tableData;
     if (currentTab === 'active') {
-      list = transactions.filter(t => (statusOverrides[t.id] ?? t.status) !== 'void');
+      list = tableData.filter(t => (statusOverrides[t.id] ?? t.status) !== 'void');
     } else {
-      list = transactions.filter(t => (statusOverrides[t.id] ?? t.status) === 'void');
+      list = tableData.filter(t => (statusOverrides[t.id] ?? t.status) === 'void');
     }
 
     if (showSelectedOnly) {
@@ -511,7 +519,7 @@ export function UnifiedTransactionTable({
 
   // --- Summary Calculation ---
   const summary = useMemo(() => {
-    const selectedTxns = transactions.filter(txn => selection.has(txn.id))
+    const selectedTxns = tableData.filter(txn => selection.has(txn.id))
     const initialSummary = { sumAmount: 0 };
     const incomeSummary = { ...initialSummary };
     const expenseSummary = { ...initialSummary };
@@ -522,10 +530,10 @@ export function UnifiedTransactionTable({
       targetSummary.sumAmount += Math.abs(originalAmount ?? 0);
     }
     return { incomeSummary, expenseSummary }
-  }, [selection, transactions])
+  }, [selection, tableData])
 
 
-  if (transactions.length === 0 && activeTab === 'active') {
+  if (tableData.length === 0 && activeTab === 'active') {
     return (
       <div className="text-center py-10 text-gray-400">
         <p>No transactions yet.</p>
@@ -943,13 +951,17 @@ export function UnifiedTransactionTable({
                       </span>
                     ) : <span className="text-slate-400">-</span>
                   case "cycle":
-                    return <span className="text-slate-600">{cycleLabel}</span>
+                    return (
+                      <CustomTooltip content="Kỳ sao kê thẻ tín dụng">
+                        <span className="text-slate-600 cursor-help border-b border-dotted border-slate-400">{cycleLabel}</span>
+                      </CustomTooltip>
+                    )
                   case "amount":
                     return amountValue
                   case "cashback_percent":
-                    return percentRaw ? <span className="text-slate-600">{(percentRaw * 100).toFixed(2)}%</span> : <span className="text-slate-300">-</span>
+                    return typeof percentRaw === 'number' ? <span className="text-slate-600">{(percentRaw * 100).toFixed(2)}%</span> : <span className="text-slate-300">-</span>
                   case "cashback_fixed":
-                    return fixedRaw ? <span className="text-slate-600">{numberFormatter.format(fixedRaw)}</span> : <span className="text-slate-300">-</span>
+                    return typeof fixedRaw === 'number' ? <span className="text-slate-600">{numberFormatter.format(fixedRaw)}</span> : <span className="text-slate-300">-</span>
                   case "cashback_sum":
                     return calculatedSum > 0 ? <span className="text-slate-600 font-medium">{numberFormatter.format(calculatedSum)}</span> : <span className="text-slate-300">-</span>
                   case "final_price":

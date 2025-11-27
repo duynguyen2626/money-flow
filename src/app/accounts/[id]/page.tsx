@@ -126,6 +126,7 @@ export default async function AccountPage({ params }: PageProps) {
             <h2 className="text-lg font-semibold">Lịch sử giao dịch</h2>
           </div>
           <UnifiedTransactionTable
+            data={transactions}
             transactions={transactions}
             context="account"
             accountId={id}
