@@ -127,6 +127,7 @@ export default async function AccountPage({ params }: PageProps) {
           </div>
           <UnifiedTransactionTable
             data={transactions}
+            transactions={transactions}
             context="account"
             accountId={id}
             accountType={account.type}
