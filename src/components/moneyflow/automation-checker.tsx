@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { Loader2, Zap } from 'lucide-react'
 
 import { runSubscriptionBotAction } from '@/actions/subscription-actions'
+import { checkAndAutoCloneBatchesAction } from '@/actions/batch.actions'
 
 type BotToast = {
   title: string
@@ -17,20 +18,27 @@ export function AutomationChecker() {
   const checkAndProcessSubscriptions = useCallback(async (isManualForce: boolean = false) => {
     setLoading(true)
     try {
-      const result = await runSubscriptionBotAction(isManualForce)
-      if (!result) return
+      // 1. Check Subscriptions
+      const subResult = await runSubscriptionBotAction(isManualForce)
 
-      if (result.processedCount > 0) {
-        const names = (result.names ?? []).join(', ')
+      // 2. Check Batches
+      const batchResult = await checkAndAutoCloneBatchesAction()
+
+      let message = ''
+
+      if (subResult && subResult.processedCount > 0) {
+        message += `Created Subs: ${(subResult.names ?? []).join(', ')}. `
+      }
+
+      if (batchResult && batchResult.length > 0) {
+        message += `Cloned Batches: ${batchResult.map((b: any) => b.name).join(', ')}.`
+      }
+
+      if (message) {
+        setToast({ title: `⚡ Automation: ${message}` })
+      } else if (subResult && subResult.skippedCount > 0) {
         setToast({
-          title: `⚡ Created: ${names}`,
-        })
-      } else if (result.skippedCount > 0) {
-        setToast({
-          title: `✅ All services are up to date for ${new Date().toLocaleString('default', {
-            month: 'short',
-            year: '2-digit',
-          })}`,
+          title: `✅ All automations are up to date.`,
         })
       }
     } catch (error) {

@@ -9,28 +9,29 @@ import Link from 'next/link'
 export const dynamic = 'force-dynamic'
 
 type ShopDetailsPageProps = {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 export default async function ShopDetailsPage({ params }: ShopDetailsPageProps) {
+  const { id } = await params
   const { getTransactionsByShop } = await import('@/services/transaction.service')
 
   const [transactions, accounts, categories, people, shops, shop] = await Promise.all([
-    getTransactionsByShop(params.id),
+    getTransactionsByShop(id),
     getAccounts(),
     getCategories(),
     getPeople(),
     getShops(),
-    getShopById(params.id)
+    getShopById(id)
   ])
 
-  const displayShop = shop ?? shops.find(s => s.id === params.id)
+  const displayShop = shop ?? shops.find(s => s.id === id)
 
   return (
     <section className="space-y-6">
-       <header className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white px-6 py-5 shadow-sm">
+      <header className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white px-6 py-5 shadow-sm">
         <Link
           href="/shops"
           className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
@@ -41,16 +42,16 @@ export default async function ShopDetailsPage({ params }: ShopDetailsPageProps) 
           <p className="text-xs uppercase tracking-wider text-slate-500">Shop Details</p>
           <div className="flex items-center gap-3 mt-1">
             {displayShop?.logo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
                 src={displayShop.logo_url}
                 alt={displayShop.name}
                 className="h-8 w-8 rounded-full object-cover"
-                />
+              />
             ) : displayShop && (
-                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-600">
                 {displayShop.name.charAt(0).toUpperCase()}
-                </div>
+              </div>
             )}
             <h1 className="text-2xl font-semibold text-slate-900">{displayShop?.name ?? 'Unknown Shop'}</h1>
           </div>
@@ -60,11 +61,11 @@ export default async function ShopDetailsPage({ params }: ShopDetailsPageProps) 
 
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <RecentTransactions
-            transactions={transactions}
-            accounts={accounts}
-            categories={categories}
-            people={people}
-            shops={shops}
+          transactions={transactions}
+          accounts={accounts}
+          categories={categories}
+          people={people}
+          shops={shops}
         />
       </div>
     </section>

@@ -124,6 +124,10 @@ export interface Database {
           cashback_share_fixed: number | null
           metadata: Json | null
           created_at: string
+          bank_name: string | null
+          bank_number: string | null
+          card_name: string | null
+          receiver_name: string | null
         }
         Insert: {
           id?: string
@@ -137,6 +141,10 @@ export interface Database {
           cashback_share_fixed?: number | null
           metadata?: Json | null
           created_at?: string
+          bank_name?: string | null
+          bank_number?: string | null
+          card_name?: string | null
+          receiver_name?: string | null
         }
         Update: {
           id?: string
@@ -150,6 +158,10 @@ export interface Database {
           cashback_share_fixed?: number | null
           metadata?: Json | null
           created_at?: string
+          bank_name?: string | null
+          bank_number?: string | null
+          card_name?: string | null
+          receiver_name?: string | null
         }
       }
       categories: {
@@ -254,6 +266,91 @@ export interface Database {
           profile_id?: string
           fixed_amount?: number | null
           created_at?: string
+        }
+      }
+      batches: {
+        Row: {
+          id: string
+          name: string
+          source_account_id: string | null
+          sheet_link: string | null
+          created_at: string
+          updated_at: string
+          status: string | null
+          is_template: boolean | null
+          auto_clone_day: number | null
+          last_cloned_month_tag: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          source_account_id?: string | null
+          sheet_link?: string | null
+          created_at?: string
+          updated_at?: string
+          status?: string | null
+          is_template?: boolean | null
+          auto_clone_day?: number | null
+          last_cloned_month_tag?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          source_account_id?: string | null
+          sheet_link?: string | null
+          created_at?: string
+          updated_at?: string
+          status?: string | null
+          is_template?: boolean | null
+          auto_clone_day?: number | null
+          last_cloned_month_tag?: string | null
+        }
+      }
+      batch_items: {
+        Row: {
+          id: string
+          batch_id: string
+          receiver_name: string | null
+          target_account_id: string | null
+          amount: number
+          note: string | null
+          status: string | null
+          created_at: string
+          bank_name: string | null
+          bank_number: string | null
+          card_name: string | null
+          transaction_id: string | null
+          is_confirmed: boolean | null
+        }
+        Insert: {
+          id?: string
+          batch_id: string
+          receiver_name?: string | null
+          target_account_id?: string | null
+          amount: number
+          note?: string | null
+          status?: string | null
+          created_at?: string
+          bank_name?: string | null
+          bank_number?: string | null
+          card_name?: string | null
+          transaction_id?: string | null
+          is_confirmed?: boolean | null
+        }
+        Update: {
+          id?: string
+          batch_id?: string
+          receiver_name?: string | null
+          target_account_id?: string | null
+          amount?: number
+          note?: string | null
+          status?: string | null
+          created_at?: string
+          bank_name?: string | null
+          bank_number?: string | null
+          card_name?: string | null
+          transaction_id?: string | null
+          is_confirmed?: boolean | null
         }
       }
     }
