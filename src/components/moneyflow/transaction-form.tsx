@@ -1026,7 +1026,7 @@ export function TransactionForm({
             }`}
           onClick={() => setRefundStatus('received')}
         >
-          Received
+          Received (Instant)
         </button>
         <button
           type="button"
@@ -1038,7 +1038,7 @@ export function TransactionForm({
           }}
           disabled={isConfirmRefund}
         >
-          Pending
+          Pending (Wait)
         </button>
       </div>
       <p className="text-xs text-slate-500">

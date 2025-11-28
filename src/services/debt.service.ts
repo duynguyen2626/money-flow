@@ -30,9 +30,9 @@ type TransactionLineRow = Database['public']['Tables']['transaction_lines']['Row
 
 export type DebtByTagAggregatedResult = {
   tag: string;
-  netBalance: number; 
-  originalPrincipal: number; 
-  totalBack: number; 
+  netBalance: number;
+  originalPrincipal: number;
+  totalBack: number;
   status: string;
   last_activity: string;
 }
@@ -84,7 +84,7 @@ export async function getPersonDetails(id: string) {
 
   return {
     id: accountData.id,
-    name: accountData.profiles?.name || accountData.name, 
+    name: accountData.profiles?.name || accountData.name,
     current_balance: accountData.current_balance ?? 0,
     owner_id: accountData.owner_id,
     avatar_url: accountData.profiles?.avatar_url || null,
@@ -102,13 +102,14 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
   const { data, error } = await supabase
     .from('transaction_lines')
     .select(`
-      transactions(tag, occurred_at, id),
+      transactions!inner(tag, occurred_at, id, status),
       amount,
       original_amount,
       cashback_share_percent,
       cashback_share_fixed
     `)
     .eq('account_id', personId)
+    .neq('transactions.status', 'void')
     .order('occurred_at', { foreignTable: 'transactions', ascending: false });
 
   if (error) {
@@ -144,10 +145,10 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
         netBalance: 0,
         originalPrincipal: 0,
         totalBack: 0,
-        last_activity: occurredAt 
+        last_activity: occurredAt
       }
     }
-    
+
     tagMap[tag].netBalance += amount
 
     if (isLending) {
@@ -244,33 +245,33 @@ export async function settleDebt(
   const lines: TransactionLineInsert[] =
     settlementDirection === 'collect'
       ? [
-          {
-            account_id: targetBankAccountId,
-            amount: absoluteAmount,
-            type: 'debit',
-            transaction_id: transaction.id,
-          },
-          {
-            account_id: debtAccountId,
-            amount: -absoluteAmount,
-            type: 'credit',
-            transaction_id: transaction.id,
-          },
-        ]
+        {
+          account_id: targetBankAccountId,
+          amount: absoluteAmount,
+          type: 'debit',
+          transaction_id: transaction.id,
+        },
+        {
+          account_id: debtAccountId,
+          amount: -absoluteAmount,
+          type: 'credit',
+          transaction_id: transaction.id,
+        },
+      ]
       : [
-          {
-            account_id: targetBankAccountId,
-            amount: -absoluteAmount,
-            type: 'credit',
-            transaction_id: transaction.id,
-          },
-          {
-            account_id: debtAccountId,
-            amount: absoluteAmount,
-            type: 'debit',
-            transaction_id: transaction.id,
-          },
-        ]
+        {
+          account_id: targetBankAccountId,
+          amount: -absoluteAmount,
+          type: 'credit',
+          transaction_id: transaction.id,
+        },
+        {
+          account_id: debtAccountId,
+          amount: absoluteAmount,
+          type: 'debit',
+          transaction_id: transaction.id,
+        },
+      ]
 
   const { error: linesError } = await (supabase.from('transaction_lines').insert as any)(lines)
 

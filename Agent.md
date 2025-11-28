@@ -1,73 +1,70 @@
 # **PROJECT: MONEY FLOW 3.0**
 
-# **PHASE: 37 \- UNIFICATION, REFUND ACTIONS & TABLE POLISH**
+# **PHASE: 39 \- REFUND STATE MACHINE FIX & SHEET SYNC PATCH**
 
 **WORKFLOW:**
 
-1. **Branch:** fix/phase-37-unify-polish  
-2. **Safety:** Run npm run build before finishing.
+1. **Branch:** fix/phase-39-refund-logic  
+2. **Safety:** Run npm run build.
 
-## **I. UNIFIED TRANSACTION TABLE (src/components/moneyflow/unified-transaction-table.tsx)**
+**OBJECTIVES:**
 
-**1\. Fix Date Time (The "7:00" Bug)**
+1. **Fix Refund Logic:** Ensure "Request Refund" sets status to waiting\_refund (not refunded). Ensure "Confirm" completes the cycle.  
+2. **Fix Void Constraint:** Prevent voiding Pending Txn if Completed Txn exists. Rollback Original Txn status when voiding.  
+3. **Fix Sheet Sync:** Repayments must be "In" and show Bank Name in "Shop" column.  
+4. **UI:** Translate Refund Modal to full English.
 
-* **Context:** occurred\_at is Date-only (00:00 UTC \-\> 07:00 VN).  
+## **I. BACKEND LOGIC (src/services/transaction.service.ts)**
+
+### **1\. Fix requestRefund (The "Waiting" State)**
+
+* **Current Bug:** It sets refund\_status \= 'full' immediately.  
 * **Fix:**  
-  * Display Date using occurred\_at (dd/MM).  
-  * Display Time using created\_at (HH:mm) if available.  
-  * *Visual:* Stacked layout.
+  * If isPending (Wait for money):  
+    * Create GD2 (Pending Txn).  
+    * Update GD1 (Original): status \= **'waiting\_refund'**. refund\_status \= **'pending'**.  
+  * If \!isPending (Money received immediately):  
+    * Update GD1: status \= 'refunded'. refund\_status \= 'full'.
 
-**2\. Polish Layout**
+### **2\. Fix voidTransaction (The Constraint & Rollback)**
 
-* **Tags Column:** Add max-w-\[120px\] truncate to prevent overflow. Add Tooltip for full text.  
-* **Borders:** Add vertical borders (border-r) to cells for clarity.  
-* **Zero Handling:** If Back columns are 0/null, display "0" or "-" explicitly.
-
-**3\. Merge Cashback Columns**
-
-* **Header:** "Back Info".  
 * **Logic:**  
-  * Line 1: Text \[Rate\]% \+ \[Fix\].  
-  * Line 2: Small Green Text Sum: \[Total\].  
-* **Action:** Replace separate columns with this single merged column.
+  1. **Check Constraints:**  
+     * If txn.status \=== 'completed' (GD2 \- Intermediate), CHECK if there is a linked GD3 (Real Money In).  
+     * If GD3 is active \-\> **THROW ERROR**: "Cannot void intermediate transaction. Please void the 'Money Received' transaction first."  
+  2. **Rollback Logic:**  
+     * If voiding GD2 (Pending): Find GD1 \-\> Set status \= 'posted', refund\_status \= 'none'.  
+     * If voiding GD3 (Real Money): Find GD2 \-\> Set status \= 'pending'.
 
-**4\. Add "Status" Column**
+### **3\. Fix Sheet Sync (syncTransactionToSheet)**
 
-* **Position:** Before Actions.  
-* **Badges:**  
-  * Void (Gray).  
-  * Refunded (Purple \- Full).  
-  * Partial Refund (Amber).  
-  * Active (Green/Blue \- Default).
+* **Logic for Repayment/Refund:**  
+  * If type \=== 'repayment' OR category.type \=== 'income' (Refund):  
+    * **Force Type:** "In".  
+  * **Fix Shop Column:**  
+    * Current: Uses source\_account\_name (which is Debt Account).  
+    * **Fix:** If Repayment, use destination\_account\_name (The Bank Name) as the "Shop" value in payload.
 
-## **II. LOGIC UPGRADE: ACTIONS MENU**
+## **II. FRONTEND UI**
 
-**Target:** src/components/moneyflow/transaction-table.tsx
+### **1\. TransactionForm (Refund Mode)**
 
-**1\. Global Refund Availability**
+* **Translation:** Translate all labels/options to English.  
+  * "Đã nhận tiền" \-\> "Received (Instant)".  
+  * "Chờ hoàn" \-\> "Pending (Wait)".  
+  * "Số tiền" \-\> "Amount".  
+  * "Tài khoản" \-\> "Account".
 
-* **Fix:** Ensure "Request Refund" and "Cancel Order" appear on ALL pages (/transactions, /accounts, /people).  
-* **Condition:** type \=== 'expense' OR type \=== 'debt' (Lending). (Remove strict Shop check).
+### **2\. UnifiedTransactionTable (Missing Pending Rows)**
 
-**2\. Separate Actions**
+* **Bug:** Pending/System transactions are missing from the list.  
+* **Cause:** The default filter might be excluding account\_type \= 'system'.  
+* **Fix:** Ensure the fetch query INCLUDES system accounts when viewing "All Transactions" or ensure they are visible in the /refunds page.
 
-* **Action 1: ↩️ Partial Refund** \-\> Opens Dialog (Enter amount).  
-* **Action 2: 🚫 Cancel Order (Full)** \-\>  
-  * Confirm Dialog: "Hủy đơn và hoàn 100%?".  
-  * Logic: Call requestRefund with amount \= original\_amount.
+## **III. EXECUTION STEPS**
 
-## **III. FIX BATCH MAPPING BUG**
-
-Context: The Batch Mapping tab shows (0) items even though data exists.  
-Fix:
-
-* Check src/services/bank.service.ts or wherever getBankMappings is called.  
-* Ensure the API/Service is actually fetching data and the State in BatchList is updated.  
-* *Self-Correction:* If the mapping list is in a separate page (/settings/banks), ensure the link works. If it's a tab in /batch, ensure the data fetcher runs on tab change.
-
-## **IV. EXECUTION STEPS**
-
-1. **Frontend:** Update Table Cell rendering (Time, Merge Back, Status Col).  
-2. **Frontend:** Update Action Menu (Add Cancel, Relax Refund condition).  
-3. **Backend/Frontend:** Debug Batch Mapping fetch.  
-4. **Verify:** Run build.
+1. **Backend:** Rewrite requestRefund state assignment.  
+2. **Backend:** Implement Void constraints.  
+3. **Backend:** Patch Sheet Sync payload mapping.  
+4. **Frontend:** Update translations.  
+5. **Verify:** Run build.
