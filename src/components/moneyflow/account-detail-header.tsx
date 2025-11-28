@@ -25,6 +25,7 @@ type AccountDetailHeaderProps = {
   isAssetAccount: boolean
   assetConfig: { interestRate: number | null; termMonths: number | null; maturityDate: string | null } | null
   shops: Shop[]
+  batchStats?: { waiting: number; confirmed: number }
 }
 
 export function AccountDetailHeader({
@@ -39,6 +40,7 @@ export function AccountDetailHeader({
   isAssetAccount,
   assetConfig,
   shops,
+  batchStats,
 }: AccountDetailHeaderProps) {
   const [collapsed, setCollapsed] = useState(false)
   const toggle = () => setCollapsed(prev => !prev)
@@ -46,7 +48,7 @@ export function AccountDetailHeader({
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
   const [isRecalculating, setIsRecalculating] = useState(false)
   const isCurrentlyActive = account.is_active !== false
-  
+
   const handleToggleAccountStatus = async () => {
     if (isUpdatingStatus) return
     setIsUpdatingStatus(true)
@@ -153,6 +155,7 @@ export function AccountDetailHeader({
       <EditAccountDialog
         account={account}
         collateralAccounts={savingsAccounts}
+        accounts={allAccounts}
         triggerContent={
           <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
             <Settings className="h-3.5 w-3.5" />
@@ -236,6 +239,7 @@ export function AccountDetailHeader({
       <EditAccountDialog
         account={account}
         collateralAccounts={savingsAccounts}
+        accounts={allAccounts}
         triggerContent={
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-full bg-white text-slate-700 hover:bg-slate-50">
             <Settings className="h-4 w-4" />
@@ -314,6 +318,7 @@ export function AccountDetailHeader({
         cashbackStats={cashbackStats}
         isAssetAccount={isAssetAccount}
         assetConfig={assetConfig}
+        batchStats={batchStats}
       />
       <div className="flex flex-wrap items-center gap-2">
         {actionButtons}

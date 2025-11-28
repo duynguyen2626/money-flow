@@ -449,7 +449,7 @@ export async function checkAndAutoCloneBatches() {
 
 /**
  * Get pending batch items for a specific account
- * Used for \"Confirm Money Received\" feature on Account Cards
+ * Used for "Confirm Money Received" feature on Account Cards
  */
 export async function getPendingBatchItemsByAccount(accountId: string) {
     const supabase: any = createClient()
@@ -513,46 +513,38 @@ export async function importBatchItemsFromExcel(
                 continue
             }
 
-            const stt = columns[0]?.trim() // STT number
-            const bankCodeAndName = columns[1]?.trim() // "314 - NH Quốc tế VIB"
-            const fullBankName = columns[2]?.trim() // "NH TMCP Quốc tế Việt Nam"
+            // Detect format:
+            // Format A: STT | Receiver | Bank Number | Bank Name | Amount | Note
+            // Format B: Receiver | Bank Number | Bank Name | Amount | Note
 
-            // Extract bank code from "314 - NH Quốc tế VIB"
-            let bankCode = ''
-            let receiverName = ''
-            if (bankCodeAndName) {
-                const parts = bankCodeAndName.split('-')
-                if (parts.length >= 2) {
-                    bankCode = parts[0].trim() // "314"
-                    receiverName = parts.slice(1).join('-').trim() // "NH Quốc tế VIB"
+            let offset = 0
+            // If first column is digits and we have enough columns, assume it's STT
+            if (/^\d+$/.test(columns[0]?.trim()) && columns.length >= 5) {
+                offset = 1
+            }
+
+            const receiverName = columns[offset]?.trim() || ''
+            const bankNumber = columns[offset + 1]?.trim() || ''
+            const bankName = columns[offset + 2]?.trim() || ''
+
+            const amountStr = columns[offset + 3]?.trim()
+            const amount = amountStr ? parseInt(amountStr.replace(/\D/g, '')) : 0
+
+            let note = columns[offset + 4]?.trim() || ''
+
+            // Append batch tag to note if present
+            if (batchTag) {
+                if (!note) {
+                    note = batchTag
+                } else if (!note.includes(batchTag)) {
+                    note = `${note} ${batchTag}`
                 }
             }
 
-            // Default amount (since not in this format)
-            const amount = 0
-
-            // Try to find target account by name
-            let targetAccountId = accountByName.get(receiverName.toLowerCase())
-
-            // Look up bank info if bank code provided
-            let bankName = ''
-            let shortName = ''
-            if (bankCode && bankCodeMap.has(bankCode)) {
-                const bankInfo = bankCodeMap.get(bankCode) as { bank_name: string; short_name: string }
-                bankName = bankInfo.short_name // Use short_name for bank_name field
-                shortName = bankInfo.short_name
-            } else {
-                // If no mapping found, use the receiver name
-                bankName = receiverName
-                shortName = receiverName
-            }
-
-            // Generate note: [ShortName] [BatchTag]
-            let note = ''
-            if (shortName && batchTag) {
-                note = `${shortName} ${batchTag}`
-            } else if (batchTag) {
-                note = batchTag
+            // Try to find target account by bank number first, then name
+            let targetAccountId = accountByNumber.get(bankNumber)
+            if (!targetAccountId) {
+                targetAccountId = accountByName.get(receiverName.toLowerCase())
             }
 
             // Insert batch item
@@ -565,7 +557,7 @@ export async function importBatchItemsFromExcel(
                     amount: amount,
                     note: note,
                     bank_name: bankName,
-                    bank_number: '', // Not provided in this format
+                    bank_number: bankNumber,
                     card_name: '',
                     status: 'pending'
                 })
@@ -581,4 +573,112 @@ export async function importBatchItemsFromExcel(
     }
 
     return results
+}
+
+export async function fundBatch(batchId: string) {
+    const supabase: any = createClient()
+
+    // 1. Fetch Batch Details (to get Source Account and Name)
+    const { data: batch, error: batchError } = await supabase
+        .from('batches')
+        .select('*, batch_items(amount)')
+        .eq('id', batchId)
+        .single()
+
+    if (batchError || !batch) throw new Error('Batch not found')
+    if (batch.status === 'funded') throw new Error('Batch already funded')
+    if (!batch.source_account_id) throw new Error('Batch has no source account')
+
+    // 2. Calculate Total Amount
+    const totalAmount = batch.batch_items.reduce((sum: number, item: any) => sum + item.amount, 0)
+    if (totalAmount <= 0) throw new Error('Batch has no amount to fund')
+
+    // 3. Extract Tag from Name (e.g. "CKL NOV25" -> "NOV25")
+    const nameParts = batch.name.split(' ')
+    const tag = nameParts[nameParts.length - 1]
+
+    // 4. Create Transaction Header
+    const { data: txn, error: txnError } = await supabase
+        .from('transactions')
+        .insert({
+            occurred_at: new Date().toISOString(),
+            note: `Funding Batch: ${batch.name}`,
+            status: 'posted',
+            tag: tag,
+            created_by: SYSTEM_ACCOUNTS.DEFAULT_USER_ID
+        })
+        .select()
+        .single()
+
+    if (txnError) throw txnError
+
+    // 5. Create Transaction Lines (Transfer: Source -> Clearing)
+    // Source Account: Credit (Decrease)
+    // Clearing Account: Debit (Increase)
+    const lines = [
+        {
+            transaction_id: txn.id,
+            account_id: batch.source_account_id,
+            amount: -totalAmount, // Credit
+            type: 'credit'
+        },
+        {
+            transaction_id: txn.id,
+            account_id: SYSTEM_ACCOUNTS.BATCH_CLEARING,
+            amount: totalAmount, // Debit
+            type: 'debit'
+        }
+    ]
+
+    const { error: linesError } = await supabase
+        .from('transaction_lines')
+        .insert(lines)
+
+    if (linesError) throw linesError
+
+    // 6. Update Batch Status
+    const { error: updateError } = await supabase
+        .from('batches')
+        .update({
+            status: 'funded',
+            funding_transaction_id: txn.id
+        })
+        .eq('id', batchId)
+
+    if (updateError) throw updateError
+
+    return true
+}
+
+export async function getAccountBatchStats(accountId: string) {
+    const supabase: any = createClient()
+
+    // Fetch batches where this account is the source and status is 'funded'
+    // We also need batch items to calculate amounts
+    const { data: batches, error } = await supabase
+        .from('batches')
+        .select('*, batch_items(amount, status)')
+        .eq('source_account_id', accountId)
+        .eq('status', 'funded')
+
+    if (error) {
+        console.error('Error fetching batch stats:', error)
+        return { waiting: 0, confirmed: 0 }
+    }
+
+    let waiting = 0
+    let confirmed = 0
+
+    batches?.forEach((batch: any) => {
+        batch.batch_items.forEach((item: any) => {
+            if (item.status === 'confirmed') {
+                confirmed += item.amount
+            } else {
+                // If batch is funded but item is not confirmed, it's waiting
+                waiting += item.amount
+            }
+        })
+    })
+
+    return { waiting, confirmed }
 }

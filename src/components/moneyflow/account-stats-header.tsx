@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowDownRight, ArrowUpRight, CreditCard, TrendingUp, Wallet, Link2, Archive, RotateCcw } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CreditCard, TrendingUp, Wallet, Link2, Archive, RotateCcw, Clock4, CheckCircle2 } from 'lucide-react'
 
 import { formatCurrency, getAccountTypeLabel } from '@/lib/account-utils'
 import { Account } from '@/types/moneyflow.types'
@@ -22,6 +22,7 @@ type AccountStatsHeaderProps = {
   cashbackStats: AccountSpendingStats | null
   isAssetAccount: boolean
   assetConfig: AssetConfig
+  batchStats?: { waiting: number; confirmed: number }
 }
 
 export function AccountStatsHeader({
@@ -31,11 +32,13 @@ export function AccountStatsHeader({
   cashbackStats,
   isAssetAccount,
   assetConfig,
+  batchStats,
 }: AccountStatsHeaderProps) {
   const router = useRouter()
   const [isUpdating, setIsUpdating] = useState(false)
-  
+
   const balanceTone = account.current_balance < 0 ? 'text-red-600' : 'text-slate-900'
+
   const statItems = [
     {
       label: 'Incoming',
@@ -51,14 +54,28 @@ export function AccountStatsHeader({
       tone: 'text-rose-700',
       bg: 'bg-rose-50',
     },
-    {
-      label: 'Net Flow',
-      value: totals.net,
-      icon: <TrendingUp className="h-4 w-4 text-slate-700" />,
-      tone: totals.net >= 0 ? 'text-emerald-700' : 'text-rose-700',
-      bg: totals.net >= 0 ? 'bg-emerald-50' : 'bg-rose-50',
-    },
   ]
+
+  if (batchStats) {
+    if (batchStats.waiting > 0) {
+      statItems.push({
+        label: 'Waiting',
+        value: batchStats.waiting,
+        icon: <Clock4 className="h-4 w-4 text-amber-600" />,
+        tone: 'text-amber-700',
+        bg: 'bg-amber-50',
+      })
+    }
+    if (batchStats.confirmed > 0) {
+      statItems.push({
+        label: 'Confirmed',
+        value: batchStats.confirmed,
+        icon: <CheckCircle2 className="h-4 w-4 text-blue-600" />,
+        tone: 'text-blue-700',
+        bg: 'bg-blue-50',
+      })
+    }
+  }
 
   const cycleLabel = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date())
   const earned = cashbackStats?.earnedSoFar ?? 0
@@ -66,17 +83,17 @@ export function AccountStatsHeader({
   const progressMax = cap ?? Math.max(earned, 1)
   const remaining = cap ? Math.max(0, cap - earned) : null
   const minSpend = cashbackStats?.minSpend
-  
+
   // Hàm xử lý đóng/mở lại tài khoản
   const handleToggleAccountStatus = async () => {
     setIsUpdating(true)
     try {
       const newStatus = !account.is_active
-      const success = await updateAccountConfigAction({ 
-        id: account.id, 
-        isActive: newStatus 
+      const success = await updateAccountConfigAction({
+        id: account.id,
+        isActive: newStatus
       })
-      
+
       if (success) {
         // Làm mới trang để cập nhật trạng thái
         router.refresh()
@@ -104,11 +121,10 @@ export function AccountStatsHeader({
               <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">
                 {getAccountTypeLabel(account.type)}
               </span>
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
-                account.is_active !== false 
-                  ? 'bg-emerald-50 text-emerald-700' 
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${account.is_active !== false
+                  ? 'bg-emerald-50 text-emerald-700'
                   : 'bg-slate-100 text-slate-600'
-              }`}>
+                }`}>
                 {account.is_active !== false ? 'Active' : 'Closed'}
               </span>
             </div>
@@ -141,7 +157,7 @@ export function AccountStatsHeader({
               </span>
             </div>
           </div>
-          
+
           {/* Thêm nút Đóng/Mở lại tài khoản */}
           <div className="flex gap-2">
             {account.is_active !== false ? (

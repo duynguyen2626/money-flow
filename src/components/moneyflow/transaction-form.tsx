@@ -160,7 +160,7 @@ export function TransactionForm({
   defaultRefundStatus = 'pending',
 }: TransactionFormProps) {
   const sourceAccounts = useMemo(
-    () => allAccounts.filter(a => a.type !== 'debt'),
+    () => allAccounts,
     [allAccounts]
   )
 
@@ -409,6 +409,7 @@ export function TransactionForm({
       cashback_share_percent: sanitizedPercent > 0 ? sanitizedPercent : undefined,
       cashback_share_fixed: sanitizedFixed > 0 ? sanitizedFixed : undefined,
       note: values.note ?? '',
+      destination_account_id: values.type === 'income' ? values.source_account_id : undefined,
     }
 
     const result = transactionId
@@ -1052,7 +1053,7 @@ export function TransactionForm({
       (transactionType === 'expense' ||
         transactionType === 'debt' ||
         transactionType === 'transfer' ||
-        (transactionType === 'income' && isRefundMode) ||
+        transactionType === 'income' ||
         isRefundMode) ? (
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">
@@ -1293,8 +1294,8 @@ export function TransactionForm({
                 setManualTagMode(true);
               }}
               className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${watch('tag') === tag
-                  ? 'bg-blue-500 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                ? 'bg-blue-500 text-white shadow-sm'
+                : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
                 }`}
             >
               {tag}

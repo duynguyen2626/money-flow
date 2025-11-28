@@ -34,6 +34,8 @@ export type Account = {
   is_active?: boolean | null;
   img_url?: string | null;
   logo_url?: string | null;
+  total_in?: number;
+  total_out?: number;
 }
 
 export type AccountCashbackSnapshot = {

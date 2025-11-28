@@ -15,6 +15,8 @@ type AccountRow = {
   is_active: boolean | null
   img_url: string | null
   logo_url: string | null
+  total_in: number | null
+  total_out: number | null
 }
 
 function normalizeCashbackConfig(value: Json | null): Json | null {
@@ -32,7 +34,7 @@ function normalizeCashbackConfig(value: Json | null): Json | null {
 
 export async function getAccounts(): Promise<Account[]> {
   const supabase = createClient()
-    
+
   const { data, error } = await supabase
     .from('accounts')
     .select('*')
@@ -60,6 +62,8 @@ export async function getAccounts(): Promise<Account[]> {
     is_active: typeof item.is_active === 'boolean' ? item.is_active : null,
     img_url: typeof item.img_url === 'string' ? item.img_url : typeof item.logo_url === 'string' ? item.logo_url : null,
     logo_url: typeof item.logo_url === 'string' ? item.logo_url : null,
+    total_in: item.total_in ?? 0,
+    total_out: item.total_out ?? 0,
   }))
 }
 
@@ -103,6 +107,8 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
     is_active: typeof row.is_active === 'boolean' ? row.is_active : null,
     img_url: typeof row.img_url === 'string' ? row.img_url : typeof row.logo_url === 'string' ? row.logo_url : null,
     logo_url: typeof row.logo_url === 'string' ? row.logo_url : null,
+    total_in: row.total_in ?? 0,
+    total_out: row.total_out ?? 0,
   }
 }
 
@@ -633,35 +639,35 @@ export async function getAccountTransactionDetails(
     }
 
     const groupedFallback = new Map<string, GroupedTransactionLines>()
-    ;(fallbackData ?? []).forEach(row => {
-      const lines = (row as { transaction_lines?: { transaction_id?: string; amount?: number; type?: string; account_id?: string }[] }).transaction_lines ?? []
-      lines.forEach(line => {
-        if (!line.transaction_id) return
-        if (!groupedFallback.has(line.transaction_id)) {
-          groupedFallback.set(line.transaction_id, { transaction_lines: [] })
-        }
-        groupedFallback.get(line.transaction_id)!.transaction_lines.push({
-          amount: line.amount ?? 0,
-          type: line.type ?? '',
-          account_id: line.account_id ?? '',
+      ; (fallbackData ?? []).forEach(row => {
+        const lines = (row as { transaction_lines?: { transaction_id?: string; amount?: number; type?: string; account_id?: string }[] }).transaction_lines ?? []
+        lines.forEach(line => {
+          if (!line.transaction_id) return
+          if (!groupedFallback.has(line.transaction_id)) {
+            groupedFallback.set(line.transaction_id, { transaction_lines: [] })
+          }
+          groupedFallback.get(line.transaction_id)!.transaction_lines.push({
+            amount: line.amount ?? 0,
+            type: line.type ?? '',
+            account_id: line.account_id ?? '',
+          })
         })
       })
-    })
     return Array.from(groupedFallback.values())
   }
 
   const grouped = new Map<string, GroupedTransactionLines>()
-  ;(data as any ?? []).forEach((line: any) => {
-    if (!line.transaction_id) return
-    if (!grouped.has(line.transaction_id)) {
-      grouped.set(line.transaction_id, { transaction_lines: [] })
-    }
-    grouped.get(line.transaction_id)!.transaction_lines.push({
-      amount: line.amount ?? 0,
-      type: line.type ?? '',
-      account_id: line.account_id ?? '',
+    ; (data as any ?? []).forEach((line: any) => {
+      if (!line.transaction_id) return
+      if (!grouped.has(line.transaction_id)) {
+        grouped.set(line.transaction_id, { transaction_lines: [] })
+      }
+      grouped.get(line.transaction_id)!.transaction_lines.push({
+        amount: line.amount ?? 0,
+        type: line.type ?? '',
+        account_id: line.account_id ?? '',
+      })
     })
-  })
 
   return Array.from(grouped.values())
 }
