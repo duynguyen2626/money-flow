@@ -240,7 +240,7 @@ export function AccountCard({
                   <div className="inline-flex items-center gap-1.5 rounded-lg bg-rose-100 px-2 py-1 shadow-sm border border-rose-200">
                     <Wallet className="h-3 w-3 text-rose-600" />
                     <span className="text-xs font-bold text-rose-700">
-                      {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(debtAmount)}
+                      Dư nợ: {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(debtAmount)}
                     </span>
                   </div>
                 )}
@@ -249,7 +249,7 @@ export function AccountCard({
                   <div className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 shadow-lg">
                     <CreditCard className="h-5 w-5 text-white" />
                     <span className="text-2xl font-black text-white tracking-tight">
-                      {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(availableBalance)}
+                      Khả dụng: {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(availableBalance)}
                     </span>
                   </div>
                 )}

@@ -842,7 +842,10 @@ export function UnifiedTransactionTable({
               const renderCell = (key: ColumnKey) => {
                 switch (key) {
                   case "date": {
-                    const d = new Date(txn.occurred_at ?? txn.created_at ?? Date.now())
+                    const occurredAt = txn.occurred_at ? new Date(txn.occurred_at) : null
+                    const createdAt = txn.created_at ? new Date(txn.created_at) : null
+                    const d = occurredAt ?? createdAt ?? new Date()
+
                     const dateFormatter = new Intl.DateTimeFormat('en-GB', {
                       day: '2-digit',
                       month: '2-digit',
@@ -854,12 +857,24 @@ export function UnifiedTransactionTable({
                       hour12: false,
                       timeZone: 'Asia/Ho_Chi_Minh',
                     })
+
+                    // Check if occurred_at is effectively midnight (00:00 UTC usually maps to date-only input)
+                    // We assume that if hours and minutes are 0 in UTC, it might be a date-only input.
                     const isMidnightUTC = d.getUTCHours() === 0 && d.getUTCMinutes() === 0
+
+                    let timeDisplay = null;
+                    if (!isMidnightUTC) {
+                       timeDisplay = timeFormatter.format(d);
+                    } else if (createdAt) {
+                       // Fallback to created_at time if occurred_at is midnight
+                       timeDisplay = timeFormatter.format(createdAt);
+                    }
+
                     return (
                       <div className="flex flex-col">
                         <span className="font-semibold">{dateFormatter.format(d)}</span>
-                        {!isMidnightUTC && (
-                          <span className="text-xs text-gray-500">{timeFormatter.format(d)}</span>
+                        {timeDisplay && (
+                          <span className="text-xs text-gray-500">{timeDisplay}</span>
                         )}
                       </div>
                     )
@@ -1080,7 +1095,7 @@ export function UnifiedTransactionTable({
                     if (effectiveStatus === 'waiting_refund') return <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Waiting Refund</span>
                     if (effectiveStatus === 'refunded') return <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
                     if (effectiveStatus === 'pending') return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Pending</span>
-                    if (effectiveStatus === 'completed') return <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">Completed</span>
+                    if (effectiveStatus === 'completed') return <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">Completed</span>
 
                     if (refundStatus === 'full' || isFullyRefunded) return <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
                     if (refundStatus === 'partial' || isPartialRefund) return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Partial</span>

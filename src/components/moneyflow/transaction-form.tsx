@@ -1219,7 +1219,15 @@ export function TransactionForm({
             value={field.value ? format(field.value, 'yyyy-MM-dd') : ''}
             onChange={event => {
               const nextValue = event.target.value
-              field.onChange(nextValue ? new Date(nextValue) : undefined)
+              if (!nextValue) {
+                field.onChange(undefined)
+                return
+              }
+              const now = new Date()
+              const [y, m, d] = nextValue.split('-').map(Number)
+              // Create date with current time components
+              const newDate = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds())
+              field.onChange(newDate)
             }}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
           />
