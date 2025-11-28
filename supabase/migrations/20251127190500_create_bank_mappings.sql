@@ -13,12 +13,15 @@ CREATE TABLE IF NOT EXISTS bank_mappings (
 ALTER TABLE bank_mappings ENABLE ROW LEVEL SECURITY;
 
 -- Allow all authenticated users to read bank mappings
+-- Allow all authenticated users to read bank mappings
+DROP POLICY IF EXISTS "Allow authenticated users to read bank mappings" ON bank_mappings;
 CREATE POLICY "Allow authenticated users to read bank mappings"
   ON bank_mappings FOR SELECT
   TO authenticated
   USING (true);
 
 -- Allow authenticated users to insert/update/delete bank mappings
+DROP POLICY IF EXISTS "Allow authenticated users to manage bank mappings" ON bank_mappings;
 CREATE POLICY "Allow authenticated users to manage bank mappings"
   ON bank_mappings FOR ALL
   TO authenticated

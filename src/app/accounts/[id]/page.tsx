@@ -1,4 +1,5 @@
 import { getAccountDetails, getAccountStats, getAccounts } from '@/services/account.service'
+import { getAccountBatchStats } from '@/services/batch.service'
 import { getUnifiedTransactions } from '@/services/transaction.service'
 import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
@@ -35,13 +36,14 @@ export default async function AccountPage({ params }: PageProps) {
     )
   }
 
-  const [stats, transactions, allAccounts, categories, people, shops] = await Promise.all([
+  const [stats, transactions, allAccounts, categories, people, shops, batchStats] = await Promise.all([
     account.type === 'credit_card' ? getAccountStats(id) : Promise.resolve(null),
     getUnifiedTransactions({ accountId: id, context: 'account', limit: 100 }),
     getAccounts(),
     getCategories(),
     getPeople(),
     getShops(),
+    getAccountBatchStats(id),
   ])
 
   const savingsAccounts = allAccounts.filter(acc =>
@@ -64,24 +66,24 @@ export default async function AccountPage({ params }: PageProps) {
   // We can roughly estimate inflow/outflow from transactions.
 
   transactions.forEach(txn => {
-     // This is a rough estimation. Accurate stats should come from getAccountStats or similar service.
-     // But for "netBalance" display in Header (if header relies on it passed from here), we might need it.
-     // AccountDetailHeader uses `statTotals`.
+    // This is a rough estimation. Accurate stats should come from getAccountStats or similar service.
+    // But for "netBalance" display in Header (if header relies on it passed from here), we might need it.
+    // AccountDetailHeader uses `statTotals`.
 
-     // Logic from previous code:
-     // txnDetails.forEach(txn => { txn.transaction_lines?.forEach(...) })
+    // Logic from previous code:
+    // txnDetails.forEach(txn => { txn.transaction_lines?.forEach(...) })
 
-     // In UnifiedTransaction:
-     const lines = txn.transaction_lines ?? [];
-     lines.forEach(line => {
-        if (line.account_id === id) {
-             if (line.type === 'debit') {
-                 totalOutflow += Math.abs(line.amount);
-             } else if (line.type === 'credit') {
-                 totalInflow += Math.abs(line.amount);
-             }
+    // In UnifiedTransaction:
+    const lines = txn.transaction_lines ?? [];
+    lines.forEach(line => {
+      if (line.account_id === id) {
+        if (line.type === 'debit') {
+          totalOutflow += Math.abs(line.amount);
+        } else if (line.type === 'credit') {
+          totalInflow += Math.abs(line.amount);
         }
-     });
+      }
+    });
   });
 
   const netBalance = totalInflow - totalOutflow
@@ -116,6 +118,7 @@ export default async function AccountPage({ params }: PageProps) {
             isAssetAccount={isAssetAccount}
             assetConfig={formattedAssetConfig}
             shops={shops}
+            batchStats={batchStats}
           />
         </div>
       </section>

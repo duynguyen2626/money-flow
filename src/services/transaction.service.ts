@@ -129,8 +129,10 @@ async function buildTransactionLines(
       type: 'debit',
     });
   } else if (input.type === 'income' && input.category_id) {
+    // For income, the account receiving money is the destination
+    const targetAccountId = input.destination_account_id || input.source_account_id;
     lines.push({
-      account_id: input.source_account_id,
+      account_id: targetAccountId,
       amount: Math.abs(input.amount),
       type: 'debit',
     });

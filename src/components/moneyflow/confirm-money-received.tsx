@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { CheckCircle2, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Loader2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/account-utils'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -24,7 +23,7 @@ interface ConfirmMoneyReceivedProps {
 
 export function ConfirmMoneyReceived({ accountId }: ConfirmMoneyReceivedProps) {
     const [pendingItems, setPendingItems] = useState<PendingBatchItem[]>([])
-    const [confirming, setConfirming] = useState<string | null>(null)
+    const [confirming, setConfirming] = useState(false)
     const [loading, setLoading] = useState(true)
     const router = useRouter()
 
@@ -50,65 +49,58 @@ export function ConfirmMoneyReceived({ accountId }: ConfirmMoneyReceivedProps) {
         return null
     }
 
-    const handleConfirm = async (itemId: string, batchId: string) => {
-        setConfirming(itemId)
+    const totalAmount = pendingItems.reduce((sum, item) => sum + item.amount, 0)
+
+    const handleConfirmAll = async (e: React.MouseEvent) => {
+        e.stopPropagation()
+        if (confirming) return
+        setConfirming(true)
+
         try {
-            const response = await fetch('/api/batch/confirm-item', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ itemId, batchId })
-            })
+            let successCount = 0
+            for (const item of pendingItems) {
+                const response = await fetch('/api/batch/confirm-item', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ itemId: item.id, batchId: item.batch_id })
+                })
 
-            if (!response.ok) throw new Error('Failed to confirm')
+                if (response.ok) {
+                    successCount++
+                }
+            }
 
-            toast.success('Đã xác nhận tiền về!')
-            setPendingItems(prev => prev.filter(item => item.id !== itemId))
-            router.refresh()
+            if (successCount > 0) {
+                toast.success(`Đã xác nhận ${successCount} khoản tiền về!`)
+                setPendingItems([])
+                router.refresh()
+            } else {
+                throw new Error('Failed to confirm items')
+            }
         } catch (error: any) {
             toast.error('Lỗi khi xác nhận', {
                 description: error.message
             })
         } finally {
-            setConfirming(null)
+            setConfirming(false)
         }
     }
 
     return (
-        <div className="flex flex-col gap-2">
-            {pendingItems.map((item) => (
-                <div
-                    key={item.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-green-200 bg-green-50 px-3 py-2"
-                >
-                    <div className="flex items-center gap-2 text-sm">
-                        <span className="text-green-700 font-semibold">
-                            💰 {formatCurrency(item.amount)} đang về
-                        </span>
-                        {item.note && (
-                            <span className="text-green-600 text-xs">({item.note})</span>
-                        )}
-                    </div>
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className="h-7 px-2 text-green-700 hover:bg-green-100 hover:text-green-800"
-                        onClick={(e) => {
-                            e.stopPropagation()
-                            handleConfirm(item.id, item.batch_id)
-                        }}
-                        disabled={confirming === item.id}
-                    >
-                        {confirming === item.id ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                            <>
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                Xác nhận
-                            </>
-                        )}
-                    </Button>
-                </div>
-            ))}
+        <div
+            onClick={handleConfirmAll}
+            className="flex items-center gap-1 rounded bg-emerald-50 px-2 py-1 text-sm font-bold text-emerald-600 cursor-pointer hover:bg-emerald-100 transition-colors"
+            role="button"
+            title="Click to confirm receipt"
+        >
+            {confirming ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+                <span>☑️</span>
+            )}
+            <span className="truncate max-w-[80px]" title={formatCurrency(totalAmount)}>
+                {new Intl.NumberFormat('vi-VN').format(totalAmount)}
+            </span>
         </div>
     )
 }

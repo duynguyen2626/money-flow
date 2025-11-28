@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { BatchList } from '@/components/batch/batch-list'
 import { CreateBatchDialog } from '@/components/batch/create-batch-dialog'
 import { BankMappingImportDialog } from '@/components/batch/bank-mapping-import-dialog'
@@ -14,6 +15,7 @@ import { toast } from 'sonner'
 import { Loader2, Trash2 } from 'lucide-react'
 
 export function BatchPageClient({ batches, accounts, bankMappings }: { batches: any[], accounts: any[], bankMappings: any[] }) {
+    const router = useRouter()
     const [importDialogOpen, setImportDialogOpen] = useState(false)
     const [selectedMappingIds, setSelectedMappingIds] = useState<string[]>([])
     const [deletingMappings, setDeletingMappings] = useState(false)
@@ -154,7 +156,7 @@ export function BatchPageClient({ batches, accounts, bankMappings }: { batches: 
             <BankMappingImportDialog
                 open={importDialogOpen}
                 onOpenChange={setImportDialogOpen}
-                onSuccess={() => window.location.reload()}
+                onSuccess={() => router.refresh()}
             />
         </div>
     )

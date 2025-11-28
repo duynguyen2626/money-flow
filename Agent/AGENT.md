@@ -1,84 +1,104 @@
-AGENT TASK: EMERGENCY UI FIXES (PEOPLE PAGE & TABLE)
+PROJECT: MONEY FLOW 3.0
 
-Context:
-The Refactor caused severe UI regressions:
+PHASE: 35 - UI REDESIGN & LOGIC FIXES (FINAL POLISH)
 
-Missing Actions: "Add Debt" and "Settle" buttons are missing from the People Header.
+WORKFLOW:
 
-Ugly Table: Shop Name dominates the Note column. Images (Category/Account) are missing.
+Branch: fix/phase-35-ui-logic-polish
 
-Wrong Default: Debt transactions default to "Adjustment" instead of "Lending".
+Safety: Run npm run build before finishing.
 
-Objective:
-Restore the UI polish and fix the data mapping bugs.
+I. DATABASE TASKS (CLI)
 
-1. Frontend: Fix PeopleDetailPage (src/app/people/[id]/page.tsx)
+Instruction: Execute this SQL via CLI or Supabase Editor to clean up.
 
-A. Restore Header Actions
-
-Location: Inside the Header Card (next to Balance or Name).
-
-Design: Two clear buttons (Icon + Text or Tooltip).
-
-🔴 Add Debt: Icon Plus. Variant destructive (or outline red).
-
-🟢 Settle: Icon Check. Variant default (green).
-
-Function: Ensure they open TransactionForm with the correct tabs (debt_lending / debt_repayment).
-
-B. Fix Debt Cards
-
-Ensure the Debt Cycle Cards are visible and compact.
-
-2. Frontend: Polish UnifiedTransactionTable (src/components/moneyflow/unified-transaction-table.tsx)
-
-A. Fix Note/Shop Column
-
-Current: Shop Name (Big) - Note (Small).
-
-Fix: Note (Big/Bold) - Shop Name (Small/Gray/Under).
-
-<div className="flex flex-col">
-   <span className="font-medium text-gray-900">{row.note || 'No Note'}</span>
-   {row.shop_name && (
-     <span className="flex items-center gap-1 text-xs text-gray-500">
-       <img src={row.shop_logo} className="w-4 h-4 object-contain"/> 
-       {row.shop_name}
-     </span>
-   )}
-</div>
+-- Drop the test table created in Phase 34
+DROP TABLE IF EXISTS "public"."cli_test";
 
 
-B. Fix Images (Category & Account)
+II. UI REDESIGN: ACCOUNT CARD (src/components/moneyflow/account-card.tsx)
 
-Bug: Images are not showing.
+Objective: Clean, English UI, optimized for vertical images, smart Confirm badge.
 
-Check: Inspect row.category.image_url and row.source_account.logo_url.
+1. Avatar / Logo:
 
-Fallback: If URL is missing, render the Emoji icon or a default lucide icon. Don't render broken image tag.
+Size: Increase size significantly. Use aspect-[3/4] or h-full within the header area to show the full vertical card image if available.
 
-3. Logic: Fix Defaults (src/components/moneyflow/transaction-form.tsx)
+Style: object-contain or object-cover without heavy borders.
 
-Action: Update useEffect for default values.
+2. Smart Confirm Badge (Replace Big Button):
 
-Logic:
+Condition: If pendingConfirmAmount > 0.
 
-IF Tab == debt_lending:
+Placement: Row 2 (Info Row), BEFORE the "X days left" badge.
 
-Set Category = "Lending" (ID: ...89 from SQL).
+Design:
 
-Do NOT use "Adjustment".
+Content: ☑️ {formatCurrency(pendingConfirmAmount)} (Icon + Number only).
 
-IF Tab == debt_repayment:
+Style: text-emerald-600 font-bold text-sm bg-emerald-50 px-2 py-1 rounded cursor-pointer hover:bg-emerald-100.
 
-Set Category = "Debt Repayment" (...96).
+Action: Click -> Trigger Confirm Logic (Same as before).
 
-4. Execution Steps
+3. Credit Card Logic (Fix Math):
 
-Page: Move Action Buttons to People Header.
+Current Bug: Available shows > Limit (e.g., 150M + 182k = 150.1M).
 
-Table: Swap Note/Shop priority and fix image rendering.
+Correct Logic:
 
-Form: Hardcode the correct Category IDs for Debt tabs.
+Current Balance in DB is usually negative for spending (e.g., -182,000).
 
-Verify: Run build.
+Available = Credit Limit + Current Balance.
+
+Example: 150,000,000 + (-182,000) = 149,818,000.
+
+Display:
+
+Balance: Show Current Balance (Red if negative). Label: "Debt".
+
+Available: Show Calculated Amount. Label: "Available".
+
+4. Language:
+
+Ensure all labels are English ("Debt", "Available", "Due in", "Cashback").
+
+III. BUG FIXES
+
+1. Fix CreateAccountDialog Error
+
+Error: Error creating account: {}.
+
+Cause: parent_account_id or secured_by_account_id is likely sent as an empty string "" which violates UUID type.
+
+Fix: In onSubmit, convert empty strings to null before calling service.
+
+const payload = {
+  ...data,
+  parent_account_id: data.parent_account_id || null,
+  secured_by_account_id: data.secured_by_account_id || null
+};
+
+
+2. Fix Batch Import Not Saving
+
+Context: BatchImportDialog creates items but they don't appear.
+
+Fix: Ensure batch.service.ts -> importBatchItems function correctly maps the input array to the batch_items table columns (receiver_name, bank_number, etc.).
+
+Note: The CORS error in logs (visualstudio) is unrelated telemetry.
+
+3. Fix Cycle Column Overflow
+
+Target: UnifiedTransactionTable.
+
+Fix: Add max-w-[100px] truncate or whitespace-nowrap properly to the Cycle/Tag column. Add a Tooltip for the full text.
+
+IV. EXECUTION STEPS
+
+Frontend: Rewrite AccountCard UI (Avatar, Badge, Math).
+
+Frontend: Fix CreateAccountDialog payload sanitization.
+
+Backend: Verify importBatchItems logic.
+
+Cleanup: Run the SQL Drop.

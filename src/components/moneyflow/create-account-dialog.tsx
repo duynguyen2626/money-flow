@@ -256,8 +256,8 @@ export function CreateAccountDialog({
     // Nếu có tài khoản cha thì sử dụng hạn mức từ tài khoản cha, ngược lại sử dụng giá trị được nhập
     const creditLimitPayload = isCreditCard && !values.parentAccountId ? values.creditLimit ?? null : null
     const securedBy =
-      isCreditCard && values.isSecured && values.securedByAccountId
-        ? values.securedByAccountId
+      isCreditCard && values.isSecured && values.securedByAccountId?.trim()
+        ? values.securedByAccountId.trim()
         : null
 
     let configPayload: Json | undefined
@@ -272,7 +272,7 @@ export function CreateAccountDialog({
           values.cashbackCycleType === 'statement_cycle'
             ? values.cashbackStatementDay
             : null,
-        sharedLimitParentId: values.parentAccountId ?? null,
+        sharedLimitParentId: values.parentAccountId?.trim() || null,
       }
     } else if (isSavingVariant) {
       configPayload = {
@@ -348,11 +348,10 @@ export function CreateAccountDialog({
                       key={option.value}
                       type="button"
                       onClick={() => setValue('savingType', option.value as 'savings' | 'investment' | 'asset')}
-                      className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
-                        watchedSavingType === option.value
-                          ? 'border-blue-500 bg-blue-50 text-blue-700'
-                          : 'border-slate-200 bg-white text-slate-600'
-                      }`}
+                      className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${watchedSavingType === option.value
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-slate-200 bg-white text-slate-600'
+                        }`}
                     >
                       {option.label}
                     </button>
@@ -370,11 +369,10 @@ export function CreateAccountDialog({
                       key={option.value}
                       type="button"
                       onClick={() => setValue('otherSubtype', option.value as 'cash' | 'ewallet')}
-                      className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${
-                        watchedOtherSubtype === option.value
-                          ? 'border-blue-500 bg-blue-50 text-blue-700'
-                          : 'border-slate-200 bg-white text-slate-600'
-                      }`}
+                      className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${watchedOtherSubtype === option.value
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-slate-200 bg-white text-slate-600'
+                        }`}
                     >
                       {option.label}
                     </button>
@@ -459,40 +457,40 @@ export function CreateAccountDialog({
 
           {activeTab === 'credit' && (
             <>
-            {/* Thêm dropdown chọn tài khoản cha */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-600">Share limit with supplementary card?</label>
-              <select
-                {...register('parentAccountId')}
-                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              >
-                <option value="">No link (Primary card)</option>
-                {parentAccountOptions.map(option => (
-                  <option key={option.id} value={option.id}>
-                    {option.name}
-                  </option>
-                ))}
-              </select>
-              {!parentAccountId && suggestedParent && (
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                  <p className="flex-1">
-                    It looks like you are adding a supplementary card for {suggestedParent.name}. Link the limit to share it?
+              {/* Thêm dropdown chọn tài khoản cha */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-slate-600">Share limit with supplementary card?</label>
+                <select
+                  {...register('parentAccountId')}
+                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                >
+                  <option value="">No link (Primary card)</option>
+                  {parentAccountOptions.map(option => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
+                {!parentAccountId && suggestedParent && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                    <p className="flex-1">
+                      It looks like you are adding a supplementary card for {suggestedParent.name}. Link the limit to share it?
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setValue('parentAccountId', suggestedParent.id)}
+                      className="rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-semibold text-blue-700 hover:border-blue-300 hover:bg-blue-50"
+                    >
+                      Link with {suggestedParent.name}
+                    </button>
+                  </div>
+                )}
+                {parentAccountId && selectedParent && (
+                  <p className="text-xs text-slate-500">
+                    Limit will be shared from {selectedParent.name}.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => setValue('parentAccountId', suggestedParent.id)}
-                    className="rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-semibold text-blue-700 hover:border-blue-300 hover:bg-blue-50"
-                  >
-                    Link with {suggestedParent.name}
-                  </button>
-                </div>
-              )}
-              {parentAccountId && selectedParent && (
-                <p className="text-xs text-slate-500">
-                  Limit will be shared from {selectedParent.name}.
-                </p>
-              )}
-            </div>
+                )}
+              </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-slate-600">Credit limit</label>
@@ -504,9 +502,8 @@ export function CreateAccountDialog({
                       type="text"
                       value={formatWithSeparators(toNumericString(field.value))}
                       onChange={event => field.onChange(parseOptionalNumber(event.target.value))}
-                      className={`w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
-                        parentAccountId ? 'bg-slate-100 cursor-not-allowed' : ''
-                      }`}
+                      className={`w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 ${parentAccountId ? 'bg-slate-100 cursor-not-allowed' : ''
+                        }`}
                       placeholder="Credit limit"
                       disabled={!!parentAccountId} // Vô hiệu hóa nếu đã chọn tài khoản cha
                     />
@@ -598,9 +595,8 @@ export function CreateAccountDialog({
                             type="text"
                             value={formatWithSeparators(toNumericString(field.value))}
                             onChange={event => field.onChange(parseOptionalNumber(event.target.value))}
-                            className={`w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 ${
-                              isUnlimitedCashback ? 'bg-slate-100 cursor-not-allowed' : ''
-                            }`}
+                            className={`w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 ${isUnlimitedCashback ? 'bg-slate-100 cursor-not-allowed' : ''
+                              }`}
                             placeholder="e.g. 100000"
                             disabled={isUnlimitedCashback} // Vô hiệu hóa nếu chọn không giới hạn
                           />
@@ -744,9 +740,8 @@ export function CreateAccountDialog({
 
           {status && (
             <p
-              className={`text-sm ${
-                status.variant === 'error' ? 'text-red-600' : 'text-emerald-600'
-              }`}
+              className={`text-sm ${status.variant === 'error' ? 'text-red-600' : 'text-emerald-600'
+                }`}
             >
               {status.text}
             </p>

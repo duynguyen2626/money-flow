@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { LayoutGrid, List } from 'lucide-react'
+import { LayoutGrid, List, Search } from 'lucide-react'
 import { CreateAccountDialog } from './create-account-dialog'
 import { AccountCard } from './account-card'
 import { AccountTable } from './account-table'
@@ -38,6 +38,7 @@ const FILTERS: { key: FilterKey; label: string; match: (account: Account) => boo
 export function AccountList({ accounts, cashbackById = {}, categories, people, shops }: AccountListProps) {
   const [view, setView] = useState<ViewMode>('grid')
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all')
+  const [searchQuery, setSearchQuery] = useState('')
   const [items, setItems] = useState<Account[]>(accounts)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [showClosedAccounts, setShowClosedAccounts] = useState(false) // Thêm trạng thái cho phần tài khoản đã đóng
@@ -67,10 +68,17 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
     [items]
   )
 
-  const filteredItems = useMemo(
-    () => activeItems.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc)),
-    [activeItems, activeFilter]
-  )
+  const filteredItems = useMemo(() => {
+    let filtered = activeItems.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc))
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(acc => acc.name.toLowerCase().includes(query))
+    }
+
+    return filtered
+  }, [activeItems, activeFilter, searchQuery])
 
   const grouped = useMemo(() => {
     const sections: { key: FilterKey; title: string; helper: string; accounts: Account[] }[] = [
@@ -123,25 +131,35 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
               key={filter.key}
               type="button"
               onClick={() => setActiveFilter(filter.key)}
-              className={`rounded-full px-3 py-1 text-sm font-semibold transition ${
-                activeFilter === filter.key
+              className={`rounded-full px-3 py-1 text-sm font-semibold transition ${activeFilter === filter.key
                   ? 'bg-blue-600 text-white shadow-sm'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
+                }`}
               aria-pressed={activeFilter === filter.key}
             >
               {filter.label}
             </button>
           ))}
+
+          {/* Search Input */}
+          <div className="relative ml-2">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search accounts..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="rounded-full border border-slate-200 bg-white pl-9 pr-4 py-1 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition"
+            />
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-full border border-slate-200 bg-slate-50 p-1">
             <button
               type="button"
               onClick={() => setView('grid')}
-              className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold transition ${
-                view === 'grid' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold transition ${view === 'grid' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
               aria-pressed={view === 'grid'}
             >
               <LayoutGrid className="h-4 w-4" />
@@ -150,9 +168,8 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
             <button
               type="button"
               onClick={() => setView('table')}
-              className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold transition ${
-                view === 'table' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-              }`}
+              className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold transition ${view === 'table' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                }`}
               aria-pressed={view === 'table'}
             >
               <List className="h-4 w-4" />
@@ -207,9 +224,9 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
               open={showClosedAccounts}
               onToggle={event => setShowClosedAccounts(event.currentTarget.open)}
             >
-                <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
-                  <div className="flex items-center gap-2">
-                    <span>Closed accounts</span>
+              <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
+                <div className="flex items-center gap-2">
+                  <span>Closed accounts</span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                     {closedItems.length}
                   </span>
@@ -242,7 +259,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
             collateralAccounts={collateralAccounts}
             allAccounts={items}
           />
-          
+
           {/* Thêm phần hiển thị tài khoản đã đóng trong chế độ bảng */}
           {closedItems.length > 0 && (
             <details
@@ -250,9 +267,9 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
               open={showClosedAccounts}
               onToggle={event => setShowClosedAccounts(event.currentTarget.open)}
             >
-                <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
-                  <div className="flex items-center gap-2">
-                    <span>Closed accounts</span>
+              <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
+                <div className="flex items-center gap-2">
+                  <span>Closed accounts</span>
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
                     {closedItems.length}
                   </span>

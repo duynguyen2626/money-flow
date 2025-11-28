@@ -1,32 +1,45 @@
-# ✅ Implementation Complete - UI Enhancements & Fixes
+# ✅ Phase 33 Complete - Batch Upgrade
 
 ## Summary of Changes
 
+### 🚀 **New Features**
+
+1. **Monthly Clone Tab (`/batch`)**
+   - Added a new tab "Monthly Clone" to the main batch page.
+   - Lists all batches marked as "Template Mode".
+   - Allows easy access to manage recurring batch templates.
+
+2. **Bulk Delete Mappings**
+   - Enhanced "Mapping Management" tab with checkboxes.
+   - Added "Delete Selected" button to remove multiple mappings at once.
+   - Implemented `deleteBankMappingsAction` for backend processing.
+
 ### 🎨 **UI Improvements**
 
-1. **Create Batch Dialog (`create-batch-dialog.tsx`)**
-   - ✅ **Switch Toggle**: Updated the "Save as Template" option to use a `Switch` component instead of a Checkbox, ensuring consistency with the Batch Settings dialog.
-   - ✅ **Layout Update**: Aligned the layout with the Batch Settings dialog for a cohesive look.
-   - ✅ **Fixed Select Component**: Corrected the usage of the custom `Select` component to ensure the build passes.
+1. **Batch Settings Dialog**
+   - ✅ **Switch Toggle**: Replaced the "Template Mode" checkbox with a modern `Switch` component.
+   - ✅ **Cleaner UI**: Removed the border around the template setting for a cleaner look.
+   - ✅ **Conditional Logic**: "Auto Clone Day" field only appears when Template Mode is enabled.
+
+2. **Create Batch Dialog**
+   - ✅ **Switch Toggle**: Updated "Save as Template" to use `Switch` for consistency.
+   - ✅ **Layout**: Aligned with Batch Settings dialog.
+
+3. **Batch Detail Page**
+   - ✅ **Hidden Mappings Tab**: Removed the "Mappings" tab from the individual batch detail view (`/batch/[id]`) to reduce clutter.
 
 ### 📁 **Files Modified**
 
-1. `src/components/batch/create-batch-dialog.tsx`
-   - Replaced Checkbox with Switch.
-   - Fixed Select component implementation.
+1. `src/components/batch/batch-settings-dialog.tsx`
+2. `src/components/batch/create-batch-dialog.tsx`
+3. `src/components/batch/batch-page-client.tsx`
+4. `src/components/batch/batch-detail.tsx`
+5. `src/services/bank.service.ts`
+6. `src/actions/bank.actions.ts`
 
-### ✅ **Build Test**
+### 📦 **Deployment**
 
-**Status:** ✅ **PASSED**
+- **Branch**: `phase-33-batch-upgrade`
+- **Commit Message**: "Phase 33: Batch Upgrade"
+- **Status**: Pushed to origin.
 
-```
-npm run build
-Exit code: 0
-```
-
-No TypeScript errors, no console warnings!
-
-## Next Steps
-
-1. **Verify Create Batch**: Open the "Create Batch" dialog and check if the "Save as Template" option is now a toggle switch.
-2. **Verify Functionality**: Ensure creating a batch still works as expected.

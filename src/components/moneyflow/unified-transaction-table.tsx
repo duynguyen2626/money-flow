@@ -946,14 +946,18 @@ export function UnifiedTransactionTable({
                   }
                   case "tag":
                     return txn.tag ? (
-                      <span className="inline-block max-w-[80px] truncate items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 border border-slate-200">
-                        {txn.tag}
-                      </span>
+                      <CustomTooltip content={txn.tag}>
+                        <span className="inline-block max-w-[100px] truncate items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 border border-slate-200 cursor-help">
+                          {txn.tag}
+                        </span>
+                      </CustomTooltip>
                     ) : <span className="text-slate-400">-</span>
                   case "cycle":
                     return (
-                      <CustomTooltip content="Kỳ sao kê thẻ tín dụng">
-                        <span className="text-slate-600 cursor-help border-b border-dotted border-slate-400">{cycleLabel}</span>
+                      <CustomTooltip content={cycleLabel}>
+                        <span className="inline-block max-w-[100px] truncate text-slate-600 cursor-help border-b border-dotted border-slate-400">
+                          {cycleLabel}
+                        </span>
                       </CustomTooltip>
                     )
                   case "amount":
