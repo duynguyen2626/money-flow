@@ -1,70 +1,100 @@
-# **PROJECT: MONEY FLOW 3.0**
+PROJECT: MONEY FLOW 3.0
 
-# **PHASE: 39 \- REFUND STATE MACHINE FIX & SHEET SYNC PATCH**
+PHASE: 41 - EMERGENCY FIX LOOP & UI STABILIZATION
 
-**WORKFLOW:**
+WORKFLOW:
 
-1. **Branch:** fix/phase-39-refund-logic  
-2. **Safety:** Run npm run build.
+Branch: fix/phase-41-react-loop
 
-**OBJECTIVES:**
+Safety: Run npm run build.
 
-1. **Fix Refund Logic:** Ensure "Request Refund" sets status to waiting\_refund (not refunded). Ensure "Confirm" completes the cycle.  
-2. **Fix Void Constraint:** Prevent voiding Pending Txn if Completed Txn exists. Rollback Original Txn status when voiding.  
-3. **Fix Sheet Sync:** Repayments must be "In" and show Bank Name in "Shop" column.  
-4. **UI:** Translate Refund Modal to full English.
+OBJECTIVE:
 
-## **I. BACKEND LOGIC (src/services/transaction.service.ts)**
+Critical Fix: Stop the React Infinite Loop (Error #185) in Account Page.
 
-### **1\. Fix requestRefund (The "Waiting" State)**
+Logic Fix: Correct "Incoming/Outgoing" calculation (Expense belongs to Out).
 
-* **Current Bug:** It sets refund\_status \= 'full' immediately.  
-* **Fix:**  
-  * If isPending (Wait for money):  
-    * Create GD2 (Pending Txn).  
-    * Update GD1 (Original): status \= **'waiting\_refund'**. refund\_status \= **'pending'**.  
-  * If \!isPending (Money received immediately):  
-    * Update GD1: status \= 'refunded'. refund\_status \= 'full'.
+UI Polish: Fix Action Menu clipping, fix Key prop warning, and redesign Account Card avatars.
 
-### **2\. Fix voidTransaction (The Constraint & Rollback)**
+I. CRITICAL BUG: REACT INFINITE LOOP (#185)
 
-* **Logic:**  
-  1. **Check Constraints:**  
-     * If txn.status \=== 'completed' (GD2 \- Intermediate), CHECK if there is a linked GD3 (Real Money In).  
-     * If GD3 is active \-\> **THROW ERROR**: "Cannot void intermediate transaction. Please void the 'Money Received' transaction first."  
-  2. **Rollback Logic:**  
-     * If voiding GD2 (Pending): Find GD1 \-\> Set status \= 'posted', refund\_status \= 'none'.  
-     * If voiding GD3 (Real Money): Find GD2 \-\> Set status \= 'pending'.
+Target: src/app/accounts/[id]/page.tsx OR UnifiedTransactionTable
 
-### **3\. Fix Sheet Sync (syncTransactionToSheet)**
+Diagnosis:
+The error "Maximum update depth exceeded" usually happens when:
 
-* **Logic for Repayment/Refund:**  
-  * If type \=== 'repayment' OR category.type \=== 'income' (Refund):  
-    * **Force Type:** "In".  
-  * **Fix Shop Column:**  
-    * Current: Uses source\_account\_name (which is Debt Account).  
-    * **Fix:** If Repayment, use destination\_account\_name (The Bank Name) as the "Shop" value in payload.
+Updating state inside the main component body (not in useEffect).
 
-## **II. FRONTEND UI**
+useEffect dependencies changing on every render (e.g., passing a new object/array reference).
 
-### **1\. TransactionForm (Refund Mode)**
+Action:
 
-* **Translation:** Translate all labels/options to English.  
-  * "Đã nhận tiền" \-\> "Received (Instant)".  
-  * "Chờ hoàn" \-\> "Pending (Wait)".  
-  * "Số tiền" \-\> "Amount".  
-  * "Tài khoản" \-\> "Account".
+Audit AccountDetailsPage:
 
-### **2\. UnifiedTransactionTable (Missing Pending Rows)**
+Check if recalculateBalance is called directly in the component body. Move it to Server Action or useEffect.
 
-* **Bug:** Pending/System transactions are missing from the list.  
-* **Cause:** The default filter might be excluding account\_type \= 'system'.  
-* **Fix:** Ensure the fetch query INCLUDES system accounts when viewing "All Transactions" or ensure they are visible in the /refunds page.
+Check if getAccountStats is causing re-renders.
 
-## **III. EXECUTION STEPS**
+Audit UnifiedTransactionTable:
 
-1. **Backend:** Rewrite requestRefund state assignment.  
-2. **Backend:** Implement Void constraints.  
-3. **Backend:** Patch Sheet Sync payload mapping.  
-4. **Frontend:** Update translations.  
-5. **Verify:** Run build.
+Check if onSelectionChange or similar callback is updating parent state infinitely.
+
+II. ACCOUNT STATISTICS (LOGIC FIX)
+
+Target: src/services/account.service.ts -> recalculate_account_stats (SQL) OR JS Logic.
+
+1. Fix Math Logic
+
+Current Bug: "Expense" transactions are counted as "Incoming".
+
+Correct Logic:
+
+Total In (Income): type IN ('income', 'repayment', 'transfer_in') AND amount > 0.
+
+Total Out (Expense): type IN ('expense', 'debt', 'transfer_out') AND amount < 0.
+
+Note: Ensure the absolute values are summed correctly.
+
+2. Update UI Display
+
+Labels: Rename "Incoming" -> "Thu (In)", "Outgoing" -> "Chi (Out)".
+
+Badges:
+
+Waiting: Show ONLY if (TotalFunded - TotalConfirmed) > 0.
+
+Confirmed: Show TotalConfirmed.
+
+III. UI POLISH & FINAL TOUCHES
+
+1. Fix Table Key Warning
+
+Error: "Each child in a list should have a unique 'key' prop".
+
+Fix: Inside UnifiedTransactionTable, ensure the map loop for columns has key={column.id} on the Table Cell (td).
+
+2. Fix Action Menu Clipping
+
+Problem: Dropdown menu is hidden/clipped by table overflow.
+
+Fix: Add side="left" and collisionPadding={10} to the DropdownMenuContent. Remove overflow-hidden from the last table cell if necessary.
+
+3. Account Card Redesign
+
+Avatar: Use object-contain and let it fill the height. Remove border radius if it cuts off the vertical card image.
+
+Credit Logic:
+
+Available = Limit + CurrentBalance (Balance is negative).
+
+Display "Dư nợ: [Abs(Balance)]" (Red).
+
+IV. EXECUTION STEPS
+
+Priority 1: Find and fix the Infinite Loop in AccountDetails.
+
+Priority 2: Fix the Key Warning in Table.
+
+Priority 3: Update Account Stats Logic.
+
+Priority 4: Polish Account Card UI.

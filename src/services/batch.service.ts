@@ -586,12 +586,101 @@ export async function fundBatch(batchId: string) {
         .single()
 
     if (batchError || !batch) throw new Error('Batch not found')
-    if (batch.status === 'funded') throw new Error('Batch already funded')
     if (!batch.source_account_id) throw new Error('Batch has no source account')
 
     // 2. Calculate Total Amount
     const totalAmount = batch.batch_items.reduce((sum: number, item: any) => sum + item.amount, 0)
     if (totalAmount <= 0) throw new Error('Batch has no amount to fund')
+
+    // 3. Check if already funded and if we need to update
+    if (batch.status === 'funded') {
+        // Calculate how much is already funded
+        // We can check all transactions linked to this batch?
+        // Or just check the 'funding_transaction_id' if we only support one?
+        // The current schema has 'funding_transaction_id' on the batch.
+        // If we want to support multiple, we might need to query transactions by note or tag?
+        // For now, let's assume we just want to ADD the difference.
+
+        // Fetch the existing funding transaction to check its amount
+        let currentFundedAmount = 0;
+        if (batch.funding_transaction_id) {
+            const { data: lines } = await supabase
+                .from('transaction_lines')
+                .select('amount')
+                .eq('transaction_id', batch.funding_transaction_id)
+                .eq('account_id', batch.source_account_id)
+                .eq('type', 'credit'); // Money leaving source
+
+            if (lines && lines.length > 0) {
+                currentFundedAmount = lines.reduce((sum: number, l: any) => sum + Math.abs(l.amount), 0);
+            }
+        }
+
+        const diff = totalAmount - currentFundedAmount;
+
+        console.log('FundBatch Debug:', {
+            totalAmount,
+            currentFundedAmount,
+            diff,
+            batchId: batch.id,
+            sourceAccount: batch.source_account_id
+        });
+
+        if (diff <= 0) {
+            console.log('FundBatch: Already fully funded.');
+            return true; // Already fully funded
+        }
+
+        // Create a NEW transaction for the difference
+        // We won't update 'funding_transaction_id' on the batch (it keeps the first one),
+        // or we could, but that loses the link to the first one.
+        // Ideally, we should just create a new transaction and maybe log it.
+        // The batch status remains 'funded'.
+
+        const nameParts = batch.name.split(' ')
+        const tag = nameParts[nameParts.length - 1]
+
+        const { data: txn, error: txnError } = await supabase
+            .from('transactions')
+            .insert({
+                occurred_at: new Date().toISOString(),
+                note: `[Waiting] Fund More Batch: ${batch.name} (Additional ${diff})`,
+                status: 'posted',
+                tag: tag, // Use the same tag
+                created_by: (await supabase.auth.getUser()).data.user?.id ?? SYSTEM_ACCOUNTS.DEFAULT_USER_ID
+            })
+            .select()
+            .single()
+
+        if (txnError) throw txnError
+
+        const lines = [
+            {
+                transaction_id: txn.id,
+                account_id: batch.source_account_id,
+                amount: -diff,
+                type: 'credit',
+                metadata: { batch_id: batch.id, type: 'batch_funding_additional' }
+            },
+            {
+                transaction_id: txn.id,
+                account_id: SYSTEM_ACCOUNTS.BATCH_CLEARING,
+                amount: diff,
+                type: 'debit',
+                metadata: { batch_id: batch.id, type: 'batch_funding_additional' }
+            }
+        ]
+
+        const { error: linesError } = await supabase
+            .from('transaction_lines')
+            .insert(lines)
+
+        if (linesError) throw linesError
+
+        return true
+    }
+
+    // --- NEW FUNDING (Original Logic) ---
 
     // 3. Extract Tag from Name (e.g. "CKL NOV25" -> "NOV25")
     const nameParts = batch.name.split(' ')

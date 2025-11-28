@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress'
 import { updateAccountConfigAction } from '@/actions/account-actions'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import { ConfirmMoneyReceived } from './confirm-money-received'
 
 type AssetConfig = {
   interestRate: number | null
@@ -39,42 +40,54 @@ export function AccountStatsHeader({
 
   const balanceTone = account.current_balance < 0 ? 'text-red-600' : 'text-slate-900'
 
-  const statItems = [
-    {
-      label: 'Incoming',
-      value: totals.inflow,
-      icon: <ArrowUpRight className="h-4 w-4 text-emerald-600" />,
-      tone: 'text-emerald-700',
-      bg: 'bg-emerald-50',
-    },
-    {
-      label: 'Outgoing',
-      value: totals.outflow,
-      icon: <ArrowDownRight className="h-4 w-4 text-rose-600" />,
-      tone: 'text-rose-700',
-      bg: 'bg-rose-50',
-    },
-  ]
+  // Removed In/Out stats as requested
+  const statItems: {
+    label: string
+    value: number
+    icon: React.ReactNode
+    tone: string
+    bg: string
+    subtext?: string
+  }[] = []
 
   if (batchStats) {
-    if (batchStats.waiting > 0) {
-      statItems.push({
-        label: 'Waiting',
-        value: batchStats.waiting,
-        icon: <Clock4 className="h-4 w-4 text-amber-600" />,
-        tone: 'text-amber-700',
-        bg: 'bg-amber-50',
-      })
-    }
-    if (batchStats.confirmed > 0) {
-      statItems.push({
-        label: 'Confirmed',
-        value: batchStats.confirmed,
-        icon: <CheckCircle2 className="h-4 w-4 text-blue-600" />,
-        tone: 'text-blue-700',
-        bg: 'bg-blue-50',
-      })
-    }
+    const waitingAmount = Math.max(0, batchStats.waiting - batchStats.confirmed)
+    // Always show Pending/Confirmed blocks even if 0, to maintain layout? 
+    // Or just push them. User wants "3 cụm".
+
+    statItems.push({
+      label: 'Pending',
+      value: waitingAmount,
+      icon: <Clock4 className="h-4 w-4 text-amber-600" />,
+      tone: 'text-amber-700',
+      bg: 'bg-amber-50',
+      subtext: 'Waiting for refund'
+    })
+
+    statItems.push({
+      label: 'Confirmed',
+      value: batchStats.confirmed,
+      icon: <CheckCircle2 className="h-4 w-4 text-blue-600" />,
+      tone: 'text-blue-700',
+      bg: 'bg-blue-50',
+      subtext: 'Funded from Batch'
+    })
+  } else {
+    // Fallback if no batch stats (e.g. not loaded yet or error)
+    statItems.push({
+      label: 'Pending',
+      value: 0,
+      icon: <Clock4 className="h-4 w-4 text-amber-600" />,
+      tone: 'text-amber-700',
+      bg: 'bg-amber-50',
+    })
+    statItems.push({
+      label: 'Confirmed',
+      value: 0,
+      icon: <CheckCircle2 className="h-4 w-4 text-blue-600" />,
+      tone: 'text-blue-700',
+      bg: 'bg-blue-50',
+    })
   }
 
   const cycleLabel = new Intl.DateTimeFormat('en-US', { month: 'short' }).format(new Date())
@@ -122,8 +135,8 @@ export function AccountStatsHeader({
                 {getAccountTypeLabel(account.type)}
               </span>
               <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${account.is_active !== false
-                  ? 'bg-emerald-50 text-emerald-700'
-                  : 'bg-slate-100 text-slate-600'
+                ? 'bg-emerald-50 text-emerald-700'
+                : 'bg-slate-100 text-slate-600'
                 }`}>
                 {account.is_active !== false ? 'Active' : 'Closed'}
               </span>
@@ -184,68 +197,71 @@ export function AccountStatsHeader({
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
+        {/* Pending & Confirmed */}
+        {/* Pending & Confirmed */}
         {statItems.map(item => (
-          <div key={item.label} className={`flex flex-col gap-1 rounded-lg ${item.bg} px-3 py-2 shadow-sm`}>
+          <div key={item.label} className={`flex flex-col gap-1 rounded-lg ${item.label === 'Confirmed' ? 'bg-white border border-slate-200' : item.bg} px-3 py-2 shadow-sm relative`}>
             <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
               <span>{item.label}</span>
               {item.icon}
             </div>
-            <span className={`text-lg font-bold tabular-nums ${item.tone}`}>
-              {formatCurrency(item.label === 'Net Flow' ? item.value : Math.abs(item.value))}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2">
-        {account.type === 'credit_card' && cashbackStats ? (
-          <>
-            <div className="flex flex-wrap items-center justify-between text-xs uppercase tracking-wide text-slate-500">
-              <span>Cashback cycle</span>
-              <span>Cycle: {cycleLabel}</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 text-sm font-semibold text-slate-900">
-              <span>{formatCurrency(cashbackStats.currentSpend)}</span>
-              <span className="text-xs font-medium text-slate-600">
-                Rate: {Math.round((cashbackStats.rate ?? 0) * 100)}%
-                {minSpend ? ` · Min spend ${formatCurrency(minSpend)}` : ''}
+            <div className="flex items-center justify-between">
+              <span className={`text-lg font-bold tabular-nums ${item.tone}`}>
+                {formatCurrency(item.value)}
               </span>
-              <span className="text-xs font-medium text-slate-600">
-                {cap ? `Cap ${formatCurrency(cap)}` : 'Unlimited'}
-              </span>
-              {remaining !== null && (
-                <span className="text-xs font-medium text-slate-600">Remaining: {formatCurrency(remaining)}</span>
+              {item.label === 'Pending' && item.value > 0 && (
+                <div className="absolute right-2 bottom-2">
+                  <ConfirmMoneyReceived accountId={account.id} minimal />
+                </div>
               )}
             </div>
-            <Progress value={earned} max={progressMax} className="h-2" />
-            <div className="flex flex-wrap items-center gap-2 text-sm text-slate-700">
-              <span className="font-semibold text-emerald-700">Earned: {formatCurrency(earned)}</span>
-              {cap && <span className="text-xs text-slate-500">/ {formatCurrency(cap)}</span>}
+            {item.subtext && <p className="text-[10px] text-slate-500">{item.subtext}</p>}
+          </div>
+        ))}
+
+        {/* Cashback / Asset / Info Block */}
+        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 shadow-sm flex flex-col justify-between">
+          {account.type === 'credit_card' && cashbackStats ? (
+            <div className="flex flex-col gap-1 h-full justify-center">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                <div className="flex items-center gap-1">
+                  <TrendingUp className="h-4 w-4 text-emerald-600" />
+                  <span>Cashback</span>
+                </div>
+                <span className="text-[10px]">{Math.round((cashbackStats.rate ?? 0) * 100)}%</span>
+              </div>
+              <div className="flex items-end justify-between">
+                <span className="text-lg font-bold tabular-nums text-emerald-700">
+                  {formatCurrency(earned)}
+                </span>
+                {cap && <span className="text-[10px] text-slate-500 mb-1">/ {formatCurrency(cap)}</span>}
+              </div>
+              <Progress value={earned} max={progressMax} className="h-1.5 mt-1" />
             </div>
-          </>
-        ) : isAssetAccount ? (
-          <>
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-              <CreditCard className="h-4 w-4 text-slate-500" />
-              <span>Interest details</span>
+          ) : isAssetAccount ? (
+            <div className="flex flex-col gap-1 h-full justify-center">
+              <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
+                <div className="flex items-center gap-1">
+                  <CreditCard className="h-4 w-4 text-slate-500" />
+                  <span>Interest</span>
+                </div>
+                <span className="text-[10px]">{assetConfig?.interestRate ? `${assetConfig.interestRate}%` : 'N/A'}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-slate-700">
+                  {assetConfig?.termMonths ? `${assetConfig.termMonths} mo` : 'No term'}
+                </span>
+                <span className="text-[10px] text-slate-500">
+                  {assetConfig?.maturityDate ? `Matures ${assetConfig.maturityDate}` : ''}
+                </span>
+              </div>
             </div>
-            <p className="text-sm text-slate-700">
-              Rate: {assetConfig?.interestRate ? `${assetConfig.interestRate}%` : 'Not set'}
-            </p>
-            <p className="text-xs text-slate-500">
-              {assetConfig?.termMonths ? `${assetConfig.termMonths} months` : 'No term'}{' '}
-              {assetConfig?.maturityDate ? `· Matures ${assetConfig.maturityDate}` : ''}
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-              <CreditCard className="h-4 w-4 text-slate-500" />
-              <span>Cashback</span>
+          ) : (
+            <div className="flex flex-col gap-1 h-full justify-center items-center text-slate-400">
+              <span className="text-xs">No extra info</span>
             </div>
-            <p className="text-sm text-slate-600">Not applicable for this account.</p>
-          </>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )

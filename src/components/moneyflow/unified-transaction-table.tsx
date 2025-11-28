@@ -47,7 +47,7 @@ type SortDir = 'asc' | 'desc'
 
 type BulkActionState = {
   selectionCount: number
-  currentTab: 'active' | 'void'
+  currentTab: 'active' | 'void' | 'pending'
   onVoidSelected: () => Promise<void> | void
   onRestoreSelected: () => Promise<void> | void
   isVoiding: boolean
@@ -141,7 +141,7 @@ interface UnifiedTransactionTableProps {
   categories?: Category[]
   people?: Person[]
   shops?: Shop[]
-  activeTab?: 'active' | 'void'
+  activeTab?: 'active' | 'void' | 'pending'
   hidePeopleColumn?: boolean
   hiddenColumns?: ColumnKey[]
   onBulkActionStateChange?: (state: BulkActionState) => void
@@ -189,9 +189,9 @@ export function UnifiedTransactionTable({
 }: UnifiedTransactionTableProps) {
   const tableData = data ?? transactions ?? []
   const defaultColumns: ColumnConfig[] = [
-    { key: "date", label: "Date", defaultWidth: 70, minWidth: 60 },
-    { key: "type", label: "Type", defaultWidth: 110, minWidth: 90 },
-    { key: "shop", label: "Notes", defaultWidth: 220, minWidth: 160 },
+    { key: "date", label: "Date", defaultWidth: 80, minWidth: 70 },
+    { key: "type", label: "Type", defaultWidth: 130, minWidth: 110 },
+    { key: "shop", label: "Notes", defaultWidth: 260, minWidth: 200 },
     { key: "category", label: "Category", defaultWidth: 150 },
     ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 140 } as ColumnConfig] : []),
     { key: "account", label: "Account", defaultWidth: 180 },
@@ -390,7 +390,7 @@ export function UnifiedTransactionTable({
       })
       .catch(err => {
         console.error('Failed to void transaction:', err)
-        setVoidError('Unable to void transaction. Please try again.')
+        setVoidError(err.message || 'Unable to void transaction. Please try again.')
       })
       .finally(() => setIsVoiding(false))
   }
@@ -526,7 +526,10 @@ export function UnifiedTransactionTable({
   const displayedTransactions = useMemo(() => {
     let list = tableData;
     if (currentTab === 'active') {
+      // All tab: Show everything except void
       list = tableData.filter(t => (statusOverrides[t.id] ?? t.status) !== 'void');
+    } else if (currentTab === 'pending') {
+      list = tableData.filter(t => (statusOverrides[t.id] ?? t.status) === 'waiting_refund' || (statusOverrides[t.id] ?? t.status) === 'pending');
     } else {
       list = tableData.filter(t => (statusOverrides[t.id] ?? t.status) === 'void');
     }
@@ -538,7 +541,13 @@ export function UnifiedTransactionTable({
       if (sortState.key === 'date') {
         const aDate = new Date(a.occurred_at ?? a.created_at ?? '').getTime()
         const bDate = new Date(b.occurred_at ?? b.created_at ?? '').getTime()
-        return sortState.dir === 'asc' ? aDate - bDate : bDate - aDate
+        if (aDate !== bDate) {
+          return sortState.dir === 'asc' ? aDate - bDate : bDate - aDate
+        }
+        // Secondary sort by created_at to ensure deterministic order
+        const aCreated = new Date(a.created_at ?? '').getTime()
+        const bCreated = new Date(b.created_at ?? '').getTime()
+        return sortState.dir === 'asc' ? aCreated - bCreated : bCreated - aCreated
       }
       const aAmt = typeof a.original_amount === 'number' ? a.original_amount : a.amount
       const bAmt = typeof b.original_amount === 'number' ? b.original_amount : b.amount
@@ -596,7 +605,7 @@ export function UnifiedTransactionTable({
 
   return (
     <div className="relative space-y-3">
-      <div className="rounded-md border-2 border-slate-300 bg-white shadow-sm overflow-hidden">
+      <div className="rounded-md border-2 border-slate-300 bg-white shadow-sm">
         <Table>
           <TableHeader className="bg-slate-50/80">
             <TableRow>
@@ -707,20 +716,23 @@ export function UnifiedTransactionTable({
               // --- Type Logic ---
               let typeBadge = null;
               if (txn.type === 'repayment') {
-                typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> TF In</span>;
+                typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowLeft className="mr-1 h-3 w-3" /> Repayment</span>;
               } else if (visualType === 'expense') {
-                typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> {displayDirection === 'OUT' ? 'Out' : 'Out'}</span>
+                typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Expense</span>
               } else if (visualType === 'income') {
-                typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> {displayDirection === 'IN' ? 'In' : 'In'}</span>
+                typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> Income</span>
               } else {
                 // Transfer
                 if (accountId) {
                   if (txn.amount >= 0) {
-                    typeBadge = <span className="inline-flex items-center rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-medium text-white"><ArrowLeft className="mr-1 h-3 w-3" /> TF In</span>
+                    // In-Transfer -> Green
+                    typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowLeft className="mr-1 h-3 w-3" /> TF In</span>
                   } else {
-                    typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-700"><ArrowRight className="mr-1 h-3 w-3" /> TF Out</span>
+                    // Out-Transfer -> Red
+                    typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowRight className="mr-1 h-3 w-3" /> TF Out</span>
                   }
                 } else {
+                  // Neutral Transfer -> Blue
                   typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
                 }
               }
@@ -728,6 +740,7 @@ export function UnifiedTransactionTable({
               const taskCell = (
                 <div className="relative flex justify-end">
                   <button
+                    id={`action-btn-${txn.id}`}
                     className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-1 text-slate-600 shadow-sm transition hover:bg-slate-50"
                     onClick={event => {
                       event.stopPropagation()
@@ -736,83 +749,97 @@ export function UnifiedTransactionTable({
                   >
                     <MoreHorizontal className="h-4 w-4" />
                   </button>
-                  {isMenuOpen && (
-                    <div className="absolute right-0 top-8 z-20 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg">
-                      {currentTab === 'void' || isVoided ? (
-                        <button
-                          className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
-                          disabled={isRestoring}
-                          onClick={event => {
-                            event.stopPropagation();
-                            handleRestore(txn);
-                          }}
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                          <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
-                        </button>
-                      ) : (
-                        <>
+                  {isMenuOpen && createPortal(
+                    <>
+                      <div
+                        className="fixed inset-0 z-40 bg-transparent"
+                        onClick={() => setActionMenuOpen(null)}
+                      />
+                      <div
+                        className="fixed z-50 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg"
+                        style={{
+                          top: document.getElementById(`action-btn-${txn.id}`)?.getBoundingClientRect().bottom ?? 0,
+                          left: (document.getElementById(`action-btn-${txn.id}`)?.getBoundingClientRect().left ?? 0) - 150,
+                        }}
+                        onClick={e => e.stopPropagation()}
+                      >
+                        {currentTab === 'void' || isVoided ? (
                           <button
-                            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={isRestoring}
                             onClick={event => {
                               event.stopPropagation();
-                              setEditingTxn(txn);
-                              setActionMenuOpen(null);
+                              handleRestore(txn);
                             }}
                           >
-                            <Pencil className="h-4 w-4 text-slate-600" />
-                            <span>Edit</span>
+                            <RotateCcw className="h-4 w-4" />
+                            <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
                           </button>
-                          {canRequestRefund && !isPendingRefund && (
+                        ) : (
+                          <>
                             <button
                               className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
                               onClick={event => {
                                 event.stopPropagation();
-                                openRefundForm(txn, 'request');
+                                setEditingTxn(txn);
+                                setActionMenuOpen(null);
                               }}
                             >
-                              <span>Request Refund</span>
+                              <Pencil className="h-4 w-4 text-slate-600" />
+                              <span>Edit</span>
                             </button>
-                          )}
-                          {canRequestRefund && !isPendingRefund && !isFullyRefunded && (
+                            {canRequestRefund && !isPendingRefund && (
+                              <button
+                                className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  openRefundForm(txn, 'request');
+                                }}
+                              >
+                                <span>Request Refund</span>
+                              </button>
+                            )}
+                            {canRequestRefund && !isPendingRefund && !isFullyRefunded && (
+                              <button
+                                className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  setConfirmCancelTarget(txn);
+                                  setActionMenuOpen(null);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                <span>Cancel Order (100%)</span>
+                              </button>
+                            )}
+                            {isPendingRefund && (
+                              <button
+                                className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  openRefundForm(txn, 'confirm');
+                                }}
+                              >
+                                <span>Confirm Refund</span>
+                              </button>
+                            )}
                             <button
                               className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-red-600 hover:bg-red-50"
                               onClick={event => {
                                 event.stopPropagation();
-                                setConfirmCancelTarget(txn);
+                                setConfirmVoidTarget(txn);
+                                setVoidError(null);
                                 setActionMenuOpen(null);
                               }}
                             >
-                              <Trash2 className="h-4 w-4" />
-                              <span>Cancel Order (100%)</span>
+                              <Ban className="h-4 w-4" />
+                              <span>Void Transaction</span>
                             </button>
-                          )}
-                          {isPendingRefund && (
-                            <button
-                              className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
-                              onClick={event => {
-                                event.stopPropagation();
-                                openRefundForm(txn, 'confirm');
-                              }}
-                            >
-                              <span>Confirm Refund</span>
-                            </button>
-                          )}
-                          <button
-                            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-red-600 hover:bg-red-50"
-                            onClick={event => {
-                              event.stopPropagation();
-                              setConfirmVoidTarget(txn);
-                              setVoidError(null);
-                              setActionMenuOpen(null);
-                            }}
-                          >
-                            <Ban className="h-4 w-4" />
-                            <span>Void Transaction</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
+                          </>
+                        )}
+                      </div>
+                    </>,
+                    document.body
                   )}
                 </div>
               )
@@ -848,19 +875,29 @@ export function UnifiedTransactionTable({
                       month: '2-digit',
                       timeZone: 'Asia/Ho_Chi_Minh',
                     })
+
+                    // Time Logic: If occurred_at is midnight UTC (00:00 UTC), it means it's a date-only entry.
+                    // In VN (UTC+7), this shows as 07:00. We want to avoid showing 07:00 for date-only entries.
+                    // We try to use created_at time instead.
+                    let timeDate = d;
+                    const isMidnightUTC = d.getUTCHours() === 0 && d.getUTCMinutes() === 0;
+
+                    if (isMidnightUTC && txn.created_at) {
+                      const created = new Date(txn.created_at);
+                      timeDate = created;
+                    }
+
                     const timeFormatter = new Intl.DateTimeFormat('en-GB', {
                       hour: '2-digit',
                       minute: '2-digit',
                       hour12: false,
                       timeZone: 'Asia/Ho_Chi_Minh',
                     })
-                    const isMidnightUTC = d.getUTCHours() === 0 && d.getUTCMinutes() === 0
+
                     return (
                       <div className="flex flex-col">
                         <span className="font-semibold">{dateFormatter.format(d)}</span>
-                        {!isMidnightUTC && (
-                          <span className="text-xs text-gray-500">{timeFormatter.format(d)}</span>
-                        )}
+                        <span className="text-xs text-gray-400">{timeFormatter.format(timeDate)}</span>
                       </div>
                     )
                   }
@@ -868,16 +905,7 @@ export function UnifiedTransactionTable({
                     return (
                       <div className="flex flex-col gap-1 items-start">
                         {typeBadge}
-                        {(refundStatus === 'partial' || isPartialRefund) && (
-                          <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-800">
-                            Partial
-                          </span>
-                        )}
-                        {(refundStatus === 'full' || isFullyRefunded) && (
-                          <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-800">
-                            Refunded
-                          </span>
-                        )}
+                        {/* Removed Refunded/Partial badges from Type column as requested */}
                       </div>
                     )
                   case "shop": {
@@ -890,7 +918,19 @@ export function UnifiedTransactionTable({
                     }
 
                     return (
-                      <div className="flex items-center gap-2 max-w-[220px] overflow-hidden">
+                      <div className="flex items-center gap-2 max-w-[260px] overflow-hidden">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(txn.id);
+                            setCopiedId(txn.id);
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }}
+                          className="text-slate-300 hover:text-slate-500 transition-colors shrink-0"
+                          title="Copy ID"
+                        >
+                          {copiedId === txn.id ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                        </button>
                         {displayName && (
                           <>
                             {displayIcon ? (
@@ -1076,15 +1116,40 @@ export function UnifiedTransactionTable({
                   case "final_price":
                     return <span className={cn("font-bold", amountClass)}>{numberFormatter.format(finalPrice)}</span>
                   case "status":
-                    if (isVoided) return <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">Void</span>
-                    if (effectiveStatus === 'waiting_refund') return <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Waiting Refund</span>
-                    if (effectiveStatus === 'refunded') return <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
-                    if (effectiveStatus === 'pending') return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Pending</span>
-                    if (effectiveStatus === 'completed') return <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">Completed</span>
+                    let statusBadge;
+                    if (isVoided) statusBadge = <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">Void</span>
+                    else if (effectiveStatus === 'waiting_refund') statusBadge = <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Waiting Refund</span>
+                    else if (effectiveStatus === 'refunded') statusBadge = <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
+                    else if (effectiveStatus === 'pending') statusBadge = <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Pending</span>
+                    else if (effectiveStatus === 'completed') statusBadge = <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Completed</span>
+                    else if (refundStatus === 'full' || isFullyRefunded) statusBadge = <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
+                    else if (refundStatus === 'partial' || isPartialRefund) statusBadge = <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Partial</span>
+                    else statusBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Active</span>
 
-                    if (refundStatus === 'full' || isFullyRefunded) return <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
-                    if (refundStatus === 'partial' || isPartialRefund) return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Partial</span>
-                    return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Active</span>
+                    const refundIdMatch = txn.note?.match(/\[([A-Z0-9]+)\]/);
+                    const refundId = refundIdMatch ? refundIdMatch[1] : null;
+
+                    if (refundId) {
+                      const isCopiedRefund = copiedId === `refund-${refundId}-${txn.id}`;
+                      return (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(refundId);
+                              setCopiedId(`refund-${refundId}-${txn.id}`);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            }}
+                            className="text-slate-400 hover:text-slate-600 transition-colors"
+                            title={`Copy Refund ID: ${refundId}`}
+                          >
+                            {isCopiedRefund ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                          </button>
+                          {statusBadge}
+                        </div>
+                      )
+                    }
+                    return statusBadge
                   case "id":
                     const isCopied = copiedId === txn.id
                     return (
@@ -1138,8 +1203,8 @@ export function UnifiedTransactionTable({
                     <TableCell
                       key={`${txn.id}-${col.key}`}
                       className={`border-r-2 border-slate-300 text-sm ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
-                        } ${col.key === "amount" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass}`}
-                      style={{ width: columnWidths[col.key], maxWidth: columnWidths[col.key] }}
+                        } ${col.key === "amount" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass} truncate`}
+                      style={{ width: columnWidths[col.key], maxWidth: columnWidths[col.key], overflow: 'hidden', whiteSpace: 'nowrap' }}
                     >
                       {renderCell(col.key)}
                     </TableCell>

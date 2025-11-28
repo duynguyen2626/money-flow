@@ -127,18 +127,16 @@ export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, acc
 
                     <div className="w-px h-8 bg-slate-200 mx-2" />
 
-                    {batch.status !== 'funded' && (
-                        <Button
-                            onClick={handleFund}
-                            disabled={funding || batch.batch_items.length === 0}
-                            variant="secondary"
-                            className={batch.batch_items.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}
-                        >
-                            {funding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            <DollarSign className="mr-2 h-4 w-4" />
-                            Fund
-                        </Button>
-                    )}
+                    <Button
+                        onClick={handleFund}
+                        disabled={funding || batch.batch_items.length === 0}
+                        variant="secondary"
+                        className={batch.batch_items.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}
+                    >
+                        {funding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        <DollarSign className="mr-2 h-4 w-4" />
+                        {batch.status === 'funded' ? 'Fund More' : 'Fund'}
+                    </Button>
 
                     <Button
                         onClick={handleSend}

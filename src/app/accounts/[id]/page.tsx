@@ -77,10 +77,13 @@ export default async function AccountPage({ params }: PageProps) {
     const lines = txn.transaction_lines ?? [];
     lines.forEach(line => {
       if (line.account_id === id) {
+        // Correct Logic:
+        // Debit (+) -> Inflow (Money comes IN to the account, increasing balance/reducing debt)
+        // Credit (-) -> Outflow (Money goes OUT of the account, decreasing balance/increasing debt)
         if (line.type === 'debit') {
-          totalOutflow += Math.abs(line.amount);
-        } else if (line.type === 'credit') {
           totalInflow += Math.abs(line.amount);
+        } else if (line.type === 'credit') {
+          totalOutflow += Math.abs(line.amount);
         }
       }
     });
@@ -138,7 +141,6 @@ export default async function AccountPage({ params }: PageProps) {
             categories={categories}
             people={people}
             shops={shops}
-            hiddenColumns={['shop']}
           />
         </section>
       </TagFilterProvider>

@@ -170,19 +170,20 @@ export function AccountCard({
         {/* Top Section: Name/Status (Left) & Actions (Right) */}
         <div className="flex items-start justify-between p-4">
           {/* Left: Name & Subtitle */}
-          <div className="flex flex-col gap-0.5 rounded-xl bg-white/90 px-3 py-2 shadow-lg backdrop-blur-md max-w-[70%]">
-            <Link href={`/accounts/${account.id}`} className="block">
-              <span className="text-lg font-bold text-slate-900 leading-tight truncate block">
-                {account.name}
-              </span>
-            </Link>
-            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-600 truncate">
-              <span className={account.is_active ? "text-emerald-700" : "text-slate-500"}>
-                {statusLabel}
-              </span>
-              <span>•</span>
-              <span>{getAccountTypeLabel(account.type)}</span>
+          <div className="flex flex-col items-start gap-2 max-w-[70%]">
+            <div className="rounded-xl bg-white/90 px-3 py-2 shadow-lg backdrop-blur-md">
+              <Link href={`/accounts/${account.id}`} className="block">
+                <span className="text-lg font-bold text-slate-900 leading-tight truncate block">
+                  {account.name}
+                </span>
+              </Link>
             </div>
+            {dueStatus.label !== 'No statement date' && (
+              <div className="inline-flex items-center rounded-md bg-yellow-100 px-2 py-1 text-[10px] font-bold text-yellow-800 shadow-sm border border-yellow-200">
+                <Clock4 className="mr-1 h-3 w-3" />
+                {dueStatus.label}
+              </div>
+            )}
           </div>
 
           {/* Right: Actions & Limit */}
@@ -236,24 +237,27 @@ export function AccountCard({
             {isCreditCard ? (
               <>
                 {/* Debt (Small) */}
-                {debtAmount > 0 && (
-                  <div className="inline-flex items-center gap-1.5 rounded-lg bg-rose-100 px-2 py-1 shadow-sm border border-rose-200">
-                    <Wallet className="h-3 w-3 text-rose-600" />
-                    <span className="text-xs font-bold text-rose-700">
-                      {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(debtAmount)}
-                    </span>
-                  </div>
-                )}
+                <div className="inline-flex items-center gap-1.5 rounded-lg bg-rose-100 px-2 py-1 shadow-sm border border-rose-200">
+                  <Wallet className="h-3 w-3 text-rose-600" />
+                  <span className="text-[10px] font-bold text-rose-700 uppercase mr-1">Dư nợ:</span>
+                  <span className="text-xs font-bold text-rose-700">
+                    {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(debtAmount)}
+                  </span>
+                </div>
                 {/* Available (Large) */}
                 {creditLimit > 0 && (
                   <div className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 shadow-lg">
                     <CreditCard className="h-5 w-5 text-white" />
-                    <span className="text-2xl font-black text-white tracking-tight">
-                      {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(availableBalance)}
-                    </span>
+                    <div className="flex flex-col items-end leading-none">
+                      <span className="text-[10px] font-bold text-emerald-100 uppercase">Khả dụng</span>
+                      <span className="text-xl font-black text-white tracking-tight">
+                        {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(availableBalance)}
+                      </span>
+                    </div>
                   </div>
                 )}
               </>
+
             ) : (
               /* Normal Account Balance */
               <div className="inline-flex items-center gap-2 rounded-xl bg-white/90 px-4 py-2 shadow-lg backdrop-blur-md">
@@ -408,12 +412,8 @@ export function AccountCard({
             <ConfirmMoneyReceived accountId={account.id} />
           </div>
 
-          {/* Right: Due Date Badge */}
-          <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-bold shadow-md whitespace-nowrap ${dueStatus.tone === 'text-red-700 bg-red-100' ? 'bg-red-600 text-white' : dueStatus.tone === 'text-amber-700 bg-amber-100' ? 'bg-amber-400 text-slate-900' : 'bg-amber-400 text-slate-900'}`}>
-            <Clock4 className="h-3.5 w-3.5" />
-            <span className="font-extrabold">Due:</span>
-            <span>{dueStatus.label.replace('Due in ', '').replace(' days', '')}</span>
-          </div>
+
+
         </div>
       </div>
     </article>
