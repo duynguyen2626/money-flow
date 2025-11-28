@@ -251,7 +251,12 @@ export function FilterableTransactions({
             ? finalTransactions.filter(txn => selectedTxnIds.has(txn.id))
             : finalTransactions
 
-        return source.reduce(
+        const effectiveSource = source.filter(txn => {
+            if (activeTab === 'active') return txn.status !== 'void'
+            return txn.status === 'void'
+        })
+
+        return effectiveSource.reduce(
             (acc, txn) => {
                 const kind = txn.type ?? (txn as any).displayType ?? 'expense'
                 const value = Math.abs(txn.amount ?? 0)
@@ -439,8 +444,8 @@ export function FilterableTransactions({
                     <div className="flex items-center rounded-lg bg-slate-200/50 p-1 text-sm font-medium text-slate-600 mr-2">
                         <button
                             className={`rounded-md px-3 py-1 transition-all text-xs ${activeTab === 'active'
-                                    ? 'bg-white text-slate-900 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-900'
+                                ? 'bg-white text-slate-900 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-900'
                                 }`}
                             onClick={() => setActiveTab('active')}
                         >
@@ -448,8 +453,8 @@ export function FilterableTransactions({
                         </button>
                         <button
                             className={`rounded-md px-3 py-1 transition-all text-xs ${activeTab === 'void'
-                                    ? 'bg-white text-slate-900 shadow-sm'
-                                    : 'text-slate-500 hover:text-slate-900'
+                                ? 'bg-white text-slate-900 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-900'
                                 }`}
                             onClick={() => setActiveTab('void')}
                         >
@@ -466,8 +471,8 @@ export function FilterableTransactions({
                     )}
                     <button
                         className={`px-3 py-1 rounded-full text-sm font-medium ${selectedTag === null
-                                ? 'bg-blue-500 text-white'
-                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                             }`}
                         onClick={clearTagFilter}
                     >
@@ -477,8 +482,8 @@ export function FilterableTransactions({
                         <button
                             key={tag}
                             className={`px-3 py-1 rounded-full text-sm font-medium ${selectedTag === tag
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                                 }`}
                             onClick={() => {
                                 const next = selectedTag === tag ? null : tag
@@ -540,8 +545,8 @@ export function FilterableTransactions({
                             </button>
                             <button
                                 className={`px-3 py-1 rounded-full text-sm font-semibold shadow-sm ${currentBulkTab === 'void'
-                                        ? 'bg-green-600 text-white hover:bg-green-500'
-                                        : 'bg-red-600 text-white hover:bg-red-500'
+                                    ? 'bg-green-600 text-white hover:bg-green-500'
+                                    : 'bg-red-600 text-white hover:bg-red-500'
                                     }`}
                                 onClick={() => bulkActionHandler?.()}
                                 disabled={bulkActionDisabled}

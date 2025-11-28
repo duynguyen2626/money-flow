@@ -12,6 +12,7 @@ import { DebtCycleTabs } from '@/components/moneyflow/debt-cycle-tabs'
 import { SheetSyncControls } from '@/components/people/sheet-sync-controls'
 import { Plus, CheckCheck } from 'lucide-react'
 import { CollapsibleSection } from '@/components/ui/collapsible-section'
+import { ResyncButton } from '@/components/people/resync-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -68,6 +69,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
 
             {/* Header Actions */}
             <div className="flex items-center gap-2">
+              <ResyncButton accountId={personId} />
               <AddTransactionDialog
                 accounts={accounts}
                 categories={categories}

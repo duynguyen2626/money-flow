@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy, ArrowUp, ArrowDown, ArrowUpDown, Trash2, Sigma } from "lucide-react"
+import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy, ArrowUp, ArrowDown, ArrowUpDown, Trash2, Sigma, CheckCheck } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
 import { CustomTooltip, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/custom-tooltip'
@@ -270,6 +270,7 @@ export function UnifiedTransactionTable({
   const [voidError, setVoidError] = useState<string | null>(null)
   const [statusOverrides, setStatusOverrides] = useState<Record<string, TransactionWithDetails['status']>>({})
   const [refundFormTxn, setRefundFormTxn] = useState<TransactionWithDetails | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [refundFormStage, setRefundFormStage] = useState<'request' | 'confirm'>('request')
   const [internalSortState, setInternalSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
   const [bulkDialog, setBulkDialog] = useState<{ mode: 'void' | 'restore'; open: boolean } | null>(null)
@@ -842,14 +843,24 @@ export function UnifiedTransactionTable({
                 switch (key) {
                   case "date": {
                     const d = new Date(txn.occurred_at ?? txn.created_at ?? Date.now())
-                    const day = String(d.getDate()).padStart(2, "0")
-                    const month = String(d.getMonth() + 1).padStart(2, "0")
-                    const hours = String(d.getHours()).padStart(2, "0")
-                    const minutes = String(d.getMinutes()).padStart(2, "0")
+                    const dateFormatter = new Intl.DateTimeFormat('en-GB', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      timeZone: 'Asia/Ho_Chi_Minh',
+                    })
+                    const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false,
+                      timeZone: 'Asia/Ho_Chi_Minh',
+                    })
+                    const isMidnightUTC = d.getUTCHours() === 0 && d.getUTCMinutes() === 0
                     return (
                       <div className="flex flex-col">
-                        <span className="font-semibold">{`${day}/${month}`}</span>
-                        <span className="text-xs text-gray-500">{`${hours}:${minutes}`}</span>
+                        <span className="font-semibold">{dateFormatter.format(d)}</span>
+                        {!isMidnightUTC && (
+                          <span className="text-xs text-gray-500">{timeFormatter.format(d)}</span>
+                        )}
                       </div>
                     )
                   }
@@ -1075,20 +1086,24 @@ export function UnifiedTransactionTable({
                     if (refundStatus === 'partial' || isPartialRefund) return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Partial</span>
                     return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Active</span>
                   case "id":
+                    const isCopied = copiedId === txn.id
                     return (
                       <CustomTooltip content={txn.id}>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 max-w-[100px]">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               navigator.clipboard.writeText(txn.id);
+                              setCopiedId(txn.id);
+                              setTimeout(() => setCopiedId(null), 2000);
                             }}
-                            className="text-slate-400 hover:text-slate-600 transition-colors"
+                            className="text-slate-400 hover:text-slate-600 transition-colors shrink-0"
+                            title="Copy ID"
                           >
-                            <Copy className="h-3 w-3" />
+                            {isCopied ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                           </button>
-                          <span className="text-xs text-slate-400 font-mono cursor-help">
-                            {txn.id.slice(0, 8)}...
+                          <span className="text-xs text-slate-400 font-mono cursor-help truncate">
+                            {isCopied ? 'Copied!' : `${txn.id.slice(0, 8)}...`}
                           </span>
                         </div>
                       </CustomTooltip>
@@ -1106,7 +1121,10 @@ export function UnifiedTransactionTable({
                 <TableRow
                   key={txn.id}
                   data-state={isSelected ? "selected" : undefined}
-                  className="hover:bg-slate-50/50"
+                  className={cn(
+                    "hover:bg-slate-50/50 border-b-2 border-slate-300 transition-colors",
+                    isMenuOpen ? "bg-blue-50" : ""
+                  )}
                 >
                   <TableCell className="border-r-2 border-slate-300">
                     <input
@@ -1317,14 +1335,14 @@ export function UnifiedTransactionTable({
                 onClick={() => handleCancelOrderConfirm(false)}
                 disabled={isVoiding}
               >
-                {isVoiding ? 'Processing...' : 'Chưa về (Request)'}
+                {isVoiding ? 'Processing...' : 'Pending (Wait)'}
               </button>
               <button
                 className="flex-1 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
                 onClick={() => handleCancelOrderConfirm(true)}
                 disabled={isVoiding}
               >
-                {isVoiding ? 'Processing...' : 'Đã về (Refund Now)'}
+                {isVoiding ? 'Processing...' : 'Received (Instant)'}
               </button>
             </div>
           </div>

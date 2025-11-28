@@ -65,20 +65,20 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
   let derivedType: TransactionFormValues["type"] = txn.type as TransactionFormValues["type"] || "expense";
 
   if (personLine?.person_id) {
-     // If person involved, could be debt lending or repayment.
-     // Check for repayment clues.
-     if (categoryLine?.categories?.name?.toLowerCase().includes('thu nợ')
-         || categoryLine?.categories?.name?.toLowerCase().includes('repayment')) {
-         derivedType = 'repayment';
-     } else {
-         derivedType = 'debt'; // Lending
-     }
+    // If person involved, could be debt lending or repayment.
+    // Check for repayment clues.
+    if (categoryLine?.categories?.name?.toLowerCase().includes('thu nợ')
+      || categoryLine?.categories?.name?.toLowerCase().includes('repayment')) {
+      derivedType = 'repayment';
+    } else {
+      derivedType = 'debt'; // Lending
+    }
   } else if (!categoryLine) {
-     derivedType = 'transfer';
+    derivedType = 'transfer';
   } else if (categoryLine.type === 'debit') {
-     derivedType = 'expense';
+    derivedType = 'expense';
   } else {
-     derivedType = 'income';
+    derivedType = 'income';
   }
 
   // Account Mapping
@@ -91,7 +91,7 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
   // Default Source (usually Credit line, unless Income)
   let sourceAccountId = creditLine?.account_id ?? debitLine?.account_id ?? undefined;
   if (derivedType === 'income') {
-      sourceAccountId = debitLine?.account_id ?? undefined;
+    sourceAccountId = debitLine?.account_id ?? undefined;
   }
 
   // Destination for Debt/Transfer
@@ -102,11 +102,11 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
 
   // Special handling for Repayment
   if (derivedType === 'repayment') {
-      // Repayment: Debit Bank, Credit Debt.
-      // Form expects: Source = Bank, Dest = Debt.
-      // debitLine = Bank, creditLine = Debt.
-      sourceAccountId = debitLine?.account_id ?? undefined;
-      destinationAccountId = creditLine?.account_id ?? undefined;
+    // Repayment: Debit Bank, Credit Debt.
+    // Form expects: Source = Bank, Dest = Debt.
+    // debitLine = Bank, creditLine = Debt.
+    sourceAccountId = debitLine?.account_id ?? undefined;
+    destinationAccountId = creditLine?.account_id ?? undefined;
   }
 
   return {
@@ -446,18 +446,18 @@ export function TransactionTable({
     setIsVoiding(true);
     let errorCount = 0;
     for (const id of Array.from(selection)) {
-        const ok = await voidTransaction(id);
-        if (ok) {
-            setStatusOverrides(prev => ({ ...prev, [id]: 'void' }));
-        } else {
-            errorCount++;
-        }
+      const ok = await voidTransaction(id);
+      if (ok) {
+        setStatusOverrides(prev => ({ ...prev, [id]: 'void' }));
+      } else {
+        errorCount++;
+      }
     }
     setIsVoiding(false);
     updateSelection(new Set()); // Clear selection
     router.refresh();
     if (errorCount > 0) {
-        alert(`Failed to void ${errorCount} transactions.`);
+      alert(`Failed to void ${errorCount} transactions.`);
     }
   }
 
@@ -468,18 +468,18 @@ export function TransactionTable({
     setIsRestoring(true);
     let errorCount = 0;
     for (const id of Array.from(selection)) {
-        const ok = await restoreTransaction(id);
-        if (ok) {
-            setStatusOverrides(prev => ({ ...prev, [id]: 'posted' }));
-        } else {
-            errorCount++;
-        }
+      const ok = await restoreTransaction(id);
+      if (ok) {
+        setStatusOverrides(prev => ({ ...prev, [id]: 'posted' }));
+      } else {
+        errorCount++;
+      }
     }
     setIsRestoring(false);
     updateSelection(new Set()); // Clear selection
     router.refresh();
     if (errorCount > 0) {
-        alert(`Failed to restore ${errorCount} transactions.`);
+      alert(`Failed to restore ${errorCount} transactions.`);
     }
   }
 
@@ -491,9 +491,9 @@ export function TransactionTable({
   const displayedTransactions = useMemo(() => {
     let list = transactions;
     if (activeTab === 'active') {
-        list = transactions.filter(t => (statusOverrides[t.id] ?? t.status) !== 'void');
+      list = transactions.filter(t => (statusOverrides[t.id] ?? t.status) !== 'void');
     } else {
-        list = transactions.filter(t => (statusOverrides[t.id] ?? t.status) === 'void');
+      list = transactions.filter(t => (statusOverrides[t.id] ?? t.status) === 'void');
     }
 
     if (showSelectedOnly) {
@@ -528,27 +528,31 @@ export function TransactionTable({
 
   const formattedDate = (value: string | number | Date) => {
     const d = new Date(value)
-    const day = String(d.getDate()).padStart(2, "0")
-    const month = String(d.getMonth() + 1).padStart(2, "0")
-    const year = String(d.getFullYear())
-
-    const formatWithPattern = (pattern: string) => {
-      return pattern
-        .replace(/YYYY/g, year)
-        .replace(/YY/g, year.slice(-2))
-        .replace(/MM/g, month)
-        .replace(/M/g, String(d.getMonth() + 1))
-        .replace(/DD/g, day)
-        .replace(/D/g, String(d.getDate()))
-    }
+    const dateFormatter = new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      timeZone: 'Asia/Ho_Chi_Minh',
+    })
+    const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Ho_Chi_Minh',
+    })
 
     if (dateFormat === "DD-MM") {
-      return `${day}-${month}-${year}`
+      return dateFormatter.format(d).replace(/\//g, '-')
     }
     if (dateFormat === "custom") {
-      return formatWithPattern(customDatePattern || "YYYY-MM-DD")
+      return dateFormatter.format(d)
     }
-    return new Date(value).toLocaleDateString("en-CA")
+
+    return (
+      <div className="flex flex-col">
+        <span className="font-semibold">{dateFormatter.format(d)}</span>
+        <span className="text-xs text-gray-500">{timeFormatter.format(d)}</span>
+      </div>
+    )
   }
 
   const handleSelectAll = (checked: boolean) => {
@@ -623,360 +627,359 @@ export function TransactionTable({
         {selection.size > 0 && (
           activeTab === 'active' ? (
             <button
-                className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-70"
-                onClick={handleBulkVoid}
-                disabled={isVoiding}
+              className="inline-flex items-center gap-2 rounded-md bg-red-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-red-500 disabled:opacity-70"
+              onClick={handleBulkVoid}
+              disabled={isVoiding}
             >
-                {isVoiding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
-                Void Selected ({selection.size})
+              {isVoiding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />}
+              Void Selected ({selection.size})
             </button>
           ) : (
             <button
-                className="inline-flex items-center gap-2 rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-green-500 disabled:opacity-70"
-                onClick={handleBulkRestore}
-                disabled={isRestoring}
+              className="inline-flex items-center gap-2 rounded-md bg-green-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-green-500 disabled:opacity-70"
+              onClick={handleBulkRestore}
+              disabled={isRestoring}
             >
-                {isRestoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                Restore Selected ({selection.size})
+              {isRestoring ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+              Restore Selected ({selection.size})
             </button>
           )
         )}
       </div>
 
       <div className="rounded-md border bg-white shadow-sm overflow-hidden">
-      <Table>
-        <TableHeader className="bg-slate-50/80">
-          <TableRow>
-            <TableHead className="border-r" style={{ width: 52 }}>
-              <input
-                type="checkbox"
-                className="rounded border-gray-300"
-                checked={isAllSelected}
-                onChange={e => handleSelectAll(e.target.checked)}
-              />
-            </TableHead>
-            {displayedColumns.map(col => {
-              if (col.key === "task") {
+        <Table>
+          <TableHeader className="bg-slate-50/80">
+            <TableRow>
+              <TableHead className="border-r" style={{ width: 52 }}>
+                <input
+                  type="checkbox"
+                  className="rounded border-gray-300"
+                  checked={isAllSelected}
+                  onChange={e => handleSelectAll(e.target.checked)}
+                />
+              </TableHead>
+              {displayedColumns.map(col => {
+                if (col.key === "task") {
+                  return (
+                    <TableHead
+                      key={col.key}
+                      className="text-right border-l bg-slate-100"
+                      style={{ width: columnWidths[col.key] }}
+                    >
+                      <button
+                        className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50"
+                        onClick={() => setIsCustomizerOpen(prev => !prev)}
+                        title="Customize columns"
+                      >
+                        <SlidersHorizontal className="h-4 w-4" />
+                      </button>
+                    </TableHead>
+                  )
+                }
+
                 return (
                   <TableHead
                     key={col.key}
-                    className="text-right border-l bg-slate-100"
+                    className={`border-r bg-slate-100 font-semibold text-slate-700 ${col.key === "tag" ? "whitespace-nowrap" : ""}`}
                     style={{ width: columnWidths[col.key] }}
                   >
-                    <button
-                      className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50"
-                      onClick={() => setIsCustomizerOpen(prev => !prev)}
-                      title="Customize columns"
-                    >
-                      <SlidersHorizontal className="h-4 w-4" />
-                    </button>
+                    {col.label}
                   </TableHead>
                 )
-              }
-
-              return (
-                <TableHead
-                  key={col.key}
-                  className={`border-r bg-slate-100 font-semibold text-slate-700 ${col.key === "tag" ? "whitespace-nowrap" : ""}`}
-                  style={{ width: columnWidths[col.key] }}
-                >
-                  {col.label}
-                </TableHead>
-              )
-            })}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {displayedTransactions.map(txn => {
-            const amountClass =
-              txn.type === "income"
-                ? "text-emerald-700"
-                : txn.type === "expense"
-                ? "text-red-500"
-                : "text-slate-600"
-            const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount
-            const amountValue = numberFormatter.format(Math.abs(originalAmount ?? 0))
-            const percentValue = typeof txn.cashback_share_percent === "number" ? txn.cashback_share_percent : null
-            const percentBack =
-              percentValue && percentValue > 0
-                ? `${(percentValue * 100).toLocaleString("en-US", {
+              })}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {displayedTransactions.map(txn => {
+              const amountClass =
+                txn.type === "income"
+                  ? "text-emerald-700"
+                  : txn.type === "expense"
+                    ? "text-red-500"
+                    : "text-slate-600"
+              const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount
+              const amountValue = numberFormatter.format(Math.abs(originalAmount ?? 0))
+              const percentValue = typeof txn.cashback_share_percent === "number" ? txn.cashback_share_percent : null
+              const percentBack =
+                percentValue && percentValue > 0
+                  ? `${(percentValue * 100).toLocaleString("en-US", {
                     maximumFractionDigits: 2,
                     minimumFractionDigits: percentValue * 100 < 1 ? 1 : 0,
                   })}%`
-                : "-"
-            const fixedValue = typeof txn.cashback_share_fixed === "number" ? txn.cashback_share_fixed : 0
-            const fixBack = fixedValue > 0 ? numberFormatter.format(fixedValue) : "-"
-            const derivedSumBack = Math.abs(originalAmount ?? 0) * (percentValue ?? 0) + fixedValue
-            const cashbackAmount =
-              typeof txn.cashback_share_amount === "number" && txn.cashback_share_amount > 0
-                ? txn.cashback_share_amount
-                : derivedSumBack
-          const sumBack = cashbackAmount > 0 ? numberFormatter.format(cashbackAmount) : "-"
-          const finalPrice = Math.abs(txn.amount ?? 0)
-            const isSelected = selection.has(txn.id)
-            const effectiveStatus = statusOverrides[txn.id] ?? txn.status
-            const isVoided = effectiveStatus === 'void'
-            const isMenuOpen = actionMenuOpen === txn.id
-            const txnMetadata = parseMetadata(txn.metadata)
-            const refundStatus = typeof txnMetadata?.refund_status === "string" ? txnMetadata.refund_status : null
-            const isPendingRefund = refundStatus === 'requested'
-            const categoryLabel = txn.category_name ?? ''
-            const hasShoppingCategory = categoryLabel.toLowerCase().includes('shopping')
-            const canRequestRefund =
-              txn.type === 'expense' && (Boolean(txn.shop_id) || hasShoppingCategory)
+                  : "-"
+              const fixedValue = typeof txn.cashback_share_fixed === "number" ? txn.cashback_share_fixed : 0
+              const fixBack = fixedValue > 0 ? numberFormatter.format(fixedValue) : "-"
+              const derivedSumBack = Math.abs(originalAmount ?? 0) * (percentValue ?? 0) + fixedValue
+              const cashbackAmount =
+                typeof txn.cashback_share_amount === "number" && txn.cashback_share_amount > 0
+                  ? txn.cashback_share_amount
+                  : derivedSumBack
+              const sumBack = cashbackAmount > 0 ? numberFormatter.format(cashbackAmount) : "-"
+              const finalPrice = Math.abs(txn.amount ?? 0)
+              const isSelected = selection.has(txn.id)
+              const effectiveStatus = statusOverrides[txn.id] ?? txn.status
+              const isVoided = effectiveStatus === 'void'
+              const isMenuOpen = actionMenuOpen === txn.id
+              const txnMetadata = parseMetadata(txn.metadata)
+              const refundStatus = typeof txnMetadata?.refund_status === "string" ? txnMetadata.refund_status : null
+              const isPendingRefund = refundStatus === 'requested'
+              const categoryLabel = txn.category_name ?? ''
+              const hasShoppingCategory = categoryLabel.toLowerCase().includes('shopping')
+              const canRequestRefund =
+                txn.type === 'expense' && (Boolean(txn.shop_id) || hasShoppingCategory)
 
-            const taskCell = (
-              <div className="relative flex justify-end">
-                <button
-                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-1 text-slate-600 shadow-sm transition hover:bg-slate-50"
-                  title="Actions"
-                  onClick={event => {
-                    event.stopPropagation()
-                    setActionMenuOpen(prev => (prev === txn.id ? null : txn.id))
-                  }}
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </button>
-                {isMenuOpen && (
-                  <div className="absolute right-0 top-8 z-20 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg">
-                    <button
-                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
-                      onClick={event => {
-                        event.stopPropagation()
-                        setEditingTxn(txn)
-                        setActionMenuOpen(null)
-                      }}
-                      disabled={isVoided}
-                    >
-                      <Pencil className="h-4 w-4 text-slate-600" />
-                      <span>Edit</span>
-                    </button>
-                    {canRequestRefund && !isPendingRefund && (
+              const taskCell = (
+                <div className="relative flex justify-end">
+                  <button
+                    className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-1 text-slate-600 shadow-sm transition hover:bg-slate-50"
+                    title="Actions"
+                    onClick={event => {
+                      event.stopPropagation()
+                      setActionMenuOpen(prev => (prev === txn.id ? null : txn.id))
+                    }}
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                  {isMenuOpen && (
+                    <div className="absolute right-0 top-8 z-20 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg">
                       <button
                         className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
                         onClick={event => {
                           event.stopPropagation()
-                          openRefundDialog(txn)
+                          setEditingTxn(txn)
+                          setActionMenuOpen(null)
                         }}
                         disabled={isVoided}
                       >
-                        <span>Request Refund</span>
+                        <Pencil className="h-4 w-4 text-slate-600" />
+                        <span>Edit</span>
                       </button>
-                    )}
-                    {isPendingRefund && (
+                      {canRequestRefund && !isPendingRefund && (
+                        <button
+                          className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                          onClick={event => {
+                            event.stopPropagation()
+                            openRefundDialog(txn)
+                          }}
+                          disabled={isVoided}
+                        >
+                          <span>Request Refund</span>
+                        </button>
+                      )}
+                      {isPendingRefund && (
+                        <button
+                          className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                          onClick={event => {
+                            event.stopPropagation()
+                            openConfirmRefundDialog(txn)
+                          }}
+                          disabled={isVoided}
+                        >
+                          <span>Confirm Refund</span>
+                        </button>
+                      )}
+                      {isVoided && (
+                        <button
+                          className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={isRestoring}
+                          onClick={event => {
+                            event.stopPropagation()
+                            handleRestore(txn)
+                          }}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                          <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
+                        </button>
+                      )}
                       <button
-                        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        disabled={isVoiding || isVoided}
                         onClick={event => {
                           event.stopPropagation()
-                          openConfirmRefundDialog(txn)
-                        }}
-                        disabled={isVoided}
-                      >
-                        <span>Confirm Refund</span>
-                      </button>
-                    )}
-                    {isVoided && (
-                      <button
-                        className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
-                        disabled={isRestoring}
-                        onClick={event => {
-                          event.stopPropagation()
-                          handleRestore(txn)
+                          setConfirmVoidTarget(txn)
+                          setVoidError(null)
+                          setActionMenuOpen(null)
                         }}
                       >
-                        <RotateCcw className="h-4 w-4" />
-                        <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
+                        <Ban className="h-4 w-4" />
+                        <span>Void Transaction</span>
                       </button>
-                    )}
-                    <button
-                      className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-red-600 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-                      disabled={isVoiding || isVoided}
-                      onClick={event => {
-                        event.stopPropagation()
-                        setConfirmVoidTarget(txn)
-                        setVoidError(null)
-                        setActionMenuOpen(null)
-                      }}
-                    >
-                      <Ban className="h-4 w-4" />
-                      <span>Void Transaction</span>
-                    </button>
-                  </div>
-                )}
-              </div>
-            )
-
-            // Smart Source Logic
-            let displayAccountName = txn.account_name ?? "-";
-
-            // If person_id is present, it's likely a debt-related transaction (Lending or Repayment)
-            // In this case, we want to show the REAL source (Bank) if possible.
-            // But we already did this in Backend Service! `txn.account_name` should be correct now.
-            // However, let's keep the frontend fallback just in case or for specific tweaks.
-            // The service returns `account_name` based on context.
-            // If we are in 'Account Detail' page (accountId passed), `account_name` is the OTHER side.
-            // If we are in 'People Detail' or 'Recent Transactions', `account_name` is also computed.
-
-            // The only issue might be if `account_name` is still the Debt Account name when we want Bank.
-            // Let's trust the backend service update first.
-
-            const renderCell = (key: ColumnKey) => {
-              switch (key) {
-                case "date":
-                  return formattedDate(txn.occurred_at)
-                case "type":
-                   if (txn.type === 'income') return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> In</span>
-                   if (txn.type === 'expense') {
-                        // Check if it's Shopping to show Red? It is Expense so Red.
-                        // Task says "Fix logic to show Red for Shopping". Expense is Red.
-                        // Maybe they meant if it was showing Green before?
-                        return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Out</span>
-                   }
-                   return <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
-                case "shop":
-                   // Merged Shop and Note
-                   return (
-                    <div className="flex flex-col gap-1">
-                      {txn.shop_name && (
-                        <div className="flex items-center gap-2">
-                          {txn.shop_logo_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={txn.shop_logo_url}
-                              alt={txn.shop_name}
-                              className="h-5 w-5 rounded-full object-cover"
-                            />
-                          ) : (
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
-                              {txn.shop_name.charAt(0).toUpperCase()}
-                            </span>
-                          )}
-                          <span className="font-medium truncate">{txn.shop_name}</span>
-                        </div>
-                      )}
-                      {txn.note && (
-                        <CustomTooltip content={<div className="max-w-xs break-words">{txn.note}</div>}>
-                          <span className="text-xs text-slate-500 truncate max-w-[200px]">{txn.note}</span>
-                        </CustomTooltip>
-                      )}
                     </div>
-                   )
-                case "note":
-                  return txn.note
-                case "category":
-                  return txn.category_name || "-"
-                case "account":
-                  return displayAccountName
-                case "people": {
-                   // Merged People and Tag
-                  const personName = (txn as any).person_name ?? txn.person_name ?? null
-                  const tag = txn.tag
-                  return (
-                    <div className="flex flex-col gap-1">
+                  )}
+                </div>
+              )
+
+              // Smart Source Logic
+              let displayAccountName = txn.account_name ?? "-";
+
+              // If person_id is present, it's likely a debt-related transaction (Lending or Repayment)
+              // In this case, we want to show the REAL source (Bank) if possible.
+              // But we already did this in Backend Service! `txn.account_name` should be correct now.
+              // However, let's keep the frontend fallback just in case or for specific tweaks.
+              // The service returns `account_name` based on context.
+              // If we are in 'Account Detail' page (accountId passed), `account_name` is the OTHER side.
+              // If we are in 'People Detail' or 'Recent Transactions', `account_name` is also computed.
+
+              // The only issue might be if `account_name` is still the Debt Account name when we want Bank.
+              // Let's trust the backend service update first.
+
+              const renderCell = (key: ColumnKey) => {
+                switch (key) {
+                  case "date":
+                    return formattedDate(txn.occurred_at)
+                  case "type":
+                    if (txn.type === 'income') return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> In</span>
+                    if (txn.type === 'expense') {
+                      // Check if it's Shopping to show Red? It is Expense so Red.
+                      // Task says "Fix logic to show Red for Shopping". Expense is Red.
+                      // Maybe they meant if it was showing Green before?
+                      return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Out</span>
+                    }
+                    return <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
+                  case "shop":
+                    // Merged Shop and Note
+                    return (
+                      <div className="flex flex-col gap-1">
+                        {txn.shop_name && (
+                          <div className="flex items-center gap-2">
+                            {txn.shop_logo_url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={txn.shop_logo_url}
+                                alt={txn.shop_name}
+                                className="h-5 w-5 rounded-full object-cover"
+                              />
+                            ) : (
+                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
+                                {txn.shop_name.charAt(0).toUpperCase()}
+                              </span>
+                            )}
+                            <span className="font-medium truncate">{txn.shop_name}</span>
+                          </div>
+                        )}
+                        {txn.note && (
+                          <CustomTooltip content={<div className="max-w-xs break-words">{txn.note}</div>}>
+                            <span className="text-xs text-slate-500 truncate max-w-[200px]">{txn.note}</span>
+                          </CustomTooltip>
+                        )}
+                      </div>
+                    )
+                  case "note":
+                    return txn.note
+                  case "category":
+                    return txn.category_name || "-"
+                  case "account":
+                    return displayAccountName
+                  case "people": {
+                    // Merged People and Tag
+                    const personName = (txn as any).person_name ?? txn.person_name ?? null
+                    const tag = txn.tag
+                    return (
+                      <div className="flex flex-col gap-1">
                         {personName && (
-                            <div className="flex items-center gap-1">
-                                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
-                                    {personName.charAt(0).toUpperCase()}
-                                </span>
-                                <span className="font-medium text-slate-700">{personName}</span>
-                            </div>
+                          <div className="flex items-center gap-1">
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
+                              {personName.charAt(0).toUpperCase()}
+                            </span>
+                            <span className="font-medium text-slate-700">{personName}</span>
+                          </div>
                         )}
                         {tag && (
-                             <span className="inline-flex w-fit items-center rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                                {tag}
-                             </span>
+                          <span className="inline-flex w-fit items-center rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                            {tag}
+                          </span>
                         )}
-                    </div>
-                  )
+                      </div>
+                    )
+                  }
+                  case "tag":
+                    return txn.tag ?? "-"
+                  case "cycle":
+                    return accountType === "credit_card" || txn.persisted_cycle_tag
+                      ? getCycleLabel(txn)
+                      : "-"
+                  case "percent":
+                    return percentBack
+                  case "fixed":
+                    return fixBack
+                  case "sumBack":
+                    return sumBack
+                  case "amount":
+                    return amountValue
+                  case "finalPrice":
+                    return numberFormatter.format(finalPrice)
+                  case "task":
+                    return taskCell
+                  default:
+                    return ""
                 }
-                case "tag":
-                  return txn.tag ?? "-"
-                case "cycle":
-                  return accountType === "credit_card" || txn.persisted_cycle_tag
-                    ? getCycleLabel(txn)
-                    : "-"
-                case "percent":
-                  return percentBack
-                case "fixed":
-                  return fixBack
-                case "sumBack":
-                  return sumBack
-                case "amount":
-                  return amountValue
-                case "finalPrice":
-                  return numberFormatter.format(finalPrice)
-                case "task":
-                  return taskCell
-                default:
-                  return ""
               }
-            }
 
-            // If in Void tab, we don't strike through.
-            // If in Active tab, we shouldn't see voided items anyway.
-            // So voidedTextClass applies only if we display voided items mixed (which we don't anymore, mostly).
-            // But if statusOverrides says void, we show it.
-            const voidedTextClass = effectiveStatus === 'void' && activeTab !== 'void' ? "opacity-60 line-through text-gray-400" : ""
+              // If in Void tab, we don't strike through.
+              // If in Active tab, we shouldn't see voided items anyway.
+              // So voidedTextClass applies only if we display voided items mixed (which we don't anymore, mostly).
+              // But if statusOverrides says void, we show it.
+              const voidedTextClass = effectiveStatus === 'void' && activeTab !== 'void' ? "opacity-60 line-through text-gray-400" : ""
 
-            return (
-              <TableRow
-                key={txn.id}
-                data-state={isSelected ? "selected" : undefined}
-              >
-                <TableCell className="border-r">
-                  <input
-                    type="checkbox"
-                    className="rounded border-gray-300"
-                    checked={isSelected}
-                    onChange={e => handleSelectOne(txn.id, e.target.checked)}
-                  />
-                </TableCell>
-                {displayedColumns.map(col => (
-                  <TableCell
-                    key={`${txn.id}-${col.key}`}
-                    className={`border-r text-sm ${col.key === "amount" || col.key === "finalPrice" || col.key === "percent" || col.key === "fixed" || col.key === "sumBack" ? "text-right" : ""} ${
-                      col.key === "amount" || col.key === "finalPrice" ? "font-semibold" : ""
-                    } ${col.key === "amount" || col.key === "finalPrice" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass}`}
-                    style={{ width: columnWidths[col.key], maxWidth: columnWidths[col.key] }}
-                  >
-                    {renderCell(col.key)}
+              return (
+                <TableRow
+                  key={txn.id}
+                  data-state={isSelected ? "selected" : undefined}
+                >
+                  <TableCell className="border-r">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300"
+                      checked={isSelected}
+                      onChange={e => handleSelectOne(txn.id, e.target.checked)}
+                    />
                   </TableCell>
-                ))}
-              </TableRow>
-            )
-          })}
-        </TableBody>
-        {selection.size > 0 && (
-          <TableFooter>
-            {summary.incomeSummary.sumAmount > 0 && (
-              <TableRow className="bg-emerald-50">
-                <TableCell
-                  colSpan={Math.max(1, displayedColumns.length - 2)}
-                  className="font-semibold text-emerald-700 border-r"
-                >
-                  Total Income
-                </TableCell>
-                <TableCell className="text-right font-semibold text-emerald-700 border-r">{numberFormatter.format(summary.incomeSummary.sumBack)}</TableCell>
-                <TableCell className="text-right font-semibold text-emerald-700 border-r">{numberFormatter.format(summary.incomeSummary.sumAmount)}</TableCell>
-                <TableCell className="text-right font-semibold text-emerald-700">{numberFormatter.format(summary.incomeSummary.sumFinalPrice)}</TableCell>
-              </TableRow>
-            )}
-            {summary.expenseSummary.sumAmount > 0 && (
-              <TableRow className="bg-red-50">
-                <TableCell
-                  colSpan={Math.max(1, displayedColumns.length - 2)}
-                  className="font-semibold text-red-500 border-r"
-                >
-                  Total Expense
-                </TableCell>
-                <TableCell className="text-right font-semibold text-red-500 border-r">{numberFormatter.format(summary.expenseSummary.sumBack)}</TableCell>
-                <TableCell className="text-right font-semibold text-red-500 border-r">{numberFormatter.format(summary.expenseSummary.sumAmount)}</TableCell>
-                <TableCell className="text-right font-semibold text-red-500">{numberFormatter.format(summary.expenseSummary.sumFinalPrice)}</TableCell>
-              </TableRow>
-            )}
-          </TableFooter>
-        )}
-      </Table>
+                  {displayedColumns.map(col => (
+                    <TableCell
+                      key={`${txn.id}-${col.key}`}
+                      className={`border-r text-sm ${col.key === "amount" || col.key === "finalPrice" || col.key === "percent" || col.key === "fixed" || col.key === "sumBack" ? "text-right" : ""} ${col.key === "amount" || col.key === "finalPrice" ? "font-semibold" : ""
+                        } ${col.key === "amount" || col.key === "finalPrice" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass}`}
+                      style={{ width: columnWidths[col.key], maxWidth: columnWidths[col.key] }}
+                    >
+                      {renderCell(col.key)}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              )
+            })}
+          </TableBody>
+          {selection.size > 0 && (
+            <TableFooter>
+              {summary.incomeSummary.sumAmount > 0 && (
+                <TableRow className="bg-emerald-50">
+                  <TableCell
+                    colSpan={Math.max(1, displayedColumns.length - 2)}
+                    className="font-semibold text-emerald-700 border-r"
+                  >
+                    Total Income
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-emerald-700 border-r">{numberFormatter.format(summary.incomeSummary.sumBack)}</TableCell>
+                  <TableCell className="text-right font-semibold text-emerald-700 border-r">{numberFormatter.format(summary.incomeSummary.sumAmount)}</TableCell>
+                  <TableCell className="text-right font-semibold text-emerald-700">{numberFormatter.format(summary.incomeSummary.sumFinalPrice)}</TableCell>
+                </TableRow>
+              )}
+              {summary.expenseSummary.sumAmount > 0 && (
+                <TableRow className="bg-red-50">
+                  <TableCell
+                    colSpan={Math.max(1, displayedColumns.length - 2)}
+                    className="font-semibold text-red-500 border-r"
+                  >
+                    Total Expense
+                  </TableCell>
+                  <TableCell className="text-right font-semibold text-red-500 border-r">{numberFormatter.format(summary.expenseSummary.sumBack)}</TableCell>
+                  <TableCell className="text-right font-semibold text-red-500 border-r">{numberFormatter.format(summary.expenseSummary.sumAmount)}</TableCell>
+                  <TableCell className="text-right font-semibold text-red-500">{numberFormatter.format(summary.expenseSummary.sumFinalPrice)}</TableCell>
+                </TableRow>
+              )}
+            </TableFooter>
+          )}
+        </Table>
       </div>
 
       {isCustomizerOpen && (
@@ -1082,10 +1085,10 @@ export function TransactionTable({
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4 py-4 sm:py-10"
           onClick={() => setEditingTxn(null)}
         >
-            <div
-              className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-2xl scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200"
-              onClick={event => event.stopPropagation()}
-            >
+          <div
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-2xl scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200"
+            onClick={event => event.stopPropagation()}
+          >
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-slate-900">Edit Transaction</h3>
               <button

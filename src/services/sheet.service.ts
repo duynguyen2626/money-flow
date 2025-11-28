@@ -15,6 +15,7 @@ type SheetSyncTransaction = {
   cashback_share_percent_input?: number | null
   cashback_share_fixed?: number | null
   cashback_share_amount?: number | null
+  type?: string
 }
 
 function isValidWebhook(url: string | null | undefined): url is string {
@@ -123,10 +124,16 @@ async function postToSheet(sheetLink: string, payload: Record<string, unknown>) 
 
 function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete') {
   const { originalAmount, percentRate, fixedBack, totalBack } = calculateTotals(txn)
+
+  // If amount is negative, it's a credit to the debt account (Repayment) -> Type "In"
+  // If amount is positive, it's a debit to the debt account (Lending) -> Type "Debt"
+  // Allow override via txn.type
+  const type = txn.type ?? ((txn.amount ?? 0) < 0 ? 'In' : 'Debt');
+
   return {
     action,
     id: txn.id,
-    type: 'Debt',
+    type: type,
     date: txn.occurred_at ?? txn.date ?? null,
     shop: txn.shop_name ?? '',
     notes: txn.note ?? '',
@@ -274,6 +281,9 @@ export async function syncAllTransactions(personId: string) {
         }
       }
 
+      // Determine type: if amount < 0, it's a repayment (In), otherwise Debt
+      const type = row.amount < 0 ? 'In' : 'Debt'
+
       const payload = buildPayload(
         {
           id: row.transactions.id,
@@ -286,6 +296,7 @@ export async function syncAllTransactions(personId: string) {
           cashback_share_percent: row.cashback_share_percent ?? undefined,
           cashback_share_fixed: row.cashback_share_fixed ?? undefined,
           cashback_share_amount: cashbackAmount,
+          type: type,
         },
         'create'
       )

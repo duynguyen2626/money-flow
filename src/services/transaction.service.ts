@@ -287,12 +287,12 @@ async function syncRepaymentTransaction(
   shopInfo: ShopRow | null
 ) {
   try {
-    const { data: destAccountResult } = await supabase
+    const { data: sourceAccountResult } = await supabase
       .from('accounts')
       .select('name')
-      .eq('id', input.debt_account_id ?? '')
+      .eq('id', input.source_account_id ?? '')
       .single();
-    const destAccount = destAccountResult as { name: string } | null;
+    const sourceAccount = sourceAccountResult as { name: string } | null;
 
     for (const line of lines) {
       if (!line.person_id) continue;
@@ -312,11 +312,12 @@ async function syncRepaymentTransaction(
             occurred_at: input.occurred_at,
             note: input.note,
             tag: input.tag,
-            shop_name: shopInfo?.name ?? destAccount?.name ?? null,
+            shop_name: shopInfo?.name ?? sourceAccount?.name ?? null,
             amount: line.amount,
             original_amount: originalAmount,
             cashback_share_percent: cashbackPercent,
             cashback_share_fixed: cashbackFixed,
+            type: 'In',
           },
           'create'
         );
@@ -556,14 +557,37 @@ export async function voidTransaction(id: string): Promise<boolean> {
     return false;
   }
 
+  // --- VOID PROTECTION FOR REFUNDS ---
+  // If voiding a 'completed' transaction (likely a confirmed refund request),
+  // check if there is a linked 'money received' transaction (GD3).
+  const lines = ((existing as any).transaction_lines as RefundTransactionLine[]) ?? [];
+  const metadata = extractLineMetadata(lines) as Record<string, any> | null;
+
+  if ((existing as any).status === 'completed' && metadata?.refund_confirmed_transaction_id) {
+    const { data: gd3 } = await supabase
+      .from('transactions')
+      .select('id, status')
+      .eq('id', metadata.refund_confirmed_transaction_id)
+      .maybeSingle();
+
+    const gd3Typed = gd3 as { id: string; status: string } | null;
+
+    if (gd3Typed && gd3Typed.status !== 'void') {
+      console.error('Cannot void intermediate transaction. Linked confirmation exists:', gd3Typed.id);
+      // We return false or throw. Returning false for now to avoid crashing, but ideally should bubble error.
+      // Since function returns boolean, we log and return false.
+      // Ideally we should probably throw to let UI know the reason.
+      // But adhering to signature:
+      return false;
+    }
+  }
+
   const { error: updateError } = await (supabase.from('transactions').update as any)({ status: 'void' }).eq('id', id);
 
   if (updateError) {
     console.error('Failed to void transaction:', updateError);
     return false;
   }
-
-  const lines = ((existing as any).transaction_lines as RefundTransactionLine[]) ?? [];
   const personLine = lines.find((line) => line?.person_id);
 
   if (personLine?.person_id) {
@@ -586,7 +610,7 @@ export async function voidTransaction(id: string): Promise<boolean> {
   }
 
   // --- ROLLBACK LOGIC FOR REFUNDS ---
-  const metadata = extractLineMetadata(lines) as Record<string, any> | null;
+  // metadata and lines are already defined above
   const metaRecord = metadata as Record<string, unknown> | null;
   let targetOriginalId =
     typeof metaRecord?.original_transaction_id === 'string'
@@ -688,7 +712,8 @@ export async function voidTransaction(id: string): Promise<boolean> {
       });
 
       // Revert Original Transaction Status to 'posted' if it was 'waiting_refund' or 'refunded'
-      if ((original as any).status === 'waiting_refund' || (original as any).status === 'refunded') {
+      // CRITICAL FIX: Ensure we force 'posted' if we are voiding the refund request.
+      if ((original as any).status !== 'void') {
         await (supabase.from('transactions').update as any)({ status: 'posted' }).eq('id', targetOriginalId);
       }
 
@@ -1147,6 +1172,7 @@ export async function requestRefund(
   }
 
   // 3. Update Original Transaction Metadata
+  // 3. Update Original Transaction Metadata
   try {
     const newRefundedTotal = currentRefundedAmount + requestedAmount;
     const newRefundStatus = deriveRefundStatus(totalOriginalAmount, newRefundedTotal);
@@ -1157,9 +1183,9 @@ export async function requestRefund(
       refund_requested_at: new Date().toISOString(),
       has_refund_request: true,
       refunded_amount: newRefundedTotal,
-      refund_status: newRefundStatus,
+      refund_status: 'pending', // Force pending for request
       refund_flow_status: 'requested',
-      status: newRefundStatus === 'full' ? 'waiting_refund' : (existing as any).status,
+      status: 'waiting_refund', // Force waiting_refund for request
     })
 
     for (const line of originalLines) {
@@ -1169,6 +1195,12 @@ export async function requestRefund(
         line.id
       )
     }
+
+    // CRITICAL FIX: Update the HEADER status to 'waiting_refund' so the UI knows it's waiting.
+    if (newRefundStatus === 'full' || newRefundStatus === 'partial') {
+      await (supabase.from('transactions').update as any)({ status: 'waiting_refund' }).eq('id', transactionId);
+    }
+
   } catch (err) {
     console.error('Failed to tag original transaction with refund metadata:', err)
   }
@@ -1330,9 +1362,15 @@ export async function confirmRefund(
         refund_confirmed_at: new Date().toISOString(),
       })
 
-      // Update Original Transaction Status to 'refunded' if full refund
+      // Update Original Transaction Status
+      // If full refund -> 'refunded'
+      // If partial refund -> 'posted' (Active) - because it's still an active transaction, just partially refunded.
+      // We do NOT want it to stay 'waiting_refund'.
       if (updatedStatus === 'full') {
         await (supabase.from('transactions').update as any)({ status: 'refunded' }).eq('id', originalTransactionId)
+      } else {
+        // For partial or none, revert to 'posted' so it shows as Active (with Partial tag if applicable)
+        await (supabase.from('transactions').update as any)({ status: 'posted' }).eq('id', originalTransactionId)
       }
 
       for (const line of originalLinesTyped as Array<{ id?: string }>) {
