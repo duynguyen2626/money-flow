@@ -9,6 +9,7 @@ import { format, subMonths } from 'date-fns'
 import {
     Dialog,
     DialogContent,
+    DialogDescription,
     DialogHeader,
     DialogTitle,
     DialogTrigger,
@@ -23,25 +24,31 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { createBatchAction } from '@/actions/batch.actions'
 
 const formSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     sheet_link: z.string().optional(),
     source_account_id: z.string().optional(),
+    is_template: z.boolean().default(false),
+    auto_clone_day: z.number().min(1).max(31).optional(),
 })
 
 export function CreateBatchDialog({ accounts }: { accounts: any[] }) {
     const [open, setOpen] = useState(false)
     const [monthMode, setMonthMode] = useState<'current' | 'last'>('current')
 
-    const form = useForm<z.infer<typeof formSchema>>({
+    const form = useForm({
         resolver: zodResolver(formSchema),
         defaultValues: {
             name: '',
             sheet_link: '',
             source_account_id: '',
+            is_template: false,
+            auto_clone_day: 1,
         },
+        mode: 'onChange',
     })
 
     // Auto-generate name when monthMode changes
@@ -72,6 +79,9 @@ export function CreateBatchDialog({ accounts }: { accounts: any[] }) {
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Create New Batch</DialogTitle>
+                    <DialogDescription>
+                        Create a new batch for processing transactions.
+                    </DialogDescription>
                 </DialogHeader>
 
                 <div className="flex gap-4 mb-4">
@@ -145,7 +155,52 @@ export function CreateBatchDialog({ accounts }: { accounts: any[] }) {
                                 </FormItem>
                             )}
                         />
-                        <Button type="submit">Create</Button>
+                        <FormField
+                            control={form.control}
+                            name="is_template"
+                            render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                    <div className="space-y-0.5">
+                                        <FormLabel>Save as Template</FormLabel>
+                                        <p className="text-sm text-muted-foreground">
+                                            This batch will be used as a template for auto-cloning.
+                                        </p>
+                                    </div>
+                                    <FormControl>
+                                        <Switch
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                        />
+                                    </FormControl>
+                                </FormItem>
+                            )}
+                        />
+                        {form.watch('is_template') && (
+                            <FormField
+                                control={form.control}
+                                name="auto_clone_day"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Auto Clone Day (1-31)</FormLabel>
+                                        <FormControl>
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                max={31}
+                                                placeholder="e.g., 1"
+                                                {...field}
+                                                onChange={(e) => {
+                                                    const value = e.target.valueAsNumber
+                                                    field.onChange(isNaN(value) ? 1 : value)
+                                                }}
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                        )}
+                        <Button type="submit" disabled={!form.formState.isValid || form.formState.isSubmitting}>Create</Button>
                     </form>
                 </Form>
             </DialogContent>

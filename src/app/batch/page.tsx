@@ -1,19 +1,12 @@
 import { getBatchesAction } from '@/actions/batch.actions'
-import { BatchList } from '@/components/batch/batch-list'
-import { CreateBatchDialog } from '@/components/batch/create-batch-dialog'
 import { getAccounts } from '@/services/account.service'
+import { getBankMappings } from '@/services/bank.service'
+import { BatchPageClient } from '@/components/batch/batch-page-client'
 
 export default async function BatchPage() {
     const batches = await getBatchesAction()
     const accounts = await getAccounts()
+    const bankMappings = await getBankMappings()
 
-    return (
-        <div className="container mx-auto py-10">
-            <div className="flex justify-between items-center mb-8">
-                <h1 className="text-3xl font-bold">Batch Transfers</h1>
-                <CreateBatchDialog accounts={accounts} />
-            </div>
-            <BatchList batches={batches} />
-        </div>
-    )
+    return <BatchPageClient batches={batches} accounts={accounts} bankMappings={bankMappings} />
 }

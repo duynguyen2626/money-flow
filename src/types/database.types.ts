@@ -353,6 +353,35 @@ export interface Database {
           is_confirmed?: boolean | null
         }
       }
+      bank_mappings: {
+        Row: {
+          id: string
+          bank_code: string
+          bank_name: string
+          short_name: string
+          logo_url: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          bank_code: string
+          bank_name: string
+          short_name: string
+          logo_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          bank_code?: string
+          bank_name?: string
+          short_name?: string
+          logo_url?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
   }
 }

@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AddItemDialog } from './add-item-dialog'
 import { ItemsTable } from './items-table'
 import { sendBatchToSheetAction, updateBatchAction, deleteBatchAction, updateBatchItemAction, confirmBatchItemAction } from '@/actions/batch.actions'
@@ -13,15 +14,22 @@ import { CloneBatchDialog } from './clone-batch-dialog'
 import { BatchSettingsDialog } from './batch-settings-dialog'
 import { toast } from 'sonner'
 
-export function BatchDetail({ batch, accounts }: { batch: any, accounts: any[] }) {
+import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+
+export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, accounts: any[], bankMappings?: any[] }) {
     const [sending, setSending] = useState(false)
     const [funding, setFunding] = useState(false)
     const [deleting, setDeleting] = useState(false)
     const [confirming, setConfirming] = useState(false)
     const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
+    const [showConfirmDialog, setShowConfirmDialog] = useState(false)
     const router = useRouter()
 
     const sourceAccount = accounts.find(a => a.id === batch.source_account_id)
+
+    // Filter items by status
+    const pendingItems = batch.batch_items?.filter((item: any) => item.status === 'pending' || !item.is_confirmed) || []
+    const confirmedItems = batch.batch_items?.filter((item: any) => item.status === 'confirmed' || item.is_confirmed) || []
 
     async function handleSend() {
         if (!batch.sheet_link) {
@@ -71,8 +79,10 @@ export function BatchDetail({ batch, accounts }: { batch: any, accounts: any[] }
 
     async function handleBulkConfirm() {
         if (selectedItemIds.length === 0) return
-        if (!confirm(`Confirm ${selectedItemIds.length} items?`)) return
+        setShowConfirmDialog(true)
+    }
 
+    async function performBulkConfirm() {
         setConfirming(true)
         try {
             await Promise.all(selectedItemIds.map(id => confirmBatchItemAction(id, batch.id)))
@@ -84,6 +94,7 @@ export function BatchDetail({ batch, accounts }: { batch: any, accounts: any[] }
             toast.error('Failed to confirm items')
         } finally {
             setConfirming(false)
+            setShowConfirmDialog(false)
         }
     }
 
@@ -117,14 +128,24 @@ export function BatchDetail({ batch, accounts }: { batch: any, accounts: any[] }
                     <div className="w-px h-8 bg-slate-200 mx-2" />
 
                     {batch.status !== 'funded' && (
-                        <Button onClick={handleFund} disabled={funding || batch.batch_items.length === 0} variant="secondary">
+                        <Button
+                            onClick={handleFund}
+                            disabled={funding || batch.batch_items.length === 0}
+                            variant="secondary"
+                            className={batch.batch_items.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}
+                        >
                             {funding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             <DollarSign className="mr-2 h-4 w-4" />
                             Fund
                         </Button>
                     )}
 
-                    <Button onClick={handleSend} disabled={sending || batch.batch_items.length === 0} variant="outline">
+                    <Button
+                        onClick={handleSend}
+                        disabled={sending || batch.batch_items.length === 0}
+                        variant="outline"
+                        className={batch.batch_items.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}
+                    >
                         {sending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         <Send className="mr-2 h-4 w-4" />
                         Send to Sheet
@@ -146,13 +167,44 @@ export function BatchDetail({ batch, accounts }: { batch: any, accounts: any[] }
                     )}
                 </CardHeader>
                 <CardContent>
-                    <ItemsTable
-                        items={batch.batch_items}
-                        batchId={batch.id}
-                        onSelectionChange={setSelectedItemIds}
-                    />
+                    <Tabs defaultValue="pending" className="w-full">
+                        <TabsList>
+                            <TabsTrigger value="pending">
+                                Pending ({pendingItems.length})
+                            </TabsTrigger>
+                            <TabsTrigger value="confirmed">
+                                Confirmed ({confirmedItems.length})
+                            </TabsTrigger>
+                        </TabsList>
+                        <TabsContent value="pending" className="mt-4">
+                            <ItemsTable
+                                items={pendingItems}
+                                batchId={batch.id}
+                                onSelectionChange={setSelectedItemIds}
+                            />
+                        </TabsContent>
+                        <TabsContent value="confirmed" className="mt-4">
+                            <ItemsTable
+                                items={confirmedItems}
+                                batchId={batch.id}
+                                onSelectionChange={setSelectedItemIds}
+                            />
+                        </TabsContent>
+                    </Tabs>
                 </CardContent>
             </Card>
+
+            <ConfirmDialog
+                open={showConfirmDialog}
+                onOpenChange={setShowConfirmDialog}
+                title="Confirm Items"
+                description={`Are you sure you want to confirm ${selectedItemIds.length} items?`}
+                onConfirm={performBulkConfirm}
+                confirmText="Confirm"
+                cancelText="Cancel"
+                variant="default"
+            />
         </div>
     )
 }
+

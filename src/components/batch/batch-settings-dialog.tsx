@@ -22,7 +22,7 @@ import {
     FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
 import { updateBatchAction } from '@/actions/batch.actions'
 import { Settings } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -105,53 +105,54 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
                             )}
                         />
 
-                        <div className="border rounded-lg p-4 space-y-4">
+                        <FormField
+                            control={form.control}
+                            name="is_template"
+                            render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                                    <div className="space-y-0.5">
+                                        <FormLabel>Template Mode</FormLabel>
+                                        <FormDescription>
+                                            Enable auto-cloning for this batch
+                                        </FormDescription>
+                                    </div>
+                                    <FormControl>
+                                        <Switch
+                                            checked={field.value}
+                                            onCheckedChange={field.onChange}
+                                        />
+                                    </FormControl>
+                                </FormItem>
+                            )}
+                        />
+
+                        {form.watch('is_template') && (
                             <FormField
                                 control={form.control}
-                                name="is_template"
+                                name="auto_clone_day"
                                 render={({ field }) => (
-                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
-                                        <div className="space-y-0.5">
-                                            <FormLabel>Template Mode</FormLabel>
-                                            <FormDescription>
-                                                Enable auto-cloning for this batch
-                                            </FormDescription>
-                                        </div>
+                                    <FormItem>
+                                        <FormLabel>Auto Clone Day (1-31)</FormLabel>
                                         <FormControl>
-                                            <Checkbox
-                                                checked={field.value}
-                                                onCheckedChange={(c) => field.onChange(c === true)}
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                max={31}
+                                                {...field}
+                                                onChange={(e) => {
+                                                    const value = e.target.valueAsNumber
+                                                    field.onChange(isNaN(value) ? 1 : value)
+                                                }}
                                             />
                                         </FormControl>
+                                        <FormDescription>
+                                            Day of the month to automatically clone this batch
+                                        </FormDescription>
+                                        <FormMessage />
                                     </FormItem>
                                 )}
                             />
-
-                            {form.watch('is_template') && (
-                                <FormField
-                                    control={form.control}
-                                    name="auto_clone_day"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <FormLabel>Auto Clone Day (1-31)</FormLabel>
-                                            <FormControl>
-                                                <Input
-                                                    type="number"
-                                                    min={1}
-                                                    max={31}
-                                                    {...field}
-                                                    onChange={(e) => field.onChange(e.target.valueAsNumber)}
-                                                />
-                                            </FormControl>
-                                            <FormDescription>
-                                                Day of the month to automatically clone this batch
-                                            </FormDescription>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-                            )}
-                        </div>
+                        )}
 
                         <Button type="submit" className="w-full">Save Changes</Button>
                     </form>
