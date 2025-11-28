@@ -237,12 +237,28 @@ export function AccountCard({
               <div className="text-right flex-1">
                 {isCreditCard ? (
                   <div className="flex flex-col items-end gap-1">
+                    {/* Dư nợ (Current Debt) */}
+                    {debtAmount > 0 && (
+                      <div className="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-2 py-1 shadow-md">
+                        <Wallet className="h-3 w-3 text-white" />
+                        <div className="flex flex-col items-end">
+                          <span className="text-[9px] font-semibold text-white/80 leading-none">Dư nợ</span>
+                          <p className="text-sm font-bold leading-tight text-white whitespace-nowrap">
+                            {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(debtAmount)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {/* Khả dụng (Available) */}
                     {creditLimit > 0 && (
-                      <div className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 shadow-lg">
-                        <CreditCard className="h-4 w-4 text-white" />
-                        <p className="text-xl font-bold leading-tight tracking-tight text-white whitespace-nowrap">
-                          {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(availableBalance)}
-                        </p>
+                      <div className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-2 py-1 shadow-md">
+                        <CreditCard className="h-3 w-3 text-white" />
+                        <div className="flex flex-col items-end">
+                          <span className="text-[9px] font-semibold text-white/80 leading-none">Khả dụng</span>
+                          <p className="text-sm font-bold leading-tight text-white whitespace-nowrap">
+                            {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(availableBalance)}
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>

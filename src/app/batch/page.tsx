@@ -7,6 +7,7 @@ export default async function BatchPage() {
     const batches = await getBatchesAction()
     const accounts = await getAccounts()
     const bankMappings = await getBankMappings()
+    console.log('BatchPage: bankMappings count:', bankMappings.length)
 
     return <BatchPageClient batches={batches} accounts={accounts} bankMappings={bankMappings} />
 }

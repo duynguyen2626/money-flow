@@ -504,6 +504,7 @@ export function TransactionForm({
       const refundCat =
         categories.find(cat => cat.id === refundCategoryId) ??
         categories.find(cat => (cat.name ?? '').toLowerCase().includes('refund')) ??
+        categories.find(cat => (cat.name ?? '').toLowerCase().includes('pending')) ??
         null
       return [
         {

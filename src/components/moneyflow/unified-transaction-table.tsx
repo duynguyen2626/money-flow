@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState } from "react"
-import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
+import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy, ArrowUp, ArrowDown, ArrowUpDown, Trash2, Sigma } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
 import { CustomTooltip, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/custom-tooltip'
@@ -36,10 +36,9 @@ type ColumnKey =
   | "cycle"
   | "account" // Smart Account
   | "amount"
-  | "cashback_percent"
-  | "cashback_fixed"
-  | "cashback_sum"
+  | "back_info"
   | "final_price"
+  | "status"
   | "id"
   | "task"
 
@@ -190,7 +189,7 @@ export function UnifiedTransactionTable({
 }: UnifiedTransactionTableProps) {
   const tableData = data ?? transactions ?? []
   const defaultColumns: ColumnConfig[] = [
-    { key: "date", label: "Date", defaultWidth: 60, minWidth: 50 },
+    { key: "date", label: "Date", defaultWidth: 70, minWidth: 60 },
     { key: "type", label: "Type", defaultWidth: 110, minWidth: 90 },
     { key: "shop", label: "Notes", defaultWidth: 220, minWidth: 160 },
     { key: "category", label: "Category", defaultWidth: 150 },
@@ -198,11 +197,10 @@ export function UnifiedTransactionTable({
     { key: "account", label: "Account", defaultWidth: 180 },
     { key: "cycle", label: "Cycle", defaultWidth: 100 },
     { key: "amount", label: "Amount", defaultWidth: 120 },
-    { key: "cashback_percent", label: "% Back", defaultWidth: 70 },
-    { key: "cashback_fixed", label: "Fix Back", defaultWidth: 80 },
-    { key: "cashback_sum", label: "Sum Back", defaultWidth: 100 },
+    { key: "back_info", label: "Back Info", defaultWidth: 140 },
     { key: "final_price", label: "Final Price", defaultWidth: 120 },
-    { key: "tag", label: accountType === 'credit_card' ? "Cycle" : "Tag", defaultWidth: 80 },
+    { key: "tag", label: accountType === 'credit_card' ? "Cycle" : "Tag", defaultWidth: 120 },
+    { key: "status", label: "Status", defaultWidth: 110 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
   ]
@@ -221,10 +219,9 @@ export function UnifiedTransactionTable({
       cycle: true,
       account: true,
       amount: true,
-      cashback_percent: true,
-      cashback_fixed: true,
-      cashback_sum: false, // Default hidden as per user request
+      back_info: true,
       final_price: true,
+      status: true,
       id: false,
       task: true,
     }
@@ -267,6 +264,7 @@ export function UnifiedTransactionTable({
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null)
   const [editingTxn, setEditingTxn] = useState<TransactionWithDetails | null>(null)
   const [confirmVoidTarget, setConfirmVoidTarget] = useState<TransactionWithDetails | null>(null)
+  const [confirmCancelTarget, setConfirmCancelTarget] = useState<TransactionWithDetails | null>(null)
   const [isVoiding, setIsVoiding] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
   const [voidError, setVoidError] = useState<string | null>(null)
@@ -321,10 +319,9 @@ export function UnifiedTransactionTable({
       cycle: true,
       account: true,
       amount: true,
-      cashback_percent: true,
-      cashback_fixed: true,
-      cashback_sum: false,
+      back_info: true,
       final_price: true,
+      status: true,
       id: false,
       task: true,
     })
@@ -395,6 +392,38 @@ export function UnifiedTransactionTable({
         setVoidError('Unable to void transaction. Please try again.')
       })
       .finally(() => setIsVoiding(false))
+  }
+
+  const handleCancelOrderConfirm = () => {
+    if (!confirmCancelTarget) return
+    setVoidError(null)
+    setIsVoiding(true)
+
+    import("@/services/transaction.service").then(({ requestRefund }) => {
+      const originalAmount = typeof confirmCancelTarget.original_amount === "number"
+        ? confirmCancelTarget.original_amount
+        : confirmCancelTarget.amount
+      const amountToRefund = Math.abs(originalAmount ?? 0)
+
+      requestRefund(
+        confirmCancelTarget.id,
+        amountToRefund,
+        false, // isPending = false means it goes to Pending account
+        { note: "Cancel Order (Full Refund)" }
+      ).then(res => {
+        if (res.success) {
+          router.refresh()
+          setConfirmCancelTarget(null)
+        } else {
+          setVoidError(res.error || 'Failed to cancel order')
+        }
+      }).catch(err => {
+        console.error(err)
+        setVoidError('Failed to cancel order')
+      }).finally(() => {
+        setIsVoiding(false)
+      })
+    })
   }
 
   const handleBulkVoid = useCallback(async () => {
@@ -547,11 +576,11 @@ export function UnifiedTransactionTable({
 
   return (
     <div className="relative space-y-3">
-      <div className="rounded-md border bg-white shadow-sm overflow-hidden">
+      <div className="rounded-md border-2 border-slate-300 bg-white shadow-sm overflow-hidden">
         <Table>
           <TableHeader className="bg-slate-50/80">
             <TableRow>
-              <TableHead className="border-r whitespace-nowrap" style={{ width: 52 }}>
+              <TableHead className="border-r-2 border-slate-300 whitespace-nowrap" style={{ width: 52 }}>
                 <input
                   type="checkbox"
                   className="rounded border-gray-300"
@@ -564,7 +593,7 @@ export function UnifiedTransactionTable({
                   return (
                     <TableHead
                       key={col.key}
-                      className="text-right border-l bg-slate-100 whitespace-nowrap"
+                      className="text-right border-l-2 border-slate-300 bg-slate-100 whitespace-nowrap"
                       style={{ width: columnWidths[col.key] }}
                     >
                       <button
@@ -580,7 +609,7 @@ export function UnifiedTransactionTable({
                 return (
                   <TableHead
                     key={col.key}
-                    className="border-r bg-slate-100 font-semibold text-slate-700 whitespace-nowrap"
+                    className="border-r-2 border-slate-300 bg-slate-100 font-semibold text-slate-700 whitespace-nowrap"
                     style={{ width: columnWidths[col.key] }}
                   >
                     {col.key === 'date' || col.key === 'amount' ? (
@@ -725,6 +754,19 @@ export function UnifiedTransactionTable({
                               <span>Request Refund</span>
                             </button>
                           )}
+                          {canRequestRefund && !isPendingRefund && !isFullyRefunded && (
+                            <button
+                              className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                              onClick={event => {
+                                event.stopPropagation();
+                                setConfirmCancelTarget(txn);
+                                setActionMenuOpen(null);
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span>Cancel Order (100%)</span>
+                            </button>
+                          )}
                           {isPendingRefund && (
                             <button
                               className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
@@ -754,6 +796,28 @@ export function UnifiedTransactionTable({
                   )}
                 </div>
               )
+
+              const voidedTextClass = effectiveStatus === 'void' && currentTab !== 'void' ? "opacity-60 line-through text-gray-400" : ""
+              const percentRaw = txn.cashback_share_percent
+              const fixedRaw = txn.cashback_share_fixed
+              const calculatedSum = txn.cashback_share_amount ?? ((Math.abs(originalAmount ?? 0) * (percentRaw ?? 0)) + (fixedRaw ?? 0))
+              const finalPrice = Math.abs(originalAmount ?? 0) - calculatedSum
+
+              // Cycle Logic
+              let cycleLabel = "-"
+              const sourceAccountId = txn.transaction_lines?.find(l => l.account_id && l.type === 'credit')?.account_id
+                ?? txn.transaction_lines?.find(l => l.account_id)?.account_id;
+
+              if (sourceAccountId) {
+                const acc = accounts.find(a => a.id === sourceAccountId)
+                if (acc && acc.cashback_config) {
+                  const config = parseCashbackConfig(acc.cashback_config)
+                  const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
+                  // Format: DD/MM - DD/MM
+                  const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+                  cycleLabel = `${fmt(range.start)} - ${fmt(range.end)}`
+                }
+              }
 
               const renderCell = (key: ColumnKey) => {
                 switch (key) {
@@ -962,14 +1026,30 @@ export function UnifiedTransactionTable({
                     )
                   case "amount":
                     return amountValue
-                  case "cashback_percent":
-                    return typeof percentRaw === 'number' ? <span className="text-slate-600">{(percentRaw * 100).toFixed(2)}%</span> : <span className="text-slate-300">-</span>
-                  case "cashback_fixed":
-                    return typeof fixedRaw === 'number' ? <span className="text-slate-600">{numberFormatter.format(fixedRaw)}</span> : <span className="text-slate-300">-</span>
-                  case "cashback_sum":
-                    return calculatedSum > 0 ? <span className="text-slate-600 font-medium">{numberFormatter.format(calculatedSum)}</span> : <span className="text-slate-300">-</span>
+                  case "back_info":
+                    if (!percentRaw && !fixedRaw) return <span className="text-slate-300">-</span>
+                    return (
+                      <div className="flex flex-col text-sm">
+                        <span className="text-slate-800 font-semibold">
+                          {percentRaw ? `${(percentRaw * 100).toFixed(2)}%` : ''}
+                          {percentRaw && fixedRaw ? ' + ' : ''}
+                          {fixedRaw ? numberFormatter.format(fixedRaw) : ''}
+                        </span>
+                        {calculatedSum > 0 && (
+                          <span className="text-emerald-600 font-bold flex items-center gap-1">
+                            <Sigma className="h-3 w-3" />
+                            {numberFormatter.format(calculatedSum)}
+                          </span>
+                        )}
+                      </div>
+                    )
                   case "final_price":
                     return <span className={cn("font-bold", amountClass)}>{numberFormatter.format(finalPrice)}</span>
+                  case "status":
+                    if (isVoided) return <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">Void</span>
+                    if (refundStatus === 'full' || isFullyRefunded) return <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
+                    if (refundStatus === 'partial' || isPartialRefund) return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Partial Refund</span>
+                    return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Active</span>
                   case "id":
                     return (
                       <CustomTooltip content={txn.id}>
@@ -996,27 +1076,7 @@ export function UnifiedTransactionTable({
                 }
               }
 
-              const voidedTextClass = effectiveStatus === 'void' && currentTab !== 'void' ? "opacity-60 line-through text-gray-400" : ""
-              const percentRaw = txn.cashback_share_percent
-              const fixedRaw = txn.cashback_share_fixed
-              const calculatedSum = txn.cashback_share_amount ?? ((Math.abs(originalAmount ?? 0) * (percentRaw ?? 0)) + (fixedRaw ?? 0))
-              const finalPrice = Math.abs(originalAmount ?? 0) - calculatedSum
 
-              // Cycle Logic
-              let cycleLabel = "-"
-              const sourceAccountId = txn.transaction_lines?.find(l => l.account_id && l.type === 'credit')?.account_id
-                ?? txn.transaction_lines?.find(l => l.account_id)?.account_id;
-
-              if (sourceAccountId) {
-                const acc = accounts.find(a => a.id === sourceAccountId)
-                if (acc && acc.cashback_config) {
-                  const config = parseCashbackConfig(acc.cashback_config)
-                  const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
-                  // Format: DD/MM - DD/MM
-                  const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
-                  cycleLabel = `${fmt(range.start)} - ${fmt(range.end)}`
-                }
-              }
 
               return (
                 <TableRow
@@ -1024,7 +1084,7 @@ export function UnifiedTransactionTable({
                   data-state={isSelected ? "selected" : undefined}
                   className="hover:bg-slate-50/50"
                 >
-                  <TableCell className="border-r">
+                  <TableCell className="border-r-2 border-slate-300">
                     <input
                       type="checkbox"
                       className="rounded border-gray-300"
@@ -1035,7 +1095,7 @@ export function UnifiedTransactionTable({
                   {displayedColumns.map(col => (
                     <TableCell
                       key={`${txn.id}-${col.key}`}
-                      className={`border-r text-sm ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
+                      className={`border-r-2 border-slate-300 text-sm ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
                         } ${col.key === "amount" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass}`}
                       style={{ width: columnWidths[col.key], maxWidth: columnWidths[col.key] }}
                     >
@@ -1192,6 +1252,48 @@ export function UnifiedTransactionTable({
               >
                 {isVoiding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Void Transaction
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {confirmCancelTarget && createPortal(
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+          onClick={() => setConfirmCancelTarget(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
+            onClick={event => event.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-slate-900">Cancel Order (Full Refund)?</h3>
+            <p className="mt-2 text-sm text-slate-600">
+              This will request a full refund of {numberFormatter.format(Math.abs(confirmCancelTarget.original_amount ?? confirmCancelTarget.amount ?? 0))} and mark the order as cancelled.
+            </p>
+            <p className="mt-2 text-xs text-amber-600">
+              Money will stay in "Pending" account until you confirm receipt.
+            </p>
+            {voidError && (
+              <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-800">
+                {voidError}
+              </div>
+            )}
+            <div className="mt-4 flex gap-2">
+              <button
+                className="flex-1 rounded-md bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+                onClick={() => setConfirmCancelTarget(null)}
+                disabled={isVoiding}
+              >
+                Cancel
+              </button>
+              <button
+                className="flex-1 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                onClick={handleCancelOrderConfirm}
+                disabled={isVoiding}
+              >
+                {isVoiding ? 'Processing...' : 'Confirm Cancel'}
               </button>
             </div>
           </div>
