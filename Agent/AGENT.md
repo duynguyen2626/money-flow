@@ -1,104 +1,74 @@
-PROJECT: MONEY FLOW 3.0
+# **PROJECT: MONEY FLOW 3.0**
 
-PHASE: 35 - UI REDESIGN & LOGIC FIXES (FINAL POLISH)
+# **PHASE: 38 \- ADVANCED REFUND LIFECYCLE (STATE MACHINE)**
 
-WORKFLOW:
+**WORKFLOW:**
 
-Branch: fix/phase-35-ui-logic-polish
+1. **Branch:** feat/phase-38-refund-lifecycle  
+2. **Safety:** Run npm run build.
 
-Safety: Run npm run build before finishing.
+OBJECTIVE:  
+Implement a strict 3-step Refund Workflow:
 
-I. DATABASE TASKS (CLI)
+1. **Request:** Original Txn \-\> Waiting Refund. Create Pending Txn (Pending).  
+2. **Confirm:** Pending Txn \-\> Completed. Create Real Txn (Posted). Original Txn \-\> Refunded.  
+3. **Rollback:** Voiding Pending Txn reverts Original to Posted.
 
-Instruction: Execute this SQL via CLI or Supabase Editor to clean up.
+## **I. BACKEND LOGIC (src/services/transaction.service.ts)**
 
--- Drop the test table created in Phase 34
-DROP TABLE IF EXISTS "public"."cli_test";
+**1\. Update requestRefund**
 
+* **Input:** originalTxnId, amount, isFullRefund.  
+* **Logic:**  
+  * Create **Refund Request Transaction** (System Account). Status: 'pending'. Note: Refund Request: ....  
+  * **Update Original Transaction:**  
+    * Set status \= 'waiting\_refund' (if full) or keep 'posted' (if partial).  
+    * Update refunded\_amount.  
+    * Set refund\_status \= 'pending' or 'partial'.
 
-II. UI REDESIGN: ACCOUNT CARD (src/components/moneyflow/account-card.tsx)
+**2\. Update confirmRefund**
 
-Objective: Clean, English UI, optimized for vertical images, smart Confirm badge.
+* **Input:** pendingTxnId, targetAccountId.  
+* **Logic:**  
+  * Fetch Pending Txn.  
+  * Create **Real Transaction** (Target Account). Status: 'posted'.  
+  * **Update Pending Txn:** Set status \= 'completed'.  
+  * **Update Original Transaction:**  
+    * Fetch Original (via linked\_transaction\_id or similar trace).  
+    * Set status \= 'refunded' (if full coverage).  
+    * Set refund\_status \= 'full'.
 
-1. Avatar / Logo:
+**3\. Update voidTransaction (Rollback)**
 
-Size: Increase size significantly. Use aspect-[3/4] or h-full within the header area to show the full vertical card image if available.
+* If voiding a Pending/Completed Refund Txn:  
+  * Find Original.  
+  * Revert Original status to 'posted'.  
+  * Revert Original refund\_status to 'none' or 'partial'.
 
-Style: object-contain or object-cover without heavy borders.
+## **II. FRONTEND UI (UnifiedTransactionTable)**
 
-2. Smart Confirm Badge (Replace Big Button):
+**1\. Status Badges Mapping**
 
-Condition: If pendingConfirmAmount > 0.
+* waiting\_refund: **Badge (Amber)**: "Waiting Refund".  
+* refunded: **Badge (Purple)**: "Refunded".  
+* pending: **Badge (Yellow)**: "Pending".  
+* completed: **Badge (Blue/Gray)**: "Completed".  
+* posted: **Badge (Green)**: "Active".
 
-Placement: Row 2 (Info Row), BEFORE the "X days left" badge.
+**2\. Refund Badge Text**
 
-Design:
+* Change "Partial Refund" \-\> **"Partial"**.
 
-Content: ☑️ {formatCurrency(pendingConfirmAmount)} (Icon + Number only).
+**3\. Refund Modal Logic**
 
-Style: text-emerald-600 font-bold text-sm bg-emerald-50 px-2 py-1 rounded cursor-pointer hover:bg-emerald-100.
+* Ensure amount field defaults to row.amount (Raw Amount), NOT final\_price.  
+* When "Cancel 100%" is clicked \-\> Open Modal \-\> Ask: "Tiền đã về chưa?".  
+  * If "Chưa" \-\> Run requestRefund (Flow above).  
+  * If "Rồi" \-\> Run Immediate Refund (Short circuit to Refunded status).
 
-Action: Click -> Trigger Confirm Logic (Same as before).
+## **III. EXECUTION STEPS**
 
-3. Credit Card Logic (Fix Math):
-
-Current Bug: Available shows > Limit (e.g., 150M + 182k = 150.1M).
-
-Correct Logic:
-
-Current Balance in DB is usually negative for spending (e.g., -182,000).
-
-Available = Credit Limit + Current Balance.
-
-Example: 150,000,000 + (-182,000) = 149,818,000.
-
-Display:
-
-Balance: Show Current Balance (Red if negative). Label: "Debt".
-
-Available: Show Calculated Amount. Label: "Available".
-
-4. Language:
-
-Ensure all labels are English ("Debt", "Available", "Due in", "Cashback").
-
-III. BUG FIXES
-
-1. Fix CreateAccountDialog Error
-
-Error: Error creating account: {}.
-
-Cause: parent_account_id or secured_by_account_id is likely sent as an empty string "" which violates UUID type.
-
-Fix: In onSubmit, convert empty strings to null before calling service.
-
-const payload = {
-  ...data,
-  parent_account_id: data.parent_account_id || null,
-  secured_by_account_id: data.secured_by_account_id || null
-};
-
-
-2. Fix Batch Import Not Saving
-
-Context: BatchImportDialog creates items but they don't appear.
-
-Fix: Ensure batch.service.ts -> importBatchItems function correctly maps the input array to the batch_items table columns (receiver_name, bank_number, etc.).
-
-Note: The CORS error in logs (visualstudio) is unrelated telemetry.
-
-3. Fix Cycle Column Overflow
-
-Target: UnifiedTransactionTable.
-
-Fix: Add max-w-[100px] truncate or whitespace-nowrap properly to the Cycle/Tag column. Add a Tooltip for the full text.
-
-IV. EXECUTION STEPS
-
-Frontend: Rewrite AccountCard UI (Avatar, Badge, Math).
-
-Frontend: Fix CreateAccountDialog payload sanitization.
-
-Backend: Verify importBatchItems logic.
-
-Cleanup: Run the SQL Drop.
+1. **Service:** Implement the State Machine logic in transaction.service.ts.  
+2. **UI:** Update Badge colors and text.  
+3. **Integration:** Wire up the Cancel/Refund actions to the new service logic.  
+4. **Verify:** Run build.
