@@ -246,7 +246,7 @@ async function calculatePersistedCycleTag(
 }
 
 function buildSheetPayload(
-  txn: { id: string; occurred_at: string; note?: string | null; tag?: string | null },
+  txn: { id: string; occurred_at: string; note?: string | null; tag?: string | null; shop_name?: string | null },
   line:
     | {
       amount: number
@@ -267,6 +267,7 @@ function buildSheetPayload(
     occurred_at: txn.occurred_at,
     note: txn.note ?? undefined,
     tag: txn.tag ?? undefined,
+    shop_name: txn.shop_name ?? undefined,
     amount: line.amount,
     original_amount:
       typeof line.original_amount === 'number' ? line.original_amount : Math.abs(line.amount),
@@ -303,25 +304,26 @@ async function syncRepaymentTransaction(
       const cashbackFixed =
         typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
 
-      void syncTransactionToSheet(
-        line.person_id,
-        {
-          id: transactionId,
-          occurred_at: input.occurred_at,
-          note: input.note,
-          tag: input.tag,
-          shop_name: shopInfo?.name ?? destAccount?.name ?? null,
-          amount: line.amount,
-          original_amount: originalAmount,
-          cashback_share_percent: cashbackPercent,
-          cashback_share_fixed: cashbackFixed,
-        },
-        'create'
-      ).then(() => {
+      try {
+        await syncTransactionToSheet(
+          line.person_id,
+          {
+            id: transactionId,
+            occurred_at: input.occurred_at,
+            note: input.note,
+            tag: input.tag,
+            shop_name: shopInfo?.name ?? destAccount?.name ?? null,
+            amount: line.amount,
+            original_amount: originalAmount,
+            cashback_share_percent: cashbackPercent,
+            cashback_share_fixed: cashbackFixed,
+          },
+          'create'
+        );
         console.log(`[Sheet Sync] Triggered for Repayment to Person ${line.person_id}`);
-      }).catch(err => {
+      } catch (err) {
         console.error('Sheet Sync Error (Repayment):', err);
-      });
+      }
     }
   } catch (error) {
     console.error("Failed to sync repayment transaction:", error);
@@ -374,6 +376,12 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     }
 
     const shopInfo = await loadShopInfo(supabase, input.shop_id)
+    let shopName = shopInfo?.name ?? null;
+
+    if (!shopName && input.source_account_id) {
+      const { data: acc } = await supabase.from('accounts').select('name').eq('id', input.source_account_id).single();
+      if (acc) shopName = (acc as any).name;
+    }
 
     if (input.type === 'repayment') {
       await syncRepaymentTransaction(supabase, txn.id, input, linesWithId, shopInfo);
@@ -383,7 +391,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
         occurred_at: input.occurred_at,
         note: input.note,
         tag,
-        shop_name: shopInfo?.name ?? null,
+        shop_name: shopName,
       };
 
       for (const line of linesWithId) {
@@ -397,23 +405,22 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
         const cashbackFixed =
           typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
 
-        void syncTransactionToSheet(
-          personId,
-          {
-            ...syncBase,
-            original_amount: originalAmount,
-            cashback_share_percent: cashbackPercent,
-            cashback_share_fixed: cashbackFixed,
-            amount: line.amount,
-          },
-          'create'
-        )
-          .then(() => {
-            console.log(`[Sheet Sync] Triggered for Person ${personId}`);
-          })
-          .catch(err => {
-            console.error('Sheet Sync Error (Background):', err);
-          });
+        try {
+          await syncTransactionToSheet(
+            personId,
+            {
+              ...syncBase,
+              original_amount: originalAmount,
+              cashback_share_percent: cashbackPercent,
+              cashback_share_fixed: cashbackFixed,
+              amount: line.amount,
+            },
+            'create'
+          );
+          console.log(`[Sheet Sync] Triggered for Person ${personId}`);
+        } catch (err) {
+          console.error('Sheet Sync Error (Background):', err);
+        }
       }
     }
 
@@ -524,6 +531,8 @@ export async function voidTransaction(id: string): Promise<boolean> {
       occurred_at,
       note,
       tag,
+      shop_id,
+      shops ( name ),
       transaction_lines (
         id,
         amount,
@@ -534,7 +543,8 @@ export async function voidTransaction(id: string): Promise<boolean> {
         person_id,
         account_id,
         category_id,
-        type
+        type,
+        accounts ( name )
       )
     `
     )
@@ -557,11 +567,21 @@ export async function voidTransaction(id: string): Promise<boolean> {
   const personLine = lines.find((line) => line?.person_id);
 
   if (personLine?.person_id) {
-    const payload = buildSheetPayload(existing as any, personLine);
+    let shopName = (existing as any).shops?.name ?? null;
+    if (!shopName) {
+      const creditLine = lines.find(l => l.type === 'credit');
+      if (creditLine?.accounts?.name) {
+        shopName = creditLine.accounts.name;
+      }
+    }
+
+    const payload = buildSheetPayload({ ...existing as any, shop_name: shopName }, personLine);
     if (payload) {
-      void syncTransactionToSheet(personLine.person_id, payload, 'delete').catch(err => {
+      try {
+        await syncTransactionToSheet(personLine.person_id, payload, 'delete');
+      } catch (err) {
         console.error('Sheet Sync Error (Void):', err);
-      });
+      }
     }
   }
 
@@ -667,6 +687,11 @@ export async function voidTransaction(id: string): Promise<boolean> {
         refund_flow_status: newStatus === 'none' ? 'voided' : priorFlowStatus,
       });
 
+      // Revert Original Transaction Status to 'posted' if it was 'waiting_refund' or 'refunded'
+      if ((original as any).status === 'waiting_refund' || (original as any).status === 'refunded') {
+        await (supabase.from('transactions').update as any)({ status: 'posted' }).eq('id', targetOriginalId);
+      }
+
       for (const line of originalLines) {
         if (!line?.id) continue;
         await (supabase.from('transaction_lines').update as any)({ metadata: updatedMeta }).eq('id', line.id);
@@ -688,13 +713,17 @@ export async function restoreTransaction(id: string): Promise<boolean> {
       occurred_at,
       note,
       tag,
+      shop_id,
+      shops ( name ),
       transaction_lines (
         amount,
         original_amount,
         cashback_share_percent,
         cashback_share_fixed,
         metadata,
-        person_id
+        person_id,
+        type,
+        accounts ( name )
       )
     `
     )
@@ -720,11 +749,20 @@ export async function restoreTransaction(id: string): Promise<boolean> {
 
   for (const line of lines) {
     if (!line?.person_id) continue;
-    const payload = buildSheetPayload(existing as any, line);
+    let shopName = (existing as any).shops?.name ?? null;
+    if (!shopName) {
+      const creditLine = lines.find(l => l.type === 'credit');
+      if (creditLine?.accounts?.name) {
+        shopName = creditLine.accounts.name;
+      }
+    }
+    const payload = buildSheetPayload({ ...existing as any, shop_name: shopName }, line);
     if (!payload) continue;
-    void syncTransactionToSheet(line.person_id, payload, 'create').catch(err => {
+    try {
+      await syncTransactionToSheet(line.person_id, payload, 'create');
+    } catch (err) {
       console.error('Sheet Sync Error (Restore):', err);
-    });
+    }
   }
 
   return true;
@@ -741,13 +779,17 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       occurred_at,
       note,
       tag,
+      shop_id,
+      shops ( name ),
       transaction_lines (
         amount,
         original_amount,
         cashback_share_percent,
         cashback_share_fixed,
         metadata,
-        person_id
+        person_id,
+        type,
+        accounts ( name )
       )
     `
     )
@@ -807,22 +849,37 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
 
   for (const line of existingLines) {
     if (!line.person_id) continue;
-    const payload = buildSheetPayload(existingData as any, line);
+    let shopName = (existingData as any).shops?.name ?? null;
+    if (!shopName) {
+      const creditLine = existingLines.find(l => l.type === 'credit');
+      if (creditLine?.accounts?.name) {
+        shopName = creditLine.accounts.name;
+      }
+    }
+    const payload = buildSheetPayload({ ...existingData as any, shop_name: shopName }, line);
     if (!payload) continue;
-    void syncTransactionToSheet(line.person_id, payload, 'delete').catch(err => {
+    try {
+      await syncTransactionToSheet(line.person_id, payload, 'delete');
+    } catch (err) {
       console.error('Sheet Sync Error (Update/Delete):', err);
-    });
+    }
   }
 
   if (input.type === 'repayment') {
     await syncRepaymentTransaction(supabase, id, input, linesWithId, shopInfo);
   } else {
+    let shopName = shopInfo?.name ?? null;
+    if (!shopName && input.source_account_id) {
+      const { data: acc } = await supabase.from('accounts').select('name').eq('id', input.source_account_id).single();
+      if (acc) shopName = (acc as any).name;
+    }
+
     const syncBase = {
       id,
       occurred_at: input.occurred_at,
       note: input.note,
       tag,
-      shop_name: shopInfo?.name ?? null,
+      shop_name: shopName,
     };
 
     for (const line of linesWithId) {
@@ -832,9 +889,11 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       const payload = buildSheetPayload(syncBase, line);
       if (!payload) continue;
 
-      void syncTransactionToSheet(personId, payload, 'create').catch(err => {
+      try {
+        await syncTransactionToSheet(personId, payload, 'create');
+      } catch (err) {
         console.error('Sheet Sync Error (Update/Create):', err);
-      });
+      }
     }
   }
 
@@ -850,6 +909,9 @@ type RefundTransactionLine = {
   original_amount?: number | null
   metadata?: Json | null
   categories?: {
+    name?: string | null
+  } | null
+  accounts?: {
     name?: string | null
   } | null
   person_id?: string | null
@@ -1001,7 +1063,7 @@ export async function requestRefund(
     .insert as any)({
       occurred_at: new Date().toISOString(),
       note: requestNote,
-      status: 'posted',
+      status: 'pending',
       tag: (existing as any).tag,
       created_by: userId,
       shop_id: options?.shop_id ?? (existing as any).shop_id ?? null,
@@ -1097,6 +1159,7 @@ export async function requestRefund(
       refunded_amount: newRefundedTotal,
       refund_status: newRefundStatus,
       refund_flow_status: 'requested',
+      status: newRefundStatus === 'full' ? 'waiting_refund' : (existing as any).status,
     })
 
     for (const line of originalLines) {
@@ -1215,6 +1278,16 @@ export async function confirmRefund(
     return { success: false, error: 'Không thể ghi sổ dòng hoàn tiền.' }
   }
 
+  // Update Pending Transaction Status to 'completed'
+  const { error: updatePendingStatusError } = await (supabase
+    .from('transactions')
+    .update as any)({ status: 'completed' })
+    .eq('id', pendingTransactionId)
+
+  if (updatePendingStatusError) {
+    console.error('Failed to update pending transaction status:', updatePendingStatusError)
+  }
+
   try {
     const updatedPendingMeta = mergeMetadata(pendingMetadata, {
       refund_status: 'confirmed',
@@ -1256,6 +1329,11 @@ export async function confirmRefund(
         refund_confirmed_transaction_id: confirmTxn.id,
         refund_confirmed_at: new Date().toISOString(),
       })
+
+      // Update Original Transaction Status to 'refunded' if full refund
+      if (updatedStatus === 'full') {
+        await (supabase.from('transactions').update as any)({ status: 'refunded' }).eq('id', originalTransactionId)
+      }
 
       for (const line of originalLinesTyped as Array<{ id?: string }>) {
         if (!line?.id) continue

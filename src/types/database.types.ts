@@ -61,7 +61,7 @@ export interface Database {
           id: string
           occurred_at: string
           note: string | null
-          status: 'posted' | 'pending' | 'void'
+          status: 'posted' | 'pending' | 'void' | 'waiting_refund' | 'refunded' | 'completed'
           tag: string | null
           created_at: string
           shop_id: string | null
@@ -70,7 +70,7 @@ export interface Database {
           id?: string
           occurred_at: string
           note?: string | null
-          status?: 'posted' | 'pending' | 'void'
+          status?: 'posted' | 'pending' | 'void' | 'waiting_refund' | 'refunded' | 'completed'
           tag?: string | null
           created_at?: string
           shop_id?: string | null
@@ -79,7 +79,7 @@ export interface Database {
           id?: string
           occurred_at?: string
           note?: string | null
-          status?: 'posted' | 'pending' | 'void'
+          status?: 'posted' | 'pending' | 'void' | 'waiting_refund' | 'refunded' | 'completed'
           tag?: string | null
           created_at?: string
           shop_id?: string | null

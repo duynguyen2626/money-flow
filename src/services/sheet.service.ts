@@ -183,7 +183,7 @@ export async function syncAllTransactions(personId: string) {
   try {
     const sheetLink = await getProfileSheetLink(personId)
     if (!sheetLink) {
-    return { success: false, message: 'No valid sheet link configured' }
+      return { success: false, message: 'No valid sheet link configured' }
     }
 
     const supabase = createClient()
@@ -204,7 +204,13 @@ export async function syncAllTransactions(personId: string) {
           note,
           tag,
           shop_id,
-          shops ( name )
+          shops ( name ),
+          transaction_lines (
+            id,
+            type,
+            account_id,
+            accounts ( name, type )
+          )
         )
       `)
       .eq('person_id', personId)
@@ -223,13 +229,19 @@ export async function syncAllTransactions(personId: string) {
       cashback_share_percent?: number | null
       cashback_share_fixed?: number | null
       metadata?: unknown
-      transactions: { 
-        id: string; 
-        occurred_at: string; 
-        note: string | null; 
+      transactions: {
+        id: string;
+        occurred_at: string;
+        note: string | null;
         tag: string | null;
         shop_id: string | null;
         shops: { name: string | null } | null;
+        transaction_lines: Array<{
+          id: string
+          type: 'debit' | 'credit'
+          account_id: string | null
+          accounts: { name: string; type: string } | null
+        }> | null
       } | null
     }[]
 
@@ -243,12 +255,31 @@ export async function syncAllTransactions(personId: string) {
           ? meta.cashback_share_amount
           : undefined
 
+      const shopData = row.transactions.shops as any
+      let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
+
+      if (!shopName) {
+        // Fallback to Credit Account Name (Source) if available
+        const lines = row.transactions.transaction_lines ?? []
+        // Find a credit line that is NOT the debt account (if possible to distinguish)
+        // Usually the debt account is the one in 'row.account_id' if this was a direct debt line query?
+        // But 'row' is from 'transaction_lines' table.
+        // We want the OTHER account.
+        // Typically Payer = Credit, Debt = Debit (Asset).
+        // Wait, if I lend money: Credit Bank, Debit DebtAccount.
+        // So Source is Credit.
+        const creditLine = lines.find(l => l.type === 'credit')
+        if (creditLine?.accounts?.name) {
+          shopName = creditLine.accounts.name
+        }
+      }
+
       const payload = buildPayload(
         {
           id: row.transactions.id,
           occurred_at: row.transactions.occurred_at,
           note: row.transactions.note,
-          shop_name: row.transactions.shops?.name ?? undefined,
+          shop_name: shopName,
           tag: row.transactions.tag ?? undefined,
           amount: row.amount,
           original_amount: row.original_amount ?? Math.abs(row.amount),

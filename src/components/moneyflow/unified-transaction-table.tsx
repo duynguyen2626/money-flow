@@ -394,35 +394,54 @@ export function UnifiedTransactionTable({
       .finally(() => setIsVoiding(false))
   }
 
-  const handleCancelOrderConfirm = () => {
+  const handleCancelOrderConfirm = (moneyReceived: boolean) => {
     if (!confirmCancelTarget) return
     setVoidError(null)
     setIsVoiding(true)
 
-    import("@/services/transaction.service").then(({ requestRefund }) => {
+    import("@/services/transaction.service").then(async ({ requestRefund, confirmRefund }) => {
       const originalAmount = typeof confirmCancelTarget.original_amount === "number"
         ? confirmCancelTarget.original_amount
         : confirmCancelTarget.amount
       const amountToRefund = Math.abs(originalAmount ?? 0)
 
-      requestRefund(
-        confirmCancelTarget.id,
-        amountToRefund,
-        false, // isPending = false means it goes to Pending account
-        { note: "Cancel Order (Full Refund)" }
-      ).then(res => {
-        if (res.success) {
-          router.refresh()
-          setConfirmCancelTarget(null)
-        } else {
-          setVoidError(res.error || 'Failed to cancel order')
+      try {
+        // 1. Request Refund (Always needed to set up metadata and pending txn)
+        const reqRes = await requestRefund(
+          confirmCancelTarget.id,
+          amountToRefund,
+          false, // isPending = false means it goes to Pending account? No, partial=false means full refund.
+          { note: "Cancel Order (Full Refund)" }
+        )
+
+        if (!reqRes.success || !reqRes.refundTransactionId) {
+          throw new Error(reqRes.error || 'Failed to request refund')
         }
-      }).catch(err => {
+
+        // 2. If Money Received, Confirm it immediately
+        if (moneyReceived) {
+          // Determine target account (default to source account of original txn)
+          const sourceAccountLine = confirmCancelTarget.transaction_lines?.find(l => l.type === 'credit' && l.account_id)
+          const targetAccountId = sourceAccountLine?.account_id
+
+          if (!targetAccountId) {
+            throw new Error('Cannot determine target account for immediate refund. Please use manual refund.')
+          }
+
+          const confRes = await confirmRefund(reqRes.refundTransactionId, targetAccountId)
+          if (!confRes.success) {
+            throw new Error(confRes.error || 'Failed to confirm refund')
+          }
+        }
+
+        router.refresh()
+        setConfirmCancelTarget(null)
+      } catch (err: any) {
         console.error(err)
-        setVoidError('Failed to cancel order')
-      }).finally(() => {
+        setVoidError(err.message || 'Failed to cancel order')
+      } finally {
         setIsVoiding(false)
-      })
+      }
     })
   }
 
@@ -840,7 +859,7 @@ export function UnifiedTransactionTable({
                         {typeBadge}
                         {(refundStatus === 'partial' || isPartialRefund) && (
                           <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-[10px] font-medium text-yellow-800">
-                            Partial Refund
+                            Partial
                           </span>
                         )}
                         {(refundStatus === 'full' || isFullyRefunded) && (
@@ -1047,8 +1066,13 @@ export function UnifiedTransactionTable({
                     return <span className={cn("font-bold", amountClass)}>{numberFormatter.format(finalPrice)}</span>
                   case "status":
                     if (isVoided) return <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">Void</span>
+                    if (effectiveStatus === 'waiting_refund') return <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Waiting Refund</span>
+                    if (effectiveStatus === 'refunded') return <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
+                    if (effectiveStatus === 'pending') return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Pending</span>
+                    if (effectiveStatus === 'completed') return <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">Completed</span>
+
                     if (refundStatus === 'full' || isFullyRefunded) return <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
-                    if (refundStatus === 'partial' || isPartialRefund) return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Partial Refund</span>
+                    if (refundStatus === 'partial' || isPartialRefund) return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Partial</span>
                     return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Active</span>
                   case "id":
                     return (
@@ -1289,11 +1313,18 @@ export function UnifiedTransactionTable({
                 Cancel
               </button>
               <button
-                className="flex-1 rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
-                onClick={handleCancelOrderConfirm}
+                className="flex-1 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:opacity-50"
+                onClick={() => handleCancelOrderConfirm(false)}
                 disabled={isVoiding}
               >
-                {isVoiding ? 'Processing...' : 'Confirm Cancel'}
+                {isVoiding ? 'Processing...' : 'Chưa về (Request)'}
+              </button>
+              <button
+                className="flex-1 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                onClick={() => handleCancelOrderConfirm(true)}
+                disabled={isVoiding}
+              >
+                {isVoiding ? 'Processing...' : 'Đã về (Refund Now)'}
               </button>
             </div>
           </div>
