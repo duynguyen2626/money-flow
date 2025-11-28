@@ -1,0 +1,200 @@
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/server'
+import { Database } from '@/types/database.types'
+
+type BankMapping = Database['public']['Tables']['bank_mappings']['Row']
+type BankMappingInsert = Database['public']['Tables']['bank_mappings']['Insert']
+type BankMappingUpdate = Database['public']['Tables']['bank_mappings']['Update']
+
+/**
+ * Get all bank mappings
+ */
+export async function getBankMappings(): Promise<BankMapping[]> {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+        .from('bank_mappings')
+        .select('*')
+        .order('bank_name')
+
+    if (error) throw error
+    return data || []
+}
+
+/**
+ * Get bank mapping by code
+ */
+export async function getBankByCode(code: string): Promise<BankMapping | null> {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+        .from('bank_mappings')
+        .select('*')
+        .eq('bank_code', code)
+        .single()
+
+    if (error) {
+        if (error.code === 'PGRST116') return null // Not found
+        throw error
+    }
+    return data
+}
+
+/**
+ * Create a new bank mapping
+ */
+export async function createBankMapping(mapping: BankMappingInsert): Promise<BankMapping> {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+        .from('bank_mappings')
+        .insert(mapping as any)
+        .select()
+        .single()
+
+    if (error) throw error
+    return data
+}
+
+/**
+ * Update a bank mapping
+ */
+export async function updateBankMapping(
+    id: string,
+    mapping: BankMappingUpdate
+): Promise<BankMapping> {
+    const supabase: any = await createClient()
+    const updateData: BankMappingUpdate = {
+        ...mapping,
+        updated_at: new Date().toISOString()
+    }
+    const { data, error } = await supabase
+        .from('bank_mappings')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single()
+
+    if (error) throw error
+    return data
+}
+
+/**
+ * Delete a bank mapping
+ */
+export async function deleteBankMapping(id: string): Promise<void> {
+    const supabase = await createClient()
+    const { error } = await supabase
+        .from('bank_mappings')
+        .delete()
+        .eq('id', id)
+
+    if (error) throw error
+}
+
+/**
+ * Delete multiple bank mappings
+ */
+export async function deleteBankMappings(ids: string[]): Promise<void> {
+    const supabase = await createClient()
+    const { error } = await supabase
+        .from('bank_mappings')
+        .delete()
+        .in('id', ids)
+
+    if (error) throw error
+}
+
+/**
+ * Search bank by name or code
+ */
+export async function searchBanks(query: string): Promise<BankMapping[]> {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+        .from('bank_mappings')
+        .select('*')
+        .or(`bank_code.ilike.%${query}%,bank_name.ilike.%${query}%,short_name.ilike.%${query}%`)
+        .order('bank_name')
+
+    if (error) throw error
+    return data || []
+}
+
+
+/**
+ * Import bank mappings from Excel/Text data
+ * Format: STT | Bank Code - Name | Full Bank Name
+ */
+export async function importBankMappingsFromExcel(excelData: string) {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    console.log('Service Role Key available:', !!serviceRoleKey)
+    let supabase
+
+    if (serviceRoleKey) {
+        supabase = createSupabaseClient<Database>(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            serviceRoleKey,
+            {
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false
+                }
+            }
+        )
+    } else {
+        supabase = await createClient()
+    }
+    const lines = excelData.trim().split('\n')
+    const results = { success: 0, errors: [] as string[] }
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim()
+        if (!line) continue
+
+        try {
+            const columns = line.split('\t')
+            if (columns.length < 3) {
+                // Try to be lenient if STT is missing
+                if (columns.length < 2) {
+                    throw new Error('Invalid format: Expected at least Code-Name and Full Name')
+                }
+            }
+
+            // Parse Column 1 (or 0 if STT missing): "314 - NH Quốc tế VIB"
+            // If STT exists (numeric first col), then index 1. Else index 0?
+            // Let's assume strict format: STT | Code - Name | Full Name
+            // So index 1 is Code-Name.
+
+            const codeNamePart = columns[1].trim()
+            const separatorIndex = codeNamePart.indexOf(' - ')
+
+            let bankCode = ''
+            let shortName = ''
+
+            if (separatorIndex !== -1) {
+                bankCode = codeNamePart.substring(0, separatorIndex).trim()
+                shortName = codeNamePart.substring(separatorIndex + 3).trim()
+            } else {
+                bankCode = codeNamePart
+                shortName = codeNamePart
+            }
+
+            const fullName = columns[2].trim()
+
+            if (!bankCode) throw new Error('Missing bank code')
+
+            const { error } = await supabase
+                .from('bank_mappings')
+                .upsert({
+                    bank_code: bankCode,
+                    short_name: shortName,
+                    bank_name: fullName,
+                    updated_at: new Date().toISOString()
+                } as any, { onConflict: 'bank_code' })
+
+            if (error) throw error
+            results.success++
+        } catch (error: any) {
+            results.errors.push(`Line ${i + 1}: ${error.message}`)
+        }
+    }
+
+    return results
+}

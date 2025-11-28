@@ -13,6 +13,8 @@ import {
     cloneBatch,
     checkAndAutoCloneBatches,
     confirmBatchItem,
+    voidBatchItem,
+    importBatchItemsFromExcel,
     Batch,
     BatchItem
 } from '@/services/batch.service'
@@ -21,6 +23,12 @@ import { revalidatePath } from 'next/cache'
 export async function confirmBatchItemAction(itemId: string, batchId: string) {
     await confirmBatchItem(itemId)
     revalidatePath(`/batch/${batchId}`)
+}
+
+export async function voidBatchItemAction(itemId: string, batchId: string) {
+    await voidBatchItem(itemId)
+    revalidatePath(`/batch/${batchId}`)
+    revalidatePath('/accounts')
 }
 
 export async function checkAndAutoCloneBatchesAction() {
@@ -90,3 +98,14 @@ export async function updateBatchItemAction(id: string, data: any) {
     // We can accept batchId as a second argument for revalidation.
     return result
 }
+
+export async function importBatchItemsAction(
+    batchId: string,
+    excelData: string,
+    batchTag?: string
+) {
+    const result = await importBatchItemsFromExcel(batchId, excelData, batchTag)
+    revalidatePath(`/batch/${batchId}`)
+    return result
+}
+

@@ -14,6 +14,7 @@ import {
 import { Account, AccountCashbackSnapshot, Category, Person, Shop } from '@/types/moneyflow.types'
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { EditAccountDialog } from './edit-account-dialog'
+import { ConfirmMoneyReceived } from './confirm-money-received'
 
 type AccountCardProps = {
   account: Account
@@ -201,6 +202,9 @@ export function AccountCard({
 
       <div className="flex flex-col gap-3 p-4">
 
+        {/* Pending Batch Items - Confirm Money Received */}
+        <ConfirmMoneyReceived accountId={account.id} />
+
         <div className="flex flex-wrap items-center gap-2 text-xs">
           {isCreditCard && (
             <>
@@ -235,15 +239,15 @@ export function AccountCard({
         <div className="mt-2 flex flex-wrap items-center gap-2 pt-3">
           {isCreditCard ? (
             <div className="flex w-full flex-wrap items-center gap-2 justify-between">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <ActionButton label="Pay card">
                   <AddTransactionDialog
                     {...dialogBaseProps}
                     defaultType="transfer"
                     defaultDebtAccountId={account.id}
                     triggerContent={
-                      <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-600">
-                        <CreditCard className="h-4 w-4" />
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-600">
+                        <CreditCard className="h-3.5 w-3.5" />
                       </span>
                     }
                     onOpen={stopCardNavigation}
@@ -255,8 +259,8 @@ export function AccountCard({
                     defaultType="income"
                     defaultSourceAccountId={account.id}
                     triggerContent={
-                      <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600">
-                        <Plus className="h-4 w-4" />
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600">
+                        <Plus className="h-3.5 w-3.5" />
                       </span>
                     }
                     onOpen={stopCardNavigation}
@@ -268,8 +272,8 @@ export function AccountCard({
                     defaultType="expense"
                     defaultSourceAccountId={account.id}
                     triggerContent={
-                      <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600">
-                        <Minus className="h-4 w-4" />
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600">
+                        <Minus className="h-3.5 w-3.5" />
                       </span>
                     }
                     onOpen={stopCardNavigation}
@@ -284,28 +288,28 @@ export function AccountCard({
           ) : (
             <>
               {showTransfer ? (
-                  <ActionButton label="Transfer">
-                    <AddTransactionDialog
-                      {...dialogBaseProps}
-                      defaultType="transfer"
-                      defaultSourceAccountId={account.id}
+                <ActionButton label="Transfer">
+                  <AddTransactionDialog
+                    {...dialogBaseProps}
+                    defaultType="transfer"
+                    defaultSourceAccountId={account.id}
                     triggerContent={
-                      <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600">
-                        <ArrowLeftRight className="h-4 w-4" />
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600">
+                        <ArrowLeftRight className="h-3.5 w-3.5" />
                       </span>
                     }
                     onOpen={stopCardNavigation}
                   />
                 </ActionButton>
               ) : (
-                  <ActionButton label="Pay card">
-                    <AddTransactionDialog
-                      {...dialogBaseProps}
-                      defaultType="transfer"
-                      defaultDebtAccountId={account.id}
+                <ActionButton label="Pay card">
+                  <AddTransactionDialog
+                    {...dialogBaseProps}
+                    defaultType="transfer"
+                    defaultDebtAccountId={account.id}
                     triggerContent={
-                      <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-600">
-                        <CreditCard className="h-4 w-4" />
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-purple-200 hover:bg-purple-50 hover:text-purple-600">
+                        <CreditCard className="h-3.5 w-3.5" />
                       </span>
                     }
                     onOpen={stopCardNavigation}
@@ -318,8 +322,8 @@ export function AccountCard({
                   defaultType="income"
                   defaultSourceAccountId={account.id}
                   triggerContent={
-                    <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600">
-                      <Plus className="h-4 w-4" />
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-600">
+                      <Plus className="h-3.5 w-3.5" />
                     </span>
                   }
                   onOpen={stopCardNavigation}
@@ -331,8 +335,8 @@ export function AccountCard({
                   defaultType="expense"
                   defaultSourceAccountId={account.id}
                   triggerContent={
-                    <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600">
-                      <Minus className="h-4 w-4" />
+                    <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600">
+                      <Minus className="h-3.5 w-3.5" />
                     </span>
                   }
                   onOpen={stopCardNavigation}
@@ -346,8 +350,8 @@ export function AccountCard({
                     defaultPersonId={account.id}
                     defaultAmount={Math.abs(account.current_balance)}
                     triggerContent={
-                      <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-green-200 hover:bg-green-50 hover:text-green-600">
-                        <User className="h-4 w-4" />
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-green-200 hover:bg-green-50 hover:text-green-600">
+                        <User className="h-3.5 w-3.5" />
                       </span>
                     }
                     onOpen={stopCardNavigation}
@@ -360,8 +364,8 @@ export function AccountCard({
                     defaultType="debt"
                     defaultSourceAccountId={account.id}
                     triggerContent={
-                      <span className="flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600">
-                        <User className="h-4 w-4" />
+                      <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 transition-colors hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600">
+                        <User className="h-3.5 w-3.5" />
                       </span>
                     }
                     onOpen={stopCardNavigation}
