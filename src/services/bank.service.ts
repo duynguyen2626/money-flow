@@ -10,7 +10,24 @@ type BankMappingUpdate = Database['public']['Tables']['bank_mappings']['Update']
  * Get all bank mappings
  */
 export async function getBankMappings(): Promise<BankMapping[]> {
-    const supabase = await createClient()
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    let supabase
+
+    if (serviceRoleKey) {
+        supabase = createSupabaseClient<Database>(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            serviceRoleKey,
+            {
+                auth: {
+                    autoRefreshToken: false,
+                    persistSession: false
+                }
+            }
+        )
+    } else {
+        supabase = await createClient()
+    }
+
     const { data, error } = await supabase
         .from('bank_mappings')
         .select('*')

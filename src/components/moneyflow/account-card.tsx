@@ -140,7 +140,7 @@ export function AccountCard({
 
   return (
     <article
-      className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+      className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md h-full"
       role="button"
       tabIndex={0}
     >
@@ -158,7 +158,7 @@ export function AccountCard({
 
       {/* Content Overlay - Full Height */}
       <div
-        className="relative z-10 flex flex-col h-full cursor-pointer"
+        className="relative z-10 flex flex-col h-full cursor-pointer min-h-[180px]"
         onClick={openDetails}
         onKeyDown={event => {
           if (event.key === 'Enter' || event.key === ' ') {
@@ -167,25 +167,27 @@ export function AccountCard({
           }
         }}
       >
-        {/* Top Section: Status, Limit, Actions, Name, Balance */}
-        <div className="flex-1 flex flex-col justify-between p-4">
-          {/* Top Row: Status Badge (Left) & Limit & Actions (Right) */}
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-2">
-              <div className="inline-flex items-center gap-2 rounded-full bg-white/50 px-3 py-1 text-[11px] font-bold backdrop-blur-md border border-white/30 shadow-md">
-                <span className="text-white">{statusLabel}</span>
-                <span className="text-white/80">•</span>
-                <span className="text-white">{getAccountTypeLabel(account.type)}</span>
-              </div>
-              {typeof account.credit_limit === 'number' && account.credit_limit > 0 && (
-                <div className="flex items-center gap-1 rounded-full bg-blue-600 px-3 py-1 text-white text-[11px] font-bold shadow-md whitespace-nowrap">
-                  <TrendingUp className="h-3 w-3" />
-                  <span>{new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(account.credit_limit)}</span>
-                </div>
-              )}
+        {/* Top Section: Name/Status (Left) & Actions (Right) */}
+        <div className="flex items-start justify-between p-4">
+          {/* Left: Name & Subtitle */}
+          <div className="flex flex-col gap-0.5 rounded-xl bg-white/90 px-3 py-2 shadow-lg backdrop-blur-md max-w-[70%]">
+            <Link href={`/accounts/${account.id}`} className="block">
+              <span className="text-lg font-bold text-slate-900 leading-tight truncate block">
+                {account.name}
+              </span>
+            </Link>
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-slate-600 truncate">
+              <span className={account.is_active ? "text-emerald-700" : "text-slate-500"}>
+                {statusLabel}
+              </span>
+              <span>•</span>
+              <span>{getAccountTypeLabel(account.type)}</span>
             </div>
+          </div>
 
-            <div className="flex items-center gap-2">
+          {/* Right: Actions & Limit */}
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-1">
               <button
                 type="button"
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/50 text-white backdrop-blur-md transition hover:bg-white/70 border border-white/30 shadow-md"
@@ -205,57 +207,62 @@ export function AccountCard({
                 onOpen={stopCardNavigation}
               />
             </div>
+            {typeof account.credit_limit === 'number' && account.credit_limit > 0 && (
+              <div className="flex items-center gap-1 rounded-full bg-black/40 px-2 py-0.5 text-white text-[10px] font-bold shadow-sm backdrop-blur-sm border border-white/10">
+                <TrendingUp className="h-3 w-3" />
+                <span>{new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(account.credit_limit)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Spacer */}
+        <div className="flex-1" />
+
+        {/* Bottom Section: Cashback (Left) & Balances (Right) */}
+        <div className="flex items-end justify-between p-4 gap-2">
+          {/* Left: Cashback (Yellow) */}
+          <div className="flex flex-col gap-2">
+            {isCreditCard && (
+              <div className="flex items-center gap-1 rounded-lg bg-amber-400 px-2.5 py-1.5 text-slate-900 text-xs font-bold shadow-md">
+                <PiggyBank className="h-3.5 w-3.5" />
+                <span>{cashbackLabel}</span>
+              </div>
+            )}
           </div>
 
-          {/* Bottom Section: Name and Balance */}
-          <div className="space-y-2">
-            <div className="flex items-start justify-between gap-2">
-              <Link
-                href={`/accounts/${account.id}`}
-                className="inline-block"
-              >
-                <div className="inline-flex items-center px-3 py-1 rounded-lg bg-black/40 backdrop-blur-sm border border-white/20 shadow-lg">
-                  <span
-                    className="text-xl font-black text-white"
-                    style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}
-                  >
-                    {account.name}
-                  </span>
-                </div>
-              </Link>
-            </div>
-
-            {/* Second Line: Cashback - Available */}
-            <div className="flex items-center justify-between gap-2">
-              {isCreditCard && (
-                <div className="flex items-center gap-1 rounded-md bg-cyan-600 px-2 py-1 text-white text-xs font-bold shadow-md">
-                  <PiggyBank className="h-3 w-3" />
-                  <span>{cashbackLabel}</span>
-                </div>
-              )}
-
-              <div className="text-right flex-1">
-                {isCreditCard ? (
-                  <div className="flex flex-col items-end gap-1">
-                    {creditLimit > 0 && (
-                      <div className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 shadow-lg">
-                        <CreditCard className="h-4 w-4 text-white" />
-                        <p className="text-xl font-bold leading-tight tracking-tight text-white whitespace-nowrap">
-                          {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(availableBalance)}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="inline-flex items-center gap-2 rounded-lg bg-white/90 px-3 py-1.5 shadow-md">
-                    <Wallet className="h-5 w-5 text-slate-700" />
-                    <p className="text-2xl font-bold leading-tight tracking-tight whitespace-nowrap text-slate-900">
-                      {balanceDisplay}
-                    </p>
+          {/* Right: Balances */}
+          <div className="flex flex-col items-end gap-2">
+            {isCreditCard ? (
+              <>
+                {/* Debt (Small) */}
+                {debtAmount > 0 && (
+                  <div className="inline-flex items-center gap-1.5 rounded-lg bg-rose-100 px-2 py-1 shadow-sm border border-rose-200">
+                    <Wallet className="h-3 w-3 text-rose-600" />
+                    <span className="text-xs font-bold text-rose-700">
+                      {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(debtAmount)}
+                    </span>
                   </div>
                 )}
+                {/* Available (Large) */}
+                {creditLimit > 0 && (
+                  <div className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 shadow-lg">
+                    <CreditCard className="h-5 w-5 text-white" />
+                    <span className="text-2xl font-black text-white tracking-tight">
+                      {new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(availableBalance)}
+                    </span>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* Normal Account Balance */
+              <div className="inline-flex items-center gap-2 rounded-xl bg-white/90 px-4 py-2 shadow-lg backdrop-blur-md">
+                <Wallet className="h-5 w-5 text-slate-700" />
+                <span className="text-2xl font-black text-slate-900 tracking-tight">
+                  {balanceDisplay}
+                </span>
               </div>
-            </div>
+            )}
           </div>
         </div>
 
