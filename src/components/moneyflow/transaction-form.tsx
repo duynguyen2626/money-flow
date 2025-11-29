@@ -15,7 +15,8 @@ import { Combobox } from '@/components/ui/combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateTag } from '@/lib/tag'
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
-import { Lock } from 'lucide-react'
+import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
 
 const formSchema = z.object({
   occurred_at: z.date(),
@@ -30,6 +31,7 @@ const formSchema = z.object({
   cashback_share_percent: z.coerce.number().min(0).optional(),
   cashback_share_fixed: z.coerce.number().min(0).optional(),
   shop_id: z.string().optional(),
+  is_voluntary: z.boolean().optional(),
 }).refine(data => {
   if ((data.type === 'expense' || data.type === 'income') && !data.category_id) {
     return false
@@ -236,6 +238,7 @@ export function TransactionForm({
       shop_id: undefined,
       cashback_share_percent: undefined,
       cashback_share_fixed: undefined,
+      is_voluntary: false,
     }),
     [defaultDebtAccountId, defaultSourceAccountId, defaultTag, defaultType, isRefundMode, refundCategoryId]
   )
@@ -410,6 +413,7 @@ export function TransactionForm({
       cashback_share_fixed: sanitizedFixed > 0 ? sanitizedFixed : undefined,
       note: values.note ?? '',
       destination_account_id: values.type === 'income' ? values.source_account_id : undefined,
+      is_voluntary: values.is_voluntary,
     }
 
     const result = transactionId
@@ -903,11 +907,13 @@ export function TransactionForm({
         )
       )
       : null
+  const isVoluntary = useWatch({ control, name: 'is_voluntary' })
+
   const showCashbackInputs =
-    transactionType !== 'income' &&
-    selectedAccount?.type === 'credit_card' &&
-    amountValue > 0 &&
-    transactionType !== 'transfer'
+    (transactionType !== 'income' &&
+      transactionType !== 'transfer' &&
+      transactionType !== 'repayment' &&
+      ((selectedAccount?.type === 'credit_card' && amountValue > 0) || isVoluntary))
 
   useEffect(() => {
     if (amountValue <= 0) {
@@ -961,8 +967,9 @@ export function TransactionForm({
   }, [defaultType, form, isEditMode, isRefundMode]);
 
   useEffect(() => {
-    if (!isRefundMode) return
-    form.setValue('type', 'income')
+    if (isRefundMode) {
+      form.setValue('type', 'income')
+    }
   }, [form, isRefundMode])
 
   useEffect(() => {
@@ -1000,12 +1007,27 @@ export function TransactionForm({
         name="type"
         render={({ field }) => (
           <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
-            <TabsList className="grid w-full grid-cols-5 gap-1">
-              <TabsTrigger value="expense">Expense</TabsTrigger>
-              <TabsTrigger value="income">Income</TabsTrigger>
-              <TabsTrigger value="transfer">Transfer</TabsTrigger>
-              <TabsTrigger value="debt">Lending</TabsTrigger>
-              <TabsTrigger value="repayment">Repay</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-5 gap-1 p-1 bg-slate-100 rounded-lg">
+              <TabsTrigger value="expense" className="data-[state=active]:bg-rose-100 data-[state=active]:text-rose-700 flex items-center justify-center gap-1 text-xs">
+                <ArrowUpRight className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Expense</span>
+              </TabsTrigger>
+              <TabsTrigger value="income" className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 flex items-center justify-center gap-1 text-xs">
+                <ArrowDownLeft className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Income</span>
+              </TabsTrigger>
+              <TabsTrigger value="transfer" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 flex items-center justify-center gap-1 text-xs">
+                <ArrowRightLeft className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Transfer</span>
+              </TabsTrigger>
+              <TabsTrigger value="debt" className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-700 flex items-center justify-center gap-1 text-xs">
+                <Wallet className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Lending</span>
+              </TabsTrigger>
+              <TabsTrigger value="repayment" className="data-[state=active]:bg-lime-100 data-[state=active]:text-lime-700 flex items-center justify-center gap-1 text-xs">
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Repay</span>
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         )}
@@ -1057,7 +1079,8 @@ export function TransactionForm({
         transactionType === 'income' ||
         isRefundMode) ? (
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">
+        <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+          <Tag className="h-4 w-4 text-slate-500" />
           Category {transactionType === 'transfer' ? '(Optional)' : ''}
         </label>
         <Controller
@@ -1094,7 +1117,10 @@ export function TransactionForm({
       transactionType === 'repayment' ||
       (isEditMode && transactionType !== 'income' && transactionType !== 'transfer') ? (
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Shop</label>
+        <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+          <Store className="h-4 w-4 text-slate-500" />
+          Shop
+        </label>
         <Controller
           control={control}
           name="shop_id"
@@ -1209,7 +1235,10 @@ export function TransactionForm({
 
   const DateInput = (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-gray-700">Date</label>
+      <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+        <Calendar className="h-4 w-4 text-slate-500" />
+        Date
+      </label>
       <Controller
         control={control}
         name="occurred_at"
@@ -1322,16 +1351,19 @@ export function TransactionForm({
   const SourceAccountInput = (
     <div className="space-y-3">
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">
-          {isRefundMode
-            ? refundStatus === 'pending'
-              ? 'Holding Account'
-              : 'Receiving Account'
-            : transactionType === 'income' || transactionType === 'repayment'
-              ? 'To Account'
-              : transactionType === 'transfer'
-                ? 'Source of Funds'
-                : 'From Account'}
+        <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+          <Wallet className="h-4 w-4 text-slate-500" />
+          <span>
+            {isRefundMode
+              ? refundStatus === 'pending'
+                ? 'Holding Account'
+                : 'Receiving Account'
+              : transactionType === 'income' || transactionType === 'repayment'
+                ? 'To Account'
+                : transactionType === 'transfer'
+                  ? 'Source of Funds'
+                  : 'From Account'}
+          </span>
         </label>
         <Controller
           control={control}
@@ -1358,7 +1390,10 @@ export function TransactionForm({
   const AmountInput = (
     <div className="space-y-3">
       <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Amount</label>
+        <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+          <DollarSign className="h-4 w-4 text-slate-500" />
+          Amount
+        </label>
         <div className="relative">
           <Controller
             control={control}
@@ -1414,7 +1449,10 @@ export function TransactionForm({
 
   const NoteInput = (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-gray-700">Note</label>
+      <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+        <FileText className="h-4 w-4 text-slate-500" />
+        Note
+      </label>
       <textarea
         {...register('note')}
         placeholder="Add a note..."
@@ -1454,14 +1492,10 @@ export function TransactionForm({
           {rateLimitPercent !== null && (
             <p className="text-xs text-slate-500">
               Up to {Math.min(50, rateLimitPercent).toFixed(2)}%
-            </p>
-          )}
-          {rateLimitPercent !== null && percentEntry > rateLimitPercent && (
-            <p className="text-xs text-amber-600">
+              ```
               Max {Math.min(50, rateLimitPercent).toFixed(2)}% according to card policy
             </p>
           )}
-
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Fixed Back</label>
@@ -1539,6 +1573,29 @@ export function TransactionForm({
     </div>
   ) : null;
 
+  const VoluntaryCashbackInput = transactionType === 'debt' ? (
+    <div className="flex items-center justify-between rounded-lg border border-slate-200 p-4 bg-slate-50">
+      <div className="space-y-0.5">
+        <label htmlFor="is_voluntary" className="text-sm font-medium text-slate-900">
+          Voluntary Cashback
+        </label>
+        <p className="text-xs text-slate-500">
+          Enable to track cashback without creating a debt record.
+        </p>
+      </div>
+      <Controller
+        control={control}
+        name="is_voluntary"
+        render={({ field }) => (
+          <Switch
+            checked={field.value ?? false}
+            onCheckedChange={field.onChange}
+          />
+        )}
+      />
+    </div>
+  ) : null;
+
   const submitLabel = isSubmitting
     ? 'Saving...'
     : isRefundMode
@@ -1550,40 +1607,32 @@ export function TransactionForm({
         : 'Add Transaction'
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      {transactionType !== 'transfer' && (
-        <>
-          {RefundStatusInput}
-          {TypeInput}
-          {CategoryInput}
-          {ShopInput}
-          {PersonInput}
-          {DateInput}
-          {TagInput}
-          {SourceAccountInput}
-          {AmountInput}
-          {CashbackInputs}
-          {NoteInput}
-        </>
-      )}
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      {/* Refund Status (Full Width) */}
+      {RefundStatusInput}
 
-      {transactionType === 'transfer' && (
-        <>
-          {TypeInput}
-          {CategoryInput}
-          {SourceAccountInput}
-          {DestinationAccountInput}
-          {AmountInput}
-          {DateInput}
-          {NoteInput}
-        </>
-      )}
+      {/* Type Selection (Full Width) */}
+      {TypeInput}
+
+      <div className="space-y-4">
+        {/* Core Fields */}
+        {PersonInput}
+        {CategoryInput}
+        {DateInput}
+        {SourceAccountInput}
+        {transactionType === 'transfer' && DestinationAccountInput}
+        {AmountInput}
+        {VoluntaryCashbackInput}
+        {CashbackInputs}
+        {ShopInput}
+
+        {/* Additional Fields */}
+        {TagInput}
+        {NoteInput}
+      </div>
 
       {status && (
-        <p
-          className={`text-sm ${status.type === 'success' ? 'text-green-600' : 'text-red-600'
-            }`}
-        >
+        <p className={`text-sm ${status.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
           {status.text}
         </p>
       )}
@@ -1591,7 +1640,7 @@ export function TransactionForm({
       <button
         type="submit"
         disabled={isSubmitting}
-        className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
+        className="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
       >
         {submitLabel}
       </button>

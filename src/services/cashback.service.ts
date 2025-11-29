@@ -4,6 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import {
   parseCashbackConfig,
   getCashbackCycleRange,
+  ParsedCashbackConfig,
+  CashbackTier,
 } from '@/lib/cashback'
 import {
   CashbackCard,
@@ -29,6 +31,17 @@ type TransactionLineRow = {
     id: string
     occurred_at: string
     note: string | null
+    shops: {
+      name: string
+      logo_url: string | null
+    } | null
+  } | null
+  // For tiered cashback - we need to know the category
+  category_id?: string | null
+  categories?: {
+    name: string
+    icon: string | null
+    image_url: string | null
   } | null
 }
 
@@ -51,7 +64,7 @@ async function fetchAccountLines(
 ): Promise<TransactionLineRow[]> {
   const { data, error } = await supabase
     .from('transaction_lines')
-    .select('amount, metadata, transactions!inner(id, occurred_at, note)')
+    .select('amount, metadata, category_id, categories(name, icon, image_url), transactions!inner(id, occurred_at, note, shops(name, logo_url))')
     .eq('account_id', accountId)
     .eq('type', 'credit')
     .gte('transactions.occurred_at', rangeStart.toISOString())
@@ -65,22 +78,73 @@ async function fetchAccountLines(
   return (data ?? []) as TransactionLineRow[]
 }
 
+/**
+ * Calculate cashback for a transaction line with tiered support
+ * @param line - Transaction line with category info
+ * @param config - Cashback configuration
+ * @param totalSpendInCycle - Total spend in the cycle (for tier determination)
+ * @returns CashbackTransaction with profit tracking
+ */
 function toTransaction(
   line: TransactionLineRow,
-  rate: number
+  config: ParsedCashbackConfig,
+  totalSpendInCycle: number
 ): CashbackTransaction | null {
   if (typeof line.amount !== 'number' || !line.transactions) {
     return null
   }
 
   const amount = Math.abs(line.amount)
+  let earnedRate = config.rate // Default rate
+
+  // Tiered cashback logic
+  if (config.hasTiers && config.tiers && config.tiers.length > 0) {
+    // Find the applicable tier based on total spend
+    const applicableTier = config.tiers
+      .filter(tier => totalSpendInCycle >= tier.minSpend)
+      .sort((a, b) => b.minSpend - a.minSpend)[0] // Get highest tier that qualifies
+
+    if (applicableTier) {
+      // Check if transaction has a category that matches tier categories
+      const categoryName = line.categories?.name?.toLowerCase() ?? ''
+
+      // Map category names to config keys (e.g., "Insurance" -> "insurance")
+      let categoryKey: string | null = null
+      for (const key of Object.keys(applicableTier.categories)) {
+        if (categoryName.includes(key.toLowerCase())) {
+          categoryKey = key
+          break
+        }
+      }
+
+      if (categoryKey && applicableTier.categories[categoryKey]) {
+        const categoryConfig = applicableTier.categories[categoryKey]
+        earnedRate = categoryConfig.rate
+        // Note: category-specific maxAmount can be handled if needed
+      } else if (applicableTier.defaultRate !== undefined) {
+        earnedRate = applicableTier.defaultRate
+      }
+    }
+  }
+
+  const bankBack = amount * earnedRate
+  const peopleBack = extractSharedAmount(line.metadata)
+  const profit = bankBack - peopleBack
 
   return {
     id: line.transactions.id,
     occurred_at: line.transactions.occurred_at,
     note: line.transactions.note,
     amount,
-    earned: amount * rate,
+    earned: bankBack, // Keep for backward compatibility
+    bankBack,
+    peopleBack,
+    profit,
+    shopName: line.transactions.shops?.name,
+    shopLogoUrl: line.transactions.shops?.logo_url,
+    categoryName: line.categories?.name,
+    categoryIcon: line.categories?.icon,
+    categoryImageUrl: line.categories?.image_url,
   }
 }
 
@@ -157,7 +221,15 @@ export async function getCashbackProgress(
     .not('cashback_config', 'is', null)
 
   if (filterAccountIds && filterAccountIds.length > 0) {
-    query = query.in('id', filterAccountIds)
+    const validIds = filterAccountIds.filter(id =>
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    )
+
+    if (validIds.length === 0) {
+      return []
+    }
+
+    query = query.in('id', validIds)
   }
 
   const { data: accounts, error } = await query
@@ -183,26 +255,32 @@ export async function getCashbackProgress(
       cycleRange.end
     )
 
+    // Calculate total spend first (needed for tier determination)
+    const currentSpend = lines.reduce((sum, line) => {
+      if (typeof line.amount !== 'number') return sum
+      return sum + Math.abs(line.amount)
+    }, 0)
+
+    // Now map transactions with the total spend context for tiered cashback
     const transactions = lines
-      .map(line => toTransaction(line, config.rate))
+      .map(line => toTransaction(line, config, currentSpend))
       .filter(Boolean) as CashbackTransaction[]
 
-    const currentSpend = transactions.reduce((sum, txn) => sum + txn.amount, 0)
-    const rawEarned = currentSpend * config.rate
+    // Calculate totals from transactions
+    const totalBankBack = transactions.reduce((sum, txn) => sum + txn.bankBack, 0)
+    const totalPeopleBack = transactions.reduce((sum, txn) => sum + txn.peopleBack, 0)
+    const totalProfit = totalBankBack - totalPeopleBack
+
     const maxCashback = config.maxAmount
     const cappedEarned =
-      typeof maxCashback === 'number' ? Math.min(rawEarned, maxCashback) : rawEarned
+      typeof maxCashback === 'number' ? Math.min(totalBankBack, maxCashback) : totalBankBack
 
     const minSpend = config.minSpend
     const meetsMinSpend =
       minSpend === null || currentSpend >= minSpend
 
     const totalEarned = meetsMinSpend ? cappedEarned : 0
-    const sharedAmount = lines.reduce(
-      (sum, line) => sum + extractSharedAmount(line.metadata),
-      0
-    )
-    const netProfit = totalEarned - sharedAmount
+    const netProfit = meetsMinSpend ? (totalEarned - totalPeopleBack) : 0
 
     const remainingBudget =
       typeof maxCashback === 'number'
@@ -223,7 +301,7 @@ export async function getCashbackProgress(
       minSpend === null ? null : Math.max(0, minSpend - currentSpend)
     const safeCurrentSpend = safeNumber(currentSpend)
     const safeTotalEarned = safeNumber(totalEarned)
-    const safeSharedAmount = safeNumber(sharedAmount)
+    const safeSharedAmount = safeNumber(totalPeopleBack)
     const safeNetProfit = safeNumber(netProfit)
     const safeProgress = Number.isFinite(progress) ? progress : 0
     const safeRemainingBudget =

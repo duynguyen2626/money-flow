@@ -1,72 +1,90 @@
-# **PROJECT: MONEY FLOW 3.0**
+AGENT TASK: RESTORE CASHBACK UI & FIX BUGS
 
-# **PHASE: 40 \- SYSTEM CONSOLIDATION & CLEANUP**
+Context:
+The Cashback Details Page (/cashback/[id]) is broken after recent refactors.
 
-**WORKFLOW:**
+Data Issue: Categories show "Uncategorized". Back Amount columns are missing formulas/subtext.
 
-1. **Branch:** fix/phase-40-consolidation  
-2. **Safety:** Run npm run build.
+Edit Bug: Editing a Cashback transaction opens "Transfer" tab instead of "Expense/Income".
 
-OBJECTIVE:  
-Clean up fragmented logic. Ensure ONE source of truth for Table Columns, Account Math, and Date Formatting.
+Visual Bug: Icons are missing (Money Transfer has 'M' instead of image). Copy icons are gone.
 
-## **I. UNIFIED TRANSACTION TABLE (THE FINAL STANDARD)**
+Objective:
 
-**Target:** src/components/moneyflow/unified-transaction-table.tsx
+Fix UnifiedTransactionTable logic for Cashback context.
 
-**1\. Columns Standardization**
+Restore "Profit/Formula" display in columns.
 
-* **Notes:** Must be visible. Combine \[Shop Logo\] Note.  
-* **Date:** Display Date dd/MM (Top) AND Time HH:mm (Bottom, small gray).  
-  * *Fix:* Ensure created\_at or occurred\_at includes time. If occurred\_at is date-only (00:00), try to fetch created\_at for the Time part.  
-* **Type:**  
-  * Green Badge: Income, Repayment, In-TF.  
-  * Red Badge: Expense, Debt Lending, Out-TF.  
-  * Blue Badge: Transfer (Neutral).  
-* **Status:**  
-  * **Pending:** Yellow (System Account only).  
-  * **Completed:** Gray.  
-  * **Refunded:** Purple.  
-  * **Active:** Green/Hidden.
+Fix Edit Tab detection.
 
-**2\. Global Visibility**
+1. Backend: Fix getUnifiedTransactions for Cashback
 
-* **Fix:** Ensure "Pending" (System) transactions are visible in /transactions if "All" filter is selected (or add a "System" toggle).
+Target: src/services/transaction.service.ts
 
-## **II. ACCOUNT CARD & LOGIC FIXES**
+A. Category & Shop Mapping
 
-**Target:** src/components/moneyflow/account-card.tsx
+Ensure category_name, category_icon, category_img are correctly joined and returned.
 
-**1\. Credit Card Math (Fix)**
+Debug: If category_id is present in DB but shows "Uncategorized", the join logic is failing.
 
-* **Limit:** account.credit\_limit (e.g., 50M).  
-* **Balance:** account.current\_balance (e.g., \-5M).  
-* **Available:** Limit \+ Balance (50 \+ \-5 \= 45M).  
-* **UI Display:**  
-  * "Dư nợ (Debt): \[Abs(Balance)\]" (Red).  
-  * "Khả dụng (Avail): \[Available\]" (Green/Blue).
+B. Cashback Calculations
 
-**2\. Badges UI**
+Ensure cashback_share_percent and cashback_share_fixed are returned.
 
-* Remove old "Incoming/Outgoing" stats from the Card face (too cluttered).  
-* Keep only **Confirm Badge**: ☑️ \[Amount\] (Clickable).
+Calculate on Backend (Optional) or Frontend:
 
-## **III. REALTIME UPDATES & PEOPLE PAGE**
+initial_back: The bank's cashback amount (Calculated via CashbackService).
 
-**1\. Fix Realtime Lag (/people/\[id\])**
+profit: initial_back - (share_percent * amount + share_fixed).
 
-* The "You owe" header relies on getPersonDetails.  
-* **Fix:** Ensure router.refresh() is called *immediately* after Void/Refund actions in the Table component.  
-* **Optimistic UI:** If possible, update the local state count, but router.refresh() is safer for data consistency.
+2. Frontend: UnifiedTransactionTable Updates
 
-**2\. Date Time Fix (7:00 Bug)**
+A. Restore Cashback Columns (The "Formula" Look)
 
-* **Cause:** Storing YYYY-MM-DD maps to UTC 00:00 \-\> VN 07:00.  
-* **Fix:** When creating transactions, send ISO String with Time (new Date().toISOString()), not just the date part. Update TransactionForm to include time in the saved value.
+Initial Back:
 
-## **IV. EXECUTION STEPS**
+Display: [Bank Back Amount] (Bold).
 
 1. **Frontend:** Update AccountCard math logic.  
 2. **Frontend:** Polish UnifiedTransactionTable columns (Notes, Time).  
 3. **Frontend:** Fix TransactionForm to save full datetime.  
 4. **Integration:** Ensure /people page refreshes on actions.
+Subtext: [Rate]% * [Amount] (Gray, small).
+
+People Back:
+
+Display: [Share Amount] (Red/Orange).
+
+Subtext: [Percent]% + [Fixed] (Gray).
+
+Profit:
+
+Display: [Profit Amount] (Green/Red).
+
+Subtext: "Net" (Gray).
+
+B. Fix Copy Icon
+
+Re-implement the "Copy" ghost button in Note/ID/Status columns.
+
+Ensure lucide-react icons are imported correctly.
+
+3. Frontend: Fix Edit Logic (TransactionForm)
+
+Logic:
+
+If initialData.category is "Cashback" or "Income" -> Tab = income.
+
+If initialData.category is "Money Transfer" -> Tab = transfer.
+
+Fix: Ensure the useEffect in Form correctly identifies the type from initialData.
+
+4. Execution Steps
+
+Service: Debug the Category Join query.
+
+Table: Implement the complex Cell Renderers for Cashback columns.
+
+Form: Fix the Tab switching logic.
+
+Verify: Run build.

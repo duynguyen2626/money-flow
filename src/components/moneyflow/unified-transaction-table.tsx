@@ -41,6 +41,9 @@ type ColumnKey =
   | "status"
   | "id"
   | "task"
+  | "initial_back"
+  | "people_back"
+  | "profit"
 
 type SortKey = 'date' | 'amount'
 type SortDir = 'asc' | 'desc'
@@ -74,20 +77,28 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
 
   let derivedType: TransactionFormValues["type"] = (txn.type as any) === 'repayment' ? 'repayment' : txn.type as TransactionFormValues["type"] || "expense";
 
+  const categoryName = categoryLine?.categories?.name?.toLowerCase() ?? txn.category_name?.toLowerCase() ?? '';
 
   if (personLine?.person_id) {
-    if (categoryLine?.categories?.name?.toLowerCase().includes('thu nợ')
-      || categoryLine?.categories?.name?.toLowerCase().includes('repayment')) {
+    if (categoryName.includes('thu nợ') || categoryName.includes('repayment')) {
       derivedType = 'repayment';
     } else {
       derivedType = 'debt';
     }
-  } else if (!categoryLine) {
-    derivedType = 'transfer';
-  } else if (categoryLine.type === 'debit') {
-    derivedType = 'expense';
-  } else {
+  } else if (categoryName.includes('cashback') || categoryName.includes('income') || categoryName.includes('refund')) {
     derivedType = 'income';
+  } else if (categoryName.includes('money transfer') || categoryName.includes('chuyển tiền')) {
+    derivedType = 'transfer';
+  } else if (!categoryLine && !txn.category_name) {
+    derivedType = 'transfer';
+  } else if (categoryLine?.type === 'debit') {
+    derivedType = 'expense';
+  } else if (categoryLine?.type === 'credit') {
+    derivedType = 'income';
+  } else if (txn.type === 'income') {
+    derivedType = 'income';
+  } else if (txn.type === 'expense') {
+    derivedType = 'expense';
   }
 
   let sourceAccountId = creditLine?.account_id ?? debitLine?.account_id ?? undefined;
@@ -198,6 +209,9 @@ export function UnifiedTransactionTable({
     { key: "cycle", label: "Cycle", defaultWidth: 100 },
     { key: "amount", label: "Amount", defaultWidth: 120 },
     { key: "back_info", label: "Back Info", defaultWidth: 140 },
+    { key: "initial_back", label: "Initial Back", defaultWidth: 110 },
+    { key: "people_back", label: "People Back", defaultWidth: 110 },
+    { key: "profit", label: "Profit", defaultWidth: 100 },
     { key: "final_price", label: "Final Price", defaultWidth: 120 },
     { key: "tag", label: accountType === 'credit_card' ? "Cycle" : "Tag", defaultWidth: 120 },
     { key: "status", label: "Status", defaultWidth: 110 },
@@ -224,6 +238,9 @@ export function UnifiedTransactionTable({
       status: true,
       id: false,
       task: true,
+      initial_back: true,
+      people_back: true,
+      profit: true,
     }
 
     if (hiddenColumns.length > 0) {
@@ -325,6 +342,9 @@ export function UnifiedTransactionTable({
       status: true,
       id: false,
       task: true,
+      initial_back: true,
+      people_back: true,
+      profit: true,
     })
   }
 
@@ -844,7 +864,8 @@ export function UnifiedTransactionTable({
                 </div>
               )
 
-              const voidedTextClass = effectiveStatus === 'void' && currentTab !== 'void' ? "opacity-60 line-through text-gray-400" : ""
+              // Only apply line-through to void transactions, not pending or waiting_refund
+              const voidedTextClass = effectiveStatus === 'void' ? "opacity-60 line-through text-gray-400" : ""
               const percentRaw = txn.cashback_share_percent
               const fixedRaw = txn.cashback_share_fixed
               const calculatedSum = txn.cashback_share_amount ?? ((Math.abs(originalAmount ?? 0) * (percentRaw ?? 0)) + (fixedRaw ?? 0))
@@ -961,11 +982,25 @@ export function UnifiedTransactionTable({
                           </span>
                         )}
                         {txn.note && (
-                          <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
-                            <span className="text-sm text-slate-700 font-medium truncate cursor-help max-w-[200px]">
-                              {txn.note}
-                            </span>
-                          </CustomTooltip>
+                          <div className="flex items-center gap-1">
+                            <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
+                              <span className="text-sm text-slate-700 font-medium truncate cursor-help max-w-[200px]">
+                                {txn.note}
+                              </span>
+                            </CustomTooltip>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(txn.id);
+                                setCopiedId(txn.id);
+                                setTimeout(() => setCopiedId(null), 2000);
+                              }}
+                              className="text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                              title="Copy Transaction ID"
+                            >
+                              {copiedId === txn.id ? <CheckCheck className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                            </button>
+                          </div>
                         )}
                       </div>
                     );
@@ -1097,22 +1132,69 @@ export function UnifiedTransactionTable({
                   case "amount":
                     return amountValue
                   case "back_info":
-                    if (!percentRaw && !fixedRaw) return <span className="text-slate-300">-</span>
+                    if (!percentRaw && !fixedRaw && typeof txn.profit !== 'number') return <span className="text-slate-300">-</span>
                     return (
                       <div className="flex flex-col text-sm">
-                        <span className="text-slate-800 font-semibold">
-                          {percentRaw ? `${(percentRaw * 100).toFixed(2)}%` : ''}
-                          {percentRaw && fixedRaw ? ' + ' : ''}
-                          {fixedRaw ? numberFormatter.format(fixedRaw) : ''}
-                        </span>
+                        {(percentRaw || fixedRaw) && (
+                          <span className="text-slate-800 font-semibold">
+                            {percentRaw ? `${(percentRaw * 100).toFixed(2)}%` : ''}
+                            {percentRaw && fixedRaw ? ' + ' : ''}
+                            {fixedRaw ? numberFormatter.format(fixedRaw) : ''}
+                          </span>
+                        )}
                         {calculatedSum > 0 && (
                           <span className="text-emerald-600 font-bold flex items-center gap-1">
                             <Sigma className="h-3 w-3" />
                             {numberFormatter.format(calculatedSum)}
                           </span>
                         )}
+                        {typeof txn.profit === 'number' && (
+                          <span className={`text-xs font-bold mt-0.5 ${txn.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                            Profit: {numberFormatter.format(txn.profit)}
+                          </span>
+                        )}
                       </div>
                     )
+                  case "initial_back":
+                    if (typeof txn.bank_back !== 'number') return <span className="text-slate-300">-</span>
+                    return (
+                      <div className="flex flex-col text-sm">
+                        <span className="text-emerald-600 font-bold">{numberFormatter.format(txn.bank_back)}</span>
+                        {typeof txn.bank_rate === 'number' && (
+                          <span className="text-xs text-slate-500">
+                            {(txn.bank_rate * 100).toFixed(1)}% * {numberFormatter.format(Math.abs(txn.original_amount ?? txn.amount ?? 0))}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  case "people_back": {
+                    if (!txn.cashback_share_amount || txn.cashback_share_amount === 0) {
+                      return <span className="text-slate-300">-</span>
+                    }
+                    const percentRaw = txn.cashback_share_percent
+                    const fixedRaw = txn.cashback_share_fixed
+                    return (
+                      <div className="flex flex-col text-sm">
+                        <span className="text-orange-600 font-bold">{numberFormatter.format(txn.cashback_share_amount)}</span>
+                        {(percentRaw || fixedRaw) && (
+                          <span className="text-xs text-slate-500">
+                            {percentRaw ? `${(percentRaw * 100).toFixed(1)}%` : ''}
+                            {percentRaw && fixedRaw ? ' + ' : ''}
+                            {fixedRaw ? numberFormatter.format(fixedRaw) : ''}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  }
+                  case "profit":
+                    return typeof txn.profit === 'number' ? (
+                      <div className="flex flex-col text-sm">
+                        <span className={`font-bold ${txn.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {numberFormatter.format(txn.profit)}
+                        </span>
+                        <span className="text-xs text-slate-400">Net</span>
+                      </div>
+                    ) : <span className="text-slate-300">-</span>
                   case "final_price":
                     return <span className={cn("font-bold", amountClass)}>{numberFormatter.format(finalPrice)}</span>
                   case "status":
@@ -1133,6 +1215,26 @@ export function UnifiedTransactionTable({
                       const isCopiedRefund = copiedId === `refund-${refundId}-${txn.id}`;
                       return (
                         <div className="flex items-center gap-2">
+                    const refundId = (txn.metadata as any)?.refund_confirmed_transaction_id ||
+                      (txn.metadata as any)?.pending_refund_transaction_id ||
+                      (txn.metadata as any)?.original_transaction_id;
+
+                    const StatusBadge = () => {
+                      if (isVoided) return <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">Void</span>
+                      if (effectiveStatus === 'waiting_refund') return <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Waiting Refund</span>
+                      if (effectiveStatus === 'refunded') return <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
+                      if (effectiveStatus === 'pending') return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Pending</span>
+                      if (effectiveStatus === 'completed') return <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">Completed</span>
+
+                      if (refundStatus === 'full' || isFullyRefunded) return <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
+                      if (refundStatus === 'partial' || isPartialRefund) return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Partial</span>
+                      return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Active</span>
+                    }
+
+                    return (
+                      <div className="flex items-center gap-1.5">
+                        <StatusBadge />
+                        {refundId && (
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1150,6 +1252,17 @@ export function UnifiedTransactionTable({
                       )
                     }
                     return statusBadge
+                              setCopiedId(refundId);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            }}
+                            className="text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                            title="Copy Refund/Linked ID"
+                          >
+                            {copiedId === refundId ? <CheckCheck className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                          </button>
+                        )}
+                      </div>
+                    )
                   case "id":
                     const isCopied = copiedId === txn.id
                     return (
