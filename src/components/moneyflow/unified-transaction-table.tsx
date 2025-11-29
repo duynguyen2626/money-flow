@@ -1198,23 +1198,6 @@ export function UnifiedTransactionTable({
                   case "final_price":
                     return <span className={cn("font-bold", amountClass)}>{numberFormatter.format(finalPrice)}</span>
                   case "status":
-                    let statusBadge;
-                    if (isVoided) statusBadge = <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">Void</span>
-                    else if (effectiveStatus === 'waiting_refund') statusBadge = <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Waiting Refund</span>
-                    else if (effectiveStatus === 'refunded') statusBadge = <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
-                    else if (effectiveStatus === 'pending') statusBadge = <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Pending</span>
-                    else if (effectiveStatus === 'completed') statusBadge = <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">Completed</span>
-                    else if (refundStatus === 'full' || isFullyRefunded) statusBadge = <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
-                    else if (refundStatus === 'partial' || isPartialRefund) statusBadge = <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Partial</span>
-                    else statusBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Active</span>
-
-                    const refundIdMatch = txn.note?.match(/\[([A-Z0-9]+)\]/);
-                    const refundId = refundIdMatch ? refundIdMatch[1] : null;
-
-                    if (refundId) {
-                      const isCopiedRefund = copiedId === `refund-${refundId}-${txn.id}`;
-                      return (
-                        <div className="flex items-center gap-2">
                     const refundId = (txn.metadata as any)?.refund_confirmed_transaction_id ||
                       (txn.metadata as any)?.pending_refund_transaction_id ||
                       (txn.metadata as any)?.original_transaction_id;
@@ -1231,6 +1214,8 @@ export function UnifiedTransactionTable({
                       return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Active</span>
                     }
 
+                    const isCopiedRefund = copiedId === `refund-${refundId}-${txn.id}`;
+
                     return (
                       <div className="flex items-center gap-1.5">
                         <StatusBadge />
@@ -1246,19 +1231,6 @@ export function UnifiedTransactionTable({
                             title={`Copy Refund ID: ${refundId}`}
                           >
                             {isCopiedRefund ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-                          </button>
-                          {statusBadge}
-                        </div>
-                      )
-                    }
-                    return statusBadge
-                              setCopiedId(refundId);
-                              setTimeout(() => setCopiedId(null), 2000);
-                            }}
-                            className="text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                            title="Copy Refund/Linked ID"
-                          >
-                            {copiedId === refundId ? <CheckCheck className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
                           </button>
                         )}
                       </div>
