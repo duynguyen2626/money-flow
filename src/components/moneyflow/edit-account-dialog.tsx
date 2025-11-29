@@ -92,7 +92,7 @@ export function EditAccountDialog({ account, collateralAccounts, accounts = [], 
   const [securedByAccountId, setSecuredByAccountId] = useState(account.secured_by_account_id ?? '')
   const [isSecured, setIsSecured] = useState(Boolean(account.secured_by_account_id))
   const [creditLimit, setCreditLimit] = useState(formatWithSeparators(toNumericString(account.credit_limit)))
-  const [imgUrl, setImgUrl] = useState(account.img_url ?? '')
+  const [logoUrl, setLogoUrl] = useState(account.logo_url ?? '')
   const [rate, setRate] = useState(String(parsedCashbackConfig.rate))
   const [maxAmount, setMaxAmount] = useState(formatWithSeparators(toNumericString(parsedCashbackConfig.maxAmount)))
   const [minSpend, setMinSpend] = useState(formatWithSeparators(toNumericString(parsedCashbackConfig.minSpend)))
@@ -142,7 +142,7 @@ export function EditAccountDialog({ account, collateralAccounts, accounts = [], 
     setInterestRate(toNumericString(freshSavings.interestRate))
     setTermMonths(toNumericString(freshSavings.termMonths))
     setMaturityDate(freshSavings.maturityDate ?? '')
-    setImgUrl(account.img_url ?? '')
+    setLogoUrl(account.logo_url ?? '')
     setParentAccountId(getSharedLimitParentId(account.cashback_config) ?? '')
     setStatus(null)
   }
@@ -208,7 +208,7 @@ export function EditAccountDialog({ account, collateralAccounts, accounts = [], 
     }
 
     const nextCreditLimit = isCreditCard ? parseOptionalNumber(creditLimit) : null
-    const cleanedImgUrl = imgUrl.trim() || null
+    const cleanedLogoUrl = logoUrl.trim() || null
 
     const rateValue = parseOptionalNumber(rate) ?? 0
     let configPayload: Json | undefined
@@ -242,7 +242,7 @@ export function EditAccountDialog({ account, collateralAccounts, accounts = [], 
         cashbackConfig: configPayload,
         type: accountType,
         securedByAccountId: securedBy,
-        imgUrl: cleanedImgUrl,
+        logoUrl: cleanedLogoUrl,
       })
 
       if (!success) {
@@ -311,11 +311,11 @@ export function EditAccountDialog({ account, collateralAccounts, accounts = [], 
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-sm font-medium text-slate-600">Image URL</label>
+                  <label className="text-sm font-medium text-slate-600">Logo URL</label>
                   <input
                     type="url"
-                    value={imgUrl}
-                    onChange={event => setImgUrl(event.target.value)}
+                    value={logoUrl}
+                    onChange={event => setLogoUrl(event.target.value)}
                     className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                     placeholder="https://logo.example.com/bank.png"
                   />

@@ -32,7 +32,6 @@ export type Account = {
   cashback_config?: Json | null;
   secured_by_account_id?: string | null;
   is_active?: boolean | null;
-  img_url?: string | null;
   logo_url?: string | null;
   total_in?: number;
   total_out?: number;

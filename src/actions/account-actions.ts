@@ -8,18 +8,18 @@ import { recalculateBalance, updateAccountConfig } from '@/services/account.serv
 import { Database, Json } from '@/types/database.types'
 import { Account } from '@/types/moneyflow.types'
 
-export async function createAccount(payload: { 
-  name: string; 
+export async function createAccount(payload: {
+  name: string;
   balance?: number;
   type?: Account['type'];
   creditLimit?: number | null;
   cashbackConfig?: Json | null;
   securedByAccountId?: string | null;
-  imgUrl?: string | null;
+  logoUrl?: string | null;
 }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  
+
   // Use default user ID if not authenticated
   const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66'
 
@@ -33,7 +33,7 @@ export async function createAccount(payload: {
     credit_limit: payload.creditLimit,
     cashback_config: payload.cashbackConfig,
     secured_by_account_id: payload.securedByAccountId,
-    img_url: payload.imgUrl,
+    logo_url: payload.logoUrl,
   }
 
   const executeInsert = (data: typeof insertPayload) =>
@@ -45,19 +45,6 @@ export async function createAccount(payload: {
   const { data, error } = await executeInsert(insertPayload)
 
   if (error) {
-    const missingColumn =
-      error.code === 'PGRST204' ||
-      (typeof error.message === 'string' && error.message.includes('img_url'))
-    if (missingColumn && insertPayload.img_url) {
-      delete insertPayload.img_url
-      const { data: retryData, error: retryError } = await executeInsert(insertPayload)
-      if (retryError) {
-        console.error('Error creating account after retry:', retryError)
-        return { error: retryError }
-      }
-      revalidatePath('/accounts')
-      return { data: retryData }
-    }
     console.error('Error creating account:', error)
     return { error }
   }
@@ -74,7 +61,6 @@ export type UpdateAccountPayload = {
   type?: Account['type']
   securedByAccountId?: string | null
   isActive?: boolean | null
-  imgUrl?: string | null
   logoUrl?: string | null
 }
 
@@ -86,7 +72,6 @@ export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
     type?: Account['type']
     secured_by_account_id?: string | null
     is_active?: boolean | null
-    img_url?: string | null
     logo_url?: string | null
   } = {}
 
@@ -112,11 +97,6 @@ export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
 
   if (typeof payload.isActive === 'boolean') {
     updatePayload.is_active = payload.isActive
-  }
-
-  if ('imgUrl' in payload) {
-    updatePayload.img_url = payload.imgUrl ?? null
-    updatePayload.logo_url = payload.logoUrl ?? payload.imgUrl ?? null
   }
 
   if ('logoUrl' in payload) {

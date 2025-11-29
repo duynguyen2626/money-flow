@@ -26,7 +26,6 @@ export default function NewAccountPage() {
     secured_by_account_id: undefined,
     is_active: true,
     owner_id: '',
-    img_url: null,
     logo_url: null
   } as Account
 
@@ -45,9 +44,9 @@ export default function NewAccountPage() {
           <h1 className="text-2xl font-bold text-gray-900">Add New Account</h1>
           <p className="text-gray-600">Create a new bank account, credit card, or other financial account.</p>
         </div>
-        
+
         <div className="bg-white rounded-lg shadow p-6">
-          <EditAccountDialog 
+          <EditAccountDialog
             account={newAccount}
             triggerContent="Open Account Creation Form"
             buttonClassName="hidden"

@@ -48,7 +48,7 @@ type StatusMessage =
 
 const formSchema = z.object({
   name: z.string().min(1, { message: 'Account name is required' }),
-  imgUrl: z.string().optional(),
+  logoUrl: z.string().optional(),
   initialBalance: z.number(),
   creditLimit: z.number().nullable().optional(),
   isSecured: z.boolean(),
@@ -71,7 +71,7 @@ type CreateAccountFormValues = z.infer<typeof formSchema>
 
 const DEFAULT_FORM_VALUES: CreateAccountFormValues = {
   name: '',
-  imgUrl: '',
+  logoUrl: '',
   initialBalance: 0,
   creditLimit: null,
   isSecured: false,
@@ -148,7 +148,7 @@ export function CreateAccountDialog({
   const watchedOtherSubtype = watch('otherSubtype')
   const watchedSavingType = watch('savingType')
   const cashbackCycleType = watch('cashbackCycleType')
-  const logoUrl = watch('imgUrl')
+  const logoUrl = watch('logoUrl')
   const isUnlimitedCashback = watch('isUnlimitedCashback') // Theo dõi trạng thái cashback không giới hạn
   const parentAccountId = watch('parentAccountId') // Theo dõi tài khoản cha được chọn
   const accountName = watch('name') // Theo dõi tên tài khoản
@@ -290,7 +290,7 @@ export function CreateAccountDialog({
         creditLimit: creditLimitPayload,
         cashbackConfig: configPayload,
         securedByAccountId: securedBy,
-        imgUrl: values.imgUrl?.trim() || null,
+        logoUrl: values.logoUrl?.trim() || null,
       })
 
       if (result?.error) {
@@ -302,6 +302,7 @@ export function CreateAccountDialog({
       setStatus({ text: 'Account created successfully!', variant: 'success' })
       reset(DEFAULT_FORM_VALUES)
       setActiveTab('bank')
+      setOpen(false)
       router.refresh()
     } catch (err) {
       console.error('Unexpected error:', err)
@@ -396,10 +397,10 @@ export function CreateAccountDialog({
               )}
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-600">Image URL (logo)</label>
+              <label className="text-sm font-medium text-slate-600">Logo URL</label>
               <input
                 type="url"
-                {...register('imgUrl')}
+                {...register('logoUrl')}
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                 placeholder="https://example.com/logo.png"
               />

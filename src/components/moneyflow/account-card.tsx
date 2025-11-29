@@ -20,6 +20,7 @@ import { useRouter } from 'next/navigation'
 import {
   computeNextDueDate,
   getAccountTypeLabel,
+  getSharedLimitParentId,
 } from '@/lib/account-utils'
 import { Account, AccountCashbackSnapshot, Category, Person, Shop } from '@/types/moneyflow.types'
 import { AddTransactionDialog } from './add-transaction-dialog'
@@ -123,11 +124,48 @@ export function AccountCard({
   const router = useRouter()
 
   // Logic for credit card stats
-  const creditLimit = account.credit_limit ?? 0
-  const availableBalance = creditLimit + account.current_balance
   const isCreditCard = account.type === 'credit_card'
   const dueDate = computeNextDueDate(account.cashback_config ?? null)
   const dueStatus = getDueStatus(dueDate)
+
+  // Parent/Child Logic
+  const sharedLimitParentId = getSharedLimitParentId(account.cashback_config)
+  const parentAccount = sharedLimitParentId ? allAccounts.find(a => a.id === sharedLimitParentId) : null
+  const isChildCard = !!parentAccount
+  const isParentCard = !isChildCard && allAccounts.some(a => getSharedLimitParentId(a.cashback_config) === account.id)
+
+  // Calculate credit card metrics
+  const creditLimit = account.credit_limit ?? 0
+  const netBalance = (account.total_in ?? 0) - (account.total_out ?? 0) // Usually negative for credit cards
+  const currentDebt = Math.abs(netBalance < 0 ? netBalance : 0) // Absolute value of negative balance
+
+  // Available = Limit + Net Balance (if netBalance is -30k and limit is 150k, available is 120k)
+  let availableBalance = creditLimit + netBalance
+  let displayLimit = creditLimit
+  let displayDebt = currentDebt
+
+  // For child cards, calculate shared available
+  if (isChildCard && parentAccount) {
+    const parentNetBalance = (parentAccount.total_in ?? 0) - (parentAccount.total_out ?? 0)
+    const childNetBalance = netBalance
+    const combinedNetBalance = parentNetBalance + childNetBalance
+
+    displayLimit = parentAccount.credit_limit ?? 0
+    availableBalance = displayLimit + combinedNetBalance
+    displayDebt = Math.abs(combinedNetBalance < 0 ? combinedNetBalance : 0)
+  }
+
+  // For parent cards, calculate total debt including children
+  if (isParentCard) {
+    const childCards = allAccounts.filter(a => getSharedLimitParentId(a.cashback_config) === account.id)
+    const totalChildDebt = childCards.reduce((sum, child) => {
+      const childNetBalance = (child.total_in ?? 0) - (child.total_out ?? 0)
+      return sum + Math.abs(childNetBalance < 0 ? childNetBalance : 0)
+    }, 0)
+
+    displayDebt = currentDebt + totalChildDebt
+    availableBalance = creditLimit - displayDebt
+  }
 
   const openDetails = () => {
     router.push(`/accounts/${account.id}`)
@@ -154,10 +192,10 @@ export function AccountCard({
         {/* Avatar/Icon */}
         <div className="flex-shrink-0">
           <div className={`flex items-center justify-center bg-white shadow-sm ring-1 ring-slate-200 overflow-hidden ${isCreditCard ? 'h-16 w-24 rounded-lg' : 'h-12 w-12 rounded-full'}`}>
-            {account.img_url ? (
+            {account.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={account.img_url}
+                src={account.logo_url}
                 alt={account.name}
                 className="h-full w-full object-cover"
               />
@@ -194,6 +232,16 @@ export function AccountCard({
             <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${getAccountTypeBadgeColor(account.type)}`}>
               {getAccountTypeLabel(account.type)}
             </span>
+            {isCreditCard && isChildCard && parentAccount && (
+              <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-700">
+                Linked to {parentAccount.name}
+              </span>
+            )}
+            {isCreditCard && isParentCard && (
+              <span className="inline-flex items-center rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700">
+                Main Card
+              </span>
+            )}
             {dueStatus && (
               <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium ${dueStatus.tone}`}>
                 <Clock4 className="h-3 w-3" />
@@ -206,42 +254,56 @@ export function AccountCard({
 
       {/* Section 2: Info & Stats (Body) */}
       <div className="flex flex-1 flex-col justify-center p-5 space-y-1">
-        <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-          Current Balance
-        </p>
-        <p className={`text-2xl font-bold tracking-tight ${account.current_balance < 0 ? 'text-red-600' : 'text-slate-900'}`}>
-          {currencyFormatter.format(account.current_balance)}
-        </p>
+        {isCreditCard ? (
+          <>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+              Available
+            </p>
+            <p className={`text-2xl font-bold tracking-tight ${availableBalance < displayLimit * 0.3 ? 'text-amber-600' : 'text-emerald-600'}`}>
+              {currencyFormatter.format(availableBalance)}
+            </p>
 
-        {/* Secondary Stats */}
-        <div className="min-h-[20px] mt-1">
-          {isCreditCard && creditLimit > 0 && (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <CustomTooltip content={
-                <div className="flex flex-col gap-1 text-xs">
-                  <span>Total In: {currencyFormatter.format(account.total_in ?? 0)}</span>
-                  <span>Total Out: {currencyFormatter.format(account.total_out ?? 0)}</span>
-                  <span className="text-slate-400 text-[10px]">Raw Balance: {account.current_balance}</span>
-                </div>
-              }>
-                <div className="flex items-center gap-2 cursor-help">
-                  <span>Available: <span className="font-medium text-emerald-600">{currencyFormatter.format(
-                    account.current_balance < 0
-                      ? creditLimit + account.current_balance
-                      : creditLimit - account.current_balance
-                  )}</span></span>
-                  <span className="text-slate-300">|</span>
-                  <span>Limit: {currencyFormatter.format(creditLimit)}</span>
-                </div>
-              </CustomTooltip>
+            {/* Secondary Stats for Credit Cards */}
+            <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+              <span>Debt: <span className={`font-medium ${displayDebt > 0 ? 'text-red-600' : 'text-slate-600'}`}>{currencyFormatter.format(displayDebt)}</span></span>
+              <span className="text-slate-300">|</span>
+              <span>Limit: <span className="font-medium text-slate-600">{currencyFormatter.format(displayLimit)}</span></span>
             </div>
-          )}
-          {account.type === 'savings' && (
-            <div className="text-xs text-slate-400">
-              Savings Account
+
+            {/* Debug Tooltip */}
+            <CustomTooltip content={
+              <div className="flex flex-col gap-1 text-xs">
+                <span>Total In: {currencyFormatter.format(account.total_in ?? 0)}</span>
+                <span>Total Out: {currencyFormatter.format(account.total_out ?? 0)}</span>
+                <span>Net Balance: {currencyFormatter.format(netBalance)}</span>
+                {isChildCard && <span className="text-blue-400">Shared with {parentAccount?.name}</span>}
+                {isParentCard && <span className="text-purple-400">Main Card (includes children)</span>}
+              </div>
+            }>
+              <div className="text-[10px] text-slate-400 cursor-help mt-0.5">
+                {isChildCard ? '🔗 Shared Limit' : isParentCard ? '👥 Main Card' : 'ℹ️ Hover for details'}
+              </div>
+            </CustomTooltip>
+          </>
+        ) : (
+          <>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+              Current Balance
+            </p>
+            <p className={`text-2xl font-bold tracking-tight ${account.current_balance < 0 ? 'text-red-600' : 'text-slate-900'}`}>
+              {currencyFormatter.format(account.current_balance)}
+            </p>
+
+            {/* Secondary Stats for Non-Credit Accounts */}
+            <div className="min-h-[20px] mt-1">
+              {account.type === 'savings' && (
+                <div className="text-xs text-slate-400">
+                  Savings Account
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
 
       {/* Section 3: Actions (Footer) */}
