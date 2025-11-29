@@ -136,16 +136,28 @@ export async function getPeople(): Promise<Person[]> {
     ])
 
   if (profileError) {
-    console.error('Error fetching people profiles:', profileError)
+    console.error('Error fetching people profiles:', {
+      message: profileError.message,
+      code: profileError.code,
+      details: profileError.details,
+    })
     return []
   }
 
   if (debtError) {
-    console.error('Error fetching debt accounts for people:', debtError)
+    console.error('Error fetching debt accounts for people:', {
+      message: debtError.message,
+      code: debtError.code,
+      details: debtError.details,
+    })
   }
 
   if (subError) {
-    console.error('Error fetching subscription memberships for people:', subError)
+    console.error('Error fetching subscription memberships for people:', {
+      message: subError.message,
+      code: subError.code,
+      details: subError.details,
+    })
   }
 
   const debtAccountMap = new Map<string, string>()
@@ -160,7 +172,7 @@ export async function getPeople(): Promise<Person[]> {
   const subscriptionCountMap = new Map<string, number>()
   const subscriptionIdsMap = new Map<string, Set<string>>()
   if (Array.isArray(subscriptionMembers)) {
-    ;(subscriptionMembers as { profile_id: string; subscription_id?: string }[]).forEach(row => {
+    ; (subscriptionMembers as { profile_id: string; subscription_id?: string }[]).forEach(row => {
       if (!row.profile_id) return
       subscriptionCountMap.set(row.profile_id, (subscriptionCountMap.get(row.profile_id) ?? 0) + 1)
       if (row.subscription_id) {
