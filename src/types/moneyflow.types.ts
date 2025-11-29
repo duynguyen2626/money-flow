@@ -140,4 +140,7 @@ export type TransactionWithDetails = TransactionRow & {
   metadata?: Json | null;
   source_account_name?: string | null;
   destination_account_name?: string | null;
+  profit?: number;
+  bank_back?: number;
+  bank_rate?: number;
 }

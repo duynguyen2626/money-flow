@@ -34,6 +34,7 @@ export type CreateTransactionInput = {
   cashback_share_fixed?: number | null;
   discount_category_id?: string | null;
   shop_id?: string | null;
+  is_voluntary?: boolean;
 };
 
 async function resolveSystemCategory(
@@ -184,6 +185,7 @@ async function buildTransactionLines(
       cashback_share_percent: sharePercentRate,
       cashback_share_fixed: shareFixed,
       person_id: input.person_id ?? null,
+      metadata: input.is_voluntary ? { is_voluntary: true } : undefined,
     });
 
     if (cashbackGiven > 0) {
@@ -1073,6 +1075,9 @@ export async function requestRefund(
   const userId = await resolveCurrentUserId(supabase)
   const requestNote = options?.note ?? `Refund Request for ${(existing as any).note ?? transactionId}`
 
+  const originalCashbackPercent = ((existing as any).transaction_lines as any[]).find((l: any) => typeof l.cashback_share_percent === 'number')?.cashback_share_percent;
+  const originalCashbackFixed = ((existing as any).transaction_lines as any[]).find((l: any) => typeof l.cashback_share_fixed === 'number')?.cashback_share_fixed;
+
   // Prepare metadata for the new refund transaction lines
   const lineMetadata = {
     refund_status: 'requested',
@@ -1081,6 +1086,8 @@ export async function requestRefund(
     refund_amount: requestedAmount,
     partial,
     original_note: (existing as any).note ?? null,
+    cashback_share_percent: originalCashbackPercent,
+    cashback_share_fixed: originalCashbackFixed,
   }
 
   const { data: requestTxn, error: createError } = await (supabase

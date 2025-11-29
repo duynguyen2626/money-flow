@@ -23,9 +23,9 @@ type AddTransactionDialogProps = {
   onOpen?: () => void;
 }
 
-export function AddTransactionDialog({ 
-  accounts, 
-  categories, 
+export function AddTransactionDialog({
+  accounts,
+  categories,
   people,
   shops = [],
   buttonText = 'Add Transaction',
@@ -84,7 +84,7 @@ export function AddTransactionDialog({
             onClick={closeDialog}
           >
             <div
-              className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
+              className="w-full max-w-xl rounded-lg bg-white p-6 shadow-xl"
               style={{ maxHeight: '90vh', overflowY: 'auto' }}
               onClick={stopPropagation}
             >
@@ -100,14 +100,14 @@ export function AddTransactionDialog({
                 </button>
               </div>
               <div className="py-2">
-              <TransactionForm
-                accounts={accounts}
-                categories={categories}
-                people={people}
-                shops={shops}
-                onSuccess={handleSuccess}
-                defaultTag={defaultTag}
-                defaultPersonId={defaultPersonId}
+                <TransactionForm
+                  accounts={accounts}
+                  categories={categories}
+                  people={people}
+                  shops={shops}
+                  onSuccess={handleSuccess}
+                  defaultTag={defaultTag}
+                  defaultPersonId={defaultPersonId}
                   defaultType={defaultType}
                   defaultSourceAccountId={defaultSourceAccountId}
                   defaultDebtAccountId={defaultDebtAccountId}

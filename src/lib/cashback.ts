@@ -5,12 +5,22 @@ type CycleRange = {
   end: Date
 }
 
+// Tiered cashback tier definition
+export type CashbackTier = {
+  minSpend: number // Minimum spend to qualify for this tier
+  categories: Record<string, { rate: number; maxAmount?: number }> // category_key -> { rate, cap }
+  defaultRate?: number // Default rate for categories not specified
+}
+
 export type ParsedCashbackConfig = {
   rate: number
   maxAmount: number | null
   cycleType: CashbackCycleType
   statementDay: number | null
   minSpend: number | null
+  // Tiered cashback support
+  hasTiers?: boolean
+  tiers?: CashbackTier[]
 }
 
 function parseConfigCandidate(raw: Record<string, unknown> | null): ParsedCashbackConfig {
@@ -55,12 +65,26 @@ function parseConfigCandidate(raw: Record<string, unknown> | null): ParsedCashba
       ? minNumber
       : null
 
+  // Parse tiered cashback
+  const hasTiers = Boolean(raw?.has_tiers ?? raw?.hasTiers)
+  let tiers: CashbackTier[] | undefined = undefined
+
+  if (hasTiers && Array.isArray(raw?.tiers)) {
+    tiers = (raw.tiers as any[]).map((tier: any) => ({
+      minSpend: Number(tier.minSpend ?? tier.min_spend ?? 0),
+      categories: tier.categories ?? {},
+      defaultRate: typeof tier.defaultRate === 'number' ? tier.defaultRate : undefined,
+    }))
+  }
+
   return {
     rate: parsedRate,
     maxAmount,
     cycleType,
     statementDay,
     minSpend,
+    hasTiers,
+    tiers,
   }
 }
 
@@ -72,6 +96,8 @@ export function parseCashbackConfig(raw: unknown): ParsedCashbackConfig {
       cycleType: 'calendar_month',
       statementDay: null,
       minSpend: null,
+      hasTiers: false,
+      tiers: undefined,
     }
   }
 
@@ -86,6 +112,8 @@ export function parseCashbackConfig(raw: unknown): ParsedCashbackConfig {
         cycleType: 'calendar_month',
         statementDay: null,
         minSpend: null,
+        hasTiers: false,
+        tiers: undefined,
       }
     }
   }
@@ -100,6 +128,8 @@ export function parseCashbackConfig(raw: unknown): ParsedCashbackConfig {
     cycleType: 'calendar_month',
     statementDay: null,
     minSpend: null,
+    hasTiers: false,
+    tiers: undefined,
   }
 }
 
@@ -140,6 +170,7 @@ export function getCashbackCycleRange(
   return { start, end }
 }
 
+
 function clampToDay(base: Date, day: number | null) {
   if (!day) {
     return base
@@ -148,4 +179,50 @@ function clampToDay(base: Date, day: number | null) {
   const monthEnd = new Date(candidate.getFullYear(), candidate.getMonth() + 1, 0)
   const safeDay = Math.min(day, monthEnd.getDate())
   return new Date(candidate.getFullYear(), candidate.getMonth(), safeDay)
+}
+
+/**
+ * Calculate the bank's cashback amount for a transaction.
+ * @param config Parsed cashback configuration
+ * @param amount Transaction amount (absolute value)
+ * @param categoryName Category name for tier matching
+ * @param totalSpend Current total spend in cycle (for tier determination). Defaults to 0.
+ */
+export function calculateBankCashback(
+  config: ParsedCashbackConfig,
+  amount: number,
+  categoryName?: string,
+  totalSpend: number = 0
+): { amount: number; rate: number } {
+  let earnedRate = config.rate
+
+  if (config.hasTiers && config.tiers && config.tiers.length > 0) {
+    // Find the applicable tier based on total spend
+    const applicableTier = config.tiers
+      .filter(tier => totalSpend >= tier.minSpend)
+      .sort((a, b) => b.minSpend - a.minSpend)[0]
+
+    if (applicableTier) {
+      if (categoryName) {
+        const lowerCat = categoryName.toLowerCase()
+        let categoryKey: string | null = null
+        for (const key of Object.keys(applicableTier.categories)) {
+          if (lowerCat.includes(key.toLowerCase())) {
+            categoryKey = key
+            break
+          }
+        }
+
+        if (categoryKey && applicableTier.categories[categoryKey]) {
+          earnedRate = applicableTier.categories[categoryKey].rate
+        } else if (applicableTier.defaultRate !== undefined) {
+          earnedRate = applicableTier.defaultRate
+        }
+      } else if (applicableTier.defaultRate !== undefined) {
+        earnedRate = applicableTier.defaultRate
+      }
+    }
+  }
+
+  return { amount: amount * earnedRate, rate: earnedRate }
 }

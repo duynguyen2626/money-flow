@@ -106,7 +106,7 @@ export function CashbackDetailsDialog({ card, onClose }: CashbackDetailsDialogPr
           onClick={stopPropagation}
         >
           <p className="text-sm font-semibold text-slate-600">
-             Không có dữ liệu hoàn tiền (No Data)
+            Không có dữ liệu hoàn tiền (No Data)
           </p>
         </div>
       </div>
@@ -164,11 +164,10 @@ export function CashbackDetailsDialog({ card, onClose }: CashbackDetailsDialogPr
                 key={`cycle-${offset}`}
                 type="button"
                 onClick={() => setSelectedOffset(offset)}
-                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                  isActive
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition ${isActive
                     ? 'border-indigo-600 bg-indigo-600 text-white'
                     : 'border-slate-200 text-slate-500 hover:border-slate-300'
-                }`}
+                  }`}
               >
                 {formatCycleName(optionCard ?? null)}
                 <span className="text-[10px] uppercase tracking-wide">
@@ -195,9 +194,8 @@ export function CashbackDetailsDialog({ card, onClose }: CashbackDetailsDialogPr
           <div className="rounded-xl border border-slate-100 bg-white px-4 py-3">
             <p className="text-xs uppercase text-slate-400">Loi nhuan rong</p>
             <p
-              className={`text-2xl font-semibold ${
-                displayCard.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'
-              }`}
+              className={`text-2xl font-semibold ${displayCard.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-500'
+                }`}
             >
               {netLabel}
             </p>
@@ -240,18 +238,28 @@ type TransactionRowProps = {
 
 function TransactionRow({ txn }: TransactionRowProps) {
   return (
-    <li className="flex items-center justify-between py-3 text-sm">
-      <div>
+    <li className="flex items-center justify-between py-3 text-sm border-b border-slate-100 last:border-0">
+      <div className="flex-1">
         <p className="font-semibold text-slate-900">
           {dateFormatter.format(new Date(txn.occurred_at))}
         </p>
         <p className="text-xs text-slate-500">{txn.note || 'Khong co ghi chu'}</p>
       </div>
-      <div className="text-right">
+      <div className="text-right space-y-1">
         <p className="font-semibold text-slate-900">{currencyFormatter.format(txn.amount)}</p>
-        <p className="text-xs text-emerald-600">
-          Hoan tien: {currencyFormatter.format(txn.earned)}
-        </p>
+        <div className="text-xs space-y-0.5">
+          <p className="text-emerald-600">
+            Bank: {currencyFormatter.format(txn.bankBack)}
+          </p>
+          {txn.peopleBack > 0 && (
+            <p className="text-amber-600">
+              Shared: {currencyFormatter.format(txn.peopleBack)}
+            </p>
+          )}
+          <p className={`font-semibold ${txn.profit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+            Profit: {currencyFormatter.format(txn.profit)}
+          </p>
+        </div>
       </div>
     </li>
   );

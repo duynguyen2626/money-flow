@@ -1,7 +1,7 @@
 import { Database, Json } from '@/types/database.types';
 import { TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types';
 import { createClient } from '@/lib/supabase/server';
-import { parseCashbackConfig, getCashbackCycleRange } from './cashback';
+import { parseCashbackConfig, getCashbackCycleRange, calculateBankCashback } from './cashback';
 import { format } from 'date-fns';
 
 const REFUND_CATEGORY_ID = 'e0000000-0000-0000-0000-000000000095';
@@ -389,6 +389,26 @@ export function mapTransactionRow(
                 : 'TRANSFER'
         : undefined
 
+    // --- Cashback & Profit Calculation ---
+    let bankBack: number | undefined
+    let bankRate: number | undefined
+    let profit: number | undefined
+
+    if (context?.accountInfo?.cashback_config) {
+        try {
+            const config = parseCashbackConfig(context.accountInfo.cashback_config)
+            const absAmount = Math.abs(displayAmount)
+            const result = calculateBankCashback(config, absAmount, categoryName)
+            bankBack = result.amount
+            bankRate = result.rate
+
+            const calculatedPeopleBack = cashbackAmount ?? ((percentRaw ?? 0) * absAmount + (txn.cashback_share_fixed ?? 0))
+            profit = bankBack - calculatedPeopleBack
+        } catch (e) {
+            console.error('Error calculating cashback/profit:', e)
+        }
+    }
+
     return {
         id: txn.id,
         occurred_at: txn.occurred_at,
@@ -425,5 +445,8 @@ export function mapTransactionRow(
         shop_logo_url: txn.shops?.logo_url ?? null,
         metadata: extractLineMetadata(txn.transaction_lines),
         transaction_lines: (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[],
+        bank_back: bankBack,
+        bank_rate: bankRate,
+        profit: profit,
     }
 }

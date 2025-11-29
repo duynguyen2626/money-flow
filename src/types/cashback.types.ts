@@ -6,6 +6,15 @@ export type CashbackTransaction = {
   note: string | null
   amount: number
   earned: number
+  // Profit tracking
+  bankBack: number // What the bank gives back
+  peopleBack: number // What was shared with others
+  profit: number // bankBack - peopleBack
+  shopName?: string
+  shopLogoUrl?: string | null
+  categoryName?: string
+  categoryIcon?: string | null
+  categoryImageUrl?: string | null
 }
 
 export type CashbackCard = {
