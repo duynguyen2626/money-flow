@@ -36,6 +36,17 @@ type TransactionLineRow = {
       name: string
       logo_url: string | null
     } | null
+    transaction_lines: Array<{
+      id: string
+      type: 'debit' | 'credit'
+      category_id: string | null
+      categories: {
+        name: string
+        icon: string | null
+        image_url: string | null
+      } | null
+      metadata: Record<string, unknown> | null
+    }>
   } | null
   // For tiered cashback - we need to know the category
   category_id?: string | null
@@ -65,7 +76,25 @@ async function fetchAccountLines(
 ): Promise<TransactionLineRow[]> {
   const { data, error } = await supabase
     .from('transaction_lines')
-    .select('amount, metadata, category_id, categories(name, icon, image_url), transactions!inner(id, occurred_at, note, shops(name, logo_url))')
+    .select(`
+      amount,
+      metadata,
+      category_id,
+      categories(name, icon, image_url),
+      transactions!inner(
+        id,
+        occurred_at,
+        note,
+        shops(name, logo_url),
+        transaction_lines(
+          id,
+          type,
+          category_id,
+          categories(name, icon, image_url),
+          metadata
+        )
+      )
+    `)
     .eq('account_id', accountId)
     .eq('type', 'credit')
     .gte('transactions.occurred_at', rangeStart.toISOString())
@@ -76,7 +105,7 @@ async function fetchAccountLines(
     return []
   }
 
-  return (data ?? []) as TransactionLineRow[]
+  return (data ?? []) as unknown as TransactionLineRow[]
 }
 
 /**
@@ -98,6 +127,17 @@ function toTransaction(
   const amount = Math.abs(line.amount)
   let earnedRate = config.rate // Default rate
 
+  // Find the "other" line (Debit) to get the true category
+  // In a credit card purchase, the Credit Card line is Credit, the Expense line is Debit.
+  const relatedLines = line.transactions.transaction_lines || []
+  const debitLine = relatedLines.find(l => l.type === 'debit')
+
+  // Use category from debit line if available, otherwise fallback to current line
+  const categoryInfo = debitLine?.categories || line.categories
+  const categoryName = categoryInfo?.name
+  const categoryIcon = categoryInfo?.icon
+  const categoryImageUrl = categoryInfo?.image_url
+
   // Tiered cashback logic
   if (config.hasTiers && config.tiers && config.tiers.length > 0) {
     // Find the applicable tier based on total spend
@@ -107,12 +147,12 @@ function toTransaction(
 
     if (applicableTier) {
       // Check if transaction has a category that matches tier categories
-      const categoryName = line.categories?.name?.toLowerCase() ?? ''
+      const catName = categoryName?.toLowerCase() ?? ''
 
       // Map category names to config keys (e.g., "Insurance" -> "insurance")
       let categoryKey: string | null = null
       for (const key of Object.keys(applicableTier.categories)) {
-        if (categoryName.includes(key.toLowerCase())) {
+        if (catName.includes(key.toLowerCase())) {
           categoryKey = key
           break
         }
@@ -129,7 +169,19 @@ function toTransaction(
   }
 
   const bankBack = amount * earnedRate
-  const peopleBack = extractSharedAmount(line.metadata)
+
+  // Check for share info in BOTH the credit line and the debit line
+  // Sometimes the share info is on the expense line (debit)
+  const creditShareInfo = extractShareInfo(line.metadata)
+  const debitShareInfo = extractShareInfo(debitLine?.metadata)
+
+  // Prioritize explicit amount > percent > fixed
+  // Merge logic: if credit line has info, use it. If not, check debit line.
+  const shareInfo = creditShareInfo.amount > 0 || creditShareInfo.percent !== undefined
+    ? creditShareInfo
+    : debitShareInfo
+
+  const peopleBack = shareInfo.amount
   const profit = bankBack - peopleBack
 
   return {
@@ -141,11 +193,14 @@ function toTransaction(
     bankBack,
     peopleBack,
     profit,
+    effectiveRate: earnedRate,
+    sharePercent: shareInfo.percent,
+    shareFixed: shareInfo.fixed,
     shopName: line.transactions.shops?.name,
     shopLogoUrl: line.transactions.shops?.logo_url,
-    categoryName: line.categories?.name,
-    categoryIcon: line.categories?.icon,
-    categoryImageUrl: line.categories?.image_url,
+    categoryName: categoryName,
+    categoryIcon: categoryIcon,
+    categoryImageUrl: categoryImageUrl,
   }
 }
 
@@ -173,23 +228,40 @@ function safeNumber(value: number | null | undefined, fallback = 0) {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
-function extractSharedAmount(metadata: unknown): number {
+function extractShareInfo(metadata: unknown): { amount: number; percent?: number; fixed?: number } {
   const parsed = parseMetadata(metadata)
   if (!parsed) {
-    return 0
+    return { amount: 0 }
   }
 
+  // 1. Check for explicit amount override
   const fromExplicit = parsed.cashback_share_amount
   if (typeof fromExplicit === 'number' && Number.isFinite(fromExplicit)) {
-    return Math.max(0, fromExplicit)
+    return { amount: Math.max(0, fromExplicit) }
   }
 
-  const fromNested = parsed.cashback_share?.amount
-  if (typeof fromNested === 'number' && Number.isFinite(fromNested)) {
-    return Math.max(0, fromNested)
+  // 2. Check for nested share object
+  if (parsed.cashback_share) {
+    const { amount, percent, fixed } = parsed.cashback_share
+
+    if (typeof amount === 'number' && Number.isFinite(amount)) {
+      return { amount: Math.max(0, amount), percent, fixed }
+    }
   }
 
-  return 0
+  // 3. Check for top-level percent/fixed (legacy or flat structure)
+  const percent = parsed.cashback_share_percent
+  const fixed = parsed.cashback_share_fixed
+
+  // If we have these but no calculated amount in metadata, we can't really know the amount unless we passed the transaction amount here.
+  // However, usually the amount is calculated and stored in `cashback_share_amount` or `cashback_share.amount` by the trigger/service that created it.
+  // If it's missing, we return 0 for amount but still return the config.
+
+  return {
+    amount: 0,
+    percent: typeof percent === 'number' ? percent : undefined,
+    fixed: typeof fixed === 'number' ? fixed : undefined
+  }
 }
 
 function shiftReferenceDate(monthOffset: number) {

@@ -1694,3 +1694,14 @@ export async function getUnifiedTransactions(
 
   return (data as any[]).map(txn => mapTransactionRow(txn, accountId, { mode: context }))
 }
+
+export async function deleteTransaction(id: string): Promise<boolean> {
+  const supabase = createClient();
+  const { error } = await supabase.from('transactions').delete().eq('id', id);
+
+  if (error) {
+    console.error('Failed to delete transaction:', error);
+    return false;
+  }
+  return true;
+}

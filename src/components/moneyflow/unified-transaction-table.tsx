@@ -20,6 +20,7 @@ import { TransactionForm, TransactionFormValues } from "./transaction-form"
 import {
   restoreTransaction,
   voidTransaction,
+  deleteTransaction,
 } from "@/services/transaction.service"
 import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
@@ -33,7 +34,7 @@ type ColumnKey =
   | "category"
   | "people" // Separated
   | "tag" // Separated
-  | "cycle"
+  | "tag" // Separated
   | "account" // Smart Account
   | "amount"
   | "back_info"
@@ -52,8 +53,10 @@ type BulkActionState = {
   currentTab: 'active' | 'void' | 'pending'
   onVoidSelected: () => Promise<void> | void
   onRestoreSelected: () => Promise<void> | void
+  onDeleteSelected: () => Promise<void> | void
   isVoiding: boolean
   isRestoring: boolean
+  isDeleting: boolean
 }
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -205,13 +208,12 @@ export function UnifiedTransactionTable({
     { key: "category", label: "Category", defaultWidth: 150 },
     ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 160, minWidth: 140 } as ColumnConfig] : []),
     { key: "account", label: "Account", defaultWidth: 200, minWidth: 180 },
-    { key: "cycle", label: "Cycle", defaultWidth: 100 },
     { key: "amount", label: "Amount", defaultWidth: 120 },
     { key: "back_info", label: "Back Info", defaultWidth: 140 },
     { key: "initial_back", label: "Initial Back", defaultWidth: 110 },
     { key: "people_back", label: "People Back", defaultWidth: 110 },
     { key: "final_price", label: "Final Price", defaultWidth: 120 },
-    { key: "tag", label: accountType === 'credit_card' ? "Cycle" : "Tag", defaultWidth: 180, minWidth: 150 },
+    { key: "tag", label: "Tag / Cycle", defaultWidth: 200, minWidth: 180 },
     { key: "status", label: "Status", defaultWidth: 130, minWidth: 120 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
@@ -228,7 +230,6 @@ export function UnifiedTransactionTable({
       category: true,
       people: !hidePeopleColumn,
       tag: true,
-      cycle: true,
       account: true,
       amount: true,
       back_info: true,
@@ -281,13 +282,14 @@ export function UnifiedTransactionTable({
   const [confirmCancelTarget, setConfirmCancelTarget] = useState<TransactionWithDetails | null>(null)
   const [isVoiding, setIsVoiding] = useState(false)
   const [isRestoring, setIsRestoring] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [voidError, setVoidError] = useState<string | null>(null)
   const [statusOverrides, setStatusOverrides] = useState<Record<string, TransactionWithDetails['status']>>({})
   const [refundFormTxn, setRefundFormTxn] = useState<TransactionWithDetails | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const [refundFormStage, setRefundFormStage] = useState<'request' | 'confirm'>('request')
   const [internalSortState, setInternalSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
-  const [bulkDialog, setBulkDialog] = useState<{ mode: 'void' | 'restore'; open: boolean } | null>(null)
+  const [bulkDialog, setBulkDialog] = useState<{ mode: 'void' | 'restore' | 'delete'; open: boolean } | null>(null)
 
   const sortState = externalSortState ?? internalSortState
   const setSortState = onSortChange ?? setInternalSortState
@@ -331,7 +333,6 @@ export function UnifiedTransactionTable({
       category: true,
       people: !hidePeopleColumn,
       tag: true,
-      cycle: true,
       account: true,
       amount: true,
       back_info: true,
@@ -472,6 +473,11 @@ export function UnifiedTransactionTable({
     setBulkDialog({ mode: 'restore', open: true })
   }, [selection.size])
 
+  const handleBulkDelete = useCallback(async () => {
+    if (selection.size === 0) return;
+    setBulkDialog({ mode: 'delete', open: true })
+  }, [selection.size])
+
   const currentTab = activeTab ?? 'active';
 
   useEffect(() => {
@@ -481,15 +487,19 @@ export function UnifiedTransactionTable({
       currentTab,
       onVoidSelected: handleBulkVoid,
       onRestoreSelected: handleBulkRestore,
+      onDeleteSelected: handleBulkDelete,
       isVoiding,
       isRestoring,
+      isDeleting,
     })
   }, [
     currentTab,
     handleBulkRestore,
     handleBulkVoid,
+    handleBulkDelete,
     isRestoring,
     isVoiding,
+    isDeleting,
     onBulkActionStateChange,
     selection.size,
   ])
@@ -499,7 +509,7 @@ export function UnifiedTransactionTable({
     router.refresh()
   }
 
-  const executeBulk = async (mode: 'void' | 'restore') => {
+  const executeBulk = async (mode: 'void' | 'restore' | 'delete') => {
     if (selection.size === 0) return
     if (mode === 'void') {
       setIsVoiding(true)
@@ -518,7 +528,7 @@ export function UnifiedTransactionTable({
       if (errorCount > 0) {
         alert(`Failed to void ${errorCount} transactions.`)
       }
-    } else {
+    } else if (mode === 'restore') {
       setIsRestoring(true)
       let errorCount = 0
       for (const id of Array.from(selection)) {
@@ -534,6 +544,21 @@ export function UnifiedTransactionTable({
       router.refresh()
       if (errorCount > 0) {
         alert(`Failed to restore ${errorCount} transactions.`)
+      }
+    } else if (mode === 'delete') {
+      setIsDeleting(true)
+      let errorCount = 0
+      for (const id of Array.from(selection)) {
+        const ok = await deleteTransaction(id)
+        if (!ok) {
+          errorCount++
+        }
+      }
+      setIsDeleting(false)
+      updateSelection(new Set())
+      router.refresh()
+      if (errorCount > 0) {
+        alert(`Failed to delete ${errorCount} transactions.`)
       }
     }
     setBulkDialog(null)
@@ -599,9 +624,25 @@ export function UnifiedTransactionTable({
     const expenseSummary = { ...initialSummary };
 
     for (const txn of selectedTxns) {
+      const visualType = (txn as any).displayType ?? txn.type;
       const originalAmount = typeof txn.original_amount === 'number' ? txn.original_amount : txn.amount;
-      const targetSummary = txn.type === 'income' ? incomeSummary : expenseSummary;
-      targetSummary.sumAmount += Math.abs(originalAmount ?? 0);
+      const absAmount = Math.abs(originalAmount ?? 0);
+
+      if (visualType === 'income') {
+        incomeSummary.sumAmount += absAmount;
+      } else if (visualType === 'expense') {
+        expenseSummary.sumAmount += absAmount;
+      } else {
+        // For transfers/others, fallback to amount sign if needed, or default to expense as per FilterableTransactions?
+        // FilterableTransactions defaults 'else' to expense.
+        // But let's try to be smarter: if amount > 0, income, else expense.
+        const amount = txn.amount ?? 0;
+        if (amount > 0) {
+          incomeSummary.sumAmount += absAmount;
+        } else {
+          expenseSummary.sumAmount += absAmount;
+        }
+      }
     }
     return { incomeSummary, expenseSummary }
   }, [selection, tableData])
@@ -861,7 +902,8 @@ export function UnifiedTransactionTable({
               )
 
               // Only apply line-through to void transactions, not pending or waiting_refund
-              const voidedTextClass = effectiveStatus === 'void' ? "opacity-60 line-through text-gray-400" : ""
+              // User requested to remove line-through and opacity for void
+              const voidedTextClass = ""
               const percentRaw = txn.cashback_share_percent
               const fixedRaw = txn.cashback_share_fixed
               const calculatedSum = txn.cashback_share_amount ?? ((Math.abs(originalAmount ?? 0) * (percentRaw ?? 0)) + (fixedRaw ?? 0))
@@ -1130,22 +1172,24 @@ export function UnifiedTransactionTable({
                     )
                   }
                   case "tag":
-                    return txn.tag ? (
-                      <div className="flex flex-wrap gap-1 min-w-[180px]">
-                        <CustomTooltip content={txn.tag}>
-                          <span className="inline-block items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 border border-slate-200 cursor-help whitespace-normal break-words">
-                            {txn.tag}
-                          </span>
-                        </CustomTooltip>
-                      </div>
-                    ) : <span className="text-slate-400">-</span>
-                  case "cycle":
                     return (
-                      <CustomTooltip content={cycleLabel}>
-                        <span className="inline-block max-w-[100px] truncate text-[10px] text-slate-600 cursor-help border-b border-dotted border-slate-400">
-                          {cycleLabel}
-                        </span>
-                      </CustomTooltip>
+                      <div className="flex flex-wrap gap-1 min-w-[180px]">
+                        {cycleLabel !== "-" && (
+                          <CustomTooltip content="Cycle">
+                            <span className="inline-block items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 border border-blue-100 cursor-help">
+                              {cycleLabel}
+                            </span>
+                          </CustomTooltip>
+                        )}
+                        {txn.tag && (
+                          <CustomTooltip content={txn.tag}>
+                            <span className="inline-block items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 border border-slate-200 cursor-help whitespace-normal break-words">
+                              {txn.tag}
+                            </span>
+                          </CustomTooltip>
+                        )}
+                        {!txn.tag && cycleLabel === "-" && <span className="text-slate-400">-</span>}
+                      </div>
                     )
                   case "amount":
                     return amountValue
@@ -1320,25 +1364,25 @@ export function UnifiedTransactionTable({
               {summary.incomeSummary.sumAmount > 0 && (
                 <TableRow className="bg-emerald-50">
                   <TableCell
-                    colSpan={Math.max(1, displayedColumns.length - 2)}
-                    className="font-bold text-emerald-700 border-r"
+                    colSpan={1 + displayedColumns.findIndex(c => c.key === 'amount')}
+                    className="font-bold text-emerald-700 border-r text-right"
                   >
                     Total Income
                   </TableCell>
                   <TableCell className="text-right font-bold text-emerald-700 border-r">{numberFormatter.format(summary.incomeSummary.sumAmount)}</TableCell>
-                  <TableCell></TableCell>
+                  <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')}></TableCell>
                 </TableRow>
               )}
               {summary.expenseSummary.sumAmount > 0 && (
                 <TableRow className="bg-red-50">
                   <TableCell
-                    colSpan={Math.max(1, displayedColumns.length - 2)}
-                    className="font-bold text-red-500 border-r"
+                    colSpan={1 + displayedColumns.findIndex(c => c.key === 'amount')}
+                    className="font-bold text-red-500 border-r text-right"
                   >
                     Total Expense
                   </TableCell>
                   <TableCell className="text-right font-bold text-red-500 border-r">{numberFormatter.format(summary.expenseSummary.sumAmount)}</TableCell>
-                  <TableCell></TableCell>
+                  <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')}></TableCell>
                 </TableRow>
               )}
             </TableFooter>
@@ -1597,29 +1641,31 @@ export function UnifiedTransactionTable({
               onClick={event => event.stopPropagation()}
             >
               <h3 className="text-lg font-semibold text-slate-900">
-                {bulkDialog.mode === 'void' ? 'Bulk Void' : 'Bulk Restore'}
+                {bulkDialog.mode === 'void' ? 'Bulk Void' : bulkDialog.mode === 'restore' ? 'Bulk Restore' : 'Permanent Delete'}
               </h3>
               <p className="mt-2 text-sm text-slate-600">
-                Bạn có chắc muốn {bulkDialog.mode === 'void' ? 'hủy' : 'khôi phục'}{' '}
-                <span className="font-semibold">{selection.size}</span> giao dịch đã chọn?
+                {bulkDialog.mode === 'void'
+                  ? `Are you sure you want to void ${selection.size} transactions?`
+                  : bulkDialog.mode === 'restore'
+                    ? `Are you sure you want to restore ${selection.size} transactions?`
+                    : `Are you sure you want to PERMANENTLY DELETE ${selection.size} transactions? This cannot be undone.`}
               </p>
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   className="rounded-md px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100"
                   onClick={() => setBulkDialog(null)}
+                  disabled={isVoiding || isRestoring || isDeleting}
                 >
                   Cancel
                 </button>
                 <button
-                  className={`inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm transition ${bulkDialog.mode === 'void'
-                    ? 'bg-red-600 hover:bg-red-500'
-                    : 'bg-green-600 hover:bg-green-500'
+                  className={`inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-70 ${bulkDialog.mode === 'restore' ? 'bg-green-600 hover:bg-green-500' : 'bg-red-600 hover:bg-red-500'
                     }`}
-                  onClick={() => void executeBulk(bulkDialog.mode)}
-                  disabled={isVoiding || isRestoring}
+                  onClick={() => executeBulk(bulkDialog.mode)}
+                  disabled={isVoiding || isRestoring || isDeleting}
                 >
-                  {(isVoiding || isRestoring) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {bulkDialog.mode === 'void' ? 'Confirm Void' : 'Confirm Restore'}
+                  {(isVoiding || isRestoring || isDeleting) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {bulkDialog.mode === 'void' ? 'Void' : bulkDialog.mode === 'restore' ? 'Restore' : 'Delete Forever'}
                 </button>
               </div>
             </div>

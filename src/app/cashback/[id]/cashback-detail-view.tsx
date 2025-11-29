@@ -119,7 +119,7 @@ export function CashbackDetailView({ card, transactions, cashbackConfig }: Cashb
                 </div>
                 <UnifiedTransactionTable
                     transactions={filteredTransactions}
-                    hiddenColumns={['back_info', 'account', 'cycle', 'tag', 'final_price']}
+                    hiddenColumns={['back_info', 'account', 'tag', 'final_price']}
                 />
             </div>
         </div>
