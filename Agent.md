@@ -1,90 +1,54 @@
-AGENT TASK: RESTORE CASHBACK UI & FIX BUGS
+# **TASK: FIX CREDIT CARD LOGIC & TABLE UI OVERFLOW**
 
-Context:
-The Cashback Details Page (/cashback/[id]) is broken after recent refactors.
+Status: PENDING
 
-Data Issue: Categories show "Uncategorized". Back Amount columns are missing formulas/subtext.
+Created: 2025-11-29
 
-Edit Bug: Editing a Cashback transaction opens "Transfer" tab instead of "Expense/Income".
+Priority: CRITICAL (Financial Logic Error)
 
-Visual Bug: Icons are missing (Money Transfer has 'M' instead of image). Copy icons are gone.
+## **1\. Context**
 
-Objective:
+User báo cáo logic tính toán số dư khả dụng (Available) của thẻ tín dụng bị sai nghiêm trọng và giao diện bảng (Table) bị vỡ layout trên màn hình nhỏ/trung bình.
 
-Fix UnifiedTransactionTable logic for Cashback context.
+## **2\. Issues & Solutions**
 
-Restore "Profit/Formula" display in columns.
+### **A. Critical Logic Error: Credit Card Balance**
 
-Fix Edit Tab detection.
+* **Hiện trạng (Bug):**  
+  * Limit: 150,000,000  
+  * Current Balance (Debt): \~29,000,000  
+  * **Displayed Available:** \~179,000,000 (Sai: Đang lấy Limit \+ Debt).  
+* **Yêu cầu sửa (Fix):**  
+  * Công thức đúng cho Available (Khả dụng):  
+    * Available \= Credit Limit \- |Current Debt| (Lấy hạn mức trừ đi dư nợ thực tế).  
+  * Logic hiển thị Current Balance:  
+    * Cần review lại xem Database lưu số âm hay dương. Nếu lưu âm (Double Entry chuẩn), công thức là Limit \+ CurrentBalance.  
+  * **Debug Info:**  
+    * Tại component AccountCard hoặc AccountDetails, hiển thị thêm (có thể ẩn trong Tooltip hoặc chế độ debug):  
+      * Total In (Tổng tiền vào/Trả nợ).  
+      * Total Out (Tổng chi tiêu).  
+      * Initial Balance.
 
-1. Backend: Fix getUnifiedTransactions for Cashback
+### **B. UI Issue: Table Overflow**
 
-Target: src/services/transaction.service.ts
+* **Hiện trạng:** Bảng dữ liệu (UnifiedTransactionTable hoặc bảng Accounts) bị dãn quá rộng, làm vỡ layout trang, thanh scroll ngang của trình duyệt nằm tuốt dưới đáy trang web (khó thao tác).  
+* **Yêu cầu sửa:**  
+  * Wrap Table trong một container có overflow-x-auto.  
+  * Đảm bảo thanh scroll ngang của Table nằm ngay dưới Table (không phải scroll của cả Body).  
+  * Cố định (Freeze/Sticky) cột quan trọng (ví dụ: cột Actions hoặc cột Name) nếu cần thiết, hoặc chỉ cần đảm bảo scroll mượt mà.
 
-A. Category & Shop Mapping
+## **3\. Implementation Plan**
 
-Ensure category_name, category_icon, category_img are correctly joined and returned.
+1. **Update src/components/moneyflow/account-card.tsx:**  
+   * Sửa function calculateAvailableBalance.  
+   * Thêm hiển thị Total In / Total Out vào phần Details (hoặc hover tooltip) để User kiểm tra lại data.  
+2. **Update src/components/moneyflow/unified-transaction-table.tsx (hoặc account-table.tsx):**  
+   * Thêm class w-full overflow-x-auto cho wrapper div.  
+   * Kiểm tra whitespace-nowrap trên các cell, nếu gây dãn quá mức thì cho phép wrap text (whitespace-normal) hoặc truncate (truncate).
 
-Debug: If category_id is present in DB but shows "Uncategorized", the join logic is failing.
+## **4\. Acceptance Criteria**
 
-B. Cashback Calculations
-
-Ensure cashback_share_percent and cashback_share_fixed are returned.
-
-Calculate on Backend (Optional) or Frontend:
-
-initial_back: The bank's cashback amount (Calculated via CashbackService).
-
-profit: initial_back - (share_percent * amount + share_fixed).
-
-2. Frontend: UnifiedTransactionTable Updates
-
-A. Restore Cashback Columns (The "Formula" Look)
-
-Initial Back:
-
-Display: [Bank Back Amount] (Bold).
-
-1. **Frontend:** Update AccountCard math logic.  
-2. **Frontend:** Polish UnifiedTransactionTable columns (Notes, Time).  
-3. **Frontend:** Fix TransactionForm to save full datetime.  
-4. **Integration:** Ensure /people page refreshes on actions.
-Subtext: [Rate]% * [Amount] (Gray, small).
-
-People Back:
-
-Display: [Share Amount] (Red/Orange).
-
-Subtext: [Percent]% + [Fixed] (Gray).
-
-Profit:
-
-Display: [Profit Amount] (Green/Red).
-
-Subtext: "Net" (Gray).
-
-B. Fix Copy Icon
-
-Re-implement the "Copy" ghost button in Note/ID/Status columns.
-
-Ensure lucide-react icons are imported correctly.
-
-3. Frontend: Fix Edit Logic (TransactionForm)
-
-Logic:
-
-If initialData.category is "Cashback" or "Income" -> Tab = income.
-
-If initialData.category is "Money Transfer" -> Tab = transfer.
-
-Fix: Ensure the useEffect in Form correctly identifies the type from initialData.
-
-4. Execution Steps
-
-Service: Debug the Category Join query.
-
-Table: Implement the complex Cell Renderers for Cashback columns.
-
-Form: Fix the Tab switching logic.
-
-Verify: Run build.
+* \[ \] Thẻ 150tr, tiêu 29tr \-\> Phải hiện Available là \~121tr.  
+* \[ \] Bảng không làm vỡ layout ngang của trang web.  
+*   
+* 

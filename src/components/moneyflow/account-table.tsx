@@ -58,7 +58,7 @@ export function AccountTable({
   allAccounts = [],
 }: AccountTableProps) {
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow className="bg-slate-50">
@@ -110,11 +110,10 @@ export function AccountTable({
                   <button
                     type="button"
                     onClick={() => onToggleStatus?.(account.id, !isActive)}
-                    className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold transition ${
-                      isActive
+                    className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold transition ${isActive
                         ? 'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300'
                         : 'border border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300'
-                    }`}
+                      }`}
                     aria-pressed={isActive}
                     disabled={isPending}
                   >

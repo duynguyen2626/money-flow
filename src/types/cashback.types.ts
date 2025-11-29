@@ -20,6 +20,7 @@ export type CashbackTransaction = {
 export type CashbackCard = {
   accountId: string
   accountName: string
+  accountImageUrl?: string | null
   currentSpend: number
   totalEarned: number
   sharedAmount: number

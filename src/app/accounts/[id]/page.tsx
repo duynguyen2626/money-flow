@@ -131,17 +131,19 @@ export default async function AccountPage({ params }: PageProps) {
           <div className="flex items-center justify-between border-b pb-3 mb-4">
             <h2 className="text-lg font-semibold">Lịch sử giao dịch</h2>
           </div>
-          <UnifiedTransactionTable
-            data={transactions}
-            transactions={transactions}
-            context="account"
-            accountId={id}
-            accountType={account.type}
-            accounts={allAccounts}
-            categories={categories}
-            people={people}
-            shops={shops}
-          />
+          <div className="w-full overflow-x-auto">
+            <UnifiedTransactionTable
+              data={transactions}
+              transactions={transactions}
+              context="account"
+              accountId={id}
+              accountType={account.type}
+              accounts={allAccounts}
+              categories={categories}
+              people={people}
+              shops={shops}
+            />
+          </div>
         </section>
       </TagFilterProvider>
     </div>

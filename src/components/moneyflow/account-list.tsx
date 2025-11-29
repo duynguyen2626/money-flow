@@ -132,8 +132,8 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
               type="button"
               onClick={() => setActiveFilter(filter.key)}
               className={`rounded-full px-3 py-1 text-sm font-semibold transition ${activeFilter === filter.key
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               aria-pressed={activeFilter === filter.key}
             >
@@ -200,7 +200,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
                   {section.accounts.length} accounts
                 </span>
               </div>
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
                 {section.accounts.map(account => (
                   <AccountCard
                     key={account.id}
@@ -233,7 +233,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
                 </div>
                 <span className="text-slate-500">{showClosedAccounts ? '▲' : '▼'}</span>
               </summary>
-              <div className="mt-4 grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              <div className="mt-4 grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
                 {closedItems.map(account => (
                   <AccountCard
                     key={account.id}

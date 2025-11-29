@@ -1,120 +1,60 @@
-import Link from 'next/link'
-import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+'use client';
 
-import { getCashbackProgress } from '@/services/cashback.service'
-import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
-import { TransactionWithDetails } from '@/types/moneyflow.types'
+import React from 'react';
+import { useRouter } from 'next/navigation';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ArrowLeft, Construction, Info } from 'lucide-react';
 
-export const dynamic = 'force-dynamic'
-
-type CashbackDetailPageProps = {
-  params: Promise<{ id: string }>
-}
-
-const currencyFormatter = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
-  maximumFractionDigits: 0,
-})
-
-export default async function CashbackDetailPage(props: CashbackDetailPageProps) {
-  const params = await props.params
-  const cards = await getCashbackProgress(0, [params.id])
-  const card = cards[0]
-
-  if (!card) {
-    notFound()
-  }
-
-  const transactions: TransactionWithDetails[] = card.transactions.map(txn => ({
-    id: txn.id,
-    occurred_at: txn.occurred_at,
-    note: txn.note ?? '',
-    amount: txn.amount,
-    original_amount: txn.amount,
-    type: 'expense',
-    status: 'posted',
-    created_at: txn.occurred_at,
-    shop_name: txn.shopName,
-    shop_logo_url: txn.shopLogoUrl,
-    cashback_share_amount: txn.peopleBack,
-    cashback_share_percent: txn.peopleBack > 0 ? txn.peopleBack / txn.amount : undefined,
-    cashback_share_fixed: 0,
-    profit: txn.profit,
-    bank_back: txn.bankBack,
-    bank_rate: card.rate,
-    transaction_lines: [],
-    category_name: txn.categoryName,
-    category_icon: txn.categoryIcon ?? undefined,
-    category_image_url: txn.categoryImageUrl ?? undefined,
-    account_name: card.accountName,
-    tag: null,
-    shop_id: null,
-  }))
+export default function CashbackDetailsPage() {
+  const router = useRouter();
 
   return (
-    <div className="w-full px-6 py-8">
-      <div className="mb-8">
-        <Link
-          href="/cashback"
-          className="mb-4 inline-flex items-center text-sm text-slate-500 hover:text-slate-700"
+    <div className="container mx-auto p-6 max-w-3xl space-y-6">
+      {/* Back Button */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          onClick={() => router.push('/cashback')}
+          className="gap-2 pl-0 hover:pl-2 transition-all"
         >
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          Back to Dashboard
-        </Link>
-
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">{card.accountName}</h1>
-            <p className="text-slate-500">{card.cycleLabel}</p>
-          </div>
-          <div className="text-right">
-            <div className="text-sm text-slate-500">Net Profit</div>
-            <div className={`text-2xl font-bold ${card.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {currencyFormatter.format(card.netProfit)}
-            </div>
-          </div>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <div className="rounded-lg border border-slate-200 p-4 bg-white shadow-sm">
-            <div className="text-xs font-medium text-slate-500">Total Spend</div>
-            <div className="mt-1 text-lg font-semibold text-slate-900">
-              {currencyFormatter.format(card.currentSpend)}
-            </div>
-          </div>
-          <div className="rounded-lg border border-slate-200 p-4 bg-white shadow-sm">
-            <div className="text-xs font-medium text-slate-500">Bank Back</div>
-            <div className="mt-1 text-lg font-semibold text-emerald-600">
-              {currencyFormatter.format(card.totalEarned)}
-            </div>
-          </div>
-          <div className="rounded-lg border border-slate-200 p-4 bg-white shadow-sm">
-            <div className="text-xs font-medium text-slate-500">Shared Back</div>
-            <div className="mt-1 text-lg font-semibold text-slate-600">
-              {currencyFormatter.format(card.sharedAmount)}
-            </div>
-          </div>
-          <div className="rounded-lg border border-slate-200 p-4 bg-slate-50 shadow-sm">
-            <div className="text-xs font-medium text-slate-500">Net Profit</div>
-            <div className={`mt-1 text-lg font-semibold ${card.netProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {currencyFormatter.format(card.netProfit)}
-            </div>
-          </div>
-        </div>
+          <ArrowLeft className="h-4 w-4" />
+          Back to Cashback List
+        </Button>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="border-b border-slate-200 px-6 py-4">
-          <h2 className="font-semibold text-slate-900">Transactions</h2>
-        </div>
-        <UnifiedTransactionTable
-          transactions={transactions}
-          hiddenColumns={['back_info', 'account', 'cycle', 'tag', 'final_price']}
-        />
-      </div>
+      {/* Main Notice Card */}
+      <Card className="border-dashed border-2">
+        <CardHeader className="text-center pb-2">
+          <div className="mx-auto bg-muted p-4 rounded-full w-fit mb-4">
+            <Construction className="h-12 w-12 text-muted-foreground" />
+          </div>
+          <CardTitle className="text-2xl">Feature Under Reconstruction</CardTitle>
+          <CardDescription className="text-lg mt-2">
+            Tính năng Chi tiết Hoàn tiền đang được xây dựng lại
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-center space-y-6">
+          <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg text-left flex gap-3 items-start max-w-lg mx-auto">
+            <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+            <div className="space-y-2 text-sm text-blue-800 dark:text-blue-200">
+              <p>Chúng tôi phát hiện một số vấn đề hiển thị dữ liệu ở phiên bản trước:</p>
+              <ul className="list-disc pl-4 space-y-1">
+                <li>Hiển thị sai danh mục (Category).</li>
+                <li>Lỗi ngữ cảnh khi chỉnh sửa giao dịch.</li>
+                <li>Nhầm lẫn cột dữ liệu (Notes/Amount).</li>
+              </ul>
+              <p className="font-medium pt-2">
+                Hệ thống đang được viết lại để đảm bảo độ chính xác tuyệt đối cho dòng tiền của bạn.
+              </p>
+            </div>
+          </div>
+
+          <Button onClick={() => router.push('/cashback')}>
+            Quay lại danh sách
+          </Button>
+        </CardContent>
+      </Card>
     </div>
-  )
+  );
 }
