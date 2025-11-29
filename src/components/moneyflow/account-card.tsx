@@ -15,7 +15,8 @@ import {
   Infinity as InfinityIcon,
   Wallet,
   Landmark,
-  PiggyBank
+  PiggyBank,
+  ChevronRight
 } from 'lucide-react'
 import { MouseEvent, ReactNode, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -246,48 +247,50 @@ export function AccountCard({
 
   return (
     <div
-      className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
+      className="group relative flex flex-col justify-between p-5 rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-md h-full"
       onClick={openDetails}
     >
-      {/* Top Section: Header (Name & Limit) */}
-      <div className="flex items-start justify-between px-3 pt-3 pb-1">
-        <div className="flex items-center gap-1.5 min-w-0 pr-2">
-          <h3 className="font-bold text-slate-900 text-base leading-tight truncate" title={account.name}>
-            {account.name}
-          </h3>
-          <div onClick={stopCardNavigation}>
-            <EditAccountDialog
-              account={account}
-              collateralAccounts={collateralAccounts}
-              triggerContent={
-                <div className="p-0.5 text-slate-400 hover:text-slate-600 cursor-pointer rounded-full hover:bg-slate-100 transition-colors">
-                  <Pencil className="h-3 w-3" />
-                </div>
-              }
-              onOpen={stopCardNavigation}
-            />
+      {/* Top Section */}
+      <div className="flex justify-between items-start mb-4">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-slate-900 text-lg leading-tight truncate" title={account.name}>
+              {account.name}
+            </h3>
+            <div onClick={stopCardNavigation}>
+              <EditAccountDialog
+                account={account}
+                collateralAccounts={collateralAccounts}
+                triggerContent={
+                  <div className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer rounded-full hover:bg-slate-100 transition-colors">
+                    <Pencil className="h-3.5 w-3.5" />
+                  </div>
+                }
+                onOpen={stopCardNavigation}
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            {dueStatus && (
+              <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${dueStatus.tone}`}>
+                <Clock4 className="h-3 w-3" />
+                {dueStatus.label}
+              </span>
+            )}
+            {cashbackBadge}
           </div>
         </div>
 
-        {isCreditCard && (
-          <span className="flex-shrink-0 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 whitespace-nowrap">
-            <span className="text-slate-400">Limit:</span>
-            <span className="font-mono font-semibold">{numberFormatter.format(displayLimit)}</span>
-          </span>
-        )}
-      </div>
-
-      {/* Middle Section: Image & Info */}
-      <div className="flex items-start gap-3 px-3 pb-3">
-        {/* Left: Avatar */}
+        {/* Card Image */}
         <div className="flex-shrink-0" onClick={stopCardNavigation}>
           <EditAccountDialog
             account={account}
             collateralAccounts={collateralAccounts}
             triggerContent={
               <div className={cn(
-                "flex items-center justify-center bg-slate-50 shadow-sm ring-1 ring-slate-200 overflow-hidden cursor-pointer hover:opacity-80 transition-opacity",
-                isCreditCard ? "h-12 w-20 rounded-md" : "h-12 w-12 rounded-md"
+                "relative overflow-hidden shadow-sm cursor-pointer hover:opacity-90 transition-opacity",
+                isCreditCard ? "h-14 w-24 rounded-lg" : "h-14 w-14 rounded-full"
               )}>
                 {account.logo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -297,7 +300,7 @@ export function AccountCard({
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  <div className="text-slate-400 scale-75">
+                  <div className="h-full w-full flex items-center justify-center bg-slate-100 text-slate-400">
                     {getAccountIcon(account.type)}
                   </div>
                 )}
@@ -306,147 +309,169 @@ export function AccountCard({
             onOpen={stopCardNavigation}
           />
         </div>
+      </div>
 
-        {/* Right: Badges & Balance */}
-        <div className="flex-1 min-w-0 flex flex-col items-end gap-1">
-          {/* Due Date */}
-          {dueStatus && (
-            <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap ${dueStatus.tone}`}>
-              <Clock4 className="h-3 w-3" />
-              {dueStatus.label}
-            </span>
-          )}
-
-          {/* Parent Badge */}
-          {isCreditCard && isChildCard && parentAccount && (
-            <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 whitespace-nowrap">
-              <span className="text-slate-400">Parent:</span>
-              <span>{parentAccount.name}</span>
-            </span>
-          )}
-
-          {/* Cashback Badge */}
-          {cashbackBadge}
-
-          {/* Balance */}
+      {/* Middle Section: Balance */}
+      <div className="mb-6">
+        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+          Current Balance
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleRecalculate}
+            disabled={isRecalculating}
+            className={cn(
+              "p-1.5 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors",
+              isRecalculating && "animate-spin text-blue-600"
+            )}
+            title="Re-sync Balance"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
           <p className={cn(
-            "text-lg font-bold tracking-tight leading-tight mt-0.5",
+            "text-3xl font-bold tracking-tight",
             isCreditCard
-              ? (displayBalance < displayLimit * 0.3 ? 'text-amber-600' : 'text-emerald-600')
+              ? (displayBalance < displayLimit * 0.3 ? 'text-amber-600' : 'text-slate-900')
               : (displayBalance < 0 ? 'text-red-600' : 'text-slate-900')
           )}>
             {numberFormatter.format(displayBalance)}
           </p>
+          <div onClick={stopCardNavigation}>
+            <ConfirmMoneyReceived accountId={account.id} minimal />
+          </div>
         </div>
-      </div>
 
-      {/* Bottom Section: Quick Actions (Icon Only) */}
-      <div className="flex items-center gap-3 p-3 bg-slate-50/50 border-t border-slate-100" onClick={stopCardNavigation}>
-        {isCreditCard ? (
-          <>
-            <ActionButton label="Pay Card">
-              <AddTransactionDialog
-                {...dialogBaseProps}
-                defaultType="transfer"
-                defaultDebtAccountId={account.id}
-                buttonClassName="h-9 w-9 inline-flex items-center justify-center rounded-md transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200 shadow-sm"
-                triggerContent={<CreditCard className="h-4 w-4" />}
-                onOpen={stopCardNavigation}
-              />
-            </ActionButton>
-            <ActionButton label="Income">
-              <AddTransactionDialog
-                {...dialogBaseProps}
-                defaultType="income"
-                defaultSourceAccountId={account.id}
-                buttonClassName="h-9 w-9 inline-flex items-center justify-center rounded-md transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
-                triggerContent={<Plus className="h-4 w-4" />}
-                onOpen={stopCardNavigation}
-              />
-            </ActionButton>
-            <ActionButton label="Expense">
-              <AddTransactionDialog
-                {...dialogBaseProps}
-                defaultType="expense"
-                defaultSourceAccountId={account.id}
-                buttonClassName="h-9 w-9 inline-flex items-center justify-center rounded-md transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 shadow-sm"
-                triggerContent={<Minus className="h-4 w-4" />}
-                onOpen={stopCardNavigation}
-              />
-            </ActionButton>
-            <ActionButton label="Lend / Debt">
-              <AddTransactionDialog
-                {...dialogBaseProps}
-                defaultType="debt"
-                defaultSourceAccountId={account.id}
-                buttonClassName="h-9 w-9 inline-flex items-center justify-center rounded-md transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200 shadow-sm"
-                triggerContent={<User className="h-4 w-4" />}
-                onOpen={stopCardNavigation}
-              />
-            </ActionButton>
-          </>
-        ) : (
-          <>
-            <ActionButton label="Income">
-              <AddTransactionDialog
-                {...dialogBaseProps}
-                defaultType="income"
-                defaultSourceAccountId={account.id}
-                buttonClassName="h-9 w-9 inline-flex items-center justify-center rounded-md transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
-                triggerContent={<Plus className="h-4 w-4" />}
-                onOpen={stopCardNavigation}
-              />
-            </ActionButton>
-            <ActionButton label="Expense">
-              <AddTransactionDialog
-                {...dialogBaseProps}
-                defaultType="expense"
-                defaultSourceAccountId={account.id}
-                buttonClassName="h-9 w-9 inline-flex items-center justify-center rounded-md transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 shadow-sm"
-                triggerContent={<Minus className="h-4 w-4" />}
-                onOpen={stopCardNavigation}
-              />
-            </ActionButton>
-            <ActionButton label="Transfer">
-              <AddTransactionDialog
-                {...dialogBaseProps}
-                defaultType="transfer"
-                defaultSourceAccountId={account.id}
-                buttonClassName="h-9 w-9 inline-flex items-center justify-center rounded-md transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 shadow-sm"
-                triggerContent={<ArrowLeftRight className="h-4 w-4" />}
-                onOpen={stopCardNavigation}
-              />
-            </ActionButton>
-            <ActionButton label="Lend / Debt">
-              <AddTransactionDialog
-                {...dialogBaseProps}
-                defaultType="debt"
-                defaultSourceAccountId={account.id}
-                buttonClassName="h-9 w-9 inline-flex items-center justify-center rounded-md transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-purple-50 hover:text-purple-600 hover:border-purple-200 shadow-sm"
-                triggerContent={<User className="h-4 w-4" />}
-                onOpen={stopCardNavigation}
-              />
-            </ActionButton>
-          </>
+        {isCreditCard && (
+          <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
+            <span>Limit: <span className="font-medium text-slate-600">{numberFormatter.format(displayLimit)}</span></span>
+          </div>
         )}
-
-        <div className="flex-1" />
-
-        {/* Re-sync Button */}
-        <ActionButton label="Re-sync Balance">
-          <button
-            onClick={handleRecalculate}
-            disabled={isRecalculating}
-            className="h-9 w-9 inline-flex items-center justify-center rounded-md transition-colors bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-slate-700 shadow-sm"
-          >
-            <RefreshCw className={cn("h-4 w-4", isRecalculating && "animate-spin")} />
-          </button>
-        </ActionButton>
       </div>
 
-      {/* Confirm Money Received Overlay */}
-      <div className="absolute top-4 right-4" onClick={stopCardNavigation}>
-        <ConfirmMoneyReceived accountId={account.id} minimal />
+      {/* Bottom Section: Actions & Details */}
+      <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-100" onClick={stopCardNavigation}>
+        <div className="flex items-center gap-3">
+          {isCreditCard ? (
+            <>
+              <CustomTooltip content="Pay Card">
+                <div>
+                  <AddTransactionDialog
+                    {...dialogBaseProps}
+                    defaultType="transfer"
+                    defaultDebtAccountId={account.id}
+                    buttonClassName="p-1.5 rounded-md text-orange-600 hover:bg-orange-50 transition-colors"
+                    triggerContent={<CreditCard className="h-5 w-5" />}
+                    onOpen={stopCardNavigation}
+                  />
+                </div>
+              </CustomTooltip>
+              <CustomTooltip content="Income">
+                <div>
+                  <AddTransactionDialog
+                    {...dialogBaseProps}
+                    defaultType="income"
+                    defaultSourceAccountId={account.id}
+                    buttonClassName="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors"
+                    triggerContent={<Plus className="h-5 w-5" />}
+                    onOpen={stopCardNavigation}
+                  />
+                </div>
+              </CustomTooltip>
+              <CustomTooltip content="Expense">
+                <div>
+                  <AddTransactionDialog
+                    {...dialogBaseProps}
+                    defaultType="expense"
+                    defaultSourceAccountId={account.id}
+                    buttonClassName="p-1.5 rounded-md text-rose-600 hover:bg-rose-50 transition-colors"
+                    triggerContent={<Minus className="h-5 w-5" />}
+                    onOpen={stopCardNavigation}
+                  />
+                </div>
+              </CustomTooltip>
+              <CustomTooltip content="Lend / Debt">
+                <div>
+                  <AddTransactionDialog
+                    {...dialogBaseProps}
+                    defaultType="debt"
+                    defaultSourceAccountId={account.id}
+                    buttonClassName="p-1.5 rounded-md text-purple-600 hover:bg-purple-50 transition-colors"
+                    triggerContent={<User className="h-5 w-5" />}
+                    onOpen={stopCardNavigation}
+                  />
+                </div>
+              </CustomTooltip>
+            </>
+          ) : (
+            <>
+              <CustomTooltip content="Income">
+                <div>
+                  <AddTransactionDialog
+                    {...dialogBaseProps}
+                    defaultType="income"
+                    defaultSourceAccountId={account.id}
+                    buttonClassName="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors"
+                    triggerContent={<Plus className="h-5 w-5" />}
+                    onOpen={stopCardNavigation}
+                  />
+                </div>
+              </CustomTooltip>
+              <CustomTooltip content="Expense">
+                <div>
+                  <AddTransactionDialog
+                    {...dialogBaseProps}
+                    defaultType="expense"
+                    defaultSourceAccountId={account.id}
+                    buttonClassName="p-1.5 rounded-md text-rose-600 hover:bg-rose-50 transition-colors"
+                    triggerContent={<Minus className="h-5 w-5" />}
+                    onOpen={stopCardNavigation}
+                  />
+                </div>
+              </CustomTooltip>
+              <CustomTooltip content="Transfer">
+                <div>
+                  <AddTransactionDialog
+                    {...dialogBaseProps}
+                    defaultType="transfer"
+                    defaultSourceAccountId={account.id}
+                    buttonClassName="p-1.5 rounded-md text-blue-600 hover:bg-blue-50 transition-colors"
+                    triggerContent={<ArrowLeftRight className="h-5 w-5" />}
+                    onOpen={stopCardNavigation}
+                  />
+                </div>
+              </CustomTooltip>
+              <CustomTooltip content="Lend / Debt">
+                <div>
+                  <AddTransactionDialog
+                    {...dialogBaseProps}
+                    defaultType="debt"
+                    defaultSourceAccountId={account.id}
+                    buttonClassName="p-1.5 rounded-md text-purple-600 hover:bg-purple-50 transition-colors"
+                    triggerContent={<User className="h-5 w-5" />}
+                    onOpen={stopCardNavigation}
+                  />
+                </div>
+              </CustomTooltip>
+            </>
+          )}
+        </div>
+
+        {cashback?.maxCashback ? (
+          <div
+            className="text-xs font-medium text-slate-500 cursor-pointer hover:text-slate-700 transition-colors"
+            onClick={openDetails}
+          >
+            Cashback Remains: <span className="text-slate-900 font-bold">{numberFormatter.format(Math.max(0, cashback.maxCashback - (cashback.earnedSoFar ?? 0)))}</span>
+          </div>
+        ) : (
+          <div
+            className="flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-blue-600 transition-colors cursor-pointer"
+            onClick={openDetails}
+          >
+            Details
+            <ChevronRight className="h-4 w-4" />
+          </div>
+        )}
       </div>
     </div>
   )

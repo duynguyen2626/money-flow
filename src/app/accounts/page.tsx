@@ -4,6 +4,7 @@ import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
 import { AccountList } from '@/components/moneyflow/account-list'
+import { FixDataButton } from '@/components/moneyflow/fix-data-button'
 import { AccountCashbackSnapshot } from '@/types/moneyflow.types'
 
 export const dynamic = 'force-dynamic'
@@ -51,8 +52,11 @@ export default async function AccountsPage() {
             <h1 className="text-2xl font-semibold text-slate-900">Accounts</h1>
             <p className="text-sm text-slate-500">Grid/Table views, quick filters, and smart credit insights.</p>
           </div>
-          <div className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
-            {accounts.length} accounts tracked
+          <div className="flex items-center gap-3">
+            <FixDataButton />
+            <div className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
+              {accounts.length} accounts tracked
+            </div>
           </div>
         </div>
       </header>

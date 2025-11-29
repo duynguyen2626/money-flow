@@ -122,7 +122,7 @@ export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProp
                                 {item.receiver_name || 'Unknown'}
                             </TableCell>
                             <TableCell>{item.bank_number || '-'}</TableCell>
-                            <TableCell>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(item.amount)}</TableCell>
+                            <TableCell>{new Intl.NumberFormat('en-US').format(item.amount)}</TableCell>
                             <TableCell>{item.note}</TableCell>
                             <TableCell>
                                 {item.target_account_id ? (

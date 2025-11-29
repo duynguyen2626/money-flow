@@ -317,7 +317,7 @@ export function AccountDetailsView({
     }
 
     return (
-        <div className="w-full h-[calc(100vh-64px)] flex flex-col space-y-4">
+        <div className="w-full h-[calc(100vh-64px)] flex flex-col space-y-4 p-6">
             {/* Header */}
             <div className="flex flex-col lg:flex-row items-center justify-between bg-white p-4 rounded-lg border border-slate-200 shadow-sm shrink-0 gap-4">
                 {/* Left: Account Info & Stats */}
@@ -330,7 +330,7 @@ export function AccountDetailsView({
                         {account.logo_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                                src={account.logo_url}
+                                src={account.logo_url as string}
                                 alt={account.name}
                                 className="h-16 w-16 object-contain rounded-lg border border-slate-200"
                             />
@@ -696,7 +696,7 @@ export function AccountDetailsView({
 
             {/* Table Container */}
             <div className="flex-1 border rounded-lg overflow-hidden bg-background shadow-sm">
-                <div className="h-full overflow-auto">
+                <div className="h-full overflow-x-auto">
                     <UnifiedTransactionTable
                         transactions={finalTransactions}
                         accountType={account.type}
@@ -711,7 +711,7 @@ export function AccountDetailsView({
                         onBulkActionStateChange={handleBulkActionStateChange}
                         sortState={sortState}
                         onSortChange={setSortState}
-                        hiddenColumns={['initial_back', 'people_back', 'final_price', 'id']}
+                        hiddenColumns={['initial_back', 'people_back', 'final_price', 'id', 'back_info']}
                         context="account"
                     />
                 </div>
