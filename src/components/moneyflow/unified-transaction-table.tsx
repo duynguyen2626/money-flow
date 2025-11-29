@@ -43,7 +43,6 @@ type ColumnKey =
   | "task"
   | "initial_back"
   | "people_back"
-  | "profit"
 
 type SortKey = 'date' | 'amount'
 type SortDir = 'asc' | 'desc'
@@ -211,7 +210,6 @@ export function UnifiedTransactionTable({
     { key: "back_info", label: "Back Info", defaultWidth: 140 },
     { key: "initial_back", label: "Initial Back", defaultWidth: 110 },
     { key: "people_back", label: "People Back", defaultWidth: 110 },
-    { key: "profit", label: "Profit", defaultWidth: 100 },
     { key: "final_price", label: "Final Price", defaultWidth: 120 },
     { key: "tag", label: accountType === 'credit_card' ? "Cycle" : "Tag", defaultWidth: 180, minWidth: 150 },
     { key: "status", label: "Status", defaultWidth: 130, minWidth: 120 },
@@ -240,7 +238,6 @@ export function UnifiedTransactionTable({
       task: true,
       initial_back: true,
       people_back: true,
-      profit: true,
     }
 
     if (hiddenColumns.length > 0) {
@@ -344,7 +341,6 @@ export function UnifiedTransactionTable({
       task: true,
       initial_back: true,
       people_back: true,
-      profit: true,
     })
   }
 
@@ -1042,22 +1038,6 @@ export function UnifiedTransactionTable({
                       </div>
                     );
 
-                    // Special Account Context Logic (Pre-formatted Arrow)
-                    if (context === 'account' && accountId) {
-                      return (
-                        <div className="flex items-center gap-2 min-w-[150px]">
-                          {/* Instructions say: Display the source_name text directly (which now contains the Arrow ➡️/⬅️) */}
-                          {/* We might want to show logo if available (handled in mapper logic now?) */}
-                          {txn.source_logo && sourceIcon}
-                          <CustomTooltip content={txn.source_name}>
-                            <span className="truncate max-w-[150px] cursor-help font-medium">
-                              {txn.source_name ?? 'Unknown'}
-                            </span>
-                          </CustomTooltip>
-                        </div>
-                      )
-                    }
-
                     const destIcon = txn.destination_logo ? (
                       <img src={txn.destination_logo} alt={txn.destination_name ?? ''} className="h-8 w-8 object-contain rounded-none" />
                     ) : (
@@ -1066,7 +1046,43 @@ export function UnifiedTransactionTable({
                       </div>
                     );
 
-                    // Render for Transfer / Debt / Repayment
+                    // Special Account Context Logic
+                    if (context === 'account' && accountId) {
+                      // If Transfer (or Debt/Repayment acting as transfer)
+                      if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
+                        const isInflow = txn.amount > 0;
+                        const rawName = isInflow ? txn.source_name : txn.destination_name;
+                        const otherAccountName = rawName?.replace(/^[⬅️➡️]\s*/, '') ?? 'Unknown';
+                        const otherAccountIcon = isInflow ? sourceIcon : destIcon;
+                        const arrow = isInflow ? "⬅️" : "➡️";
+
+                        return (
+                          <CustomTooltip content={otherAccountName}>
+                            <div className="flex items-center gap-2 min-w-[150px]">
+                              <span className="text-lg leading-none">{arrow}</span>
+                              {otherAccountIcon}
+                              <span className="truncate max-w-[120px] cursor-help font-medium">
+                                {otherAccountName}
+                              </span>
+                            </div>
+                          </CustomTooltip>
+                        )
+                      }
+
+                      // Normal Expense/Income
+                      return (
+                        <div className="flex items-center gap-2 min-w-[150px]">
+                          {txn.source_name && sourceIcon}
+                          <CustomTooltip content={txn.account_name}>
+                            <span className="truncate max-w-[120px] cursor-help font-medium">
+                              {txn.account_name ?? 'Unknown'}
+                            </span>
+                          </CustomTooltip>
+                        </div>
+                      )
+                    }
+
+                    // Render for Transfer / Debt / Repayment (General Context)
                     if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
                       return (
                         <CustomTooltip content={`${txn.source_name ?? 'Unknown'} ➡️ ${txn.destination_name ?? 'Unknown'}`}>
@@ -1134,27 +1150,35 @@ export function UnifiedTransactionTable({
                   case "amount":
                     return amountValue
                   case "back_info":
+                    if (txn.type === 'transfer' || txn.type === 'repayment' || txn.type === 'debt') return <span className="text-slate-300">-</span>
                     if (!percentRaw && !fixedRaw && typeof txn.profit !== 'number') return <span className="text-slate-300">-</span>
                     return (
                       <div className="flex flex-col text-sm">
+                        {/* Formula on Top */}
                         {(percentRaw || fixedRaw) && (
-                          <span className="text-slate-800 font-semibold">
+                          <span className="text-[10px] text-slate-500 mb-0.5">
                             {percentRaw ? `${(percentRaw * 100).toFixed(2)}%` : ''}
                             {percentRaw && fixedRaw ? ' + ' : ''}
                             {fixedRaw ? numberFormatter.format(fixedRaw) : ''}
                           </span>
                         )}
-                        {calculatedSum > 0 && (
-                          <span className="text-emerald-600 font-bold flex items-center gap-1">
-                            <Sigma className="h-3 w-3" />
-                            {numberFormatter.format(calculatedSum)}
-                          </span>
-                        )}
-                        {typeof txn.profit === 'number' && (
-                          <span className={`text-xs font-bold mt-0.5 ${txn.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            Profit: {numberFormatter.format(txn.profit)}
-                          </span>
-                        )}
+                        {/* Sum and Profit on Bottom */}
+                        <div className="flex items-center gap-2">
+                          {calculatedSum > 0 && (
+                            <span className="text-emerald-600 font-bold flex items-center gap-1">
+                              <Sigma className="h-3 w-3" />
+                              {numberFormatter.format(calculatedSum)}
+                            </span>
+                          )}
+                          {typeof txn.profit === 'number' && txn.profit !== 0 && (
+                            <>
+                              {calculatedSum > 0 && <span className="text-slate-300">;</span>}
+                              <span className={`font-bold flex items-center gap-1 ${txn.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                🤑 {numberFormatter.format(txn.profit)}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     )
                   case "initial_back":
@@ -1188,21 +1212,6 @@ export function UnifiedTransactionTable({
                       </div>
                     )
                   }
-                  case "profit":
-                    const bankRate = txn.bank_rate || 0;
-                    const peopleRate = txn.people_rate || 0;
-                    const rateDiff = bankRate - peopleRate;
-
-                    return typeof txn.profit === 'number' ? (
-                      <div className="flex flex-col text-sm">
-                        <span className={`font-bold ${txn.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {numberFormatter.format(txn.profit)}
-                        </span>
-                        <span className="text-[10px] text-slate-500">
-                          {(bankRate * 100).toFixed(1)}% - {(peopleRate * 100).toFixed(1)}% = {(rateDiff * 100).toFixed(1)}%
-                        </span>
-                      </div>
-                    ) : <span className="text-slate-300">-</span>
                   case "final_price":
                     return <span className={cn("font-bold", amountClass)}>{numberFormatter.format(finalPrice)}</span>
                   case "status":

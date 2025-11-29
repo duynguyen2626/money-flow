@@ -43,6 +43,7 @@ export type AccountCashbackSnapshot = {
   progress: number
   currentSpend: number
   cycleLabel?: string
+  earnedSoFar: number
 }
 
 export type DebtAccount = {

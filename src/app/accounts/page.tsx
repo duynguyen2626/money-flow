@@ -28,6 +28,7 @@ export default async function AccountsPage() {
       progress: card.progress,
       currentSpend: card.currentSpend,
       cycleLabel: card.cycleLabel,
+      earnedSoFar: card.totalEarned,
     }
   })
 

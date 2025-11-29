@@ -3,13 +3,20 @@
 import { useState, useMemo, useCallback } from 'react'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { UnifiedTransactionTable } from './unified-transaction-table'
-import { FilterIcon, X, CreditCard, Wallet, ArrowLeftRight, User, Plus, Minus, Settings } from 'lucide-react'
+import { FilterIcon, X, CreditCard, Wallet, ArrowLeft, Settings, Clock4, CheckCircle2, TrendingUp, Plus, Minus, ArrowLeftRight, User, RefreshCw } from 'lucide-react'
 import { Combobox } from '@/components/ui/combobox'
 import { useTagFilter } from '@/context/tag-filter-context'
 import Link from 'next/link'
-import { AddTransactionDialog } from './add-transaction-dialog'
 import { EditAccountDialog } from './edit-account-dialog'
 import { getSharedLimitParentId } from '@/lib/account-utils'
+import { AccountSpendingStats } from '@/types/cashback.types'
+import { ConfirmMoneyReceived } from './confirm-money-received'
+import { Progress } from '@/components/ui/progress'
+import { AddTransactionDialog } from './add-transaction-dialog'
+import { CustomTooltip } from '@/components/ui/custom-tooltip'
+import { recalculateAccountBalanceAction } from '@/actions/account-actions'
+import { useRouter } from 'next/navigation'
+import { cn } from '@/lib/utils'
 
 type AccountDetailsViewProps = {
     account: Account
@@ -18,6 +25,8 @@ type AccountDetailsViewProps = {
     categories: Category[]
     people: Person[]
     shops: Shop[]
+    batchStats?: { waiting: number; confirmed: number }
+    cashbackStats?: AccountSpendingStats | null
 }
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -43,29 +52,69 @@ export function AccountDetailsView({
     categories,
     people,
     shops,
+    batchStats,
+    cashbackStats,
 }: AccountDetailsViewProps) {
+    const router = useRouter()
+    const [isRecalculating, setIsRecalculating] = useState(false)
+
     // --- Header Logic ---
     const isCreditCard = account.type === 'credit_card'
     const sharedLimitParentId = getSharedLimitParentId(account.cashback_config)
     const parentAccount = sharedLimitParentId ? accounts.find(a => a.id === sharedLimitParentId) : null
     const isChildCard = !!parentAccount
+    const isParentCard = !isChildCard && accounts.some(a => getSharedLimitParentId(a.cashback_config) === account.id)
 
-    let displayBalance = account.current_balance
-    let displayLabel = 'Current Balance'
+    // Unified Balance Logic: Limit + In - Out
+    const creditLimit = account.credit_limit ?? 0
+    const netBalance = (account.total_in ?? 0) - (account.total_out ?? 0)
+
+    let displayBalance = creditLimit + netBalance
+    let displayLabel = isCreditCard ? 'Available' : 'Current Balance'
 
     if (isCreditCard) {
-        const creditLimit = account.credit_limit ?? 0
-        const netBalance = (account.total_in ?? 0) - (account.total_out ?? 0)
-
         if (isChildCard && parentAccount) {
+            // Logic from AccountCard for Child Card
             const parentNetBalance = (parentAccount.total_in ?? 0) - (parentAccount.total_out ?? 0)
-            const combinedNetBalance = parentNetBalance + netBalance
+
+            // Find all children of this parent
+            const siblings = accounts.filter(a => getSharedLimitParentId(a.cashback_config) === parentAccount.id)
+
+            const totalChildDebt = siblings.reduce((sum, child) => {
+                const childNet = (child.total_in ?? 0) - (child.total_out ?? 0)
+                return sum + Math.abs(childNet < 0 ? childNet : 0)
+            }, 0)
+
+            const parentDebt = Math.abs(parentNetBalance < 0 ? parentNetBalance : 0)
+            const totalDebt = parentDebt + totalChildDebt
+
             const displayLimit = parentAccount.credit_limit ?? 0
-            displayBalance = displayLimit + combinedNetBalance
-        } else {
-            displayBalance = creditLimit + netBalance
+            displayBalance = displayLimit - totalDebt
+            displayLabel = 'Shared Available'
+        } else if (isParentCard) {
+            // Logic from AccountCard for Parent Card
+            const childCards = accounts.filter(a => getSharedLimitParentId(a.cashback_config) === account.id)
+            const totalChildDebt = childCards.reduce((sum, child) => {
+                const childNetBalance = (child.total_in ?? 0) - (child.total_out ?? 0)
+                return sum + Math.abs(childNetBalance < 0 ? childNetBalance : 0)
+            }, 0)
+
+            const currentDebt = Math.abs(netBalance < 0 ? netBalance : 0)
+            const displayDebt = currentDebt + totalChildDebt
+            displayBalance = creditLimit - displayDebt
         }
-        displayLabel = 'Available'
+    }
+
+    const handleRecalculate = async () => {
+        setIsRecalculating(true)
+        try {
+            await recalculateAccountBalanceAction(account.id)
+            router.refresh()
+        } catch (err) {
+            console.error('Failed to recalculate', err)
+        } finally {
+            setIsRecalculating(false)
+        }
     }
 
     // --- Filter Logic (Adapted from FilterableTransactions) ---
@@ -252,6 +301,14 @@ export function AccountDetailsView({
         return searchedTransactions
     }, [searchedTransactions, showSelectedOnly, selectedTxnIds])
 
+    // Stats for the header
+    const waitingAmount = Math.max(0, batchStats?.waiting ?? 0)
+    const confirmedAmount = batchStats?.confirmed ?? 0
+    const earned = cashbackStats?.earnedSoFar ?? 0
+    const cap = cashbackStats?.maxCashback
+    const progressMax = cap ?? Math.max(earned, 1)
+    const remaining = cap ? Math.max(0, cap - earned) : null
+
     const dialogBaseProps = {
         accounts,
         categories,
@@ -260,12 +317,16 @@ export function AccountDetailsView({
     }
 
     return (
-        <div className="container mx-auto max-w-7xl h-[calc(100vh-64px)] flex flex-col p-4 space-y-4">
+        <div className="w-full h-[calc(100vh-64px)] flex flex-col space-y-4">
             {/* Header */}
-            <div className="flex items-start justify-between bg-white p-4 rounded-lg border border-slate-200 shadow-sm shrink-0">
-                <div className="flex items-center gap-4">
-                    {/* Logo */}
-                    <div className="flex-shrink-0">
+            <div className="flex flex-col lg:flex-row items-center justify-between bg-white p-4 rounded-lg border border-slate-200 shadow-sm shrink-0 gap-4">
+                {/* Left: Account Info & Stats */}
+                <div className="flex flex-1 items-center gap-6 w-full overflow-x-auto">
+                    {/* Logo & Back */}
+                    <div className="relative flex-shrink-0 group">
+                        <Link href="/accounts" className="absolute -left-2 -top-2 z-10 bg-white rounded-full p-1 border border-slate-200 shadow-sm hover:bg-slate-50 text-slate-500 hover:text-slate-700 transition-colors">
+                            <ArrowLeft className="h-4 w-4" />
+                        </Link>
                         {account.logo_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -285,14 +346,16 @@ export function AccountDetailsView({
                     </div>
 
                     {/* Name & Balance */}
-                    <div className="flex flex-col">
+                    <div className="flex flex-col min-w-[200px]">
                         <div className="flex items-center gap-2">
                             <h1 className="text-2xl font-bold text-slate-900">{account.name}</h1>
-                            {isChildCard && parentAccount && (
-                                <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-                                    Linked to {parentAccount.name}
-                                </span>
-                            )}
+                            <EditAccountDialog
+                                account={account}
+                                collateralAccounts={accounts.filter(a => a.type === 'savings' || a.type === 'investment' || a.type === 'asset')}
+                                accounts={accounts}
+                                buttonClassName="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                                triggerContent={<Settings className="h-4 w-4" />}
+                            />
                         </div>
                         <div className="flex flex-col">
                             <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">
@@ -306,24 +369,172 @@ export function AccountDetailsView({
                             </p>
                         </div>
                     </div>
-                </div>
 
-                {/* Actions */}
-                <div className="flex flex-col items-end gap-2">
-                    <Link
-                        href="/accounts"
-                        className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                    >
-                        ← Back to Accounts
-                    </Link>
-                    <div className="flex items-center gap-2">
-                        <EditAccountDialog
-                            account={account}
-                            collateralAccounts={accounts.filter(a => a.type === 'savings' || a.type === 'investment' || a.type === 'asset')}
-                            accounts={accounts}
-                            buttonClassName="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-                            triggerContent={<Settings className="h-5 w-5" />}
-                        />
+                    {/* Stats (Pending, Cashback, Confirmed) - Integrated */}
+                    <div className="flex flex-1 items-center gap-4 overflow-x-auto no-scrollbar">
+                        {/* Pending */}
+                        <div className="flex flex-col justify-center rounded-lg bg-amber-50 px-3 py-2 border border-amber-100 min-w-[140px] h-[70px] relative">
+                            <div className="flex items-center justify-between text-xs font-semibold text-amber-700 mb-1">
+                                <span>Pending</span>
+                                <Clock4 className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="flex items-end justify-between">
+                                <span className="text-lg font-bold text-amber-700 tabular-nums">
+                                    {numberFormatter.format(waitingAmount)}
+                                </span>
+                                {waitingAmount > 0 && (
+                                    <div className="absolute right-2 bottom-2">
+                                        <ConfirmMoneyReceived accountId={account.id} minimal />
+                                    </div>
+                                )}
+                            </div>
+                            <p className="text-[10px] text-amber-600/80 mt-auto">Waiting for refund</p>
+                        </div>
+
+                        {/* Cashback */}
+                        <div className="flex flex-col justify-center rounded-lg bg-white border border-slate-200 px-3 py-2 min-w-[180px] h-[70px]">
+                            <div className="flex items-center justify-between text-xs font-semibold text-emerald-700 mb-1">
+                                <div className="flex items-center gap-1">
+                                    <TrendingUp className="h-3.5 w-3.5" />
+                                    <span>Cashback</span>
+                                </div>
+                                <span className="text-[10px] bg-emerald-100 px-1.5 py-0.5 rounded text-emerald-800">
+                                    {Math.round((cashbackStats?.rate ?? 0) * 100)}%
+                                </span>
+                            </div>
+                            <div className="flex items-end justify-between">
+                                <span className="text-lg font-bold text-emerald-700 tabular-nums">
+                                    {numberFormatter.format(earned)}
+                                </span>
+                            </div>
+                            <Progress value={earned} max={progressMax} className="h-1 mt-auto" />
+                            <p className="text-[10px] text-emerald-600/80 mt-1">Earned so far</p>
+                        </div>
+
+                        {/* Confirmed */}
+                        <div className="flex flex-col justify-center rounded-lg bg-blue-50 px-3 py-2 border border-blue-100 min-w-[140px] h-[70px]">
+                            <div className="flex items-center justify-between text-xs font-semibold text-blue-700 mb-1">
+                                <span>Confirmed</span>
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="flex items-end justify-between">
+                                <span className="text-lg font-bold text-blue-700 tabular-nums">
+                                    {numberFormatter.format(confirmedAmount)}
+                                </span>
+                            </div>
+                            <p className="text-[10px] text-blue-600/80 mt-auto">Funded from Batch</p>
+                        </div>
+
+                        {/* Quick Add Buttons (Moved here) */}
+                        <div className="flex items-center gap-2 h-[70px]">
+                            {isCreditCard ? (
+                                <>
+                                    <CustomTooltip content="Pay Card">
+                                        <div>
+                                            <AddTransactionDialog
+                                                {...dialogBaseProps}
+                                                defaultType="transfer"
+                                                defaultDebtAccountId={account.id}
+                                                buttonClassName="h-[70px] w-[70px] flex flex-col items-center justify-center rounded-lg border border-orange-200 bg-orange-50 text-orange-600 hover:bg-orange-100 hover:text-orange-700 transition-colors gap-1"
+                                                triggerContent={<><CreditCard className="h-6 w-6" /><span className="text-[10px] font-medium">Pay</span></>}
+                                            />
+                                        </div>
+                                    </CustomTooltip>
+                                    <CustomTooltip content="Income">
+                                        <div>
+                                            <AddTransactionDialog
+                                                {...dialogBaseProps}
+                                                defaultType="income"
+                                                defaultSourceAccountId={account.id}
+                                                buttonClassName="h-[70px] w-[70px] flex flex-col items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 transition-colors gap-1"
+                                                triggerContent={<><Plus className="h-6 w-6" /><span className="text-[10px] font-medium">Income</span></>}
+                                            />
+                                        </div>
+                                    </CustomTooltip>
+                                    <CustomTooltip content="Expense">
+                                        <div>
+                                            <AddTransactionDialog
+                                                {...dialogBaseProps}
+                                                defaultType="expense"
+                                                defaultSourceAccountId={account.id}
+                                                buttonClassName="h-[70px] w-[70px] flex flex-col items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 transition-colors gap-1"
+                                                triggerContent={<><Minus className="h-6 w-6" /><span className="text-[10px] font-medium">Expense</span></>}
+                                            />
+                                        </div>
+                                    </CustomTooltip>
+                                    <CustomTooltip content="Lend / Debt">
+                                        <div>
+                                            <AddTransactionDialog
+                                                {...dialogBaseProps}
+                                                defaultType="debt"
+                                                defaultSourceAccountId={account.id}
+                                                buttonClassName="h-[70px] w-[70px] flex flex-col items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-700 transition-colors gap-1"
+                                                triggerContent={<><User className="h-6 w-6" /><span className="text-[10px] font-medium">Debt</span></>}
+                                            />
+                                        </div>
+                                    </CustomTooltip>
+                                </>
+                            ) : (
+                                <>
+                                    <CustomTooltip content="Income">
+                                        <div>
+                                            <AddTransactionDialog
+                                                {...dialogBaseProps}
+                                                defaultType="income"
+                                                defaultSourceAccountId={account.id}
+                                                buttonClassName="h-[70px] w-[70px] flex flex-col items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 transition-colors gap-1"
+                                                triggerContent={<><Plus className="h-6 w-6" /><span className="text-[10px] font-medium">Income</span></>}
+                                            />
+                                        </div>
+                                    </CustomTooltip>
+                                    <CustomTooltip content="Expense">
+                                        <div>
+                                            <AddTransactionDialog
+                                                {...dialogBaseProps}
+                                                defaultType="expense"
+                                                defaultSourceAccountId={account.id}
+                                                buttonClassName="h-[70px] w-[70px] flex flex-col items-center justify-center rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 hover:text-rose-700 transition-colors gap-1"
+                                                triggerContent={<><Minus className="h-6 w-6" /><span className="text-[10px] font-medium">Expense</span></>}
+                                            />
+                                        </div>
+                                    </CustomTooltip>
+                                    <CustomTooltip content="Transfer">
+                                        <div>
+                                            <AddTransactionDialog
+                                                {...dialogBaseProps}
+                                                defaultType="transfer"
+                                                defaultSourceAccountId={account.id}
+                                                buttonClassName="h-[70px] w-[70px] flex flex-col items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 transition-colors gap-1"
+                                                triggerContent={<><ArrowLeftRight className="h-6 w-6" /><span className="text-[10px] font-medium">Transfer</span></>}
+                                            />
+                                        </div>
+                                    </CustomTooltip>
+                                    <CustomTooltip content="Lend / Debt">
+                                        <div>
+                                            <AddTransactionDialog
+                                                {...dialogBaseProps}
+                                                defaultType="debt"
+                                                defaultSourceAccountId={account.id}
+                                                buttonClassName="h-[70px] w-[70px] flex flex-col items-center justify-center rounded-lg border border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-100 hover:text-purple-700 transition-colors gap-1"
+                                                triggerContent={<><User className="h-6 w-6" /><span className="text-[10px] font-medium">Debt</span></>}
+                                            />
+                                        </div>
+                                    </CustomTooltip>
+                                </>
+                            )}
+
+                            {/* Re-sync Button */}
+                            <CustomTooltip content="Re-sync Balance">
+                                <button
+                                    onClick={handleRecalculate}
+                                    disabled={isRecalculating}
+                                    className="h-[70px] w-[70px] flex flex-col items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:text-slate-700 transition-colors gap-1"
+                                >
+                                    <RefreshCw className={cn("h-6 w-6", isRecalculating && "animate-spin")} />
+                                    <span className="text-[10px] font-medium">Sync</span>
+                                </button>
+                            </CustomTooltip>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -500,7 +711,8 @@ export function AccountDetailsView({
                         onBulkActionStateChange={handleBulkActionStateChange}
                         sortState={sortState}
                         onSortChange={setSortState}
-                        hiddenColumns={['initial_back', 'people_back', 'profit', 'final_price', 'id']}
+                        hiddenColumns={['initial_back', 'people_back', 'final_price', 'id']}
+                        context="account"
                     />
                 </div>
             </div>

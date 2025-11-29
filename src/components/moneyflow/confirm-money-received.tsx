@@ -135,27 +135,28 @@ export function ConfirmMoneyReceived({ accountId, minimal = false }: ConfirmMone
     }
 
 
+    if (totalAmount === 0) {
+        return null
+    }
+
     return (
-        <div className="flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 shadow-sm backdrop-blur-md">
-            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-tight">
+        <div
+            className="flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 shadow-sm backdrop-blur-md cursor-pointer hover:bg-white transition-colors border border-transparent hover:border-emerald-200 group"
+            onClick={handleConfirmAll}
+        >
+            <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-tight group-hover:text-emerald-600 transition-colors">
                 Waiting Confirm:
             </span>
-            <span className="text-sm font-bold text-slate-700">
+            <span className="text-sm font-bold text-slate-700 group-hover:text-emerald-700 transition-colors">
                 {new Intl.NumberFormat('vi-VN').format(totalAmount)}
             </span>
-            <Tooltip label={`Confirm receipt of ${formatCurrency(totalAmount)}`}>
-                <button
-                    onClick={handleConfirmAll}
-                    className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 hover:bg-emerald-200 hover:scale-110 transition-all shadow-sm"
-                    disabled={confirming}
-                >
-                    {confirming ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
-                    ) : (
-                        <span className="text-xs">✓</span>
-                    )}
-                </button>
-            </Tooltip>
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 group-hover:bg-emerald-200 group-hover:scale-110 transition-all shadow-sm">
+                {confirming ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                    <span className="text-xs">✓</span>
+                )}
+            </div>
         </div>
     )
 }

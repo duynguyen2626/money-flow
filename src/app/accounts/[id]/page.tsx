@@ -3,6 +3,8 @@ import { getUnifiedTransactions } from '@/services/transaction.service'
 import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
+import { getAccountBatchStats } from '@/services/batch.service'
+import { getAccountSpendingStats } from '@/services/cashback.service'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 import { AccountDetailsView } from '@/components/moneyflow/account-details-view'
 
@@ -33,12 +35,14 @@ export default async function AccountPage({ params }: PageProps) {
     )
   }
 
-  const [transactions, allAccounts, categories, people, shops] = await Promise.all([
-    getUnifiedTransactions({ accountId: id, context: 'account', limit: 1000 }), // Increased limit for better view
+  const [transactions, allAccounts, categories, people, shops, batchStats, cashbackStats] = await Promise.all([
+    getUnifiedTransactions({ accountId: id, context: 'account', limit: 1000 }),
     getAccounts(),
     getCategories(),
     getPeople(),
     getShops(),
+    getAccountBatchStats(id),
+    getAccountSpendingStats(id, new Date()),
   ])
 
   return (
@@ -50,6 +54,8 @@ export default async function AccountPage({ params }: PageProps) {
         categories={categories}
         people={people}
         shops={shops}
+        batchStats={batchStats}
+        cashbackStats={cashbackStats}
       />
     </TagFilterProvider>
   )
