@@ -1,3 +1,5 @@
+'use server'
+
 import { createClient } from '@/lib/supabase/server'
 import { Category } from '@/types/moneyflow.types'
 
@@ -10,7 +12,7 @@ type CategoryRow = {
 
 export async function getCategories(): Promise<Category[]> {
   const supabase = createClient()
-    
+
   const { data, error } = await supabase
     .from('categories')
     .select('*')

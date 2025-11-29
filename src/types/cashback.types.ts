@@ -10,6 +10,9 @@ export type CashbackTransaction = {
   bankBack: number // What the bank gives back
   peopleBack: number // What was shared with others
   profit: number // bankBack - peopleBack
+  effectiveRate: number // The rate used for calculation (e.g. 0.01 for 1%)
+  sharePercent?: number // The % shared (e.g. 0.8 for 0.8%)
+  shareFixed?: number // The fixed amount shared
   shopName?: string
   shopLogoUrl?: string | null
   categoryName?: string

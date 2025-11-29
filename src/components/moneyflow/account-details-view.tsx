@@ -41,8 +41,10 @@ type BulkActionState = {
     currentTab: 'active' | 'void' | 'pending'
     onVoidSelected: () => Promise<void> | void
     onRestoreSelected: () => Promise<void> | void
+    onDeleteSelected: () => Promise<void> | void
     isVoiding: boolean
     isRestoring: boolean
+    isDeleting: boolean
 }
 
 export function AccountDetailsView({
@@ -131,6 +133,7 @@ export function AccountDetailsView({
     const [activeTab, setActiveTab] = useState<'active' | 'void' | 'pending'>('active')
     const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
     const [bulkActions, setBulkActions] = useState<BulkActionState | null>(null)
+    const [selectedType, setSelectedType] = useState<'all' | 'income' | 'expense' | 'transfer'>('all')
     const [sortState, setSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
 
     const handleBulkActionStateChange = useCallback((next: BulkActionState) => {
@@ -294,12 +297,69 @@ export function AccountDetailsView({
         )
     }, [filteredByCategory, searchTerm])
 
+    const filteredByType = useMemo(() => {
+        if (selectedType === 'all') return searchedTransactions
+        return searchedTransactions.filter(txn => {
+            const visualType = (txn as any).displayType ?? txn.type
+            if (selectedType === 'transfer') {
+                return visualType === 'transfer' || visualType === 'debt' || visualType === 'repayment'
+            }
+            return visualType === selectedType
+        })
+    }, [searchedTransactions, selectedType])
+
     const finalTransactions = useMemo(() => {
         if (showSelectedOnly && selectedTxnIds.size > 0) {
-            return searchedTransactions.filter(txn => selectedTxnIds.has(txn.id))
+            return filteredByType.filter(txn => selectedTxnIds.has(txn.id))
         }
-        return searchedTransactions
-    }, [searchedTransactions, showSelectedOnly, selectedTxnIds])
+        return filteredByType
+    }, [filteredByType, showSelectedOnly, selectedTxnIds])
+
+    const totals = useMemo(() => {
+        const source = selectedTxnIds.size > 0
+            ? finalTransactions.filter(txn => selectedTxnIds.has(txn.id))
+            : finalTransactions
+
+        const effectiveSource = source.filter(txn => {
+            if (activeTab === 'active') return txn.status !== 'void'
+            return txn.status === 'void'
+        })
+
+        return effectiveSource.reduce(
+            (acc, txn) => {
+                const kind = txn.type ?? (txn as any).displayType ?? 'expense'
+                const value = Math.abs(txn.amount ?? 0)
+                const isPersonTxn = Boolean((txn as any).person_id ?? txn.person_id)
+
+                if (isPersonTxn) {
+                    if (kind === 'income' || kind === 'repayment') {
+                        acc.collect += value
+                    } else {
+                        acc.lend += value
+                    }
+                    return acc
+                }
+
+                if (kind === 'income') {
+                    acc.income += value
+                } else if (kind === 'expense') {
+                    acc.expense += value
+                } else {
+                    acc.expense += value
+                }
+                return acc
+            },
+            { income: 0, expense: 0, lend: 0, collect: 0 }
+        )
+    }, [finalTransactions, selectedTxnIds, activeTab])
+
+    const currentBulkTab = bulkActions?.currentTab ?? activeTab
+    const bulkActionLabel = currentBulkTab === 'void' ? 'Restore Selected' : 'Void Selected'
+    const bulkActionHandler =
+        currentBulkTab === 'void' ? bulkActions?.onRestoreSelected : bulkActions?.onVoidSelected
+    const bulkActionBusy = currentBulkTab === 'void' ? bulkActions?.isRestoring : bulkActions?.isVoiding
+    const bulkActionDisabled =
+        !bulkActionHandler || (bulkActions?.selectionCount ?? 0) === 0 || !!bulkActionBusy
 
     // Stats for the header
     const waitingAmount = Math.max(0, batchStats?.waiting ?? 0)
@@ -541,158 +601,251 @@ export function AccountDetailsView({
 
             {/* Filters */}
             <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm shrink-0">
-                <div className="flex flex-col md:flex-row md:items-center gap-3">
-                    {/* Search */}
-                    <div className="relative flex-1 max-w-md">
-                        <input
-                            type="text"
-                            placeholder="Search by note..."
-                            value={searchTerm}
-                            onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full rounded-md border border-gray-300 px-3 py-2 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        />
-                        {searchTerm && (
+                <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+                    {/* Top Row (Mobile) / Left Side (Desktop): Search & Quick Filters */}
+                    <div className="flex flex-1 flex-col md:flex-row gap-3">
+                        {/* Quick Filters (All/Void/Pending) */}
+                        <div className="flex items-center rounded-lg bg-slate-100 p-1 text-xs font-medium text-slate-600 shrink-0 overflow-x-auto">
                             <button
-                                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:text-slate-600"
-                                onClick={() => setSearchTerm('')}
-                                title="Clear search"
+                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${activeTab === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                                onClick={() => setActiveTab('active')}
                             >
-                                <X className="h-3 w-3" />
+                                All
                             </button>
-                        )}
+                            <button
+                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${activeTab === 'void' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                                onClick={() => setActiveTab('void')}
+                            >
+                                Void
+                            </button>
+                            <button
+                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                                onClick={() => setActiveTab('pending')}
+                            >
+                                Pending
+                            </button>
+                        </div>
+
+                        {/* Search */}
+                        <div className="relative flex-1 max-w-md">
+                            <input
+                                type="text"
+                                placeholder="Search by note..."
+                                value={searchTerm}
+                                onChange={e => setSearchTerm(e.target.value)}
+                                className="w-full rounded-md border border-gray-300 px-3 py-2 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            />
+                            {searchTerm && (
+                                <button
+                                    className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:text-slate-600"
+                                    onClick={() => setSearchTerm('')}
+                                    title="Clear search"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Type Filters */}
+                        <div className="flex items-center rounded-lg bg-slate-100 p-1 text-xs font-medium text-slate-600 shrink-0 overflow-x-auto">
+                            <button
+                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                                onClick={() => setSelectedType('all')}
+                            >
+                                All Types
+                            </button>
+                            <button
+                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'income' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-emerald-700'}`}
+                                onClick={() => setSelectedType('income')}
+                            >
+                                In
+                            </button>
+                            <button
+                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'expense' ? 'bg-white text-rose-700 shadow-sm' : 'text-slate-500 hover:text-rose-700'}`}
+                                onClick={() => setSelectedType('expense')}
+                            >
+                                Out
+                            </button>
+                            <button
+                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'transfer' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-blue-700'}`}
+                                onClick={() => setSelectedType('transfer')}
+                            >
+                                Transfer
+                            </button>
+                        </div>
                     </div>
 
-                    {/* Quick Filters (All/Void/Pending) */}
-                    <div className="flex items-center rounded-lg bg-slate-100 p-1 text-xs font-medium text-slate-600">
-                        <button
-                            className={`rounded-md px-3 py-1.5 transition-all ${activeTab === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-                            onClick={() => setActiveTab('active')}
-                        >
-                            All
-                        </button>
-                        <button
-                            className={`rounded-md px-3 py-1.5 transition-all ${activeTab === 'void' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-                            onClick={() => setActiveTab('void')}
-                        >
-                            Void
-                        </button>
-                        <button
-                            className={`rounded-md px-3 py-1.5 transition-all ${activeTab === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-                            onClick={() => setActiveTab('pending')}
-                        >
-                            Pending
-                        </button>
-                    </div>
+                    {/* Right Side: Tags, Filters, Year */}
+                    <div className="flex items-center gap-3 ml-auto overflow-x-auto">
+                        {/* Tags Dropdown */}
+                        <div className="w-[180px] shrink-0">
+                            <Combobox
+                                items={tagOptions}
+                                value={selectedTag ?? undefined}
+                                onValueChange={value => setSelectedTag(value ?? null)}
+                                placeholder="Select Tag..."
+                                inputPlaceholder="Search tag..."
+                                emptyState="No tags found"
+                            />
+                        </div>
 
-                    {/* Filter Menu Toggle */}
-                    <div className="relative">
-                        <button
-                            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
-                            onClick={() => setShowFilterMenu(prev => !prev)}
-                        >
-                            <FilterIcon className="h-4 w-4" />
-                            Filters
-                        </button>
-                        {showFilterMenu && (
-                            <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-md border border-slate-200 bg-white p-3 text-xs shadow-lg space-y-3">
-                                {/* Filter Menu Content */}
-                                <div className="space-y-2">
-                                    <p className="text-[11px] font-semibold text-slate-700">Tags</p>
-                                    <Combobox
-                                        items={tagOptions}
-                                        value={selectedTag ?? undefined}
-                                        onValueChange={value => setSelectedTag(value ?? null)}
-                                        placeholder="All tags"
-                                        inputPlaceholder="Search tag..."
-                                        emptyState="No tags found"
-                                    />
-                                </div>
-                                {isCreditCard && (
-                                    <div className="space-y-2">
-                                        <p className="text-[11px] font-semibold text-slate-700">Cycle</p>
-                                        <Combobox
-                                            items={tagOptions}
-                                            value={selectedCycle ?? undefined}
-                                            onValueChange={value => setSelectedCycle(value ?? null)}
-                                            placeholder="All cycles"
-                                            inputPlaceholder="Search cycle..."
-                                            emptyState="No cycles"
-                                        />
+                        {/* Filter Menu Toggle */}
+                        <div className="relative shrink-0">
+                            <button
+                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
+                                onClick={() => setShowFilterMenu(prev => !prev)}
+                            >
+                                <FilterIcon className="h-4 w-4" />
+                                Filters
+                            </button>
+                            {showFilterMenu && (
+                                <>
+                                    <div className="fixed inset-0 z-10" onClick={() => setShowFilterMenu(false)} />
+                                    <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-md border border-slate-200 bg-white p-3 text-xs shadow-lg space-y-3">
+                                        {/* Filter Menu Content */}
+                                        {isCreditCard && (
+                                            <div className="space-y-2">
+                                                <p className="text-[11px] font-semibold text-slate-700">Cycle</p>
+                                                <Combobox
+                                                    items={tagOptions}
+                                                    value={selectedCycle ?? undefined}
+                                                    onValueChange={value => setSelectedCycle(value ?? null)}
+                                                    placeholder="All cycles"
+                                                    inputPlaceholder="Search cycle..."
+                                                    emptyState="No cycles"
+                                                />
+                                            </div>
+                                        )}
+                                        <div className="space-y-2">
+                                            <p className="text-[11px] font-semibold text-slate-700">Category</p>
+                                            <Combobox
+                                                items={categoryItems}
+                                                value={selectedCategoryId ?? undefined}
+                                                onValueChange={value => {
+                                                    setSelectedCategoryId(value ?? null)
+                                                    setSelectedSubcategoryId(null)
+                                                }}
+                                                placeholder="All categories"
+                                                inputPlaceholder="Search category..."
+                                                emptyState="No categories"
+                                            />
+                                            {selectedCategoryId && availableSubcategories.length > 0 && (
+                                                <Combobox
+                                                    items={subcategoryItems}
+                                                    value={selectedSubcategoryId ?? undefined}
+                                                    onValueChange={value => setSelectedSubcategoryId(value ?? null)}
+                                                    placeholder="Subcategory"
+                                                    inputPlaceholder="Search subcategory..."
+                                                    emptyState="No subcategories"
+                                                />
+                                            )}
+                                        </div>
+                                        <div className="space-y-2">
+                                            <p className="text-[11px] font-semibold text-slate-700">People</p>
+                                            <Combobox
+                                                items={peopleItems}
+                                                value={selectedPersonId ?? undefined}
+                                                onValueChange={val => setSelectedPersonId(val ?? null)}
+                                                placeholder="All people"
+                                                inputPlaceholder="Search person..."
+                                                emptyState="No people"
+                                            />
+                                        </div>
+                                        <div className="flex items-center justify-between gap-2 border-t pt-2">
+                                            <button
+                                                className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                                                onClick={() => {
+                                                    setSelectedTag(null)
+                                                    setSelectedCycle(null)
+                                                    setSelectedCategoryId(null)
+                                                    setSelectedSubcategoryId(null)
+                                                    setSelectedPersonId(null)
+                                                    setSelectedYear(currentYear)
+                                                    setSelectedType('all')
+                                                }}
+                                            >
+                                                Reset All
+                                            </button>
+                                            <button
+                                                className="text-xs text-slate-600 hover:text-slate-800"
+                                                onClick={() => setShowFilterMenu(false)}
+                                            >
+                                                Close
+                                            </button>
+                                        </div>
                                     </div>
-                                )}
-                                <div className="space-y-2">
-                                    <p className="text-[11px] font-semibold text-slate-700">Category</p>
-                                    <Combobox
-                                        items={categoryItems}
-                                        value={selectedCategoryId ?? undefined}
-                                        onValueChange={value => {
-                                            setSelectedCategoryId(value ?? null)
-                                            setSelectedSubcategoryId(null)
-                                        }}
-                                        placeholder="All categories"
-                                        inputPlaceholder="Search category..."
-                                        emptyState="No categories"
-                                    />
-                                    {selectedCategoryId && availableSubcategories.length > 0 && (
-                                        <Combobox
-                                            items={subcategoryItems}
-                                            value={selectedSubcategoryId ?? undefined}
-                                            onValueChange={value => setSelectedSubcategoryId(value ?? null)}
-                                            placeholder="Subcategory"
-                                            inputPlaceholder="Search subcategory..."
-                                            emptyState="No subcategories"
-                                        />
-                                    )}
-                                </div>
-                                <div className="space-y-2">
-                                    <p className="text-[11px] font-semibold text-slate-700">People</p>
-                                    <Combobox
-                                        items={peopleItems}
-                                        value={selectedPersonId ?? undefined}
-                                        onValueChange={val => setSelectedPersonId(val ?? null)}
-                                        placeholder="All people"
-                                        inputPlaceholder="Search person..."
-                                        emptyState="No people"
-                                    />
-                                </div>
-                                <div className="flex items-center justify-between gap-2 border-t pt-2">
-                                    <button
-                                        className="text-xs font-semibold text-blue-600 hover:text-blue-800"
-                                        onClick={() => {
-                                            setSelectedTag(null)
-                                            setSelectedCycle(null)
-                                            setSelectedCategoryId(null)
-                                            setSelectedSubcategoryId(null)
-                                            setSelectedPersonId(null)
-                                            setSelectedYear(currentYear)
-                                        }}
-                                    >
-                                        Reset All
-                                    </button>
-                                    <button
-                                        className="text-xs text-slate-600 hover:text-slate-800"
-                                        onClick={() => setShowFilterMenu(false)}
-                                    >
-                                        Close
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                                </>
+                            )}
+                        </div>
 
-                    {/* Year Select */}
-                    <select
-                        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        value={selectedYear}
-                        onChange={e => setSelectedYear(e.target.value)}
-                    >
-                        <option value="">All years</option>
-                        {availableYears.map(year => (
-                            <option key={year} value={year}>{year}</option>
-                        ))}
-                    </select>
+                        {/* Year Select */}
+                        <select
+                            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 shrink-0"
+                            value={selectedYear}
+                            onChange={e => setSelectedYear(e.target.value)}
+                        >
+                            <option value="">All years</option>
+                            {availableYears.map(year => (
+                                <option key={year} value={year}>{year}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
             </div>
+
+            {/* Bulk Actions & Totals */}
+            {selectedTxnIds.size > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 border rounded-md border-slate-200 bg-slate-50 px-3 py-2 shrink-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            className="px-3 py-1 rounded-full text-sm font-medium bg-gray-200 text-gray-800 hover:bg-gray-300"
+                            onClick={() => { setSelectedTxnIds(new Set()); setShowSelectedOnly(false) }}
+                        >
+                            Deselect All ({selectedTxnIds.size})
+                        </button>
+                        <button
+                            className={`px-3 py-1 rounded-full text-sm font-semibold shadow-sm ${currentBulkTab === 'void'
+                                ? 'bg-green-600 text-white hover:bg-green-500'
+                                : 'bg-red-600 text-white hover:bg-red-500'
+                                }`}
+                            onClick={() => bulkActionHandler?.()}
+                            disabled={bulkActionDisabled}
+                        >
+                            {bulkActionBusy ? 'Working...' : `${bulkActionLabel} (${selectedTxnIds.size})`}
+                        </button>
+                        {currentBulkTab === 'void' && (
+                            <button
+                                className="px-3 py-1 rounded-full text-sm font-semibold shadow-sm bg-red-700 text-white hover:bg-red-800"
+                                onClick={() => bulkActions?.onDeleteSelected?.()}
+                                disabled={!bulkActions?.onDeleteSelected || bulkActions?.isDeleting}
+                            >
+                                {bulkActions?.isDeleting ? 'Deleting...' : `Delete Forever (${selectedTxnIds.size})`}
+                            </button>
+                        )}
+                        <button
+                            className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200"
+                            onClick={() => setShowSelectedOnly(prev => !prev)}
+                        >
+                            {showSelectedOnly ? 'Show All' : 'Show Selected'}
+                        </button>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
+                            Income: {numberFormatter.format(totals.income)}
+                        </span>
+                        <span className="rounded-full bg-red-50 px-3 py-1 text-red-600">
+                            Expense: {numberFormatter.format(totals.expense)}
+                        </span>
+                        <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-600">
+                            Lend: {numberFormatter.format(totals.lend)}
+                        </span>
+                        <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-600">
+                            Collect: {numberFormatter.format(totals.collect)}
+                        </span>
+                    </div>
+                </div>
+            )}
 
             {/* Table Container */}
             <div className="flex-1 border rounded-lg overflow-hidden bg-background shadow-sm">
