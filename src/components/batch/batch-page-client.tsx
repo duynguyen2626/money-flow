@@ -13,15 +13,17 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { deleteBankMappingsAction } from '@/actions/bank.actions'
 import { toast } from 'sonner'
 import { Loader2, Trash2 } from 'lucide-react'
+import { SheetWebhookLinkManager } from './sheet-webhook-link-manager'
 
-export function BatchPageClient({ batches, accounts, bankMappings }: { batches: any[], accounts: any[], bankMappings: any[] }) {
+export function BatchPageClient({ batches, accounts, bankMappings, webhookLinks }: { batches: any[], accounts: any[], bankMappings: any[], webhookLinks: any[] }) {
     const router = useRouter()
     const [importDialogOpen, setImportDialogOpen] = useState(false)
     const [selectedMappingIds, setSelectedMappingIds] = useState<string[]>([])
     const [deletingMappings, setDeletingMappings] = useState(false)
+    const [webhookLinkItems, setWebhookLinkItems] = useState(webhookLinks)
 
-    const processingBatches = batches.filter(b => (b.status === 'draft' || !b.status) && !b.is_template)
-    const doneBatches = batches.filter(b => b.status === 'funded' && !b.is_template)
+    const processingBatches = batches.filter(b => !b.is_template && b.status !== 'funded' && b.status !== 'completed')
+    const doneBatches = batches.filter(b => !b.is_template && (b.status === 'funded' || b.status === 'completed'))
     const templateBatches = batches.filter(b => b.is_template)
 
     async function handleDeleteMappings() {
@@ -65,7 +67,7 @@ export function BatchPageClient({ batches, accounts, bankMappings }: { batches: 
                         <Upload className="mr-2 h-4 w-4" />
                         Import Bank Mappings
                     </Button>
-                    <CreateBatchDialog accounts={accounts} />
+                    <CreateBatchDialog accounts={accounts} webhookLinks={webhookLinkItems} />
                 </div>
             </div>
 
@@ -83,14 +85,17 @@ export function BatchPageClient({ batches, accounts, bankMappings }: { batches: 
                     <TabsTrigger value="templates">
                         Monthly Clone ({templateBatches.length})
                     </TabsTrigger>
+                    <TabsTrigger value="webhooks">
+                        Webhook Links ({webhookLinkItems.length})
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="processing" className="mt-6">
-                    <BatchList batches={processingBatches} />
+                    <BatchList batches={processingBatches} mode="processing" />
                 </TabsContent>
 
                 <TabsContent value="done" className="mt-6">
-                    <BatchList batches={doneBatches} />
+                    <BatchList batches={doneBatches} mode="done" />
                 </TabsContent>
 
                 <TabsContent value="mappings" className="mt-6">
@@ -150,6 +155,13 @@ export function BatchPageClient({ batches, accounts, bankMappings }: { batches: 
 
                 <TabsContent value="templates" className="mt-6">
                     <BatchList batches={templateBatches} />
+                </TabsContent>
+
+                <TabsContent value="webhooks" className="mt-6">
+                    <SheetWebhookLinkManager
+                        initialLinks={webhookLinkItems}
+                        onChange={(next) => setWebhookLinkItems(next)}
+                    />
                 </TabsContent>
             </Tabs>
 

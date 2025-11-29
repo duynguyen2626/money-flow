@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AddItemDialog } from './add-item-dialog'
 import { ItemsTable } from './items-table'
-import { sendBatchToSheetAction, updateBatchAction, deleteBatchAction, updateBatchItemAction, confirmBatchItemAction } from '@/actions/batch.actions'
+import { sendBatchToSheetAction, fundBatchAction, deleteBatchAction, confirmBatchItemAction } from '@/actions/batch.actions'
 import { Loader2, CheckCircle2, DollarSign, Trash2, Send } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { CloneBatchDialog } from './clone-batch-dialog'
@@ -15,6 +15,7 @@ import { BatchSettingsDialog } from './batch-settings-dialog'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { formatCurrency } from '@/lib/account-utils'
 
 export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, accounts: any[], bankMappings?: any[] }) {
     const [sending, setSending] = useState(false)
@@ -51,9 +52,16 @@ export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, acc
     async function handleFund() {
         setFunding(true)
         try {
-            await updateBatchAction(batch.id, { status: 'funded' })
+            const result = await fundBatchAction(batch.id)
+            const fundedAmount = Math.abs(result?.fundedAmount ?? 0)
+
             router.refresh()
-            toast.success('Batch funded successfully')
+
+            if (result?.createdTransaction && fundedAmount > 0) {
+                toast.success(`Funding Transaction Created (-${formatCurrency(fundedAmount)})`)
+            } else {
+                toast.success('Batch already fully funded')
+            }
         } catch (error) {
             console.error(error)
             toast.error('Failed to fund batch')
@@ -205,4 +213,3 @@ export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, acc
         </div>
     )
 }
-

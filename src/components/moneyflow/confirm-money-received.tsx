@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react'
 import { formatCurrency } from '@/lib/account-utils'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 interface PendingBatchItem {
     id: string
@@ -39,22 +40,39 @@ export function ConfirmMoneyReceived({ accountId, minimal = false }: ConfirmMone
     const [loading, setLoading] = useState(true)
     const router = useRouter()
 
-    useEffect(() => {
-        async function fetchPendingItems() {
-            try {
-                const response = await fetch(`/api/batch/pending-items?accountId=${accountId}`)
-                if (response.ok) {
-                    const data = await response.json()
-                    setPendingItems(data)
-                }
-            } catch (error) {
-                console.error('Failed to fetch pending items:', error)
-            } finally {
-                setLoading(false)
+    const fetchPendingItems = async () => {
+        try {
+            const response = await fetch(`/api/batch/pending-items?accountId=${accountId}`)
+            if (response.ok) {
+                const data = await response.json()
+                setPendingItems(data)
             }
+        } catch (error) {
+            console.error('Failed to fetch pending items:', error)
+        } finally {
+            setLoading(false)
         }
+    }
 
+    useEffect(() => {
         fetchPendingItems()
+
+        const supabase = createClient()
+        const channel = supabase
+            .channel(`batch_items_pending_${accountId}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'batch_items',
+                filter: `target_account_id=eq.${accountId}`
+            }, () => {
+                fetchPendingItems()
+            })
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
     }, [accountId])
 
     if (loading || !pendingItems || pendingItems.length === 0) {

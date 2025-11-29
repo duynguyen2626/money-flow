@@ -15,6 +15,7 @@ import {
     confirmBatchItem,
     voidBatchItem,
     importBatchItemsFromExcel,
+    fundBatch,
     Batch,
     BatchItem
 } from '@/services/batch.service'
@@ -86,6 +87,17 @@ export async function sendBatchToSheetAction(batchId: string) {
     return await sendBatchToSheet(batchId)
 }
 
+export async function fundBatchAction(batchId: string) {
+    const result = await fundBatch(batchId)
+    revalidatePath('/batch')
+    revalidatePath(`/batch/${batchId}`)
+    revalidatePath('/accounts')
+    if (result?.sourceAccountId) {
+        revalidatePath(`/accounts/${result.sourceAccountId}`)
+    }
+    return result
+}
+
 export async function updateBatchItemAction(id: string, data: any) {
     const result = await updateBatchItem(id, data)
     // We don't know the batchId here easily without fetching, but we can revalidate the batch page if we knew it.
@@ -108,4 +120,3 @@ export async function importBatchItemsAction(
     revalidatePath(`/batch/${batchId}`)
     return result
 }
-

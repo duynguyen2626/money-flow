@@ -1,3 +1,5 @@
+'use client'
+
 import Link from 'next/link'
 import { ArrowDownRight, ArrowUpRight, CreditCard, TrendingUp, Wallet, Link2, Archive, RotateCcw, Clock4, CheckCircle2 } from 'lucide-react'
 
@@ -7,8 +9,9 @@ import { AccountSpendingStats } from '@/types/cashback.types'
 import { Progress } from '@/components/ui/progress'
 import { updateAccountConfigAction } from '@/actions/account-actions'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ConfirmMoneyReceived } from './confirm-money-received'
+import { createClient } from '@/lib/supabase/client'
 
 type AssetConfig = {
   interestRate: number | null
@@ -37,6 +40,44 @@ export function AccountStatsHeader({
 }: AccountStatsHeaderProps) {
   const router = useRouter()
   const [isUpdating, setIsUpdating] = useState(false)
+  const [liveBatchStats, setLiveBatchStats] = useState(batchStats)
+
+  useEffect(() => {
+    setLiveBatchStats(batchStats)
+  }, [batchStats])
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await fetch(`/api/batch/stats?accountId=${account.id}`)
+        if (res.ok) {
+          const data = await res.json()
+          setLiveBatchStats(data)
+        }
+      } catch (e) {
+        console.error('Failed to fetch batch stats', e)
+      }
+    }
+
+    fetchStats()
+
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`batch_items_stats_${account.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'batch_items',
+        filter: `target_account_id=eq.${account.id}`
+      }, () => {
+        fetchStats()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [account.id])
 
   const balanceTone = account.current_balance < 0 ? 'text-red-600' : 'text-slate-900'
 
@@ -50,8 +91,10 @@ export function AccountStatsHeader({
     subtext?: string
   }[] = []
 
-  if (batchStats) {
-    const waitingAmount = Math.max(0, batchStats.waiting - batchStats.confirmed)
+  const resolvedStats = liveBatchStats || batchStats
+
+  if (resolvedStats) {
+    const waitingAmount = Math.max(0, resolvedStats.waiting)
     // Always show Pending/Confirmed blocks even if 0, to maintain layout? 
     // Or just push them. User wants "3 cụm".
 
@@ -66,7 +109,7 @@ export function AccountStatsHeader({
 
     statItems.push({
       label: 'Confirmed',
-      value: batchStats.confirmed,
+      value: resolvedStats.confirmed,
       icon: <CheckCircle2 className="h-4 w-4 text-blue-600" />,
       tone: 'text-blue-700',
       bg: 'bg-blue-50',

@@ -8,15 +8,17 @@ import { Trash2, ExternalLink } from 'lucide-react'
 import { deleteBatchAction } from '@/actions/batch.actions'
 import { useRouter } from 'next/navigation'
 
-export function BatchList({ batches }: { batches: any[] }) {
+type BatchListProps = { batches: any[]; mode?: 'processing' | 'done' }
+
+export function BatchList({ batches, mode }: BatchListProps) {
     const router = useRouter()
 
     if (!batches || batches.length === 0) {
         return <div>No batches found. Create one to get started.</div>
     }
 
-    const processingBatches = batches.filter(b => b.status !== 'completed')
-    const doneBatches = batches.filter(b => b.status === 'completed')
+    const processingBatches = batches.filter(b => b.status !== 'funded' && b.status !== 'completed')
+    const doneBatches = batches.filter(b => b.status === 'funded' || b.status === 'completed')
 
     async function handleDelete(e: React.MouseEvent, id: string) {
         e.preventDefault() // Prevent navigation to detail page
@@ -81,6 +83,30 @@ export function BatchList({ batches }: { batches: any[] }) {
             ))}
         </div>
     )
+
+    if (mode === 'processing') {
+        return (
+            <div className="mt-4">
+                {processingBatches.length > 0 ? (
+                    <BatchGrid items={processingBatches} />
+                ) : (
+                    <div className="text-muted-foreground text-sm">No processing batches.</div>
+                )}
+            </div>
+        )
+    }
+
+    if (mode === 'done') {
+        return (
+            <div className="mt-4">
+                {doneBatches.length > 0 ? (
+                    <BatchGrid items={doneBatches} />
+                ) : (
+                    <div className="text-muted-foreground text-sm">No completed batches.</div>
+                )}
+            </div>
+        )
+    }
 
     return (
         <Tabs defaultValue="processing" className="w-full">
