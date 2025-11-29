@@ -16,6 +16,7 @@ import {
 type AccountRow = {
   id: string
   name: string
+  logo_url: string | null
   cashback_config: unknown
 }
 
@@ -216,7 +217,7 @@ export async function getCashbackProgress(
 
   let query = supabase
     .from('accounts')
-    .select('id, name, cashback_config')
+    .select('id, name, logo_url, cashback_config')
     .eq('type', 'credit_card')
     .not('cashback_config', 'is', null)
 
@@ -323,6 +324,7 @@ export async function getCashbackProgress(
     cards.push({
       accountId: account.id,
       accountName: account.name,
+      accountImageUrl: account.logo_url,
       currentSpend: safeCurrentSpend,
       totalEarned: safeTotalEarned,
       sharedAmount: safeSharedAmount,

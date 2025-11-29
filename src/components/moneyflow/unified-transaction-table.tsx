@@ -204,8 +204,8 @@ export function UnifiedTransactionTable({
     { key: "type", label: "Type", defaultWidth: 130, minWidth: 110 },
     { key: "shop", label: "Notes", defaultWidth: 260, minWidth: 200 },
     { key: "category", label: "Category", defaultWidth: 150 },
-    ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 140 } as ColumnConfig] : []),
-    { key: "account", label: "Account", defaultWidth: 180 },
+    ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 160, minWidth: 140 } as ColumnConfig] : []),
+    { key: "account", label: "Account", defaultWidth: 200, minWidth: 180 },
     { key: "cycle", label: "Cycle", defaultWidth: 100 },
     { key: "amount", label: "Amount", defaultWidth: 120 },
     { key: "back_info", label: "Back Info", defaultWidth: 140 },
@@ -213,8 +213,8 @@ export function UnifiedTransactionTable({
     { key: "people_back", label: "People Back", defaultWidth: 110 },
     { key: "profit", label: "Profit", defaultWidth: 100 },
     { key: "final_price", label: "Final Price", defaultWidth: 120 },
-    { key: "tag", label: accountType === 'credit_card' ? "Cycle" : "Tag", defaultWidth: 120 },
-    { key: "status", label: "Status", defaultWidth: 110 },
+    { key: "tag", label: accountType === 'credit_card' ? "Cycle" : "Tag", defaultWidth: 180, minWidth: 150 },
+    { key: "status", label: "Status", defaultWidth: 130, minWidth: 120 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
   ]
@@ -1045,7 +1045,7 @@ export function UnifiedTransactionTable({
                     // Special Account Context Logic (Pre-formatted Arrow)
                     if (context === 'account' && accountId) {
                       return (
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-[150px]">
                           {/* Instructions say: Display the source_name text directly (which now contains the Arrow ➡️/⬅️) */}
                           {/* We might want to show logo if available (handled in mapper logic now?) */}
                           {txn.source_logo && sourceIcon}
@@ -1070,7 +1070,7 @@ export function UnifiedTransactionTable({
                     if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
                       return (
                         <CustomTooltip content={`${txn.source_name ?? 'Unknown'} ➡️ ${txn.destination_name ?? 'Unknown'}`}>
-                          <div className="flex items-center gap-2 cursor-help">
+                          <div className="flex items-center gap-2 cursor-help min-w-[150px]">
                             {txn.source_name && sourceIcon}
                             {txn.source_name && txn.destination_name && <span className="text-xl">➡️</span>}
                             {txn.destination_name && destIcon}
@@ -1081,7 +1081,7 @@ export function UnifiedTransactionTable({
 
                     // Render for Single Account (Expense/Income)
                     return (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-[150px]">
                         {txn.source_name && sourceIcon}
                         <CustomTooltip content={txn.account_name}>
                           <span className="truncate max-w-[120px] cursor-help">
@@ -1096,7 +1096,7 @@ export function UnifiedTransactionTable({
                     const personAvatar = (txn as any).person_avatar_url ?? txn.person_avatar_url ?? null
                     if (!personName) return <span className="text-slate-400">-</span>
                     return (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-[120px]">
                         {personAvatar ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -1115,16 +1115,18 @@ export function UnifiedTransactionTable({
                   }
                   case "tag":
                     return txn.tag ? (
-                      <CustomTooltip content={txn.tag}>
-                        <span className="inline-block max-w-[100px] truncate items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 border border-slate-200 cursor-help">
-                          {txn.tag}
-                        </span>
-                      </CustomTooltip>
+                      <div className="flex flex-wrap gap-1 min-w-[180px]">
+                        <CustomTooltip content={txn.tag}>
+                          <span className="inline-block items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 border border-slate-200 cursor-help whitespace-normal break-words">
+                            {txn.tag}
+                          </span>
+                        </CustomTooltip>
+                      </div>
                     ) : <span className="text-slate-400">-</span>
                   case "cycle":
                     return (
                       <CustomTooltip content={cycleLabel}>
-                        <span className="inline-block max-w-[100px] truncate text-slate-600 cursor-help border-b border-dotted border-slate-400">
+                        <span className="inline-block max-w-[100px] truncate text-[10px] text-slate-600 cursor-help border-b border-dotted border-slate-400">
                           {cycleLabel}
                         </span>
                       </CustomTooltip>
@@ -1161,8 +1163,8 @@ export function UnifiedTransactionTable({
                       <div className="flex flex-col text-sm">
                         <span className="text-emerald-600 font-bold">{numberFormatter.format(txn.bank_back)}</span>
                         {typeof txn.bank_rate === 'number' && (
-                          <span className="text-xs text-slate-500">
-                            {(txn.bank_rate * 100).toFixed(1)}% * {numberFormatter.format(Math.abs(txn.original_amount ?? txn.amount ?? 0))}
+                          <span className="text-[10px] text-slate-500">
+                            {numberFormatter.format(Math.abs(txn.original_amount ?? txn.amount ?? 0))} * {(txn.bank_rate * 100).toFixed(1)}%
                           </span>
                         )}
                       </div>
@@ -1177,7 +1179,7 @@ export function UnifiedTransactionTable({
                       <div className="flex flex-col text-sm">
                         <span className="text-orange-600 font-bold">{numberFormatter.format(txn.cashback_share_amount)}</span>
                         {(percentRaw || fixedRaw) && (
-                          <span className="text-xs text-slate-500">
+                          <span className="text-[10px] text-slate-500">
                             {percentRaw ? `${(percentRaw * 100).toFixed(1)}%` : ''}
                             {percentRaw && fixedRaw ? ' + ' : ''}
                             {fixedRaw ? numberFormatter.format(fixedRaw) : ''}
@@ -1187,12 +1189,18 @@ export function UnifiedTransactionTable({
                     )
                   }
                   case "profit":
+                    const bankRate = txn.bank_rate || 0;
+                    const peopleRate = txn.people_rate || 0;
+                    const rateDiff = bankRate - peopleRate;
+
                     return typeof txn.profit === 'number' ? (
                       <div className="flex flex-col text-sm">
                         <span className={`font-bold ${txn.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                           {numberFormatter.format(txn.profit)}
                         </span>
-                        <span className="text-xs text-slate-400">Net</span>
+                        <span className="text-[10px] text-slate-500">
+                          {(bankRate * 100).toFixed(1)}% - {(peopleRate * 100).toFixed(1)}% = {(rateDiff * 100).toFixed(1)}%
+                        </span>
                       </div>
                     ) : <span className="text-slate-300">-</span>
                   case "final_price":
@@ -1217,7 +1225,7 @@ export function UnifiedTransactionTable({
                     const isCopiedRefund = copiedId === `refund-${refundId}-${txn.id}`;
 
                     return (
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 min-w-[120px]">
                         <StatusBadge />
                         {refundId && (
                           <button

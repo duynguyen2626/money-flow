@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Home, Landmark, CreditCard, Wallet, Users, Clapperboard, ShoppingBag, ChevronLeft, ChevronRight, ArrowLeftRight, ArrowRight, Layers } from "lucide-react"
+import { Home, Landmark, CreditCard, Wallet, Users, Clapperboard, ShoppingBag, ChevronLeft, ChevronRight, ArrowLeftRight, ArrowRight, Layers, CircleDollarSign } from "lucide-react"
 import Link from "next/link"
 
 import { SidebarNav, type NavItem } from "./sidebar-nav"
@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils"
 
 const navItems: NavItem[] = [
   { label: "Overview", href: "/", icon: Home },
-  { label: "Accounts", href: "/accounts", icon: Wallet },
+  { label: "Accounts", href: "/accounts", icon: CircleDollarSign },
   { label: "Shops", href: "/shops", icon: ShoppingBag },
   { label: "Transactions", href: "/transactions", icon: ArrowLeftRight },
   { label: "Refunds", href: "/refunds", icon: ArrowRight },

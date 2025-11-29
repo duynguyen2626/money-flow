@@ -143,4 +143,5 @@ export type TransactionWithDetails = TransactionRow & {
   profit?: number;
   bank_back?: number;
   bank_rate?: number;
+  people_rate?: number;
 }

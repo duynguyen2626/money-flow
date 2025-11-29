@@ -496,12 +496,23 @@ export function TransactionForm({
         }
       }
     } else if (transactionType === 'transfer') {
-      const transferCat = categories.find(c => c.name === 'Chuyển tiền' || c.name === 'Money Transfer');
-      if (transferCat) {
-        form.setValue('category_id', transferCat.id);
+      // Check if destination is a credit card (Pay Card scenario)
+      const destinationId = form.getValues('debt_account_id');
+      const destinationAccount = allAccounts.find(a => a.id === destinationId);
+
+      if (destinationAccount?.type === 'credit_card') {
+        const creditPaymentCat = categories.find(c => c.name === 'Credit Payment' || c.name === 'Thanh toán thẻ tín dụng');
+        if (creditPaymentCat) {
+          form.setValue('category_id', creditPaymentCat.id);
+        }
+      } else {
+        const transferCat = categories.find(c => c.name === 'Chuyển tiền' || c.name === 'Money Transfer');
+        if (transferCat) {
+          form.setValue('category_id', transferCat.id);
+        }
       }
     }
-  }, [transactionType, categories, shops, form, isEditMode]);
+  }, [transactionType, categories, shops, form, isEditMode, allAccounts]);
 
   const categoryOptions = useMemo(() => {
     if (isRefundMode && refundCategoryId) {
@@ -524,7 +535,7 @@ export function TransactionForm({
     }
 
     const targetType = transactionType === 'debt' ? 'expense' : transactionType
-    if (targetType !== 'expense' && targetType !== 'income') {
+    if (targetType !== 'expense' && targetType !== 'income' && targetType !== 'transfer' && targetType !== 'repayment') {
       return []
     }
     return categories
