@@ -321,44 +321,69 @@ export function AccountDetailsView({
                             account={account}
                             collateralAccounts={accounts.filter(a => a.type === 'savings' || a.type === 'investment' || a.type === 'asset')}
                             accounts={accounts}
-                            triggerContent={
-                                <button className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
-                                    <Settings className="h-5 w-5" />
-                                </button>
-                            }
+                            buttonClassName="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+                            triggerContent={<Settings className="h-5 w-5" />}
                         />
                     </div>
                 </div>
             </div>
 
             {/* Filters */}
-            <div className="flex flex-col gap-3 bg-white p-3 rounded-lg border border-slate-200 shadow-sm shrink-0">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center">
-                    <div className="relative flex-1">
+            <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm shrink-0">
+                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                    {/* Search */}
+                    <div className="relative flex-1 max-w-md">
                         <input
                             type="text"
                             placeholder="Search by note..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full rounded-md border border-gray-300 px-3 py-2 pr-36 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            className="w-full rounded-md border border-gray-300 px-3 py-2 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                         />
+                        {searchTerm && (
+                            <button
+                                className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:text-slate-600"
+                                onClick={() => setSearchTerm('')}
+                                title="Clear search"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Quick Filters (All/Void/Pending) */}
+                    <div className="flex items-center rounded-lg bg-slate-100 p-1 text-xs font-medium text-slate-600">
                         <button
-                            className="absolute right-24 top-1/2 -translate-y-1/2 inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:text-slate-800 shadow-sm"
-                            onClick={() => setSearchTerm('')}
-                            title="Clear search"
+                            className={`rounded-md px-3 py-1.5 transition-all ${activeTab === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                            onClick={() => setActiveTab('active')}
                         >
-                            <X className="h-4 w-4" />
+                            All
                         </button>
                         <button
-                            className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50"
+                            className={`rounded-md px-3 py-1.5 transition-all ${activeTab === 'void' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                            onClick={() => setActiveTab('void')}
+                        >
+                            Void
+                        </button>
+                        <button
+                            className={`rounded-md px-3 py-1.5 transition-all ${activeTab === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                            onClick={() => setActiveTab('pending')}
+                        >
+                            Pending
+                        </button>
+                    </div>
+
+                    {/* Filter Menu Toggle */}
+                    <div className="relative">
+                        <button
+                            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
                             onClick={() => setShowFilterMenu(prev => !prev)}
-                            title="Filter options"
                         >
                             <FilterIcon className="h-4 w-4" />
                             Filters
                         </button>
                         {showFilterMenu && (
-                            <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-md border border-slate-200 bg-white p-3 text-xs shadow space-y-3">
+                            <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-md border border-slate-200 bg-white p-3 text-xs shadow-lg space-y-3">
                                 {/* Filter Menu Content */}
                                 <div className="space-y-2">
                                     <p className="text-[11px] font-semibold text-slate-700">Tags</p>
@@ -419,7 +444,7 @@ export function AccountDetailsView({
                                         emptyState="No people"
                                     />
                                 </div>
-                                <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center justify-between gap-2 border-t pt-2">
                                     <button
                                         className="text-xs font-semibold text-blue-600 hover:text-blue-800"
                                         onClick={() => {
@@ -431,7 +456,7 @@ export function AccountDetailsView({
                                             setSelectedYear(currentYear)
                                         }}
                                     >
-                                        Reset
+                                        Reset All
                                     </button>
                                     <button
                                         className="text-xs text-slate-600 hover:text-slate-800"
@@ -443,42 +468,18 @@ export function AccountDetailsView({
                             </div>
                         )}
                     </div>
-                    <div className="flex w-full flex-col gap-2 md:w-48 md:flex-row md:items-center">
-                        <select
-                            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            value={selectedYear}
-                            onChange={e => setSelectedYear(e.target.value)}
-                        >
-                            <option value="">All years</option>
-                            {availableYears.map(year => (
-                                <option key={year} value={year}>{year}</option>
-                            ))}
-                        </select>
-                    </div>
-                </div>
 
-                {/* Quick Filter Buttons */}
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="flex items-center rounded-lg bg-slate-100 p-1 text-xs font-medium text-slate-600">
-                        <button
-                            className={`rounded-md px-3 py-1 transition-all ${activeTab === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-                            onClick={() => setActiveTab('active')}
-                        >
-                            All
-                        </button>
-                        <button
-                            className={`rounded-md px-3 py-1 transition-all ${activeTab === 'void' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-                            onClick={() => setActiveTab('void')}
-                        >
-                            Void
-                        </button>
-                        <button
-                            className={`rounded-md px-3 py-1 transition-all ${activeTab === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
-                            onClick={() => setActiveTab('pending')}
-                        >
-                            Pending
-                        </button>
-                    </div>
+                    {/* Year Select */}
+                    <select
+                        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        value={selectedYear}
+                        onChange={e => setSelectedYear(e.target.value)}
+                    >
+                        <option value="">All years</option>
+                        {availableYears.map(year => (
+                            <option key={year} value={year}>{year}</option>
+                        ))}
+                    </select>
                 </div>
             </div>
 
@@ -499,7 +500,7 @@ export function AccountDetailsView({
                         onBulkActionStateChange={handleBulkActionStateChange}
                         sortState={sortState}
                         onSortChange={setSortState}
-                        hiddenColumns={['people', 'tag', 'cycle', 'account', 'back_info', 'initial_back', 'people_back', 'profit', 'final_price', 'id']}
+                        hiddenColumns={['initial_back', 'people_back', 'profit', 'final_price', 'id']}
                     />
                 </div>
             </div>
