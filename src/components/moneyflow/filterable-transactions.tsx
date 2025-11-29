@@ -25,7 +25,7 @@ type FilterableTransactionsProps = {
 
 type BulkActionState = {
     selectionCount: number
-    currentTab: 'active' | 'void'
+    currentTab: 'active' | 'void' | 'pending'
     onVoidSelected: () => Promise<void> | void
     onRestoreSelected: () => Promise<void> | void
     isVoiding: boolean
@@ -56,12 +56,12 @@ export function FilterableTransactions({
     const [showSelectedOnly, setShowSelectedOnly] = useState(false)
     const [showFilterMenu, setShowFilterMenu] = useState(false)
     const currentYear = String(new Date().getFullYear())
-    const [selectedYear, setSelectedYear] = useState<string>(currentYear)
+    const [selectedYear, setSelectedYear] = useState<string>('')
     const [moreTagsOpen, setMoreTagsOpen] = useState(false)
     const [selectedCycle, setSelectedCycle] = useState<string | null>(null)
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
     const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(null)
-    const [activeTab, setActiveTab] = useState<'active' | 'void'>('active')
+    const [activeTab, setActiveTab] = useState<'active' | 'void' | 'pending'>('active')
     const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
     const [bulkActions, setBulkActions] = useState<BulkActionState | null>(null)
     const [sortState, setSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
@@ -449,7 +449,7 @@ export function FilterableTransactions({
                                 }`}
                             onClick={() => setActiveTab('active')}
                         >
-                            Active
+                            All
                         </button>
                         <button
                             className={`rounded-md px-3 py-1 transition-all text-xs ${activeTab === 'void'
@@ -459,6 +459,15 @@ export function FilterableTransactions({
                             onClick={() => setActiveTab('void')}
                         >
                             Void
+                        </button>
+                        <button
+                            className={`rounded-md px-3 py-1 transition-all text-xs ${activeTab === 'pending'
+                                ? 'bg-white text-slate-900 shadow-sm'
+                                : 'text-slate-500 hover:text-slate-900'
+                                }`}
+                            onClick={() => setActiveTab('pending')}
+                        >
+                            Pending/Waiting
                         </button>
                     </div>
                     {isSortActive && (

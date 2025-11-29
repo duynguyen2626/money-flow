@@ -5,6 +5,14 @@ import { SYSTEM_ACCOUNTS } from '@/lib/constants'
 
 export type Batch = Database['public']['Tables']['batches']['Row']
 export type BatchItem = Database['public']['Tables']['batch_items']['Row']
+export type FundBatchResult = {
+    transactionId: string | null
+    totalAmount: number
+    fundedAmount: number
+    createdTransaction: boolean
+    status: 'funded' | 'additional_funded' | 'already_funded'
+    sourceAccountId: string
+}
 
 export async function getBatches() {
     const supabase: any = createClient()
@@ -575,7 +583,7 @@ export async function importBatchItemsFromExcel(
     return results
 }
 
-export async function fundBatch(batchId: string) {
+export async function fundBatch(batchId: string): Promise<FundBatchResult> {
     const supabase: any = createClient()
 
     // 1. Fetch Batch Details (to get Source Account and Name)
@@ -586,26 +594,132 @@ export async function fundBatch(batchId: string) {
         .single()
 
     if (batchError || !batch) throw new Error('Batch not found')
-    if (batch.status === 'funded') throw new Error('Batch already funded')
     if (!batch.source_account_id) throw new Error('Batch has no source account')
 
+    const batchItems = Array.isArray(batch.batch_items) ? batch.batch_items : []
+    if (batchItems.length === 0) throw new Error('Batch has no items to fund')
+
     // 2. Calculate Total Amount
-    const totalAmount = batch.batch_items.reduce((sum: number, item: any) => sum + item.amount, 0)
+    const totalAmount = batchItems.reduce((sum: number, item: any) => sum + Math.abs(item.amount), 0)
     if (totalAmount <= 0) throw new Error('Batch has no amount to fund')
+
+    const {
+        data: { user }
+    } = await supabase.auth.getUser()
+    const userId = user?.id ?? SYSTEM_ACCOUNTS.DEFAULT_USER_ID
+
+    // 3. Check if already funded and if we need to update
+    if (batch.status === 'funded') {
+        // Calculate how much is already funded
+        // We can check all transactions linked to this batch?
+        // Or just check the 'funding_transaction_id' if we only support one?
+        // The current schema has 'funding_transaction_id' on the batch.
+        // If we want to support multiple, we might need to query transactions by note or tag?
+        // For now, let's assume we just want to ADD the difference.
+
+        // Fetch the existing funding transaction to check its amount
+        let currentFundedAmount = 0;
+        if (batch.funding_transaction_id) {
+            const { data: lines } = await supabase
+                .from('transaction_lines')
+                .select('amount')
+                .eq('transaction_id', batch.funding_transaction_id)
+                .eq('account_id', batch.source_account_id)
+                .eq('type', 'credit'); // Money leaving source
+
+            if (lines && lines.length > 0) {
+                currentFundedAmount = lines.reduce((sum: number, l: any) => sum + Math.abs(l.amount), 0);
+            }
+        }
+
+        const diff = totalAmount - currentFundedAmount;
+
+        if (diff <= 0) {
+            return {
+                transactionId: null,
+                totalAmount,
+                fundedAmount: currentFundedAmount,
+                createdTransaction: false,
+                status: 'already_funded',
+                sourceAccountId: batch.source_account_id
+            }
+        }
+
+        const lineMetadata = { batch_id: batch.id, type: 'batch_funding_additional' }
+
+        const nameParts = batch.name.split(' ')
+        const tag = nameParts[nameParts.length - 1]
+
+        const { data: txn, error: txnError } = await supabase
+            .from('transactions')
+            .insert({
+                occurred_at: new Date().toISOString(),
+                note: `[Waiting] Fund More Batch: ${batch.name} (Additional ${diff})`,
+                status: 'posted',
+                tag: tag, // Use the same tag
+                created_by: userId
+            })
+            .select()
+            .single()
+
+        if (txnError) throw txnError
+
+        const lines = [
+            {
+                transaction_id: txn.id,
+                account_id: batch.source_account_id,
+                amount: -diff,
+                type: 'credit',
+                metadata: lineMetadata
+            },
+            {
+                transaction_id: txn.id,
+                account_id: SYSTEM_ACCOUNTS.BATCH_CLEARING,
+                amount: diff,
+                type: 'debit',
+                metadata: lineMetadata
+            }
+        ]
+
+        const { error: linesError } = await supabase
+            .from('transaction_lines')
+            .insert(lines)
+
+        if (linesError) throw linesError
+
+        if (!batch.funding_transaction_id) {
+            await supabase
+                .from('batches')
+                .update({ funding_transaction_id: txn.id })
+                .eq('id', batchId)
+        }
+
+        return {
+            transactionId: txn.id,
+            totalAmount,
+            fundedAmount: diff,
+            createdTransaction: true,
+            status: 'additional_funded',
+            sourceAccountId: batch.source_account_id
+        }
+    }
+
+    // --- NEW FUNDING (Original Logic) ---
 
     // 3. Extract Tag from Name (e.g. "CKL NOV25" -> "NOV25")
     const nameParts = batch.name.split(' ')
     const tag = nameParts[nameParts.length - 1]
+    const lineMetadata = { batch_id: batch.id, type: 'batch_funding' }
 
     // 4. Create Transaction Header
     const { data: txn, error: txnError } = await supabase
         .from('transactions')
         .insert({
             occurred_at: new Date().toISOString(),
-            note: `Funding Batch: ${batch.name}`,
+            note: `Transfer to Trung gian CKL - ${batch.name}`,
             status: 'posted',
             tag: tag,
-            created_by: SYSTEM_ACCOUNTS.DEFAULT_USER_ID
+            created_by: userId
         })
         .select()
         .single()
@@ -620,13 +734,15 @@ export async function fundBatch(batchId: string) {
             transaction_id: txn.id,
             account_id: batch.source_account_id,
             amount: -totalAmount, // Credit
-            type: 'credit'
+            type: 'credit',
+            metadata: lineMetadata
         },
         {
             transaction_id: txn.id,
             account_id: SYSTEM_ACCOUNTS.BATCH_CLEARING,
             amount: totalAmount, // Debit
-            type: 'debit'
+            type: 'debit',
+            metadata: lineMetadata
         }
     ]
 
@@ -647,19 +763,24 @@ export async function fundBatch(batchId: string) {
 
     if (updateError) throw updateError
 
-    return true
+    return {
+        transactionId: txn.id,
+        totalAmount,
+        fundedAmount: totalAmount,
+        createdTransaction: true,
+        status: 'funded',
+        sourceAccountId: batch.source_account_id
+    }
 }
 
 export async function getAccountBatchStats(accountId: string) {
     const supabase: any = createClient()
 
-    // Fetch batches where this account is the source and status is 'funded'
-    // We also need batch items to calculate amounts
-    const { data: batches, error } = await supabase
-        .from('batches')
-        .select('*, batch_items(amount, status)')
-        .eq('source_account_id', accountId)
-        .eq('status', 'funded')
+    const { data: items, error } = await supabase
+        .from('batch_items')
+        .select('amount, status, batch:batches(is_template, status)')
+        .eq('target_account_id', accountId)
+        .in('status', ['pending', 'confirmed'])
 
     if (error) {
         console.error('Error fetching batch stats:', error)
@@ -669,15 +790,13 @@ export async function getAccountBatchStats(accountId: string) {
     let waiting = 0
     let confirmed = 0
 
-    batches?.forEach((batch: any) => {
-        batch.batch_items.forEach((item: any) => {
-            if (item.status === 'confirmed') {
-                confirmed += item.amount
-            } else {
-                // If batch is funded but item is not confirmed, it's waiting
-                waiting += item.amount
-            }
-        })
+    items?.forEach((item: any) => {
+        if (item.batch?.is_template) return
+        if (item.status === 'pending') {
+            waiting += item.amount
+        } else if (item.status === 'confirmed') {
+            confirmed += item.amount
+        }
     })
 
     return { waiting, confirmed }

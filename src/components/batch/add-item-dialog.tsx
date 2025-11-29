@@ -105,6 +105,22 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
     const targetAccountId = form.watch('target_account_id')
     const bankNumber = form.watch('bank_number')
 
+    // Auto-fill card name from target account (take everything after the first token)
+    useEffect(() => {
+        if (!targetAccountId || targetAccountId === 'none') return
+        const target = accounts.find(a => a.id === targetAccountId)
+        if (!target?.name) return
+
+        const parts = target.name.split(/[\s-]+/).filter(Boolean)
+        if (parts.length < 2) return
+
+        const inferredCardName = parts.slice(1).join(' ').trim()
+        const currentCardName = form.getValues('card_name')?.trim()
+        if (!currentCardName || currentCardName === '' || currentCardName === inferredCardName) {
+            form.setValue('card_name', inferredCardName)
+        }
+    }, [accounts, form, targetAccountId])
+
     // Auto-fill bank name when bank code is selected
     useEffect(() => {
         if (bankCode && bankMappings.length > 0) {

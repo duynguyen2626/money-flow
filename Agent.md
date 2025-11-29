@@ -45,6 +45,10 @@ Initial Back:
 
 Display: [Bank Back Amount] (Bold).
 
+1. **Frontend:** Update AccountCard math logic.  
+2. **Frontend:** Polish UnifiedTransactionTable columns (Notes, Time).  
+3. **Frontend:** Fix TransactionForm to save full datetime.  
+4. **Integration:** Ensure /people page refreshes on actions.
 Subtext: [Rate]% * [Amount] (Gray, small).
 
 People Back:

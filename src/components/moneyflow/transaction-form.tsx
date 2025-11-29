@@ -1247,8 +1247,20 @@ export function TransactionForm({
             type="date"
             value={field.value ? format(field.value, 'yyyy-MM-dd') : ''}
             onChange={event => {
-              const nextValue = event.target.value
-              field.onChange(nextValue ? new Date(nextValue) : undefined)
+              const dateStr = event.target.value
+              if (!dateStr) {
+                field.onChange(undefined)
+                return
+              }
+              // Create date from input (local midnight)
+              const [y, m, d] = dateStr.split('-').map(Number)
+              const date = new Date(y, m - 1, d)
+
+              // Add current time to avoid 00:00 UTC -> 07:00 VN issue
+              const now = new Date()
+              date.setHours(now.getHours(), now.getMinutes(), now.getSeconds())
+
+              field.onChange(date)
             }}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
           />

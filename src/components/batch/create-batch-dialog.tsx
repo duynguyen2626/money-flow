@@ -35,7 +35,9 @@ const formSchema = z.object({
     auto_clone_day: z.number().min(1).max(31).optional(),
 })
 
-export function CreateBatchDialog({ accounts }: { accounts: any[] }) {
+type WebhookLink = { id: string; name: string; url: string }
+
+export function CreateBatchDialog({ accounts, webhookLinks }: { accounts: any[], webhookLinks?: WebhookLink[] }) {
     const [open, setOpen] = useState(false)
     const [monthMode, setMonthMode] = useState<'current' | 'last'>('current')
 
@@ -122,19 +124,41 @@ export function CreateBatchDialog({ accounts }: { accounts: any[] }) {
                                 </FormItem>
                             )}
                         />
-                        <FormField
-                            control={form.control}
-                            name="sheet_link"
-                            render={({ field }) => (
+                        <div className="grid gap-3 md:grid-cols-2">
+                            <FormField
+                                control={form.control}
+                                name="sheet_link"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Sheet Webhook Link</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="https://script.google.com/..." {...field} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            {webhookLinks && webhookLinks.length > 0 && (
                                 <FormItem>
-                                    <FormLabel>Sheet Webhook Link</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="https://script.google.com/..." {...field} />
-                                    </FormControl>
-                                    <FormMessage />
+                                    <FormLabel>Reuse Saved Webhook</FormLabel>
+                                    <Select
+                                        items={[
+                                            { value: '', label: 'None' },
+                                            ...webhookLinks.map(w => ({ value: w.url, label: w.name }))
+                                        ]}
+                                        value={form.watch('sheet_link') && webhookLinks.some(w => w.url === form.watch('sheet_link')) ? form.watch('sheet_link') : ''}
+                                        onValueChange={(val) => {
+                                            if (val === '') {
+                                                form.setValue('sheet_link', '')
+                                            } else {
+                                                form.setValue('sheet_link', val)
+                                            }
+                                        }}
+                                        placeholder="Select saved webhook"
+                                    />
                                 </FormItem>
                             )}
-                        />
+                        </div>
                         <FormField
                             control={form.control}
                             name="source_account_id"

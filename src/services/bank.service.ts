@@ -11,6 +11,12 @@ type BankMappingUpdate = Database['public']['Tables']['bank_mappings']['Update']
  */
 export async function getBankMappings(): Promise<BankMapping[]> {
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    console.log('getBankMappings: serviceRoleKey exists?', !!serviceRoleKey)
+
+    // Debug: Log keys starting with SUPABASE
+    const envKeys = Object.keys(process.env).filter(key => key.startsWith('SUPABASE'));
+    console.log('Available SUPABASE env keys:', envKeys);
+
     let supabase
 
     if (serviceRoleKey) {
@@ -33,7 +39,11 @@ export async function getBankMappings(): Promise<BankMapping[]> {
         .select('*')
         .order('bank_name')
 
-    if (error) throw error
+    if (error) {
+        console.error('getBankMappings error:', error)
+        throw error
+    }
+    console.log('getBankMappings: data length', data?.length)
     return data || []
 }
 
@@ -156,7 +166,8 @@ export async function importBankMappingsFromExcel(excelData: string) {
             }
         )
     } else {
-        supabase = await createClient()
+        console.error('Missing SUPABASE_SERVICE_ROLE_KEY. Cannot perform privileged import.')
+        throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY in environment variables. Please check .env.local')
     }
     const lines = excelData.trim().split('\n')
     const results = { success: 0, errors: [] as string[] }

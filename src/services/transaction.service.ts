@@ -560,12 +560,12 @@ export async function voidTransaction(id: string): Promise<boolean> {
   }
 
   // --- VOID PROTECTION FOR REFUNDS ---
-  // If voiding a 'completed' transaction (likely a confirmed refund request),
-  // check if there is a linked 'money received' transaction (GD3).
+  // If voiding a transaction that has a linked 'money received' transaction (GD3),
+  // we must block it to prevent data inconsistency.
   const lines = ((existing as any).transaction_lines as RefundTransactionLine[]) ?? [];
   const metadata = extractLineMetadata(lines) as Record<string, any> | null;
 
-  if ((existing as any).status === 'completed' && metadata?.refund_confirmed_transaction_id) {
+  if (metadata?.refund_confirmed_transaction_id) {
     const { data: gd3 } = await supabase
       .from('transactions')
       .select('id, status')
@@ -576,11 +576,141 @@ export async function voidTransaction(id: string): Promise<boolean> {
 
     if (gd3Typed && gd3Typed.status !== 'void') {
       console.error('Cannot void intermediate transaction. Linked confirmation exists:', gd3Typed.id);
-      // We return false or throw. Returning false for now to avoid crashing, but ideally should bubble error.
-      // Since function returns boolean, we log and return false.
-      // Ideally we should probably throw to let UI know the reason.
-      // But adhering to signature:
-      return false;
+      // Throwing error to be caught by UI
+      throw new Error('Cannot void this transaction because the refund has already been confirmed (GD3). Please void the confirmation transaction first.');
+    }
+  }
+
+  // --- HANDLE VOIDING OF REFUND CONFIRMATION (GD3) ---
+  // If this is a GD3 (has pending_refund_transaction_id), we need to revert GD2 and GD1.
+  console.log('VoidTransaction Debug:', { id, metadata });
+
+  if (metadata?.pending_refund_transaction_id) {
+    const gd2Id = metadata.pending_refund_transaction_id;
+    const gd1Id = metadata.original_transaction_id || metadata.linked_transaction_id;
+    const refundAmount = Number(metadata.refund_amount) || 0;
+
+    console.log(`Voiding GD3 (${id}). Reverting GD2 (${gd2Id}) and updating GD1 (${gd1Id})...`);
+
+    // 1. Revert GD2 (Refund Request) to 'pending'
+    // We also need to revert its metadata (remove confirmed status)
+    const { data: gd2 } = await supabase
+      .from('transactions')
+      .select('*, transaction_lines(*)')
+      .eq('id', gd2Id)
+      .single();
+
+    if (gd2) {
+      const gd2Lines = (gd2 as any).transaction_lines ?? [];
+      const gd2Meta = extractLineMetadata(gd2Lines) as Record<string, any> || {};
+      const newGd2Meta = { ...gd2Meta, refund_status: 'pending', refund_confirmed_transaction_id: null, refund_confirmed_at: null };
+
+      // Update GD2 status and metadata
+      await (supabase.from('transactions').update as any)({ status: 'pending' }).eq('id', gd2Id);
+      for (const line of gd2Lines) {
+        await (supabase.from('transaction_lines').update as any)({ metadata: newGd2Meta }).eq('id', line.id);
+      }
+    }
+
+    // 2. Update GD1 (Original) to 'waiting_refund' (or active/partial)
+    // We need to decrease the refunded_amount in GD1 metadata
+    if (gd1Id) {
+      const { data: gd1 } = await supabase
+        .from('transactions')
+        .select('*, transaction_lines(*)')
+        .eq('id', gd1Id)
+        .single();
+
+      if (gd1) {
+        const gd1Lines = (gd1 as any).transaction_lines ?? [];
+        const gd1Meta = extractLineMetadata(gd1Lines) as Record<string, any> || {};
+        const currentRefunded = Number(gd1Meta.refunded_amount) || 0;
+        const newRefunded = Math.max(0, currentRefunded - refundAmount);
+
+        // Determine new refund status for GD1
+        let newRefundStatus = 'pending'; // Default back to pending/waiting
+        if (newRefunded <= 0) newRefundStatus = 'requested'; // Or 'pending'
+        else newRefundStatus = 'partial';
+
+        const newGd1Meta = { ...gd1Meta, refunded_amount: newRefunded, refund_status: newRefundStatus };
+
+        // Update GD1 status to 'waiting_refund' (user requested "waiting")
+        await (supabase.from('transactions').update as any)({ status: 'waiting_refund' }).eq('id', gd1Id);
+
+        for (const line of gd1Lines) {
+          await (supabase.from('transaction_lines').update as any)({ metadata: newGd1Meta }).eq('id', line.id);
+        }
+      }
+    }
+  }
+
+  // --- HANDLE VOIDING OF REFUND REQUEST (GD2) ---
+  // If this is a GD2 (has refund_status='requested' or 'pending' and links to GD1), we need to revert GD1.
+  if (metadata?.refund_status === 'requested' || metadata?.refund_status === 'pending') {
+    const gd1Id = metadata.original_transaction_id || metadata.linked_transaction_id;
+    const refundAmount = Number(metadata.refund_amount) || 0;
+
+    if (gd1Id) {
+      console.log(`Voiding GD2 (${id}). Reverting GD1 (${gd1Id})...`);
+      const { data: gd1 } = await supabase
+        .from('transactions')
+        .select('*, transaction_lines(*)')
+        .eq('id', gd1Id)
+        .single();
+
+      if (gd1) {
+        const gd1Lines = (gd1 as any).transaction_lines ?? [];
+        const gd1Meta = extractLineMetadata(gd1Lines) as Record<string, any> || {};
+        const currentRefunded = Number(gd1Meta.refunded_amount) || 0;
+        const newRefunded = Math.max(0, currentRefunded - refundAmount);
+
+        // Determine new refund status for GD1
+        let newRefundStatus = 'none';
+        let newStatus = 'posted'; // Default to Active (posted)
+
+        if (newRefunded > 0) {
+          newRefundStatus = 'partial';
+          newStatus = 'waiting_refund'; // Still waiting if partial? Or active? Usually waiting if incomplete.
+        } else {
+          // Fully reverted
+          newRefundStatus = 'none';
+          newStatus = 'posted';
+        }
+
+        const newGd1Meta = { ...gd1Meta, refunded_amount: newRefunded, refund_status: newRefundStatus };
+
+        // Remove Refund ID from Note if fully reverted
+        // Assuming Note format: "1.[ID] Note..."
+        // We want to remove "[ID]" if it exists? Or just leave it?
+        // User said: "Notes khi không còn giao dịch con nữa nên xóa luôn ID"
+        // Let's try to remove the specific Group ID if newRefunded is 0.
+        let newNote = (gd1 as any).note;
+        if (newRefunded === 0) {
+          // Regex to find [XXXX]
+          // We should check if we can identify the specific ID.
+          // Usually the ID is in the GD2 note too.
+          // Let's assume the ID in the note is the one we want to remove.
+          const groupTagMatch = (existing as any).note?.match(/\[[A-Z0-9]+\]/);
+          if (groupTagMatch) {
+            const tagToRemove = groupTagMatch[0];
+            newNote = newNote.replace(tagToRemove, '').replace(/\s+/, ' ').trim();
+            // Also remove "1." prefix if it was added?
+            // The prefix "1." is usually added when creating the refund flow.
+            // If we revert to original, maybe we should remove "1."?
+            // Let's be safe and just remove the tag for now.
+            // If the note becomes "1. Note", it's fine.
+            if (newNote.startsWith('1. ')) {
+              newNote = newNote.substring(3);
+            }
+          }
+        }
+
+        await (supabase.from('transactions').update as any)({ status: newStatus, note: newNote }).eq('id', gd1Id);
+
+        for (const line of gd1Lines) {
+          await (supabase.from('transaction_lines').update as any)({ metadata: newGd1Meta }).eq('id', line.id);
+        }
+      }
     }
   }
 
@@ -607,121 +737,6 @@ export async function voidTransaction(id: string): Promise<boolean> {
         await syncTransactionToSheet(personLine.person_id, payload, 'delete');
       } catch (err) {
         console.error('Sheet Sync Error (Void):', err);
-      }
-    }
-  }
-
-  // --- ROLLBACK LOGIC FOR REFUNDS ---
-  // metadata and lines are already defined above
-  const metaRecord = metadata as Record<string, unknown> | null;
-  let targetOriginalId =
-    typeof metaRecord?.original_transaction_id === 'string'
-      ? metaRecord.original_transaction_id
-      : typeof metaRecord?.linked_transaction_id === 'string'
-        ? metaRecord.linked_transaction_id
-        : null;
-  const pendingRefundId =
-    typeof metaRecord?.pending_refund_transaction_id === 'string'
-      ? metaRecord.pending_refund_transaction_id
-      : null;
-
-  let refundAmount =
-    typeof metaRecord?.refund_amount === 'number' ? Math.abs(metaRecord.refund_amount) : null;
-
-  if (!refundAmount) {
-    const derivedAmount = deriveRefundAmountFromLines(lines);
-    if (derivedAmount !== null) {
-      refundAmount = derivedAmount;
-    }
-  }
-
-  if (!targetOriginalId && pendingRefundId) {
-    const { data: pendingTx, error: pendingError } = await supabase
-      .from('transactions')
-      .select('id, transaction_lines(id, amount, original_amount, type, metadata)')
-      .eq('id', pendingRefundId)
-      .maybeSingle();
-
-    if (!pendingError && pendingTx) {
-      const pendingLines = ((pendingTx as any)?.transaction_lines as RefundTransactionLine[]) ?? [];
-      const pendingMeta = extractLineMetadata(pendingLines as Array<{ metadata?: Json | null }>) as Record<string, any> | null;
-
-      if (!refundAmount) {
-        const pendingAmount =
-          typeof pendingMeta?.refund_amount === 'number' ? Math.abs(pendingMeta.refund_amount) : null;
-        refundAmount = pendingAmount ?? deriveRefundAmountFromLines(pendingLines);
-      }
-
-      if (!targetOriginalId) {
-        targetOriginalId =
-          typeof pendingMeta?.original_transaction_id === 'string'
-            ? pendingMeta.original_transaction_id
-            : typeof pendingMeta?.linked_transaction_id === 'string'
-              ? pendingMeta.linked_transaction_id
-              : null;
-      }
-    }
-  }
-
-  if (targetOriginalId && refundAmount && refundAmount > 0) {
-    console.log(`Rollback: Voiding a refund transaction. Restoring original transaction ${targetOriginalId}`);
-
-    const { data: original, error: originalError } = await supabase
-      .from('transactions')
-      .select('id, transaction_lines(id, metadata, amount, original_amount, type)')
-      .eq('id', targetOriginalId)
-      .maybeSingle();
-
-    if (original && !originalError) {
-      let originalLines = ((original as any).transaction_lines as RefundTransactionLine[]) ?? [];
-      let originalMetadata = extractLineMetadata(originalLines as Array<{ metadata?: Json | null }>) as Record<string, any> | null;
-
-      if (
-        typeof originalMetadata?.linked_transaction_id === 'string' &&
-        originalMetadata.linked_transaction_id !== targetOriginalId
-      ) {
-        const fallbackOriginalId = originalMetadata.linked_transaction_id as string;
-        if (!refundAmount && typeof originalMetadata?.refund_amount === 'number') {
-          refundAmount = Math.abs(originalMetadata.refund_amount);
-        }
-        const { data: parentTx, error: parentError } = await supabase
-          .from('transactions')
-          .select('id, transaction_lines(id, metadata, amount, original_amount, type)')
-          .eq('id', fallbackOriginalId)
-          .maybeSingle();
-
-        if (!parentError && parentTx) {
-          targetOriginalId = fallbackOriginalId;
-          originalLines = ((parentTx as any).transaction_lines as RefundTransactionLine[]) ?? [];
-          originalMetadata = extractLineMetadata(originalLines as Array<{ metadata?: Json | null }>) as Record<string, any> | null;
-        }
-      }
-
-      const currentRefunded =
-        typeof originalMetadata?.refunded_amount === 'number' ? originalMetadata.refunded_amount : 0;
-      const originalTotal = calculateOriginalAmountTotal(originalLines);
-      const newRefunded = Math.max(0, currentRefunded - refundAmount);
-      const newStatus = deriveRefundStatus(originalTotal, newRefunded);
-      const priorFlowStatus =
-        typeof (originalMetadata as Record<string, unknown> | null)?.refund_flow_status === 'string'
-          ? (originalMetadata as Record<string, unknown>).refund_flow_status
-          : undefined;
-
-      const updatedMeta = mergeMetadata(originalMetadata, {
-        refunded_amount: newRefunded,
-        refund_status: newStatus,
-        refund_flow_status: newStatus === 'none' ? 'voided' : priorFlowStatus,
-      });
-
-      // Revert Original Transaction Status to 'posted' if it was 'waiting_refund' or 'refunded'
-      // CRITICAL FIX: Ensure we force 'posted' if we are voiding the refund request.
-      if ((original as any).status !== 'void') {
-        await (supabase.from('transactions').update as any)({ status: 'posted' }).eq('id', targetOriginalId);
-      }
-
-      for (const line of originalLines) {
-        if (!line?.id) continue;
-        await (supabase.from('transaction_lines').update as any)({ metadata: updatedMeta }).eq('id', line.id);
       }
     }
   }
@@ -1073,7 +1088,27 @@ export async function requestRefund(
   }
 
   const userId = await resolveCurrentUserId(supabase)
-  const requestNote = options?.note ?? `Refund Request for ${(existing as any).note ?? transactionId}`
+
+  // Generate Group ID (Short ID)
+  // Generate Group ID (Short ID)
+  const shortId = (existing as any).id.slice(0, 4).toUpperCase();
+  const groupTag = `[${shortId}]`;
+
+  // 0. Update Original Transaction Note with Sequence 1 if needed
+  const originalNote = (existing as any).note ?? '';
+  if (!originalNote.includes(groupTag)) {
+    const newOriginalNote = `1.${groupTag} ${originalNote}`;
+    await (supabase.from('transactions').update as any)({ note: newOriginalNote }).eq('id', transactionId);
+  } else if (!originalNote.startsWith('1.')) {
+    // If it has tag but no sequence, maybe add it? Or assume it's fine. 
+    // Let's just prepend 1. if it's not there.
+    const newOriginalNote = `1.${originalNote}`;
+    await (supabase.from('transactions').update as any)({ note: newOriginalNote }).eq('id', transactionId);
+  }
+
+  const requestNote = options?.note
+    ? `2.${groupTag} ${options.note}`
+    : `2.${groupTag} Refund Request for ${originalNote}`
 
   const originalCashbackPercent = ((existing as any).transaction_lines as any[]).find((l: any) => typeof l.cashback_share_percent === 'number')?.cashback_share_percent;
   const originalCashbackFixed = ((existing as any).transaction_lines as any[]).find((l: any) => typeof l.cashback_share_fixed === 'number')?.cashback_share_fixed;
@@ -1115,7 +1150,7 @@ export async function requestRefund(
   linesToInsert.push({
     transaction_id: requestTxn.id,
     account_id: SYSTEM_ACCOUNTS.PENDING_REFUNDS,
-    amount: requestedAmount,
+    amount: requestedAmount, // Use Requested Amount (not Original Total) to balance the transaction
     type: 'debit',
     metadata: lineMetadata,
   });
@@ -1253,6 +1288,13 @@ export async function confirmRefund(
     (line) => line?.account_id === SYSTEM_ACCOUNTS.PENDING_REFUNDS && line.type === 'debit'
   )
 
+  console.log('ConfirmRefund Debug:', {
+    pendingId: pendingTransactionId,
+    pendingLines: (pending as any).transaction_lines,
+    foundPendingLine: pendingLine,
+    amountToConfirm: pendingLine ? Math.abs(pendingLine.amount) : 'N/A'
+  });
+
   if (!pendingLine) {
     return { success: false, error: 'Khong co dong ghi treo hop le de xac nhan.' }
   }
@@ -1266,7 +1308,14 @@ export async function confirmRefund(
     typeof pendingMeta?.linked_transaction_id === 'string' ? pendingMeta.linked_transaction_id : null
 
   const userId = await resolveCurrentUserId(supabase)
-  const confirmNote = `Confirmed refund for ${(pending as any).note ?? (pending as any).id}`
+
+  // Extract Group ID from pending note if exists, or generate new one
+  // Extract Group ID from pending note if exists, or generate new one
+  const pendingNote = (pending as any).note ?? '';
+  const groupTagMatch = pendingNote.match(/\[[A-Z0-9]+\]/);
+  const groupTag = groupTagMatch ? groupTagMatch[0] : `[${pendingTransactionId.slice(0, 4).toUpperCase()}]`;
+
+  const confirmNote = `3.${groupTag} Confirmed refund for ${(pending as any).note ?? (pending as any).id}`
   const confirmationMetadata = {
     refund_status: 'confirmed',
     linked_transaction_id: originalTransactionId ?? pendingTransactionId,
@@ -1280,7 +1329,7 @@ export async function confirmRefund(
     .insert as any)({
       occurred_at: new Date().toISOString(),
       note: confirmNote,
-      status: 'posted',
+      status: 'completed', // Set to Completed as requested
       tag: (pending as any).tag,
       created_by: userId,
     })
@@ -1325,6 +1374,72 @@ export async function confirmRefund(
 
   if (updatePendingStatusError) {
     console.error('Failed to update pending transaction status:', updatePendingStatusError)
+  }
+
+  // Update Original Transaction (GD1) Status to 'refunded' if fully refunded
+  if (originalTransactionId) {
+    const { data: gd1 } = await supabase
+      .from('transactions')
+      .select('transaction_lines')
+      .eq('id', originalTransactionId)
+      .single();
+
+    if (gd1) {
+      const gd1Lines = (gd1 as any).transaction_lines ?? [];
+      const gd1Meta = extractLineMetadata(gd1Lines) as Record<string, any> || {};
+      const currentRefunded = Number(gd1Meta.refunded_amount) || 0;
+      // We just confirmed 'amountToConfirm'.
+      // But wait, 'currentRefunded' in metadata might not be updated yet?
+      // Actually, 'requestRefund' updates 'refunded_amount' immediately when requested.
+      // So 'currentRefunded' should already include this amount (as requested).
+      // We just need to check if it covers the full amount.
+      // Let's check the original amount of GD1.
+
+      // We need to fetch original amount.
+      // We can sum up the lines of GD1.
+      const originalTotal = gd1Lines.reduce((sum: number, line: any) => sum + Math.abs(line.original_amount || line.amount), 0);
+      // Note: original_amount might be null if not set, fallback to amount.
+      // But amount is signed. We want magnitude.
+      // Actually, we should look for the expense/income lines.
+
+      // Let's assume if refund_status is 'full' or if refunded_amount >= original_amount.
+      // But we don't have original_amount easily here without calculation.
+
+      // Simpler approach: If refund_status in metadata is 'full' or 'refunded', set status to 'refunded'.
+      // But 'requestRefund' sets it to 'partial' or 'full' based on request.
+      // If it was already 'waiting_refund', and now we confirm it...
+      // The user wants GD1 to be 'refunded' (purple badge) if it's done.
+
+      // Let's check if the refund status in metadata is 'full'.
+      if (gd1Meta.refund_status === 'full' || gd1Meta.refund_status === 'refunded') {
+        await (supabase.from('transactions').update as any)({ status: 'refunded' }).eq('id', originalTransactionId);
+      } else {
+        // If it's partial, maybe keep it as 'waiting_refund' or 'partial'?
+        // User complained: "Refund 100%, giao dịch gốc sao lại Pending".
+        // If 100%, it should be 'refunded'.
+
+        // Let's force check amounts to be sure.
+        // We need to fetch GD1 lines with amounts.
+        const { data: gd1WithAmounts } = await supabase
+          .from('transactions')
+          .select('transaction_lines(amount, type)')
+          .eq('id', originalTransactionId)
+          .single();
+
+        if (gd1WithAmounts) {
+          const lines = (gd1WithAmounts as any).transaction_lines ?? [];
+          // Sum of absolute amounts of all lines? No, that's double counting (debit+credit).
+          // Just take the max amount? Or sum of debits?
+          // For a normal expense, it's sum of credits (money leaving).
+          // For income, sum of debits.
+          const totalOriginal = lines.reduce((sum: number, l: any) => sum + Math.abs(l.amount), 0) / 2; // Rough estimate
+
+          if (currentRefunded >= totalOriginal * 0.99) { // Tolerance for float
+            await (supabase.from('transactions').update as any)({ status: 'refunded' }).eq('id', originalTransactionId);
+          }
+        }
+      }
+    }
   }
 
   try {
@@ -1515,7 +1630,7 @@ export async function getUnifiedTransactions(
   if (accountId) {
     const { data: txnIds, error: idsError } = await supabase
       .from('transaction_lines')
-      .select('transaction_id, transactions!inner(occurred_at)')
+      .select('transaction_id, transactions!inner(occurred_at, note)')
       .eq('account_id', accountId)
       .order('transactions(occurred_at)', { ascending: false })
       .limit(limit)
