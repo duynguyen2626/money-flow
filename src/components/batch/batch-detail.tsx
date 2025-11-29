@@ -110,7 +110,12 @@ export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, acc
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h1 className="text-3xl font-bold">{batch.name}</h1>
+                    <div className="flex items-center gap-3">
+                        <h1 className="text-3xl font-bold">{batch.name}</h1>
+                        <span className="inline-flex items-center rounded-md bg-rose-100 px-3 py-1 text-xl font-bold text-rose-700 border border-rose-200">
+                            Total: {new Intl.NumberFormat('en-US').format(batch.batch_items.reduce((sum: number, item: any) => sum + Math.abs(item.amount ?? 0), 0))}
+                        </span>
+                    </div>
                     <div className="text-muted-foreground flex items-center gap-2">
                         Source:
                         {sourceAccount ? (
@@ -174,15 +179,17 @@ export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, acc
                 </CardHeader>
                 <CardContent>
                     <Tabs defaultValue="pending" className="w-full">
-                        <TabsList>
-                            <TabsTrigger value="pending">
-                                Pending ({pendingItems.length})
-                            </TabsTrigger>
-                            <TabsTrigger value="confirmed">
-                                Confirmed ({confirmedItems.length})
-                            </TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="pending" className="mt-4">
+                        <div className="flex items-center justify-between mb-4">
+                            <TabsList>
+                                <TabsTrigger value="pending">
+                                    Pending ({pendingItems.length})
+                                </TabsTrigger>
+                                <TabsTrigger value="confirmed">
+                                    Confirmed ({confirmedItems.length})
+                                </TabsTrigger>
+                            </TabsList>
+                        </div>
+                        <TabsContent value="pending" className="mt-0">
                             <ItemsTable
                                 items={pendingItems}
                                 batchId={batch.id}

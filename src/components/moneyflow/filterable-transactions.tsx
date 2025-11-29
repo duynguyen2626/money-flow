@@ -607,7 +607,7 @@ export function FilterableTransactions({
                     onBulkActionStateChange={handleBulkActionStateChange}
                     sortState={sortState}
                     onSortChange={setSortState}
-                    hiddenColumns={['initial_back', 'people_back', 'profit']}
+                    hiddenColumns={['initial_back', 'people_back']}
                 />
             </div>
         </div>

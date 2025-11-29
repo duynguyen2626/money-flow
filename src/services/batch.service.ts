@@ -173,6 +173,11 @@ export async function confirmBatchItem(itemId: string) {
 
     if (updateError) throw updateError
 
+    // 5. Recalculate Balances
+    const { recalculateBalance } = await import('./account.service')
+    await recalculateBalance(SYSTEM_ACCOUNTS.BATCH_CLEARING)
+    await recalculateBalance(item.target_account_id)
+
     return true
 }
 
@@ -694,6 +699,11 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
                 .eq('id', batchId)
         }
 
+        // Recalculate Balances
+        const { recalculateBalance } = await import('./account.service')
+        await recalculateBalance(batch.source_account_id)
+        await recalculateBalance(SYSTEM_ACCOUNTS.BATCH_CLEARING)
+
         return {
             transactionId: txn.id,
             totalAmount,
@@ -762,6 +772,11 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
         .eq('id', batchId)
 
     if (updateError) throw updateError
+
+    // 7. Recalculate Balances
+    const { recalculateBalance } = await import('./account.service')
+    await recalculateBalance(batch.source_account_id)
+    await recalculateBalance(SYSTEM_ACCOUNTS.BATCH_CLEARING)
 
     return {
         transactionId: txn.id,
