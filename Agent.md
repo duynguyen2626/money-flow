@@ -1,1 +1,72 @@
-AGENT TASK: FIX CRITICAL BUG - BATCH FUNDING TRANSACTION MISSINGContext:User reports that clicking "Fund" on a Batch updates the status to 'funded' visually, BUT no actual transaction is created.The Source Account balance is not deducted, leading to data inconsistency.Objective:Fix fundBatch in src/services/batch.service.ts to ensure the Funding Transaction (Transfer Out) is created and linked correctly.1. Backend: Fix fundBatch Logic (src/services/batch.service.ts)Current Logic (Likely Broken):Updates batches status.Missing: Call to createTransaction.Correct Logic Flow:Fetch Batch details (Source Account, Total Amount).Create Transaction (The Funding TXN):From: batch.source_account_id.To: SYSTEM_ACCOUNTS.BATCH_CLEARING (Use constant).Amount: batch.total_amount (Negative for Source, Positive for System).Type: 'transfer'.Category: SYSTEM_CATEGORIES.TRANSFER (or default Transfer category).Note: Funding Batch: ${batch.name}.Tag: batch.month_tag.Update Batch:Set status = 'funded'.Set funding_transaction_id = newTransaction.id.Safety Check:Ensure total_amount > 0.Ensure Source Account exists.2. Frontend: Feedback & RefreshTarget: src/app/batch/[id]/page.tsxAction:After fundBatch returns success:Show Toast: "Funding Transaction Created (-[Amount])".Call router.refresh() to update the Source Account balance display in the header.3. Execution StepsRefactor: Rewrite fundBatch in service to include createTransaction call.Verify: Check if SYSTEM_ACCOUNTS constants are imported and used correctly.Test: Create a dummy batch, add item, click Fund. Check /transactions to see if a new Transfer Out appears.
+# **PROJECT: MONEY FLOW 3.0**
+
+# **PHASE: 40 \- SYSTEM CONSOLIDATION & CLEANUP**
+
+**WORKFLOW:**
+
+1. **Branch:** fix/phase-40-consolidation  
+2. **Safety:** Run npm run build.
+
+OBJECTIVE:  
+Clean up fragmented logic. Ensure ONE source of truth for Table Columns, Account Math, and Date Formatting.
+
+## **I. UNIFIED TRANSACTION TABLE (THE FINAL STANDARD)**
+
+**Target:** src/components/moneyflow/unified-transaction-table.tsx
+
+**1\. Columns Standardization**
+
+* **Notes:** Must be visible. Combine \[Shop Logo\] Note.  
+* **Date:** Display Date dd/MM (Top) AND Time HH:mm (Bottom, small gray).  
+  * *Fix:* Ensure created\_at or occurred\_at includes time. If occurred\_at is date-only (00:00), try to fetch created\_at for the Time part.  
+* **Type:**  
+  * Green Badge: Income, Repayment, In-TF.  
+  * Red Badge: Expense, Debt Lending, Out-TF.  
+  * Blue Badge: Transfer (Neutral).  
+* **Status:**  
+  * **Pending:** Yellow (System Account only).  
+  * **Completed:** Gray.  
+  * **Refunded:** Purple.  
+  * **Active:** Green/Hidden.
+
+**2\. Global Visibility**
+
+* **Fix:** Ensure "Pending" (System) transactions are visible in /transactions if "All" filter is selected (or add a "System" toggle).
+
+## **II. ACCOUNT CARD & LOGIC FIXES**
+
+**Target:** src/components/moneyflow/account-card.tsx
+
+**1\. Credit Card Math (Fix)**
+
+* **Limit:** account.credit\_limit (e.g., 50M).  
+* **Balance:** account.current\_balance (e.g., \-5M).  
+* **Available:** Limit \+ Balance (50 \+ \-5 \= 45M).  
+* **UI Display:**  
+  * "Dư nợ (Debt): \[Abs(Balance)\]" (Red).  
+  * "Khả dụng (Avail): \[Available\]" (Green/Blue).
+
+**2\. Badges UI**
+
+* Remove old "Incoming/Outgoing" stats from the Card face (too cluttered).  
+* Keep only **Confirm Badge**: ☑️ \[Amount\] (Clickable).
+
+## **III. REALTIME UPDATES & PEOPLE PAGE**
+
+**1\. Fix Realtime Lag (/people/\[id\])**
+
+* The "You owe" header relies on getPersonDetails.  
+* **Fix:** Ensure router.refresh() is called *immediately* after Void/Refund actions in the Table component.  
+* **Optimistic UI:** If possible, update the local state count, but router.refresh() is safer for data consistency.
+
+**2\. Date Time Fix (7:00 Bug)**
+
+* **Cause:** Storing YYYY-MM-DD maps to UTC 00:00 \-\> VN 07:00.  
+* **Fix:** When creating transactions, send ISO String with Time (new Date().toISOString()), not just the date part. Update TransactionForm to include time in the saved value.
+
+## **IV. EXECUTION STEPS**
+
+1. **Frontend:** Update AccountCard math logic.  
+2. **Frontend:** Polish UnifiedTransactionTable columns (Notes, Time).  
+3. **Frontend:** Fix TransactionForm to save full datetime.  
+4. **Integration:** Ensure /people page refreshes on actions.
