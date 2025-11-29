@@ -25,6 +25,7 @@ import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
 import { cn } from "@/lib/utils"
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
+import { TableCellBadge } from "./table-cell-badge"
 
 type ColumnKey =
   | "date"
@@ -204,17 +205,17 @@ export function UnifiedTransactionTable({
     { key: "type", label: "Type", defaultWidth: 130, minWidth: 110 },
     { key: "shop", label: "Notes", defaultWidth: 260, minWidth: 200 },
     { key: "category", label: "Category", defaultWidth: 150 },
-    ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 140 } as ColumnConfig] : []),
-    { key: "account", label: "Account", defaultWidth: 180 },
-    { key: "cycle", label: "Cycle", defaultWidth: 100 },
+    ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 150 } as ColumnConfig] : []),
+    { key: "account", label: "Account", defaultWidth: 200 },
+    { key: "cycle", label: "Cycle", defaultWidth: 120 },
     { key: "amount", label: "Amount", defaultWidth: 120 },
     { key: "back_info", label: "Back Info", defaultWidth: 140 },
     { key: "initial_back", label: "Initial Back", defaultWidth: 110 },
     { key: "people_back", label: "People Back", defaultWidth: 110 },
     { key: "profit", label: "Profit", defaultWidth: 100 },
     { key: "final_price", label: "Final Price", defaultWidth: 120 },
-    { key: "tag", label: accountType === 'credit_card' ? "Cycle" : "Tag", defaultWidth: 120 },
-    { key: "status", label: "Status", defaultWidth: 110 },
+    { key: "tag", label: accountType === 'credit_card' ? "Cycle" : "Tag", defaultWidth: 150 },
+    { key: "status", label: "Status", defaultWidth: 140 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
   ]
@@ -625,8 +626,8 @@ export function UnifiedTransactionTable({
 
   return (
     <div className="relative space-y-3">
-      <div className="rounded-md border-2 border-slate-300 bg-white shadow-sm">
-        <Table>
+      <div className="rounded-md border-2 border-slate-300 bg-white shadow-sm overflow-x-auto">
+        <Table className="w-full">
           <TableHeader className="bg-slate-50/80">
             <TableRow>
               <TableHead className="border-r-2 border-slate-300 whitespace-nowrap" style={{ width: 52 }}>
@@ -1114,21 +1115,9 @@ export function UnifiedTransactionTable({
                     )
                   }
                   case "tag":
-                    return txn.tag ? (
-                      <CustomTooltip content={txn.tag}>
-                        <span className="inline-block max-w-[100px] truncate items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 border border-slate-200 cursor-help">
-                          {txn.tag}
-                        </span>
-                      </CustomTooltip>
-                    ) : <span className="text-slate-400">-</span>
+                    return <TableCellBadge value={txn.tag} variant="tag" />
                   case "cycle":
-                    return (
-                      <CustomTooltip content={cycleLabel}>
-                        <span className="inline-block max-w-[100px] truncate text-slate-600 cursor-help border-b border-dotted border-slate-400">
-                          {cycleLabel}
-                        </span>
-                      </CustomTooltip>
-                    )
+                    return <TableCellBadge value={cycleLabel !== '-' ? cycleLabel : null} variant="cycle" />
                   case "amount":
                     return amountValue
                   case "back_info":
@@ -1202,23 +1191,20 @@ export function UnifiedTransactionTable({
                       (txn.metadata as any)?.pending_refund_transaction_id ||
                       (txn.metadata as any)?.original_transaction_id;
 
-                    const StatusBadge = () => {
-                      if (isVoided) return <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">Void</span>
-                      if (effectiveStatus === 'waiting_refund') return <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Waiting Refund</span>
-                      if (effectiveStatus === 'refunded') return <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
-                      if (effectiveStatus === 'pending') return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Pending</span>
-                      if (effectiveStatus === 'completed') return <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">Completed</span>
-
-                      if (refundStatus === 'full' || isFullyRefunded) return <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
-                      if (refundStatus === 'partial' || isPartialRefund) return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Partial</span>
-                      return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Active</span>
-                    }
+                    let statusValue = 'ACTIVE';
+                    if (isVoided) statusValue = 'VOID';
+                    else if (effectiveStatus === 'waiting_refund') statusValue = 'WAITING REFUND';
+                    else if (effectiveStatus === 'refunded') statusValue = 'REFUNDED';
+                    else if (effectiveStatus === 'pending') statusValue = 'PENDING';
+                    else if (effectiveStatus === 'completed') statusValue = 'COMPLETED';
+                    else if (refundStatus === 'full' || isFullyRefunded) statusValue = 'REFUNDED';
+                    else if (refundStatus === 'partial' || isPartialRefund) statusValue = 'PARTIAL';
 
                     const isCopiedRefund = copiedId === `refund-${refundId}-${txn.id}`;
 
                     return (
                       <div className="flex items-center gap-1.5">
-                        <StatusBadge />
+                        <TableCellBadge value={statusValue} variant="status" />
                         {refundId && (
                           <button
                             onClick={(e) => {

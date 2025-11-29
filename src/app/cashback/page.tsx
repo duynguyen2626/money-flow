@@ -1,25 +1,51 @@
-import { CashbackDashboard } from '@/components/moneyflow/cashback-dashboard'
 import { getCashbackProgress } from '@/services/cashback.service'
+import { CashbackTable, Cashback } from './components/cashback-table'
 
 export const dynamic = 'force-dynamic'
 
 export default async function CashbackPage() {
   const cards = await getCashbackProgress()
 
+  const cashbackData: Cashback[] = cards.map(card => {
+    // Calculate derived values
+    // card.rate is e.g. 0.1 (10%)
+    const bankBackRate = card.rate * 100;
+    const peopleBackRate = card.currentSpend > 0 ? (card.sharedAmount / card.currentSpend) * 100 : 0;
+
+    // Status logic
+    let status = 'ACTIVE';
+    // If we have progress 100% or cycle ended?
+    // Usually status is derived from time or progress.
+    const now = new Date();
+    const end = new Date(card.cycleEnd);
+    if (now > end) status = 'COMPLETED';
+    else status = 'ACTIVE';
+
+    return {
+      id: card.accountId,
+      cardName: card.accountName,
+      cycle: card.cycleLabel,
+      totalSpend: card.currentSpend,
+      bankBackRate: bankBackRate,
+      bankBackAmount: card.totalEarned,
+      peopleBackRate: peopleBackRate,
+      peopleBackAmount: card.sharedAmount,
+      profit: card.netProfit,
+      status: status
+    };
+  });
+
   return (
     <div className="space-y-6">
-      <section className="rounded-lg bg-white p-6 shadow">
-        <div className="border-b pb-4">
-          <p className="text-sm uppercase text-slate-400">Cashback</p>
-          <h1 className="text-2xl font-semibold text-slate-900">Theo doi tien thuong the</h1>
-          <p className="text-sm text-slate-500">
-            Xem tien da hoan va muc tieu chi tieu cho tung the tin dung.
-          </p>
-        </div>
-        <div className="mt-6">
-          <CashbackDashboard cards={cards} />
-        </div>
-      </section>
+      <header>
+        <h1 className="text-3xl font-bold text-slate-900">Cashback Management</h1>
+        <p className="text-slate-500">Track all cashback cycles with detailed analytics</p>
+      </header>
+
+      {/* Table view of all cashback cycles */}
+      <CashbackTable
+        data={cashbackData}
+      />
     </div>
-  )
+  );
 }
