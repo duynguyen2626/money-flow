@@ -1020,21 +1020,26 @@ export function UnifiedTransactionTable({
                           {copiedId === txn.id ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                         </button>
                         <div className="flex items-center gap-2">
-                          {displayIcon ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={displayIcon}
-                              alt={displayName || 'Shop'}
-                              className="h-8 w-8 object-contain rounded-none"
-                            />
-                          ) : (
-                            <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
-                              {displayName ? displayName.charAt(0).toUpperCase() : '🛍️'}
-                            </span>
+                          {!(txn.note && txn.note.match(/^(\d+)\.\[([A-Z0-9]+)\]/)) && (
+                            displayIcon ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={displayIcon}
+                                alt={displayName || 'Shop'}
+                                className="h-8 w-8 object-contain rounded-none"
+                              />
+                            ) : (
+                              <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
+                                {displayName ? displayName.charAt(0).toUpperCase() : '🛍️'}
+                              </span>
+                            )
                           )}
-                          {displayName && !txn.note?.match(/^[123]\. /) && (
-                            <span className="truncate">{displayName}</span>
-                          )}
+                          {displayName &&
+                            !txn.note &&
+                            !isFullyRefunded &&
+                            !txn.note?.match(/^[123]\. /) && (
+                              <span className="truncate">{displayName}</span>
+                            )}
                         </div>
                         {txn.note && (
                           <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>

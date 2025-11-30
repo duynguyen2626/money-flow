@@ -1,7 +1,9 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { getDashboardStats } from '@/services/dashboard.service'
 import { DashboardCharts } from '@/components/dashboard/dashboard-charts'
 import { Wallet, TrendingDown, TrendingUp, Users, AlertCircle, FileText } from 'lucide-react'
+import { createClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +12,13 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 })
 
 export default async function Home() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
   const stats = await getDashboardStats()
 
   return (

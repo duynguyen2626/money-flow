@@ -597,7 +597,6 @@ export async function voidTransaction(id: string): Promise<boolean> {
     const gd3Typed = gd3 as { id: string; status: string } | null;
 
     if (gd3Typed && gd3Typed.status !== 'void') {
-      console.error('Cannot void intermediate transaction. Linked confirmation exists:', gd3Typed.id);
       // Throwing error to be caught by UI
       throw new Error('Cannot void this transaction because the refund has already been confirmed (GD3). Please void the confirmation transaction first.');
     }
@@ -605,14 +604,10 @@ export async function voidTransaction(id: string): Promise<boolean> {
 
   // --- HANDLE VOIDING OF REFUND CONFIRMATION (GD3) ---
   // If this is a GD3 (has pending_refund_transaction_id), we need to revert GD2 and GD1.
-  console.log('VoidTransaction Debug:', { id, metadata });
-
   if (metadata?.pending_refund_transaction_id) {
     const gd2Id = metadata.pending_refund_transaction_id;
     const gd1Id = metadata.original_transaction_id || metadata.linked_transaction_id;
     const refundAmount = Number(metadata.refund_amount) || 0;
-
-    console.log(`Voiding GD3 (${id}). Reverting GD2 (${gd2Id}) and updating GD1 (${gd1Id})...`);
 
     // 1. Revert GD2 (Refund Request) to 'pending'
     // We also need to revert its metadata (remove confirmed status)
@@ -673,7 +668,6 @@ export async function voidTransaction(id: string): Promise<boolean> {
     const refundAmount = Number(metadata.refund_amount) || 0;
 
     if (gd1Id) {
-      console.log(`Voiding GD2 (${id}). Reverting GD1 (${gd1Id})...`);
       const { data: gd1 } = await supabase
         .from('transactions')
         .select('*, transaction_lines(*)')

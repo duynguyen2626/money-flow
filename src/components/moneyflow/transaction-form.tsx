@@ -22,6 +22,7 @@ import { SmartAmountInput } from '@/components/ui/smart-amount-input'
 import { CategoryDialog } from '@/components/moneyflow/category-dialog'
 import { AddShopDialog } from '@/components/moneyflow/add-shop-dialog'
 import { CreatePersonDialog } from '@/components/people/create-person-dialog'
+import { EditAccountDialog } from './edit-account-dialog'
 
 
 
@@ -227,6 +228,7 @@ export function TransactionForm({
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
   const [isShopDialogOpen, setIsShopDialogOpen] = useState(false)
   const [isPersonDialogOpen, setIsPersonDialogOpen] = useState(false)
+  const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false)
   const [statsLoading, setStatsLoading] = useState(false)
   const [statsError, setStatsError] = useState<string | null>(null)
   const [debtEnsureError, setDebtEnsureError] = useState<string | null>(null)
@@ -867,13 +869,7 @@ export function TransactionForm({
     }
   }, [transactionType, form])
 
-  useEffect(() => {
-    if (isRefundMode) {
-      const amt = Math.abs(watchedAmount ?? 0)
-      const noteValue = `Refund: ${numberFormatter.format(amt)}`
-      form.setValue('note', noteValue)
-    }
-  }, [form, isRefundMode, watchedAmount])
+
 
   useEffect(() => {
     if (isRefundMode) {
@@ -1222,6 +1218,8 @@ export function TransactionForm({
                 emptyState="No matching category"
                 disabled={false} // Explicitly allow selecting category in refund modal
                 className="h-11"
+                onAddNew={() => setIsCategoryDialogOpen(true)}
+                addLabel="New Category"
               />
             </div>
           )}
@@ -1270,6 +1268,8 @@ export function TransactionForm({
               inputPlaceholder="Search shop..."
               emptyState="No shops yet"
               className="h-11"
+              onAddNew={() => setIsShopDialogOpen(true)}
+              addLabel="New Shop"
             />
           )}
         />
@@ -1298,6 +1298,8 @@ export function TransactionForm({
               inputPlaceholder="Search person..."
               emptyState="No person found"
               className="h-11"
+              onAddNew={() => setIsPersonDialogOpen(true)}
+              addLabel="New Person"
             />
           )}
         />
@@ -1554,7 +1556,8 @@ export function TransactionForm({
                 { value: 'credit', label: 'Credit', active: accountFilter === 'credit', onClick: () => setAccountFilter('credit') },
                 { value: 'other', label: 'Others', active: accountFilter === 'other', onClick: () => setAccountFilter('other') },
               ]}
-            // No onAddNew for accounts as it's complex
+              onAddNew={() => setIsAccountDialogOpen(true)}
+              addLabel="New Account"
             />
           )}
         />
@@ -1934,6 +1937,23 @@ export function TransactionForm({
         open={isPersonDialogOpen}
         onOpenChange={setIsPersonDialogOpen}
         subscriptions={[]}
+      />
+      <EditAccountDialog
+        account={{
+          id: 'new',
+          name: '',
+          type: 'bank',
+          current_balance: 0,
+          credit_limit: undefined,
+          cashback_config: null,
+          secured_by_account_id: undefined,
+          is_active: true,
+          owner_id: '',
+          logo_url: null,
+        } as Account}
+        open={isAccountDialogOpen}
+        onOpenChange={setIsAccountDialogOpen}
+        accounts={allAccounts}
       />
     </>
   )
