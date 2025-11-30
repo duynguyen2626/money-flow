@@ -28,7 +28,6 @@ export async function createAccount(payload: {
     current_balance: payload.balance ?? 0,
     owner_id: userId,
     type: payload.type ?? 'bank',
-    currency: 'VND',
     is_active: true,
     credit_limit: payload.creditLimit,
     cashback_config: payload.cashbackConfig,

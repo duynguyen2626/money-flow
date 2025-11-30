@@ -7,8 +7,6 @@ import { Progress } from '@/components/ui/progress'
 import { CashbackCard } from '@/types/cashback.types'
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
   maximumFractionDigits: 0,
 })
 

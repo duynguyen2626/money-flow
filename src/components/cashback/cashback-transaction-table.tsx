@@ -20,8 +20,6 @@ interface CashbackTransactionTableProps {
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'VND',
     maximumFractionDigits: 0,
 })
 
@@ -142,20 +140,26 @@ export function CashbackTransactionTable({ transactions, onEdit }: CashbackTrans
 
                                     {/* People Back (Shared) */}
                                     <TableCell className="text-right bg-orange-50/30">
-                                        <div className="flex flex-col items-end">
-                                            <span className={cn(
-                                                "font-bold",
-                                                txn.peopleBack > 0 ? "text-orange-600" : "text-slate-300"
-                                            )}>
-                                                {txn.peopleBack > 0 ? `-${currencyFormatter.format(txn.peopleBack)}` : '-'}
-                                            </span>
+                                        <div className="flex flex-col items-end gap-0.5">
+                                            <div className="flex items-center gap-1.5 justify-end w-full">
+                                                {txn.personName && (
+                                                    <span className="inline-flex items-center rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-medium text-orange-800 whitespace-nowrap">
+                                                        {txn.personName}
+                                                    </span>
+                                                )}
+                                                <span className={cn(
+                                                    "font-bold",
+                                                    txn.peopleBack > 0 ? "text-orange-600" : "text-slate-300"
+                                                )}>
+                                                    {txn.peopleBack > 0 ? `-${currencyFormatter.format(txn.peopleBack)}` : '-'}
+                                                </span>
+                                            </div>
                                             {txn.peopleBack > 0 && (
-                                                <span className="text-[10px] text-slate-500">
-                                                    {txn.sharePercent
-                                                        ? percentFormatter.format(txn.sharePercent)
-                                                        : txn.shareFixed
-                                                            ? 'Fixed'
-                                                            : 'Shared'}
+                                                <span className="text-[10px] text-slate-500 whitespace-nowrap">
+                                                    {txn.sharePercent ? percentFormatter.format(txn.sharePercent) : ''}
+                                                    {txn.sharePercent && txn.shareFixed ? ' + ' : ''}
+                                                    {txn.shareFixed ? currencyFormatter.format(txn.shareFixed) : ''}
+                                                    {!txn.sharePercent && !txn.shareFixed && 'Shared'}
                                                 </span>
                                             )}
                                         </div>

@@ -36,8 +36,6 @@ export default function CashbackDetailsPage() {
   const [editInitialValues, setEditInitialValues] = useState<Partial<TransactionFormValues> | null>(null)
 
   const currencyFormatter = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'VND',
     maximumFractionDigits: 0,
   })
 
@@ -136,6 +134,15 @@ export default function CashbackDetailsPage() {
         if (found.type === 'income') type = 'income'
         if (found.type === 'transfer') type = 'transfer'
         if (found.type === 'repayment') type = 'repayment'
+        if (found.type === 'debt') type = 'debt'
+
+        // Robust check for Lending (Debt)
+        const debtLine = lines.find(l => l.accounts?.type === 'debt')
+        if (debtLine) {
+          if (type !== 'repayment' && type !== 'income') {
+            type = 'debt'
+          }
+        }
 
         // Determine Category
         const categoryId = lines.find(l => l.category_id)?.category_id
@@ -145,11 +152,20 @@ export default function CashbackDetailsPage() {
 
         // Determine Accounts
         const sourceId = type === 'income' ? debitLine?.account_id : (creditLine?.account_id || debitLine?.account_id)
-        const destId = type === 'transfer' || type === 'repayment' ? debitLine?.account_id : undefined // Simplified
+        const destId = (type === 'transfer' || type === 'repayment' || type === 'debt') ? (debtLine?.account_id || debitLine?.account_id) : undefined
 
         // Share info
-        const sharePercent = found.cashback_share_percent
-        const shareFixed = found.cashback_share_fixed
+        let sharePercent = found.cashback_share_percent
+        let shareFixed = found.cashback_share_fixed
+
+        // Fallback to line info if header is missing
+        if (sharePercent === undefined && shareFixed === undefined) {
+          const lineWithShare = lines.find(l => l.cashback_share_percent !== undefined || l.cashback_share_fixed !== undefined)
+          if (lineWithShare) {
+            sharePercent = lineWithShare.cashback_share_percent
+            shareFixed = lineWithShare.cashback_share_fixed
+          }
+        }
 
         setEditInitialValues({
           occurred_at: new Date(found.occurred_at || new Date()),

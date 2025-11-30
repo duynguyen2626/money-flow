@@ -46,6 +46,15 @@ type TransactionLineRow = {
         image_url: string | null
       } | null
       metadata: Record<string, unknown> | null
+      cashback_share_percent?: number | null
+      cashback_share_fixed?: number | null
+      accounts?: {
+        name: string
+        type: string
+      } | null
+      profiles?: {
+        name: string
+      } | null
     }>
   } | null
   // For tiered cashback - we need to know the category
@@ -54,6 +63,12 @@ type TransactionLineRow = {
     name: string
     icon: string | null
     image_url: string | null
+  } | null
+  cashback_share_percent?: number | null
+  cashback_share_fixed?: number | null
+  accounts?: {
+    name: string
+    type: string
   } | null
 }
 
@@ -91,7 +106,12 @@ async function fetchAccountLines(
           type,
           category_id,
           categories(name, icon, image_url),
-          metadata
+          metadata,
+          cashback_share_percent,
+          cashback_share_fixed,
+          cashback_share_fixed,
+          accounts(name, type),
+          profiles(name)
         )
       )
     `)
@@ -177,11 +197,21 @@ function toTransaction(
 
   // Prioritize explicit amount > percent > fixed
   // Merge logic: if credit line has info, use it. If not, check debit line.
+  // Also check columns on the debit line (where share info is usually stored for Debt/Lending)
+  const debitShareFromColumns = {
+    amount: 0,
+    percent: debitLine?.cashback_share_percent ?? undefined,
+    fixed: debitLine?.cashback_share_fixed ?? undefined
+  }
+
   const shareInfo = creditShareInfo.amount > 0 || creditShareInfo.percent !== undefined
     ? creditShareInfo
-    : debitShareInfo
+    : (debitShareInfo.amount > 0 || debitShareInfo.percent !== undefined ? debitShareInfo : debitShareFromColumns)
 
-  const peopleBack = shareInfo.amount
+  let peopleBack = shareInfo.amount
+  if (peopleBack === 0 && (shareInfo.percent !== undefined || shareInfo.fixed !== undefined)) {
+    peopleBack = (amount * (shareInfo.percent ?? 0)) + (shareInfo.fixed ?? 0)
+  }
   const profit = bankBack - peopleBack
 
   return {
@@ -201,6 +231,7 @@ function toTransaction(
     categoryName: categoryName,
     categoryIcon: categoryIcon,
     categoryImageUrl: categoryImageUrl,
+    personName: debitLine?.profiles?.name ?? (debitLine?.accounts?.type === 'debt' ? debitLine.accounts.name : undefined),
   }
 }
 
@@ -423,7 +454,8 @@ export async function getCashbackProgress(
 
 export async function getAccountSpendingStats(
   accountId: string,
-  referenceDate: Date
+  referenceDate: Date,
+  categoryId?: string
 ): Promise<AccountSpendingStats | null> {
   const supabase = createClient()
 
@@ -463,11 +495,82 @@ export async function getAccountSpendingStats(
   const meetsMinSpend = minSpend === null || currentSpend >= minSpend
   const earnedSoFar = meetsMinSpend ? cappedEarned : 0
 
+  // --- Smart Hint Logic ---
+  let potentialRate = config.rate
+  let matchReason = ''
+  let maxReward: number | null = null
+
+  if (categoryId) {
+    // Fetch category name to check against rules
+    const { data: catData } = await supabase
+      .from('categories')
+      .select('name')
+      .eq('id', categoryId)
+      .single()
+
+    const categoryName = (catData as { name: string } | null)?.name
+
+    if (config.hasTiers && config.tiers && config.tiers.length > 0) {
+      // Step 2: Determine Active Tier
+      // Sort tiers by min_spend desc. Find first where CurrentTotalSpend >= tier.min_spend
+      const applicableTier = config.tiers
+        .filter(tier => currentSpend >= tier.minSpend)
+        .sort((a, b) => b.minSpend - a.minSpend)[0]
+
+      if (applicableTier) {
+        matchReason = `Tier > ${(applicableTier.minSpend / 1000000).toLocaleString('vi-VN')}tr`
+
+        // Step 3: Check Category Rule
+        let foundCatRule = false
+        if (categoryName) {
+          const lowerCat = categoryName.toLowerCase()
+          for (const key of Object.keys(applicableTier.categories)) {
+            const rule = applicableTier.categories[key]
+
+            // Check Category Name Match
+            const catMatch = lowerCat.includes(key.toLowerCase())
+
+            // Check MCC Match (if we had MCC on category, but we only have name here. 
+            // Assuming categoryName might contain MCC or we need to fetch it.
+            // For now, let's assume rule key matches part of category name as before)
+
+            if (catMatch) {
+              potentialRate = rule.rate
+              maxReward = rule.max_reward ?? null
+              matchReason = `Category "${key}" (Tier > ${(applicableTier.minSpend / 1000000).toLocaleString('vi-VN')}tr)`
+              if (rule.max_reward) {
+                matchReason += ` [Max: ${rule.max_reward.toLocaleString('vi-VN')}đ]`
+              }
+              foundCatRule = true
+              break
+            }
+          }
+        }
+
+        if (!foundCatRule) {
+          if (applicableTier.defaultRate !== undefined) {
+            potentialRate = applicableTier.defaultRate
+            matchReason = `Default Tier Rate (Tier > ${(applicableTier.minSpend / 1000000).toLocaleString('vi-VN')}tr)`
+          }
+        }
+      } else {
+        // No tier met yet
+        matchReason = 'Base Rate (No Tier Met)'
+      }
+    } else {
+      // No tiers configured
+      matchReason = 'Base Rate'
+    }
+  }
+
   return {
     currentSpend,
     minSpend,
     maxCashback,
     rate: config.rate,
     earnedSoFar,
+    potentialRate,
+    matchReason,
+    maxReward,
   }
 }

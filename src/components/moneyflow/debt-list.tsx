@@ -9,8 +9,6 @@ import { AddTransactionDialog } from './add-transaction-dialog'
 import { Category, Person, Shop } from '@/types/moneyflow.types'
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
 })
 
 type DebtListProps = {

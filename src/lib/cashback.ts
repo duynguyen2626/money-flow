@@ -7,8 +7,14 @@ type CycleRange = {
 
 // Tiered cashback tier definition
 export type CashbackTier = {
+  name?: string // Optional name for the tier (e.g., "Premium", "Gold")
   minSpend: number // Minimum spend to qualify for this tier
-  categories: Record<string, { rate: number; maxAmount?: number }> // category_key -> { rate, cap }
+  categories: Record<string, {
+    rate: number
+    maxAmount?: number
+    mcc_codes?: string
+    max_reward?: number
+  }> // category_key -> { rate, cap, mcc, max_reward }
   defaultRate?: number // Default rate for categories not specified
 }
 
