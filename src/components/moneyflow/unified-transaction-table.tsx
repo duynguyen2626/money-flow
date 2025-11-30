@@ -1022,14 +1022,18 @@ export function UnifiedTransactionTable({
                           </span>
                         )}
                         {txn.note && (
-                          <RefundNoteDisplay
-                            note={txn.note}
-                            shopLogoUrl={displayIcon}
-                            shopName={displayName}
-                            accountLogoUrl={txn.source_logo}
-                            accountName={txn.source_name}
-                            status={effectiveStatus}
-                          />
+                          <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
+                            <div className="max-w-[300px]">
+                              <RefundNoteDisplay
+                                note={txn.note}
+                                shopLogoUrl={displayIcon}
+                                shopName={displayName}
+                                accountLogoUrl={effectiveStatus === 'completed' && txn.note?.startsWith('3.') ? txn.destination_logo : txn.source_logo}
+                                accountName={effectiveStatus === 'completed' && txn.note?.startsWith('3.') ? txn.destination_name : txn.source_name}
+                                status={effectiveStatus}
+                              />
+                            </div>
+                          </CustomTooltip>
                         )}
                       </div>
                     );
@@ -1135,10 +1139,19 @@ export function UnifiedTransactionTable({
                     // Render for Single Account (Expense/Income)
                     const accountLine = txn.transaction_lines?.find(l => l.accounts?.name === txn.account_name)
                     const displayAccountId = accountLine?.account_id
+                    const accountLogo = accountLine?.accounts?.logo_url
 
                     return (
                       <div className="flex items-center gap-2 min-w-[150px]">
-                        {txn.source_name && sourceIcon}
+                        {txn.source_name ? sourceIcon : (
+                          accountLogo ? (
+                            <img src={accountLogo} alt={txn.account_name ?? ''} className="h-8 w-8 object-contain rounded-none" />
+                          ) : (
+                            <div className="flex h-8 w-8 items-center justify-center bg-slate-100 text-sm font-bold border rounded-none">
+                              {(txn.account_name ?? '?').charAt(0).toUpperCase()}
+                            </div>
+                          )
+                        )}
                         <CustomTooltip content={txn.account_name}>
                           {displayAccountId ? (
                             <Link

@@ -39,7 +39,28 @@ export function Combobox({
   onAddNew,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
+  const [mounted, setMounted] = React.useState(false)
   const selectedItem = items.find(item => item.value === value)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        className={cn(
+          'flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm ring-offset-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          className
+        )}
+      >
+        <span className="block truncate text-gray-500">{placeholder}</span>
+        <ChevronDown className="h-4 w-4 opacity-50" />
+      </button>
+    )
+  }
 
   const handleSelect = (nextValue: string) => {
     onValueChange(nextValue || undefined)

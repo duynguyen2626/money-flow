@@ -21,26 +21,19 @@ export function RefundNoteDisplay({
 }: RefundNoteDisplayProps) {
     const parsed = parseRefundNote(note)
 
-    // Only enhance display for refund transactions (sequence 2 or 3)
-    if (!parsed.isRefund || !parsed.sequence || parsed.sequence < 2) {
+    // Enable for all refund transactions (sequence 1, 2, 3)
+    if (!parsed.isRefund || !parsed.sequence) {
         return <span className="text-sm text-slate-700 font-medium truncate">{note}</span>
     }
 
-    // For GD2 (Request) and GD3 (Confirm), show enhanced format
     const isConfirmed = parsed.sequence === 3
 
     return (
         <div className="flex items-center gap-1.5 max-w-[300px]">
-            {/* Shop Icon - Always show first if available */}
-            {shopLogoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                    src={shopLogoUrl}
-                    alt={shopName || 'Shop'}
-                    className="h-5 w-5 object-contain rounded-none shrink-0"
-                    title={shopName || undefined}
-                />
-            )}
+            {/* Sequence Number */}
+            <span className="text-xs font-semibold text-slate-600 shrink-0">
+                {parsed.sequence}.
+            </span>
 
             {/* Group ID Badge */}
             <span className="inline-flex items-center rounded-md bg-purple-100 px-1.5 py-0.5 text-[10px] font-mono font-bold text-purple-800 shrink-0">
@@ -66,7 +59,7 @@ export function RefundNoteDisplay({
                 </>
             )}
 
-            {/* For GD2: Show clean note text */}
+            {/* For GD1 & GD2: Show clean note text */}
             {!isConfirmed && (
                 <span className="text-xs text-slate-600 truncate" title={parsed.cleanNote}>
                     {parsed.cleanNote}
