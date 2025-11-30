@@ -1,6 +1,6 @@
 # **TASK: PHASE 49 \- UI/UX ENHANCEMENT & SAFER BATCH ACTIONS**
 
-Status: PENDING
+Status: DONE
 
 Phase: 49
 
@@ -81,10 +81,10 @@ Priority: HIGH (User Experience & Data Safety)
 
 ## **6\. Verification**
 
-* \[ \] Batch Cancel restores the last item correctly.  
-* \[ \] Modal is clean, Date at top, Shop next to Category.  
-* \[ \] Refund Transactions (GD2/GD3) show Account Logos correctly.  
-* \[ \] Shops show only ONE large icon.  
-* \[ \] Voiding GD2 shows a helpful message guiding user to void GD3 first.  
+* [x] Batch Cancel restores the last item correctly.  
+* [x] Modal is clean, Date at top, Shop next to Category.  
+* [x] Refund Transactions (GD2/GD3) show Account Logos correctly.  
+* [x] Shops show only ONE large icon.  
+* [x] Voiding GD2 shows a helpful message guiding user to void GD3 first.  
 *   
 * 

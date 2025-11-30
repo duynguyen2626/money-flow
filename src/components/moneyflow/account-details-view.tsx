@@ -383,26 +383,28 @@ export function AccountDetailsView({
                 {/* Left: Account Info & Stats */}
                 <div className="flex flex-1 items-center gap-6 w-full overflow-x-auto">
                     {/* Logo & Back */}
-                    <div className="relative flex-shrink-0 group">
-                        <Link href="/accounts" className="absolute -left-2 -top-2 z-10 bg-white rounded-full p-1 border border-slate-200 shadow-sm hover:bg-slate-50 text-slate-500 hover:text-slate-700 transition-colors">
-                            <ArrowLeft className="h-4 w-4" />
+                    <div className="flex items-center gap-3">
+                        <Link href="/accounts" className="flex items-center justify-center h-10 w-10 rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors shadow-sm">
+                            <ArrowLeft className="h-5 w-5" />
                         </Link>
-                        {account.logo_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                                src={account.logo_url as string}
-                                alt={account.name}
-                                className="h-16 w-16 object-contain rounded-lg border border-slate-200"
-                            />
-                        ) : (
-                            <div className="h-16 w-16 flex items-center justify-center bg-slate-100 rounded-lg border border-slate-200">
-                                {isCreditCard ? (
-                                    <CreditCard className="h-8 w-8 text-slate-400" />
-                                ) : (
-                                    <Wallet className="h-8 w-8 text-slate-400" />
-                                )}
-                            </div>
-                        )}
+                        <div className="relative flex-shrink-0 group">
+                            {account.logo_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    src={account.logo_url as string}
+                                    alt={account.name}
+                                    className="h-16 w-16 object-contain border border-slate-200"
+                                />
+                            ) : (
+                                <div className="h-16 w-16 flex items-center justify-center bg-slate-100 border border-slate-200">
+                                    {isCreditCard ? (
+                                        <CreditCard className="h-8 w-8 text-slate-400" />
+                                    ) : (
+                                        <Wallet className="h-8 w-8 text-slate-400" />
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Name & Balance */}

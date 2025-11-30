@@ -1,10 +1,11 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState, useRef } from "react"
 import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy, ArrowUp, ArrowDown, ArrowUpDown, Trash2, Sigma, CheckCheck } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createPortal } from "react-dom"
+import { toast } from "sonner"
 import { CustomTooltip, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/custom-tooltip'
 import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
 import {
@@ -292,6 +293,7 @@ export function UnifiedTransactionTable({
   const [refundFormStage, setRefundFormStage] = useState<'request' | 'confirm'>('request')
   const [internalSortState, setInternalSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
   const [bulkDialog, setBulkDialog] = useState<{ mode: 'void' | 'restore' | 'delete'; open: boolean } | null>(null)
+  const stopBulk = useRef(false)
 
   const sortState = externalSortState ?? internalSortState
   const setSortState = onSortChange ?? setInternalSortState
@@ -409,7 +411,14 @@ export function UnifiedTransactionTable({
       })
       .catch(err => {
         console.error('Failed to void transaction:', err)
-        setVoidError(err.message || 'Unable to void transaction. Please try again.')
+        if (err.message && err.message.includes('void the confirmation transaction first')) {
+          toast.error("Please void the Confirmation Transaction (GD3) first.", {
+            description: "Linked confirmation exists."
+          });
+          closeVoidDialog();
+        } else {
+          setVoidError(err.message || 'Unable to void transaction. Please try again.')
+        }
       })
       .finally(() => setIsVoiding(false))
   }
@@ -513,54 +522,72 @@ export function UnifiedTransactionTable({
 
   const executeBulk = async (mode: 'void' | 'restore' | 'delete') => {
     if (selection.size === 0) return
+    stopBulk.current = false
+    let processedCount = 0
+
     if (mode === 'void') {
       setIsVoiding(true)
       let errorCount = 0
       for (const id of Array.from(selection)) {
+        if (stopBulk.current) {
+          toast.info(`Process stopped. ${processedCount} items processed.`)
+          break
+        }
         const ok = await voidTransaction(id)
         if (ok) {
           setStatusOverrides(prev => ({ ...prev, [id]: 'void' }))
         } else {
           errorCount++
         }
+        processedCount++
       }
       setIsVoiding(false)
       updateSelection(new Set())
       router.refresh()
       if (errorCount > 0) {
-        alert(`Failed to void ${errorCount} transactions.`)
+        toast.error(`Failed to void ${errorCount} transactions.`)
       }
     } else if (mode === 'restore') {
       setIsRestoring(true)
       let errorCount = 0
       for (const id of Array.from(selection)) {
+        if (stopBulk.current) {
+          toast.info(`Process stopped. ${processedCount} items processed.`)
+          break
+        }
         const ok = await restoreTransaction(id)
         if (ok) {
           setStatusOverrides(prev => ({ ...prev, [id]: 'posted' }))
         } else {
           errorCount++
         }
+        processedCount++
       }
       setIsRestoring(false)
       updateSelection(new Set())
       router.refresh()
       if (errorCount > 0) {
-        alert(`Failed to restore ${errorCount} transactions.`)
+        toast.error(`Failed to restore ${errorCount} transactions.`)
       }
     } else if (mode === 'delete') {
       setIsDeleting(true)
       let errorCount = 0
       for (const id of Array.from(selection)) {
+        if (stopBulk.current) {
+          toast.info(`Process stopped. ${processedCount} items processed.`)
+          break
+        }
         const ok = await deleteTransaction(id)
         if (!ok) {
           errorCount++
         }
+        processedCount++
       }
       setIsDeleting(false)
       updateSelection(new Set())
       router.refresh()
       if (errorCount > 0) {
-        alert(`Failed to delete ${errorCount} transactions.`)
+        toast.error(`Failed to delete ${errorCount} transactions.`)
       }
     }
     setBulkDialog(null)
@@ -992,35 +1019,23 @@ export function UnifiedTransactionTable({
                         >
                           {copiedId === txn.id ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                         </button>
-                        {displayName && (
-                          <>
-                            {displayIcon ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={displayIcon}
-                                alt={displayName}
-                                className="h-8 w-8 object-contain rounded-none"
-                              />
-                            ) : (
-                              <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
-                                {displayName.charAt(0).toUpperCase()}
-                              </span>
-                            )}
-                          </>
-                        )}
-                        {!displayName && displayIcon && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={displayIcon}
-                            alt="Shop"
-                            className="h-5 w-5 object-cover rounded-none"
-                          />
-                        )}
-                        {!displayName && !displayIcon && (
-                          <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
-                            🛍️
-                          </span>
-                        )}
+                        <div className="flex items-center gap-2">
+                          {displayIcon ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={displayIcon}
+                              alt={displayName || 'Shop'}
+                              className="h-8 w-8 object-contain rounded-none"
+                            />
+                          ) : (
+                            <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
+                              {displayName ? displayName.charAt(0).toUpperCase() : '🛍️'}
+                            </span>
+                          )}
+                          {displayName && !txn.note?.match(/^[123]\. /) && (
+                            <span className="truncate">{displayName}</span>
+                          )}
+                        </div>
                         {txn.note && (
                           <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
                             <div className="max-w-[300px]">
@@ -1139,7 +1154,7 @@ export function UnifiedTransactionTable({
                     // Render for Single Account (Expense/Income)
                     const accountLine = txn.transaction_lines?.find(l => l.accounts?.name === txn.account_name)
                     const displayAccountId = accountLine?.account_id
-                    const accountLogo = accountLine?.accounts?.logo_url
+                    const accountLogo = accountLine?.accounts?.logo_url ?? txn.source_logo
 
                     return (
                       <div className="flex items-center gap-2 min-w-[150px]">
@@ -1689,10 +1704,15 @@ export function UnifiedTransactionTable({
               <div className="mt-4 flex justify-end gap-2">
                 <button
                   className="rounded-md px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100"
-                  onClick={() => setBulkDialog(null)}
-                  disabled={isVoiding || isRestoring || isDeleting}
+                  onClick={() => {
+                    if (isVoiding || isRestoring || isDeleting) {
+                      stopBulk.current = true
+                    } else {
+                      setBulkDialog(null)
+                    }
+                  }}
                 >
-                  Cancel
+                  {isVoiding || isRestoring || isDeleting ? 'Stop' : 'Cancel'}
                 </button>
                 <button
                   className={`inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-70 ${bulkDialog.mode === 'restore' ? 'bg-green-600 hover:bg-green-500' : 'bg-red-600 hover:bg-red-500'

@@ -14,10 +14,11 @@ type AccountListProps = {
   categories: Category[]
   people: Person[]
   shops: Shop[]
+  pendingBatchAccountIds?: string[]
 }
 
 type ViewMode = 'grid' | 'table'
-type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt'
+type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt' | 'waiting_confirm'
 
 const FILTERS: { key: FilterKey; label: string; match: (account: Account) => boolean }[] = [
   { key: 'all', label: 'All', match: () => true },
@@ -33,9 +34,10 @@ const FILTERS: { key: FilterKey; label: string; match: (account: Account) => boo
     match: account => ['savings', 'investment', 'asset'].includes(account.type),
   },
   { key: 'debt', label: 'Debt', match: account => account.type === 'debt' },
+  { key: 'waiting_confirm', label: 'Waiting Confirm', match: () => true }, // Logic handled in filteredItems
 ]
 
-export function AccountList({ accounts, cashbackById = {}, categories, people, shops }: AccountListProps) {
+export function AccountList({ accounts, cashbackById = {}, categories, people, shops, pendingBatchAccountIds = [] }: AccountListProps) {
   const [view, setView] = useState<ViewMode>('grid')
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -69,7 +71,14 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
   )
 
   const filteredItems = useMemo(() => {
-    let filtered = activeItems.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc))
+    let filtered = activeItems
+
+    // Handle 'waiting_confirm' separately or via match
+    if (activeFilter === 'waiting_confirm') {
+      filtered = filtered.filter(acc => pendingBatchAccountIds.includes(acc.id))
+    } else {
+      filtered = filtered.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc))
+    }
 
     // Apply search filter
     if (searchQuery.trim()) {
@@ -140,20 +149,20 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
               {filter.label}
             </button>
           ))}
+        </div>
 
+        <div className="flex items-center gap-2 flex-1 justify-end">
           {/* Search Input */}
-          <div className="relative ml-2">
+          <div className="relative w-full max-w-xs">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search accounts..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="rounded-full border border-slate-200 bg-white pl-9 pr-4 py-1 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition"
+              className="w-full rounded-full border border-slate-200 bg-white pl-9 pr-4 py-1 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition"
             />
           </div>
-        </div>
-        <div className="flex items-center gap-2">
           <div className="flex rounded-full border border-slate-200 bg-slate-50 p-1">
             <button
               type="button"

@@ -55,4 +55,9 @@ export type AccountSpendingStats = {
   potentialRate?: number
   matchReason?: string
   maxReward?: number | null // Category-specific max reward limit
+  cycle?: {
+    start: string
+    end: string
+    label: string
+  }
 }

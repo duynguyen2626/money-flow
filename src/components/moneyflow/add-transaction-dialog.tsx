@@ -80,26 +80,42 @@ export function AddTransactionDialog({
             role="dialog"
             aria-modal="true"
             aria-label="Add Transaction"
-            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-10"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-4 backdrop-blur-sm"
             onClick={closeDialog}
           >
             <div
-              className="w-full max-w-xl rounded-lg bg-white p-6 shadow-xl"
-              style={{ maxHeight: '90vh', overflowY: 'auto' }}
+              className="flex w-full max-w-xl flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden"
+              style={{ maxHeight: '90vh' }}
               onClick={stopPropagation}
             >
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Add New Transaction</h2>
+              {/* Header */}
+              <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+                <h2 className="text-xl font-semibold text-slate-900">Add New Transaction</h2>
                 <button
                   type="button"
-                  className="rounded p-1 text-gray-500 transition hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                  className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-600"
                   aria-label="Close dialog"
                   onClick={closeDialog}
                 >
-                  X
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
                 </button>
               </div>
-              <div className="py-2">
+
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto px-6 py-6">
                 <TransactionForm
                   accounts={accounts}
                   categories={categories}

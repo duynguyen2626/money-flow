@@ -798,21 +798,29 @@ export async function getAccountBatchStats(accountId: string) {
         .in('status', ['pending', 'confirmed'])
 
     if (error) {
-        console.error('Error fetching batch stats:', error)
+        // If no items found, return empty stats
         return { waiting: 0, confirmed: 0 }
     }
 
-    let waiting = 0
-    let confirmed = 0
+    // Filter out template batches and calculate sums
+    const filteredItems = items?.filter((item: any) => !item.batch?.is_template) || [];
 
-    items?.forEach((item: any) => {
-        if (item.batch?.is_template) return
-        if (item.status === 'pending') {
-            waiting += item.amount
-        } else if (item.status === 'confirmed') {
-            confirmed += item.amount
-        }
-    })
+    const waiting = filteredItems.filter((i: any) => i.status === 'pending').reduce((sum: number, i: any) => sum + Math.abs(i.amount), 0)
+    const confirmed = filteredItems.filter((i: any) => i.status === 'confirmed').reduce((sum: number, i: any) => sum + Math.abs(i.amount), 0)
 
     return { waiting, confirmed }
+}
+
+export async function getAccountsWithPendingBatchItems() {
+    const supabase: any = createClient()
+    const { data, error } = await supabase
+        .from('batch_items')
+        .select('target_account_id')
+        .eq('status', 'pending')
+
+    if (error) throw error
+
+    // Return unique account IDs
+    const accountIds = new Set(data.map((item: any) => item.target_account_id).filter(Boolean))
+    return Array.from(accountIds) as string[]
 }

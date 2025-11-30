@@ -43,7 +43,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   return (
     <div className="min-h-screen bg-slate-100 flex">
-      <aside className={cn("sticky top-0 h-screen flex flex-col border-r bg-white py-8 transition-all duration-300", isCollapsed ? "w-16 px-2" : "w-64 px-6")}>
+      <aside
+        suppressHydrationWarning
+        className={cn("sticky top-0 h-screen flex flex-col border-r bg-white py-8 transition-all duration-300", isCollapsed ? "w-16 px-2" : "w-64 px-6")}
+      >
         <div className={cn("text-2xl font-bold text-blue-700 mb-10", isCollapsed ? "text-center" : "")}>
           {isCollapsed ? "MF" : "Money Flow"}
         </div>

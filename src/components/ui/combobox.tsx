@@ -25,6 +25,12 @@ type ComboboxProps = {
   disabled?: boolean
   className?: string
   onAddNew?: () => void
+  tabs?: {
+    value: string
+    label: string
+    onClick: () => void
+    active: boolean
+  }[]
 }
 
 export function Combobox({
@@ -37,6 +43,7 @@ export function Combobox({
   disabled = false,
   className,
   onAddNew,
+  tabs,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [mounted, setMounted] = React.useState(false)
@@ -102,10 +109,44 @@ export function Combobox({
       <PopoverPrimitive.Content
         align="start"
         sideOffset={4}
-        className="z-50 w-[280px] rounded-xl border border-slate-200 bg-white p-0 shadow-lg"
+        className="z-50 w-[320px] rounded-xl border border-slate-200 bg-white p-0 shadow-lg"
       >
         <Command className="overflow-hidden rounded-xl">
+          {tabs && tabs.length > 0 && (
+            <div className="flex items-center gap-1 p-2 border-b border-slate-100 bg-slate-50/50">
+              {tabs.map(tab => (
+                <button
+                  key={tab.value}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    tab.onClick()
+                  }}
+                  className={cn(
+                    "flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-all",
+                    tab.active
+                      ? "bg-white text-blue-600 shadow-sm ring-1 ring-slate-200"
+                      : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  )}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
           <CommandInput className="border-b border-slate-100 px-3 py-2 text-sm outline-none" placeholder={inputPlaceholder} />
+          {onAddNew && (
+            <div
+              onClick={() => {
+                onAddNew()
+                setOpen(false)
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-blue-600 font-medium cursor-pointer hover:bg-blue-50 border-b border-slate-100"
+            >
+              <Plus className="h-4 w-4" />
+              Thêm mới...
+            </div>
+          )}
           <CommandList className="max-h-72 overflow-y-auto">
             {items.length === 0 && (
               <CommandEmpty className="px-3 py-2 text-xs text-slate-500">{emptyState}</CommandEmpty>
@@ -133,21 +174,6 @@ export function Combobox({
                 </CommandItem>
               )
             })}
-            {onAddNew && (
-              <CommandGroup className="border-t pt-1 mt-1 sticky bottom-0 bg-white">
-                <CommandItem
-                  onSelect={() => {
-                    onAddNew()
-                    setOpen(false)
-                  }}
-                  value="CREATE_NEW_ITEM_TRIGGER"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600 font-medium cursor-pointer hover:bg-blue-50"
-                >
-                  <Plus className="h-4 w-4" />
-                  Thêm mới...
-                </CommandItem>
-              </CommandGroup>
-            )}
           </CommandList>
         </Command>
       </PopoverPrimitive.Content>
