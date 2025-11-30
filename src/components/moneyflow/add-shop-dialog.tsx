@@ -19,10 +19,17 @@ import { Combobox } from '@/components/ui/combobox'
 
 type AddShopDialogProps = {
   categories?: Category[]
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  onSuccess?: () => void
 }
 
-export function AddShopDialog({ categories = [] }: AddShopDialogProps) {
-  const [open, setOpen] = useState(false)
+export function AddShopDialog({ categories = [], open: controlledOpen, onOpenChange, onSuccess }: AddShopDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = typeof controlledOpen !== 'undefined'
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = isControlled && onOpenChange ? onOpenChange : setInternalOpen
+
   const [name, setName] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
   const [defaultCategoryId, setDefaultCategoryId] = useState<string | null>(null)
@@ -63,17 +70,20 @@ export function AddShopDialog({ categories = [] }: AddShopDialogProps) {
       setLogoUrl('')
       setDefaultCategoryId(null)
       setOpen(false)
-      router.refresh()
+      if (onSuccess) onSuccess()
+      else router.refresh()
     })
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          Add Shop
-        </Button>
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            Add Shop
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="bg-white">
         <DialogHeader>
           <DialogTitle>Add Shop</DialogTitle>

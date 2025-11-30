@@ -1,15 +1,15 @@
 'use client'
 
-import { FormEvent, MouseEvent, ReactNode, useMemo, useState, useTransition, useEffect } from 'react'
+import { FormEvent, MouseEvent, useMemo, useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
-import { parseCashbackConfig, CashbackCycleType, CashbackTier } from '@/lib/cashback'
+import { CashbackCycleType, CashbackTier } from '@/lib/cashback'
 import { Account } from '@/types/moneyflow.types'
 import type { Json } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, Trash2, X } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
-import { CustomDropdown, type DropdownOption } from '@/components/ui/custom-dropdown'
+import { CustomDropdown } from '@/components/ui/custom-dropdown'
 import { NumberInputWithSuggestions } from '@/components/ui/number-input-suggestions'
 
 type CategoryOption = { id: string; name: string; type: 'expense' | 'income' }
@@ -31,9 +31,6 @@ const parseOptionalNumber = (value: string) => {
   const parsed = Number(trimmed)
   return Number.isFinite(parsed) ? parsed : null
 }
-
-// Import TierItem, CategoryMultiSelect, TierList from edit-account-dialog
-// (Copy the same components here for consistency)
 
 function TierItem({
   tier,
@@ -353,6 +350,9 @@ function TierList({
 type CreateAccountDialogProps = {
   collateralAccounts?: Account[]
   creditCardAccounts?: Account[]
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+  onSuccess?: () => void
 }
 
 type StatusMessage = {
@@ -362,9 +362,13 @@ type StatusMessage = {
 
 const ASSET_TYPES: Account['type'][] = ['savings', 'investment', 'asset']
 
-export function CreateAccountDialog({ collateralAccounts = [], creditCardAccounts = [] }: CreateAccountDialogProps) {
+export function CreateAccountDialog({ collateralAccounts = [], creditCardAccounts = [], open: controlledOpen, onOpenChange, onSuccess }: CreateAccountDialogProps) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = typeof controlledOpen !== 'undefined'
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = isControlled && onOpenChange ? onOpenChange : setInternalOpen
+
   const [status, setStatus] = useState<StatusMessage>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -524,20 +528,25 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
       }
 
       setOpen(false)
-      router.push('/accounts')
-      router.refresh()
+      if (onSuccess) onSuccess()
+      else {
+        router.push('/accounts')
+        router.refresh()
+      }
     })
   }
 
   return (
     <>
-      <button
-        type="button"
-        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500"
-        onClick={() => setOpen(true)}
-      >
-        Add New Account
-      </button>
+      {!isControlled && (
+        <button
+          type="button"
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500"
+          onClick={() => setOpen(true)}
+        >
+          Add New Account
+        </button>
+      )}
 
       {open &&
         createPortal(

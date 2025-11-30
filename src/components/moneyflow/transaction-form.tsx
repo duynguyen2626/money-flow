@@ -18,6 +18,9 @@ import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { NumberInputWithSuggestions } from '@/components/ui/number-input-suggestions'
+import { CreateAccountDialog } from '@/components/moneyflow/create-account-dialog'
+import { CategoryDialog } from '@/components/moneyflow/category-dialog'
+import { AddShopDialog } from '@/components/moneyflow/add-shop-dialog'
 
 const formSchema = z.object({
   occurred_at: z.date(),
@@ -162,6 +165,10 @@ export function TransactionForm({
   refundMaxAmount,
   defaultRefundStatus = 'pending',
 }: TransactionFormProps) {
+  const [createAccountOpen, setCreateAccountOpen] = useState(false)
+  const [createCategoryOpen, setCreateCategoryOpen] = useState(false)
+  const [createShopOpen, setCreateShopOpen] = useState(false)
+
   const sourceAccounts = useMemo(
     () => allAccounts,
     [allAccounts]
@@ -485,11 +492,14 @@ export function TransactionForm({
 
     if (transactionType === 'debt') {
       const peopleShoppingCat = categories.find(c => c.name === 'People Shopping' || c.name === 'Shopping');
+      // Only set if category_id is empty to avoid overwriting user selection
       if (peopleShoppingCat && !form.getValues('category_id')) {
         form.setValue('category_id', peopleShoppingCat.id);
       }
+
       const shopeeShop = shops.find(s => s.name === 'Shopee');
-      if (shopeeShop) {
+      // Only set if shop_id is empty
+      if (shopeeShop && !form.getValues('shop_id')) {
         form.setValue('shop_id', shopeeShop.id);
       }
     } else if (transactionType === 'repayment') {
@@ -503,7 +513,6 @@ export function TransactionForm({
         }
       }
     }
-    // REMOVED: Auto-selection for 'transfer' type to fix incorrect Money Transfer category bug
   }, [transactionType, categories, shops, form, isEditMode]);
 
   const categoryOptions = useMemo(() => {
@@ -1108,6 +1117,7 @@ export function TransactionForm({
                 inputPlaceholder="Search category..."
                 emptyState="No matching category"
                 disabled={false} // Explicitly allow selecting category in refund modal
+                onAddNew={() => setCreateCategoryOpen(true)}
               />
             </div>
           )}
@@ -1155,6 +1165,7 @@ export function TransactionForm({
               }
               inputPlaceholder="Search shop..."
               emptyState="No shops yet"
+              onAddNew={() => setCreateShopOpen(true)}
             />
           )}
         />
@@ -1235,6 +1246,7 @@ export function TransactionForm({
               placeholder="Select destination"
               inputPlaceholder="Search account..."
               emptyState="No account found"
+              onAddNew={() => setCreateAccountOpen(true)}
             />
           )}
         />
@@ -1389,6 +1401,7 @@ export function TransactionForm({
               inputPlaceholder="Search account..."
               emptyState="No account found"
               disabled={isRefundMode && refundStatus === 'pending'}
+              onAddNew={() => setCreateAccountOpen(true)}
             />
           )}
         />
@@ -1640,43 +1653,78 @@ export function TransactionForm({
         : 'Add Transaction'
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      {/* Refund Status (Full Width) */}
-      {RefundStatusInput}
+    <>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Refund Status (Full Width) */}
+        {RefundStatusInput}
 
-      {/* Type Selection (Full Width) */}
-      {TypeInput}
+        {/* Type Selection (Full Width) */}
+        {TypeInput}
 
-      <div className="space-y-4">
-        {/* Core Fields */}
-        {PersonInput}
-        {CategoryInput}
-        {DateInput}
-        {SourceAccountInput}
-        {transactionType === 'transfer' && DestinationAccountInput}
-        {AmountInput}
-        {VoluntaryCashbackInput}
-        {CashbackInputs}
-        {ShopInput}
+        <div className="space-y-4">
+          {/* Core Fields */}
+          {PersonInput}
+          {CategoryInput}
+          {DateInput}
+          {SourceAccountInput}
+          {transactionType === 'transfer' && DestinationAccountInput}
+          {AmountInput}
+          {VoluntaryCashbackInput}
+          {CashbackInputs}
+          {ShopInput}
 
-        {/* Additional Fields */}
-        {TagInput}
-        {NoteInput}
-      </div>
+          {/* Additional Fields */}
+          {TagInput}
+          {NoteInput}
+        </div>
 
-      {status && (
-        <p className={`text-sm ${status.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-          {status.text}
-        </p>
-      )}
+        {status && (
+          <p className={`text-sm ${status.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+            {status.text}
+          </p>
+        )}
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
-      >
-        {submitLabel}
-      </button>
-    </form>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {submitLabel}
+        </button>
+      </form>
+
+      <CreateAccountDialog
+        open={createAccountOpen}
+        onOpenChange={setCreateAccountOpen}
+        onSuccess={() => {
+          router.refresh()
+          setCreateAccountOpen(false)
+        }}
+      />
+      <CategoryDialog
+        open={createCategoryOpen}
+        onOpenChange={setCreateCategoryOpen}
+        defaultType={
+          transactionType === 'debt' || transactionType === 'expense'
+            ? 'expense'
+            : transactionType === 'income'
+            ? 'income'
+            : 'expense'
+        }
+        onSuccess={() => {
+          router.refresh()
+          setCreateCategoryOpen(false)
+        }}
+      />
+      <AddShopDialog
+        categories={categories}
+        open={createShopOpen}
+        onOpenChange={setCreateShopOpen}
+        onSuccess={() => {
+          router.refresh()
+          setCreateShopOpen(false)
+        }}
+      />
+    </>
   )
 }

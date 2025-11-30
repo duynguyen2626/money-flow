@@ -33,6 +33,7 @@ const formSchema = z.object({
     type: z.enum(["expense", "income"]),
     icon: z.string().optional(),
     image_url: z.string().optional(),
+    mcc_codes: z.string().optional(),
 })
 
 interface CategoryDialogProps {
@@ -59,6 +60,7 @@ export function CategoryDialog({
             type: defaultType,
             icon: "",
             image_url: "",
+            mcc_codes: "",
         },
     })
 
@@ -69,6 +71,7 @@ export function CategoryDialog({
                 type: category.type,
                 icon: category.icon || "",
                 image_url: category.image_url || "",
+                mcc_codes: Array.isArray(category.mcc_codes) ? category.mcc_codes.join(", ") : "",
             })
         } else {
             form.reset({
@@ -76,6 +79,7 @@ export function CategoryDialog({
                 type: defaultType,
                 icon: "",
                 image_url: "",
+                mcc_codes: "",
             })
         }
     }, [category, defaultType, form, open])
@@ -83,11 +87,20 @@ export function CategoryDialog({
     async function onSubmit(values: z.infer<typeof formSchema>) {
         setIsLoading(true)
         try {
+            const mccArray = values.mcc_codes
+                ? values.mcc_codes.split(",").map((s) => s.trim()).filter(Boolean)
+                : []
+
+            const payload = {
+                ...values,
+                mcc_codes: mccArray,
+            }
+
             if (category) {
-                await updateCategory(category.id, values)
+                await updateCategory(category.id, payload)
                 toast.success("Category updated")
             } else {
-                await createCategory(values)
+                await createCategory(payload)
                 toast.success("Category created")
             }
             onSuccess()
@@ -152,6 +165,19 @@ export function CategoryDialog({
                                 )}
                             />
                         </div>
+                        <FormField
+                            control={form.control}
+                            name="mcc_codes"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Mã MCC (Ngăn cách bởi dấu phẩy)</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="5411, 5812" {...field} value={field.value || ""} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                         <DialogFooter>
                             <Button type="submit" disabled={isLoading}>
                                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

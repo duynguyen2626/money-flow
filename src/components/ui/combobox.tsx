@@ -1,9 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { Check, ChevronDown, Lock } from 'lucide-react'
+import { Check, ChevronDown, Lock, PlusIcon } from 'lucide-react'
 import * as PopoverPrimitive from '@radix-ui/react-popover'
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from 'cmdk'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from 'cmdk'
 
 const cn = (...classes: (string | undefined)[]) => classes.filter(Boolean).join(' ')
 
@@ -24,6 +24,7 @@ type ComboboxProps = {
   emptyState?: string
   disabled?: boolean
   className?: string
+  onAddNew?: () => void
 }
 
 export function Combobox({
@@ -35,6 +36,7 @@ export function Combobox({
   emptyState = 'No results found',
   disabled = false,
   className,
+  onAddNew,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const selectedItem = items.find(item => item.value === value)
@@ -111,6 +113,21 @@ export function Combobox({
               )
             })}
           </CommandList>
+          {onAddNew && (
+            <div className="border-t border-slate-100 bg-slate-50 p-1">
+              <div
+                role="button"
+                className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-blue-600 hover:bg-blue-50"
+                onClick={() => {
+                  onAddNew()
+                  setOpen(false)
+                }}
+              >
+                <PlusIcon className="h-4 w-4" />
+                <span className="font-medium">Thêm mới...</span>
+              </div>
+            </div>
+          )}
         </Command>
       </PopoverPrimitive.Content>
     </PopoverPrimitive.Root>

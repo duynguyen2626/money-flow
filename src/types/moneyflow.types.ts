@@ -12,6 +12,7 @@ export type Category = {
   parent_id?: string | null
   icon?: string | null
   image_url?: string | null
+  mcc_codes?: string[]
 }
 
 export type Shop = {
@@ -145,4 +146,7 @@ export type TransactionWithDetails = TransactionRow & {
   bank_back?: number;
   bank_rate?: number;
   people_rate?: number;
+  // Added fields
+  refunded_amount?: number | null;
+  refund_status?: 'none' | 'partial' | 'full';
 }

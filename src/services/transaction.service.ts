@@ -1506,6 +1506,54 @@ export async function confirmRefund(
       // We do NOT want it to stay 'waiting_refund'.
       if (updatedStatus === 'full') {
         await (supabase.from('transactions').update as any)({ status: 'refunded' }).eq('id', originalTransactionId)
+
+        // --- LOGIC CHANGE: UNLINK PERSON IF FULL REFUND ---
+        // Requirement: "Full Refund (100%) should unlink the Person from the original transaction to keep Debt Ledger clean."
+        // We append note: "[Hủy nợ: PersonName]"
+        // And set person_id = null for debt lines.
+
+        // 1. Fetch Person Name if needed
+        const { data: originalTxn } = await supabase
+           .from('transactions')
+           .select('note')
+           .eq('id', originalTransactionId)
+           .single();
+
+        // We iterate lines to find person
+        // We only clear person_id for the lines that had it.
+        // We also update the note.
+
+        // Find person name from lines (via profile relation or just cache? we need to query profile if not in line data)
+        // For simplicity, we just mark it.
+
+        let personName = '';
+        const linesToClear = [];
+
+        for (const line of originalLinesTyped) {
+           if (line.person_id) {
+             linesToClear.push(line.id);
+             // Try to fetch name?
+             if (!personName) {
+                const { data: person } = await supabase.from('people').select('name').eq('id', line.person_id).single();
+                if (person) personName = (person as unknown as { name: string }).name;
+             }
+           }
+        }
+
+        if (linesToClear.length > 0) {
+           // Clear person_id
+           await (supabase.from('transaction_lines').update as any)({ person_id: null }).in('id', linesToClear);
+
+           // Append Note
+           if (personName) {
+             const oldNote = (originalTxn as any)?.note || '';
+             const appendText = ` [Hủy nợ: ${personName}]`;
+             if (!oldNote.includes(appendText)) {
+                await (supabase.from('transactions').update as any)({ note: oldNote + appendText }).eq('id', originalTransactionId);
+             }
+           }
+        }
+
       } else {
         // For partial or none, revert to 'posted' so it shows as Active (with Partial tag if applicable)
         await (supabase.from('transactions').update as any)({ status: 'posted' }).eq('id', originalTransactionId)
