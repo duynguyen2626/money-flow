@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Home, Landmark, CreditCard, Wallet, Users, Clapperboard, ShoppingBag, ChevronLeft, ChevronRight, ArrowLeftRight, ArrowRight, Layers, CircleDollarSign } from "lucide-react"
+import { LayoutDashboard, List, Undo2, Landmark, Users, BadgePercent, Tags, Store, Layers, Zap, ChevronLeft, ChevronRight } from "lucide-react"
 import Link from "next/link"
 
 import { SidebarNav, type NavItem } from "./sidebar-nav"
@@ -9,16 +9,16 @@ import { AutomationChecker } from "./automation-checker"
 import { cn } from "@/lib/utils"
 
 const navItems: NavItem[] = [
-  { label: "Overview", href: "/", icon: Home },
-  { label: "Accounts", href: "/accounts", icon: CircleDollarSign },
-  { label: "Shops", href: "/shops", icon: ShoppingBag },
-  { label: "Transactions", href: "/transactions", icon: ArrowLeftRight },
-  { label: "Refunds", href: "/refunds", icon: ArrowRight },
+  { label: "Overview", href: "/", icon: LayoutDashboard },
+  { label: "Transactions", href: "/transactions", icon: List },
+  { label: "Refunds", href: "/refunds", icon: Undo2 },
+  { label: "Accounts", href: "/accounts", icon: Landmark },
   { label: "People", href: "/people", icon: Users },
-  { label: "Services", href: "/services", icon: Clapperboard },
-  { label: "Debts", href: "/debt", icon: Landmark },
-  { label: "Cashback", href: "/cashback", icon: CreditCard },
-  { label: "Batch", href: "/batch", icon: Layers },
+  { label: "Cashback", href: "/cashback", icon: BadgePercent },
+  { label: "Categories", href: "/categories", icon: Tags },
+  { label: "Shops", href: "/shops", icon: Store },
+  { label: "Batch Transfer", href: "/batch", icon: Layers },
+  { label: "Services", href: "/services", icon: Zap },
 ]
 
 type AppLayoutProps = {

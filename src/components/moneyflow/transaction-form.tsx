@@ -275,6 +275,11 @@ export function TransactionForm({
 
   useEffect(() => {
     if (!initialValues) {
+      // Ensure category is cleared if no initial values (fresh form)
+      // This fixes the issue where it might default to 'Subscription' or other values unexpectedly
+      if (!defaultType && !isEditMode) {
+        form.setValue('category_id', undefined)
+      }
       return
     }
 
