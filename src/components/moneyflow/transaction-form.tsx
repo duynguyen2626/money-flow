@@ -322,6 +322,8 @@ export function TransactionForm({
   }, [form, initialValues?.note, isRefundMode, refundCategoryId])
 
   async function onSubmit(values: TransactionFormValues) {
+    console.log('[Form Submit] Category ID being submitted:', values.category_id);
+    console.log('[Form Submit] Full values:', values);
     setStatus(null)
 
     if (isRefundMode) {
@@ -489,6 +491,7 @@ export function TransactionForm({
     if (transactionType === 'debt' && !currentCategoryId) {
       const peopleShoppingCat = categories.find(c => c.name === 'People Shopping' || c.name === 'Shopping');
       if (peopleShoppingCat) {
+        console.log('[Category Auto-Set] Setting category to People Shopping/Shopping for debt type');
         form.setValue('category_id', peopleShoppingCat.id);
       }
       const shopeeShop = shops.find(s => s.name === 'Shopee');
@@ -498,10 +501,12 @@ export function TransactionForm({
     } else if (transactionType === 'repayment' && !currentCategoryId) {
       const repaymentCatId = 'e0000000-0000-0000-0000-000000000097';
       if (categories.some(c => c.id === repaymentCatId)) {
+        console.log('[Category Auto-Set] Setting category to Repayment for repayment type');
         form.setValue('category_id', repaymentCatId);
       } else {
         const repaymentCat = categories.find(c => c.name === 'Thu nợ người khác' || c.name === 'Repayment');
         if (repaymentCat) {
+          console.log('[Category Auto-Set] Setting category to Thu nợ người khác for repayment type');
           form.setValue('category_id', repaymentCat.id);
         }
       }
@@ -684,12 +689,25 @@ export function TransactionForm({
   )
 
   useEffect(() => {
-    if (!watchedShopId) return
-    const shop = shops.find(s => s.id === watchedShopId)
-    if (shop?.default_category_id) {
-      form.setValue('category_id', shop.default_category_id)
+    // CRITICAL FIX: Only auto-set category from shop if:
+    // 1. Not in edit mode (user is creating new transaction)
+    // 2. Category is currently empty (user hasn't selected anything yet)
+    // 3. Shop has a default category
+    if (isEditMode) return;
+    if (!watchedShopId) return;
+
+    const currentCategoryId = form.getValues('category_id');
+    if (currentCategoryId) {
+      console.log('[Shop Category] User already selected category, not overriding:', currentCategoryId);
+      return; // User already selected a category, don't override!
     }
-  }, [watchedShopId, shops, form])
+
+    const shop = shops.find(s => s.id === watchedShopId);
+    if (shop?.default_category_id) {
+      console.log('[Shop Category] Auto-setting category from shop:', shop.name, shop.default_category_id);
+      form.setValue('category_id', shop.default_category_id);
+    }
+  }, [watchedShopId, shops, form, isEditMode])
 
   useEffect(() => {
     if (!isRefundMode) return
