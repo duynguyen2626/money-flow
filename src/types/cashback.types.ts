@@ -18,6 +18,7 @@ export type CashbackTransaction = {
   categoryName?: string
   categoryIcon?: string | null
   categoryImageUrl?: string | null
+  personName?: string | null
 }
 
 export type CashbackCard = {
@@ -50,4 +51,8 @@ export type AccountSpendingStats = {
   maxCashback: number | null
   rate: number
   earnedSoFar: number
+  // Smart Hint fields
+  potentialRate?: number
+  matchReason?: string
+  maxReward?: number | null // Category-specific max reward limit
 }

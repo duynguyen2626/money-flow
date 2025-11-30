@@ -1,94 +1,21 @@
-"use client"
+'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Controller, SubmitHandler, useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { FormEvent, MouseEvent, ReactNode, useMemo, useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-
-import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { createAccount } from '@/actions/account-actions'
+import { createPortal } from 'react-dom'
+import { parseCashbackConfig, CashbackCycleType, CashbackTier } from '@/lib/cashback'
 import { Account } from '@/types/moneyflow.types'
-import { Json } from '@/types/database.types'
+import type { Json } from '@/types/database.types'
+import { createClient } from '@/lib/supabase/client'
+import { Plus, Trash2, X } from 'lucide-react'
+import { Switch } from '@/components/ui/switch'
+import { CustomDropdown, type DropdownOption } from '@/components/ui/custom-dropdown'
+import { NumberInputWithSuggestions } from '@/components/ui/number-input-suggestions'
 
-const ASSET_TYPES: Account['type'][] = ['savings', 'investment', 'asset']
+type CategoryOption = { id: string; name: string; type: 'expense' | 'income' }
 
-const ACCOUNT_TABS: { value: AccountTab; label: string; helper: string }[] = [
-  { value: 'bank', label: '🏦 Payment', helper: 'Bank accounts for daily spending' },
-  { value: 'credit', label: '💳 Credit Card', helper: 'Track limits, statements & cashback' },
-  { value: 'saving', label: '💰 Savings', helper: 'Term deposits and investment accounts' },
-  { value: 'other', label: '📦 Others', helper: 'Cash, e-wallets or miscellaneous funds' },
-]
-
-type AccountTab = 'bank' | 'credit' | 'saving' | 'other'
-const SAVING_VARIANTS: { value: Account['type']; label: string }[] = [
-  { value: 'savings', label: 'Savings' },
-  { value: 'investment', label: 'Investment' },
-  { value: 'asset', label: 'Secured Asset' },
-]
-
-const OTHER_VARIANTS: { value: Account['type']; label: string }[] = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'ewallet', label: 'E-wallet' },
-]
-
-type StatusMessage =
-  | { text: string; variant: 'success' | 'error' }
-  | null
-
-const formSchema = z.object({
-  name: z.string().min(1, { message: 'Account name is required' }),
-  logoUrl: z.string().optional(),
-  initialBalance: z.number(),
-  creditLimit: z.number().nullable().optional(),
-  isSecured: z.boolean(),
-  securedByAccountId: z.string().optional(),
-  otherSubtype: z.enum(['cash', 'ewallet']),
-  savingType: z.enum(['savings', 'investment', 'asset']),
-  interestRate: z.number().nullable().optional(),
-  termMonths: z.number().nullable().optional(),
-  maturityDate: z.string().nullable().optional(),
-  cashbackRate: z.number().nonnegative(),
-  cashbackMaxAmount: z.number().nullable().optional(),
-  cashbackMinSpend: z.number().nullable().optional(),
-  cashbackCycleType: z.enum(['calendar_month', 'statement_cycle']),
-  cashbackStatementDay: z.number().nullable().optional(),
-  isUnlimitedCashback: z.boolean(), // Thêm trường cho tùy chọn cashback không giới hạn
-  parentAccountId: z.string().optional(), // Thêm trường cho tài khoản cha
-})
-
-type CreateAccountFormValues = z.infer<typeof formSchema>
-
-const DEFAULT_FORM_VALUES: CreateAccountFormValues = {
-  name: '',
-  logoUrl: '',
-  initialBalance: 0,
-  creditLimit: null,
-  isSecured: false,
-  securedByAccountId: '',
-  otherSubtype: 'cash',
-  savingType: 'savings',
-  interestRate: null,
-  termMonths: null,
-  maturityDate: '',
-  cashbackRate: 0,
-  cashbackMaxAmount: null,
-  cashbackMinSpend: null,
-  cashbackCycleType: 'calendar_month',
-  cashbackStatementDay: null,
-  isUnlimitedCashback: false, // Giá trị mặc định
-  parentAccountId: '', // Giá trị mặc định
-}
+const toNumericString = (value: number | null | undefined) =>
+  typeof value === 'number' ? String(value) : ''
 
 const formatWithSeparators = (value: string) => {
   const digits = value.replace(/[^0-9]/g, '')
@@ -105,656 +32,918 @@ const parseOptionalNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-const parseStatementDayValue = (value: string) => {
-  const parsed = parseOptionalNumber(value)
-  if (parsed === null) {
-    return null
+// Import TierItem, CategoryMultiSelect, TierList from edit-account-dialog
+// (Copy the same components here for consistency)
+
+function TierItem({
+  tier,
+  index,
+  onRemove,
+  onChange,
+  categoryOptions
+}: {
+  tier: CashbackTier
+  index: number
+  onRemove: () => void
+  onChange: (updates: Partial<CashbackTier>) => void
+  categoryOptions: CategoryOption[]
+}) {
+  const rules = useMemo(() => {
+    const grouped: { rate: number; maxAmount?: number; mcc_codes?: string; max_reward?: number; categories: string[] }[] = []
+
+    Object.entries(tier.categories).forEach(([catKey, config]) => {
+      const existing = grouped.find(
+        g => g.rate === config.rate && g.maxAmount === config.maxAmount && g.mcc_codes === config.mcc_codes && g.max_reward === config.max_reward
+      )
+      if (existing) {
+        existing.categories.push(catKey)
+      } else {
+        grouped.push({
+          rate: config.rate,
+          maxAmount: config.maxAmount,
+          mcc_codes: config.mcc_codes,
+          max_reward: config.max_reward,
+          categories: [catKey]
+        })
+      }
+    })
+    return grouped
+  }, [tier.categories])
+
+  const updateRules = (newRules: { rate: number; maxAmount?: number; mcc_codes?: string; max_reward?: number; categories: string[] }[]) => {
+    const newCategories: Record<string, { rate: number; maxAmount?: number; mcc_codes?: string; max_reward?: number }> = {}
+    newRules.forEach(rule => {
+      rule.categories.forEach(cat => {
+        newCategories[cat] = {
+          rate: rule.rate,
+          maxAmount: rule.maxAmount,
+          mcc_codes: rule.mcc_codes,
+          max_reward: rule.max_reward
+        }
+      })
+    })
+    onChange({ categories: newCategories })
   }
-  const normalized = Math.min(Math.max(Math.floor(parsed), 1), 31)
-  return normalized
+
+  const addRule = () => {
+    const draftKey = `DRAFT_${Math.random().toString(36).substr(2, 9)}`
+    const newCategories = {
+      ...tier.categories,
+      [draftKey]: {
+        rate: 0,
+        max_reward: undefined,
+        mcc_codes: undefined
+      }
+    }
+    onChange({ categories: newCategories })
+  }
+
+  const removeRule = (ruleIndex: number) => {
+    const next = [...rules]
+    next.splice(ruleIndex, 1)
+    updateRules(next)
+  }
+
+  const updateRule = (ruleIndex: number, field: string, value: any) => {
+    const rule = rules[ruleIndex]
+    const newCategories = { ...tier.categories }
+
+    if (field === 'categories') {
+      const newCats = value as string[]
+      rule.categories.forEach(c => delete newCategories[c])
+
+      if (newCats.length === 0) {
+        const draftKey = `DRAFT_${Math.random().toString(36).substr(2, 9)}`
+        newCategories[draftKey] = {
+          rate: rule.rate,
+          maxAmount: rule.maxAmount,
+          mcc_codes: rule.mcc_codes,
+          max_reward: rule.max_reward
+        }
+      } else {
+        newCats.forEach(c => {
+          newCategories[c] = {
+            rate: rule.rate,
+            maxAmount: rule.maxAmount,
+            mcc_codes: rule.mcc_codes,
+            max_reward: rule.max_reward
+          }
+        })
+      }
+    } else {
+      rule.categories.forEach(c => {
+        if (newCategories[c]) {
+          newCategories[c] = { ...newCategories[c], [field]: value }
+        }
+      })
+    }
+
+    onChange({ categories: newCategories })
+  }
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex items-center gap-3 flex-1">
+          <h5 className="text-sm font-bold text-slate-700 uppercase">Tier {index + 1}</h5>
+          <input
+            type="text"
+            value={tier.name || ''}
+            onChange={e => onChange({ name: e.target.value })}
+            className="flex-1 max-w-xs rounded border border-slate-200 px-3 py-1.5 text-sm"
+            placeholder="e.g. Premium, Gold, Platinum"
+          />
+        </div>
+        <button type="button" onClick={onRemove} className="text-red-500 hover:text-red-600">
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">Min Total Spend</label>
+          <NumberInputWithSuggestions
+            value={formatWithSeparators(toNumericString(tier.minSpend))}
+            onChange={val => onChange({ minSpend: parseOptionalNumber(val) ?? 0 })}
+            className="w-full"
+            placeholder="15,000,000"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-slate-600">Default Rate (%)</label>
+          <input
+            type="number"
+            value={tier.defaultRate !== undefined ? tier.defaultRate * 100 : ''}
+            onChange={e => {
+              const val = parseFloat(e.target.value)
+              onChange({ defaultRate: isNaN(val) ? undefined : val / 100 })
+            }}
+            className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
+            placeholder="Default for this tier"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-medium text-slate-600">Category Rules</label>
+          <button type="button" onClick={addRule} className="text-xs text-blue-600 hover:underline font-medium">
+            + Add Rule
+          </button>
+        </div>
+
+        {rules.length === 0 && (
+          <p className="text-xs text-slate-400 italic">No category rules. Click "+ Add Rule" to add specific rates.</p>
+        )}
+
+        {rules.length > 0 && (
+          <div className="space-y-3">
+            {rules.map((rule, rIndex) => (
+              <div key={rIndex} className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase">Category</label>
+                  <CategoryMultiSelect
+                    options={categoryOptions}
+                    selected={rule.categories.filter(c => !c.startsWith('DRAFT_'))}
+                    onChange={(cats) => updateRule(rIndex, 'categories', cats)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase">Rate (%)</label>
+                    <input
+                      type="number"
+                      className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
+                      value={rule.rate * 100}
+                      onChange={e => updateRule(rIndex, 'rate', parseFloat(e.target.value) / 100)}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase">Max Reward (VND)</label>
+                    <NumberInputWithSuggestions
+                      value={formatWithSeparators(toNumericString(rule.max_reward))}
+                      onChange={val => updateRule(rIndex, 'max_reward', parseOptionalNumber(val))}
+                      className="w-full"
+                      placeholder="No Limit"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-end gap-3">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-500 uppercase">MCC Codes</label>
+                    <input
+                      type="text"
+                      className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
+                      value={rule.mcc_codes || ''}
+                      onChange={e => updateRule(rIndex, 'mcc_codes', e.target.value)}
+                      placeholder="e.g. 5411, 5812"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeRule(rIndex)}
+                    className="rounded-md bg-red-50 p-2 text-red-500 hover:bg-red-100 transition"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
-const toNumericString = (value: number | null | undefined) =>
-  typeof value === 'number' ? String(value) : ''
+function CategoryMultiSelect({ options, selected, onChange }: { options: CategoryOption[], selected: string[], onChange: (val: string[]) => void }) {
+  const expenseOptions = useMemo(() => options.filter(o => o.type === 'expense'), [options])
+
+  const dropdownOptions = useMemo(() =>
+    expenseOptions.map(opt => ({ value: opt.name, label: opt.name }))
+    , [expenseOptions])
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {selected.map(cat => (
+          <span key={cat} className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-1 text-xs text-blue-700 font-medium">
+            {cat}
+            <button type="button" onClick={() => onChange(selected.filter(c => c !== cat))} className="hover:text-blue-900">×</button>
+          </span>
+        ))}
+      </div>
+      <CustomDropdown
+        options={dropdownOptions}
+        value=""
+        onChange={(val) => {
+          if (val && !selected.includes(val)) {
+            onChange([...selected, val])
+          }
+        }}
+        placeholder="+ Add Category"
+        className="w-full"
+      />
+    </div>
+  )
+}
+
+function TierList({
+  tiers,
+  onChange,
+  categoryOptions
+}: {
+  tiers: CashbackTier[]
+  onChange: (tiers: CashbackTier[]) => void
+  categoryOptions: CategoryOption[]
+}) {
+  const addTier = () => {
+    onChange([
+      ...tiers,
+      { minSpend: 0, categories: {}, defaultRate: 0 }
+    ])
+  }
+
+  const removeTier = (index: number) => {
+    const next = [...tiers]
+    next.splice(index, 1)
+    onChange(next)
+  }
+
+  const updateTier = (index: number, updates: Partial<CashbackTier>) => {
+    const next = [...tiers]
+    next[index] = { ...next[index], ...updates }
+    onChange(next)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-semibold text-slate-700">Advanced Tiers</h4>
+        <button
+          type="button"
+          onClick={addTier}
+          className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
+        >
+          <Plus className="h-4 w-4" /> Add Tier
+        </button>
+      </div>
+
+      {tiers.length === 0 && (
+        <p className="text-sm text-slate-500 italic">No tiers configured. Base rate applies.</p>
+      )}
+
+      {tiers.map((tier, index) => (
+        <TierItem
+          key={index}
+          tier={tier}
+          index={index}
+          onRemove={() => removeTier(index)}
+          onChange={(updates) => updateTier(index, updates)}
+          categoryOptions={categoryOptions}
+        />
+      ))}
+    </div>
+  )
+}
 
 type CreateAccountDialogProps = {
   collateralAccounts?: Account[]
   creditCardAccounts?: Account[]
 }
 
-export function CreateAccountDialog({
-  collateralAccounts = [],
-  creditCardAccounts = [],
-}: CreateAccountDialogProps) {
-  const [open, setOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<AccountTab>('bank')
+type StatusMessage = {
+  text: string
+  variant: 'success' | 'error'
+} | null
+
+const ASSET_TYPES: Account['type'][] = ['savings', 'investment', 'asset']
+
+export function CreateAccountDialog({ collateralAccounts = [], creditCardAccounts = [] }: CreateAccountDialogProps) {
   const router = useRouter()
+  const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<StatusMessage>(null)
+  const [isPending, startTransition] = useTransition()
 
-  const {
-    control,
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<CreateAccountFormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: DEFAULT_FORM_VALUES,
-  })
+  const [name, setName] = useState('')
+  const [accountType, setAccountType] = useState<Account['type']>('credit_card')
+  const [logoUrl, setLogoUrl] = useState('')
+  const [creditLimit, setCreditLimit] = useState('')
+  const [isSecured, setIsSecured] = useState(false)
+  const [securedByAccountId, setSecuredByAccountId] = useState('')
+  const [parentAccountId, setParentAccountId] = useState('')
 
-  const watchedIsSecured = watch('isSecured')
-  const watchedOtherSubtype = watch('otherSubtype')
-  const watchedSavingType = watch('savingType')
-  const cashbackCycleType = watch('cashbackCycleType')
-  const logoUrl = watch('logoUrl')
-  const isUnlimitedCashback = watch('isUnlimitedCashback') // Theo dõi trạng thái cashback không giới hạn
-  const parentAccountId = watch('parentAccountId') // Theo dõi tài khoản cha được chọn
-  const accountName = watch('name') // Theo dõi tên tài khoản
+  // Cashback fields
+  const [rate, setRate] = useState('0')
+  const [maxAmount, setMaxAmount] = useState('')
+  const [minSpend, setMinSpend] = useState('')
+  const [cycleType, setCycleType] = useState<CashbackCycleType>('calendar_month')
+  const [statementDay, setStatementDay] = useState('')
+  const [tiers, setTiers] = useState<CashbackTier[]>([])
 
-  // Lọc danh sách tài khoản cha (chỉ lấy các thẻ tín dụng)
-  const parentAccountOptions = useMemo(
-    () =>
-      creditCardAccounts.filter(
-        acc => acc.type === 'credit_card' && acc.is_active !== false
-      ),
-    [creditCardAccounts]
-  )
-  const selectedParent = useMemo(
-    () => parentAccountOptions.find(option => option.id === parentAccountId),
-    [parentAccountId, parentAccountOptions]
-  )
-  const normalizedAccountName = accountName?.trim().toLowerCase()
-  const suggestedParent = useMemo(() => {
-    if (!normalizedAccountName) return null
-    return parentAccountOptions.find(option => {
-      const candidate = option.name?.trim().toLowerCase()
-      if (!candidate) return false
-      return (
-        candidate === normalizedAccountName ||
-        normalizedAccountName.includes(candidate) ||
-        candidate.includes(normalizedAccountName)
-      )
-    })
-  }, [normalizedAccountName, parentAccountOptions])
+  // Savings fields
+  const [interestRate, setInterestRate] = useState('')
+  const [termMonths, setTermMonths] = useState('')
+  const [maturityDate, setMaturityDate] = useState('')
+
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([])
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const supabase = createClient()
+      const { data } = await supabase.from('categories').select('id, name, type').order('name')
+      if (data) setCategoryOptions(data)
+    }
+    fetchCategories()
+  }, [])
+
+  const isCreditCard = accountType === 'credit_card'
+  const isAssetAccount = ASSET_TYPES.includes(accountType)
 
   const collateralOptions = useMemo(
-    () => collateralAccounts.filter(acc => ASSET_TYPES.includes(acc.type)),
+    () => collateralAccounts.filter(candidate => ASSET_TYPES.includes(candidate.type)),
     [collateralAccounts]
   )
 
-  useEffect(() => {
-    if (!watchedIsSecured) {
-      setValue('securedByAccountId', '')
-    }
-  }, [setValue, watchedIsSecured])
+  const suggestedParent = useMemo(() => {
+    if (!isCreditCard || !name.trim() || parentAccountId) return null
+    const firstWord = name.trim().split(' ')[0]
+    if (firstWord.length < 2) return null
+    const candidate = creditCardAccounts.find(acc =>
+      acc.name.toLowerCase().startsWith(firstWord.toLowerCase())
+    )
+    return candidate || null
+  }, [name, isCreditCard, parentAccountId, creditCardAccounts])
 
-  useEffect(() => {
-    if (activeTab !== 'credit' && parentAccountId) {
-      setValue('parentAccountId', '')
-    }
-  }, [activeTab, parentAccountId, setValue])
-
-  // Khi chọn tài khoản cha, vô hiệu hóa trường hạn mức tín dụng
-  useEffect(() => {
-    if (parentAccountId) {
-      setValue('creditLimit', null)
-    }
-  }, [parentAccountId, setValue])
-
-  // Khi chọn tùy chọn cashback không giới hạn, vô hiệu hóa trường số tiền tối đa
-  useEffect(() => {
-    if (isUnlimitedCashback) {
-      setValue('cashbackMaxAmount', null)
-    }
-  }, [isUnlimitedCashback, setValue])
-
-  const handleTabChange = (nextTab: string) => {
-    // Type assertion since we know the values are valid AccountTab values
-    const tab = nextTab as AccountTab;
-    setActiveTab(tab)
-    if (tab !== 'credit') {
-      setValue('isSecured', false)
-      setValue('securedByAccountId', '')
-    }
+  const resetForm = () => {
+    setName('')
+    setAccountType('credit_card')
+    setLogoUrl('')
+    setCreditLimit('')
+    setIsSecured(false)
+    setSecuredByAccountId('')
+    setParentAccountId('')
+    setRate('0')
+    setMaxAmount('')
+    setMinSpend('')
+    setCycleType('calendar_month')
+    setStatementDay('')
+    setTiers([])
+    setInterestRate('')
+    setTermMonths('')
+    setMaturityDate('')
+    setStatus(null)
   }
 
-  const handleDialogOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      reset(DEFAULT_FORM_VALUES)
-      setActiveTab('bank')
-      setStatus(null)
-    }
-    setOpen(nextOpen)
+  const closeDialog = () => {
+    setOpen(false)
+    resetForm()
   }
 
-  const resolveAccountType = (): Account['type'] => {
-    switch (activeTab) {
-      case 'bank':
-        return 'bank'
-      case 'credit':
-        return 'credit_card'
-      case 'saving':
-        return watchedSavingType
-      case 'other':
-        return watchedOtherSubtype
-    }
+  const stopPropagation = (event?: MouseEvent<HTMLDivElement>) => {
+    event?.stopPropagation()
   }
 
-  const isCreditCard = activeTab === 'credit'
-  const isSavingVariant = activeTab === 'saving'
+  const parseStatementDayValue = (value: string) => {
+    const parsed = parseOptionalNumber(value)
+    if (parsed === null) return null
+    return Math.min(Math.max(Math.floor(parsed), 1), 31)
+  }
 
-  const onSubmit: SubmitHandler<CreateAccountFormValues> = async values => {
-    const trimmedName = values.name.trim()
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const trimmedName = name.trim()
     if (!trimmedName) {
+      setStatus({ text: 'Account name cannot be empty.', variant: 'error' })
       return
     }
-    setStatus(null)
 
-    const finalType = resolveAccountType()
-    // Nếu có tài khoản cha thì sử dụng hạn mức từ tài khoản cha, ngược lại sử dụng giá trị được nhập
-    const creditLimitPayload = isCreditCard && !values.parentAccountId ? values.creditLimit ?? null : null
-    const securedBy =
-      isCreditCard && values.isSecured && values.securedByAccountId?.trim()
-        ? values.securedByAccountId.trim()
-        : null
+    const nextCreditLimit = isCreditCard ? parseOptionalNumber(creditLimit) : null
+    const cleanedLogoUrl = logoUrl.trim() || null
 
+    const rateValue = parseOptionalNumber(rate) ?? 0
     let configPayload: Json | undefined
     if (isCreditCard) {
       configPayload = {
-        rate: values.cashbackRate ?? 0,
-        // Nếu chọn cashback không giới hạn thì đặt maxAmount là 0, ngược lại sử dụng giá trị được nhập
-        maxAmount: values.isUnlimitedCashback ? 0 : values.cashbackMaxAmount ?? null,
-        minSpend: values.cashbackMinSpend ?? null,
-        cycleType: values.cashbackCycleType,
-        statementDay:
-          values.cashbackCycleType === 'statement_cycle'
-            ? values.cashbackStatementDay
-            : null,
-        sharedLimitParentId: values.parentAccountId?.trim() || null,
+        rate: rateValue,
+        maxAmount: parseOptionalNumber(maxAmount),
+        minSpend: parseOptionalNumber(minSpend),
+        cycleType,
+        statementDay: cycleType === 'statement_cycle' ? parseStatementDayValue(statementDay) : null,
+        parentAccountId: parentAccountId || null,
+        hasTiers: tiers.length > 0,
+        tiers: tiers.length > 0 ? tiers.map(t => {
+          const cleanCategories: Record<string, any> = {}
+          Object.entries(t.categories).forEach(([k, v]) => {
+            if (!k.startsWith('DRAFT_')) {
+              cleanCategories[k] = v
+            }
+          })
+          return { ...t, categories: cleanCategories }
+        }) : undefined,
       }
-    } else if (isSavingVariant) {
+    } else if (isAssetAccount) {
       configPayload = {
-        interestRate: values.interestRate ?? null,
-        termMonths: values.termMonths ?? null,
-        maturityDate: values.maturityDate?.trim() || null,
+        interestRate: parseOptionalNumber(interestRate),
+        termMonths: parseOptionalNumber(termMonths),
+        maturityDate: maturityDate.trim() || null,
       }
     }
 
-    try {
-      const result = await createAccount({
-        name: trimmedName,
-        balance: values.initialBalance ?? 0,
-        type: finalType,
-        creditLimit: creditLimitPayload,
-        cashbackConfig: configPayload,
-        securedByAccountId: securedBy,
-        logoUrl: values.logoUrl?.trim() || null,
-      })
+    const securedBy = isCreditCard && isSecured ? (securedByAccountId || null) : null
 
-      if (result?.error) {
-        setStatus({ text: String(result.error), variant: 'error' })
-        console.error('Error creating account:', result.error)
+    startTransition(async () => {
+      setStatus(null)
+
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (!user) {
+        setStatus({ text: 'You must be logged in to create an account.', variant: 'error' })
         return
       }
 
-      setStatus({ text: 'Account created successfully!', variant: 'success' })
-      reset(DEFAULT_FORM_VALUES)
-      setActiveTab('bank')
+      const { error } = await supabase.from('accounts').insert({
+        name: trimmedName,
+        type: accountType,
+        credit_limit: nextCreditLimit,
+        cashback_config: configPayload,
+        secured_by_account_id: securedBy,
+        logo_url: cleanedLogoUrl,
+        owner_id: user.id,
+        current_balance: 0,
+        is_active: true
+      })
+
+      if (error) {
+        setStatus({ text: 'Could not create account. Please try again.', variant: 'error' })
+        return
+      }
+
       setOpen(false)
+      router.push('/accounts')
       router.refresh()
-    } catch (err) {
-      console.error('Unexpected error:', err)
-      setStatus({ text: 'An unexpected error occurred', variant: 'error' })
-    }
+    })
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleDialogOpenChange}>
-      <DialogTrigger asChild>
-        <Button>Add New Account</Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Add New Account</DialogTitle>
-          <DialogDescription>Smart creation workflow for every account type.</DialogDescription>
-        </DialogHeader>
+    <>
+      <button
+        type="button"
+        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500"
+        onClick={() => setOpen(true)}
+      >
+        Add New Account
+      </button>
 
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="mt-3">
-          <TabsList className="grid w-full grid-cols-4 gap-2 rounded-full bg-slate-100 p-1 text-[13px] font-semibold text-slate-600">
-            {ACCOUNT_TABS.map(tab => (
-              <TabsTrigger key={tab.value} value={tab.value} className="rounded-full">
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-        <p className="mt-2 text-xs text-slate-500">
-          {ACCOUNT_TABS.find(tab => tab.value === activeTab)?.helper}
-        </p>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5">
-          <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/40 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Basics</p>
-
-            {activeTab === 'saving' && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  Savings & invest category
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {SAVING_VARIANTS.map(option => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setValue('savingType', option.value as 'savings' | 'investment' | 'asset')}
-                      className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${watchedSavingType === option.value
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-slate-200 bg-white text-slate-600'
-                        }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeTab === 'other' && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Account type</p>
-                <div className="flex flex-wrap gap-2">
-                  {OTHER_VARIANTS.map(option => (
-                    <button
-                      key={option.value}
-                      type="button"
-                      onClick={() => setValue('otherSubtype', option.value as 'cash' | 'ewallet')}
-                      className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition ${watchedOtherSubtype === option.value
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-slate-200 bg-white text-slate-600'
-                        }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-600">
-                Account name <abbr title="Required">*</abbr>
-              </label>
-              <input
-                type="text"
-                {...register('name')}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                placeholder="My bank account"
-              />
-              {errors.name && (
-                <p className="text-xs text-red-600">{errors.name.message}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-600">Logo URL</label>
-              <input
-                type="url"
-                {...register('logoUrl')}
-                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                placeholder="https://example.com/logo.png"
-              />
-              {logoUrl && (
-                <div className="mt-2 flex items-center gap-3">
-                  <div className="h-12 w-12 overflow-hidden rounded-md border border-slate-200 bg-white">
-                    <img
-                      src={logoUrl}
-                      alt="Logo preview"
-                      className="h-full w-full object-contain"
-                      onError={event => {
-                        const target = event.currentTarget
-                        target.style.display = 'none'
-                      }}
-                    />
-                  </div>
-                  <p className="text-xs text-slate-500">Preview of the logo URL</p>
-                </div>
-              )}
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-600">Initial balance</label>
-                <Controller
-                  control={control}
-                  name="initialBalance"
-                  render={({ field }) => (
-                    <input
-                      type="text"
-                      value={formatWithSeparators(String(field.value ?? ''))}
-                      onChange={event => {
-                        const parsed = parseOptionalNumber(event.target.value)
-                        field.onChange(parsed ?? 0)
-                      }}
-                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                      placeholder="0"
-                    />
-                  )}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-600">Currency</label>
-                <input
-                  type="text"
-                  readOnly
-                  value="VND"
-                  className="w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-600 shadow-sm"
-                />
-                <p className="text-xs text-slate-500">
-                  VND is currently the default currency for new accounts.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {activeTab === 'credit' && (
-            <>
-              {/* Thêm dropdown chọn tài khoản cha */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-600">Share limit with supplementary card?</label>
-                <select
-                  {...register('parentAccountId')}
-                  className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+      {open &&
+        createPortal(
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Create new account"
+            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-12"
+            onClick={closeDialog}
+          >
+            <div
+              className="w-full max-w-5xl rounded-xl bg-white shadow-2xl flex flex-col"
+              style={{ maxHeight: '85vh', minHeight: '400px' }}
+              onClick={stopPropagation}
+            >
+              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 rounded-t-xl">
+                <h2 className="text-xl font-bold text-slate-900">Add New Account</h2>
+                <button
+                  type="button"
+                  className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                  onClick={closeDialog}
                 >
-                  <option value="">No link (Primary card)</option>
-                  {parentAccountOptions.map(option => (
-                    <option key={option.id} value={option.id}>
-                      {option.name}
-                    </option>
-                  ))}
-                </select>
-                {!parentAccountId && suggestedParent && (
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                    <p className="flex-1">
-                      It looks like you are adding a supplementary card for {suggestedParent.name}. Link the limit to share it?
-                    </p>
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <form className="p-6 flex-1 overflow-y-auto" onSubmit={handleSubmit}>
+                {/* Account Type Selection */}
+                <div className="mb-6 space-y-4">
+                  <label className="block text-sm font-medium text-slate-700">Account Type</label>
+
+                  <div className="flex gap-2 flex-wrap">
                     <button
                       type="button"
-                      onClick={() => setValue('parentAccountId', suggestedParent.id)}
-                      className="rounded-full border border-blue-200 bg-white px-3 py-1 text-[11px] font-semibold text-blue-700 hover:border-blue-300 hover:bg-blue-50"
+                      onClick={() => setAccountType('credit_card')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${accountType === 'credit_card'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
                     >
-                      Link with {suggestedParent.name}
+                      💳 Credit Card
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAccountType('bank')}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${accountType === 'bank'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                    >
+                      🏦 Bank
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!['savings', 'investment', 'asset'].includes(accountType)) {
+                          setAccountType('savings')
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${['savings', 'investment', 'asset'].includes(accountType)
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                    >
+                      💰 Savings & Investment
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!['cash', 'ewallet', 'debt'].includes(accountType)) {
+                          setAccountType('cash')
+                        }
+                      }}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${['cash', 'ewallet', 'debt'].includes(accountType)
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                    >
+                      📦 Others
                     </button>
                   </div>
-                )}
-                {parentAccountId && selectedParent && (
-                  <p className="text-xs text-slate-500">
-                    Limit will be shared from {selectedParent.name}.
-                  </p>
-                )}
-              </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-600">Credit limit</label>
-                <Controller
-                  control={control}
-                  name="creditLimit"
-                  render={({ field }) => (
-                    <input
-                      type="text"
-                      value={formatWithSeparators(toNumericString(field.value))}
-                      onChange={event => field.onChange(parseOptionalNumber(event.target.value))}
-                      className={`w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 ${parentAccountId ? 'bg-slate-100 cursor-not-allowed' : ''
-                        }`}
-                      placeholder="Credit limit"
-                      disabled={!!parentAccountId} // Vô hiệu hóa nếu đã chọn tài khoản cha
-                    />
+                  {['savings', 'investment', 'asset'].includes(accountType) && (
+                    <div className="flex gap-2 pl-4 border-l-2 border-blue-200">
+                      <button
+                        type="button"
+                        onClick={() => setAccountType('savings')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'savings'
+                          ? 'bg-blue-100 text-blue-700 font-semibold'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          }`}
+                      >
+                        Savings
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAccountType('investment')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'investment'
+                          ? 'bg-blue-100 text-blue-700 font-semibold'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          }`}
+                      >
+                        Investment
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAccountType('asset')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'asset'
+                          ? 'bg-blue-100 text-blue-700 font-semibold'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          }`}
+                      >
+                        Secured Asset
+                      </button>
+                    </div>
                   )}
-                />
-              </div>
 
-              <div className="space-y-3 rounded-md border border-slate-200 p-3">
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <input
-                    type="checkbox"
-                    {...register('isSecured')}
-                    className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  Secured (collateral)
-                </label>
-                {watchedIsSecured && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-600">Secured by</label>
-                    <select
-                      {...register('securedByAccountId')}
-                      className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                    >
-                      <option value="">None</option>
-                      {collateralOptions.map(option => (
-                        <option key={option.id} value={option.id}>
-                          {option.name}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-slate-500">
-                      Pick a savings or investment account as collateral for this card.
-                    </p>
+                  {['cash', 'ewallet', 'debt'].includes(accountType) && (
+                    <div className="flex gap-2 pl-4 border-l-2 border-blue-200">
+                      <button
+                        type="button"
+                        onClick={() => setAccountType('cash')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'cash'
+                          ? 'bg-blue-100 text-blue-700 font-semibold'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          }`}
+                      >
+                        Cash
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAccountType('ewallet')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'ewallet'
+                          ? 'bg-blue-100 text-blue-700 font-semibold'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          }`}
+                      >
+                        E-wallet
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAccountType('debt')}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'debt'
+                          ? 'bg-blue-100 text-blue-700 font-semibold'
+                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          }`}
+                      >
+                        Debt
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2 Column Layout */}
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                  {/* Left Column - Basic Info */}
+                  <div className="space-y-5">
+                    <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Basic Information</h3>
+
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-slate-600">Name</label>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={event => setName(event.target.value)}
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        placeholder="Account name"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-slate-600">Logo URL</label>
+                      <input
+                        type="url"
+                        value={logoUrl}
+                        onChange={event => setLogoUrl(event.target.value)}
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        placeholder="https://logo.example.com/bank.png"
+                      />
+                    </div>
+
+                    {isCreditCard && (
+                      <>
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium text-slate-600">Credit Limit</label>
+                          <NumberInputWithSuggestions
+                            value={creditLimit}
+                            onChange={setCreditLimit}
+                            className="w-full"
+                            placeholder="Credit limit"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium text-slate-600">Parent Account (Shared Limit)</label>
+                            {suggestedParent && (
+                              <button
+                                type="button"
+                                onClick={() => setParentAccountId(suggestedParent.id)}
+                                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                              >
+                                Link to {suggestedParent.name}?
+                              </button>
+                            )}
+                          </div>
+                          <CustomDropdown
+                            options={[
+                              { value: '', label: 'None (Primary Card)' },
+                              ...creditCardAccounts.map(acc => ({ value: acc.id, label: acc.name }))
+                            ]}
+                            value={parentAccountId}
+                            onChange={setParentAccountId}
+                            className="w-full"
+                          />
+                        </div>
+
+                        {collateralOptions.length > 0 && (
+                          <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex items-center justify-between">
+                              <label className="text-sm font-medium text-slate-700">
+                                Secured (collateral)
+                              </label>
+                              <Switch
+                                checked={isSecured}
+                                onCheckedChange={(checked) => {
+                                  setIsSecured(checked)
+                                  if (!checked) setSecuredByAccountId('')
+                                }}
+                              />
+                            </div>
+                            {isSecured && (
+                              <div className="space-y-1">
+                                <label className="text-sm font-medium text-slate-600">Secured by</label>
+                                <CustomDropdown
+                                  options={[
+                                    { value: '', label: 'None' },
+                                    ...collateralOptions.map(option => ({ value: option.id, label: option.name }))
+                                  ]}
+                                  value={securedByAccountId}
+                                  onChange={setSecuredByAccountId}
+                                  className="w-full"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+
+
                   </div>
-                )}
-              </div>
 
-              <fieldset className="space-y-4 rounded-lg border border-slate-200 p-4">
-                <legend className="px-2 text-sm font-semibold text-slate-600">Cashback configuration</legend>
-                <div className="grid gap-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-600">Rate (%)</label>
-                    <Controller
-                      control={control}
-                      name="cashbackRate"
-                      render={({ field }) => {
-                        const displayValue =
-                          field.value != null ? (field.value * 100).toString() : ''
-                        return (
+                  {/* Right Column */}
+                  <div className="space-y-5">
+                    {isCreditCard && (
+                      <div className="space-y-5">
+                        <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Cashback Configuration</h3>
+
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium text-slate-600">Rate (%)</label>
                           <input
                             type="number"
+                            step="any"
                             min="0"
                             max="100"
-                            step="any"
-                            value={displayValue}
+                            value={rate ? (parseFloat(rate) * 100).toString() : ''}
                             onChange={event => {
-                              const parsed = parseFloat(event.target.value)
-                              field.onChange(isNaN(parsed) ? 0 : parsed / 100)
+                              const val = parseFloat(event.target.value)
+                              setRate(isNaN(val) ? '0' : (val / 100).toString())
                             }}
                             className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                             placeholder="10"
                           />
-                        )
-                      }}
-                    />
-                    <p className="text-xs text-slate-500">Enter the percentage (like 10 for 10%).</p>
-                  </div>
+                        </div>
 
-                  {/* Thêm checkbox cho tùy chọn cashback không giới hạn */}
-                  <div className="flex items-center">
-                    <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                      <input
-                        type="checkbox"
-                        {...register('isUnlimitedCashback')}
-                        className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      Unlimited
-                    </label>
-                  </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-600">Max amount</label>
+                            <NumberInputWithSuggestions
+                              value={maxAmount}
+                              onChange={setMaxAmount}
+                              className="w-full"
+                              placeholder="Ex: 100000"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-600">Min spend</label>
+                            <NumberInputWithSuggestions
+                              value={minSpend}
+                              onChange={setMinSpend}
+                              className="w-full"
+                              placeholder="Ex: 500000"
+                            />
+                          </div>
+                        </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-600">Max amount</label>
-                      <Controller
-                        control={control}
-                        name="cashbackMaxAmount"
-                        render={({ field }) => (
-                          <input
-                            type="text"
-                            value={formatWithSeparators(toNumericString(field.value))}
-                            onChange={event => field.onChange(parseOptionalNumber(event.target.value))}
-                            className={`w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 ${isUnlimitedCashback ? 'bg-slate-100 cursor-not-allowed' : ''
-                              }`}
-                            placeholder="e.g. 100000"
-                            disabled={isUnlimitedCashback} // Vô hiệu hóa nếu chọn không giới hạn
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium text-slate-600">Cycle type</label>
+                          <CustomDropdown
+                            options={[
+                              { value: 'calendar_month', label: 'Calendar month' },
+                              { value: 'statement_cycle', label: 'Statement cycle' }
+                            ]}
+                            value={cycleType}
+                            onChange={(val) => setCycleType(val as CashbackCycleType)}
+                            className="w-full"
                           />
+                        </div>
+
+                        {cycleType === 'statement_cycle' && (
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-600">Statement day</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="31"
+                              step="1"
+                              value={statementDay}
+                              onChange={event => setStatementDay(event.target.value)}
+                              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                              placeholder="Day of month"
+                            />
+                          </div>
                         )}
-                      />
-                    </div>
+                      </div>
+                    )}
 
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-600">Min spend</label>
-                      <Controller
-                        control={control}
-                        name="cashbackMinSpend"
-                        render={({ field }) => (
-                          <input
-                            type="text"
-                            value={formatWithSeparators(toNumericString(field.value))}
-                            onChange={event => field.onChange(parseOptionalNumber(event.target.value))}
-                            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            placeholder="e.g. 500000"
-                          />
-                        )}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-600">Cycle type</label>
-                    <select
-                      {...register('cashbackCycleType')}
-                      className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                    >
-                      <option value="calendar_month">Calendar month</option>
-                      <option value="statement_cycle">Statement cycle</option>
-                    </select>
-                  </div>
-
-                  {cashbackCycleType === 'statement_cycle' && (
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-slate-600">Statement day</label>
-                      <Controller
-                        control={control}
-                        name="cashbackStatementDay"
-                        render={({ field }) => (
+                    {isAssetAccount && (
+                      <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                        <h4 className="text-sm font-semibold text-slate-700">Interest Info</h4>
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium text-slate-600">Interest rate (%)</label>
                           <input
                             type="number"
-                            min="1"
-                            max="31"
-                            step="1"
-                            value={field.value ?? ''}
-                            onChange={event => {
-                              const normalized = parseStatementDayValue(event.target.value)
-                              field.onChange(normalized)
-                            }}
+                            step="any"
+                            min="0"
+                            value={interestRate}
+                            onChange={event => setInterestRate(event.target.value)}
                             className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            placeholder="Day of month"
+                            placeholder="Ex: 7.2"
                           />
-                        )}
-                      />
-                    </div>
-                  )}
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium text-slate-600">Term (months)</label>
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            value={termMonths}
+                            onChange={event => setTermMonths(event.target.value)}
+                            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            placeholder="Ex: 12"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium text-slate-600">Maturity date</label>
+                          <input
+                            type="date"
+                            value={maturityDate}
+                            onChange={event => setMaturityDate(event.target.value)}
+                            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </fieldset>
-            </>
-          )}
 
-          {activeTab === 'saving' && (
-            <fieldset className="space-y-4 rounded-lg border border-slate-200 p-4">
-              <legend className="px-2 text-sm font-semibold text-slate-600">
-                Interest information
-              </legend>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-600">Account category</label>
-                  <select
-                    {...register('savingType')}
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                {/* Advanced Tiers - Full Width */}
+                {isCreditCard && (
+                  <div className="mt-6 pt-6 border-t border-slate-200">
+                    <TierList tiers={tiers} onChange={setTiers} categoryOptions={categoryOptions} />
+                  </div>
+                )}
+
+                {status && (
+                  <p
+                    className={`mt-4 text-sm ${status.variant === 'error' ? 'text-red-600' : 'text-green-600'}`}
                   >
-                    <option value="savings">Savings</option>
-                    <option value="investment">Investment</option>
-                    <option value="asset">Secured asset</option>
-                  </select>
+                    {status.text}
+                  </p>
+                )}
+
+                <div className="mt-6 flex justify-end gap-3 border-t border-slate-200 pt-6">
+                  <button
+                    type="button"
+                    className="rounded-md border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                    onClick={closeDialog}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isPending ? 'Creating...' : 'Create Account'}
+                  </button>
                 </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-600">Interest rate (%)</label>
-                    <Controller
-                      control={control}
-                      name="interestRate"
-                      render={({ field }) => (
-                        <input
-                          type="number"
-                          step="any"
-                          min="0"
-                          value={field.value ?? ''}
-                          onChange={event => {
-                            const parsed = parseOptionalNumber(event.target.value)
-                            field.onChange(parsed)
-                          }}
-                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                          placeholder="e.g. 7.2"
-                        />
-                      )}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-slate-600">Term (months)</label>
-                    <Controller
-                      control={control}
-                      name="termMonths"
-                      render={({ field }) => (
-                        <input
-                          type="number"
-                          step="1"
-                          min="0"
-                          value={field.value ?? ''}
-                          onChange={event => {
-                            const parsed = parseOptionalNumber(event.target.value)
-                            field.onChange(parsed)
-                          }}
-                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                          placeholder="e.g. 12"
-                        />
-                      )}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-slate-600">Maturity date</label>
-                  <input
-                    type="date"
-                    {...register('maturityDate')}
-                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                  />
-                </div>
-              </div>
-            </fieldset>
-          )}
-
-          {status && (
-            <p
-              className={`text-sm ${status.variant === 'error' ? 'text-red-600' : 'text-emerald-600'
-                }`}
-            >
-              {status.text}
-            </p>
-          )}
-
-          <DialogFooter className="border-t-0">
-            <Button type="submit" disabled={isSubmitting}>
-              Create Account
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+              </form>
+            </div >
+          </div >,
+          document.body
+        )
+      }
+    </>
   )
 }

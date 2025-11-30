@@ -10,8 +10,6 @@ import { PendingRefundItem, confirmRefund } from '@/services/transaction.service
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
-  style: 'currency',
-  currency: 'VND',
 })
 
 type RefundsTrackerProps = {

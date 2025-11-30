@@ -17,6 +17,7 @@ import { generateTag } from '@/lib/tag'
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
+import { NumberInputWithSuggestions } from '@/components/ui/number-input-suggestions'
 
 const formSchema = z.object({
   occurred_at: z.date(),
@@ -247,7 +248,9 @@ export function TransactionForm({
     resolver: zodResolver(formSchema) as Resolver<TransactionFormValues>,
     defaultValues: {
       ...baseDefaults,
+      ...baseDefaults,
       ...initialValues,
+      amount: initialValues?.amount ? Math.abs(initialValues.amount) : 0,
     },
   })
 
@@ -275,7 +278,11 @@ export function TransactionForm({
       return
     }
 
-    const newValues = { ...baseDefaults, ...initialValues };
+    const newValues = {
+      ...baseDefaults,
+      ...initialValues,
+      amount: initialValues.amount ? Math.abs(initialValues.amount) : 0
+    };
 
     const isRepayment = initialValues.category_name?.toLowerCase().includes('thu nợ')
       || initialValues.category_name?.toLowerCase().includes('repayment')
@@ -478,7 +485,7 @@ export function TransactionForm({
 
     if (transactionType === 'debt') {
       const peopleShoppingCat = categories.find(c => c.name === 'People Shopping' || c.name === 'Shopping');
-      if (peopleShoppingCat) {
+      if (peopleShoppingCat && !form.getValues('category_id')) {
         form.setValue('category_id', peopleShoppingCat.id);
       }
       const shopeeShop = shops.find(s => s.name === 'Shopee');
@@ -796,6 +803,9 @@ export function TransactionForm({
     if (watchedDate) {
       params.set('date', watchedDate.toISOString())
     }
+    if (watchedCategoryId) {
+      params.set('categoryId', watchedCategoryId)
+    }
 
     fetch(`/api/cashback/stats?${params.toString()}`, {
       cache: 'no-store',
@@ -870,14 +880,20 @@ export function TransactionForm({
   }, [selectedAccount?.id])
 
   const potentialCashback = useMemo(() => {
-    if (!cashbackMeta || cashbackMeta.rate === 0) {
+    const rate = spendingStats?.potentialRate ?? cashbackMeta?.rate ?? 0
+    if (rate === 0) {
       return 0
     }
     if (typeof watchedAmount !== 'number' || Number.isNaN(watchedAmount)) {
       return 0
     }
-    return Math.abs(watchedAmount) * cashbackMeta.rate
-  }, [cashbackMeta, watchedAmount])
+    const rawCashback = Math.abs(watchedAmount) * rate
+    // Apply category-specific max reward if available
+    if (spendingStats?.maxReward && spendingStats.maxReward > 0) {
+      return Math.min(rawCashback, spendingStats.maxReward)
+    }
+    return rawCashback
+  }, [cashbackMeta, watchedAmount, spendingStats])
 
   const amountValue = typeof watchedAmount === 'number' ? Math.abs(watchedAmount) : 0
   const projectedSpend = (spendingStats?.currentSpend ?? 0) + amountValue
@@ -1410,18 +1426,10 @@ export function TransactionForm({
             control={control}
             name="amount"
             render={({ field }) => (
-              <input
-                type="text"
-                inputMode="decimal"
+              <NumberInputWithSuggestions
                 value={field.value ? new Intl.NumberFormat('en-US').format(field.value) : ''}
-                onFocus={() => {
-                  if (field.value === 0) {
-                    field.onChange(undefined);
-                  }
-                }}
-                onChange={event => {
-                  const rawValue = event.target.value;
-                  const numericValue = rawValue.replace(/[^0-9]/g, '');
+                onChange={val => {
+                  const numericValue = val.replace(/[^0-9]/g, '');
 
                   if (numericValue === '') {
                     field.onChange(undefined);
@@ -1435,7 +1443,7 @@ export function TransactionForm({
                 }}
                 disabled={isConfirmRefund}
                 title={isConfirmRefund ? 'This field is locked in Refund mode' : undefined}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-slate-500 pr-9"
+                className="w-full pr-9"
                 placeholder="0"
               />
             )}
@@ -1514,13 +1522,10 @@ export function TransactionForm({
             control={control}
             name="cashback_share_fixed"
             render={({ field }) => (
-              <input
-                type="text"
-                inputMode="decimal"
+              <NumberInputWithSuggestions
                 value={field.value ? new Intl.NumberFormat('en-US').format(field.value) : ''}
-                onChange={event => {
-                  const rawValue = event.target.value
-                  const numericValue = rawValue.replace(/[^0-9]/g, '')
+                onChange={val => {
+                  const numericValue = val.replace(/[^0-9]/g, '')
                   if (numericValue === '') {
                     field.onChange(undefined)
                     return
@@ -1531,8 +1536,7 @@ export function TransactionForm({
                   field.onChange(clamped)
                 }}
                 disabled={budgetMaxed}
-                max={amountValue > 0 ? amountValue : undefined}
-                className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full"
                 placeholder="Enter fixed amount"
               />
             )}
@@ -1562,6 +1566,34 @@ export function TransactionForm({
         <p className="text-xs">
           <span className="font-semibold text-slate-700">Cycle:</span> {selectedCycleLabel ?? 'N/A'}
         </p>
+
+        {/* Smart Hint Display */}
+        {spendingStats && spendingStats.matchReason && (
+          <p className="text-xs">
+            <span className="font-semibold text-slate-700">Applied Rate:</span>{' '}
+            <span className="text-emerald-600 font-bold">
+              {((spendingStats.potentialRate ?? spendingStats.rate) * 100).toFixed(2)}%
+            </span>
+            {' '}({spendingStats.matchReason})
+          </p>
+        )}
+        {spendingStats && spendingStats.maxReward && spendingStats.maxReward > 0 && (
+          <p className="text-xs">
+            <span className="font-semibold text-slate-700">Max Reward (Category):</span>{' '}
+            <span className="text-blue-600 font-bold">
+              {numberFormatter.format(spendingStats.maxReward)}đ
+            </span>
+          </p>
+        )}
+        {potentialCashback > 0 && (
+          <p className="text-xs">
+            <span className="font-semibold text-slate-700">Estimated Cashback:</span>{' '}
+            <span className="text-emerald-600 font-bold">
+              {numberFormatter.format(potentialCashback)}
+            </span>
+          </p>
+        )}
+
         {statsLoading && <p>Loading min spend...</p>}
         {statsError && <p className="text-rose-600">{statsError}</p>}
         {spendingStats && spendingStats.minSpend && spendingStats.minSpend > 0 && (
@@ -1584,7 +1616,12 @@ export function TransactionForm({
     </div>
   ) : null;
 
-  const VoluntaryCashbackInput = transactionType === 'debt' ? (
+  const showVoluntaryToggle =
+    (transactionType === 'expense' || transactionType === 'debt') &&
+    selectedAccount &&
+    (selectedAccount.type !== 'credit_card' || !selectedAccount.cashback_config)
+
+  const VoluntaryCashbackInput = showVoluntaryToggle ? (
     <div className="flex items-center justify-between rounded-lg border border-slate-200 p-4 bg-slate-50">
       <div className="space-y-0.5">
         <label htmlFor="is_voluntary" className="text-sm font-medium text-slate-900">

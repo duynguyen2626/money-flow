@@ -17,7 +17,8 @@ export async function GET(request: NextRequest) {
   const parsedDate = dateParam ? new Date(dateParam) : new Date()
   const referenceDate = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate
 
-  const stats = await getAccountSpendingStats(accountId, referenceDate)
+  const categoryId = url.searchParams.get('categoryId') ?? undefined
+  const stats = await getAccountSpendingStats(accountId, referenceDate, categoryId)
 
   return NextResponse.json(stats)
 }

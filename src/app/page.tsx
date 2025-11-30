@@ -50,11 +50,10 @@ export default async function Home() {
                 </span>
               </div>
               <div
-                className={`font-mono font-bold text-lg ${
-                  acc.current_balance < 0 ? 'text-red-600' : 'text-green-600'
-                }`}
+                className={`font-mono font-bold text-lg ${acc.current_balance < 0 ? 'text-red-600' : 'text-green-600'
+                  }`}
               >
-                {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(
+                {new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(
                   acc.current_balance
                 )}
               </div>

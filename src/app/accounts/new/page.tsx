@@ -19,7 +19,6 @@ export default function NewAccountPage() {
     id: 'new',
     name: '',
     type: 'bank',
-    currency: 'VND',
     current_balance: 0,
     credit_limit: undefined,
     cashback_config: null,

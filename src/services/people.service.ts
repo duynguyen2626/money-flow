@@ -49,7 +49,6 @@ async function createDebtAccountForPerson(
       name: buildDebtAccountName(personName),
       type: 'debt',
       owner_id: userId,
-      currency: 'VND',
       current_balance: 0,
     })
     .select('id')
