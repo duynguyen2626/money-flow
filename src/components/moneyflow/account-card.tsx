@@ -291,8 +291,8 @@ export function AccountCard({
             collateralAccounts={collateralAccounts}
             triggerContent={
               <div className={cn(
-                "relative overflow-hidden shadow-sm cursor-pointer hover:opacity-90 transition-opacity",
-                isCreditCard ? "h-14 w-24 rounded-lg" : "h-14 w-14"
+                "relative shadow-sm cursor-pointer hover:opacity-90 transition-opacity",
+                isCreditCard ? "h-14 w-24 rounded-lg overflow-hidden" : "h-14 w-14"
               )}>
                 {account.logo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element

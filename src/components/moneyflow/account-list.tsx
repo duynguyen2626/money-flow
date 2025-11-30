@@ -14,6 +14,7 @@ type AccountListProps = {
   categories: Category[]
   people: Person[]
   shops: Shop[]
+  pendingBatchAccountIds?: string[]
 }
 
 type ViewMode = 'grid' | 'table'
@@ -36,7 +37,7 @@ const FILTERS: { key: FilterKey; label: string; match: (account: Account) => boo
   { key: 'waiting_confirm', label: 'Waiting Confirm', match: () => true }, // Logic handled in filteredItems
 ]
 
-export function AccountList({ accounts, cashbackById = {}, categories, people, shops }: AccountListProps) {
+export function AccountList({ accounts, cashbackById = {}, categories, people, shops, pendingBatchAccountIds = [] }: AccountListProps) {
   const [view, setView] = useState<ViewMode>('grid')
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -74,29 +75,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
 
     // Handle 'waiting_confirm' separately or via match
     if (activeFilter === 'waiting_confirm') {
-      // Assuming 'waiting_confirm' means accounts with pending batch items?
-      // The user request says "Waiting Confirm: để lọc ra các account chờ batch transfer".
-      // However, `Account` type doesn't seem to have this info directly unless passed via props or calculated.
-      // Looking at `AccountListProps`, we don't have batch stats here.
-      // But wait, `AccountCard` doesn't show batch stats either.
-      // Maybe it means accounts that are 'holding' accounts for batches?
-      // Or maybe we need to pass a list of account IDs that have waiting confirmations.
-      // For now, I will assume we might need to update the logic later or filter based on some property if available.
-      // Since I don't have the batch info here, I'll leave it as a placeholder or try to infer.
-      // Actually, the user just said "Waiting Confirm: để lọc ra các account chờ batch transfer".
-      // If I can't implement the logic right now without extra data, I will just add the UI button.
-      // But to make it functional, I might need to fetch that data.
-      // Let's check `Account` type definition if possible.
-      // For now, let's just filter nothing or all if selected, but the user wants it to filter.
-      // I'll skip the logic implementation for 'waiting_confirm' in this step if I don't have data, 
-      // BUT I should at least put the UI there.
-      // Wait, `AccountList` receives `accounts`.
-      // Let's assume for now it filters nothing special until I have the data.
-      // Or maybe I can filter by `account.id` if I knew which ones.
-      // Let's just apply the standard filter for others.
-      if (activeFilter !== 'waiting_confirm') {
-        filtered = filtered.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc))
-      }
+      filtered = filtered.filter(acc => pendingBatchAccountIds.includes(acc.id))
     } else {
       filtered = filtered.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc))
     }

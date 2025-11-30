@@ -1032,7 +1032,7 @@ export function UnifiedTransactionTable({
                               {displayName ? displayName.charAt(0).toUpperCase() : '🛍️'}
                             </span>
                           )}
-                          {displayName && !txn.note?.match(/^[123]\. \[(Cancel|Refund|Received)\]/) && (
+                          {displayName && !txn.note?.match(/^[123]\. /) && (
                             <span className="truncate">{displayName}</span>
                           )}
                         </div>

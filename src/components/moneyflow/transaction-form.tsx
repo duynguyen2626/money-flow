@@ -690,7 +690,7 @@ export function TransactionForm({
       return filteredAccounts.map(acc => ({
         value: acc.id,
         label: acc.name,
-        description: `${acc.type.replace('_', ' ')} - ${numberFormatter.format(acc.current_balance)}`,
+        description: numberFormatter.format(acc.current_balance),
         searchValue: `${acc.name} ${acc.type.replace('_', ' ')} ${acc.current_balance}`,
         icon: acc.logo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -1586,7 +1586,16 @@ export function TransactionForm({
             render={({ field }) => (
               <SmartAmountInput
                 value={field.value}
-                onChange={field.onChange}
+                onChange={(val) => {
+                  if (val === undefined) {
+                    field.onChange(undefined)
+                    return
+                  }
+                  // Clamp to rateLimitPercent if available, else max 100
+                  const max = rateLimitPercent !== null ? Math.min(50, rateLimitPercent) : 100
+                  const clamped = Math.min(val, max)
+                  field.onChange(clamped)
+                }}
                 disabled={budgetMaxed}
                 className="w-full"
                 placeholder="Enter percentage"
