@@ -135,6 +135,18 @@ export function Combobox({
             </div>
           )}
           <CommandInput className="border-b border-slate-100 px-3 py-2 text-sm outline-none" placeholder={inputPlaceholder} />
+          {onAddNew && (
+            <div
+              onClick={() => {
+                onAddNew()
+                setOpen(false)
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-blue-600 font-medium cursor-pointer hover:bg-blue-50 border-b border-slate-100"
+            >
+              <Plus className="h-4 w-4" />
+              Thêm mới...
+            </div>
+          )}
           <CommandList className="max-h-72 overflow-y-auto">
             {items.length === 0 && (
               <CommandEmpty className="px-3 py-2 text-xs text-slate-500">{emptyState}</CommandEmpty>
@@ -162,21 +174,6 @@ export function Combobox({
                 </CommandItem>
               )
             })}
-            {onAddNew && (
-              <CommandGroup className="border-t pt-1 mt-1 sticky bottom-0 bg-white">
-                <CommandItem
-                  onSelect={() => {
-                    onAddNew()
-                    setOpen(false)
-                  }}
-                  value="CREATE_NEW_ITEM_TRIGGER"
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600 font-medium cursor-pointer hover:bg-blue-50"
-                >
-                  <Plus className="h-4 w-4" />
-                  Thêm mới...
-                </CommandItem>
-              </CommandGroup>
-            )}
           </CommandList>
         </Command>
       </PopoverPrimitive.Content>

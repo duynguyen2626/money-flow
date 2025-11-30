@@ -549,7 +549,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
             onClick={closeDialog}
           >
             <div
-              className="w-full max-w-5xl rounded-xl bg-white shadow-2xl flex flex-col"
+              className="w-full max-w-5xl rounded-xl bg-white shadow-2xl flex flex-col overflow-hidden"
               style={{ maxHeight: '85vh', minHeight: '400px' }}
               onClick={stopPropagation}
             >
