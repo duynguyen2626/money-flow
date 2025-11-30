@@ -27,6 +27,7 @@ import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
 import { cn } from "@/lib/utils"
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
+import { RefundNoteDisplay } from './refund-note-display'
 
 type ColumnKey =
   | "date"
@@ -1021,25 +1022,14 @@ export function UnifiedTransactionTable({
                           </span>
                         )}
                         {txn.note && (
-                          <div className="flex items-center gap-1">
-                            <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
-                              <span className="text-sm text-slate-700 font-medium truncate cursor-help max-w-[200px]">
-                                {txn.note}
-                              </span>
-                            </CustomTooltip>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard.writeText(txn.id);
-                                setCopiedId(txn.id);
-                                setTimeout(() => setCopiedId(null), 2000);
-                              }}
-                              className="text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Copy Transaction ID"
-                            >
-                              {copiedId === txn.id ? <CheckCheck className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                            </button>
-                          </div>
+                          <RefundNoteDisplay
+                            note={txn.note}
+                            shopLogoUrl={displayIcon}
+                            shopName={displayName}
+                            accountLogoUrl={txn.source_logo}
+                            accountName={txn.source_name}
+                            status={effectiveStatus}
+                          />
                         )}
                       </div>
                     );
