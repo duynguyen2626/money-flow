@@ -1289,7 +1289,7 @@ export async function requestRefund(
 
         // Update transaction note to indicate debt was cancelled
         const currentNote = (existing as any).note ?? '';
-        const updatedNote = `${currentNote} [Hủy nợ: ${personName}]`;
+        const updatedNote = `${currentNote} [Cancelled Debt: ${personName}]`;
         await (supabase.from('transactions').update as any)({
           note: updatedNote
         }).eq('id', transactionId);
@@ -1362,13 +1362,25 @@ export async function confirmRefund(
 
   const userId = await resolveCurrentUserId(supabase)
 
-  // Extract Group ID from pending note if exists, or generate new one
+  // Fetch original transaction to get shop_id
+  let originalShopId = null;
+  if (originalTransactionId) {
+    const { data: originalTxn } = await supabase
+      .from('transactions')
+      .select('shop_id')
+      .eq('id', originalTransactionId)
+      .single();
+    originalShopId = (originalTxn as any)?.shop_id ?? null;
+  }
+
   // Extract Group ID from pending note if exists, or generate new one
   const pendingNote = (pending as any).note ?? '';
   const groupTagMatch = pendingNote.match(/\[[A-Z0-9]+\]/);
   const groupTag = groupTagMatch ? groupTagMatch[0] : `[${pendingTransactionId.slice(0, 4).toUpperCase()}]`;
 
-  const confirmNote = `3.${groupTag} Confirmed refund for ${(pending as any).note ?? (pending as any).id}`
+  // Improved note format: "3.[ID] Confirmed Refund"
+  const confirmNote = `3.${groupTag} Confirmed Refund`;
+
   const confirmationMetadata = {
     refund_status: 'confirmed',
     linked_transaction_id: originalTransactionId ?? pendingTransactionId,
@@ -1385,6 +1397,7 @@ export async function confirmRefund(
       status: 'completed', // Set to Completed as requested
       tag: (pending as any).tag,
       created_by: userId,
+      shop_id: originalShopId ?? (pending as any).shop_id ?? null, // Use original shop_id if available
     })
     .select()
     .single()
@@ -1398,6 +1411,7 @@ export async function confirmRefund(
     {
       transaction_id: confirmTxn.id,
       account_id: targetAccountId,
+      category_id: REFUND_CATEGORY_ID, // Set Refund category
       amount: amountToConfirm,
       type: 'debit',
       metadata: confirmationMetadata,
@@ -1405,6 +1419,7 @@ export async function confirmRefund(
     {
       transaction_id: confirmTxn.id,
       account_id: SYSTEM_ACCOUNTS.PENDING_REFUNDS,
+      category_id: REFUND_CATEGORY_ID, // Set Refund category
       amount: -amountToConfirm,
       type: 'credit',
       metadata: confirmationMetadata,
