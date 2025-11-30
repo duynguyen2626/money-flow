@@ -161,16 +161,43 @@ async function buildTransactionLines(
       person_id: input.person_id ?? null,
     });
 
-  } else if ((input.type === 'debt' || input.type === 'transfer') && input.debt_account_id) {
+  } else if (input.type === 'debt' && input.debt_account_id && input.category_id) {
+    // DEBT TRANSACTION (Lending/Mua hộ)
+    // Logic: User spends money, optionally shares cost with another person
+    // Example: Buy 100k food, person owes 50k
+    // Lines:
+    // 1. Credit source account: -100k (money out)
+    // 2. Debit category (Food): +100k (expense recorded)
+    // 3. Track person_id and cashback in metadata on category line
+
     const originalAmount = Math.abs(input.amount);
     const sharePercentEntry = Math.max(0, Number(input.cashback_share_percent ?? 0));
     const sharePercentCapped = Math.min(100, sharePercentEntry);
     const sharePercentRate = sharePercentCapped / 100;
     const shareFixed = Math.max(0, Number(input.cashback_share_fixed ?? 0));
-    const percentContribution = sharePercentRate * originalAmount;
-    const rawCashback = percentContribution + shareFixed;
-    const cashbackGiven = Math.min(originalAmount, Math.max(0, rawCashback));
-    const debtAmount = Math.max(0, originalAmount - cashbackGiven);
+
+    // Line 1: Credit source account (money out)
+    lines.push({
+      account_id: input.source_account_id,
+      amount: -originalAmount,
+      type: 'credit',
+    });
+
+    // Line 2: Debit category (expense recorded with user-selected category!)
+    lines.push({
+      category_id: input.category_id, // USE USER'S SELECTED CATEGORY!
+      amount: originalAmount,
+      type: 'debit',
+      original_amount: originalAmount,
+      cashback_share_percent: sharePercentRate,
+      cashback_share_fixed: shareFixed,
+      person_id: input.person_id ?? null, // Track who owes money
+      metadata: input.is_voluntary ? { is_voluntary: true } : undefined,
+    });
+
+  } else if (input.type === 'transfer' && input.debt_account_id) {
+    // TRANSFER TRANSACTION (Money Transfer between accounts)
+    const originalAmount = Math.abs(input.amount);
 
     lines.push({
       account_id: input.source_account_id,
@@ -179,30 +206,9 @@ async function buildTransactionLines(
     });
     lines.push({
       account_id: input.debt_account_id,
-      amount: debtAmount,
+      amount: originalAmount,
       type: 'debit',
-      original_amount: originalAmount,
-      cashback_share_percent: sharePercentRate,
-      cashback_share_fixed: shareFixed,
-      person_id: input.person_id ?? null,
-      metadata: input.is_voluntary ? { is_voluntary: true } : undefined,
     });
-
-    if (cashbackGiven > 0) {
-      const discountCategoryId = await resolveDiscountCategoryId(
-        supabase,
-        input.discount_category_id || undefined
-      );
-      if (!discountCategoryId) {
-        console.error('No fallback category found for discount line');
-        return null;
-      }
-      lines.push({
-        category_id: discountCategoryId,
-        amount: cashbackGiven,
-        type: 'debit',
-      });
-    }
   } else {
     console.error('Invalid transaction type or missing data');
     return null;
