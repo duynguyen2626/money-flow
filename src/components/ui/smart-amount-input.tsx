@@ -167,7 +167,7 @@ export function SmartAmountInput({
                     disabled={disabled}
                     placeholder={placeholder}
                     className={cn(
-                        "h-11 font-mono text-lg",
+                        "h-11 font-mono text-xl font-bold",
                         mathError ? "border-red-300 focus-visible:ring-red-200" : ""
                     )}
                 />

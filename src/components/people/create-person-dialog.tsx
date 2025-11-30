@@ -10,16 +10,20 @@ type CreatePersonDialogProps = {
   subscriptions: Subscription[]
 }
 
-export function CreatePersonDialog({ subscriptions }: CreatePersonDialogProps) {
-  const [open, setOpen] = useState(false)
+export function CreatePersonDialog({ subscriptions, open: controlledOpen, onOpenChange: setControlledOpen }: CreatePersonDialogProps & { open?: boolean, onOpenChange?: (open: boolean) => void }) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = isControlled ? setControlledOpen : setInternalOpen
+
   const router = useRouter()
 
   const handleSuccess = () => {
-    setOpen(false)
+    setOpen?.(false)
     router.refresh()
   }
 
-  const closeDialog = () => setOpen(false)
+  const closeDialog = () => setOpen?.(false)
 
   const stopPropagation = (event: MouseEvent<HTMLDivElement>) => {
     event.stopPropagation()
@@ -27,13 +31,15 @@ export function CreatePersonDialog({ subscriptions }: CreatePersonDialogProps) {
 
   return (
     <>
-      <button
-        type="button"
-        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-        onClick={() => setOpen(true)}
-      >
-        Them thanh vien
-      </button>
+      {!isControlled && (
+        <button
+          type="button"
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+          onClick={() => setOpen?.(true)}
+        >
+          Them thanh vien
+        </button>
+      )}
 
       {open && (
         <div

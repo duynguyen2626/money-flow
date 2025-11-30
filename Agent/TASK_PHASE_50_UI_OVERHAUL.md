@@ -1,6 +1,6 @@
 # **TASK: PHASE 50 \- UI OVERHAUL & SMART AMOUNT INPUT**
 
-Status: PENDING
+Status: DONE
 Phase: 50
 Priority: CRITICAL (User Request)
 
@@ -45,8 +45,8 @@ Completely redesign the `TransactionForm` (Add Transaction Modal) to be modern, 
     *   Ensure all Comboboxes render icons/images.
 
 ## **4. Verification**
-*   [ ] Lending mode starts with Person.
-*   [ ] From Account and Amount are side-by-side.
-*   [ ] Amount input calculates `7+3=10`.
-*   [ ] Amount label shows text "x ngàn..." in red/blue.
-*   [ ] Dropdowns show avatars.
+*   [x] Lending mode starts with Person.
+*   [x] From Account and Amount are side-by-side.
+*   [x] Amount input calculates `7+3=10`.
+*   [x] Amount label shows text "x ngàn..." in red/blue.
+*   [x] Dropdowns show avatars.

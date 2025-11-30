@@ -21,8 +21,12 @@ type AddShopDialogProps = {
   categories?: Category[]
 }
 
-export function AddShopDialog({ categories = [] }: AddShopDialogProps) {
-  const [open, setOpen] = useState(false)
+export function AddShopDialog({ categories = [], open: controlledOpen, onOpenChange: setControlledOpen }: AddShopDialogProps & { open?: boolean, onOpenChange?: (open: boolean) => void }) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = isControlled ? setControlledOpen : setInternalOpen
+
   const [name, setName] = useState('')
   const [logoUrl, setLogoUrl] = useState('')
   const [defaultCategoryId, setDefaultCategoryId] = useState<string | null>(null)
@@ -38,7 +42,7 @@ export function AddShopDialog({ categories = [] }: AddShopDialogProps) {
         label: c.name,
         searchValue: c.name
       }))
-  , [categories])
+    , [categories])
 
   const handleSubmit = () => {
     const trimmedName = name.trim()
@@ -62,18 +66,20 @@ export function AddShopDialog({ categories = [] }: AddShopDialogProps) {
       setName('')
       setLogoUrl('')
       setDefaultCategoryId(null)
-      setOpen(false)
+      setOpen?.(false)
       router.refresh()
     })
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          Add Shop
-        </Button>
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            Add Shop
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="bg-white">
         <DialogHeader>
           <DialogTitle>Add Shop</DialogTitle>
@@ -113,7 +119,7 @@ export function AddShopDialog({ categories = [] }: AddShopDialogProps) {
           )}
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => setOpen(false)} disabled={isPending}>
+          <Button variant="ghost" onClick={() => setOpen?.(false)} disabled={isPending}>
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={isPending}>

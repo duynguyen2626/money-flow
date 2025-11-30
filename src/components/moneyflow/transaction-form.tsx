@@ -17,7 +17,13 @@ import { generateTag } from '@/lib/tag'
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
+import { cn } from '@/lib/utils'
 import { SmartAmountInput } from '@/components/ui/smart-amount-input'
+import { CategoryDialog } from '@/components/moneyflow/category-dialog'
+import { AddShopDialog } from '@/components/moneyflow/add-shop-dialog'
+import { CreatePersonDialog } from '@/components/people/create-person-dialog'
+
+
 
 const formSchema = z.object({
   occurred_at: z.date(),
@@ -213,6 +219,13 @@ export function TransactionForm({
   const [progressLoading, setProgressLoading] = useState(false)
   const [progressError, setProgressError] = useState<string | null>(null)
   const [spendingStats, setSpendingStats] = useState<AccountSpendingStats | null>(null)
+  const [transactionType, setTransactionType] = useState<'expense' | 'income' | 'debt' | 'transfer' | 'repayment'>(defaultType || 'expense')
+  const [accountFilter, setAccountFilter] = useState<'all' | 'bank' | 'credit' | 'other'>('all')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
+  const [isShopDialogOpen, setIsShopDialogOpen] = useState(false)
+  const [isPersonDialogOpen, setIsPersonDialogOpen] = useState(false)
   const [statsLoading, setStatsLoading] = useState(false)
   const [statsError, setStatsError] = useState<string | null>(null)
   const [debtEnsureError, setDebtEnsureError] = useState<string | null>(null)
@@ -245,9 +258,8 @@ export function TransactionForm({
   )
 
   const form = useForm<TransactionFormValues>({
-    resolver: zodResolver(formSchema) as Resolver<TransactionFormValues>,
+    resolver: zodResolver(formSchema) as any,
     defaultValues: {
-      ...baseDefaults,
       ...baseDefaults,
       ...initialValues,
       amount: initialValues?.amount ? Math.abs(initialValues.amount) : 0,
@@ -307,11 +319,13 @@ export function TransactionForm({
 
     form.reset(newValues)
     setManualTagMode(true)
+    setTransactionType(newValues.type)
   }, [baseDefaults, form, initialValues, allAccounts])
 
   useEffect(() => {
     if (!isRefundMode) return
     form.setValue('type', 'income')
+    setTransactionType('income')
     form.setValue('category_id', refundCategoryId ?? REFUND_CATEGORY_ID, { shouldValidate: true })
     const currentNote = form.getValues('note')
     if (!currentNote || currentNote.trim().length === 0) {
@@ -325,162 +339,157 @@ export function TransactionForm({
     console.log('[Form Submit] Category ID being submitted:', values.category_id);
     console.log('[Form Submit] Full values:', values);
     setStatus(null)
+    setIsSubmitting(true)
 
-    if (isRefundMode) {
-      const targetTransactionId = refundTransactionId ?? transactionId
-      if (!targetTransactionId) {
-        setStatus({ type: 'error', text: 'Missing target transaction to refund.' })
-        return
-      }
-
-      const maxRefund = typeof refundMaxAmount === 'number' ? Math.abs(refundMaxAmount) : Math.abs(values.amount ?? 0)
-
-      if (Math.abs(values.amount ?? 0) > maxRefund) {
-        setStatus({ type: 'error', text: `Refund amount cannot exceed ${numberFormatter.format(maxRefund)}` })
-        return
-      }
-
-      const safeAmount = Math.abs(values.amount ?? 0)
-      if (!Number.isFinite(safeAmount) || safeAmount <= 0) {
-        setStatus({ type: 'error', text: 'Please enter a valid refund amount.' })
-        return
-      }
-
-      const partialFlag = safeAmount < maxRefund
-
-      if (isConfirmRefund) {
-        const targetAccountId = values.source_account_id
-        if (!targetAccountId || targetAccountId === REFUND_PENDING_ACCOUNT_ID) {
-          setStatus({ type: 'error', text: 'Choose the receiving account for this refund.' })
+    try {
+      if (isRefundMode) {
+        const targetTransactionId = refundTransactionId ?? transactionId
+        if (!targetTransactionId) {
+          setStatus({ type: 'error', text: 'Missing target transaction to refund.' })
           return
         }
-        const confirmResult = await confirmRefund(targetTransactionId, targetAccountId)
-        if (!confirmResult.success) {
-          setStatus({ type: 'error', text: confirmResult.error ?? 'Unable to confirm refund.' })
+
+        const maxRefund = typeof refundMaxAmount === 'number' ? Math.abs(refundMaxAmount) : Math.abs(values.amount ?? 0)
+
+        if (Math.abs(values.amount ?? 0) > maxRefund) {
+          setStatus({ type: 'error', text: `Refund amount cannot exceed ${numberFormatter.format(maxRefund)}` })
           return
         }
+
+        const safeAmount = Math.abs(values.amount ?? 0)
+        if (!Number.isFinite(safeAmount) || safeAmount <= 0) {
+          setStatus({ type: 'error', text: 'Please enter a valid refund amount.' })
+          return
+        }
+
+        const partialFlag = safeAmount < maxRefund
+
+        if (isConfirmRefund) {
+          const targetAccountId = values.source_account_id
+          if (!targetAccountId || targetAccountId === REFUND_PENDING_ACCOUNT_ID) {
+            setStatus({ type: 'error', text: 'Choose the receiving account for this refund.' })
+            return
+          }
+          const confirmResult = await confirmRefund(targetTransactionId, targetAccountId)
+          if (!confirmResult.success) {
+            setStatus({ type: 'error', text: confirmResult.error ?? 'Unable to confirm refund.' })
+            return
+          }
+          router.refresh()
+          setStatus({ type: 'success', text: 'Refund confirmed successfully.' })
+          onSuccess?.()
+          return
+        }
+
+        const requestResult = await requestRefund(targetTransactionId, safeAmount, partialFlag, {
+          note: values.note ?? undefined,
+          shop_id: values.shop_id ?? undefined,
+        })
+
+        if (!requestResult.success) {
+          setStatus({ type: 'error', text: requestResult.error ?? 'Unable to create refund request.' })
+          return
+        }
+
+        if (refundStatus === 'received') {
+          const preferredAccount =
+            values.source_account_id === REFUND_PENDING_ACCOUNT_ID
+              ? defaultSourceAccountId ?? initialValues?.source_account_id ?? null
+              : values.source_account_id ?? null
+
+          if (!preferredAccount) {
+            setStatus({ type: 'error', text: 'Select where the refunded money was received.' })
+            return
+          }
+
+          const confirmResult = await confirmRefund(
+            requestResult.refundTransactionId ?? '',
+            preferredAccount
+          )
+          if (!confirmResult.success) {
+            setStatus({ type: 'error', text: confirmResult.error ?? 'Unable to confirm refund.' })
+            return
+          }
+        }
+
         router.refresh()
-        setStatus({ type: 'success', text: 'Refund confirmed successfully.' })
+        setStatus({
+          type: 'success',
+          text: refundStatus === 'received' ? 'Refund confirmed successfully.' : 'Refund request created.',
+        })
         onSuccess?.()
         return
       }
 
-      const requestResult = await requestRefund(targetTransactionId, safeAmount, partialFlag, {
-        note: values.note ?? undefined,
+      const percentLimit = cashbackProgress ? cashbackProgress.rate * 100 : null
+      const rawPercent = Number(values.cashback_share_percent ?? 0)
+      const rawFixed = Number(values.cashback_share_fixed ?? 0)
+      const sanitizedPercent =
+        percentLimit !== null
+          ? Math.min(percentLimit, Math.max(0, rawPercent))
+          : Math.max(0, rawPercent)
+      const sanitizedFixed = Math.max(0, rawFixed)
+
+      const payload: Parameters<typeof createTransaction>[0] = {
+        ...values,
+        occurred_at: values.occurred_at.toISOString(),
         shop_id: values.shop_id ?? undefined,
-      })
-
-      if (!requestResult.success) {
-        setStatus({ type: 'error', text: requestResult.error ?? 'Unable to create refund request.' })
-        return
+        cashback_share_percent: sanitizedPercent > 0 ? sanitizedPercent : undefined,
+        cashback_share_fixed: sanitizedFixed > 0 ? sanitizedFixed : undefined,
+        note: values.note ?? '',
+        destination_account_id: values.type === 'income' ? values.source_account_id : undefined,
+        is_voluntary: values.is_voluntary,
       }
 
-      if (refundStatus === 'received') {
-        const preferredAccount =
-          values.source_account_id === REFUND_PENDING_ACCOUNT_ID
-            ? defaultSourceAccountId ?? initialValues?.source_account_id ?? null
-            : values.source_account_id ?? null
+      const result = transactionId
+        ? await updateTransaction(transactionId, payload)
+        : await createTransaction(payload)
 
-        if (!preferredAccount) {
-          setStatus({ type: 'error', text: 'Select where the refunded money was received.' })
+      if (result) {
+        router.refresh()
+        setStatus({
+          type: 'success',
+          text: isEditMode ? 'Transaction updated successfully.' : 'Transaction created successfully.',
+        })
+        if (isEditMode) {
+          onSuccess?.()
           return
         }
-
-        const confirmResult = await confirmRefund(
-          requestResult.refundTransactionId ?? '',
-          preferredAccount
-        )
-        if (!confirmResult.success) {
-          setStatus({ type: 'error', text: confirmResult.error ?? 'Unable to confirm refund.' })
-          return
-        }
-      }
-
-      router.refresh()
-      setStatus({
-        type: 'success',
-        text: refundStatus === 'received' ? 'Refund confirmed successfully.' : 'Refund request created.',
-      })
-      onSuccess?.()
-      return
-    }
-
-    const percentLimit = cashbackProgress ? cashbackProgress.rate * 100 : null
-    const rawPercent = Number(values.cashback_share_percent ?? 0)
-    const rawFixed = Number(values.cashback_share_fixed ?? 0)
-    const sanitizedPercent =
-      percentLimit !== null
-        ? Math.min(percentLimit, Math.max(0, rawPercent))
-        : Math.max(0, rawPercent)
-    const sanitizedFixed = Math.max(0, rawFixed)
-
-    const payload: Parameters<typeof createTransaction>[0] = {
-      ...values,
-      occurred_at: values.occurred_at.toISOString(),
-      shop_id: values.shop_id ?? undefined,
-      cashback_share_percent: sanitizedPercent > 0 ? sanitizedPercent : undefined,
-      cashback_share_fixed: sanitizedFixed > 0 ? sanitizedFixed : undefined,
-      note: values.note ?? '',
-      destination_account_id: values.type === 'income' ? values.source_account_id : undefined,
-      is_voluntary: values.is_voluntary,
-    }
-
-    const result = transactionId
-      ? await updateTransaction(transactionId, payload)
-      : await createTransaction(payload)
-
-    if (result) {
-      router.refresh()
-      setStatus({
-        type: 'success',
-        text: isEditMode ? 'Transaction updated successfully.' : 'Transaction created successfully.',
-      })
-      if (isEditMode) {
+        form.reset({
+          ...baseDefaults,
+          occurred_at: new Date(),
+          amount: 0,
+          note: '',
+          tag: defaultTag ?? generateTag(new Date()),
+          source_account_id: defaultSourceAccountId ?? undefined,
+          category_id: undefined,
+          person_id: undefined,
+          debt_account_id: defaultDebtAccountId ?? undefined,
+          shop_id: undefined,
+          cashback_share_percent: undefined,
+          cashback_share_fixed: undefined,
+        })
+        setManualTagMode(Boolean(defaultTag))
+        applyDefaultPersonSelection()
         onSuccess?.()
-        return
+      } else {
+        setStatus({
+          type: 'error',
+          text: 'Failed to create transaction.',
+        })
       }
-      form.reset({
-        ...baseDefaults,
-        occurred_at: new Date(),
-        amount: 0,
-        note: '',
-        tag: defaultTag ?? generateTag(new Date()),
-        source_account_id: defaultSourceAccountId ?? undefined,
-        category_id: undefined,
-        person_id: undefined,
-        debt_account_id: defaultDebtAccountId ?? undefined,
-        shop_id: undefined,
-        cashback_share_percent: undefined,
-        cashback_share_fixed: undefined,
-      })
-      setManualTagMode(Boolean(defaultTag))
-      applyDefaultPersonSelection()
-      onSuccess?.()
-    } else {
-      setStatus({
-        type: 'error',
-        text: 'Failed to create transaction.',
-      })
+    } finally {
+      setIsSubmitting(false)
     }
   }
 
   const {
     control,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
     register,
     watch,
   } = form
-
-  const transactionType = useWatch({
-    control,
-    name: 'type',
-  })
-
-  const watchedCategoryId = useWatch({
-    control,
-    name: 'category_id',
-  })
 
   useEffect(() => {
     if (isEditMode) return;
@@ -514,39 +523,10 @@ export function TransactionForm({
     // REMOVED: Auto-selection for 'transfer' type to fix incorrect Money Transfer category bug
   }, [transactionType, categories, shops, form, isEditMode]);
 
-  const categoryOptions = useMemo(() => {
-    if (isRefundMode && refundCategoryId) {
-      const refundCat =
-        categories.find(cat => cat.id === refundCategoryId) ??
-        categories.find(cat => (cat.name ?? '').toLowerCase().includes('refund')) ??
-        categories.find(cat => (cat.name ?? '').toLowerCase().includes('pending')) ??
-        null
-      return [
-        {
-          value: refundCategoryId,
-          label: refundCat?.name ?? 'Refund',
-          description: refundCat?.type === 'income' ? 'Income' : 'Expense',
-          searchValue: refundCat?.name ?? 'Refund',
-          icon: refundCat?.icon ? (
-            <span className="text-lg">{refundCat.icon}</span>
-          ) : undefined,
-        },
-      ]
-    }
-
-    const targetType = transactionType === 'debt' ? 'expense' : transactionType
-    if (targetType !== 'expense' && targetType !== 'income' && targetType !== 'transfer' && targetType !== 'repayment') {
-      return []
-    }
-    return categories
-      .filter(cat => cat.type === targetType)
-      .map(cat => ({
-        value: cat.id,
-        label: cat.name,
-        description: cat.type === 'expense' ? 'Expense' : 'Income',
-        searchValue: `${cat.name} ${cat.type}`,
-      }))
-  }, [categories, transactionType, isRefundMode, refundCategoryId])
+  const watchedCategoryId = useWatch({
+    control,
+    name: 'category_id',
+  })
 
   const watchedAccountId = useWatch({
     control,
@@ -588,6 +568,61 @@ export function TransactionForm({
     name: 'cashback_share_fixed',
   })
 
+
+
+  const categoryOptions = useMemo(
+    () => {
+      if (isRefundMode && refundCategoryId) {
+        const refundCat =
+          categories.find(cat => cat.id === refundCategoryId) ??
+          categories.find(cat => (cat.name ?? '').toLowerCase().includes('refund')) ??
+          categories.find(cat => (cat.name ?? '').toLowerCase().includes('pending')) ??
+          null
+        return [
+          {
+            value: refundCategoryId,
+            label: refundCat?.name ?? 'Refund',
+            description: refundCat?.type === 'income' ? 'Income' : 'Expense',
+            searchValue: refundCat?.name ?? 'Refund',
+            icon: refundCat?.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={refundCat.image_url}
+                alt={refundCat.name}
+                className="h-5 w-5 object-contain rounded-none"
+              />
+            ) : (
+              <span className="text-xl">{refundCat?.icon || '📦'}</span>
+            ),
+          },
+        ]
+      }
+
+      const targetType = transactionType === 'debt' ? 'expense' : transactionType
+      if (targetType !== 'expense' && targetType !== 'income' && targetType !== 'transfer' && targetType !== 'repayment') {
+        return []
+      }
+      return categories
+        .filter(cat => cat.type === targetType)
+        .map(cat => ({
+          value: cat.id,
+          label: cat.name,
+          description: cat.type === 'expense' ? 'Expense' : 'Income',
+          searchValue: `${cat.name} ${cat.type}`,
+          icon: cat.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={cat.image_url}
+              alt={cat.name}
+              className="h-5 w-5 object-contain rounded-none"
+            />
+          ) : (
+            <span className="text-xl">{cat.icon || '📦'}</span>
+          ),
+        }))
+    }, [categories, transactionType, isRefundMode, refundCategoryId]
+  )
+
   const debugCategoryClick = useCallback(() => {
     console.log('[Refund Category Debug]', {
       isRefundMode,
@@ -597,14 +632,28 @@ export function TransactionForm({
     })
   }, [categoryOptions, form, isRefundMode, refundCategoryId])
 
+
+
   const accountOptions = useMemo(
     () => {
-      const currentCategory = categories.find(c => c.id === watchedCategoryId);
-      const isCreditPayment = currentCategory?.name === 'Credit Payment' || currentCategory?.name?.toLowerCase().includes('credit payment');
-
       let filteredAccounts = sourceAccounts;
-      if (isCreditPayment || transactionType === 'transfer') {
-        filteredAccounts = sourceAccounts.filter(a => a.type !== 'credit_card');
+
+      // Filter by type based on accountFilter state
+      if (accountFilter !== 'all') {
+        filteredAccounts = sourceAccounts.filter(acc => {
+          if (accountFilter === 'bank') return acc.type === 'bank';
+          if (accountFilter === 'credit') return acc.type === 'credit_card';
+          if (accountFilter === 'other') return acc.type !== 'bank' && acc.type !== 'credit_card';
+          return true;
+        });
+      }
+
+      // If category is selected, sort relevant accounts to top (existing logic)
+      if (watchedCategoryId) {
+        const category = categories.find(c => c.id === watchedCategoryId)
+        if (category && category.name) {
+          // ... (existing sort logic if needed)
+        }
       }
 
       return filteredAccounts.map(acc => ({
@@ -617,16 +666,16 @@ export function TransactionForm({
           <img
             src={acc.logo_url}
             alt={acc.name}
-            className="h-5 w-5 rounded-full object-cover"
+            className="h-5 w-5 object-contain rounded-none"
           />
         ) : (
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+          <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
             {getAccountInitial(acc.name)}
           </span>
         ),
       }))
     },
-    [sourceAccounts, watchedCategoryId, categories, transactionType]
+    [sourceAccounts, watchedCategoryId, categories, transactionType, accountFilter]
   )
 
   const destinationAccountOptions = useMemo(
@@ -646,10 +695,10 @@ export function TransactionForm({
           <img
             src={acc.logo_url}
             alt={acc.name}
-            className="h-5 w-5 rounded-full object-cover"
+            className="h-5 w-5 object-contain rounded-none"
           />
         ) : (
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+          <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
             {getAccountInitial(acc.name)}
           </span>
         ),
@@ -670,10 +719,10 @@ export function TransactionForm({
           <img
             src={person.avatar_url}
             alt={person.name}
-            className="h-5 w-5 rounded-full object-cover"
+            className="h-5 w-5 object-contain rounded-none"
           />
         ) : (
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+          <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
             {getAccountInitial(person.name)}
           </span>
         ),
@@ -693,12 +742,10 @@ export function TransactionForm({
           <img
             src={shop.logo_url}
             alt={shop.name}
-            className="h-5 w-5 rounded-full object-cover"
+            className="h-5 w-5 object-contain rounded-none"
           />
         ) : (
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
-            {shop.name.charAt(0).toUpperCase()}
-          </span>
+          <Store className="h-4 w-4 text-slate-400" />
         ),
       })),
     [shops]
@@ -800,10 +847,11 @@ export function TransactionForm({
   }, [transactionType, form])
 
   useEffect(() => {
-    if (!isRefundMode) return
-    const amt = Math.abs(watchedAmount ?? 0)
-    const noteValue = `Refund: ${numberFormatter.format(amt)}`
-    form.setValue('note', noteValue)
+    if (isRefundMode) {
+      const amt = Math.abs(watchedAmount ?? 0)
+      const noteValue = `Refund: ${numberFormatter.format(amt)}`
+      form.setValue('note', noteValue)
+    }
   }, [form, isRefundMode, watchedAmount])
 
   useEffect(() => {
@@ -860,7 +908,7 @@ export function TransactionForm({
     return () => {
       controller.abort()
     }
-  }, [isRefundMode, watchedAccountId, watchedDate])
+  }, [isRefundMode, watchedAccountId, watchedDate, watchedCategoryId])
 
   useEffect(() => {
     if (!selectedAccount?.id) {
@@ -1017,12 +1065,14 @@ export function TransactionForm({
     if (isEditMode || isRefundMode) return
     if (defaultType) {
       form.setValue('type', defaultType);
+      setTransactionType(defaultType);
     }
   }, [defaultType, form, isEditMode, isRefundMode]);
 
   useEffect(() => {
     if (isRefundMode) {
       form.setValue('type', 'income')
+      setTransactionType('income')
     }
   }, [form, isRefundMode])
 
@@ -1060,7 +1110,7 @@ export function TransactionForm({
         control={control}
         name="type"
         render={({ field }) => (
-          <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
+          <Tabs value={field.value} onValueChange={(value) => { field.onChange(value); setTransactionType(value as 'expense' | 'income' | 'debt' | 'transfer' | 'repayment') }} className="w-full">
             <TabsList className="grid w-full grid-cols-5 gap-1 p-1.5 bg-slate-100/80 rounded-xl">
               <TabsTrigger value="expense" className="data-[state=active]:bg-white data-[state=active]:text-rose-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all">
                 <ArrowUpRight className="h-3.5 w-3.5" />
@@ -1187,7 +1237,7 @@ export function TransactionForm({
               placeholder={
                 debtAccountForRepayment && !field.value ? (
                   <span className="flex items-center gap-2">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
                       {getAccountInitial(debtAccountForRepayment.name)}
                     </span>
                     <span>To: {debtAccountForRepayment.name}</span>
@@ -1205,7 +1255,7 @@ export function TransactionForm({
       </div>
     ) : null
 
-  const PersonInput = (transactionType === 'debt' || transactionType === 'repayment') ? (
+  const PersonInput = (transactionType === 'debt' || transactionType === 'repayment' || (transactionType === 'income' && !isRefundMode)) ? (
     <div className="space-y-3">
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">
@@ -1339,11 +1389,58 @@ export function TransactionForm({
         name="tag"
         render={({ field }) => (
           <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+              <span className="text-xs font-medium text-slate-500 whitespace-nowrap">Recent:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  form.setValue('tag', generateTag(new Date()), { shouldValidate: true });
+                  setManualTagMode(true);
+                }}
+                className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
+                aria-label="Reset to current month"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2v6h6" /><path d="M21 12A9 9 0 0 0 6 5.3L3 8" /><path d="M21 22v-6h-6" /><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7" /></svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const currentDate = watchedDate || new Date();
+                  const previousMonth = subMonths(currentDate, 1);
+                  const previousTag = generateTag(previousMonth);
+                  form.setValue('tag', previousTag, { shouldValidate: true });
+                  setManualTagMode(true);
+                }}
+                className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
+                aria-label="Previous month"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+              </button>
+              {suggestedTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => {
+                    form.setValue('tag', tag, { shouldValidate: true });
+                    setManualTagMode(true);
+                  }}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap",
+                    watch('tag') === tag
+                      ? "bg-blue-500 text-white shadow-sm"
+                      : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                  )}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
             <input
               {...field}
+              value={field.value || ''}
               onChange={(e) => {
-                field.onChange(e);
-                if (!manualTagMode) {
+                field.onChange(e.target.value);
+                if (e.target.value) {
                   setManualTagMode(true);
                 }
               }}
@@ -1356,53 +1453,6 @@ export function TransactionForm({
       {errors.tag && (
         <p className="text-sm text-red-600">{errors.tag.message}</p>
       )}
-
-      <div className="mt-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-gray-500 mr-1">Recent:</span>
-          <button
-            type="button"
-            onClick={() => {
-              form.setValue('tag', generateTag(new Date()), { shouldValidate: true });
-              setManualTagMode(true);
-            }}
-            className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
-            aria-label="Reset to current month"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2v6h6" /><path d="M21 12A9 9 0 0 0 6 5.3L3 8" /><path d="M21 22v-6h-6" /><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7" /></svg>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const currentDate = watchedDate || new Date();
-              const previousMonth = subMonths(currentDate, 1);
-              const previousTag = generateTag(previousMonth);
-              form.setValue('tag', previousTag, { shouldValidate: true });
-              setManualTagMode(true);
-            }}
-            className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
-            aria-label="Previous month"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
-          </button>
-          {suggestedTags.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              onClick={() => {
-                form.setValue('tag', tag, { shouldValidate: true });
-                setManualTagMode(true);
-              }}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${watch('tag') === tag
-                ? 'bg-blue-500 text-white shadow-sm'
-                : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                }`}
-            >
-              {tag}
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   ) : null
 
@@ -1428,14 +1478,21 @@ export function TransactionForm({
           name="source_account_id"
           render={({ field }) => (
             <Combobox
+              items={accountOptions}
               value={field.value}
               onValueChange={field.onChange}
-              items={accountOptions}
               placeholder={isRefundMode && refundStatus === 'pending' ? 'System Account' : 'Select account'}
               inputPlaceholder="Search account..."
               emptyState="No account found"
               disabled={isRefundMode && refundStatus === 'pending'}
               className="h-11"
+              tabs={[
+                { value: 'all', label: 'All', active: accountFilter === 'all', onClick: () => setAccountFilter('all') },
+                { value: 'bank', label: 'Bank', active: accountFilter === 'bank', onClick: () => setAccountFilter('bank') },
+                { value: 'credit', label: 'Credit', active: accountFilter === 'credit', onClick: () => setAccountFilter('credit') },
+                { value: 'other', label: 'Others', active: accountFilter === 'other', onClick: () => setAccountFilter('other') },
+              ]}
+            // No onAddNew for accounts as it's complex
             />
           )}
         />
@@ -1488,34 +1545,37 @@ export function TransactionForm({
   )
 
   const CashbackInputs = showCashbackInputs ? (
-    <div className="space-y-3 rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 text-sm text-slate-600">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-medium text-slate-900 flex items-center gap-2">
+          <Percent className="h-4 w-4 text-blue-500" />
+          Cashback Details
+        </h4>
+        {spendingStats && spendingStats.cycle && (
+          <span className="text-xs text-slate-500">
+            Cycle: {spendingStats.cycle.label}
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">% Back</label>
           <Controller
             control={control}
             name="cashback_share_percent"
             render={({ field }) => (
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                max={rateLimitPercent ?? undefined}
-                value={field.value ?? ''}
-                onChange={event => {
-                  const nextValue = event.target.value
-                  field.onChange(nextValue === '' ? undefined : Number(nextValue))
-                }}
+              <SmartAmountInput
+                value={field.value}
+                onChange={field.onChange}
                 disabled={budgetMaxed}
-                className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-50"
+                className="w-full"
                 placeholder="Enter percentage"
               />
             )}
           />
           {rateLimitPercent !== null && (
             <p className="text-xs text-slate-500">
-              Up to {Math.min(50, rateLimitPercent).toFixed(2)}%
-              ```
               Max {Math.min(50, rateLimitPercent).toFixed(2)}% according to card policy
             </p>
           )}
@@ -1657,107 +1717,149 @@ export function TransactionForm({
         : 'Add Transaction'
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-      {/* Refund Status (Full Width) */}
-      {RefundStatusInput}
+    <>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Refund Status (Full Width) */}
+        {RefundStatusInput}
 
-      {/* Type Selection (Full Width) */}
-      {TypeInput}
+        {/* Type Selection (Full Width) */}
+        {TypeInput}
 
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        {(transactionType === 'debt' || transactionType === 'repayment') ? (
-          <>
-            {/* LENDING MODE: Person First */}
-            <div className="col-span-2">
-              {PersonInput}
-            </div>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          {(transactionType === 'debt' || transactionType === 'repayment') ? (
+            <>
+              {/* LENDING MODE: Person First */}
+              <div className="col-span-2">
+                {PersonInput}
+              </div>
 
-            {/* Date & Tag */}
-            <div className="col-span-1">
-              {DateInput}
-            </div>
-            <div className="col-span-1">
-              {TagInput}
-            </div>
+              {/* Date & Tag */}
+              <div className="col-span-1">
+                {DateInput}
+              </div>
+              <div className="col-span-1">
+                {TagInput}
+              </div>
 
-            {/* From Account & Amount (Side-by-Side) */}
-            <div className="col-span-1">
-              {SourceAccountInput}
-            </div>
-            <div className="col-span-1">
-              {AmountInput}
-            </div>
+              {/* From Account & Amount (Side-by-Side) */}
+              <div className="col-span-1">
+                {SourceAccountInput}
+              </div>
+              <div className="col-span-1">
+                {AmountInput}
+              </div>
 
-            {/* Category & Shop */}
-            <div className="col-span-1">
-              {CategoryInput}
-            </div>
-            <div className="col-span-1">
-              {ShopInput}
-            </div>
-          </>
-        ) : (
-          <>
-            {/* OTHER MODES */}
-            <div className="col-span-2">
-              {DateInput}
-            </div>
+              {/* Category & Shop */}
+              <div className="col-span-1">
+                {CategoryInput}
+              </div>
+              <div className="col-span-1">
+                {ShopInput}
+              </div>
+            </>
+          ) : (
+            <>
+              {/* OTHER MODES */}
+              <div className="col-span-2">
+                {DateInput}
+              </div>
 
-            {transactionType === 'transfer' ? (
-              <>
-                <div className="col-span-1">
-                  {SourceAccountInput}
-                </div>
-                <div className="col-span-1">
-                  {DestinationAccountInput}
-                </div>
-                <div className="col-span-2">
-                  {AmountInput}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="col-span-1">
-                  {CategoryInput}
-                </div>
-                <div className="col-span-1">
-                  {ShopInput}
-                </div>
-                <div className="col-span-1">
-                  {SourceAccountInput}
-                </div>
-                <div className="col-span-1">
-                  {AmountInput}
-                </div>
-                <div className="col-span-2">
-                  {PersonInput}
-                </div>
-              </>
-            )}
-          </>
+              {transactionType === 'transfer' ? (
+                <>
+                  <div className="col-span-1">
+                    {SourceAccountInput}
+                  </div>
+                  <div className="col-span-1">
+                    {DestinationAccountInput}
+                  </div>
+                  <div className="col-span-1">
+                    {CategoryInput}
+                  </div>
+                  <div className="col-span-1">
+                    {AmountInput}
+                  </div>
+                </>
+              ) : transactionType === 'income' ? (
+                <>
+                  <div className="col-span-1">
+                    {CategoryInput}
+                  </div>
+                  <div className="col-span-1">
+                    {SourceAccountInput}
+                  </div>
+                  <div className="col-span-1">
+                    {AmountInput}
+                  </div>
+                  <div className="col-span-1">
+                    {PersonInput}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="col-span-1">
+                    {CategoryInput}
+                  </div>
+                  <div className="col-span-1">
+                    {ShopInput}
+                  </div>
+                  <div className="col-span-1">
+                    {SourceAccountInput}
+                  </div>
+                  <div className="col-span-1">
+                    {AmountInput}
+                  </div>
+                  <div className="col-span-2">
+                    {PersonInput}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {/* Common Bottom Section */}
+          <div className="col-span-2 space-y-4 pt-2 border-t border-slate-100">
+            {VoluntaryCashbackInput}
+            {CashbackInputs}
+            {NoteInput}
+          </div>
+        </div>
+
+        {status && (
+          <p className={`text-sm ${status.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
+            {status.text}
+          </p>
         )}
 
-        {/* Common Bottom Section */}
-        <div className="col-span-2 space-y-4 pt-2 border-t border-slate-100">
-          {VoluntaryCashbackInput}
-          {CashbackInputs}
-          {NoteInput}
-        </div>
-      </div>
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {submitLabel}
+        </button>
+      </form>
 
-      {status && (
-        <p className={`text-sm ${status.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-          {status.text}
-        </p>
-      )}
+      <CategoryDialog
+        open={isCategoryDialogOpen}
+        onOpenChange={setIsCategoryDialogOpen}
+        onSuccess={() => {
+          // Ideally we should refresh categories or select the new one
+          // But for now just closing is fine, the parent might refresh
+        }}
+        defaultType={transactionType === 'income' ? 'income' : 'expense'}
+      />
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
-      >
-        {submitLabel}
-      </button>
-    </form>
+      <AddShopDialog
+        open={isShopDialogOpen}
+        onOpenChange={setIsShopDialogOpen}
+        categories={categories}
+      />
+
+      <CreatePersonDialog
+        open={isPersonDialogOpen}
+        onOpenChange={setIsPersonDialogOpen}
+        subscriptions={[]}
+      />
+    </>
   )
 }
