@@ -77,35 +77,35 @@ export function PersonCard({
 
     return (
         <div
-            className="flex h-full flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md"
+            className="flex h-full flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-md cursor-pointer"
+            onClick={onOpenDebt}
         >
             <div className="flex items-start justify-between">
-                <div
-                    className="flex items-center gap-3 cursor-pointer"
-                    onClick={onOpenDebt}
-                >
+                <div className="flex items-center gap-2 flex-1 min-w-0">
                     {person.avatar_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                             src={person.avatar_url}
                             alt={person.name}
-                            className="h-12 w-12 rounded-full border border-slate-200 object-cover"
+                            className="h-10 w-10 rounded-full border border-slate-200 object-cover flex-shrink-0"
                         />
                     ) : (
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-lg font-semibold text-slate-700">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-base font-semibold text-slate-700 flex-shrink-0">
                             {getInitial(person.name)}
                         </div>
                     )}
-                    <div className="flex flex-col">
-                        <span className="text-base font-semibold text-slate-900 hover:text-blue-600 transition-colors">
+                    <div className="flex flex-col min-w-0 flex-1">
+                        <span className="text-sm font-semibold text-slate-900 hover:text-blue-600 transition-colors truncate">
                             {person.name}
                         </span>
-                        <span className="text-xs text-slate-500">{person.email || 'No email'}</span>
+                        {person.email && (
+                            <span className="text-[10px] text-slate-500 truncate">{person.email}</span>
+                        )}
                     </div>
                 </div>
                 <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-100"
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 shadow-sm transition hover:bg-slate-100 flex-shrink-0"
                     onClick={(e) => {
                         e.stopPropagation()
                         onEdit()
@@ -115,14 +115,14 @@ export function PersonCard({
                 </button>
             </div>
 
-            <div className="flex items-center justify-between text-xs text-slate-500">
+            <div className="flex items-center justify-between text-[10px] text-slate-500">
                 <span>Status</span>
-                <div className="flex gap-2">
+                <div className="flex gap-1.5">
                     {balanceBadge}
                     {hasDebt ? (
-                        !balanceBadge && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">Settled</span>
+                        !balanceBadge && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">Settled</span>
                     ) : (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+                        <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
                             Unlinked
                         </span>
                     )}
@@ -130,42 +130,45 @@ export function PersonCard({
             </div>
 
             {personSubscriptions.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-1">
-                    {personSubscriptions.map(sub => {
+                <div className="flex flex-wrap gap-1.5 mt-0.5">
+                    {personSubscriptions.slice(0, 2).map(sub => {
                         const brand = getServiceBranding(sub.name)
                         return (
                             <button
                                 key={`${person.id}-${sub.id}`}
                                 type="button"
-                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700 focus:outline-none"
+                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 shadow-sm hover:border-blue-200 hover:text-blue-700 focus:outline-none"
                                 onClick={event => {
                                     event.stopPropagation()
                                     setEditServiceId(sub.id)
                                 }}
                             >
                                 <span
-                                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ring-2 ${brand.bg} ${brand.text} ${brand.ring}`}
+                                    className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold ring-1 ${brand.bg} ${brand.text} ${brand.ring}`}
                                 >
                                     {brand.icon}
                                 </span>
-                                <span className="truncate max-w-[120px]">{sub.name}</span>
+                                <span className="truncate max-w-[60px]">{sub.name}</span>
                             </button>
                         )
                     })}
+                    {personSubscriptions.length > 2 && (
+                        <span className="text-[10px] text-slate-500">+{personSubscriptions.length - 2}</span>
+                    )}
                 </div>
             )}
 
-            <div className="mt-auto pt-3 border-t border-slate-100 flex gap-2">
+            <div className="mt-auto pt-2 border-t border-slate-100 flex gap-1.5">
                 <div className="flex-1">
                     <AddTransactionDialog
                         {...dialogBaseProps}
                         defaultType="debt"
                         defaultPersonId={person.id}
-                        buttonClassName="w-full flex items-center justify-center gap-2 rounded-md bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+                        buttonClassName="w-full flex items-center justify-center gap-1 rounded-md bg-blue-50 px-2 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-100 transition-colors"
                         buttonText="Lend"
                         triggerContent={
                             <>
-                                <HandCoins className="h-4 w-4" />
+                                <HandCoins className="h-3 w-3" />
                                 Lend
                             </>
                         }
@@ -176,11 +179,11 @@ export function PersonCard({
                         {...dialogBaseProps}
                         defaultType="repayment"
                         defaultPersonId={person.id}
-                        buttonClassName="w-full flex items-center justify-center gap-2 rounded-md bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+                        buttonClassName="w-full flex items-center justify-center gap-1 rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
                         buttonText="Repay"
                         triggerContent={
                             <>
-                                <Banknote className="h-4 w-4" />
+                                <Banknote className="h-3 w-3" />
                                 Repay
                             </>
                         }
