@@ -502,24 +502,9 @@ export function TransactionForm({
           form.setValue('category_id', repaymentCat.id);
         }
       }
-    } else if (transactionType === 'transfer') {
-      // Check if destination is a credit card (Pay Card scenario)
-      const destinationId = form.getValues('debt_account_id');
-      const destinationAccount = allAccounts.find(a => a.id === destinationId);
-
-      if (destinationAccount?.type === 'credit_card') {
-        const creditPaymentCat = categories.find(c => c.name === 'Credit Payment' || c.name === 'Thanh toán thẻ tín dụng');
-        if (creditPaymentCat) {
-          form.setValue('category_id', creditPaymentCat.id);
-        }
-      } else {
-        const transferCat = categories.find(c => c.name === 'Chuyển tiền' || c.name === 'Money Transfer');
-        if (transferCat) {
-          form.setValue('category_id', transferCat.id);
-        }
-      }
     }
-  }, [transactionType, categories, shops, form, isEditMode, allAccounts]);
+    // REMOVED: Auto-selection for 'transfer' type to fix incorrect Money Transfer category bug
+  }, [transactionType, categories, shops, form, isEditMode]);
 
   const categoryOptions = useMemo(() => {
     if (isRefundMode && refundCategoryId) {

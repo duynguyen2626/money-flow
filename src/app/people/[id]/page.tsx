@@ -19,19 +19,25 @@ export const dynamic = 'force-dynamic'
 export default async function PeopleDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: personId } = await params
 
-  const [person, accounts, categories, people, shops, transactions, debtCycles] = await Promise.all([
-    getPersonDetails(personId),
-    getAccounts(),
-    getCategories(),
-    getPeople(),
-    getShops(),
-    getUnifiedTransactions({ accountId: personId, limit: 200, context: 'person' }),
-    getDebtByTags(personId),
-  ])
+  // First, get person details to determine the actual debt account ID
+  const person = await getPersonDetails(personId)
 
   if (!person) {
     return notFound()
   }
+
+  // Use the debt account ID (person.id) for fetching transactions and debt cycles
+  // This ensures we get the correct data regardless of whether the URL has Profile ID or Account ID
+  const actualAccountId = person.id
+
+  const [accounts, categories, people, shops, transactions, debtCycles] = await Promise.all([
+    getAccounts(),
+    getCategories(),
+    getPeople(),
+    getShops(),
+    getUnifiedTransactions({ accountId: actualAccountId, limit: 200, context: 'person' }),
+    getDebtByTags(actualAccountId),
+  ])
 
   const sheetProfileId = person.owner_id ?? personId
   const balance = person.current_balance ?? 0
@@ -69,7 +75,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
 
             {/* Header Actions */}
             <div className="flex items-center gap-2">
-              <ResyncButton accountId={personId} />
+              <ResyncButton accountId={actualAccountId} />
               <AddTransactionDialog
                 accounts={accounts}
                 categories={categories}
@@ -77,7 +83,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                 shops={shops}
                 buttonText="Settle"
                 defaultType="repayment"
-                defaultPersonId={personId}
+                defaultPersonId={actualAccountId}
                 defaultAmount={Math.abs(balance)}
                 buttonClassName="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md shadow-sm transition-colors flex items-center gap-2"
                 triggerContent={
@@ -94,7 +100,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                 shops={shops}
                 buttonText="Add Debt"
                 defaultType="debt"
-                defaultPersonId={personId}
+                defaultPersonId={actualAccountId}
                 buttonClassName="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md shadow-sm transition-colors flex items-center gap-2"
                 triggerContent={
                   <>
@@ -119,7 +125,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                   categories={categories}
                   people={people}
                   shops={shops}
-                  personId={personId}
+                  personId={actualAccountId}
                 />
               </div>
             </CollapsibleSection>
@@ -132,7 +138,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
               accounts={accounts}
               people={people}
               shops={shops}
-              accountId={personId}
+              accountId={actualAccountId}
               accountType="debt"
               hidePeopleColumn
             />

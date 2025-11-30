@@ -129,7 +129,7 @@ export async function getPeople(): Promise<Person[]> {
         .order('name', { ascending: true }),
       supabase
         .from('accounts')
-        .select('id, owner_id')
+        .select('id, owner_id, current_balance')
         .eq('type', 'debt'),
       supabase.from('subscription_members').select('profile_id, subscription_id'),
     ])
@@ -159,11 +159,14 @@ export async function getPeople(): Promise<Person[]> {
     })
   }
 
-  const debtAccountMap = new Map<string, string>()
+  const debtAccountMap = new Map<string, { id: string; balance: number }>()
   if (Array.isArray(debtAccounts)) {
     (debtAccounts as AccountRow[]).forEach(account => {
       if (account.owner_id) {
-        debtAccountMap.set(account.owner_id, account.id)
+        debtAccountMap.set(account.owner_id, {
+          id: account.id,
+          balance: account.current_balance ?? 0,
+        })
       }
     })
   }
@@ -183,16 +186,20 @@ export async function getPeople(): Promise<Person[]> {
     })
   }
 
-  return (profiles as ProfileRow[] | null)?.map(person => ({
-    id: person.id,
-    name: person.name,
-    email: person.email,
-    avatar_url: person.avatar_url,
-    sheet_link: person.sheet_link,
-    debt_account_id: debtAccountMap.get(person.id) ?? null,
-    subscription_count: subscriptionCountMap.get(person.id) ?? 0,
-    subscription_ids: Array.from(subscriptionIdsMap.get(person.id) ?? []),
-  })) ?? []
+  return (profiles as ProfileRow[] | null)?.map(person => {
+    const debtInfo = debtAccountMap.get(person.id)
+    return {
+      id: person.id,
+      name: person.name,
+      email: person.email,
+      avatar_url: person.avatar_url,
+      sheet_link: person.sheet_link,
+      debt_account_id: debtInfo?.id ?? null,
+      balance: debtInfo?.balance ?? null,
+      subscription_count: subscriptionCountMap.get(person.id) ?? 0,
+      subscription_ids: Array.from(subscriptionIdsMap.get(person.id) ?? []),
+    }
+  }) ?? []
 }
 
 export async function ensureDebtAccount(
@@ -292,7 +299,7 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
         .eq('profile_id', id),
       supabase
         .from('accounts')
-        .select('id')
+        .select('id, current_balance')
         .eq('owner_id', id)
         .eq('type', 'debt')
         .limit(1),
@@ -317,7 +324,8 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
   const subscription_ids = (memberships as { subscription_id: string }[] | null)?.map(
     row => row.subscription_id
   ) ?? []
-  const debt_account_id = (debtAccounts as { id: string }[] | null)?.[0]?.id ?? null
+  const debt_account_id = (debtAccounts as { id: string; current_balance: number }[] | null)?.[0]?.id ?? null
+  const balance = (debtAccounts as { id: string; current_balance: number }[] | null)?.[0]?.current_balance ?? null
 
   return {
     id: (profile as any).id,
@@ -328,5 +336,6 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     subscription_ids,
     subscription_count: subscription_ids.length,
     debt_account_id,
+    balance,
   }
 }

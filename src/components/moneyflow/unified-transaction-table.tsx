@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy, ArrowUp, ArrowDown, ArrowUpDown, Trash2, Sigma, CheckCheck } from "lucide-react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { createPortal } from "react-dom"
 import { CustomTooltip, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/custom-tooltip'
 import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
@@ -1138,13 +1139,26 @@ export function UnifiedTransactionTable({
                     }
 
                     // Render for Single Account (Expense/Income)
+                    const accountLine = txn.transaction_lines?.find(l => l.accounts?.name === txn.account_name)
+                    const displayAccountId = accountLine?.account_id
+
                     return (
                       <div className="flex items-center gap-2 min-w-[150px]">
                         {txn.source_name && sourceIcon}
                         <CustomTooltip content={txn.account_name}>
-                          <span className="truncate max-w-[120px] cursor-help">
-                            {txn.account_name ?? 'Unknown'}
-                          </span>
+                          {displayAccountId ? (
+                            <Link
+                              href={`/accounts/${displayAccountId}`}
+                              onClick={e => e.stopPropagation()}
+                              className="truncate max-w-[120px] cursor-pointer font-medium hover:text-blue-600 transition-colors"
+                            >
+                              {txn.account_name ?? 'Unknown'}
+                            </Link>
+                          ) : (
+                            <span className="truncate max-w-[120px] cursor-help">
+                              {txn.account_name ?? 'Unknown'}
+                            </span>
+                          )}
                         </CustomTooltip>
                       </div>
                     );
@@ -1152,8 +1166,11 @@ export function UnifiedTransactionTable({
                   case "people": {
                     const personName = (txn as any).person_name ?? txn.person_name ?? null
                     const personAvatar = (txn as any).person_avatar_url ?? txn.person_avatar_url ?? null
+                    const personId = (txn as any).person_id ?? txn.person_id ?? null
+
                     if (!personName) return <span className="text-slate-400">-</span>
-                    return (
+
+                    const content = (
                       <div className="flex items-center gap-2 min-w-[120px]">
                         {personAvatar ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -1167,9 +1184,21 @@ export function UnifiedTransactionTable({
                             {personName.charAt(0).toUpperCase()}
                           </span>
                         )}
-                        <span className="font-medium text-slate-700">{personName}</span>
+                        <span className="font-medium text-slate-700 hover:text-blue-600 transition-colors">{personName}</span>
                       </div>
                     )
+
+                    if (personId) {
+                      return (
+                        <Link
+                          href={`/people/${personId}`}
+                          onClick={e => e.stopPropagation()}
+                        >
+                          {content}
+                        </Link>
+                      )
+                    }
+                    return content
                   }
                   case "tag":
                     return (

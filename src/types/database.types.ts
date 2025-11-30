@@ -167,6 +167,8 @@ export interface Database {
           name: string
           type: 'expense' | 'income'
           parent_id: string | null
+          icon: string | null
+          image_url: string | null
           created_at: string
         }
         Insert: {
@@ -174,6 +176,8 @@ export interface Database {
           name: string
           type: 'expense' | 'income'
           parent_id?: string | null
+          icon?: string | null
+          image_url?: string | null
           created_at?: string
         }
         Update: {
@@ -181,6 +185,8 @@ export interface Database {
           name?: string
           type?: 'expense' | 'income'
           parent_id?: string | null
+          icon?: string | null
+          image_url?: string | null
           created_at?: string
         }
       }

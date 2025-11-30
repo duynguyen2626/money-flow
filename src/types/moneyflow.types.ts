@@ -62,6 +62,7 @@ export type Person = {
   avatar_url?: string | null
   sheet_link?: string | null
   debt_account_id?: string | null
+  balance?: number | null
   subscription_ids?: string[]
   subscription_count?: number
 }
