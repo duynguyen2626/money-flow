@@ -62,7 +62,8 @@ export async function getDebtAccounts(): Promise<DebtAccount[]> {
 export async function getPersonDetails(id: string) {
   const supabase = createClient()
 
-  const { data, error } = await supabase
+  // 1. Try to find by Account ID
+  const { data: accountData, error: accountError } = await supabase
     .from('accounts')
     .select(`
       id, 
@@ -73,23 +74,71 @@ export async function getPersonDetails(id: string) {
     `)
     .eq('id', id)
     .eq('type', 'debt')
-    .single()
+    .maybeSingle()
 
-  if (error) {
-    console.error('Error fetching person details:', error)
-    return null
+  if (accountData) {
+    const data = accountData as unknown as DebtAccountWithProfile
+    return {
+      id: data.id,
+      name: data.profiles?.name || data.name,
+      current_balance: data.current_balance ?? 0,
+      owner_id: data.owner_id,
+      avatar_url: data.profiles?.avatar_url || null,
+      sheet_link: data.profiles?.sheet_link ?? null,
+    }
   }
 
-  const accountData = data as unknown as DebtAccountWithProfile
+  // 2. Try to find by Profile ID (owner_id)
+  const { data: profileAccountData, error: profileAccountError } = await supabase
+    .from('accounts')
+    .select(`
+      id, 
+      name, 
+      current_balance, 
+      owner_id,
+      profiles (id, name, avatar_url, sheet_link)
+    `)
+    .eq('owner_id', id)
+    .eq('type', 'debt')
+    .maybeSingle()
 
-  return {
-    id: accountData.id,
-    name: accountData.profiles?.name || accountData.name,
-    current_balance: accountData.current_balance ?? 0,
-    owner_id: accountData.owner_id,
-    avatar_url: accountData.profiles?.avatar_url || null,
-    sheet_link: accountData.profiles?.sheet_link ?? null,
+  if (profileAccountData) {
+    const data = profileAccountData as unknown as DebtAccountWithProfile
+    return {
+      id: data.id,
+      name: data.profiles?.name || data.name,
+      current_balance: data.current_balance ?? 0,
+      owner_id: data.owner_id,
+      avatar_url: data.profiles?.avatar_url || null,
+      sheet_link: data.profiles?.sheet_link ?? null,
+    }
   }
+
+  // 3. Fallback: Check if it is a Profile ID without Debt Account
+  const { data: profileData, error: profileError } = await supabase
+    .from('profiles')
+    .select('id, name, avatar_url, sheet_link')
+    .eq('id', id)
+    .maybeSingle()
+
+  if (profileData) {
+    const profile = profileData as unknown as Profile
+    return {
+      id: profile.id, // This is Profile ID, but we treat it as "Person ID"
+      name: profile.name,
+      current_balance: 0,
+      owner_id: profile.id, // Owner is self
+      avatar_url: profile.avatar_url,
+      sheet_link: profile.sheet_link,
+      is_profile_only: true // Flag to indicate no debt account yet
+    }
+  }
+
+  if (accountError) console.error('Error fetching person details (account):', accountError)
+  if (profileAccountError) console.error('Error fetching person details (profile account):', profileAccountError)
+  if (profileError) console.error('Error fetching person details (profile):', profileError)
+
+  return null
 }
 
 type TransactionLineWithTransaction = TransactionLineRow & {
