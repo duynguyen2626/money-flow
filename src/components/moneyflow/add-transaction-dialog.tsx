@@ -84,7 +84,7 @@ export function AddTransactionDialog({
             onClick={closeDialog}
           >
             <div
-              className="flex w-full max-w-xl flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5"
+              className="flex w-full max-w-xl flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden"
               style={{ maxHeight: '90vh' }}
               onClick={stopPropagation}
             >

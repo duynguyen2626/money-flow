@@ -145,7 +145,7 @@ export function SmartAmountInput({
                     {mathError && <span className="text-xs text-red-500 font-normal flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {mathError}</span>}
                 </label>
                 {textParts.length > 0 && (
-                    <div className="text-lg text-right">
+                    <div className="text-xs text-right">
                         {textParts.map((part, i) => (
                             <React.Fragment key={i}>
                                 <span className="font-bold text-blue-600">{part.value}</span>
@@ -167,7 +167,7 @@ export function SmartAmountInput({
                     disabled={disabled}
                     placeholder={placeholder}
                     className={cn(
-                        "h-11 font-mono text-xl font-bold",
+                        "h-11 text-sm",
                         mathError ? "border-red-300 focus-visible:ring-red-200" : ""
                     )}
                 />

@@ -1386,9 +1386,28 @@ export function TransactionForm({
       <div className="flex items-center justify-between">
         <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
           <Tag className="h-4 w-4 text-slate-500" />
-          Debt Cycle (Tag)
+          Tag
         </label>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          {suggestedTags.slice(0, 1).map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              onClick={() => {
+                form.setValue('tag', tag, { shouldValidate: true });
+                setManualTagMode(true);
+              }}
+              className={cn(
+                "rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors border",
+                watch('tag') === tag
+                  ? "bg-blue-100 text-blue-700 border-blue-200"
+                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+              )}
+            >
+              {tag}
+            </button>
+          ))}
+          <div className="h-4 w-px bg-slate-200 mx-1" />
           <button
             type="button"
             onClick={() => {
@@ -1398,10 +1417,10 @@ export function TransactionForm({
               form.setValue('tag', previousTag, { shouldValidate: true });
               setManualTagMode(true);
             }}
-            className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-slate-100 text-slate-500 transition-colors"
+            className="flex h-5 w-5 items-center justify-center rounded-md hover:bg-slate-100 text-slate-500 transition-colors"
             title="Previous Month"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
@@ -1409,10 +1428,10 @@ export function TransactionForm({
               form.setValue('tag', generateTag(new Date()), { shouldValidate: true });
               setManualTagMode(true);
             }}
-            className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-slate-100 text-slate-500 transition-colors"
+            className="flex h-5 w-5 items-center justify-center rounded-md hover:bg-slate-100 text-slate-500 transition-colors"
             title="Reset to Current"
           >
-            <RotateCcw className="h-3.5 w-3.5" />
+            <RotateCcw className="h-3 w-3" />
           </button>
         </div>
       </div>
@@ -1420,40 +1439,18 @@ export function TransactionForm({
         control={control}
         name="tag"
         render={({ field }) => (
-          <div className="space-y-2">
-            <div className="flex flex-wrap gap-2">
-              {suggestedTags.slice(0, 1).map((tag) => (
-                <button
-                  key={tag}
-                  type="button"
-                  onClick={() => {
-                    form.setValue('tag', tag, { shouldValidate: true });
-                    setManualTagMode(true);
-                  }}
-                  className={cn(
-                    "rounded-full px-3 py-1 text-xs font-medium transition-colors border",
-                    watch('tag') === tag
-                      ? "bg-blue-100 text-blue-700 border-blue-200"
-                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-                  )}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-            <input
-              {...field}
-              value={field.value || ''}
-              onChange={(e) => {
-                field.onChange(e.target.value);
-                if (e.target.value) {
-                  setManualTagMode(true);
-                }
-              }}
-              className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="Enter tag (e.g., NOV25)"
-            />
-          </div>
+          <input
+            {...field}
+            value={field.value || ''}
+            onChange={(e) => {
+              field.onChange(e.target.value);
+              if (e.target.value) {
+                setManualTagMode(true);
+              }
+            }}
+            className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            placeholder="Enter tag (e.g., NOV25)"
+          />
         )}
       />
       {errors.tag && (
@@ -1728,8 +1725,10 @@ export function TransactionForm({
         {/* Refund Status (Full Width) */}
         {RefundStatusInput}
 
-        {/* Type Selection (Full Width) */}
-        {TypeInput}
+        {/* Type Selection (Full Width) - Sticky */}
+        <div className="sticky top-0 z-10 bg-white pb-4 pt-2 -mt-2">
+          {TypeInput}
+        </div>
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           {(transactionType === 'debt' || transactionType === 'repayment') ? (
