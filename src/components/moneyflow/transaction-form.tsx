@@ -483,16 +483,19 @@ export function TransactionForm({
   useEffect(() => {
     if (isEditMode) return;
 
-    if (transactionType === 'debt') {
+    const currentCategoryId = form.getValues('category_id');
+
+    // Only auto-set category if it's currently empty
+    if (transactionType === 'debt' && !currentCategoryId) {
       const peopleShoppingCat = categories.find(c => c.name === 'People Shopping' || c.name === 'Shopping');
-      if (peopleShoppingCat && !form.getValues('category_id')) {
+      if (peopleShoppingCat) {
         form.setValue('category_id', peopleShoppingCat.id);
       }
       const shopeeShop = shops.find(s => s.name === 'Shopee');
       if (shopeeShop) {
         form.setValue('shop_id', shopeeShop.id);
       }
-    } else if (transactionType === 'repayment') {
+    } else if (transactionType === 'repayment' && !currentCategoryId) {
       const repaymentCatId = 'e0000000-0000-0000-0000-000000000097';
       if (categories.some(c => c.id === repaymentCatId)) {
         form.setValue('category_id', repaymentCatId);

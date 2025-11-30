@@ -1259,6 +1259,37 @@ export async function requestRefund(
       await (supabase.from('transactions').update as any)({ status: 'waiting_refund' }).eq('id', transactionId);
     }
 
+    // NEW LOGIC: Full Refund Cleanup - Unlink Person from Original Transaction
+    if (newRefundStatus === 'full') {
+      // Find person_id from original lines
+      const personLine = lines.find(l => l.person_id);
+      if (personLine?.person_id) {
+        // Get person name for note
+        const { data: personData } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', personLine.person_id)
+          .single();
+
+        const personName = (personData as any)?.name || 'Unknown';
+
+        // Update all lines to remove person_id
+        for (const line of originalLines) {
+          if (!line?.id) continue;
+          await (supabase.from('transaction_lines').update as any)({
+            person_id: null
+          }).eq('id', line.id);
+        }
+
+        // Update transaction note to indicate debt was cancelled
+        const currentNote = (existing as any).note ?? '';
+        const updatedNote = `${currentNote} [Hủy nợ: ${personName}]`;
+        await (supabase.from('transactions').update as any)({
+          note: updatedNote
+        }).eq('id', transactionId);
+      }
+    }
+
   } catch (err) {
     console.error('Failed to tag original transaction with refund metadata:', err)
   }
