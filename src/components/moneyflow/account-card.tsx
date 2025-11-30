@@ -254,9 +254,11 @@ export function AccountCard({
       <div className="flex justify-between items-start mb-4">
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <h3 className="font-bold text-slate-900 text-lg leading-tight truncate" title={account.name}>
-              {account.name}
-            </h3>
+            <CustomTooltip content={account.name}>
+              <h3 className="font-bold text-slate-900 text-lg leading-tight truncate max-w-[150px]">
+                {account.name}
+              </h3>
+            </CustomTooltip>
             <div onClick={stopCardNavigation}>
               <EditAccountDialog
                 account={account}
@@ -290,7 +292,7 @@ export function AccountCard({
             triggerContent={
               <div className={cn(
                 "relative overflow-hidden shadow-sm cursor-pointer hover:opacity-90 transition-opacity",
-                isCreditCard ? "h-14 w-24 rounded-lg" : "h-14 w-14 rounded-full"
+                isCreditCard ? "h-14 w-24 rounded-lg" : "h-14 w-14"
               )}>
                 {account.logo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -461,7 +463,7 @@ export function AccountCard({
             className="text-xs font-medium text-slate-500 cursor-pointer hover:text-slate-700 transition-colors"
             onClick={openDetails}
           >
-            Cashback Remains: <span className="text-slate-900 font-bold">{numberFormatter.format(Math.max(0, cashback.maxCashback - (cashback.earnedSoFar ?? 0)))}</span>
+            🔄💰 Remains <span className="inline-flex items-center justify-center rounded-md bg-slate-100 px-2 py-0.5 text-sm font-bold text-slate-900">{numberFormatter.format(Math.max(0, cashback.maxCashback - (cashback.earnedSoFar ?? 0)))}</span>
           </div>
         ) : (
           <div
