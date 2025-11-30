@@ -15,7 +15,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateTag } from '@/lib/tag'
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
-import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw } from 'lucide-react'
+import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw, ChevronLeft } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { SmartAmountInput } from '@/components/ui/smart-amount-input'
@@ -1383,40 +1383,46 @@ export function TransactionForm({
 
   const TagInput = (transactionType === 'debt' || transactionType === 'repayment') ? (
     <div className="space-y-2">
-      <label className="text-sm font-medium text-gray-700">Debt Cycle (Tag)</label>
+      <div className="flex items-center justify-between">
+        <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+          <Tag className="h-4 w-4 text-slate-500" />
+          Debt Cycle (Tag)
+        </label>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              const currentDate = watchedDate || new Date();
+              const previousMonth = subMonths(currentDate, 1);
+              const previousTag = generateTag(previousMonth);
+              form.setValue('tag', previousTag, { shouldValidate: true });
+              setManualTagMode(true);
+            }}
+            className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-slate-100 text-slate-500 transition-colors"
+            title="Previous Month"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              form.setValue('tag', generateTag(new Date()), { shouldValidate: true });
+              setManualTagMode(true);
+            }}
+            className="flex h-6 w-6 items-center justify-center rounded-md hover:bg-slate-100 text-slate-500 transition-colors"
+            title="Reset to Current"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
       <Controller
         control={control}
         name="tag"
         render={({ field }) => (
           <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-              <span className="text-xs font-medium text-slate-500 whitespace-nowrap">Recent:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  form.setValue('tag', generateTag(new Date()), { shouldValidate: true });
-                  setManualTagMode(true);
-                }}
-                className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
-                aria-label="Reset to current month"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 2v6h6" /><path d="M21 12A9 9 0 0 0 6 5.3L3 8" /><path d="M21 22v-6h-6" /><path d="M3 12a9 9 0 0 0 15 6.7l3-2.7" /></svg>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const currentDate = watchedDate || new Date();
-                  const previousMonth = subMonths(currentDate, 1);
-                  const previousTag = generateTag(previousMonth);
-                  form.setValue('tag', previousTag, { shouldValidate: true });
-                  setManualTagMode(true);
-                }}
-                className="flex h-6 w-6 items-center justify-center rounded-md bg-gray-100 p-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
-                aria-label="Previous month"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
-              </button>
-              {suggestedTags.map((tag) => (
+            <div className="flex flex-wrap gap-2">
+              {suggestedTags.slice(0, 1).map((tag) => (
                 <button
                   key={tag}
                   type="button"
@@ -1425,10 +1431,10 @@ export function TransactionForm({
                     setManualTagMode(true);
                   }}
                   className={cn(
-                    "rounded-md px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap",
+                    "rounded-full px-3 py-1 text-xs font-medium transition-colors border",
                     watch('tag') === tag
-                      ? "bg-blue-500 text-white shadow-sm"
-                      : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                      ? "bg-blue-100 text-blue-700 border-blue-200"
+                      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
                   )}
                 >
                   {tag}
@@ -1545,7 +1551,7 @@ export function TransactionForm({
   )
 
   const CashbackInputs = showCashbackInputs ? (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-3">
+    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2 space-y-2">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-medium text-slate-900 flex items-center gap-2">
           <Percent className="h-4 w-4 text-blue-500" />
@@ -1558,7 +1564,7 @@ export function TransactionForm({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">% Back</label>
           <Controller
@@ -1750,10 +1756,12 @@ export function TransactionForm({
               </div>
 
               {/* Category & Shop */}
-              <div className="col-span-1">
-                {CategoryInput}
-              </div>
-              <div className="col-span-1">
+              {transactionType !== 'repayment' && (
+                <div className="col-span-1">
+                  {CategoryInput}
+                </div>
+              )}
+              <div className={transactionType === 'repayment' ? "col-span-2" : "col-span-1"}>
                 {ShopInput}
               </div>
             </>

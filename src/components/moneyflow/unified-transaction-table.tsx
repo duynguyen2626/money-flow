@@ -1032,7 +1032,9 @@ export function UnifiedTransactionTable({
                               {displayName ? displayName.charAt(0).toUpperCase() : '🛍️'}
                             </span>
                           )}
-                          {displayName && <span className="truncate">{displayName}</span>}
+                          {displayName && !txn.note?.match(/^[123]\. \[(Cancel|Refund|Received)\]/) && (
+                            <span className="truncate">{displayName}</span>
+                          )}
                         </div>
                         {txn.note && (
                           <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
