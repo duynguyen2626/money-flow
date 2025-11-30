@@ -410,7 +410,6 @@ export function UnifiedTransactionTable({
         router.refresh()
       })
       .catch(err => {
-        console.error('Failed to void transaction:', err)
         if (err.message && err.message.includes('void the confirmation transaction first')) {
           toast.error("Please void the Confirmation Transaction (GD3) first.", {
             description: "Linked confirmation exists."
@@ -533,10 +532,14 @@ export function UnifiedTransactionTable({
           toast.info(`Process stopped. ${processedCount} items processed.`)
           break
         }
-        const ok = await voidTransaction(id)
-        if (ok) {
-          setStatusOverrides(prev => ({ ...prev, [id]: 'void' }))
-        } else {
+        try {
+          const ok = await voidTransaction(id)
+          if (ok) {
+            setStatusOverrides(prev => ({ ...prev, [id]: 'void' }))
+          } else {
+            errorCount++
+          }
+        } catch (error) {
           errorCount++
         }
         processedCount++

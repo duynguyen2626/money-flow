@@ -433,7 +433,6 @@ export function TransactionTable({
         router.refresh()
       })
       .catch(err => {
-        console.error('Failed to void transaction:', err)
         setVoidError('Unable to void transaction. Please try again.')
       })
       .finally(() => setIsVoiding(false))
@@ -446,10 +445,14 @@ export function TransactionTable({
     setIsVoiding(true);
     let errorCount = 0;
     for (const id of Array.from(selection)) {
-      const ok = await voidTransaction(id);
-      if (ok) {
-        setStatusOverrides(prev => ({ ...prev, [id]: 'void' }));
-      } else {
+      try {
+        const ok = await voidTransaction(id);
+        if (ok) {
+          setStatusOverrides(prev => ({ ...prev, [id]: 'void' }));
+        } else {
+          errorCount++;
+        }
+      } catch (e) {
         errorCount++;
       }
     }
