@@ -17,7 +17,7 @@ import { generateTag } from '@/lib/tag'
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
-import { NumberInputWithSuggestions } from '@/components/ui/number-input-suggestions'
+import { SmartAmountInput } from '@/components/ui/smart-amount-input'
 
 const formSchema = z.object({
   occurred_at: z.date(),
@@ -612,7 +612,14 @@ export function TransactionForm({
         label: acc.name,
         description: `${acc.type.replace('_', ' ')} - ${numberFormatter.format(acc.current_balance)}`,
         searchValue: `${acc.name} ${acc.type.replace('_', ' ')} ${acc.current_balance}`,
-        icon: (
+        icon: acc.logo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={acc.logo_url}
+            alt={acc.name}
+            className="h-5 w-5 rounded-full object-cover"
+          />
+        ) : (
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
             {getAccountInitial(acc.name)}
           </span>
@@ -634,7 +641,14 @@ export function TransactionForm({
         label: acc.name,
         description: `${acc.type.replace('_', ' ')} - ${numberFormatter.format(acc.current_balance)}`,
         searchValue: `${acc.name} ${acc.type.replace('_', ' ')} ${acc.current_balance}`,
-        icon: (
+        icon: acc.logo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={acc.logo_url}
+            alt={acc.name}
+            className="h-5 w-5 rounded-full object-cover"
+          />
+        ) : (
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
             {getAccountInitial(acc.name)}
           </span>
@@ -651,7 +665,14 @@ export function TransactionForm({
         label: person.name,
         description: person.email || 'No email',
         searchValue: `${person.name} ${person.email ?? ''}`.trim(),
-        icon: (
+        icon: person.avatar_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={person.avatar_url}
+            alt={person.name}
+            className="h-5 w-5 rounded-full object-cover"
+          />
+        ) : (
           <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
             {getAccountInitial(person.name)}
           </span>
@@ -1040,24 +1061,24 @@ export function TransactionForm({
         name="type"
         render={({ field }) => (
           <Tabs value={field.value} onValueChange={field.onChange} className="w-full">
-            <TabsList className="grid w-full grid-cols-5 gap-1 p-1 bg-slate-100 rounded-lg">
-              <TabsTrigger value="expense" className="data-[state=active]:bg-rose-100 data-[state=active]:text-rose-700 flex items-center justify-center gap-1 text-xs">
+            <TabsList className="grid w-full grid-cols-5 gap-1 p-1.5 bg-slate-100/80 rounded-xl">
+              <TabsTrigger value="expense" className="data-[state=active]:bg-white data-[state=active]:text-rose-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all">
                 <ArrowUpRight className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Expense</span>
               </TabsTrigger>
-              <TabsTrigger value="income" className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 flex items-center justify-center gap-1 text-xs">
+              <TabsTrigger value="income" className="data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all">
                 <ArrowDownLeft className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Income</span>
               </TabsTrigger>
-              <TabsTrigger value="transfer" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 flex items-center justify-center gap-1 text-xs">
+              <TabsTrigger value="transfer" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all">
                 <ArrowRightLeft className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Transfer</span>
               </TabsTrigger>
-              <TabsTrigger value="debt" className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-700 flex items-center justify-center gap-1 text-xs">
+              <TabsTrigger value="debt" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all">
                 <Wallet className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Lending</span>
               </TabsTrigger>
-              <TabsTrigger value="repayment" className="data-[state=active]:bg-lime-100 data-[state=active]:text-lime-700 flex items-center justify-center gap-1 text-xs">
+              <TabsTrigger value="repayment" className="data-[state=active]:bg-white data-[state=active]:text-lime-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all">
                 <RotateCcw className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Repay</span>
               </TabsTrigger>
@@ -1427,47 +1448,19 @@ export function TransactionForm({
 
   const AmountInput = (
     <div className="space-y-3">
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-          <DollarSign className="h-4 w-4 text-slate-500" />
-          Amount
-        </label>
-        <div className="relative">
-          <Controller
-            control={control}
-            name="amount"
-            render={({ field }) => (
-              <NumberInputWithSuggestions
-                value={field.value ? new Intl.NumberFormat('en-US').format(field.value) : ''}
-                onChange={val => {
-                  const numericValue = val.replace(/[^0-9]/g, '');
-
-                  if (numericValue === '') {
-                    field.onChange(undefined);
-                    return;
-                  }
-
-                  const number = parseInt(numericValue, 10);
-                  if (!isNaN(number)) {
-                    field.onChange(number);
-                  }
-                }}
-                disabled={isConfirmRefund}
-                title={isConfirmRefund ? 'This field is locked in Refund mode' : undefined}
-                className="h-11 w-full pr-9"
-                placeholder="0"
-              />
-            )}
+      <Controller
+        control={control}
+        name="amount"
+        render={({ field }) => (
+          <SmartAmountInput
+            value={field.value}
+            onChange={field.onChange}
+            disabled={isConfirmRefund}
+            placeholder="0"
+            error={errors.amount?.message}
           />
-          {isConfirmRefund && (
-            <Lock className="absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-          )}
-        </div>
-        {errors.amount && (
-          <p className="text-sm text-red-600">{errors.amount.message}</p>
         )}
-      </div>
-
+      />
       {progressLoading && (
         <p className="text-xs text-slate-400">Loading cashback history...</p>
       )}
@@ -1533,22 +1526,20 @@ export function TransactionForm({
             control={control}
             name="cashback_share_fixed"
             render={({ field }) => (
-              <NumberInputWithSuggestions
-                value={field.value ? new Intl.NumberFormat('en-US').format(field.value) : ''}
+              <SmartAmountInput
+                value={field.value}
                 onChange={val => {
-                  const numericValue = val.replace(/[^0-9]/g, '')
-                  if (numericValue === '') {
+                  if (val === undefined) {
                     field.onChange(undefined)
                     return
                   }
-                  const number = parseInt(numericValue, 10)
-                  if (Number.isNaN(number)) return
-                  const clamped = amountValue > 0 ? Math.min(number, amountValue) : number
+                  const clamped = amountValue > 0 ? Math.min(val, amountValue) : val
                   field.onChange(clamped)
                 }}
                 disabled={budgetMaxed}
-                className="w-full"
                 placeholder="Enter fixed amount"
+                label="Fixed Amount"
+                className="w-full"
               />
             )}
           />
@@ -1673,48 +1664,83 @@ export function TransactionForm({
       {/* Type Selection (Full Width) */}
       {TypeInput}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {/* Row 1: Date & Tag */}
-        <div className={transactionType === 'debt' || transactionType === 'repayment' ? "col-span-1" : "col-span-2"}>
-          {DateInput}
-        </div>
-        {(transactionType === 'debt' || transactionType === 'repayment') && (
-          <div className="col-span-1">
-            {TagInput}
-          </div>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        {(transactionType === 'debt' || transactionType === 'repayment') ? (
+          <>
+            {/* LENDING MODE: Person First */}
+            <div className="col-span-2">
+              {PersonInput}
+            </div>
+
+            {/* Date & Tag */}
+            <div className="col-span-1">
+              {DateInput}
+            </div>
+            <div className="col-span-1">
+              {TagInput}
+            </div>
+
+            {/* From Account & Amount (Side-by-Side) */}
+            <div className="col-span-1">
+              {SourceAccountInput}
+            </div>
+            <div className="col-span-1">
+              {AmountInput}
+            </div>
+
+            {/* Category & Shop */}
+            <div className="col-span-1">
+              {CategoryInput}
+            </div>
+            <div className="col-span-1">
+              {ShopInput}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* OTHER MODES */}
+            <div className="col-span-2">
+              {DateInput}
+            </div>
+
+            {transactionType === 'transfer' ? (
+              <>
+                <div className="col-span-1">
+                  {SourceAccountInput}
+                </div>
+                <div className="col-span-1">
+                  {DestinationAccountInput}
+                </div>
+                <div className="col-span-2">
+                  {AmountInput}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="col-span-1">
+                  {CategoryInput}
+                </div>
+                <div className="col-span-1">
+                  {ShopInput}
+                </div>
+                <div className="col-span-1">
+                  {SourceAccountInput}
+                </div>
+                <div className="col-span-1">
+                  {AmountInput}
+                </div>
+                <div className="col-span-2">
+                  {PersonInput}
+                </div>
+              </>
+            )}
+          </>
         )}
 
-        {/* Row 2: Category & Shop */}
-        <div className="col-span-1">
-          {CategoryInput}
-        </div>
-        <div className="col-span-1">
-          {ShopInput}
-        </div>
-
-        {/* Row 3: Person & Accounts */}
-        <div className="col-span-2">
-          {PersonInput}
-        </div>
-        <div className="col-span-1">
-          {SourceAccountInput}
-        </div>
-        {transactionType === 'transfer' && (
-          <div className="col-span-1">
-            {DestinationAccountInput}
-          </div>
-        )}
-
-        {/* Row 4: Amount */}
-        <div className="col-span-2">
-          {AmountInput}
-        </div>
-
-        {/* Row 5: Cashback & Extras */}
-        <div className="col-span-2 space-y-4">
+        {/* Common Bottom Section */}
+        <div className="col-span-2 space-y-4 pt-2 border-t border-slate-100">
           {VoluntaryCashbackInput}
           {CashbackInputs}
-          {/* NoteInput */}
           {NoteInput}
         </div>
       </div>
