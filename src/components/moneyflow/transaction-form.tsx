@@ -1129,6 +1129,7 @@ export function TransactionForm({
                 inputPlaceholder="Search category..."
                 emptyState="No matching category"
                 disabled={false} // Explicitly allow selecting category in refund modal
+                className="h-11"
               />
             </div>
           )}
@@ -1176,6 +1177,7 @@ export function TransactionForm({
               }
               inputPlaceholder="Search shop..."
               emptyState="No shops yet"
+              className="h-11"
             />
           )}
         />
@@ -1203,6 +1205,7 @@ export function TransactionForm({
               placeholder="Select person"
               inputPlaceholder="Search person..."
               emptyState="No person found"
+              className="h-11"
             />
           )}
         />
@@ -1256,6 +1259,7 @@ export function TransactionForm({
               placeholder="Select destination"
               inputPlaceholder="Search account..."
               emptyState="No account found"
+              className="h-11"
             />
           )}
         />
@@ -1295,7 +1299,7 @@ export function TransactionForm({
 
               field.onChange(date)
             }}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
           />
         )}
       />
@@ -1322,7 +1326,7 @@ export function TransactionForm({
                   setManualTagMode(true);
                 }
               }}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               placeholder="Enter tag (e.g., NOV25)"
             />
           </div>
@@ -1410,6 +1414,7 @@ export function TransactionForm({
               inputPlaceholder="Search account..."
               emptyState="No account found"
               disabled={isRefundMode && refundStatus === 'pending'}
+              className="h-11"
             />
           )}
         />
@@ -1449,7 +1454,7 @@ export function TransactionForm({
                 }}
                 disabled={isConfirmRefund}
                 title={isConfirmRefund ? 'This field is locked in Refund mode' : undefined}
-                className="w-full pr-9"
+                className="h-11 w-full pr-9"
                 placeholder="0"
               />
             )}
@@ -1668,21 +1673,50 @@ export function TransactionForm({
       {/* Type Selection (Full Width) */}
       {TypeInput}
 
-      <div className="space-y-4">
-        {/* Core Fields */}
-        {PersonInput}
-        {CategoryInput}
-        {DateInput}
-        {SourceAccountInput}
-        {transactionType === 'transfer' && DestinationAccountInput}
-        {AmountInput}
-        {VoluntaryCashbackInput}
-        {CashbackInputs}
-        {ShopInput}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {/* Row 1: Date & Tag */}
+        <div className={transactionType === 'debt' || transactionType === 'repayment' ? "col-span-1" : "col-span-2"}>
+          {DateInput}
+        </div>
+        {(transactionType === 'debt' || transactionType === 'repayment') && (
+          <div className="col-span-1">
+            {TagInput}
+          </div>
+        )}
 
-        {/* Additional Fields */}
-        {TagInput}
-        {NoteInput}
+        {/* Row 2: Category & Shop */}
+        <div className="col-span-1">
+          {CategoryInput}
+        </div>
+        <div className="col-span-1">
+          {ShopInput}
+        </div>
+
+        {/* Row 3: Person & Accounts */}
+        <div className="col-span-2">
+          {PersonInput}
+        </div>
+        <div className="col-span-1">
+          {SourceAccountInput}
+        </div>
+        {transactionType === 'transfer' && (
+          <div className="col-span-1">
+            {DestinationAccountInput}
+          </div>
+        )}
+
+        {/* Row 4: Amount */}
+        <div className="col-span-2">
+          {AmountInput}
+        </div>
+
+        {/* Row 5: Cashback & Extras */}
+        <div className="col-span-2 space-y-4">
+          {VoluntaryCashbackInput}
+          {CashbackInputs}
+          {/* NoteInput */}
+          {NoteInput}
+        </div>
       </div>
 
       {status && (
