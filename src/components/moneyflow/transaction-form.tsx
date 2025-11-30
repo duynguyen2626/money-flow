@@ -15,7 +15,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateTag } from '@/lib/tag'
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
-import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw, ChevronLeft } from 'lucide-react'
+import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw, ChevronLeft, ExternalLink } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import { SmartAmountInput } from '@/components/ui/smart-amount-input'
@@ -636,17 +636,19 @@ export function TransactionForm({
 
   const accountOptions = useMemo(
     () => {
-      let filteredAccounts = sourceAccounts;
+      let filteredAccounts = sourceAccounts
+        .filter(acc => {
+          // Filter by type if a filter is active
+          if (accountFilter === 'bank' && acc.type !== 'bank') return false
+          if (accountFilter === 'credit' && acc.type !== 'credit_card') return false
+          if (accountFilter === 'other' && (acc.type === 'bank' || acc.type === 'credit_card')) return false
 
-      // Filter by type based on accountFilter state
-      if (accountFilter !== 'all') {
-        filteredAccounts = sourceAccounts.filter(acc => {
-          if (accountFilter === 'bank') return acc.type === 'bank';
-          if (accountFilter === 'credit') return acc.type === 'credit_card';
-          if (accountFilter === 'other') return acc.type !== 'bank' && acc.type !== 'credit_card';
-          return true;
-        });
-      }
+          // Hide system accounts (e.g., "System Account") unless in specific modes if needed
+          // Based on previous context, REFUND_PENDING_ACCOUNT_ID is a system account.
+          if (acc.id === REFUND_PENDING_ACCOUNT_ID && (!isRefundMode || refundStatus !== 'pending')) return false
+
+          return true
+        })
 
       // If category is selected, sort relevant accounts to top (existing logic)
       if (watchedCategoryId) {
@@ -675,7 +677,7 @@ export function TransactionForm({
         ),
       }))
     },
-    [sourceAccounts, watchedCategoryId, categories, transactionType, accountFilter]
+    [sourceAccounts, watchedCategoryId, categories, transactionType, accountFilter, isRefundMode, refundStatus]
   )
 
   const destinationAccountOptions = useMemo(
@@ -1290,25 +1292,39 @@ export function TransactionForm({
         )}
       </div>
 
-      {watchedPersonId && !debtAccountByPerson.get(watchedPersonId) && (
+      {watchedPersonId && !debtAccountByPerson.get(watchedPersonId) ? (
         <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
           <div className="space-y-1">
             <p className="font-semibold">This person does not have a debt account.</p>
             <p>A debt account will be created automatically when you click the button.</p>
             {debtEnsureError && (
-              <p className="text-rose-600">{debtEnsureError}</p>
+              <p className="font-semibold text-red-600">{debtEnsureError}</p>
             )}
           </div>
           <button
             type="button"
-            className="rounded-md bg-amber-600 px-3 py-1 text-[11px] font-semibold text-white shadow-sm transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
             onClick={handleEnsureDebtAccount}
             disabled={isEnsuringDebt}
+            className="shrink-0 rounded bg-amber-600 px-3 py-1.5 font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
           >
             {isEnsuringDebt ? 'Creating...' : 'Create & Link Now'}
           </button>
         </div>
-      )}
+      ) : watchedPersonId && debtAccountByPerson.get(watchedPersonId) ? (
+        <div className="flex items-center gap-2 mt-2">
+          <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+            Linked
+          </span>
+          <a
+            href={`/people/${watchedPersonId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+          >
+            View Details <ExternalLink className="h-3 w-3" />
+          </a>
+        </div>
+      ) : null}
       {errors.debt_account_id && (
         <p className="text-sm text-red-600">{errors.debt_account_id.message}</p>
       )}

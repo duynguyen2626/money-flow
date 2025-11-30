@@ -98,19 +98,38 @@ export function SmartAmountInput({
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value
-        setInputValue(val)
+        // Allow digits, commas, dots, and math operators
+        if (!/^[0-9+\-*/().,\s]*$/.test(val)) return
+
         setMathError(null)
 
-        // If it's a simple number being typed, we can update the parent immediately
-        // but if it looks like math, we wait for blur/enter
         const raw = val.replace(/,/g, '')
-        if (!/[+\-*/]/.test(raw)) {
-            const num = parseFloat(raw)
+
+        // If it's a math expression, keep as is
+        if (/[+\-*/]/.test(raw)) {
+            setInputValue(val)
+            return
+        }
+
+        // If it's a number, format it with commas
+        if (raw && !isNaN(Number(raw))) {
+            // Check if user is typing a decimal or just deleted a comma
+            // Simple approach: format only if it looks like a complete integer for now
+            // But to support typing "1000", we should format.
+            // However, formatting while typing can be tricky with cursor position.
+            // For now, let's just allow raw input and format on blur, OR
+            // format if it's a simple integer addition.
+
+            // User request: "Amount nhập (đang focus on) không có ký tự phân cách thập phân" -> implies they WANT it.
+            // Let's try to format it if it's a valid integer.
+            const num = parseInt(raw)
             if (!isNaN(num)) {
-                // Don't update parent yet if we want to support typing "22" and suggesting "22000"
-                // Actually, for immediate feedback, we might want to update.
-                // But the requirement says "suggestions".
+                setInputValue(new Intl.NumberFormat('en-US').format(num))
+            } else {
+                setInputValue(val)
             }
+        } else {
+            setInputValue(val)
         }
     }
 
@@ -194,9 +213,6 @@ export function SmartAmountInput({
                                 }}
                             >
                                 <span className="font-medium text-slate-700">{new Intl.NumberFormat('en-US').format(s)}</span>
-                                <span className="text-xs text-slate-400">
-                                    {formatVietnameseCurrencyText(s).map(p => `${p.value} ${p.unit}`).join(' ')}
-                                </span>
                             </button>
                         ))}
                     </div>
