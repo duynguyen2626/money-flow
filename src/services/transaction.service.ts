@@ -1288,7 +1288,14 @@ export async function requestRefund(
         }
 
         // Update transaction note to indicate debt was cancelled
-        const currentNote = (existing as any).note ?? '';
+        // Fetch the updated note (which now has "1.[ID]" prefix)
+        const { data: updatedTxn } = await supabase
+          .from('transactions')
+          .select('note')
+          .eq('id', transactionId)
+          .single();
+
+        const currentNote = (updatedTxn as any)?.note ?? (existing as any).note ?? '';
         const updatedNote = `${currentNote} [Cancelled Debt: ${personName}]`;
         await (supabase.from('transactions').update as any)({
           note: updatedNote

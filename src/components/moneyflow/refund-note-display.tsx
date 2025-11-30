@@ -31,12 +31,7 @@ export function RefundNoteDisplay({
 
     return (
         <div className="flex items-center gap-1.5 max-w-[300px]">
-            {/* Group ID Badge */}
-            <span className="inline-flex items-center rounded-md bg-purple-100 px-1.5 py-0.5 text-[10px] font-mono font-bold text-purple-800 shrink-0">
-                {parsed.groupId}
-            </span>
-
-            {/* Shop Icon (if available) */}
+            {/* Shop Icon - Always show first if available */}
             {shopLogoUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -47,24 +42,36 @@ export function RefundNoteDisplay({
                 />
             )}
 
-            {/* Arrow for GD3 (Confirmed) */}
-            {isConfirmed && <span className="text-lg leading-none shrink-0">➡️</span>}
+            {/* Group ID Badge */}
+            <span className="inline-flex items-center rounded-md bg-purple-100 px-1.5 py-0.5 text-[10px] font-mono font-bold text-purple-800 shrink-0">
+                {parsed.groupId}
+            </span>
 
-            {/* Bank/Account Icon (for GD3 only) */}
-            {isConfirmed && accountLogoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                    src={accountLogoUrl}
-                    alt={accountName || 'Account'}
-                    className="h-5 w-5 object-contain rounded-none shrink-0"
-                    title={accountName || undefined}
-                />
+            {/* For GD3: Show arrow and bank icon + account name */}
+            {isConfirmed && (
+                <>
+                    <span className="text-lg leading-none shrink-0">➡️</span>
+                    {accountLogoUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                            src={accountLogoUrl}
+                            alt={accountName || 'Account'}
+                            className="h-5 w-5 object-contain rounded-none shrink-0"
+                            title={accountName || undefined}
+                        />
+                    )}
+                    <span className="text-xs font-semibold text-slate-700 truncate">
+                        {accountName || 'Account'}
+                    </span>
+                </>
             )}
 
-            {/* Clean Note Text */}
-            <span className="text-xs text-slate-600 truncate" title={parsed.cleanNote}>
-                {parsed.cleanNote}
-            </span>
+            {/* For GD2: Show clean note text */}
+            {!isConfirmed && (
+                <span className="text-xs text-slate-600 truncate" title={parsed.cleanNote}>
+                    {parsed.cleanNote}
+                </span>
+            )}
         </div>
     )
 }

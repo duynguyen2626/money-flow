@@ -1116,7 +1116,11 @@ export function UnifiedTransactionTable({
                     }
 
                     // Render for Transfer / Debt / Repayment (General Context)
-                    if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
+                    // Also handle Refund transactions (GD3) which are income type but should show flow
+                    const isRefundTransaction = effectiveStatus === 'completed' &&
+                      (txn.source_name?.includes('Pending') || txn.source_name?.includes('Refund'));
+
+                    if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment' || isRefundTransaction) {
                       return (
                         <CustomTooltip content={`${txn.source_name ?? 'Unknown'} ➡️ ${txn.destination_name ?? 'Unknown'}`}>
                           <div className="flex items-center gap-2 cursor-help min-w-[150px]">
