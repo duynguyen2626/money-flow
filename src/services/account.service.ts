@@ -423,7 +423,7 @@ async function fetchTransactions(
             cashback_share_percent,
             cashback_share_fixed,
             profiles ( name ),
-            accounts (name),
+            accounts (name, logo_url),
             categories (name)
           )
         `)
@@ -469,7 +469,7 @@ async function fetchTransactions(
           cashback_share_percent,
           cashback_share_fixed,
           profiles ( name ),
-          accounts (name),
+          accounts (name, logo_url),
           categories (name)
         )
       `)

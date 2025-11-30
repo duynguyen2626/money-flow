@@ -161,16 +161,43 @@ async function buildTransactionLines(
       person_id: input.person_id ?? null,
     });
 
-  } else if ((input.type === 'debt' || input.type === 'transfer') && input.debt_account_id) {
+  } else if (input.type === 'debt' && input.debt_account_id && input.category_id) {
+    // DEBT TRANSACTION (Lending/Mua hộ)
+    // Logic: User spends money, optionally shares cost with another person
+    // Example: Buy 100k food, person owes 50k
+    // Lines:
+    // 1. Credit source account: -100k (money out)
+    // 2. Debit category (Food): +100k (expense recorded)
+    // 3. Track person_id and cashback in metadata on category line
+
     const originalAmount = Math.abs(input.amount);
     const sharePercentEntry = Math.max(0, Number(input.cashback_share_percent ?? 0));
     const sharePercentCapped = Math.min(100, sharePercentEntry);
     const sharePercentRate = sharePercentCapped / 100;
     const shareFixed = Math.max(0, Number(input.cashback_share_fixed ?? 0));
-    const percentContribution = sharePercentRate * originalAmount;
-    const rawCashback = percentContribution + shareFixed;
-    const cashbackGiven = Math.min(originalAmount, Math.max(0, rawCashback));
-    const debtAmount = Math.max(0, originalAmount - cashbackGiven);
+
+    // Line 1: Credit source account (money out)
+    lines.push({
+      account_id: input.source_account_id,
+      amount: -originalAmount,
+      type: 'credit',
+    });
+
+    // Line 2: Debit category (expense recorded with user-selected category!)
+    lines.push({
+      category_id: input.category_id, // USE USER'S SELECTED CATEGORY!
+      amount: originalAmount,
+      type: 'debit',
+      original_amount: originalAmount,
+      cashback_share_percent: sharePercentRate,
+      cashback_share_fixed: shareFixed,
+      person_id: input.person_id ?? null, // Track who owes money
+      metadata: input.is_voluntary ? { is_voluntary: true } : undefined,
+    });
+
+  } else if (input.type === 'transfer' && input.debt_account_id) {
+    // TRANSFER TRANSACTION (Money Transfer between accounts)
+    const originalAmount = Math.abs(input.amount);
 
     lines.push({
       account_id: input.source_account_id,
@@ -179,30 +206,9 @@ async function buildTransactionLines(
     });
     lines.push({
       account_id: input.debt_account_id,
-      amount: debtAmount,
+      amount: originalAmount,
       type: 'debit',
-      original_amount: originalAmount,
-      cashback_share_percent: sharePercentRate,
-      cashback_share_fixed: shareFixed,
-      person_id: input.person_id ?? null,
-      metadata: input.is_voluntary ? { is_voluntary: true } : undefined,
     });
-
-    if (cashbackGiven > 0) {
-      const discountCategoryId = await resolveDiscountCategoryId(
-        supabase,
-        input.discount_category_id || undefined
-      );
-      if (!discountCategoryId) {
-        console.error('No fallback category found for discount line');
-        return null;
-      }
-      lines.push({
-        category_id: discountCategoryId,
-        amount: cashbackGiven,
-        type: 'debit',
-      });
-    }
   } else {
     console.error('Invalid transaction type or missing data');
     return null;
@@ -1259,6 +1265,44 @@ export async function requestRefund(
       await (supabase.from('transactions').update as any)({ status: 'waiting_refund' }).eq('id', transactionId);
     }
 
+    // NEW LOGIC: Full Refund Cleanup - Unlink Person from Original Transaction
+    if (newRefundStatus === 'full') {
+      // Find person_id from original lines
+      const personLine = lines.find(l => l.person_id);
+      if (personLine?.person_id) {
+        // Get person name for note
+        const { data: personData } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', personLine.person_id)
+          .single();
+
+        const personName = (personData as any)?.name || 'Unknown';
+
+        // Update all lines to remove person_id
+        for (const line of originalLines) {
+          if (!line?.id) continue;
+          await (supabase.from('transaction_lines').update as any)({
+            person_id: null
+          }).eq('id', line.id);
+        }
+
+        // Update transaction note to indicate debt was cancelled
+        // Fetch the updated note (which now has "1.[ID]" prefix)
+        const { data: updatedTxn } = await supabase
+          .from('transactions')
+          .select('note')
+          .eq('id', transactionId)
+          .single();
+
+        const currentNote = (updatedTxn as any)?.note ?? (existing as any).note ?? '';
+        const updatedNote = `${currentNote} [Cancelled Debt: ${personName}]`;
+        await (supabase.from('transactions').update as any)({
+          note: updatedNote
+        }).eq('id', transactionId);
+      }
+    }
+
   } catch (err) {
     console.error('Failed to tag original transaction with refund metadata:', err)
   }
@@ -1325,13 +1369,25 @@ export async function confirmRefund(
 
   const userId = await resolveCurrentUserId(supabase)
 
-  // Extract Group ID from pending note if exists, or generate new one
+  // Fetch original transaction to get shop_id
+  let originalShopId = null;
+  if (originalTransactionId) {
+    const { data: originalTxn } = await supabase
+      .from('transactions')
+      .select('shop_id')
+      .eq('id', originalTransactionId)
+      .single();
+    originalShopId = (originalTxn as any)?.shop_id ?? null;
+  }
+
   // Extract Group ID from pending note if exists, or generate new one
   const pendingNote = (pending as any).note ?? '';
   const groupTagMatch = pendingNote.match(/\[[A-Z0-9]+\]/);
   const groupTag = groupTagMatch ? groupTagMatch[0] : `[${pendingTransactionId.slice(0, 4).toUpperCase()}]`;
 
-  const confirmNote = `3.${groupTag} Confirmed refund for ${(pending as any).note ?? (pending as any).id}`
+  // Improved note format: "3.[ID] Confirmed Refund"
+  const confirmNote = `3.${groupTag} Confirmed Refund`;
+
   const confirmationMetadata = {
     refund_status: 'confirmed',
     linked_transaction_id: originalTransactionId ?? pendingTransactionId,
@@ -1348,6 +1404,7 @@ export async function confirmRefund(
       status: 'completed', // Set to Completed as requested
       tag: (pending as any).tag,
       created_by: userId,
+      shop_id: originalShopId ?? (pending as any).shop_id ?? null, // Use original shop_id if available
     })
     .select()
     .single()
@@ -1361,6 +1418,7 @@ export async function confirmRefund(
     {
       transaction_id: confirmTxn.id,
       account_id: targetAccountId,
+      category_id: REFUND_CATEGORY_ID, // Set Refund category
       amount: amountToConfirm,
       type: 'debit',
       metadata: confirmationMetadata,
@@ -1368,6 +1426,7 @@ export async function confirmRefund(
     {
       transaction_id: confirmTxn.id,
       account_id: SYSTEM_ACCOUNTS.PENDING_REFUNDS,
+      category_id: REFUND_CATEGORY_ID, // Set Refund category
       amount: -amountToConfirm,
       type: 'credit',
       metadata: confirmationMetadata,

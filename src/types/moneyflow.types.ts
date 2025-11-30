@@ -12,6 +12,7 @@ export type Category = {
   parent_id?: string | null
   icon?: string | null
   image_url?: string | null
+  mcc_codes?: string[] | null
 }
 
 export type Shop = {

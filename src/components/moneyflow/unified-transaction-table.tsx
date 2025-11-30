@@ -27,6 +27,7 @@ import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
 import { cn } from "@/lib/utils"
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
+import { RefundNoteDisplay } from './refund-note-display'
 
 type ColumnKey =
   | "date"
@@ -1021,25 +1022,18 @@ export function UnifiedTransactionTable({
                           </span>
                         )}
                         {txn.note && (
-                          <div className="flex items-center gap-1">
-                            <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
-                              <span className="text-sm text-slate-700 font-medium truncate cursor-help max-w-[200px]">
-                                {txn.note}
-                              </span>
-                            </CustomTooltip>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard.writeText(txn.id);
-                                setCopiedId(txn.id);
-                                setTimeout(() => setCopiedId(null), 2000);
-                              }}
-                              className="text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                              title="Copy Transaction ID"
-                            >
-                              {copiedId === txn.id ? <CheckCheck className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
-                            </button>
-                          </div>
+                          <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
+                            <div className="max-w-[300px]">
+                              <RefundNoteDisplay
+                                note={txn.note}
+                                shopLogoUrl={displayIcon}
+                                shopName={displayName}
+                                accountLogoUrl={effectiveStatus === 'completed' && txn.note?.startsWith('3.') ? txn.destination_logo : txn.source_logo}
+                                accountName={effectiveStatus === 'completed' && txn.note?.startsWith('3.') ? txn.destination_name : txn.source_name}
+                                status={effectiveStatus}
+                              />
+                            </div>
+                          </CustomTooltip>
                         )}
                       </div>
                     );
@@ -1126,7 +1120,11 @@ export function UnifiedTransactionTable({
                     }
 
                     // Render for Transfer / Debt / Repayment (General Context)
-                    if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
+                    // Also handle Refund transactions (GD3) which are income type but should show flow
+                    const isRefundTransaction = effectiveStatus === 'completed' &&
+                      (txn.source_name?.includes('Pending') || txn.source_name?.includes('Refund'));
+
+                    if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment' || isRefundTransaction) {
                       return (
                         <CustomTooltip content={`${txn.source_name ?? 'Unknown'} ➡️ ${txn.destination_name ?? 'Unknown'}`}>
                           <div className="flex items-center gap-2 cursor-help min-w-[150px]">
@@ -1141,10 +1139,19 @@ export function UnifiedTransactionTable({
                     // Render for Single Account (Expense/Income)
                     const accountLine = txn.transaction_lines?.find(l => l.accounts?.name === txn.account_name)
                     const displayAccountId = accountLine?.account_id
+                    const accountLogo = accountLine?.accounts?.logo_url
 
                     return (
                       <div className="flex items-center gap-2 min-w-[150px]">
-                        {txn.source_name && sourceIcon}
+                        {txn.source_name ? sourceIcon : (
+                          accountLogo ? (
+                            <img src={accountLogo} alt={txn.account_name ?? ''} className="h-8 w-8 object-contain rounded-none" />
+                          ) : (
+                            <div className="flex h-8 w-8 items-center justify-center bg-slate-100 text-sm font-bold border rounded-none">
+                              {(txn.account_name ?? '?').charAt(0).toUpperCase()}
+                            </div>
+                          )
+                        )}
                         <CustomTooltip content={txn.account_name}>
                           {displayAccountId ? (
                             <Link

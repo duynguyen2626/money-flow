@@ -1,9 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { Check, ChevronDown, Lock } from 'lucide-react'
+import { Check, ChevronDown, Lock, Plus } from 'lucide-react'
 import * as PopoverPrimitive from '@radix-ui/react-popover'
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from 'cmdk'
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList, CommandGroup } from 'cmdk'
 
 const cn = (...classes: (string | undefined)[]) => classes.filter(Boolean).join(' ')
 
@@ -24,6 +24,7 @@ type ComboboxProps = {
   emptyState?: string
   disabled?: boolean
   className?: string
+  onAddNew?: () => void
 }
 
 export function Combobox({
@@ -35,9 +36,31 @@ export function Combobox({
   emptyState = 'No results found',
   disabled = false,
   className,
+  onAddNew,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
+  const [mounted, setMounted] = React.useState(false)
   const selectedItem = items.find(item => item.value === value)
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        className={cn(
+          'flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm ring-offset-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
+          className
+        )}
+      >
+        <span className="block truncate text-gray-500">{placeholder}</span>
+        <ChevronDown className="h-4 w-4 opacity-50" />
+      </button>
+    )
+  }
 
   const handleSelect = (nextValue: string) => {
     onValueChange(nextValue || undefined)
@@ -110,6 +133,21 @@ export function Combobox({
                 </CommandItem>
               )
             })}
+            {onAddNew && (
+              <CommandGroup className="border-t pt-1 mt-1 sticky bottom-0 bg-white">
+                <CommandItem
+                  onSelect={() => {
+                    onAddNew()
+                    setOpen(false)
+                  }}
+                  value="CREATE_NEW_ITEM_TRIGGER"
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-blue-600 font-medium cursor-pointer hover:bg-blue-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  Thêm mới...
+                </CommandItem>
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverPrimitive.Content>
