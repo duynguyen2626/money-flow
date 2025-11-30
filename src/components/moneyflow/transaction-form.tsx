@@ -222,6 +222,7 @@ export function TransactionForm({
   const [transactionType, setTransactionType] = useState<'expense' | 'income' | 'debt' | 'transfer' | 'repayment'>(defaultType || 'expense')
   const [accountFilter, setAccountFilter] = useState<'all' | 'bank' | 'credit' | 'other'>('all')
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [payerName, setPayerName] = useState<string>('')
 
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
   const [isShopDialogOpen, setIsShopDialogOpen] = useState(false)
@@ -329,7 +330,15 @@ export function TransactionForm({
     form.setValue('category_id', refundCategoryId ?? REFUND_CATEGORY_ID, { shouldValidate: true })
     const currentNote = form.getValues('note')
     if (!currentNote || currentNote.trim().length === 0) {
-      const baseNote = initialValues?.note ?? ''
+      // Clean the note - use only the original note without shop name
+      let baseNote = initialValues?.note ?? ''
+
+      // If the note already starts with "Refund:", extract the actual note part
+      if (baseNote.startsWith('Refund:')) {
+        baseNote = baseNote.replace(/^Refund:\s*/, '').trim()
+      }
+
+      // Build the refund note with just the original note
       const nextNote = baseNote ? `Refund: ${baseNote}` : 'Refund'
       form.setValue('note', nextNote)
     }
@@ -430,13 +439,23 @@ export function TransactionForm({
           : Math.max(0, rawPercent)
       const sanitizedFixed = Math.max(0, rawFixed)
 
+      // Check if this is a group debt repayment and append payer name to note
+      const selectedPerson = values.person_id ? personMap.get(values.person_id) : null
+      const isGroupDebt = selectedPerson?.name?.toLowerCase().includes('clt') ||
+        selectedPerson?.name?.toLowerCase().includes('group')
+
+      let finalNote = values.note ?? ''
+      if (values.type === 'repayment' && isGroupDebt && payerName.trim()) {
+        finalNote = `${finalNote} (paid by ${payerName.trim()})`
+      }
+
       const payload: Parameters<typeof createTransaction>[0] = {
         ...values,
         occurred_at: values.occurred_at.toISOString(),
         shop_id: values.shop_id ?? undefined,
         cashback_share_percent: sanitizedPercent > 0 ? sanitizedPercent : undefined,
         cashback_share_fixed: sanitizedFixed > 0 ? sanitizedFixed : undefined,
-        note: values.note ?? '',
+        note: finalNote,
         destination_account_id: values.type === 'income' ? values.source_account_id : undefined,
         is_voluntary: values.is_voluntary,
       }
@@ -1291,6 +1310,30 @@ export function TransactionForm({
           </p>
         )}
       </div>
+
+      {/* Payer Name Input for Group Debt Repayments */}
+      {transactionType === 'repayment' && watchedPersonId && (() => {
+        const selectedPerson = personMap.get(watchedPersonId)
+        const isGroupDebt = selectedPerson?.name?.toLowerCase().includes('clt') ||
+          selectedPerson?.name?.toLowerCase().includes('group')
+        return isGroupDebt ? (
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700">
+              Payer Name (Who paid?)
+            </label>
+            <input
+              type="text"
+              value={payerName}
+              onChange={(e) => setPayerName(e.target.value)}
+              placeholder="Enter payer name..."
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+            <p className="text-xs text-slate-500">
+              This will be appended to the note as "(paid by [name])"
+            </p>
+          </div>
+        ) : null
+      })()}
 
       {watchedPersonId && !debtAccountByPerson.get(watchedPersonId) ? (
         <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
