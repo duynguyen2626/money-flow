@@ -80,16 +80,20 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
     .eq('id', id)
     .maybeSingle()
 
-  if (error || !data) {
+  if (error) {
     // Treat "no rows found" as a simple not-found instead of a hard error
-    if (error?.code && error.code === 'PGRST116') {
+    if (error.code === 'PGRST116') {
       return null
     }
     console.error('Error fetching account details:', {
       accountId: id,
-      message: error?.message ?? 'unknown error',
-      code: error?.code,
+      message: error.message,
+      code: error.code,
     })
+    return null
+  }
+
+  if (!data) {
     return null
   }
 

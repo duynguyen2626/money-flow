@@ -124,7 +124,7 @@ export async function getDashboardStats(
       .select('type, current_balance')
       .eq('owner_id', user.id)
       .eq('is_active', true)
-      .in('type', ['bank', 'cash', 'savings', 'investment', 'asset'])
+      .in('type', ['bank', 'cash', 'savings'])
 
     if (assetsError) throw assetsError
     const totalAssets =
