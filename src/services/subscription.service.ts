@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { Subscription, SubscriptionMember } from '@/types/moneyflow.types'
 import { ensureDebtAccount } from './people.service'
+import { getPersonDetails } from './debt.service'
 import { syncTransactionToSheet } from './sheet.service'
 import { resolveMissingDebtAccountIds } from '@/lib/debt-account-links'
 
@@ -261,7 +262,12 @@ async function syncSubscriptionMembers(
 
   const payload =
     members
-      ?.filter(member => member?.profile_id)
+      ?.map(member => ({
+        profile_id: (member as any)?.profile_id ?? (member as any)?.id,
+        fixed_amount: member?.fixed_amount,
+        slots: Number(member?.slots),
+      }))
+      .filter(member => member?.profile_id)
       .map<SubscriptionMemberInsert>(member => ({
         id: randomUUID(),
         subscription_id: subscriptionId,
@@ -270,7 +276,7 @@ async function syncSubscriptionMembers(
           typeof member.fixed_amount === 'number' && !Number.isNaN(member.fixed_amount)
             ? member.fixed_amount
             : null,
-        slots: typeof member.slots === 'number' ? member.slots : 1,
+        slots: Number.isFinite(member.slots) ? Number(member.slots) : 1,
       })) ?? []
 
   if (payload.length === 0) {
@@ -373,7 +379,13 @@ export async function updateSubscription(id: string, payload: SubscriptionPayloa
   }
 
   if (Array.isArray(payload.members)) {
-    await syncSubscriptionMembers(supabase, id, payload.members)
+    const normalizedMembers = payload.members.map(member => ({
+      profile_id: (member as any).profile_id ?? (member as any).id,
+      fixed_amount: member.fixed_amount,
+      slots: Number.isFinite(Number(member.slots)) ? Number(member.slots) : 1,
+    }))
+
+    await syncSubscriptionMembers(supabase, id, normalizedMembers)
   }
 
   return true
@@ -429,23 +441,29 @@ type DueSubscription = SubscriptionWithMembersRow & {
   members_with_debt?: (SubscriptionMember & { profile_name?: string | null })[]
 }
 
-function buildMemberShareList(
-  subscription: DueSubscription,
-  debtMap: Map<string, string>
-) {
+async function buildMemberShareList(subscription: DueSubscription) {
   const members = subscription.subscription_members ?? []
-  return members.map(member => {
-    const personName = member.profiles?.name ?? 'Thanh vien'
-    const debtAccountId = debtMap.get(member.profile_id) ?? null
+  const result: (SubscriptionMember & { profile_name?: string | null; debt_account_id: string | null })[] = []
 
-    return {
+  for (const member of members) {
+    const personName = member.profiles?.name ?? 'Thanh vien'
+    const details = await getPersonDetails(member.profile_id)
+    let debtAccountId = details?.is_profile_only ? null : details?.id ?? null
+
+    if (!debtAccountId && member.profile_id) {
+      debtAccountId = await ensureDebtAccount(member.profile_id)
+    }
+
+    result.push({
       profile_id: member.profile_id,
       profile_name: personName,
       fixed_amount: typeof member.fixed_amount === 'number' ? member.fixed_amount : 0,
       slots: (member as any).slots ?? 1,
       debt_account_id: debtAccountId,
-    }
-  })
+    })
+  }
+
+  return result
 }
 
 export async function checkAndProcessSubscriptions(isManualForce: boolean = false): Promise<{
@@ -514,15 +532,8 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
     }
   }
 
-  const memberIds = new Set<string>()
-  dueRows.forEach(row =>
-    row.subscription_members?.forEach(member => memberIds.add(member.profile_id))
-  )
-  const debtMap = await fetchDebtAccountsMap(supabase, Array.from(memberIds))
-  await ensureDebtAccounts(Array.from(memberIds), debtMap)
-
   const paymentAccountId = await resolvePaymentAccountId(supabase)
-  const expenseCategoryId = await resolveExpenseCategoryId(supabase)
+  const expenseCategoryId = 'e0000000-0000-0000-0000-000000000088'
   if (!paymentAccountId || !expenseCategoryId) {
     return {
       processedCount: 0,
@@ -551,10 +562,10 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
     const txnNote = formatNoteTemplate(row, billingDate, row.subscription_members?.length ?? 0)
     const txnTag = format(parseISO(billingDate), 'MMMyy').toUpperCase()
 
-    const members = buildMemberShareList(row, debtMap)
+    const members = await buildMemberShareList(row)
 
-    // Calculate shares based on slots
-    const totalSlots = members.reduce((sum, m) => sum + (m.slots ?? 1), 0)
+    // Calculate shares based on slots (owner gets an implicit slot)
+    const totalSlots = members.reduce((sum, m) => sum + (m.slots ?? 1), 0) + 1
     const unitCost = totalSlots > 0 ? price / totalSlots : 0
 
     const paymentSource = row.payment_account_id ?? paymentAccountId
@@ -615,7 +626,7 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
           member_profile_id: member.profile_id,
           member_name: member.profile_name,
           slots: slots,
-          note: slots > 1 ? `[Slot: ${slots}]` : undefined
+          note: `${txnNote} (x${slots})`,
         },
       })
     })
