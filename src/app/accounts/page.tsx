@@ -7,6 +7,10 @@ import { getAccountsWithPendingBatchItems } from '@/services/batch.service'
 import { AccountList } from '@/components/moneyflow/account-list'
 import { FixDataButton } from '@/components/moneyflow/fix-data-button'
 import { AccountCashbackSnapshot } from '@/types/moneyflow.types'
+import Link from 'next/link'
+import { buttonVariants } from '@/components/ui/button'
+import { PlusCircle } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,6 +60,13 @@ export default async function AccountsPage() {
           </div>
           <div className="flex items-center gap-3">
             <FixDataButton />
+            <Link
+              href="/accounts/new"
+              className={cn(buttonVariants({ variant: 'outline' }), 'flex items-center gap-2')}
+            >
+              <PlusCircle size={18} />
+              Create New
+            </Link>
             <div className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
               {accounts.length} accounts tracked
             </div>

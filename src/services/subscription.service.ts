@@ -43,7 +43,7 @@ export type SubscriptionPayload = {
   is_active?: boolean | null
   payment_account_id?: string | null
   note_template?: string | null
-  members?: { profile_id: string; fixed_amount?: number | null }[]
+  members?: { profile_id: string; fixed_amount?: number | null; slots?: number | null }[]
   shop_id?: string | null
 }
 
@@ -104,6 +104,7 @@ function mapSubscriptionRow(
     row.subscription_members?.map(member => ({
       profile_id: member.profile_id,
       fixed_amount: member.fixed_amount,
+      slots: (member as any).slots ?? 1,
       profile_name: member.profiles?.name ?? null,
       avatar_url: member.profiles?.avatar_url ?? null,
       debt_account_id: debtMap.get(member.profile_id) ?? null,
@@ -131,6 +132,7 @@ export async function getSubscriptions(): Promise<Subscription[]> {
       subscription_members (
         profile_id,
         fixed_amount,
+        slots,
         profiles ( id, name, avatar_url )
       )
     `
@@ -203,6 +205,7 @@ async function syncSubscriptionMembers(
           typeof member.fixed_amount === 'number' && !Number.isNaN(member.fixed_amount)
             ? member.fixed_amount
             : null,
+        slots: typeof member.slots === 'number' ? member.slots : 1,
       })) ?? []
 
   if (payload.length === 0) {
@@ -374,6 +377,7 @@ function buildMemberShareList(
       profile_id: member.profile_id,
       profile_name: personName,
       fixed_amount: typeof member.fixed_amount === 'number' ? member.fixed_amount : 0,
+      slots: (member as any).slots ?? 1,
       debt_account_id: debtAccountId,
     }
   })
@@ -402,6 +406,7 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
       subscription_members (
         profile_id,
         fixed_amount,
+        slots,
         profiles ( name )
       )
     `
@@ -480,12 +485,12 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
       : parseBillingDate(row.next_billing_date ?? todayStr)
     const txnNote = formatNoteTemplate(row, billingDate, row.subscription_members?.length ?? 0)
     const txnTag = format(parseISO(billingDate), 'MMMyy').toUpperCase()
+
     const members = buildMemberShareList(row, debtMap)
-    const memberTotal = members.reduce(
-      (sum, member) => sum + Math.max(0, Number(member.fixed_amount ?? 0)),
-      0
-    )
-    const myShare = Math.max(0, price - memberTotal)
+
+    // Calculate shares based on slots
+    const totalSlots = members.reduce((sum, m) => sum + (m.slots ?? 1), 0)
+    const unitCost = totalSlots > 0 ? price / totalSlots : 0
 
     const paymentSource = row.payment_account_id ?? paymentAccountId
     const { data: txn, error: txnError } = await (supabase
@@ -520,22 +525,18 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
       },
     ]
 
-    if (myShare > 0) {
-      lines.push({
-        id: randomUUID(),
-        transaction_id: txn.id,
-        category_id: expenseCategoryId,
-        amount: myShare,
-        type: 'debit',
-        metadata: { subscription_id: row.id, role: 'owner_share' },
-      })
-    }
-
     members.forEach(member => {
-      const share = Math.max(0, Number(member.fixed_amount ?? 0))
+      const slots = member.slots ?? 1
+      const share = unitCost * slots
+
       if (share <= 0 || !member.debt_account_id) {
         return
       }
+
+      if (member.profile_id === userId) {
+        return
+      }
+
       lines.push({
         id: randomUUID(),
         transaction_id: txn.id,
@@ -548,30 +549,27 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
           subscription_id: row.id,
           member_profile_id: member.profile_id,
           member_name: member.profile_name,
+          slots: slots,
+          note: slots > 1 ? `[Slot: ${slots}]` : undefined
         },
       })
     })
 
-    const debitSum = lines
-      .filter(line => line.type === 'debit')
-      .reduce((sum, line) => sum + Math.abs(line.amount), 0)
-    if (Math.abs(debitSum - price) > 0.01) {
-      const adjustment = price - debitSum
-      if (lines.find(line => line.category_id === expenseCategoryId)) {
-        const extraLine = lines.find(line => line.category_id === expenseCategoryId)
-        if (extraLine) {
-          extraLine.amount = Math.max(0, Math.round((extraLine.amount + adjustment) * 100) / 100)
-        }
-      } else {
-        lines.push({
-          id: randomUUID(),
-          transaction_id: txn.id,
-          category_id: expenseCategoryId,
-          amount: adjustment,
-          type: 'debit',
-          metadata: { subscription_id: row.id, role: 'adjustment' },
-        })
-      }
+    const debtSum = lines
+      .filter(line => line.type === 'debit' && line.account_id)
+      .reduce((sum, line) => sum + line.amount, 0)
+
+    const myShare = Math.max(0, price - debtSum)
+
+    if (myShare > 0) {
+      lines.push({
+        id: randomUUID(),
+        transaction_id: txn.id,
+        category_id: expenseCategoryId,
+        amount: myShare,
+        type: 'debit',
+        metadata: { subscription_id: row.id, role: 'owner_share' },
+      })
     }
 
     const { error: lineError } = await (supabase.from('transaction_lines').insert as any)(lines)

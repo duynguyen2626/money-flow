@@ -25,6 +25,7 @@ type ComboboxProps = {
   disabled?: boolean
   className?: string
   onAddNew?: () => void
+  addLabel?: string
   tabs?: {
     value: string
     label: string
@@ -43,6 +44,7 @@ export function Combobox({
   disabled = false,
   className,
   onAddNew,
+  addLabel,
   tabs,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
@@ -112,6 +114,22 @@ export function Combobox({
         className="z-50 w-[320px] rounded-xl border border-slate-200 bg-white p-0 shadow-lg"
       >
         <Command className="overflow-hidden rounded-xl">
+          {onAddNew && (
+            <div
+              onClick={() => {
+                onAddNew()
+                setOpen(false)
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-blue-600 font-medium cursor-pointer hover:bg-blue-50 border-b border-slate-200 bg-white"
+            >
+              <Plus className="h-4 w-4" />
+              <span>{`+ Create ${addLabel}`}</span>
+            </div>
+          )}
+          <CommandInput
+            className="border-b border-slate-100 px-3 py-2 text-sm outline-none"
+            placeholder={inputPlaceholder}
+          />
           {tabs && tabs.length > 0 && (
             <div className="flex items-center gap-1 p-2 border-b border-slate-100 bg-slate-50/50">
               {tabs.map(tab => (
@@ -134,21 +152,8 @@ export function Combobox({
               ))}
             </div>
           )}
-          <CommandInput className="border-b border-slate-100 px-3 py-2 text-sm outline-none" placeholder={inputPlaceholder} />
-          {onAddNew && (
-            <div
-              onClick={() => {
-                onAddNew()
-                setOpen(false)
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-sm text-blue-600 font-medium cursor-pointer hover:bg-blue-50 border-b border-slate-100"
-            >
-              <Plus className="h-4 w-4" />
-              Thêm mới...
-            </div>
-          )}
           <CommandList className="max-h-72 overflow-y-auto">
-            {items.length === 0 && (
+            {items.length === 0 && !onAddNew && (
               <CommandEmpty className="px-3 py-2 text-xs text-slate-500">{emptyState}</CommandEmpty>
             )}
             {items.map(item => {

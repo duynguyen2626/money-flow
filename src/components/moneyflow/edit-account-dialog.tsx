@@ -360,6 +360,8 @@ type EditAccountDialogProps = {
   triggerContent?: ReactNode
   buttonClassName?: string
   onOpen?: () => void
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 type StatusMessage = {
@@ -408,9 +410,21 @@ function parseSavingsConfig(raw: Json | null | undefined): SavingsConfig {
   }
 }
 
-export function EditAccountDialog({ account, collateralAccounts, accounts = [], triggerContent, buttonClassName, onOpen }: EditAccountDialogProps) {
+export function EditAccountDialog({
+  account,
+  collateralAccounts,
+  accounts = [],
+  triggerContent,
+  buttonClassName,
+  onOpen,
+  open: externalOpen,
+  onOpenChange: externalOnOpenChange,
+}: EditAccountDialogProps) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isControllable = externalOpen !== undefined && externalOnOpenChange !== undefined
+  const open = isControllable ? externalOpen : internalOpen
+  const setOpen = isControllable ? externalOnOpenChange : setInternalOpen
   const [status, setStatus] = useState<StatusMessage>(null)
   const [isPending, startTransition] = useTransition()
 
@@ -603,22 +617,24 @@ export function EditAccountDialog({ account, collateralAccounts, accounts = [], 
 
   return (
     <>
-      <button
-        type="button"
-        className={
-          buttonClassName ??
-          (triggerContent
-            ? 'inline-flex items-center justify-center rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50'
-            : 'rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600')
-        }
-        onClick={event => {
-          event.stopPropagation()
-          onOpen?.()
-          openDialog()
-        }}
-      >
-        {triggerContent ?? 'Settings'}
-      </button>
+      {!isControllable && (
+        <button
+          type="button"
+          className={
+            buttonClassName ??
+            (triggerContent
+              ? 'inline-flex items-center justify-center rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50'
+              : 'rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600')
+          }
+          onClick={event => {
+            event.stopPropagation()
+            onOpen?.()
+            openDialog()
+          }}
+        >
+          {triggerContent ?? 'Settings'}
+        </button>
+      )}
 
       {open &&
         createPortal(

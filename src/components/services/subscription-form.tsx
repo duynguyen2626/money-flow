@@ -38,50 +38,11 @@ type SubscriptionFormProps = {
 type MemberSelection = {
   profile_id: string
   fixed_amount?: number | null
-}
-
-function roundThousand(value: number) {
-  return Math.max(0, Math.floor(value / 1000) * 1000)
-}
-
-function distributeEvenly(profileIds: string[], price: number): MemberSelection[] {
-  if (price <= 0 || profileIds.length === 0) {
-    return profileIds.map(id => ({ profile_id: id, fixed_amount: 0 }))
-  }
-  const base = roundThousand(price / profileIds.length)
-  let remaining = price
-  const shares = profileIds.map((id, index) => {
-    const isLast = index === profileIds.length - 1
-    const amount = isLast ? Math.max(0, remaining) : base
-    remaining = Math.max(0, remaining - amount)
-    return { profile_id: id, fixed_amount: amount }
-  })
-  return shares
-}
-
-function clampShares(members: MemberSelection[], price: number): MemberSelection[] {
-  if (price <= 0 || members.length === 0) {
-    return members.map(m => ({ ...m, fixed_amount: 0 }))
-  }
-  const total = members.reduce((sum, m) => sum + Math.max(0, Number(m.fixed_amount ?? 0)), 0)
-  if (total <= price) {
-    return members
-  }
-  const factor = price / total
-  let remaining = price
-  const scaled = members.map((m, index) => {
-    const raw = Math.max(0, Number(m.fixed_amount ?? 0))
-    const scaledValue = roundThousand(raw * factor)
-    const isLast = index === members.length - 1
-    const amount = isLast ? Math.max(0, remaining) : scaledValue
-    remaining = Math.max(0, remaining - amount)
-    return { ...m, fixed_amount: amount }
-  })
-  return scaled
+  slots: number
 }
 
 function formatMoney(value: number) {
-  return new Intl.NumberFormat('vi-VN', {
+  return new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
   }).format(value)
 }
@@ -98,6 +59,7 @@ function getInitialMembers(subscription?: Subscription): MemberSelection[] {
     subscription?.members?.map(member => ({
       profile_id: member.profile_id,
       fixed_amount: member.fixed_amount ?? 0,
+      slots: member.slots ?? 1,
     })) ?? []
   )
 }
@@ -163,47 +125,56 @@ export function SubscriptionForm({
     return Number.isFinite(parsed) ? parsed : 0
   }, [priceInput])
 
-  const totalMemberShare = useMemo(
-    () =>
-      members.reduce(
-        (sum, member) => sum + Math.max(0, Number(member.fixed_amount ?? 0)),
-        0
-      ),
-    [members]
-  )
-  const ownerShare = Math.max(0, priceNumber - totalMemberShare)
-  const overBudget = totalMemberShare > priceNumber
+  // Calculate shares based on slots
+  const totalSlots = useMemo(() => {
+    // Assuming owner also has slots? 
+    // If owner is not in members list, we assume owner pays the remainder.
+    // If "Me" is in members list, we count their slots.
+    return members.reduce((sum, m) => sum + m.slots, 0)
+  }, [members])
+
+  const unitCost = totalSlots > 0 ? priceNumber / totalSlots : 0
+
+  const totalAllocated = useMemo(() => {
+    return members.reduce((sum, m) => sum + (unitCost * m.slots), 0)
+  }, [members, unitCost])
+
+  const ownerShare = Math.max(0, priceNumber - totalAllocated)
+
+  // If "Me" is in members, ownerShare might be 0 because "Me" is allocated via slots.
+  // But visually we might want to show "My Cost" which is OwnerShare + (Me's Slot Cost).
+  // For now, let's just show Owner Share (Remainder).
 
   const brand = getServiceBranding(name || initialData?.name || 'SV')
 
   const toggleMember = (profile_id: string) => {
     setMembers(prev => {
       const exists = prev.some(member => member.profile_id === profile_id)
-      const nextIds = exists
-        ? prev.filter(m => m.profile_id !== profile_id).map(m => m.profile_id)
-        : [...prev.map(m => m.profile_id), profile_id]
-      return distributeEvenly(nextIds, priceNumber)
+      if (exists) {
+        // Remove member
+        return prev.filter(m => m.profile_id !== profile_id)
+      } else {
+        // Add member with default 1 slot
+        return [...prev, { profile_id, slots: 1 }]
+      }
     })
   }
 
-  const updateShare = (profile_id: string, value: string) => {
-    const parsed = Number(value)
+  const updateSlots = (profile_id: string, value: string) => {
+    const parsed = parseInt(value, 10)
+    const newSlots = Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
+
     setMembers(prev => {
-      const next = prev.map(member =>
-        member.profile_id === profile_id
-          ? {
-              ...member,
-              fixed_amount: Number.isFinite(parsed) ? parsed : 0,
-            }
-          : member
-      )
-      return clampShares(next, priceNumber)
+      if (newSlots === 0) {
+        // If slots is 0, should we remove the member? 
+        // User said "untick mới 0". So maybe typing 0 just sets slots to 0 but keeps them in list (unticked state?)
+        // Or maybe typing 0 is allowed.
+        // Let's allow 0 slots.
+        return prev.map(m => m.profile_id === profile_id ? { ...m, slots: 0 } : m)
+      }
+      return prev.map(m => m.profile_id === profile_id ? { ...m, slots: newSlots } : m)
     })
   }
-
-  useEffect(() => {
-    setMembers(prev => clampShares(prev, priceNumber))
-  }, [priceNumber])
 
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -211,7 +182,7 @@ export function SubscriptionForm({
     if (!trimmedName) {
       setStatus({
         type: 'error',
-        text: 'Nhap ten dich vu truoc khi luu.',
+        text: 'Please enter a service name.',
       })
       return
     }
@@ -227,17 +198,21 @@ export function SubscriptionForm({
         payment_account_id: paymentAccountId,
         is_active: isActive,
         note_template: noteTemplate.trim() || null,
-        members,
+        members: members.map(m => ({
+          profile_id: m.profile_id,
+          slots: m.slots,
+          fixed_amount: unitCost * m.slots // Calculate fixed amount for DB compatibility/reference
+        })),
       })
       setStatus({
         type: 'success',
-        text: mode === 'create' ? 'Da tao dich vu.' : 'Da cap nhat dich vu.',
+        text: mode === 'create' ? 'Service created.' : 'Service updated.',
       })
     } catch (error) {
       console.error('Failed to submit subscription form', error)
       setStatus({
         type: 'error',
-        text: 'Khong the luu dich vu. Thu lai nhe.',
+        text: 'Failed to save service. Please try again.',
       })
     } finally {
       setIsSaving(false)
@@ -254,19 +229,19 @@ export function SubscriptionForm({
             >
               {brand.icon}
             </div>
-            <div className="flex flex-col">
-              <span className="text-xs uppercase text-slate-500">Dich vu</span>
+            <div className="flex flex-col flex-1">
+              <span className="text-xs uppercase text-slate-500">Service Name</span>
               <input
                 value={name}
                 onChange={event => setName(event.target.value)}
-                placeholder="Vi du: YouTube Premium"
+                placeholder="Ex: YouTube Premium"
                 className="w-full border-b border-dashed border-slate-200 text-base font-semibold text-slate-900 focus:border-blue-500 focus:outline-none"
               />
             </div>
           </div>
 
-          <label className="space-y-1 text-sm">
-            <span className="text-slate-600">Mẫu nội dung giao dịch</span>
+          <label className="space-y-1 text-sm block">
+            <span className="text-slate-600">Transaction Note Template</span>
             <input
               value={noteTemplate}
               onChange={event => setNoteTemplate(event.target.value)}
@@ -274,25 +249,25 @@ export function SubscriptionForm({
               className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               placeholder={defaultTemplate}
             />
-            <span className="text-xs text-slate-500">
-              Dùng các từ khóa: {`{name}`}, {`{date}`} (MM-YYYY), {`{price}`}, {`{members}`}.
+            <span className="text-xs text-slate-500 block">
+              Keywords: {`{name}`}, {`{date}`} (MM-YYYY), {`{price}`}, {`{members}`}.
             </span>
-            <span className="text-[11px] text-slate-600">
-              Ví dụ: {formatPreview(
+            <span className="text-[11px] text-slate-600 block">
+              Preview: {formatPreview(
                 noteTemplate || defaultTemplate,
                 name || initialData?.name || 'Service',
                 priceNumber,
                 members.length
               )}
             </span>
-            <div className="flex flex-wrap gap-2 text-[11px] text-slate-600">
+            <div className="flex flex-wrap gap-2 text-[11px] text-slate-600 mt-1">
               {['{name}', '{date}', '{price}', '{members}'].map(token => (
                 <button
                   key={token}
                   type="button"
                   onClick={() => setNoteTemplate(prev => `${prev} ${token}`.trim())}
                   className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 hover:bg-slate-100"
-                  title="Chèn từ khóa"
+                  title="Insert keyword"
                 >
                   {token}
                 </button>
@@ -309,7 +284,7 @@ export function SubscriptionForm({
 
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Tong chi phi</span>
+              <span className="text-slate-600">Total Cost</span>
               <input
                 value={priceInput}
                 onChange={event => setPriceInput(event.target.value)}
@@ -319,28 +294,28 @@ export function SubscriptionForm({
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                 placeholder="200000"
               />
-              <span className="text-xs text-slate-500">So tien auto debit hang ky.</span>
+              <span className="text-xs text-slate-500">Auto-debit amount per cycle.</span>
             </label>
 
             <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Ngay nhac thu</span>
+              <span className="text-slate-600">Next Billing Date</span>
               <input
                 value={nextBillingDate}
                 onChange={event => setNextBillingDate(event.target.value)}
                 type="date"
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
-              <span className="text-xs text-slate-500">Bot se chay vao ngay nay.</span>
+              <span className="text-xs text-slate-500">Bot will run on this date.</span>
             </label>
 
             <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Tai khoan thanh toan</span>
+              <span className="text-slate-600">Payment Account</span>
               <select
                 value={paymentAccountId ?? ''}
                 onChange={event => setPaymentAccountId(event.target.value || null)}
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               >
-                <option value="">Mac dinh (chon lon nhat)</option>
+                <option value="">Default (Highest Balance)</option>
                 {accounts
                   .filter(acc => acc.type !== 'debt')
                   .map(acc => (
@@ -349,28 +324,28 @@ export function SubscriptionForm({
                     </option>
                   ))}
               </select>
-              <span className="text-xs text-slate-500">Chon nguon thanh toan cho bot.</span>
+              <span className="text-xs text-slate-500">Source of funds.</span>
             </label>
           </div>
 
           <label className="space-y-1 text-sm block">
-            <span className="text-slate-600">Nhà cung cấp (Shop)</span>
+            <span className="text-slate-600">Provider (Shop)</span>
             <Combobox
               items={shopItems}
               value={shopId ?? undefined}
               onValueChange={val => setShopId(val ?? null)}
-              placeholder="Chọn shop (VD: Youtube, Apple)..."
-              inputPlaceholder="Tìm shop..."
+              placeholder="Select shop (e.g. Youtube, Apple)..."
+              inputPlaceholder="Search shop..."
             />
             <span className="text-xs text-slate-500">
-              Logo shop se duoc dung cho giao dich.
+              Shop logo will be used for transactions.
             </span>
           </label>
 
           <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
             <div>
-              <p className="text-sm font-semibold text-slate-800">Trang thai</p>
-              <p className="text-xs text-slate-500">Chi dich vu Active moi duoc quet.</p>
+              <p className="text-sm font-semibold text-slate-800">Status</p>
+              <p className="text-xs text-slate-500">Only active services are processed.</p>
             </div>
             <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
               <input
@@ -379,15 +354,15 @@ export function SubscriptionForm({
                 onChange={event => setIsActive(event.target.checked)}
                 className="h-4 w-4 accent-blue-600"
               />
-              <span className="text-slate-700">{isActive ? 'Active' : 'Tam dung'}</span>
+              <span className="text-slate-700">{isActive ? 'Active' : 'Paused'}</span>
             </label>
           </div>
 
           <div className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-sm text-slate-600">
-            <p>Chu tai khoan se chiu: {formatMoney(ownerShare)}</p>
-            {overBudget && (
+            <p>Owner Remainder: {formatMoney(ownerShare)}</p>
+            {totalAllocated > priceNumber && (
               <p className="text-xs text-rose-600">
-                Tong phan chia lon hon tong bill. Giam share hoac tang gia dich vu.
+                Total allocated ({formatMoney(totalAllocated)}) exceeds total cost.
               </p>
             )}
           </div>
@@ -396,22 +371,25 @@ export function SubscriptionForm({
         <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-semibold text-slate-800">Members chia bill</p>
+              <p className="text-sm font-semibold text-slate-800">Split Members</p>
               <p className="text-xs text-slate-500">
-                Chia theo fixed amount. Phan con lai tinh vao owner.
+                Split by slots. 1 slot = {formatMoney(unitCost)}.
               </p>
             </div>
             <span className="text-xs font-semibold text-slate-600">
-              {members.length} thanh vien
+              {members.length} members
             </span>
           </div>
 
           <div className="space-y-2">
             {people.length === 0 ? (
-              <p className="text-sm text-slate-500">Chua co thanh vien nao.</p>
+              <p className="text-sm text-slate-500">No people found.</p>
             ) : (
               people.map(person => {
-                const selected = members.find(member => member.profile_id === person.id)
+                const selectedMember = members.find(member => member.profile_id === person.id)
+                const isSelected = Boolean(selectedMember)
+                const slots = selectedMember?.slots ?? 0
+
                 return (
                   <div
                     key={person.id}
@@ -433,25 +411,27 @@ export function SubscriptionForm({
                       <div className="flex flex-col">
                         <span className="text-sm font-semibold text-slate-900">{person.name}</span>
                         <span className="text-[11px] text-slate-500">
-                          {selected ? 'Dang chia' : 'Chua chon'}
+                          {isSelected ? `${formatMoney(unitCost * slots)}` : 'Not selected'}
                         </span>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        className="w-28 rounded-md border border-slate-200 px-2 py-1 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
-                        placeholder="0"
-                        min={0}
-                        step="any"
-                        disabled={!selected}
-                        value={selected?.fixed_amount ?? ''}
-                        onChange={event => updateShare(person.id, event.target.value)}
-                      />
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-slate-400 uppercase">Slots</span>
+                        <input
+                          type="number"
+                          className="w-16 rounded-md border border-slate-200 px-2 py-1 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
+                          placeholder="0"
+                          min={0}
+                          disabled={!isSelected}
+                          value={isSelected ? slots : ''}
+                          onChange={event => updateSlots(person.id, event.target.value)}
+                        />
+                      </div>
                       <input
                         type="checkbox"
                         className="h-4 w-4 accent-blue-600"
-                        checked={Boolean(selected)}
+                        checked={isSelected}
                         onChange={() => toggleMember(person.id)}
                       />
                     </div>
@@ -463,11 +443,11 @@ export function SubscriptionForm({
 
           <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
             <div className="flex items-center justify-between">
-              <span>Da chia</span>
-              <span className="font-semibold">{formatMoney(totalMemberShare)}</span>
+              <span>Allocated</span>
+              <span className="font-semibold">{formatMoney(totalAllocated)}</span>
             </div>
             <div className="flex items-center justify-between text-xs text-slate-500">
-              <span>Bill</span>
+              <span>Total Bill</span>
               <span>{formatMoney(priceNumber)}</span>
             </div>
           </div>
@@ -487,7 +467,7 @@ export function SubscriptionForm({
             onClick={onCancel}
             className="rounded-md px-4 py-2 text-sm font-medium text-slate-700 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
           >
-            Huy
+            Cancel
           </button>
         )}
         <button
@@ -495,7 +475,7 @@ export function SubscriptionForm({
           disabled={isSaving}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {isSaving ? 'Dang luu...' : submitLabel ?? (mode === 'create' ? 'Tao dich vu' : 'Cap nhat')}
+          {isSaving ? 'Saving...' : submitLabel ?? (mode === 'create' ? 'Create Service' : 'Update Service')}
         </button>
       </div>
     </form>

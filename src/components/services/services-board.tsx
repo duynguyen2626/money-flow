@@ -16,7 +16,10 @@ type ServicesBoardProps = {
   shops: Shop[]
 }
 
+import { useRouter } from 'next/navigation'
+
 export function ServicesBoard({ subscriptions, people, accounts, shops }: ServicesBoardProps) {
+  const router = useRouter()
   const [editId, setEditId] = useState<string | null>(null)
   const [editPersonId, setEditPersonId] = useState<string | null>(null)
   const selected = useMemo(
@@ -56,7 +59,7 @@ export function ServicesBoard({ subscriptions, people, accounts, shops }: Servic
             <SubscriptionCard
               key={subscription.id}
               subscription={subscription}
-              onEdit={() => setEditId(subscription.id)}
+              onEdit={() => router.push(`/services/${subscription.id}`)}
               onMemberClick={profileId => setEditPersonId(profileId)}
             />
           ))}

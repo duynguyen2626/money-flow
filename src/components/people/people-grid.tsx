@@ -39,6 +39,13 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
   const router = useRouter()
   const [isEnsuring, startEnsuring] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  const filteredPeople = useMemo(() => {
+    if (!searchQuery.trim()) return people
+    const lower = searchQuery.toLowerCase()
+    return people.filter(p => p.name.toLowerCase().includes(lower))
+  }, [people, searchQuery])
 
   const handleOpenDebt = (person: Person) => {
     setError(null)
@@ -59,8 +66,18 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
 
   return (
     <>
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Search people..."
+          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {people.map(person => (
+        {filteredPeople.map(person => (
           <PersonCard
             key={person.id}
             person={person}

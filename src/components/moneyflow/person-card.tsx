@@ -77,7 +77,7 @@ export function PersonCard({
 
     return (
         <div
-            className="flex h-full flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-md cursor-pointer"
+            className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-md cursor-pointer"
             onClick={onOpenDebt}
         >
             <div className="flex items-start justify-between">
@@ -87,7 +87,7 @@ export function PersonCard({
                         <img
                             src={person.avatar_url}
                             alt={person.name}
-                            className="h-10 w-10 rounded-full border border-slate-200 object-cover flex-shrink-0"
+                            className="h-12 w-12 border border-slate-200 object-contain flex-shrink-0 bg-white"
                         />
                     ) : (
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-base font-semibold text-slate-700 flex-shrink-0">

@@ -1,74 +1,72 @@
-# **TASK: FIX ACCOUNT LOGIC, UI BUGS & UNIFY DATA**
+# **PROJECT: MONEY FLOW 3.0**
 
-Status: PENDING
+# **CURRENT STATUS: UI/LOGIC STABILIZED (PHASE 50 DONE)**
 
-Created: 2025-11-29
+# **NEXT PHASE: 51 \- SERVICE SLOTS & DASHBOARD**
 
-Priority: CRITICAL
+**WORKFLOW:**
 
-## **1\. Context**
+1. **Branch:** feat/phase-51-slots-dashboard  
+2. **Safety:** Run npm run build before finishing.
 
-User báo cáo hàng loạt vấn đề về UI/UX và Logic trên trang Accounts, đặc biệt là cách hiển thị Thẻ tín dụng (Parent/Child) và lỗi giao diện bảng.
+**OBJECTIVE:**
 
-## **2\. Issues & Solutions**
+1. **Service Upgrade:** Allow members to take multiple slots (e.g., 2 slots for 1 person). Logic: 1 Debt Transaction Line with multiplied amount and Note \[Slot: X\].  
+2. **Dashboard:** Build the Home Page visuals (Charts, Stats) as previously planned but postponed.
 
-### **A. UI/UX Bugs**
+## **I. FEATURE: MULTI-SLOT SUBSCRIPTION (/services)**
 
-1. **Missing Quick Action (+):**  
-   * **Lỗi:** Thẻ tín dụng thiếu nút "Quick Add Transaction" (+) trên Card giống như thẻ ngân hàng.  
-   * **Fix:** Thêm nút (+) vào AccountCard cho loại credit\_card.  
-2. **Modal Not Closing:**  
-   * **Lỗi:** Khi tạo tài khoản xong, modal "Success/Done" không tự đóng.  
-   * **Fix:** Kiểm tra state open của Dialog sau khi submit thành công.  
-3. **Page Overflow (Scroll Ngang):**  
-   * **Lỗi:** Trang details bị thanh cuộn ngang của trình duyệt chiếm dụng, phải kéo cả trang mới xem được hết bảng.  
-   * **Fix:**  
-     * Layout chính của page phải fixed width hoặc max-w-screen.  
-     * Table phải nằm trong container overflow-x-auto.  
-     * Thanh scroll ngang phải nằm ngay dưới Table (inside container) chứ không phải scroll của window.
+**1\. Database Schema**
 
-### **B. Logic & Data Display (CRITICAL)**
+* Table subscription\_members now has slots (int, default 1).
 
-1. **Credit Card Metrics:**  
-   * **Hiện tại:** Hiển thị Available gây rối (179tr??). Tooltip hiển thị Raw Balance khó hiểu.  
-   * **Yêu cầu mới:**  
-     * **Con số chính (Big Number):** Hiển thị **Current Balance** (Dư nợ hiện tại). Nếu Database lưu dương \-\> Hiển thị số âm (màu đỏ/cam) để thể hiện là nợ.  
-     * **Con số phụ:** Hiển thị "Limit: ..." và "Available: ..." (Available \= Limit \- Balance) nhỏ hơn ở dưới.  
-2. **Parent \- Child Relationship:**  
-   * **Child Card (Vd: Vcb Signature 2):**  
-     * Phát hiện qua parent\_account\_id hoặc cashback\_config.sharedLimitParentId.  
-     * **Badge:** Hiển thị "Linked / Thẻ Phụ" \+ Tên thẻ Parent.  
-     * **Limit:** Hiển thị Limit của Parent (badge "Shared Limit").  
-     * **Balance:** Hiển thị Balance riêng của thẻ con (nếu có) và dòng tham chiếu Balance tổng của Parent.  
-     * **Tuyệt đối không** hiển thị Available ảo (vì dùng chung hạn mức).  
-   * **Parent Card (Vd: Vcb Signature):**  
-     * **Badge:** "Main / Thẻ Chính".  
-     * Hiển thị danh sách thẻ con đang link vào (nếu UI cho phép).
+**2\. UI: Upgrade ServiceDialog**
 
-### **C. Code Refactor: Unify Image Field**
+* **Target:** The Member Selection List.  
+* **Change:**  
+  * Next to the Checkbox and Name, add a small **Number Input** (min 1).  
+  * Show only if Checked.  
+  * Default value: 1\.  
+  * *Visual:* \[x\] \[Avatar\] Lâm Qty: \[ 2 \].
 
-* **Vấn đề:** Code đang lẫn lộn giữa img\_url và logo\_url.  
-* **Giải pháp:** Thống nhất dùng **logo\_url** trên toàn bộ hệ thống (Database & Code).
+**3\. Backend: Upgrade Bot Logic (checkAndProcessSubscriptions)**
 
-## **3\. Implementation Plan**
+* **Logic:**  
+  1. Calculate TotalSlots \= Sum of all member.slots.  
+  2. Calculate UnitCost \= TotalPrice / TotalSlots (assuming "Me" is not taking slots, or "Me" is calculated as remainder).  
+     * *Refinement:* If "Me" is just the payer and holds remaining slots implicitly, then UnitCost \= Price / (MemberSlots \+ MySlots).  
+     * *Simplification:* For now, assume Price is split among TotalSlots defined.  
+  3. **Loop Members to create Debt Lines:**  
+     * MemberCost \= UnitCost \* member.slots.  
+     * **Note Generation:**  
+       * If member.slots \> 1: Append \[Slot: {member.slots}\] to the line description/note.  
+       * Else: Keep standard note.
 
-### **Step 1: Database Standardization**
+## **II. FEATURE: THE DASHBOARD (src/app/page.tsx)**
 
-* Chạy Migration để đổi tên cột img\_url \-\> logo\_url (hoặc merge data).  
-* Refactor code TypeScript: Replace all img\_url \-\> logo\_url.
+**Context:** The home page is currently blank/basic. We need the "Ultimate Dashboard".
 
-### **Step 2: Fix UI Components**
+**1\. Service: src/services/dashboard.service.ts**
 
-* **account-card.tsx:**  
-  * Thêm nút (+).  
-  * Viết lại logic hiển thị Balance cho Credit Card (Show Debt as Main).  
-  * Thêm logic check sharedLimitParentId để render giao diện Parent/Child.  
-* **create-account-dialog.tsx:** Fix lỗi đóng modal.  
-* **unified-transaction-table.tsx:** Bọc div với overflow-x-auto và max-w-full.
+* **getDashboardStats:**  
+  * **Net Worth:** Sum of (Bank \+ Cash \+ Savings).  
+  * **Monthly Spend:** Sum expense (excluding Transfer/CreditPay).  
+  * **Debt Overview:** Sum positive Debt.  
+  * **Waiting Money:** Sum System Account balance.
 
-### **Step 3: Verify Logic**
+**2\. UI Layout (Using Recharts & Shadcn Cards)**
 
-* Check thẻ Child (Balance 0\) \-\> Phải hiện đúng Link với Parent (Limit 150tr).  
-* Check thẻ Parent \-\> Phải hiện đúng Balance nợ (\~29tr).  
-*   
-* 
+* **Top Row:** 3 Cards (Net Worth, Spend, Debt).  
+* **Middle Row:**  
+  * **Left (Chart):** Monthly Expense Breakdown (Donut Chart by Category).  
+  * **Right (List):** "Top Debtors" (People who owe you most).  
+* **Bottom Row:** "Waiting & Pending" (Batch/Refund status summary).
+
+## **III. EXECUTION STEPS**
+
+1. **Service:** Update subscription.service.ts to handle Slot Math.  
+2. **UI:** Update ServiceDialog to input slots.  
+3. **Service:** Create dashboard.service.ts.  
+4. **UI:** Build the Dashboard Page.  
+5. **Verify:** Run build.  
+1. 
