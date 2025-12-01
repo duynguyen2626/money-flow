@@ -5,7 +5,8 @@ import { getAccounts } from '@/services/account.service'
 import { getShops } from '@/services/shop.service'
 import { ServiceEditPageContent } from '@/components/services/service-edit-page-content'
 
-export default async function ServiceEditPage({ params }: { params: { id: string } }) {
+export default async function ServiceEditPage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params
     const [subscriptions, people, accounts, shops] = await Promise.all([
         getSubscriptions(),
         getPeople(),
@@ -13,7 +14,7 @@ export default async function ServiceEditPage({ params }: { params: { id: string
         getShops(),
     ])
 
-    const subscription = subscriptions.find(s => s.id === params.id)
+    const subscription = subscriptions.find(s => s.id === id)
 
     if (!subscription) {
         notFound()

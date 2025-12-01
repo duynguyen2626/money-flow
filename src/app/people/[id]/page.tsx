@@ -35,7 +35,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
     getCategories(),
     getPeople(),
     getShops(),
-    getUnifiedTransactions({ accountId: actualAccountId, limit: 200, context: 'person' }),
+    getUnifiedTransactions({ accountId: actualAccountId, personId: person.owner_id ?? undefined, limit: 200, context: 'person' }),
     getDebtByTags(actualAccountId),
   ])
 
