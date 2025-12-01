@@ -1,0 +1,2 @@
+ALTER TABLE subscription_members ADD COLUMN IF NOT EXISTS slots INTEGER DEFAULT 1;
+ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS note_template TEXT;

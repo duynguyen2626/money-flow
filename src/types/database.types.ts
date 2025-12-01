@@ -254,6 +254,7 @@ export interface Database {
           subscription_id: string
           profile_id: string
           fixed_amount: number | null
+          slots: number | null
           created_at: string
         }
         Insert: {
@@ -261,6 +262,7 @@ export interface Database {
           subscription_id: string
           profile_id: string
           fixed_amount?: number | null
+          slots?: number | null
           created_at?: string
         }
         Update: {
@@ -268,6 +270,7 @@ export interface Database {
           subscription_id?: string
           profile_id?: string
           fixed_amount?: number | null
+          slots?: number | null
           created_at?: string
         }
       }

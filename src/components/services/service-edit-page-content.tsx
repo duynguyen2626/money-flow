@@ -34,7 +34,10 @@ export function ServiceEditPageContent({
             accounts={accounts}
             shops={shops}
             onSubmit={async (payload: import('@/services/subscription.service').SubscriptionPayload) => {
-                await updateSubscriptionAction(subscription.id, payload)
+                const success = await updateSubscriptionAction(subscription.id, payload)
+                if (!success) {
+                    throw new Error('Failed to update service')
+                }
                 router.refresh()
                 onSaved?.()
                 if (redirectAfterSave) {

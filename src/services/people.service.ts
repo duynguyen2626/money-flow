@@ -49,7 +49,7 @@ async function createDebtAccountForPerson(
     .insert as any)({
       name: buildDebtAccountName(personName),
       type: 'debt',
-      owner_id: userId,
+      owner_id: personId,
       current_balance: 0,
     })
     .select('id')
@@ -206,7 +206,7 @@ export async function getPeople(): Promise<Person[]> {
     if (monthlyLinesError) {
       console.error('Error fetching monthly debt lines:', monthlyLinesError)
     } else {
-      ;(monthlyLines as any[] | null)?.forEach(line => {
+      ; (monthlyLines as any[] | null)?.forEach(line => {
         const accountId = line.account_id
         if (!accountId) return
 
@@ -231,16 +231,16 @@ export async function getPeople(): Promise<Person[]> {
 
         const updated: MonthlyDebtSummary = existing
           ? {
-              ...existing,
-              amount: existing.amount + amountValue,
-              occurred_at: existing.occurred_at ?? (validDate ? validDate.toISOString() : occurredAt),
-            }
+            ...existing,
+            amount: existing.amount + amountValue,
+            occurred_at: existing.occurred_at ?? (validDate ? validDate.toISOString() : occurredAt),
+          }
           : {
-              tag: tagValue ?? undefined,
-              tagLabel: label,
-              amount: amountValue,
-              occurred_at: validDate ? validDate.toISOString() : occurredAt ?? undefined,
-            }
+            tag: tagValue ?? undefined,
+            tagLabel: label,
+            amount: amountValue,
+            occurred_at: validDate ? validDate.toISOString() : occurredAt ?? undefined,
+          }
 
         personMap.set(groupingKey, updated)
         monthlyDebtMap.set(ownerId, personMap)

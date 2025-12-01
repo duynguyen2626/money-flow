@@ -22,6 +22,7 @@ export async function updateSubscriptionAction(id: string, payload: Subscription
   const ok = await updateSubscription(id, payload)
   if (ok) {
     revalidatePath('/services')
+    revalidatePath(`/services/${id}`)
     revalidatePath('/people')
   }
   return ok

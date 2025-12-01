@@ -71,6 +71,20 @@ export function AutomationChecker() {
         )}
       </button>
 
+      <button
+        type="button"
+        onClick={async () => {
+          const { debugSubscriptionBotAction } = await import('@/actions/debug-bot-action')
+          const result = await debugSubscriptionBotAction('Youtube')
+          console.log('DEBUG BOT RESULT:', result)
+          alert(JSON.stringify(result, null, 2))
+        }}
+        title="Debug Bot (Youtube)"
+        className="rounded-full p-2 text-slate-600 hover:bg-slate-200 hover:text-slate-900"
+      >
+        <span className="text-xs font-bold">🐞</span>
+      </button>
+
       {toast && (
         <div className="fixed right-4 top-4 z-50 w-full max-w-sm rounded-lg border border-blue-100 bg-white p-4 shadow-lg">
           <div className="flex items-start justify-between gap-3">

@@ -1,97 +1,85 @@
 PROJECT: MONEY FLOW 3.0
 
-PHASE: 58 - PEOPLE UI HIGH-DENSITY & LAYOUT SPLIT
+PHASE: 51.5 - SERVICE LOGIC FIXES & BOT MATH CORRECTION
 
 WORKFLOW:
 
-Branch: feat/phase-58-people-density
+Branch: fix/phase-51-5-service-bot
 
 Safety: Run npm run build.
 
 OBJECTIVE:
-The current People Grid is inefficient and ugly due to varying card heights.
-Solution: Split the view into two distinct sections with different card designs.
 
-Active Debtors: Standard Cards (Detailed Debt Breakdown).
+Fix Service UI: Ensure "Total Members" and "Preview" update immediately upon editing/saving. Fix "Update" button state.
 
-Settled / Friends: Mini Cards (Square, Avatar-centric).
+Fix Bot Math: Calculate debt share based on SLOTS, not just Member Count.
 
-I. UI: REDESIGN PeopleGrid (src/components/people/people-grid.tsx)
+I. BACKEND: FIX BOT MATH (src/services/subscription.service.ts)
 
-Logic:
+Target: checkAndProcessSubscriptions
 
-Filter people by Search query.
+Correct Logic (Weighted Split):
 
-Split into debtors (total_debt !== 0) and others (total_debt === 0).
+Calculate Total Slots:
 
-Layout:
+MemberSlots = Sum of slots from subscription_members.
 
-Filter Bar: Search Input + [Add Person Button].
+MySlots = 1 (Default assumption: Owner uses 1 slot).
 
-Section 1: "⚠️ Outstanding Debtors"
+Refinement: Or assume Price is the total bill, and we split by MemberSlots + 1.
 
-Grid: grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4.
+Decision: TotalDivisor = MemberSlots + 1.
 
-Render: PersonCard (Detailed Variant).
+Calculate Unit Cost:
 
-Section 2: "✅ Friends & Family (Settled)"
+UnitCost = SubscriptionPrice / TotalDivisor.
 
-Grid: grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3. (Higher density).
+Create Debt Transactions:
 
-Render: PersonCard (Compact Variant).
+Loop through Members.
 
-II. UI: REDESIGN PersonCard (src/components/moneyflow/person-card.tsx)
+DebtAmount = UnitCost * member.slots.
 
-Props: variant?: 'detailed' | 'compact'
+Note Generation:
 
-Variant A: DETAILED (For Debtors)
+Base: subscription.name (or Template).
 
-Header: Avatar (40px) | Name (Bold) | Total Debt Badge (Red).
+Suffix: If member.slots > 1 -> Add " (x{member.slots} slots)" or similar.
 
-Body (Debt List):
+Create Line: One line per person with the calculated DebtAmount.
 
-Background bg-red-50/50 rounded-md p-2.
+II. UI: FIX SERVICE EDIT PAGE (src/components/services/service-edit-page-content.tsx)
 
-List top 3 debt tags (e.g., "NOV25: 50k").
+1. Fix Reactivity (Stale Data)
 
-Action: Small check button to settle specific tag.
+Problem: "Total Members" or "Cost" doesn't update after Save.
 
-Footer:
+Fix:
 
-Services: Row of small Service Icons (Youtube, etc.). Label "No Services" if empty.
+Ensure updateSubscription returns the updated object (including relations count).
 
-Actions: Icon Buttons (Lend 💸, Repay 🤝). No text labels. Tooltip only.
+Update the local state (service object) with the response.
 
-Variant B: COMPACT (For Settled)
+Call router.refresh() to ensure Server Components (like Sidebar counts) update.
 
-Style: Square-ish Card, Center Aligned content.
+2. Fix "Update" Button State
 
-Layout:
+Logic: Disable button if !form.formState.isDirty OR isSaving.
 
-Top: Large Avatar (56px) centered.
+Trigger: Ensure changing the "Member List" (Checkboxes/Slots) marks the form as dirty.
 
-Middle: Name (Truncate) centered.
+3. Fix Template Preview
 
-Bottom: Row of Actions (Lend Button only basically, or Edit).
+Logic: Add a useEffect watching note_template, price, and members.
 
-Service Indicators: Tiny dots or mini icons at the top-right corner.
+Render: Real-time string replacement (e.g., "Youtube 12-2025 (166k/5)") shown in a gray box below the input.
 
-III. UI: ICONS & TOOLTIPS
+III. EXECUTION STEPS
 
-Replace Text Buttons: Use Lucide icons for everything in the card footer.
+Backend: Rewrite Bot Math to include Slot multiplier.
 
-Lend: HandCoins (Color: Rose-500).
+Frontend: Fix State Update logic in ServiceEditPageContent.
 
-Settle/Repay: Banknote (Color: Emerald-500).
+Frontend: Implement Live Preview for Note Template.
 
-Edit: Pencil (Gray-400).
-
-Tooltips: Wrap all icons in <Tooltip> to explain functionality.
-
-IV. EXECUTION STEPS
-
-Component: Refactor PersonCard to support variant prop and new styles.
-
-Page: Update PeopleGrid to implement the Split Layout strategy.
-
-Verify: Check mobile responsiveness (stack grids).
+Verify: Run manual bot check.

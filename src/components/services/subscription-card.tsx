@@ -41,6 +41,7 @@ export function SubscriptionCard({ subscription, onEdit, onMemberClick }: Subscr
   const brand = getServiceBranding(subscription.name)
   const status = getStatus(subscription.next_billing_date)
   const members = subscription.members ?? []
+  const totalSlots = members.reduce((sum, m) => sum + (m.slots ?? 1), 0)
 
   return (
     <div className="flex h-full flex-col gap-3 rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm">
@@ -81,7 +82,7 @@ export function SubscriptionCard({ subscription, onEdit, onMemberClick }: Subscr
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-500">
           <span>Members</span>
-          <span>{members.length}</span>
+          <span>{totalSlots}</span>
         </div>
         {members.length === 0 ? (
           <p className="text-sm text-slate-500">Chua gan thanh vien nao.</p>

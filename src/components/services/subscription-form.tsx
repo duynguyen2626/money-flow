@@ -95,6 +95,60 @@ export function SubscriptionForm({
     paymentAccount?.id ?? null
   )
 
+  const priceNumber = useMemo(() => {
+    const parsed = Number(priceInput)
+    return Number.isFinite(parsed) ? parsed : 0
+  }, [priceInput])
+
+  // Deep comparison to check if form is actually different from initialData
+  const isChanged = useMemo(() => {
+    if (mode === 'create') return true // Always enabled for create if valid (handled by validation)
+    if (!initialData) return false
+
+    const currentPrice = Number.isFinite(priceNumber) ? priceNumber : null
+    const initialPrice = initialData.price ?? null
+
+    const currentMembers = members.map(m => ({
+      profile_id: m.profile_id,
+      slots: m.slots
+    })).sort((a, b) => a.profile_id.localeCompare(b.profile_id))
+
+    const initialMembers = (initialData.members ?? []).map(m => ({
+      profile_id: m.profile_id,
+      slots: m.slots ?? 1
+    })).sort((a, b) => a.profile_id.localeCompare(b.profile_id))
+
+    const isMembersChanged = JSON.stringify(currentMembers) !== JSON.stringify(initialMembers)
+
+    return (
+      name.trim() !== (initialData.name ?? '') ||
+      shopId !== (initialData.shop_id ?? null) ||
+      currentPrice !== initialPrice ||
+      (nextBillingDate || null) !== (pickInitialDate(initialData.next_billing_date) || null) ||
+      (noteTemplate.trim() || null) !== (initialData.note_template ?? defaultTemplate) ||
+      isActive !== (initialData.is_active ?? true) ||
+      paymentAccountId !== (initialData.payment_account_id ?? null) ||
+      isMembersChanged
+    )
+  }, [
+    mode, initialData, name, shopId, priceNumber, nextBillingDate,
+    noteTemplate, isActive, paymentAccountId, members
+  ])
+
+  // Sync state with initialData when it changes (e.g. after save/refresh)
+  useEffect(() => {
+    if (initialData) {
+      setName(initialData.name ?? '')
+      setShopId(initialData.shop_id ?? null)
+      setPriceInput(typeof initialData.price === 'number' ? String(initialData.price) : '')
+      setNextBillingDate(pickInitialDate(initialData.next_billing_date))
+      setNoteTemplate(initialData.note_template ?? defaultTemplate)
+      setIsActive(initialData.is_active ?? true)
+      setMembers(getInitialMembers(initialData))
+      setPaymentAccountId(initialData.payment_account_id ?? null)
+    }
+  }, [initialData])
+
   const shopItems = useMemo(
     () =>
       shops.map(shop => ({
@@ -119,10 +173,7 @@ export function SubscriptionForm({
     }
   }, [shopId, shops])
 
-  const priceNumber = useMemo(() => {
-    const parsed = Number(priceInput)
-    return Number.isFinite(parsed) ? parsed : 0
-  }, [priceInput])
+
 
   // Calculate shares based on slots
   const totalSlots = useMemo(() => {
@@ -255,7 +306,9 @@ export function SubscriptionForm({
               <span className="text-xs uppercase text-slate-500">Service Name</span>
               <input
                 value={name}
-                onChange={event => setName(event.target.value)}
+                onChange={event => {
+                  setName(event.target.value)
+                }}
                 placeholder="Ex: YouTube Premium"
                 className="w-full border-b border-dashed border-slate-200 text-base font-semibold text-slate-900 focus:border-blue-500 focus:outline-none"
               />
@@ -266,7 +319,9 @@ export function SubscriptionForm({
             <span className="text-slate-600">Transaction Note Template</span>
             <input
               value={noteTemplate}
-              onChange={event => setNoteTemplate(event.target.value)}
+              onChange={event => {
+                setNoteTemplate(event.target.value)
+              }}
               type="text"
               className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               placeholder={defaultTemplate}
@@ -274,14 +329,15 @@ export function SubscriptionForm({
             <span className="text-xs text-slate-500 block">
               Keywords: {`{name}`}, {`{date}`} (MM-YYYY), {`{price}`}, {`{members}`}.
             </span>
-            <span className="text-[11px] text-slate-600 block">
-              Preview: {formatPreview(
+            <div className="mt-2 rounded-md border border-slate-100 bg-slate-50 p-2 text-xs text-slate-600">
+              <span className="font-semibold text-slate-700">Preview: </span>
+              {formatPreview(
                 noteTemplate || defaultTemplate,
                 name || initialData?.name || 'Service',
                 priceNumber,
                 members.length
               )}
-            </span>
+            </div>
             <div className="flex flex-wrap gap-2 text-[11px] text-slate-600 mt-1">
               {['{name}', '{date}', '{price}', '{members}'].map(token => (
                 <button
@@ -309,7 +365,9 @@ export function SubscriptionForm({
               <span className="text-slate-600">Total Cost</span>
               <input
                 value={priceInput}
-                onChange={event => setPriceInput(event.target.value)}
+                onChange={event => {
+                  setPriceInput(event.target.value)
+                }}
                 type="number"
                 min={0}
                 step="any"
@@ -323,7 +381,9 @@ export function SubscriptionForm({
               <span className="text-slate-600">Next Billing Date</span>
               <input
                 value={nextBillingDate}
-                onChange={event => setNextBillingDate(event.target.value)}
+                onChange={event => {
+                  setNextBillingDate(event.target.value)
+                }}
                 type="date"
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
@@ -334,7 +394,9 @@ export function SubscriptionForm({
               <span className="text-slate-600">Payment Account</span>
               <select
                 value={paymentAccountId ?? ''}
-                onChange={event => setPaymentAccountId(event.target.value || null)}
+                onChange={event => {
+                  setPaymentAccountId(event.target.value || null)
+                }}
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               >
                 <option value="">Default (Highest Balance)</option>
@@ -355,7 +417,9 @@ export function SubscriptionForm({
             <Combobox
               items={shopItems}
               value={shopId ?? undefined}
-              onValueChange={val => setShopId(val ?? null)}
+              onValueChange={val => {
+                setShopId(val ?? null)
+              }}
               placeholder="Select shop (e.g. Youtube, Apple)..."
               inputPlaceholder="Search shop..."
             />
@@ -373,7 +437,9 @@ export function SubscriptionForm({
               <input
                 type="checkbox"
                 checked={isActive}
-                onChange={event => setIsActive(event.target.checked)}
+                onChange={event => {
+                  setIsActive(event.target.checked)
+                }}
                 className="h-4 w-4 accent-blue-600"
               />
               <span className="text-slate-700">{isActive ? 'Active' : 'Paused'}</span>
@@ -486,8 +552,8 @@ export function SubscriptionForm({
               <span>{formatMoney(priceNumber)}</span>
             </div>
             <div className="flex items-center justify-between text-xs text-slate-500">
-              <span>Total persons</span>
-              <span className="font-semibold">{members.length}</span>
+              <span>Total Slots</span>
+              <span className="font-semibold">{totalSlots}</span>
             </div>
           </div>
         </div>
@@ -511,7 +577,7 @@ export function SubscriptionForm({
         )}
         <button
           type="submit"
-          disabled={isSaving}
+          disabled={isSaving || (mode === 'edit' && !isChanged)}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
         >
           {isSaving ? 'Saving...' : submitLabel ?? (mode === 'create' ? 'Create Service' : 'Update Service')}

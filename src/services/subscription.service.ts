@@ -153,10 +153,11 @@ export async function getSubscriptions(): Promise<Subscription[]> {
           .from('subscriptions')
           .select(
             `
-            id, name, price, next_billing_date, shop_id,
+            id, name, price, next_billing_date, shop_id, payment_account_id, note_template,
             subscription_members (
               profile_id,
               fixed_amount,
+              slots,
               profiles ( id, name, avatar_url )
             )
           `
@@ -217,10 +218,11 @@ export async function getSubscription(id: string): Promise<Subscription | null> 
           .from('subscriptions')
           .select(
             `
-            id, name, price, next_billing_date, shop_id,
+            id, name, price, next_billing_date, shop_id, payment_account_id, note_template,
             subscription_members (
               profile_id,
               fixed_amount,
+              slots,
               profiles ( id, name, avatar_url )
             )
           `
@@ -459,6 +461,7 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
     data: { user },
   } = await supabase.auth.getUser()
   const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66'
+  console.log('[Bot] Running with UserId:', userId)
   const today = new Date()
   const todayStr = dateOnly(today)
   const currentMonthTag = format(today, 'MMMyy').toUpperCase()
@@ -485,7 +488,27 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
 
   if (error) {
     console.error('Failed to scan due subscriptions:', error)
-    return { processedCount: 0, names: [], skippedCount: 0, skippedNames: [] }
+    // Try fallback query
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from('subscriptions')
+      .select(
+        `
+        id, name, price, next_billing_date, payment_account_id, shop_id, note_template,
+        subscription_members (
+          profile_id,
+          fixed_amount,
+          slots,
+          profiles ( name )
+        )
+      `
+      )
+      .lte('next_billing_date', todayStr)
+
+    if (fallbackError) {
+      console.error('Fallback scan failed:', fallbackError)
+      return { processedCount: 0, names: [], skippedCount: 0, skippedNames: [] }
+    }
+    data = fallbackData
   }
 
   const dueRows = (data ?? []) as DueSubscription[]
@@ -557,6 +580,9 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
     const totalSlots = members.reduce((sum, m) => sum + (m.slots ?? 1), 0)
     const unitCost = totalSlots > 0 ? price / totalSlots : 0
 
+    console.log(`[Bot] Processing ${row.name}: Price=${price}, Members=${members.length}, TotalSlots=${totalSlots}, UnitCost=${unitCost}`)
+    members.forEach(m => console.log(`   - Member ${m.profile_name} (${m.profile_id}): Slots=${m.slots}, DebtAcc=${m.debt_account_id}`))
+
     const paymentSource = row.payment_account_id ?? paymentAccountId
     const { data: txn, error: txnError } = await (supabase
       .from('transactions')
@@ -599,6 +625,7 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
       }
 
       if (member.profile_id === userId) {
+        console.log(`   -> Skipping self (Me): ${member.profile_id}`)
         return
       }
 

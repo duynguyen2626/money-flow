@@ -78,7 +78,7 @@ export function PersonCard({
     return (
       <article className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-[11px] shadow-sm transition-colors hover:border-slate-300">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             {person.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -108,7 +108,7 @@ export function PersonCard({
               </p>
             </div>
           </div>
-          <div className={`rounded-full px-3 py-1 text-[11px] font-semibold ${badgeClasses}`}>
+          <div className={`rounded-full px-3 py-1 text-[11px] font-semibold shrink-0 ${badgeClasses}`}>
             {balance > 0 ? `Owes ${balanceLabel}` : balance < 0 ? `You owe ${balanceLabel}` : 'Settled'}
           </div>
         </div>
@@ -219,7 +219,7 @@ export function PersonCard({
       className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-[11px] shadow-sm transition-colors hover:border-slate-300"
     >
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           {person.avatar_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -249,7 +249,7 @@ export function PersonCard({
             </p>
           </div>
         </div>
-        <div className={`rounded-full px-3 py-1 text-[11px] font-semibold ${badgeClasses}`}>
+        <div className={`rounded-full px-3 py-1 text-[11px] font-semibold shrink-0 ${badgeClasses}`}>
           {balance > 0 ? `Owes ${balanceLabel}` : balance < 0 ? `You owe ${balanceLabel}` : 'Settled'}
         </div>
       </div>
