@@ -16,6 +16,7 @@ import {
 } from '@/lib/transaction-mapper';
 
 import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants';
+import { resolveMissingDebtAccountIds } from '@/lib/debt-account-links';
 
 const REFUND_CATEGORY_ID = SYSTEM_CATEGORIES.REFUND;
 
@@ -218,6 +219,7 @@ async function buildTransactionLines(
     return null;
   }
 
+  await resolveMissingDebtAccountIds(supabase, lines);
   return { lines, tag };
 }
 

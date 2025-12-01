@@ -64,7 +64,7 @@ export function CreateSubscriptionDialog({ people, accounts, shops }: CreateSubs
               accounts={accounts}
               shops={shops}
               onCancel={closeDialog}
-              onSubmit={async values => {
+              onSubmit={async (values: import('@/services/subscription.service').SubscriptionPayload) => {
                 await createSubscriptionAction(values)
                 setOpen(false)
                 router.refresh()

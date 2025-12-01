@@ -56,6 +56,13 @@ export type DebtAccount = {
   sheet_link?: string | null;
 }
 
+export type MonthlyDebtSummary = {
+  tag?: string | null
+  tagLabel: string
+  amount: number
+  occurred_at?: string | null
+}
+
 export type Person = {
   id: string
   name: string
@@ -67,6 +74,7 @@ export type Person = {
   subscription_ids?: string[]
   subscription_count?: number
   subscription_details?: { id: string; name: string; slots: number }[]
+  monthly_debts?: MonthlyDebtSummary[]
 }
 
 export type SubscriptionMember = {

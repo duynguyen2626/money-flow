@@ -1,107 +1,97 @@
-# **PROJECT: MONEY FLOW 3.0**
+PROJECT: MONEY FLOW 3.0
 
-# **PHASE: 53 \- DASHBOARD RE-ARCHITECT & SERVICE PAGE**
+PHASE: 58 - PEOPLE UI HIGH-DENSITY & LAYOUT SPLIT
 
-**WORKFLOW:**
+WORKFLOW:
 
-1. **Branch:** `feat/phase-53-dashboard-service`  
-2. **Safety:** Run `npm run build`.
+Branch: feat/phase-58-people-density
 
-**OBJECTIVE:**
+Safety: Run npm run build.
 
-1. **FIX DASHBOARD CRASH:** Rewrite `DashboardService` to query `transaction_lines` (NOT `transactions`).  
-2. **NEW DASHBOARD LAYOUT:** Implement the "Dense Grid" layout requested by user. Add Month/Year Filter.  
-3. **SERVICE PAGE:** Move Service Edit from Modal to `/services/[id]` page.  
-4. **ICONS:** Change Service Icon to Cloud.
+OBJECTIVE:
+The current People Grid is inefficient and ugly due to varying card heights.
+Solution: Split the view into two distinct sections with different card designs.
 
-   ## **I. BACKEND: FIX DASHBOARD SERVICE (`src/services/dashboard.service.ts`)**
+Active Debtors: Standard Cards (Detailed Debt Breakdown).
 
-**Function:** `getDashboardStats(month: number, year: number)`
+Settled / Friends: Mini Cards (Square, Avatar-centric).
 
-**Correct Logic (Double-Entry Aware):**
+I. UI: REDESIGN PeopleGrid (src/components/people/people-grid.tsx)
 
-1. **Date Range:** StartDate \-\> EndDate of selected Month/Year.  
-2. **Total Spend (For Chart):**  
-   * Query: `transaction_lines` JOIN `categories`.  
-   * Where: `created_at` in Range AND `line.amount` \> 0 AND `category.type` \= 'expense'.  
-   * *Exclude:* Categories like "Transfer", "Credit Payment", "Loan", "Repayment".  
-   * **Group By:** `category.name`. Sum `amount`.  
-3. **Top Debtors:**  
-   * Query: `accounts` where `type` \= 'debt'.  
-   * Order By: `current_balance` DESC. Take Top 5\.  
-   * *Note:* No date filter here (Debt is cumulative).  
-4. **System Status:**  
-   * **Refunds:** Balance of Account `SYSTEM_ACCOUNTS.PENDING_REFUNDS`.  
-   * **Batches:** Sum `amount` of batch items where `status` \= 'pending'.
+Logic:
 
-   ## **II. UI: NEW DASHBOARD LAYOUT (`src/app/page.tsx`)**
+Filter people by Search query.
 
-**Structure:** `max-w-screen-2xl mx-auto space-y-4`
+Split into debtors (total_debt !== 0) and others (total_debt === 0).
 
-**1\. Filter Bar (Top Right):**
+Layout:
 
-* Select Month (1-12). Select Year (2024-2026).  
-* State: `selectedDate`. Triggers data refetch.
+Filter Bar: Search Input + [Add Person Button].
 
-**2\. Row 1: Debt & Analytics (Grid cols-12 gap-4)**
+Section 1: "⚠️ Outstanding Debtors"
 
-* **Col-span-4 (Left): "Sổ Nợ (Debt Book)" Widget**  
-  * Compact List: Avatar | Name | Badge `Wait: 500k` / `Owe: 200k`.  
-  * Action: Link to `/people`.  
-* **Col-span-8 (Right): "Chi tiêu tháng \[M\]" Widget**  
-  * **Layout:** Grid cols-2.  
-  * **Sub-Col 1:** **Donut Chart** (Recharts).  
-    * Height: 250px (Small). Legend: Vertical, Right aligned.  
-  * **Sub-Col 2:** **Recent Transactions**.  
-    * Compact Table (Date | Note | Amount). 5 items max.
+Grid: grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4.
 
-**3\. Row 2: System Health (Grid cols-2 gap-4)**
+Render: PersonCard (Detailed Variant).
 
-* **Card 1:** **"Chờ hoàn tiền (Refunds)"**.  
-  * Big Number: Current Balance of Pending Account.  
-  * List: Top 3 pending transactions. Link `/refunds`.  
-* **Card 2:** **"Chờ duyệt (Batches)"**.  
-  * Big Number: Total Pending Amount.  
-  * Text: "X lệnh đang chờ xác nhận". Link `/batch`.
+Section 2: "✅ Friends & Family (Settled)"
 
-  ## **III. FEATURE: SERVICE DETAILS PAGE (`src/app/services/[id]/page.tsx`)**
+Grid: grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3. (Higher density).
 
-**Goal:** Replace the Edit Modal with a full page.
+Render: PersonCard (Compact Variant).
 
-**Layout:**
+II. UI: REDESIGN PersonCard (src/components/moneyflow/person-card.tsx)
 
-* **Header:**  
-  * Icon (Big Cloud/Service Logo).  
-  * Title: Service Name.  
-  * Subtitle: Price / Cycle / Next Billing.  
-  * **Action:** "Edit Info" (Opens small dialog for Name/Price only).  
-* **Body (Tabs):**  
-  * **Tab 1: Members (Overview):**  
-    * **Component:** `ServiceMemberManager`.  
-    * **List:** People with Checkboxes & **Slot Input**.  
-    * **Logic:** Toggling checkbox or changing slot immediately calls `updateSubscriptionMembers`.  
-  * **Tab 2: History:** List of auto-generated transactions for this service.
+Props: variant?: 'detailed' | 'compact'
 
-**Navigation Update:**
+Variant A: DETAILED (For Debtors)
 
-* In `/services` list, clicking a card navigates to `/services/[id]`.
+Header: Avatar (40px) | Name (Bold) | Total Debt Badge (Red).
 
-  ## **IV. UI POLISH: ICONS**
+Body (Debt List):
 
-**Target:** `src/components/moneyflow/app-layout.tsx`
+Background bg-red-50/50 rounded-md p-2.
 
-**Update Sidebar:**
+List top 3 debt tags (e.g., "NOV25: 50k").
 
-* **Services:** Change Icon to `Cloud` or `CloudLightning` (Lucide).  
-* **Accounts:** Ensure `Landmark` (Bank).  
-* **People:** `Users`.  
-* **Cashback:** `RotateCw`.
+Action: Small check button to settle specific tag.
 
-  ## **V. EXECUTION STEPS**
+Footer:
 
-1. **Backend:** Rewrite `getDashboardStats` with correct SQL/Logic.  
-2. **Page:** Rebuild `page.tsx` with the 4-block layout.  
-3. **Page:** Build `src/app/services/[id]/page.tsx` and Member Manager.  
-4. **Layout:** Update Sidebar Icons.  
-1.   
-1. 
+Services: Row of small Service Icons (Youtube, etc.). Label "No Services" if empty.
+
+Actions: Icon Buttons (Lend 💸, Repay 🤝). No text labels. Tooltip only.
+
+Variant B: COMPACT (For Settled)
+
+Style: Square-ish Card, Center Aligned content.
+
+Layout:
+
+Top: Large Avatar (56px) centered.
+
+Middle: Name (Truncate) centered.
+
+Bottom: Row of Actions (Lend Button only basically, or Edit).
+
+Service Indicators: Tiny dots or mini icons at the top-right corner.
+
+III. UI: ICONS & TOOLTIPS
+
+Replace Text Buttons: Use Lucide icons for everything in the card footer.
+
+Lend: HandCoins (Color: Rose-500).
+
+Settle/Repay: Banknote (Color: Emerald-500).
+
+Edit: Pencil (Gray-400).
+
+Tooltips: Wrap all icons in <Tooltip> to explain functionality.
+
+IV. EXECUTION STEPS
+
+Component: Refactor PersonCard to support variant prop and new styles.
+
+Page: Update PeopleGrid to implement the Split Layout strategy.
+
+Verify: Check mobile responsiveness (stack grids).

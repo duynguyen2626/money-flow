@@ -1,82 +1,74 @@
-# ✅ **PHASE 53 - ALL BUGS FIXED!**
+1/2 ## Error Type
+Console Error
 
-## **Console Errors Status:**
+## Error Message
+Error fetching monthly debt lines: {}
 
-### ✅ **1/2 - Source Map Warning (Non-Critical)**
-**Error:** `sourceMapURL could not be parsed`
-- **Status:** ⚠️ Development-only warning from Turbopack
-- **Impact:** No functional impact
-- **Action:** Can be safely ignored
 
-### ✅ **2/2 - searchParams Promise Error (FIXED)**
-**Error:** `Route "/" used searchParams.month. searchParams is a Promise and must be unwrapped`
-- **Status:** ✅ **FIXED**
-- **Cause:** Next.js 15+ changed `searchParams` to be a Promise
-- **Solution:** 
-  - Updated type: `searchParams: Promise<{ month?: string; year?: string }>`
-  - Added: `const params = await searchParams`
-  - Updated all references to use `params.month` and `params.year`
-- **File:** `src/app/page.tsx`
+    at getPeople (src\services\people.service.ts:207:15)
+    at Function.all (<anonymous>:1:21)
+    at PeoplePage (src\app\people\page.tsx:12:64)
+    at PeoplePage (<anonymous>:null:null)
 
-### ✅ **3/3 - Refund Transactions Error (FIXED)**
-**Error:** `Error fetching refund transactions: {}`
-- **Status:** ✅ **FIXED** (Previous commit)
-- **Solution:** Removed `.order()` clause and added client-side sorting
+## Code Frame
+  205 |
+  206 |     if (monthlyLinesError) {
+> 207 |       console.error('Error fetching monthly debt lines:', monthlyLinesError)
+      |               ^
+  208 |     } else {
+  209 |       ;(monthlyLines as any[] | null)?.forEach(line => {
+  210 |         const accountId = line.account_id
 
----
+Next.js version: 16.0.3 (Turbopack)
 
-## **Tab Icon (Favicon) - FIXED ✅**
-- Updated `layout.tsx` to use `/favicon.ico`
-- Changed title to English: "Money Flow 3.0 - Personal Finance Dashboard"
-- Changed description to English: "Track your accounts, transactions, debts, and cashback with double-entry bookkeeping."
+2/2 ## Error Type
+Console Error
 
----
+## Error Message
+A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
 
-## **Phase 53 Implementation - COMPLETE ✅**
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
 
-### **Backend:**
-- ✅ Rewrote `getDashboardStats()` to query `transaction_lines`
-- ✅ Added Month/Year filter parameters
-- ✅ Fixed Top Debtors query (from `accounts` table)
-- ✅ Enhanced Pending Refunds tracking
-- ✅ Enhanced Pending Batches tracking
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
 
-### **Frontend:**
-- ✅ 2-row grid layout (12 columns)
-- ✅ Month/Year filter with dropdowns
-- ✅ Debt Book widget (col-span-4)
-- ✅ Monthly Spending widget (col-span-8) with donut chart
-- ✅ System Health cards (Refunds + Batches)
-- ✅ KPI mini-cards (Net Worth, Spend, Income)
+https://react.dev/link/hydration-mismatch
 
-### **Service Page:**
-- ✅ Already exists at `/services/[id]`
-- ✅ Tabs: Overview & Members
-- ✅ Member management with slots
-- ✅ Navigation configured
+  ...
+    <InnerScrollAndFocusHandler segmentPath={[...]} focusAndScrollRef={{apply:false, ...}}>
+      <ErrorBoundary errorComponent={undefined} errorStyles={undefined} errorScripts={undefined}>
+        <LoadingBoundary name="people/" loading={null}>
+          <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+            <RedirectBoundary>
+              <RedirectErrorBoundary router={{...}}>
+                <InnerLayoutRouter url="/people" tree={[...]} params={{}} cacheNode={{lazyData:null, ...}} ...>
+                  <SegmentViewNode type="page" pagePath="/money-flo...">
+                    <SegmentTrieNode>
+                    <PeoplePage>
+                      <div className="space-y-6">
+                        <section className="bg-white s...">
+                          <div>
+                          <PeopleGrid people={[...]} subscriptions={[...]} shops={[...]} accounts={[...]} ...>
+                            <div className="space-y-3 ...">
+                              <div>
+                              <div className="relative m...">
+                                <Search>
+                                <input
+                                  type="text"
+                                  placeholder="Search people..."
+                                  value=""
+                                  onChange={function onChange}
+                                  className="w-full rounded-full border border-slate-200 bg-white px-3 py-2 pl-10 text..."
+-                                 pwa2-uuid="EDITOR/input-7C1-F0E-70C75-C72"
+-                                 pwa-fake-editor=""
+                                >
+                            ...
+                  ...
+                ...
+      ...
 
-### **Icons:**
-- ✅ Services: Changed from ⚡ Zap to ☁️ Cloud
-- ✅ All other icons verified
 
----
-
-## **Git Status:**
-- **Branch:** `feat/phase-53-dashboard-service`
-- **Commits:** 4 commits
-  1. Initial dashboard redesign
-  2. Implementation log
-  3. Console errors fix + favicon
-  4. searchParams Promise fix
-- **Status:** ✅ **ALL BUGS FIXED - READY FOR TESTING**
-
----
-
-## **Build & Dev Server:**
-- ✅ Build: Successful
-- ✅ Dev Server: Running without errors
-- ✅ All console errors resolved
-
----
-
-**🎉 Phase 53 Complete! Ready for production!**
+Next.js version: 16.0.3 (Turbopack)

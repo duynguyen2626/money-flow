@@ -1,215 +1,368 @@
-"use client"
+'use client'
 
-import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { Pencil, HandCoins, Banknote, ExternalLink } from 'lucide-react'
+import { useState } from 'react'
+import { HandCoins, Banknote, ChevronRight, Check, Pencil } from 'lucide-react'
 
-import { Person, Shop, Subscription, Account, Category } from '@/types/moneyflow.types'
-import { getServiceBranding } from '@/components/services/service-branding'
-import { EditSubscriptionDialog } from '@/components/services/edit-subscription-dialog'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
+import { EditSubscriptionDialog } from '@/components/services/edit-subscription-dialog'
+import { Account, Category, MonthlyDebtSummary, Person, Shop, Subscription } from '@/types/moneyflow.types'
+import { CustomTooltip } from '@/components/ui/custom-tooltip'
 
-interface PersonCardProps {
-    person: Person
-    subscriptions: Subscription[]
-    shops: Shop[]
-    accounts: Account[]
-    categories: Category[]
-    onEdit: () => void
-    onOpenDebt: () => void
+type PersonCardProps = {
+  person: Person
+  shops: Shop[]
+  accounts: Account[]
+  categories: Category[]
+  subscriptions: Subscription[]
+  onEdit: () => void
+  onOpenDebt: () => void
+  variant?: 'detailed' | 'compact'
 }
 
-const numberFormatter = new Intl.NumberFormat('vi-VN', {
-    maximumFractionDigits: 0,
+const currencyFormatter = new Intl.NumberFormat('vi-VN', {
+  maximumFractionDigits: 0,
 })
 
 export function PersonCard({
-    person,
-    subscriptions,
-    shops,
-    accounts,
-    categories,
-    onEdit,
-    onOpenDebt,
+  person,
+  shops,
+  accounts,
+  categories,
+  subscriptions,
+  onEdit,
+  onOpenDebt,
+  variant = 'detailed',
 }: PersonCardProps) {
-    const router = useRouter()
-    const [editServiceId, setEditServiceId] = useState<string | null>(null)
+  const balance = person.balance ?? 0
+  const isActive = balance !== 0
+  const monthlyDebts = (person.monthly_debts ?? []).slice(0, 3)
+  const firstDebtTag = monthlyDebts[0]?.tag ?? monthlyDebts[0]?.tagLabel
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null)
 
-    const personSubscriptions = useMemo(() => {
-        const subMap = new Map(subscriptions.map(s => [s.id, s]))
-        return (person.subscription_ids ?? [])
-            .map(id => subMap.get(id))
-            .filter(Boolean) as Subscription[]
-    }, [person.subscription_ids, subscriptions])
+  const editingSubscription = editingServiceId
+    ? subscriptions.find(sub => sub.id === editingServiceId)
+    : null
 
-    const balance = person.balance ?? 0
+  const renderDebtRow = (entry: MonthlyDebtSummary) => (
+    <div
+      key={`${person.id}-${entry.tagLabel}`}
+      className="flex items-center justify-between gap-2 rounded-xl border border-slate-100 bg-white px-3 py-1 text-[11px] text-slate-600"
+      onClick={event => event.stopPropagation()}
+    >
+      <div className="min-w-0">
+        <p className="truncate font-semibold text-slate-900">{entry.tagLabel}</p>
+        <p>{currencyFormatter.format(entry.amount)}</p>
+      </div>
+      {person.debt_account_id && (
+        <AddTransactionDialog
+          accounts={accounts}
+          categories={categories}
+          people={[person]}
+          shops={shops}
+          defaultType="repayment"
+          defaultTag={entry.tag ?? entry.tagLabel}
+          defaultAmount={entry.amount}
+          defaultDebtAccountId={person.debt_account_id}
+          buttonClassName="flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 bg-white p-0 text-slate-500 transition hover:border-blue-300 hover:text-blue-700"
+          triggerContent={<Check className="h-3 w-3" />}
+        />
+      )}
+    </div>
+  )
 
-    const getInitial = (name: string) => {
-        const first = name?.trim().charAt(0)
-        return first ? first.toUpperCase() : '?'
-    }
+  const badgeClasses =
+    balance > 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-700'
+  const balanceLabel = currencyFormatter.format(Math.abs(balance))
 
-    // Badges logic
-    let balanceBadge = null
-    if (balance > 0) {
-        // They owe me (Asset) -> Chờ thu
-        balanceBadge = (
-            <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700 h-6">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                Chờ thu: {numberFormatter.format(balance)}
-            </span>
-        )
-    } else if (balance < 0) {
-        // I owe them (Liability) -> Nợ họ
-        balanceBadge = (
-            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 h-6">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                Nợ họ: {numberFormatter.format(Math.abs(balance))}
-            </span>
-        )
-    }
-
-    const dialogBaseProps = {
-        accounts,
-        categories,
-        people: [person],
-        shops,
-    }
-
+  if (variant === 'compact') {
     return (
-        <div
-            className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-md cursor-pointer group relative overflow-hidden"
-            onClick={onOpenDebt}
-        >
-            {/* Header */}
-            <div className="flex items-center gap-3">
-                {person.avatar_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                        src={person.avatar_url}
-                        alt={person.name}
-                        className="h-12 w-12 rounded-lg border border-slate-100 object-cover bg-slate-50"
-                    />
-                ) : (
-                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-lg font-bold text-slate-600">
-                        {getInitial(person.name)}
-                    </div>
-                )}
-
-                <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-bold text-slate-900 truncate pr-2">
-                            {person.name}
-                        </h3>
-                        <button
-                            type="button"
-                            className="text-slate-400 hover:text-blue-600 transition-colors opacity-0 group-hover:opacity-100"
-                            onClick={(e) => {
-                                e.stopPropagation()
-                                onEdit()
-                            }}
-                        >
-                            <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                    </div>
-                    <p className="text-xs text-slate-500 truncate">
-                        {person.email || 'Contact'}
-                    </p>
-                </div>
-            </div>
-
-            {/* Middle: Stats */}
-            <div className="space-y-2 min-h-[52px]">
-                {/* Row 1: Debt Badge */}
-                <div className="flex items-center gap-2">
-                    {balanceBadge || (
-                        <span className="text-xs text-slate-400 italic pl-1">No pending debt</span>
-                    )}
-                </div>
-
-                {/* Row 2: Subscriptions */}
-                {person.subscription_details && person.subscription_details.length > 0 && (
-                    <div className="flex flex-wrap gap-2 pt-1">
-                        {person.subscription_details.slice(0, 4).map(sub => {
-                            const brand = getServiceBranding(sub.name)
-                            return (
-                                <div
-                                    key={`${person.id}-${sub.id}`}
-                                    className="relative group/sub flex items-center gap-0.5"
-                                >
-                                    <button
-                                        type="button"
-                                        className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${brand.bg} ${brand.text} ring-1 ring-white shadow-sm overflow-hidden`}
-                                        onClick={event => {
-                                            event.stopPropagation()
-                                            setEditServiceId(sub.id)
-                                        }}
-                                    >
-                                        {brand.icon}
-                                    </button>
-                                    {sub.slots > 1 && (
-                                        <span className="text-[10px] font-medium text-slate-500">
-                                            {sub.slots}
-                                        </span>
-                                    )}
-                                </div>
-                            )
-                        })}
-                        {person.subscription_details.length > 4 && (
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[9px] font-medium text-slate-500 ring-1 ring-white">
-                                +{person.subscription_details.length - 4}
-                            </span>
-                        )}
-                        <span className="text-[10px] text-slate-400 self-center ml-1">
-                            {person.subscription_details.length} Subs
-                        </span>
-                    </div>
-                )}
-            </div>
-
-            {/* Footer: Actions */}
-            <div className="mt-auto grid grid-cols-2 gap-2 pt-2 border-t border-slate-50">
-                <AddTransactionDialog
-                    {...dialogBaseProps}
-                    defaultType="debt"
-                    defaultPersonId={person.id}
-                    buttonClassName="flex items-center justify-center gap-1.5 rounded-md bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors w-full"
-                    buttonText="Cho vay"
-                    triggerContent={
-                        <>
-                            <HandCoins className="h-3.5 w-3.5" />
-                            Cho vay
-                        </>
-                    }
-                />
-                <AddTransactionDialog
-                    {...dialogBaseProps}
-                    defaultType="repayment"
-                    defaultPersonId={person.id}
-                    buttonClassName="flex items-center justify-center gap-1.5 rounded-md bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors w-full"
-                    buttonText="Thu nợ"
-                    triggerContent={
-                        <>
-                            <Banknote className="h-3.5 w-3.5" />
-                            Thu nợ
-                        </>
-                    }
-                />
-            </div>
-
-            {editServiceId && (
-                <EditSubscriptionDialog
-                    subscription={subscriptions.find(s => s.id === editServiceId)!}
-                    people={[person]}
-                    accounts={accounts}
-                    shops={shops}
-                    initiallyOpen
-                    onClose={() => {
-                        setEditServiceId(null)
-                        router.refresh()
-                    }}
-                />
+      <article className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-[11px] shadow-sm transition-colors hover:border-slate-300">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            {person.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={person.avatar_url}
+                alt={person.name}
+                className="h-10 w-10 rounded-none object-cover"
+              />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center bg-slate-100 font-semibold text-slate-600">
+                {person.name.charAt(0).toUpperCase()}
+              </div>
             )}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <p className="text-base font-bold text-slate-900 truncate">{person.name}</p>
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  className="text-slate-400 hover:text-blue-600 transition"
+                  aria-label="Edit person"
+                >
+                  <Pencil className="h-3 w-3" />
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-400 truncate">
+                {person.subscription_details?.[0]?.name ?? person.email ?? 'Member'}
+              </p>
+            </div>
+          </div>
+          <div className={`rounded-full px-3 py-1 text-[11px] font-semibold ${badgeClasses}`}>
+            {balance > 0 ? `Owes ${balanceLabel}` : balance < 0 ? `You owe ${balanceLabel}` : 'Settled'}
+          </div>
         </div>
+
+        <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-[10px]">
+          <div className="flex flex-col gap-1.5 text-slate-500">
+            {person.subscription_details && person.subscription_details.length > 0 ? (
+              person.subscription_details.map(service => {
+                const sub = subscriptions.find(s => s.id === service.id)
+                const shop = sub?.shop_id ? shops.find(s => s.id === sub.shop_id) : null
+
+                return (
+                  <div key={service.id} className="flex items-center justify-between gap-2 text-[11px]">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {shop?.logo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={shop.logo_url} alt="" className="h-4 w-4 rounded-full object-cover" />
+                      ) : (
+                        <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-100 text-[8px] font-bold text-slate-500">
+                          {service.name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      <span className="truncate text-slate-700 font-medium">{service.name}</span>
+                      <span className="text-slate-400">: {service.slots}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={event => {
+                        event.stopPropagation()
+                        setEditingServiceId(service.id)
+                      }}
+                      className="text-slate-400 hover:text-blue-600 transition"
+                      aria-label={`Edit ${service.name}`}
+                    >
+                      <Pencil className="h-3 w-3" />
+                    </button>
+                  </div>
+                )
+              })
+            ) : (
+              <div className="flex items-center gap-2 text-[11px] text-slate-400 italic">
+                No active services
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <CustomTooltip content="Lend money">
+              <AddTransactionDialog
+                accounts={accounts}
+                categories={categories}
+                people={[person]}
+                shops={shops}
+                defaultType="debt"
+                defaultDebtAccountId={person.debt_account_id ?? undefined}
+                buttonClassName="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-rose-600 transition hover:border-rose-300 hover:text-rose-700"
+                triggerContent={<HandCoins className="h-4 w-4" />}
+              />
+            </CustomTooltip>
+
+            <CustomTooltip content="Repay debt">
+              <AddTransactionDialog
+                accounts={accounts}
+                categories={categories}
+                people={[person]}
+                shops={shops}
+                defaultType="repayment"
+                defaultDebtAccountId={person.debt_account_id ?? undefined}
+                defaultAmount={balance > 0 ? balance : undefined}
+                defaultTag={firstDebtTag}
+                buttonClassName="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-emerald-600 transition hover:border-emerald-300 hover:text-emerald-700"
+                triggerContent={<Banknote className="h-4 w-4" />}
+              />
+            </CustomTooltip>
+
+            <CustomTooltip content="View details">
+              <button
+                type="button"
+                onClick={event => {
+                  event.stopPropagation()
+                  onOpenDebt()
+                }}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 transition hover:border-slate-300 hover:text-slate-700"
+                aria-label="View details"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </CustomTooltip>
+
+            {editingSubscription && (
+              <EditSubscriptionDialog
+                subscription={editingSubscription}
+                people={[person]}
+                accounts={accounts}
+                shops={shops}
+                initiallyOpen
+                focusProfileId={person.id}
+                onClose={() => setEditingServiceId(null)}
+              />
+            )}
+          </div>
+        </div>
+      </article>
     )
+  }
+
+  return (
+    <article
+      className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-[11px] shadow-sm transition-colors hover:border-slate-300"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          {person.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={person.avatar_url}
+              alt={person.name}
+              className="h-10 w-10 rounded-full border border-slate-200 object-cover"
+            />
+          ) : (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-slate-100 font-semibold text-slate-600">
+              {person.name.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <p className="text-sm font-semibold text-slate-900 truncate">{person.name}</p>
+              <button
+                type="button"
+                onClick={onEdit}
+                className="text-slate-400 hover:text-blue-600 transition"
+                aria-label="Edit person"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-400">
+              {person.subscription_details?.[0]?.name ?? person.email ?? 'Member'}
+            </p>
+          </div>
+        </div>
+        <div className={`rounded-full px-3 py-1 text-[11px] font-semibold ${badgeClasses}`}>
+          {balance > 0 ? `Owes ${balanceLabel}` : balance < 0 ? `You owe ${balanceLabel}` : 'Settled'}
+        </div>
+      </div>
+
+      {isActive && monthlyDebts.length > 0 && (
+        <div className="rounded-2xl bg-rose-50/50 p-2 text-[11px]">
+          <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+            <span>Debt Breakdown</span>
+            {person.monthly_debts && person.monthly_debts.length > 3 && (
+              <span className="text-blue-600">+{person.monthly_debts.length - 3} more</span>
+            )}
+          </div>
+          <div className="mt-2 space-y-1">{monthlyDebts.map(renderDebtRow)}</div>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-[10px]">
+        <div className="flex flex-col gap-1.5 text-slate-500">
+          {person.subscription_details && person.subscription_details.length > 0 ? (
+            person.subscription_details.map(service => {
+              const sub = subscriptions.find(s => s.id === service.id)
+              const shop = sub?.shop_id ? shops.find(s => s.id === sub.shop_id) : null
+
+              return (
+                <div key={service.id} className="flex items-center justify-between gap-2 text-[11px]">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {shop?.logo_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={shop.logo_url} alt="" className="h-4 w-4 rounded-full object-cover" />
+                    ) : (
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-100 text-[8px] font-bold text-slate-500">
+                        {service.name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="truncate text-slate-700 font-medium">{service.name}</span>
+                    <span className="text-slate-400">: {service.slots}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={event => {
+                      event.stopPropagation()
+                      setEditingServiceId(service.id)
+                    }}
+                    className="text-slate-400 hover:text-blue-600 transition"
+                    aria-label={`Edit ${service.name}`}
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                </div>
+              )
+            })
+          ) : (
+            <div className="flex items-center gap-2 text-[11px] text-slate-400 italic">
+              No active services
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          <CustomTooltip content="Lend money">
+            <AddTransactionDialog
+              accounts={accounts}
+              categories={categories}
+              people={[person]}
+              shops={shops}
+              defaultType="debt"
+              defaultDebtAccountId={person.debt_account_id ?? undefined}
+              buttonClassName="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-rose-600 transition hover:border-rose-300 hover:text-rose-700"
+              triggerContent={<HandCoins className="h-4 w-4" />}
+            />
+          </CustomTooltip>
+
+          <CustomTooltip content="Repay debt">
+            <AddTransactionDialog
+              accounts={accounts}
+              categories={categories}
+              people={[person]}
+              shops={shops}
+              defaultType="repayment"
+              defaultDebtAccountId={person.debt_account_id ?? undefined}
+              defaultAmount={balance > 0 ? balance : undefined}
+              defaultTag={firstDebtTag}
+              buttonClassName="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-emerald-600 transition hover:border-emerald-300 hover:text-emerald-700"
+              triggerContent={<Banknote className="h-4 w-4" />}
+            />
+          </CustomTooltip>
+
+          <CustomTooltip content="View details">
+            <button
+              type="button"
+              onClick={event => {
+                event.stopPropagation()
+                onOpenDebt()
+              }}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-400 transition hover:border-slate-300 hover:text-slate-700"
+              aria-label="View details"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </CustomTooltip>
+
+          {editingSubscription && (
+            <EditSubscriptionDialog
+              subscription={editingSubscription}
+              people={[person]}
+              accounts={accounts}
+              shops={shops}
+              initiallyOpen
+              focusProfileId={person.id}
+              onClose={() => setEditingServiceId(null)}
+            />
+          )}
+        </div>
+      </div>
+    </article>
+  )
 }
