@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 export default async function Home({
   searchParams,
 }: {
-  searchParams: { month?: string; year?: string }
+  searchParams: Promise<{ month?: string; year?: string }>
 }) {
   const supabase = await createClient()
   const {
@@ -23,10 +23,13 @@ export default async function Home({
     redirect('/login')
   }
 
+  // Await searchParams as it's a Promise in Next.js 15+
+  const params = await searchParams
+
   // Parse month/year from query params
   const now = new Date()
-  const month = searchParams.month ? parseInt(searchParams.month) : now.getMonth() + 1
-  const year = searchParams.year ? parseInt(searchParams.year) : now.getFullYear()
+  const month = params.month ? parseInt(params.month) : now.getMonth() + 1
+  const year = params.year ? parseInt(params.year) : now.getFullYear()
 
   const [stats, accounts, categories, people, shops] = await Promise.all([
     getDashboardStats(month, year),
