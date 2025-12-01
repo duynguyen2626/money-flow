@@ -34,7 +34,7 @@ export default async function Home() {
   ])
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
+    <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -46,8 +46,8 @@ export default async function Home() {
       {/* Row 1: KPI Cards (Compact) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Net Worth */}
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-sm p-4 text-white">
-          <div className="flex items-center gap-2 mb-1 opacity-90">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-sm p-3 text-white flex flex-col justify-between h-24">
+          <div className="flex items-center gap-2 opacity-90">
             <Wallet className="h-4 w-4" />
             <span className="text-xs font-medium">Net Worth</span>
           </div>
@@ -57,8 +57,8 @@ export default async function Home() {
         </div>
 
         {/* Monthly Spend */}
-        <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-sm p-4 text-white">
-          <div className="flex items-center gap-2 mb-1 opacity-90">
+        <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl shadow-sm p-3 text-white flex flex-col justify-between h-24">
+          <div className="flex items-center gap-2 opacity-90">
             <TrendingDown className="h-4 w-4" />
             <span className="text-xs font-medium">Monthly Spend</span>
           </div>
@@ -68,8 +68,8 @@ export default async function Home() {
         </div>
 
         {/* Monthly Income */}
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-sm p-4 text-white">
-          <div className="flex items-center gap-2 mb-1 opacity-90">
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-sm p-3 text-white flex flex-col justify-between h-24">
+          <div className="flex items-center gap-2 opacity-90">
             <TrendingUp className="h-4 w-4" />
             <span className="text-xs font-medium">Monthly Income</span>
           </div>
@@ -79,105 +79,10 @@ export default async function Home() {
         </div>
       </div>
 
-      {/* Row 2: Quick Actions & Spending Chart */}
+      {/* Row 2: Recent Activity & Spending Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left: Quick Actions (40%) */}
-        <div className="lg:col-span-2 space-y-4">
-          {/* Spending Actions */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3">Quick Add</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <AddTransactionDialog
-                accounts={accounts}
-                categories={categories}
-                people={people}
-                shops={shops}
-                defaultType="expense"
-                triggerContent={
-                  <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 transition-colors cursor-pointer w-full h-full">
-                    <TrendingDown className="h-5 w-5 mb-1" />
-                    <span className="text-xs font-medium">Expense</span>
-                  </div>
-                }
-              />
-              <AddTransactionDialog
-                accounts={accounts}
-                categories={categories}
-                people={people}
-                shops={shops}
-                defaultType="income"
-                triggerContent={
-                  <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-green-50 text-green-600 hover:bg-green-100 transition-colors cursor-pointer w-full h-full">
-                    <TrendingUp className="h-5 w-5 mb-1" />
-                    <span className="text-xs font-medium">Income</span>
-                  </div>
-                }
-              />
-              <AddTransactionDialog
-                accounts={accounts}
-                categories={categories}
-                people={people}
-                shops={shops}
-                defaultType="transfer"
-                triggerContent={
-                  <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors cursor-pointer w-full h-full">
-                    <ArrowRightLeft className="h-5 w-5 mb-1" />
-                    <span className="text-xs font-medium">Transfer</span>
-                  </div>
-                }
-              />
-            </div>
-          </div>
-
-          {/* Debt Actions */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-            <h2 className="text-sm font-semibold text-slate-900 mb-3">Debt Actions</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <AddTransactionDialog
-                accounts={accounts}
-                categories={categories}
-                people={people}
-                shops={shops}
-                defaultType="debt"
-                triggerContent={
-                  <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors cursor-pointer w-full h-full">
-                    <Banknote className="h-5 w-5 mb-1" />
-                    <span className="text-xs font-medium">Lend</span>
-                  </div>
-                }
-              />
-              <AddTransactionDialog
-                accounts={accounts}
-                categories={categories}
-                people={people}
-                shops={shops}
-                defaultType="repayment"
-                triggerContent={
-                  <div className="flex flex-col items-center justify-center p-3 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors cursor-pointer w-full h-full">
-                    <CreditCard className="h-5 w-5 mb-1" />
-                    <span className="text-xs font-medium">Repay</span>
-                  </div>
-                }
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Spending Chart (60%) */}
-        <div className="lg:col-span-3 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-          <div className="mb-2">
-            <h2 className="text-sm font-semibold text-slate-900">Spending Breakdown</h2>
-          </div>
-          <div className="h-[300px]">
-            <DashboardCharts spendingByCategory={stats.spendingByCategory} />
-          </div>
-        </div>
-      </div>
-
-      {/* Row 3: Recent Activity & Debt/System */}
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Left: Recent Activity (60%) - Moved down and wider */}
-        <div className="lg:col-span-3 bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col">
+        {/* Left: Recent Activity (40%) */}
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex flex-col h-[340px]">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Clock className="h-4 w-4 text-slate-500" />
@@ -186,7 +91,7 @@ export default async function Home() {
             <Link href="/transactions" className="text-xs text-blue-600 hover:underline">View all</Link>
           </div>
 
-          <div className="flex-1 space-y-3">
+          <div className="flex-1 overflow-y-auto space-y-3 pr-1 custom-scrollbar">
             {stats.recentTransactions.length === 0 ? (
               <p className="text-xs text-slate-400 text-center py-4">No recent transactions</p>
             ) : (
@@ -224,88 +129,144 @@ export default async function Home() {
           </div>
         </div>
 
-        {/* Right: Debt & System (40%) */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Top Debtors */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <Users className="h-4 w-4 text-slate-500" />
-                <h2 className="text-sm font-semibold text-slate-900">Top Debtors</h2>
-              </div>
-              <Link href="/people" className="text-xs text-blue-600 hover:underline">View all</Link>
+        {/* Right: Spending Chart (60%) */}
+        <div className="lg:col-span-3 bg-white rounded-xl shadow-sm border border-slate-200 p-4 h-[340px]">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-900">Spending Breakdown</h2>
+            <div className="flex items-center gap-1">
+              <AddTransactionDialog
+                accounts={accounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+                defaultType="expense"
+                buttonClassName="flex items-center gap-1 px-2 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-medium"
+                triggerContent={
+                  <>
+                    <Plus className="h-3 w-3" />
+                    Exp
+                  </>
+                }
+              />
+              <AddTransactionDialog
+                accounts={accounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+                defaultType="income"
+                buttonClassName="flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors text-xs font-medium"
+                triggerContent={
+                  <>
+                    <Plus className="h-3 w-3" />
+                    Inc
+                  </>
+                }
+              />
             </div>
+          </div>
+          <div className="h-[280px]">
+            <DashboardCharts spendingByCategory={stats.spendingByCategory} />
+          </div>
+        </div>
+      </div>
 
-            {stats.topDebtors.length === 0 ? (
-              <p className="text-xs text-slate-400 text-center py-4">No outstanding debts</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-3">
-                {stats.topDebtors.map((debtor) => (
-                  <Link
-                    key={debtor.id}
-                    href={`/accounts/${debtor.id}`}
-                    className="flex items-center gap-3 p-2 rounded-lg border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-colors"
-                  >
-                    {debtor.avatar_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={debtor.avatar_url} alt={debtor.name} className="h-8 w-8 rounded-full object-cover" />
-                    ) : (
-                      <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">
-                        {debtor.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium text-slate-900 truncate">{debtor.name}</p>
-                    </div>
-                    <p className="text-xs font-bold text-green-600">{numberFormatter.format(debtor.balance)}</p>
-                  </Link>
-                ))}
-              </div>
-            )}
+      {/* Row 3: Debt & System */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Top Debtors (Horizontal List) */}
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-slate-200 p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-slate-500" />
+              <h2 className="text-sm font-semibold text-slate-900">Top Debtors</h2>
+            </div>
+            <div className="flex items-center gap-3">
+              <AddTransactionDialog
+                accounts={accounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+                defaultType="debt"
+                buttonClassName="flex items-center gap-1 text-xs font-medium text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-md transition-colors"
+                triggerContent={
+                  <>
+                    <Plus className="h-3 w-3" />
+                    Cho vay
+                  </>
+                }
+              />
+              <Link href="/people" className="text-xs text-slate-500 hover:text-slate-900">View all</Link>
+            </div>
           </div>
 
-          {/* Pending Actions */}
-          <div className="grid grid-cols-2 gap-4">
-            <Link
-              href="/batch"
-              className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 hover:shadow-md transition-shadow flex flex-col justify-between"
-            >
-              <div className="flex items-start justify-between">
-                <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
-                  <FileText className="h-5 w-5" />
-                </div>
-                {stats.pendingBatches > 0 && (
-                  <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    {stats.pendingBatches}
-                  </span>
-                )}
+          {stats.topDebtors.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-4">No outstanding debts</p>
+          ) : (
+            <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
+              {stats.topDebtors.map((debtor) => (
+                <Link
+                  key={debtor.id}
+                  href={`/people`}
+                  className="flex flex-col items-center gap-2 p-3 rounded-lg border border-slate-100 hover:border-blue-200 hover:bg-blue-50 transition-colors min-w-[100px]"
+                >
+                  {debtor.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={debtor.avatar_url} alt={debtor.name} className="h-10 w-10 rounded-full object-cover" />
+                  ) : (
+                    <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-600">
+                      {debtor.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="text-center">
+                    <p className="text-xs font-medium text-slate-900 truncate max-w-[80px]">{debtor.name}</p>
+                    <p className="text-xs font-bold text-green-600">{numberFormatter.format(debtor.balance)}</p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Pending Actions */}
+        <div className="space-y-3">
+          <Link
+            href="/batch"
+            className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 hover:shadow-md transition-shadow flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
+                <FileText className="h-5 w-5" />
               </div>
-              <div className="mt-3">
+              <div>
                 <p className="text-xs text-slate-500">Pending</p>
                 <p className="text-sm font-bold text-slate-900">Batch Imports</p>
               </div>
-            </Link>
+            </div>
+            {stats.pendingBatches > 0 && (
+              <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                {stats.pendingBatches}
+              </span>
+            )}
+          </Link>
 
-            <Link
-              href="/transactions"
-              className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 hover:shadow-md transition-shadow flex flex-col justify-between"
-            >
-              <div className="flex items-start justify-between">
-                <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
-                  <AlertCircle className="h-5 w-5" />
-                </div>
-                {stats.pendingRefunds > 0 && (
-                  <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                    {stats.pendingRefunds}
-                  </span>
-                )}
+          <Link
+            href="/transactions"
+            className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 hover:shadow-md transition-shadow flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+                <AlertCircle className="h-5 w-5" />
               </div>
-              <div className="mt-3">
+              <div>
                 <p className="text-xs text-slate-500">Pending</p>
                 <p className="text-sm font-bold text-slate-900">Refunds</p>
               </div>
-            </Link>
-          </div>
+            </div>
+            {stats.pendingRefunds > 0 && (
+              <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                {stats.pendingRefunds}
+              </span>
+            )}
+          </Link>
         </div>
       </div>
     </div>

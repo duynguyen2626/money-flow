@@ -19,6 +19,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Money Flow 3.0',
   description: 'Personal finance dashboard for tracking accounts, transactions, and debts.',
+  icons: {
+    icon: process.env.NODE_ENV === 'development' ? '/icon-dev.png' : '/icon.png',
+  },
 }
 
 export default function RootLayout({

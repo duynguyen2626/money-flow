@@ -15,6 +15,7 @@ type EditSubscriptionDialogProps = {
   shops: Shop[]
   initiallyOpen?: boolean
   onClose?: () => void
+  trigger?: React.ReactNode
 }
 
 export function EditSubscriptionDialog({
@@ -24,6 +25,7 @@ export function EditSubscriptionDialog({
   shops,
   initiallyOpen,
   onClose,
+  trigger,
 }: EditSubscriptionDialogProps) {
   const [open, setOpen] = useState(Boolean(initiallyOpen))
   const router = useRouter()
@@ -43,13 +45,19 @@ export function EditSubscriptionDialog({
 
   return (
     <>
-      <button
-        type="button"
-        className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-        onClick={() => setOpen(true)}
-      >
-        Edit
-      </button>
+      {trigger ? (
+        <div onClick={() => setOpen(true)} className="cursor-pointer inline-block">
+          {trigger}
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+          onClick={() => setOpen(true)}
+        >
+          Edit
+        </button>
+      )}
 
       {open && (
         <div

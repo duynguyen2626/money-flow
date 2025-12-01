@@ -129,34 +129,52 @@ export async function getPeople(): Promise<Person[]> {
         .order('name', { ascending: true }),
       supabase
         .from('accounts')
-        .select('id, owner_id, current_balance')
+        .select('id, owner_id')
         .eq('type', 'debt'),
-      supabase.from('subscription_members').select('profile_id, subscription_id'),
+      supabase
+        .from('subscription_members')
+        .select(`
+          profile_id, 
+          subscription_id, 
+          slots,
+          subscriptions ( name )
+        `),
     ])
 
   if (profileError) {
-    console.error('Error fetching people profiles:', {
-      message: profileError.message,
-      code: profileError.code,
-      details: profileError.details,
-    })
+    console.error('Error fetching people profiles:', profileError)
     return []
   }
 
   if (debtError) {
-    console.error('Error fetching debt accounts for people:', {
-      message: debtError.message,
-      code: debtError.code,
-      details: debtError.details,
-    })
+    console.error('Error fetching debt accounts for people:', debtError)
   }
 
   if (subError) {
-    console.error('Error fetching subscription memberships for people:', {
-      message: subError.message,
-      code: subError.code,
-      details: subError.details,
-    })
+    console.error('Error fetching subscription memberships for people:', subError)
+  }
+
+  // Calculate balances from transaction lines
+  const debtAccountIds = (debtAccounts as AccountRow[])?.map(a => a.id) ?? []
+  const debtBalanceMap = new Map<string, number>()
+
+  if (debtAccountIds.length > 0) {
+    const { data: lines, error: linesError } = await supabase
+      .from('transaction_lines')
+      .select('account_id, amount, type')
+      .in('account_id', debtAccountIds)
+
+    if (linesError) {
+      console.error('Error fetching debt transaction lines:', linesError)
+    } else {
+      (lines as any[])?.forEach(line => {
+        const current = debtBalanceMap.get(line.account_id) ?? 0
+        // Debit = Asset Increases (They owe more)
+        // Credit = Asset Decreases (They paid back)
+        const change = line.type === 'debit' ? Math.abs(line.amount) : -Math.abs(line.amount)
+        debtBalanceMap.set(line.account_id, current + change)
+      })
+    }
   }
 
   const debtAccountMap = new Map<string, { id: string; balance: number }>()
@@ -165,29 +183,33 @@ export async function getPeople(): Promise<Person[]> {
       if (account.owner_id) {
         debtAccountMap.set(account.owner_id, {
           id: account.id,
-          balance: account.current_balance ?? 0,
+          balance: debtBalanceMap.get(account.id) ?? 0,
         })
       }
     })
   }
 
-  const subscriptionCountMap = new Map<string, number>()
-  const subscriptionIdsMap = new Map<string, Set<string>>()
+  const subscriptionMap = new Map<string, Array<{ id: string; name: string; slots: number }>>()
   if (Array.isArray(subscriptionMembers)) {
-    ; (subscriptionMembers as { profile_id: string; subscription_id?: string }[]).forEach(row => {
+    (subscriptionMembers as any[]).forEach(row => {
       if (!row.profile_id) return
-      subscriptionCountMap.set(row.profile_id, (subscriptionCountMap.get(row.profile_id) ?? 0) + 1)
+      if (!subscriptionMap.has(row.profile_id)) {
+        subscriptionMap.set(row.profile_id, [])
+      }
       if (row.subscription_id) {
-        if (!subscriptionIdsMap.has(row.profile_id)) {
-          subscriptionIdsMap.set(row.profile_id, new Set<string>())
-        }
-        subscriptionIdsMap.get(row.profile_id)?.add(row.subscription_id)
+        subscriptionMap.get(row.profile_id)?.push({
+          id: row.subscription_id,
+          name: row.subscriptions?.name ?? 'Unknown',
+          slots: row.slots ?? 1
+        })
       }
     })
   }
 
   return (profiles as ProfileRow[] | null)?.map(person => {
     const debtInfo = debtAccountMap.get(person.id)
+    const subs = subscriptionMap.get(person.id) ?? []
+
     return {
       id: person.id,
       name: person.name,
@@ -196,8 +218,9 @@ export async function getPeople(): Promise<Person[]> {
       sheet_link: person.sheet_link,
       debt_account_id: debtInfo?.id ?? null,
       balance: debtInfo?.balance ?? null,
-      subscription_count: subscriptionCountMap.get(person.id) ?? 0,
-      subscription_ids: Array.from(subscriptionIdsMap.get(person.id) ?? []),
+      subscription_count: subs.length,
+      subscription_ids: subs.map(s => s.id), // Keep for backward compatibility if needed
+      subscription_details: subs, // New field
     }
   }) ?? []
 }

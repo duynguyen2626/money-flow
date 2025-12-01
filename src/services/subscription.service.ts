@@ -187,6 +187,70 @@ export async function getSubscriptions(): Promise<Subscription[]> {
   }
 }
 
+export async function getSubscription(id: string): Promise<Subscription | null> {
+  try {
+    const supabase = createClient()
+
+    const baseSelect = `
+      id, name, price, next_billing_date, is_active, payment_account_id, note_template, shop_id,
+      subscription_members (
+        profile_id,
+        fixed_amount,
+        slots,
+        profiles ( id, name, avatar_url )
+      )
+    `
+
+    const { data, error } = await supabase
+      .from('subscriptions')
+      .select(baseSelect)
+      .eq('id', id)
+      .single()
+
+    let row: SubscriptionWithMembersRow | null = data as SubscriptionWithMembersRow | null
+
+    if (error) {
+      // Fallback logic similar to getSubscriptions if needed, but for single row
+      if (error.code === '42703') {
+        const fallback = await supabase
+          .from('subscriptions')
+          .select(
+            `
+            id, name, price, next_billing_date, shop_id,
+            subscription_members (
+              profile_id,
+              fixed_amount,
+              profiles ( id, name, avatar_url )
+            )
+          `
+          )
+          .eq('id', id)
+          .single()
+
+        if (fallback.error) {
+          console.error('Failed to load subscription:', fallback.error)
+          return null
+        }
+        row = fallback.data as SubscriptionWithMembersRow
+      } else {
+        console.error('Failed to load subscription:', error)
+        return null
+      }
+    }
+
+    if (!row) return null
+
+    const profileIds = new Set<string>()
+    row.subscription_members?.forEach(member => profileIds.add(member.profile_id))
+
+    const debtMap = await fetchDebtAccountsMap(supabase, Array.from(profileIds))
+    return mapSubscriptionRow(row, debtMap)
+  } catch (err) {
+    console.error('Error fetching subscription:', err)
+    return null
+  }
+}
+
 async function syncSubscriptionMembers(
   supabase: ReturnType<typeof createClient>,
   subscriptionId: string,
