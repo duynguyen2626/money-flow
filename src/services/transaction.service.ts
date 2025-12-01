@@ -184,8 +184,12 @@ async function buildTransactionLines(
     });
 
     // Line 2: Debit category (expense recorded with user-selected category!)
+    // Line 2: Debit Debt Account (Asset) AND Category (Expense Classification)
+    // We must set account_id for it to appear in the Debt Account history.
+    // We also set category_id so the user sees what it was for (e.g. Food).
     lines.push({
-      category_id: input.category_id, // USE USER'S SELECTED CATEGORY!
+      account_id: input.debt_account_id, // FIX: Use debt_account_id to link to Debt Account
+      category_id: input.category_id,    // Keep category for classification
       amount: originalAmount,
       type: 'debit',
       original_amount: originalAmount,
@@ -344,6 +348,22 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
     const userId = user?.id || SYSTEM_ACCOUNTS.DEFAULT_USER_ID;
+
+    // Ensure profile exists to satisfy FK constraint
+    const { data: profile } = await supabase.from('profiles').select('id').eq('id', userId).single();
+    if (!profile) {
+      console.log(`[createTransaction] Profile missing for ${userId}, creating fallback profile.`);
+      const { error: createProfileError } = await (supabase.from('profiles').insert as any)({
+        id: userId,
+        name: user?.email?.split('@')[0] ?? 'System User',
+        email: user?.email ?? null,
+      });
+      if (createProfileError) {
+        console.error('Failed to create fallback profile:', createProfileError);
+        // If we can't create a profile, we might fail the transaction or try another ID.
+        // For now, let's proceed and hope for the best or fail at the FK constraint.
+      }
+    }
 
     const built = await buildTransactionLines(supabase, input);
     if (!built) {

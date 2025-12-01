@@ -65,7 +65,7 @@ export function EditSubscriptionDialog({
           >
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase text-slate-500">Cap nhat</p>
+                <p className="text-xs font-semibold uppercase text-slate-500">Update</p>
                 <h2 className="text-lg font-semibold text-gray-900">{subscription.name}</h2>
               </div>
               <button
@@ -91,7 +91,7 @@ export function EditSubscriptionDialog({
                 onClose?.()
                 router.refresh()
               }}
-              submitLabel="Luu dich vu"
+              submitLabel="Save Service"
             />
           </div>
         </div>

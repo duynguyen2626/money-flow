@@ -48,7 +48,9 @@ export function RefundNoteDisplay({
                         </span>
                     )}
                     <span className="text-xs text-slate-600 truncate" title={parsed.cleanNote}>
-                        {parsed.cleanNote}
+                        {shopName && parsed.cleanNote.startsWith(shopName)
+                            ? parsed.cleanNote.slice(shopName.length).replace(/^[\s-:]+/, '')
+                            : parsed.cleanNote}
                     </span>
                 </div>
             )}

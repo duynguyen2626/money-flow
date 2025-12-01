@@ -447,7 +447,7 @@ export function TransactionForm({
         selectedPerson?.name?.toLowerCase().includes('group')
 
       let finalNote = values.note ?? ''
-      if (values.type === 'repayment' && isGroupDebt && payerName.trim()) {
+      if ((values.type === 'repayment' || values.type === 'debt') && isGroupDebt && payerName.trim()) {
         finalNote = `${finalNote} (paid by ${payerName.trim()})`
       }
 
@@ -1121,8 +1121,7 @@ export function TransactionForm({
       </div>
     </div>
   ) : (
-    <div className="space-y-2">
-      <label className="text-sm font-medium text-gray-700">Type</label>
+    <div className="mb-1">
       <Controller
         control={control}
         name="type"
@@ -1313,8 +1312,8 @@ export function TransactionForm({
         )}
       </div>
 
-      {/* Payer Name Input for Group Debt Repayments */}
-      {transactionType === 'repayment' && watchedPersonId && (() => {
+      {/* Payer Name Input for Group Debt Repayments/Lending */}
+      {(transactionType === 'repayment' || transactionType === 'debt') && watchedPersonId && (() => {
         const selectedPerson = personMap.get(watchedPersonId)
         const isGroupDebt = selectedPerson?.name?.toLowerCase().includes('clt') ||
           selectedPerson?.name?.toLowerCase().includes('group')

@@ -123,7 +123,7 @@ export function Combobox({
               className="flex w-full items-center gap-2 px-3 py-2.5 text-sm text-blue-600 font-medium cursor-pointer hover:bg-blue-50 border-b border-slate-200 bg-white"
             >
               <Plus className="h-4 w-4" />
-              <span>{`+ Create "${addLabel}"`}</span>
+              <span>{`+ Create ${addLabel}`}</span>
             </div>
           )}
           <CommandInput
