@@ -111,13 +111,26 @@ export function SubscriptionForm({
   )
 
   useEffect(() => {
+    if (initialData) {
+      setName(initialData.name)
+      setShopId(initialData.shop_id ?? null)
+      setPriceInput(typeof initialData.price === 'number' ? String(initialData.price) : '')
+      setNextBillingDate(pickInitialDate(initialData.next_billing_date))
+      setNoteTemplate(initialData.note_template ?? defaultTemplate)
+      setIsActive(initialData.is_active ?? true)
+      setPaymentAccountId(initialData.payment_account_id ?? null)
+      setMembers(getInitialMembers(initialData))
+    }
+  }, [initialData, defaultTemplate])
+
+  useEffect(() => {
     if (shopId) {
       const selectedShop = shops.find(s => s.id === shopId)
-      if (selectedShop) {
+      if (selectedShop && !name) {
         setName(selectedShop.name)
       }
     }
-  }, [shopId, shops])
+  }, [shopId, shops, name])
 
   const priceNumber = useMemo(() => {
     const parsed = Number(priceInput)

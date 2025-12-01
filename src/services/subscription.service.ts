@@ -15,6 +15,9 @@ type SubscriptionInsert = Database['public']['Tables']['subscriptions']['Insert'
 type SubscriptionUpdate = Database['public']['Tables']['subscriptions']['Update']
 type SubscriptionMemberRow = Database['public']['Tables']['subscription_members']['Row']
 type SubscriptionMemberInsert = Database['public']['Tables']['subscription_members']['Insert']
+// Extension to include 'slots' which is missing from generated types but present in DB
+type SubscriptionMemberInsertWithSlots = SubscriptionMemberInsert & { slots?: number }
+
 type AccountRow = Database['public']['Tables']['accounts']['Row']
 type CategoryRow = Database['public']['Tables']['categories']['Row']
 type TransactionInsert = Database['public']['Tables']['transactions']['Insert']
@@ -262,7 +265,7 @@ async function syncSubscriptionMembers(
   const payload =
     members
       ?.filter(member => member?.profile_id)
-      .map<SubscriptionMemberInsert>(member => ({
+      .map<SubscriptionMemberInsertWithSlots>(member => ({
         id: randomUUID(),
         subscription_id: subscriptionId,
         profile_id: member.profile_id,
@@ -522,8 +525,10 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
   await ensureDebtAccounts(Array.from(memberIds), debtMap)
 
   const paymentAccountId = await resolvePaymentAccountId(supabase)
-  const expenseCategoryId = await resolveExpenseCategoryId(supabase)
-  if (!paymentAccountId || !expenseCategoryId) {
+  // Hardcoded Category: "Online Services"
+  const expenseCategoryId = 'e0000000-0000-0000-0000-000000000088'
+
+  if (!paymentAccountId) {
     return {
       processedCount: 0,
       names: [],
@@ -554,7 +559,8 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
     const members = buildMemberShareList(row, debtMap)
 
     // Calculate shares based on slots
-    const totalSlots = members.reduce((sum, m) => sum + (m.slots ?? 1), 0)
+    // TotalSlots = Sum(member.slots) + 1 (Owner/Me gets 1 slot implicitly)
+    const totalSlots = members.reduce((sum, m) => sum + (m.slots ?? 1), 0) + 1
     const unitCost = totalSlots > 0 ? price / totalSlots : 0
 
     const paymentSource = row.payment_account_id ?? paymentAccountId
@@ -615,7 +621,8 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
           member_profile_id: member.profile_id,
           member_name: member.profile_name,
           slots: slots,
-          note: slots > 1 ? `[Slot: ${slots}]` : undefined
+          // LineNote: txnNote + (x${member.slots})
+          note: `${txnNote} (x${slots})`
         },
       })
     })
