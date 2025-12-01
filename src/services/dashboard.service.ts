@@ -275,7 +275,6 @@ export async function getDashboardStats(
       .eq('account_id', SYSTEM_ACCOUNTS.PENDING_REFUNDS)
       .eq('type', 'debit')
       .neq('transactions.status', 'void')
-      .order('transactions.occurred_at', { ascending: false })
       .limit(3)
 
     if (refundTxError) {
@@ -283,12 +282,16 @@ export async function getDashboardStats(
     }
 
     const topRefundTransactions =
-      (refundTransactions as any[])?.map((line: any) => ({
-        id: line.transactions.id,
-        note: line.transactions.note,
-        amount: Math.abs(line.amount || 0),
-        occurred_at: line.transactions.occurred_at,
-      })) || []
+      (refundTransactions as any[])
+        ?.sort((a: any, b: any) =>
+          new Date(b.transactions.occurred_at).getTime() - new Date(a.transactions.occurred_at).getTime()
+        )
+        .map((line: any) => ({
+          id: line.transactions.id,
+          note: line.transactions.note,
+          amount: Math.abs(line.amount || 0),
+          occurred_at: line.transactions.occurred_at,
+        })) || []
 
     // ========================================================================
     // 8. PENDING BATCHES (Count and Total Amount)
