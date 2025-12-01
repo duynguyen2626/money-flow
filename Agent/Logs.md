@@ -1,91 +1,31 @@
-1/3
-## Error Type
+1/2 ## Error Type
 Console Error
 
 ## Error Message
-In HTML, <button> cannot be a descendant of <button>.
-This will cause a hydration error.
-
-  ...
-    <LoadingBoundary name="/" loading={null}>
-      <HTTPAccessFallbackBoundary notFound={<SegmentViewNode>} forbidden={undefined} unauthorized={undefined}>
-        <HTTPAccessFallbackErrorBoundary pathname="/" notFound={<SegmentViewNode>} forbidden={undefined} ...>
-          <RedirectBoundary>
-            <RedirectErrorBoundary router={{...}}>
-              <InnerLayoutRouter url="/" tree={[...]} params={{}} cacheNode={{lazyData:null, ...}} segmentPath={[...]} ...>
-                <SegmentViewNode type="page" pagePath="/money-flo...">
-                  <SegmentTrieNode>
-                  <Home>
-                    <div className="max-w-7xl ...">
-                      <div>
-                      <div>
-                      <div className="grid grid-...">
-                        <div>
-                        <div className="lg:col-spa...">
-                          <div className="mb-2 flex ...">
-                            <h2>
-                            <div className="flex items...">
-                              <AddTransactionDialog accounts={[...]} categories={[...]} people={[...]} shops={[...]} ...>
->                               <button
->                                 type="button"
->                                 className="inline-flex items-center justify-center rounded-md p-0 bg-transparent tex..."
->                                 onMouseDown={undefined}
->                                 onClick={function onClick}
->                                 aria-label="Add Transaction"
->                               >
->                                 <button
->                                   className="flex items-center gap-1 px-2 py-1 rounded-md bg-red-50 text-red-600 hov..."
->                                 >
-                              ...
-                          ...
-                      ...
-                ...
-              ...
+Error fetching monthly debt lines: {}
 
 
-
-    at button (<anonymous>:null:null)
-    at Home (src\app\page.tsx:144:19)
+    at getPeople (src\services\people.service.ts:207:15)
+    at Function.all (<anonymous>:1:21)
+    at PeoplePage (src\app\people\page.tsx:12:64)
+    at PeoplePage (<anonymous>:null:null)
 
 ## Code Frame
-  142 |                 defaultType="expense"
-  143 |                 triggerContent={
-> 144 |                   <button className="flex items-center gap-1 px-2 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-medium">
-      |                   ^
-  145 |                     <Plus className="h-3 w-3" />
-  146 |                     Exp
-  147 |                   </button>
+  205 |
+  206 |     if (monthlyLinesError) {
+> 207 |       console.error('Error fetching monthly debt lines:', monthlyLinesError)
+      |               ^
+  208 |     } else {
+  209 |       ;(monthlyLines as any[] | null)?.forEach(line => {
+  210 |         const accountId = line.account_id
 
 Next.js version: 16.0.3 (Turbopack)
 
-2/3 ## Error Type
+2/2 ## Error Type
 Console Error
 
 ## Error Message
-<button> cannot contain a nested <button>.
-See this log for the ancestor stack trace.
-
-
-    at button (<anonymous>:null:null)
-    at AddTransactionDialog (src/components/moneyflow/add-transaction-dialog.tsx:63:7)
-    at Home (src\app\page.tsx:137:15)
-
-## Code Frame
-  61 |   return (
-  62 |     <>
-> 63 |       <button
-     |       ^
-  64 |         type="button"
-  65 |         className={buttonClassName || defaultClassName}
-  66 |         onMouseDown={onOpen}
-
-Next.js version: 16.0.3 (Turbopack)
-
-3/3 ## Error Type
-Recoverable Error
-
-## Error Message
-Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
 
 - A server/client branch `if (typeof window !== 'undefined')`.
 - Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
@@ -97,17 +37,38 @@ It can also happen if the client has a browser extension installed which messes 
 
 https://react.dev/link/hydration-mismatch
 
+  ...
+    <InnerScrollAndFocusHandler segmentPath={[...]} focusAndScrollRef={{apply:false, ...}}>
+      <ErrorBoundary errorComponent={undefined} errorStyles={undefined} errorScripts={undefined}>
+        <LoadingBoundary name="people/" loading={null}>
+          <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+            <RedirectBoundary>
+              <RedirectErrorBoundary router={{...}}>
+                <InnerLayoutRouter url="/people" tree={[...]} params={{}} cacheNode={{lazyData:null, ...}} ...>
+                  <SegmentViewNode type="page" pagePath="/money-flo...">
+                    <SegmentTrieNode>
+                    <PeoplePage>
+                      <div className="space-y-6">
+                        <section className="bg-white s...">
+                          <div>
+                          <PeopleGrid people={[...]} subscriptions={[...]} shops={[...]} accounts={[...]} ...>
+                            <div className="space-y-3 ...">
+                              <div>
+                              <div className="relative m...">
+                                <Search>
+                                <input
+                                  type="text"
+                                  placeholder="Search people..."
+                                  value=""
+                                  onChange={function onChange}
+                                  className="w-full rounded-full border border-slate-200 bg-white px-3 py-2 pl-10 text..."
+-                                 pwa2-uuid="EDITOR/input-7C1-F0E-70C75-C72"
+-                                 pwa-fake-editor=""
+                                >
+                            ...
+                  ...
+                ...
+      ...
 
-    at button (<anonymous>:null:null)
-    at Home (src\app\page.tsx:144:19)
-
-## Code Frame
-  142 |                 defaultType="expense"
-  143 |                 triggerContent={
-> 144 |                   <button className="flex items-center gap-1 px-2 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-medium">
-      |                   ^
-  145 |                     <Plus className="h-3 w-3" />
-  146 |                     Exp
-  147 |                   </button>
 
 Next.js version: 16.0.3 (Turbopack)

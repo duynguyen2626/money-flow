@@ -59,7 +59,7 @@ export default function LoginPage() {
                             <form action={handleLogin} className="space-y-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="email">Email</Label>
-                                    <div className="relative">
+                                    <div className="relative" suppressHydrationWarning>
                                         <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                                         <Input
                                             id="email"
@@ -74,7 +74,7 @@ export default function LoginPage() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="password">Password</Label>
-                                    <div className="relative">
+                                    <div className="relative" suppressHydrationWarning>
                                         <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                                         <Input
                                             id="password"
@@ -103,7 +103,7 @@ export default function LoginPage() {
                             <form action={handleSignup} className="space-y-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="signup-email">Email</Label>
-                                    <div className="relative">
+                                    <div className="relative" suppressHydrationWarning>
                                         <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                                         <Input
                                             id="signup-email"
@@ -118,7 +118,7 @@ export default function LoginPage() {
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="signup-password">Password</Label>
-                                    <div className="relative">
+                                    <div className="relative" suppressHydrationWarning>
                                         <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                                         <Input
                                             id="signup-password"

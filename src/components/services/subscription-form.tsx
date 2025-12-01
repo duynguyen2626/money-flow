@@ -17,11 +17,13 @@ function formatPreview(template: string, serviceName: string, price: number, mem
   return template
     .replace('{name}', serviceName)
     .replace('{date}', `${month}-${year}`)
-    .replace('{month}', month)
-    .replace('{year}', year)
-    .replace('{price}', String(safePrice))
-    .replace('{members}', String(memberCount))
     .replace('{member}', String(memberCount))
+}
+
+type MemberSelection = {
+  profile_id: string
+  fixed_amount?: number | null
+  slots: number
 }
 
 type SubscriptionFormProps = {
@@ -31,14 +33,9 @@ type SubscriptionFormProps = {
   shops: Shop[]
   initialData?: Subscription
   submitLabel?: string
+  focusProfileId?: string
   onCancel?: () => void
   onSubmit: (payload: SubscriptionPayload) => Promise<void> | void
-}
-
-type MemberSelection = {
-  profile_id: string
-  fixed_amount?: number | null
-  slots: number
 }
 
 function formatMoney(value: number) {
@@ -71,6 +68,7 @@ export function SubscriptionForm({
   shops,
   initialData,
   submitLabel,
+  focusProfileId,
   onCancel,
   onSubmit,
 }: SubscriptionFormProps) {
@@ -86,6 +84,7 @@ export function SubscriptionForm({
   const [noteTemplate, setNoteTemplate] = useState(initialData?.note_template ?? defaultTemplate)
   const [isActive, setIsActive] = useState(initialData?.is_active ?? true)
   const [members, setMembers] = useState<MemberSelection[]>(getInitialMembers(initialData))
+  const [memberToAdd, setMemberToAdd] = useState<string | undefined>(undefined)
   const [isSaving, setIsSaving] = useState(false)
   const [status, setStatus] = useState<{ type: 'error' | 'success'; text: string } | null>(null)
   const paymentAccount = useMemo(
@@ -146,18 +145,41 @@ export function SubscriptionForm({
   // For now, let's just show Owner Share (Remainder).
 
   const brand = getServiceBranding(name || initialData?.name || 'SV')
-
-  const toggleMember = (profile_id: string) => {
-    setMembers(prev => {
-      const exists = prev.some(member => member.profile_id === profile_id)
-      if (exists) {
-        // Remove member
-        return prev.filter(m => m.profile_id !== profile_id)
-      } else {
-        // Add member with default 1 slot
-        return [...prev, { profile_id, slots: 1 }]
-      }
-    })
+  const availablePeople = useMemo(
+    () => people.filter(person => !members.some(member => member.profile_id === person.id)),
+    [people, members]
+  )
+  const addablePeopleItems = useMemo(
+    () =>
+      availablePeople.map(person => ({
+        value: person.id,
+        label: person.name,
+        description: person.email ?? 'Select to add',
+        icon: person.avatar_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={person.avatar_url}
+            alt={person.name}
+            className="h-6 w-6 rounded-full object-cover"
+          />
+        ) : (
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
+            {person.name.charAt(0).toUpperCase()}
+          </div>
+        ),
+      })),
+    [availablePeople]
+  )
+  const handleAddMember = (profile_id?: string) => {
+    if (!profile_id) {
+      setMemberToAdd(undefined)
+      return
+    }
+    setMembers(prev => [...prev, { profile_id, slots: 1 }])
+    setMemberToAdd(undefined)
+  }
+  const removeMember = (profile_id: string) => {
+    setMembers(prev => prev.filter(member => member.profile_id !== profile_id))
   }
 
   const updateSlots = (profile_id: string, value: string) => {
@@ -369,75 +391,88 @@ export function SubscriptionForm({
         </div>
 
         <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-slate-800">Split Members</p>
-              <p className="text-xs text-slate-500">
-                Split by slots. 1 slot = {formatMoney(unitCost)}.
+              <p className="text-sm font-semibold text-slate-800">Member Manager</p>
+              <p className="text-[11px] text-slate-500">
+                {focusProfileId
+                  ? 'Editing slots for this member only.'
+                  : 'Active list + quick add. Slots determine each person\'s share.'}
               </p>
             </div>
-            <span className="text-xs font-semibold text-slate-600">
-              {members.length} members
-            </span>
+            {!focusProfileId && (
+              <div className="w-48">
+                <Combobox
+                  items={addablePeopleItems}
+                  value={memberToAdd}
+                  onValueChange={handleAddMember}
+                  placeholder={availablePeople.length ? 'Add member' : 'All people added'}
+                  inputPlaceholder="Search people..."
+                  emptyState="No eligible people"
+                  disabled={availablePeople.length === 0}
+                />
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
-            {people.length === 0 ? (
-              <p className="text-sm text-slate-500">No people found.</p>
+            {members.length === 0 ? (
+              <p className="text-sm text-slate-500">No active members yet.</p>
             ) : (
-              people.map(person => {
-                const selectedMember = members.find(member => member.profile_id === person.id)
-                const isSelected = Boolean(selectedMember)
-                const slots = selectedMember?.slots ?? 0
-
-                return (
-                  <div
-                    key={person.id}
-                    className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
-                  >
-                    <div className="flex items-center gap-2">
-                      {person.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={person.avatar_url}
-                          alt={person.name}
-                          className="h-9 w-9 rounded-full border border-slate-200 object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
-                          {person.name.charAt(0).toUpperCase()}
+              members
+                .filter(m => !focusProfileId || m.profile_id === focusProfileId)
+                .map(member => {
+                  const person = people.find(p => p.id === member.profile_id)
+                  const slots = member.slots
+                  return (
+                    <div
+                      key={member.profile_id}
+                      className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        {person?.avatar_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={person.avatar_url}
+                            alt={person.name}
+                            className="h-9 w-9 rounded-full border border-slate-200 object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700">
+                            {person?.name.charAt(0).toUpperCase() ?? '?'}
+                          </div>
+                        )}
+                        <div className="flex flex-col">
+                          <span className="text-sm font-semibold text-slate-900">{person?.name ?? 'Member'}</span>
+                          <span className="text-[11px] text-slate-500">
+                            {slots > 0 ? `${formatMoney(unitCost * slots)}` : 'Slots: 0'}
+                          </span>
                         </div>
-                      )}
-                      <div className="flex flex-col">
-                        <span className="text-sm font-semibold text-slate-900">{person.name}</span>
-                        <span className="text-[11px] text-slate-500">
-                          {isSelected ? `${formatMoney(unitCost * slots)}` : 'Not selected'}
-                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 text-[10px] text-slate-500">
+                          <span>Slots</span>
+                          <input
+                            type="number"
+                            min={0}
+                            className="w-16 rounded-md border border-slate-200 px-2 py-1 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            value={slots}
+                            onChange={event => updateSlots(member.profile_id, event.target.value)}
+                          />
+                        </label>
+                        {!focusProfileId && (
+                          <button
+                            type="button"
+                            className="rounded-full border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
+                            onClick={() => removeMember(member.profile_id)}
+                          >
+                            Remove
+                          </button>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1">
-                        <span className="text-[10px] text-slate-400 uppercase">Slots</span>
-                        <input
-                          type="number"
-                          className="w-16 rounded-md border border-slate-200 px-2 py-1 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 disabled:bg-slate-100"
-                          placeholder="0"
-                          min={0}
-                          disabled={!isSelected}
-                          value={isSelected ? slots : ''}
-                          onChange={event => updateSlots(person.id, event.target.value)}
-                        />
-                      </div>
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 accent-blue-600"
-                        checked={isSelected}
-                        onChange={() => toggleMember(person.id)}
-                      />
-                    </div>
-                  </div>
-                )
-              })
+                  )
+                })
             )}
           </div>
 
@@ -449,6 +484,10 @@ export function SubscriptionForm({
             <div className="flex items-center justify-between text-xs text-slate-500">
               <span>Total Bill</span>
               <span>{formatMoney(priceNumber)}</span>
+            </div>
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>Total persons</span>
+              <span className="font-semibold">{members.length}</span>
             </div>
           </div>
         </div>

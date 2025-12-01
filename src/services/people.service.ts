@@ -1,9 +1,10 @@
 'use server'
 
 import { randomUUID } from 'crypto'
+import { format } from 'date-fns'
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
-import { Person } from '@/types/moneyflow.types'
+import { MonthlyDebtSummary, Person } from '@/types/moneyflow.types'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type ProfileInsert = Database['public']['Tables']['profiles']['Insert']
@@ -178,6 +179,7 @@ export async function getPeople(): Promise<Person[]> {
   }
 
   const debtAccountMap = new Map<string, { id: string; balance: number }>()
+  const accountOwnerByAccountId = new Map<string, string>()
   if (Array.isArray(debtAccounts)) {
     (debtAccounts as AccountRow[]).forEach(account => {
       if (account.owner_id) {
@@ -185,9 +187,79 @@ export async function getPeople(): Promise<Person[]> {
           id: account.id,
           balance: debtBalanceMap.get(account.id) ?? 0,
         })
+        accountOwnerByAccountId.set(account.id, account.owner_id)
       }
     })
   }
+
+  const monthlyDebtMap = new Map<string, Map<string, MonthlyDebtSummary>>()
+
+  if (debtAccountIds.length > 0) {
+    const { data: monthlyLines, error: monthlyLinesError } = await supabase
+      .from('transaction_lines')
+      .select('account_id, amount, type, transactions!inner(tag, occurred_at, status)')
+      .eq('type', 'debit')
+      .in('account_id', debtAccountIds)
+      .neq('transactions.status', 'void')
+      .order('occurred_at', { ascending: false, foreignTable: 'transactions' })
+
+    if (monthlyLinesError) {
+      console.error('Error fetching monthly debt lines:', monthlyLinesError)
+    } else {
+      ;(monthlyLines as any[] | null)?.forEach(line => {
+        const accountId = line.account_id
+        if (!accountId) return
+
+        const ownerId = accountOwnerByAccountId.get(accountId)
+        if (!ownerId) return
+
+        const tagValue = line.transactions?.tag ?? null
+        const occurredAt = line.transactions?.occurred_at ?? null
+        const parsedDate = occurredAt ? new Date(occurredAt) : null
+        const validDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null
+        const fallbackKey = validDate ? format(validDate, 'yyyy-MM') : 'unknown'
+        const groupingKey = tagValue ?? fallbackKey
+        const label =
+          tagValue ?? (validDate ? format(validDate, 'MMM yy').toUpperCase() : 'Debt')
+
+        const parsedAmount =
+          typeof line.amount === 'string' ? Number.parseFloat(line.amount) : line.amount ?? 0
+        const amountValue = Math.abs(Number.isFinite(parsedAmount) ? parsedAmount : 0)
+
+        const personMap = monthlyDebtMap.get(ownerId) ?? new Map<string, MonthlyDebtSummary>()
+        const existing = personMap.get(groupingKey)
+
+        const updated: MonthlyDebtSummary = existing
+          ? {
+              ...existing,
+              amount: existing.amount + amountValue,
+              occurred_at: existing.occurred_at ?? (validDate ? validDate.toISOString() : occurredAt),
+            }
+          : {
+              tag: tagValue ?? undefined,
+              tagLabel: label,
+              amount: amountValue,
+              occurred_at: validDate ? validDate.toISOString() : occurredAt ?? undefined,
+            }
+
+        personMap.set(groupingKey, updated)
+        monthlyDebtMap.set(ownerId, personMap)
+      })
+    }
+  }
+
+  const monthlyDebtsByPerson = new Map<string, MonthlyDebtSummary[]>()
+  monthlyDebtMap.forEach((tagMap, personId) => {
+    const entries = Array.from(tagMap.values())
+      .sort((a, b) => {
+        const dateA = a.occurred_at ? new Date(a.occurred_at).getTime() : 0
+        const dateB = b.occurred_at ? new Date(b.occurred_at).getTime() : 0
+        return dateB - dateA
+      })
+      .slice(0, 3)
+
+    monthlyDebtsByPerson.set(personId, entries)
+  })
 
   const subscriptionMap = new Map<string, Array<{ id: string; name: string; slots: number }>>()
   if (Array.isArray(subscriptionMembers)) {
@@ -221,6 +293,7 @@ export async function getPeople(): Promise<Person[]> {
       subscription_count: subs.length,
       subscription_ids: subs.map(s => s.id), // Keep for backward compatibility if needed
       subscription_details: subs, // New field
+      monthly_debts: monthlyDebtsByPerson.get(person.id) ?? [],
     }
   }) ?? []
 }

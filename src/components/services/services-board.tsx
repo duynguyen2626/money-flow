@@ -5,7 +5,6 @@ import { useMemo, useState } from 'react'
 import { Account, Person, Shop, Subscription } from '@/types/moneyflow.types'
 
 import { CreateSubscriptionDialog } from './create-subscription-dialog'
-import { EditSubscriptionDialog } from './edit-subscription-dialog'
 import { SubscriptionCard } from './subscription-card'
 import { EditPersonDialog } from '../people/edit-person-dialog'
 
@@ -20,12 +19,7 @@ import { useRouter } from 'next/navigation'
 
 export function ServicesBoard({ subscriptions, people, accounts, shops }: ServicesBoardProps) {
   const router = useRouter()
-  const [editId, setEditId] = useState<string | null>(null)
   const [editPersonId, setEditPersonId] = useState<string | null>(null)
-  const selected = useMemo(
-    () => subscriptions.find(item => item.id === editId) ?? null,
-    [editId, subscriptions]
-  )
   const peopleMap = useMemo(() => {
     const map = new Map<string, Person>()
     people.forEach(p => map.set(p.id, p))
@@ -66,16 +60,6 @@ export function ServicesBoard({ subscriptions, people, accounts, shops }: Servic
         </div>
       )}
 
-      {selected && (
-        <EditSubscriptionDialog
-          subscription={selected}
-          people={people}
-          accounts={accounts}
-          shops={shops}
-          initiallyOpen
-          onClose={() => setEditId(null)}
-        />
-      )}
       {selectedPerson && (
         <EditPersonDialog
           person={selectedPerson}

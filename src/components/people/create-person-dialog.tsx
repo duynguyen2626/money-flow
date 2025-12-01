@@ -8,9 +8,10 @@ import { createPersonAction } from '@/actions/people-actions'
 
 type CreatePersonDialogProps = {
   subscriptions: Subscription[]
+  trigger?: React.ReactNode
 }
 
-export function CreatePersonDialog({ subscriptions, open: controlledOpen, onOpenChange: setControlledOpen }: CreatePersonDialogProps & { open?: boolean, onOpenChange?: (open: boolean) => void }) {
+export function CreatePersonDialog({ subscriptions, trigger, open: controlledOpen, onOpenChange: setControlledOpen }: CreatePersonDialogProps & { open?: boolean, onOpenChange?: (open: boolean) => void }) {
   const [internalOpen, setInternalOpen] = useState(false)
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : internalOpen
@@ -32,13 +33,17 @@ export function CreatePersonDialog({ subscriptions, open: controlledOpen, onOpen
   return (
     <>
       {!isControlled && (
-        <button
-          type="button"
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-          onClick={() => setOpen?.(true)}
-        >
-          Them thanh vien
-        </button>
+        trigger ? (
+          <div onClick={() => setOpen?.(true)}>{trigger}</div>
+        ) : (
+          <button
+            type="button"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+            onClick={() => setOpen?.(true)}
+          >
+            Them thanh vien
+          </button>
+        )
       )}
 
       {open && (

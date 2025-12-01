@@ -8,6 +8,7 @@ import { Database } from '@/types/database.types'
 import { Subscription, SubscriptionMember } from '@/types/moneyflow.types'
 import { ensureDebtAccount } from './people.service'
 import { syncTransactionToSheet } from './sheet.service'
+import { resolveMissingDebtAccountIds } from '@/lib/debt-account-links'
 
 type SubscriptionRow = Database['public']['Tables']['subscriptions']['Row']
 type SubscriptionInsert = Database['public']['Tables']['subscriptions']['Insert']
@@ -636,6 +637,7 @@ export async function checkAndProcessSubscriptions(isManualForce: boolean = fals
       })
     }
 
+    await resolveMissingDebtAccountIds(supabase, lines)
     const { error: lineError } = await (supabase.from('transaction_lines').insert as any)(lines)
     if (lineError) {
       console.error('Failed to create transaction lines for subscription:', {

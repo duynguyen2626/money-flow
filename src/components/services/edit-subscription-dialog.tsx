@@ -16,6 +16,7 @@ type EditSubscriptionDialogProps = {
   initiallyOpen?: boolean
   onClose?: () => void
   trigger?: React.ReactNode
+  focusProfileId?: string
 }
 
 export function EditSubscriptionDialog({
@@ -26,6 +27,7 @@ export function EditSubscriptionDialog({
   initiallyOpen,
   onClose,
   trigger,
+  focusProfileId,
 }: EditSubscriptionDialogProps) {
   const [open, setOpen] = useState(Boolean(initiallyOpen))
   const router = useRouter()
@@ -92,8 +94,9 @@ export function EditSubscriptionDialog({
               accounts={accounts}
               shops={shops}
               initialData={subscription}
+              focusProfileId={focusProfileId}
               onCancel={closeDialog}
-              onSubmit={async values => {
+              onSubmit={async (values: import('@/services/subscription.service').SubscriptionPayload) => {
                 await updateSubscriptionAction(subscription.id, values)
                 setOpen(false)
                 onClose?.()

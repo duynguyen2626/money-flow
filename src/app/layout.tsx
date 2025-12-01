@@ -17,10 +17,11 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Money Flow 3.0',
-  description: 'Personal finance dashboard for tracking accounts, transactions, and debts.',
+  title: 'Money Flow 3.0 - Personal Finance Dashboard',
+  description: 'Track your accounts, transactions, debts, and cashback with double-entry bookkeeping.',
   icons: {
-    icon: process.env.NODE_ENV === 'development' ? '/icon-dev.png' : '/icon.png',
+    icon: '/cloud.svg',
+    shortcut: '/cloud.svg',
   },
 }
 

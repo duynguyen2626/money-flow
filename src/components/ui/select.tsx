@@ -29,7 +29,30 @@ export function Select({
   className,
 }: SelectProps) {
   const [open, setOpen] = React.useState(false)
+  const [isMounted, setIsMounted] = React.useState(false)
   const selectedItem = items.find(item => item.value === value)
+
+  React.useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
+  if (!isMounted) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        className={cn(
+          'flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm text-slate-600 shadow-sm transition hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-0',
+          className
+        )}
+      >
+        <span className="text-sm font-medium text-slate-900">
+          {selectedItem ? selectedItem.label : placeholder}
+        </span>
+        <ChevronDown className="h-4 w-4 text-slate-500" />
+      </button>
+    )
+  }
 
   const handleSelect = (nextValue: string) => {
     onValueChange(nextValue || undefined)
