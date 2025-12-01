@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { LayoutDashboard, List, Undo2, Landmark, Users, BadgePercent, Tags, Store, Layers, Zap, ChevronLeft, ChevronRight } from "lucide-react"
+import { LayoutDashboard, List, Undo2, Landmark, Users, BadgePercent, Tags, Store, Layers, Cloud, ChevronLeft, ChevronRight } from "lucide-react"
 import Link from "next/link"
 
 import { SidebarNav, type NavItem } from "./sidebar-nav"
@@ -18,7 +18,7 @@ const navItems: NavItem[] = [
   { label: "Categories", href: "/categories", icon: Tags },
   { label: "Shops", href: "/shops", icon: Store },
   { label: "Batch Transfer", href: "/batch", icon: Layers },
-  { label: "Services", href: "/services", icon: Zap },
+  { label: "Services", href: "/services", icon: Cloud },
 ]
 
 type AppLayoutProps = {

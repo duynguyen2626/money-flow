@@ -1,97 +1,107 @@
 # **PROJECT: MONEY FLOW 3.0**
 
-# **PHASE: 52 \- PEOPLE UX OVERHAUL, DASHBOARD FIX & SERVICE PAGE**
+# **PHASE: 53 \- DASHBOARD RE-ARCHITECT & SERVICE PAGE**
 
 **WORKFLOW:**
 
-1. **Branch:** feat/phase-52-people-dashboard-fix  
-2. **Safety:** Run npm run build.
+1. **Branch:** `feat/phase-53-dashboard-service`  
+2. **Safety:** Run `npm run build`.
 
 **OBJECTIVE:**
 
-1. **CRITICAL FIX:** Dashboard Service is querying transactions.amount which DOES NOT EXIST. It must query transaction\_lines.  
-2. **Redesign People Card:** Make it information-dense (Debt Badges, Slot Counts, Actions).  
-3. **Compact Dashboard:** Optimize whitespace, smaller charts.  
-4. **Feature:** Build /services/\[id\] page (Fixing the Next.js 15 async param bug).  
-5. **Config:** Dynamic Favicon.
+1. **FIX DASHBOARD CRASH:** Rewrite `DashboardService` to query `transaction_lines` (NOT `transactions`).  
+2. **NEW DASHBOARD LAYOUT:** Implement the "Dense Grid" layout requested by user. Add Month/Year Filter.  
+3. **SERVICE PAGE:** Move Service Edit from Modal to `/services/[id]` page.  
+4. **ICONS:** Change Service Icon to Cloud.
 
-## **I. CRITICAL BUG FIX: DASHBOARD SERVICE**
+   ## **I. BACKEND: FIX DASHBOARD SERVICE (`src/services/dashboard.service.ts`)**
 
-**Target:** src/services/dashboard.service.ts
+**Function:** `getDashboardStats(month: number, year: number)`
 
-The Error: column transactions.amount does not exist.
+**Correct Logic (Double-Entry Aware):**
 
-The Fix:
+1. **Date Range:** StartDate \-\> EndDate of selected Month/Year.  
+2. **Total Spend (For Chart):**  
+   * Query: `transaction_lines` JOIN `categories`.  
+   * Where: `created_at` in Range AND `line.amount` \> 0 AND `category.type` \= 'expense'.  
+   * *Exclude:* Categories like "Transfer", "Credit Payment", "Loan", "Repayment".  
+   * **Group By:** `category.name`. Sum `amount`.  
+3. **Top Debtors:**  
+   * Query: `accounts` where `type` \= 'debt'.  
+   * Order By: `current_balance` DESC. Take Top 5\.  
+   * *Note:* No date filter here (Debt is cumulative).  
+4. **System Status:**  
+   * **Refunds:** Balance of Account `SYSTEM_ACCOUNTS.PENDING_REFUNDS`.  
+   * **Batches:** Sum `amount` of batch items where `status` \= 'pending'.
 
-* **DO NOT** query transactions directly for sums.  
-* **QUERY** transaction\_lines.  
-  * **Total Spend:** Sum amount from lines where type\='debit' AND category.type\='expense'.  
-  * **Total Income:** Sum amount from lines where type\='credit' AND category.type\='income'.  
-* *Note:* Ensure you exclude "Transfer" and "Credit Payment" categories to avoid double counting.
+   ## **II. UI: NEW DASHBOARD LAYOUT (`src/app/page.tsx`)**
 
-## **II. UI: REDESIGN PeopleCard (src/components/moneyflow/person-card.tsx)**
+**Structure:** `max-w-screen-2xl mx-auto space-y-4`
 
-**New Layout (Compact & Rich):**
+**1\. Filter Bar (Top Right):**
 
-* **Header:**  
-  * **Left:** Large Avatar (Aspect Square, object-cover, rounded-md). *Fix the tiny circle issue.*  
-  * **Right:** Name (Bold) \+ Relation/Role (Small gray).  
-* **Middle (Stats):**  
-  * **Row 1:** Badges for Debt.  
-    * If balance \> 0: 🔴 Chờ thu: \[Amount\]  
-    * If balance \< 0: 🟢 Nợ họ: \[Amount\]  
-  * **Row 2:** Subscription Slots.  
-    * Render small icons (Youtube, Netflix...) or text: 📺 3 Subs.  
-* **Footer (Actions):**  
-  * **Split Button:** \[ 💸 Cho vay \] | \[ 🤝 Thu nợ \] (Full width or Icon-based).
+* Select Month (1-12). Select Year (2024-2026).  
+* State: `selectedDate`. Triggers data refetch.
 
-**Data Fetching:** Ensure getPeople returns aggregated debt balance and subscription stats.
+**2\. Row 1: Debt & Analytics (Grid cols-12 gap-4)**
 
-## **III. COMPACT DASHBOARD (src/app/page.tsx)**
+* **Col-span-4 (Left): "Sổ Nợ (Debt Book)" Widget**  
+  * Compact List: Avatar | Name | Badge `Wait: 500k` / `Owe: 200k`.  
+  * Action: Link to `/people`.  
+* **Col-span-8 (Right): "Chi tiêu tháng \[M\]" Widget**  
+  * **Layout:** Grid cols-2.  
+  * **Sub-Col 1:** **Donut Chart** (Recharts).  
+    * Height: 250px (Small). Legend: Vertical, Right aligned.  
+  * **Sub-Col 2:** **Recent Transactions**.  
+    * Compact Table (Date | Note | Amount). 5 items max.
 
-**Action:**
+**3\. Row 2: System Health (Grid cols-2 gap-4)**
 
-* Wrap content in max-w-7xl mx-auto (Constraint width).  
-* **Redesign Rows:**  
-  * **Row 1 (KPI):** Keep 3 cards but reduce height (Compact mode).  
-  * **Row 2 (Main):**  
-    * **Left (40%):** "Recent Activity" (List of last 5 transactions \- Compact table, hide unneeded columns).  
-    * **Right (60%):** Spend Chart (Reduce height to 300px, move Legend to right).  
-  * **Row 3 (Debt & System):** "Top Debtors" (Horizontal list) & "Pending Actions".
+* **Card 1:** **"Chờ hoàn tiền (Refunds)"**.  
+  * Big Number: Current Balance of Pending Account.  
+  * List: Top 3 pending transactions. Link `/refunds`.  
+* **Card 2:** **"Chờ duyệt (Batches)"**.  
+  * Big Number: Total Pending Amount.  
+  * Text: "X lệnh đang chờ xác nhận". Link `/batch`.
 
-## **IV. FEATURE: SERVICE DETAILS PAGE (src/app/services/\[id\]/page.tsx)**
+  ## **III. FEATURE: SERVICE DETAILS PAGE (`src/app/services/[id]/page.tsx`)**
 
-**CRITICAL FIX:** Ensure params is awaited (Next.js 15).
-
-```
-
-export default async function ServicePage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params; // <--- FIX HERE
-  // ... fetch data ...
-}
-
-```
+**Goal:** Replace the Edit Modal with a full page.
 
 **Layout:**
 
-* **Header:** Service Icon (Big) \+ Name \+ Price \+ "Edit" Button.  
-* **Tab 1 (Overview):** Chart of cost history (optional) or just stats.  
-* **Tab 2 (Members):** The "Check & Slot" list (Editable).
+* **Header:**  
+  * Icon (Big Cloud/Service Logo).  
+  * Title: Service Name.  
+  * Subtitle: Price / Cycle / Next Billing.  
+  * **Action:** "Edit Info" (Opens small dialog for Name/Price only).  
+* **Body (Tabs):**  
+  * **Tab 1: Members (Overview):**  
+    * **Component:** `ServiceMemberManager`.  
+    * **List:** People with Checkboxes & **Slot Input**.  
+    * **Logic:** Toggling checkbox or changing slot immediately calls `updateSubscriptionMembers`.  
+  * **Tab 2: History:** List of auto-generated transactions for this service.
 
-## **V. CONFIG: DYNAMIC FAVICON (src/app/layout.tsx)**
+**Navigation Update:**
 
-**Action:**
+* In `/services` list, clicking a card navigates to `/services/[id]`.
 
-* Check process.env.NODE\_ENV.  
-* If 'development': Use /icon-dev.png (Prepare a distinct icon).  
-* If 'production': Use /icon.png.  
-* *Implementation:* Can be done via \<link rel="icon" ... /\> inside \<head\> or Next.js Metadata API.
+  ## **IV. UI POLISH: ICONS**
 
-## **VI. EXECUTION STEPS**
+**Target:** `src/components/moneyflow/app-layout.tsx`
 
-1. **Backend:** Fix dashboard.service.ts Logic (Priority 1).  
-2. **Page:** Build /services/\[id\] and fix the async params bug immediately.  
-3. **Component:** Rewrite PersonCard & PeopleList.  
-4. **Page:** Refactor Dashboard layout.  
-5.   
+**Update Sidebar:**
+
+* **Services:** Change Icon to `Cloud` or `CloudLightning` (Lucide).  
+* **Accounts:** Ensure `Landmark` (Bank).  
+* **People:** `Users`.  
+* **Cashback:** `RotateCw`.
+
+  ## **V. EXECUTION STEPS**
+
+1. **Backend:** Rewrite `getDashboardStats` with correct SQL/Logic.  
+2. **Page:** Rebuild `page.tsx` with the 4-block layout.  
+3. **Page:** Build `src/app/services/[id]/page.tsx` and Member Manager.  
+4. **Layout:** Update Sidebar Icons.  
+1.   
 1. 
