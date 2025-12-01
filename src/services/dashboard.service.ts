@@ -3,24 +3,33 @@
 import { createClient } from '@/lib/supabase/server'
 
 export type DashboardStats = {
-    totalAssets: number
-    monthlySpend: number
-    monthlyIncome: number
-    debtOverview: number
-    pendingBatches: number
-    pendingRefunds: number
-    spendingByCategory: Array<{
-        name: string
-        value: number
-        icon?: string | null
-        image_url?: string | null
-    }>
-    topDebtors: Array<{
-        id: string
-        name: string
-        balance: number
-        avatar_url?: string | null
-    }>
+  totalAssets: number
+  monthlySpend: number
+  monthlyIncome: number
+  debtOverview: number
+  pendingBatches: number
+  pendingRefunds: number
+  spendingByCategory: Array<{
+    name: string
+    value: number
+    icon?: string | null
+    image_url?: string | null
+  }>
+  topDebtors: Array<{
+    id: string
+    name: string
+    balance: number
+    avatar_url?: string | null
+  }>
+  recentTransactions: Array<{
+    id: string
+    amount: number
+    description: string | null
+    occurred_at: string
+    category_name: string
+    category_icon: string | null
+    type: 'income' | 'expense' | 'transfer' | 'debt' | 'repayment'
+  }>
 }
 
 export async function getDashboardStats(): Promise<DashboardStats> {
@@ -33,6 +42,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     pendingRefunds: 0,
     spendingByCategory: [],
     topDebtors: [],
+    recentTransactions: [],
   }
 
   try {
@@ -191,6 +201,39 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
     if (refundsError) throw refundsError
 
+    // 8. Recent Transactions
+    const { data: recentTx, error: recentTxError } = await supabase
+      .from('transactions')
+      .select(`
+        id,
+        amount,
+        note,
+        occurred_at,
+        type,
+        transaction_lines (
+            categories (name, icon)
+        )
+      `)
+      .neq('status', 'void')
+      .order('occurred_at', { ascending: false })
+      .limit(5)
+
+    if (recentTxError) throw recentTxError
+
+    const recentTransactions = (recentTx as any[])?.map(tx => {
+      // Try to find the first category that is not null
+      const category = tx.transaction_lines?.[0]?.categories
+      return {
+        id: tx.id,
+        amount: tx.amount,
+        description: tx.note,
+        occurred_at: tx.occurred_at,
+        type: tx.type,
+        category_name: category?.name || 'Uncategorized',
+        category_icon: category?.icon
+      }
+    }) || []
+
     return {
       totalAssets,
       monthlySpend,
@@ -200,6 +243,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       pendingRefunds: pendingRefundsCount || 0,
       spendingByCategory,
       topDebtors,
+      recentTransactions,
     }
   } catch (error) {
     console.error('Error fetching dashboard stats:', error)

@@ -1661,6 +1661,7 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
 
 type UnifiedTransactionParams = {
   accountId?: string
+  personId?: string
   limit?: number
   context?: 'person' | 'account'
 }
@@ -1701,6 +1702,7 @@ export async function getUnifiedTransactions(
       : { accountId: accountOrOptions as string | undefined, limit: limitArg }
 
   const accountId = parsed.accountId
+  const personId = parsed.personId
   const limit = parsed.limit ?? limitArg
   const context = parsed.context
 
@@ -1716,11 +1718,27 @@ export async function getUnifiedTransactions(
     }
   }
 
-  if (accountId) {
-    const { data: txnIds, error: idsError } = await supabase
+  if (accountId || personId) {
+    let query = supabase
       .from('transaction_lines')
       .select('transaction_id, transactions!inner(occurred_at, note)')
-      .eq('account_id', accountId)
+
+    if (context === 'person') {
+      const conditions: string[] = []
+      if (accountId) conditions.push(`account_id.eq.${accountId}`)
+      if (accountId) conditions.push(`person_id.eq.${accountId}`)
+      if (personId) conditions.push(`person_id.eq.${personId}`)
+      // Also check if account_id matches personId (in case personId IS the debt account id, though unlikely if distinct)
+      if (personId && personId !== accountId) conditions.push(`account_id.eq.${personId}`)
+
+      if (conditions.length > 0) {
+        query = query.or(conditions.join(','))
+      }
+    } else if (accountId) {
+      query = query.eq('account_id', accountId)
+    }
+
+    const { data: txnIds, error: idsError } = await query
       .order('transactions(occurred_at)', { ascending: false })
       .limit(limit)
 
