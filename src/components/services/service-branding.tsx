@@ -1,9 +1,18 @@
-export function getServiceBranding(name: string) {
+import { Cloud, Music, Play, Monitor, Globe } from 'lucide-react'
+import { ReactNode } from 'react'
+
+export function getServiceBranding(name: string): {
+  icon: ReactNode
+  bg: string
+  ring: string
+  text: string
+  badge: string
+} {
   const key = name.toLowerCase()
 
   if (key.includes('youtube')) {
     return {
-      icon: 'YT',
+      icon: <Play className="h-full w-full p-1" />,
       bg: 'bg-red-50',
       ring: 'ring-red-100',
       text: 'text-red-600',
@@ -13,7 +22,7 @@ export function getServiceBranding(name: string) {
 
   if (key.includes('netflix')) {
     return {
-      icon: 'N',
+      icon: <span className="font-bold">N</span>,
       bg: 'bg-neutral-900 text-white',
       ring: 'ring-neutral-300',
       text: 'text-neutral-50',
@@ -23,7 +32,7 @@ export function getServiceBranding(name: string) {
 
   if (key.includes('icloud') || key.includes('apple')) {
     return {
-      icon: 'CL',
+      icon: <Cloud className="h-full w-full p-1" />,
       bg: 'bg-blue-50',
       ring: 'ring-blue-100',
       text: 'text-blue-600',
@@ -33,7 +42,7 @@ export function getServiceBranding(name: string) {
 
   if (key.includes('spotify')) {
     return {
-      icon: 'SP',
+      icon: <Music className="h-full w-full p-1" />,
       bg: 'bg-emerald-50',
       ring: 'ring-emerald-100',
       text: 'text-emerald-600',
@@ -43,7 +52,7 @@ export function getServiceBranding(name: string) {
 
   if (key.includes('disney')) {
     return {
-      icon: 'DS',
+      icon: <span className="font-bold">D</span>,
       bg: 'bg-indigo-50',
       ring: 'ring-indigo-100',
       text: 'text-indigo-600',
@@ -53,7 +62,7 @@ export function getServiceBranding(name: string) {
 
   if (key.includes('google') || key.includes('workspace')) {
     return {
-      icon: 'G',
+      icon: <span className="font-bold">G</span>,
       bg: 'bg-amber-50',
       ring: 'ring-amber-100',
       text: 'text-amber-600',
@@ -61,8 +70,9 @@ export function getServiceBranding(name: string) {
     }
   }
 
+  // Default - Cloud icon as requested
   return {
-    icon: name.charAt(0).toUpperCase() || 'S',
+    icon: <Cloud className="h-full w-full p-1" />,
     bg: 'bg-slate-50',
     ring: 'ring-slate-200',
     text: 'text-slate-700',

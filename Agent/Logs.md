@@ -1,41 +1,113 @@
-1/2
+1/3
 ## Error Type
 Console Error
 
 ## Error Message
-A param property was accessed directly with `params.id`. `params` is a Promise and must be unwrapped with `React.use()` before accessing its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+In HTML, <button> cannot be a descendant of <button>.
+This will cause a hydration error.
+
+  ...
+    <LoadingBoundary name="/" loading={null}>
+      <HTTPAccessFallbackBoundary notFound={<SegmentViewNode>} forbidden={undefined} unauthorized={undefined}>
+        <HTTPAccessFallbackErrorBoundary pathname="/" notFound={<SegmentViewNode>} forbidden={undefined} ...>
+          <RedirectBoundary>
+            <RedirectErrorBoundary router={{...}}>
+              <InnerLayoutRouter url="/" tree={[...]} params={{}} cacheNode={{lazyData:null, ...}} segmentPath={[...]} ...>
+                <SegmentViewNode type="page" pagePath="/money-flo...">
+                  <SegmentTrieNode>
+                  <Home>
+                    <div className="max-w-7xl ...">
+                      <div>
+                      <div>
+                      <div className="grid grid-...">
+                        <div>
+                        <div className="lg:col-spa...">
+                          <div className="mb-2 flex ...">
+                            <h2>
+                            <div className="flex items...">
+                              <AddTransactionDialog accounts={[...]} categories={[...]} people={[...]} shops={[...]} ...>
+>                               <button
+>                                 type="button"
+>                                 className="inline-flex items-center justify-center rounded-md p-0 bg-transparent tex..."
+>                                 onMouseDown={undefined}
+>                                 onClick={function onClick}
+>                                 aria-label="Add Transaction"
+>                               >
+>                                 <button
+>                                   className="flex items-center gap-1 px-2 py-1 rounded-md bg-red-50 text-red-600 hov..."
+>                                 >
+                              ...
+                          ...
+                      ...
+                ...
+              ...
 
 
-    at CashbackDetailsPage (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/app/cashback/[id]/page.tsx:46:14)
+
+    at button (<anonymous>:null:null)
+    at Home (src\app\page.tsx:144:19)
 
 ## Code Frame
-  44 |     }
-  45 |     loadData()
-> 46 |   }, [params.id])
-     |              ^
-  47 |
-  48 |   if (loading) {
-  49 |     return (
+  142 |                 defaultType="expense"
+  143 |                 triggerContent={
+> 144 |                   <button className="flex items-center gap-1 px-2 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-medium">
+      |                   ^
+  145 |                     <Plus className="h-3 w-3" />
+  146 |                     Exp
+  147 |                   </button>
 
 Next.js version: 16.0.3 (Turbopack)
 
-2/2 ## Error Type
+2/3 ## Error Type
 Console Error
 
 ## Error Message
-A param property was accessed directly with `params.id`. `params` is a Promise and must be unwrapped with `React.use()` before accessing its properties. Learn more: https://nextjs.org/docs/messages/sync-dynamic-apis
+<button> cannot contain a nested <button>.
+See this log for the ancestor stack trace.
 
 
-    at loadData (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/app/cashback/[id]/page.tsx:35:60)
-    at CashbackDetailsPage.useEffect (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/app/cashback/[id]/page.tsx:45:5)
+    at button (<anonymous>:null:null)
+    at AddTransactionDialog (src/components/moneyflow/add-transaction-dialog.tsx:63:7)
+    at Home (src\app\page.tsx:137:15)
 
 ## Code Frame
-  33 |         // We use monthOffset=0 for current cycle. 
-  34 |         // TODO: Add cycle selector in future to change offset
-> 35 |         const cards = await getCashbackProgress(0, [params.id])
-     |                                                            ^
-  36 |         if (cards.length > 0) {
-  37 |           setCardData(cards[0])
-  38 |         }
+  61 |   return (
+  62 |     <>
+> 63 |       <button
+     |       ^
+  64 |         type="button"
+  65 |         className={buttonClassName || defaultClassName}
+  66 |         onMouseDown={onOpen}
+
+Next.js version: 16.0.3 (Turbopack)
+
+3/3 ## Error Type
+Recoverable Error
+
+## Error Message
+Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+
+    at button (<anonymous>:null:null)
+    at Home (src\app\page.tsx:144:19)
+
+## Code Frame
+  142 |                 defaultType="expense"
+  143 |                 triggerContent={
+> 144 |                   <button className="flex items-center gap-1 px-2 py-1 rounded-md bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-xs font-medium">
+      |                   ^
+  145 |                     <Plus className="h-3 w-3" />
+  146 |                     Exp
+  147 |                   </button>
 
 Next.js version: 16.0.3 (Turbopack)

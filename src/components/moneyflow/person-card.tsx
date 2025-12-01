@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pencil, HandCoins, Banknote } from 'lucide-react'
+import { Pencil, HandCoins, Banknote, ExternalLink } from 'lucide-react'
 
 import { Person, Shop, Subscription, Account, Category } from '@/types/moneyflow.types'
 import { getServiceBranding } from '@/components/services/service-branding'
@@ -43,7 +43,6 @@ export function PersonCard({
     }, [person.subscription_ids, subscriptions])
 
     const balance = person.balance ?? 0
-    const hasDebt = Boolean(person.debt_account_id)
 
     const getInitial = (name: string) => {
         const first = name?.trim().charAt(0)
@@ -55,21 +54,17 @@ export function PersonCard({
     if (balance > 0) {
         // They owe me (Asset) -> Chờ thu
         balanceBadge = (
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-bold text-red-700">
-                Wait: {numberFormatter.format(balance)}
+            <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700 h-6">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                Chờ thu: {numberFormatter.format(balance)}
             </span>
         )
     } else if (balance < 0) {
         // I owe them (Liability) -> Nợ họ
         balanceBadge = (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
-                Owe: {numberFormatter.format(Math.abs(balance))}
-            </span>
-        )
-    } else {
-        balanceBadge = (
-            <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                Settled
+            <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 h-6">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Nợ họ: {numberFormatter.format(Math.abs(balance))}
             </span>
         )
     }
@@ -83,90 +78,107 @@ export function PersonCard({
 
     return (
         <div
-            className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md cursor-pointer group"
+            className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:shadow-md cursor-pointer group relative overflow-hidden"
             onClick={onOpenDebt}
         >
             {/* Header */}
-            <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                    {person.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                            src={person.avatar_url}
-                            alt={person.name}
-                            className="h-14 w-14 rounded-full border border-slate-200 object-cover bg-white"
-                        />
-                    ) : (
-                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100 text-xl font-bold text-slate-700">
-                            {getInitial(person.name)}
-                        </div>
-                    )}
-                    <div>
-                        <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+            <div className="flex items-center gap-3">
+                {person.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                        src={person.avatar_url}
+                        alt={person.name}
+                        className="h-12 w-12 rounded-lg border border-slate-100 object-cover bg-slate-50"
+                    />
+                ) : (
+                    <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-slate-100 text-lg font-bold text-slate-600">
+                        {getInitial(person.name)}
+                    </div>
+                )}
+
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-slate-900 truncate pr-2">
                             {person.name}
                         </h3>
-                        <p className="text-xs text-slate-500">
-                            {person.email || 'No contact info'}
-                        </p>
+                        <button
+                            type="button"
+                            className="text-slate-400 hover:text-blue-600 transition-colors opacity-0 group-hover:opacity-100"
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                onEdit()
+                            }}
+                        >
+                            <Pencil className="h-3.5 w-3.5" />
+                        </button>
                     </div>
+                    <p className="text-xs text-slate-500 truncate">
+                        {person.email || 'Contact'}
+                    </p>
                 </div>
-                <button
-                    type="button"
-                    className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                    onClick={(e) => {
-                        e.stopPropagation()
-                        onEdit()
-                    }}
-                >
-                    <Pencil className="h-4 w-4" />
-                </button>
             </div>
 
             {/* Middle: Stats */}
-            <div className="space-y-2">
-                {/* Debt Badge */}
-                <div>
-                    {balanceBadge}
+            <div className="space-y-2 min-h-[52px]">
+                {/* Row 1: Debt Badge */}
+                <div className="flex items-center gap-2">
+                    {balanceBadge || (
+                        <span className="text-xs text-slate-400 italic pl-1">No pending debt</span>
+                    )}
                 </div>
 
-                {/* Subscriptions */}
-                {personSubscriptions.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5">
-                        {personSubscriptions.map(sub => {
+                {/* Row 2: Subscriptions */}
+                {person.subscription_details && person.subscription_details.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                        {person.subscription_details.slice(0, 4).map(sub => {
                             const brand = getServiceBranding(sub.name)
                             return (
-                                <button
+                                <div
                                     key={`${person.id}-${sub.id}`}
-                                    type="button"
-                                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                                    onClick={event => {
-                                        event.stopPropagation()
-                                        setEditServiceId(sub.id)
-                                    }}
+                                    className="relative group/sub flex items-center gap-0.5"
                                 >
-                                    <span className={`flex h-3 w-3 items-center justify-center rounded-full text-[6px] ${brand.bg} ${brand.text}`}>
+                                    <button
+                                        type="button"
+                                        className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] ${brand.bg} ${brand.text} ring-1 ring-white shadow-sm overflow-hidden`}
+                                        onClick={event => {
+                                            event.stopPropagation()
+                                            setEditServiceId(sub.id)
+                                        }}
+                                    >
                                         {brand.icon}
-                                    </span>
-                                    <span className="truncate max-w-[60px]">{sub.name}</span>
-                                </button>
+                                    </button>
+                                    {sub.slots > 1 && (
+                                        <span className="text-[10px] font-medium text-slate-500">
+                                            {sub.slots}
+                                        </span>
+                                    )}
+                                </div>
                             )
                         })}
+                        {person.subscription_details.length > 4 && (
+                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[9px] font-medium text-slate-500 ring-1 ring-white">
+                                +{person.subscription_details.length - 4}
+                            </span>
+                        )}
+                        <span className="text-[10px] text-slate-400 self-center ml-1">
+                            {person.subscription_details.length} Subs
+                        </span>
                     </div>
                 )}
             </div>
 
             {/* Footer: Actions */}
-            <div className="mt-auto pt-3 border-t border-slate-100 grid grid-cols-2 gap-2">
+            <div className="mt-auto grid grid-cols-2 gap-2 pt-2 border-t border-slate-50">
                 <AddTransactionDialog
                     {...dialogBaseProps}
                     defaultType="debt"
                     defaultPersonId={person.id}
-                    buttonClassName="flex items-center justify-center gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 transition-colors w-full"
-                    buttonText="Lend"
+                    buttonClassName="flex items-center justify-center gap-1.5 rounded-md bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition-colors w-full"
+                    buttonText="Cho vay"
                     triggerContent={
                         <>
                             <HandCoins className="h-3.5 w-3.5" />
-                            Lend
+                            Cho vay
                         </>
                     }
                 />
@@ -174,12 +186,12 @@ export function PersonCard({
                     {...dialogBaseProps}
                     defaultType="repayment"
                     defaultPersonId={person.id}
-                    buttonClassName="flex items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition-colors w-full"
-                    buttonText="Repay"
+                    buttonClassName="flex items-center justify-center gap-1.5 rounded-md bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors w-full"
+                    buttonText="Thu nợ"
                     triggerContent={
                         <>
                             <Banknote className="h-3.5 w-3.5" />
-                            Repay
+                            Thu nợ
                         </>
                     }
                 />

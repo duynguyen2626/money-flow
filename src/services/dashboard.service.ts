@@ -158,17 +158,46 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     const spendingByCategory = Array.from(categoryMap.values()).sort((a, b) => b.value - a.value).slice(0, 10)
 
     // 6. Top Debtors (People who owe me money)
-    const { data: debtorAccounts, error: debtorAccountsError } = await supabase
+    // 6. Top Debtors (People who owe me money)
+    // Fetch all debt accounts first to calculate real-time balance
+    const { data: allDebtAccounts, error: allDebtError } = await supabase
       .from('accounts')
-      .select('id, name, current_balance, owner_id')
+      .select('id, name, owner_id')
       .eq('type', 'debt')
-      .gt('current_balance', 0)
-      .order('current_balance', { ascending: false })
-      .limit(5)
 
-    if (debtorAccountsError) throw debtorAccountsError
+    if (allDebtError) throw allDebtError
 
-    const debtorIds = (debtorAccounts as any[])?.map(acc => acc.owner_id).filter(Boolean) || []
+    const debtAccountIds = (allDebtAccounts as any[])?.map(a => a.id) ?? []
+    const debtBalanceMap = new Map<string, number>()
+
+    if (debtAccountIds.length > 0) {
+      const { data: lines, error: linesError } = await supabase
+        .from('transaction_lines')
+        .select('account_id, amount, type')
+        .in('account_id', debtAccountIds)
+
+      if (linesError) {
+        console.error('Error fetching lines for top debtors:', linesError)
+      } else {
+        (lines as any[])?.forEach((line: any) => {
+          const current = debtBalanceMap.get(line.account_id) ?? 0
+          const change = line.type === 'debit' ? Math.abs(line.amount) : -Math.abs(line.amount)
+          debtBalanceMap.set(line.account_id, current + change)
+        })
+      }
+    }
+
+    // Filter and Sort
+    const topDebtorAccounts = (allDebtAccounts as any[])
+      .map(acc => ({
+        ...acc,
+        current_balance: debtBalanceMap.get(acc.id) ?? 0
+      }))
+      .filter(d => d.current_balance > 0)
+      .sort((a, b) => b.current_balance - a.current_balance)
+      .slice(0, 5)
+
+    const debtorIds = topDebtorAccounts.map(acc => acc.owner_id).filter(Boolean)
     const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
       .select('id, name, avatar_url')
@@ -176,7 +205,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
     if (profilesError) throw profilesError
     const profileMap = new Map((profiles as any[])?.map(p => [p.id, p]) || [])
-    const topDebtors = (debtorAccounts as any[])?.map(acc => {
+    const topDebtors = topDebtorAccounts.map(acc => {
       const profile = acc.owner_id ? profileMap.get(acc.owner_id) : null
       return {
         id: acc.id,
@@ -184,7 +213,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
         balance: acc.current_balance || 0,
         avatar_url: profile?.avatar_url,
       }
-    }) || []
+    })
 
     // 7. System Status (Pending Batches and Refunds)
     const { count: pendingBatchesCount, error: batchesError } = await supabase
@@ -206,12 +235,15 @@ export async function getDashboardStats(): Promise<DashboardStats> {
       .from('transactions')
       .select(`
         id,
-        amount,
         note,
         occurred_at,
-        type,
+        status,
         transaction_lines (
-            categories (name, icon)
+            amount,
+            type,
+            account_id,
+            categories (name, icon, type),
+            accounts (type)
         )
       `)
       .neq('status', 'void')
@@ -221,16 +253,55 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     if (recentTxError) throw recentTxError
 
     const recentTransactions = (recentTx as any[])?.map(tx => {
-      // Try to find the first category that is not null
-      const category = tx.transaction_lines?.[0]?.categories
+      const lines = tx.transaction_lines || []
+
+      // 1. Try to find category lines (Expense/Income)
+      const categoryLines = lines.filter((l: any) => l.categories)
+
+      let amount = 0
+      let type = 'transfer' // Default
+      let categoryName = 'Uncategorized'
+      let categoryIcon = null
+
+      if (categoryLines.length > 0) {
+        // It's an Expense or Income
+        amount = categoryLines.reduce((sum: number, l: any) => sum + Math.abs(l.amount || 0), 0)
+        const firstCat = categoryLines[0].categories
+        type = firstCat.type // 'expense' or 'income'
+        categoryName = firstCat.name
+        categoryIcon = firstCat.icon
+      } else {
+        // No category -> Transfer, Debt, or Repayment
+        // Calculate amount from debit lines (money leaving/moving)
+        const debitLines = lines.filter((l: any) => l.type === 'debit')
+        amount = debitLines.reduce((sum: number, l: any) => sum + Math.abs(l.amount || 0), 0)
+
+        // Check for Debt accounts
+        const debtLine = lines.find((l: any) => l.accounts?.type === 'debt')
+        if (debtLine) {
+          // If Debt Account is Debited (Asset Increases) -> Lend (Debt)
+          // If Debt Account is Credited (Asset Decreases) -> Repay (Repayment)
+          if (debtLine.type === 'debit') {
+            type = 'debt' // Lend
+            categoryName = 'Lend'
+          } else {
+            type = 'repayment' // Repay
+            categoryName = 'Repayment'
+          }
+        } else {
+          type = 'transfer'
+          categoryName = 'Transfer'
+        }
+      }
+
       return {
         id: tx.id,
-        amount: tx.amount,
+        amount,
         description: tx.note,
         occurred_at: tx.occurred_at,
-        type: tx.type,
-        category_name: category?.name || 'Uncategorized',
-        category_icon: category?.icon
+        type: type as 'income' | 'expense' | 'transfer' | 'debt' | 'repayment',
+        category_name: categoryName,
+        category_icon: categoryIcon
       }
     }) || []
 

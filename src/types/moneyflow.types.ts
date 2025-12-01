@@ -66,6 +66,7 @@ export type Person = {
   balance?: number | null
   subscription_ids?: string[]
   subscription_count?: number
+  subscription_details?: { id: string; name: string; slots: number }[]
 }
 
 export type SubscriptionMember = {
