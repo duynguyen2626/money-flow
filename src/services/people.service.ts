@@ -195,12 +195,14 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   if (debtAccountIds.length > 0) {
     const { data: lines, error: linesError } = await supabase
       .from('transaction_lines')
-      .select('account_id, amount, type')
+      .select('account_id, amount, type, transactions!inner(status)')
       .in('account_id', debtAccountIds)
+      .neq('transactions.status', 'void')
 
     if (linesError) {
       console.error('Error fetching debt transaction lines:', linesError)
     } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (lines as any[])?.forEach(line => {
         const current = debtBalanceMap.get(line.account_id) ?? 0
         // Debit = Asset Increases (They owe more)

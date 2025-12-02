@@ -2,6 +2,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
 import { format, setDate, subMonths } from 'date-fns';
 import { Database, Json } from '@/types/database.types';
 import { TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types';
@@ -767,6 +768,10 @@ export async function voidTransaction(id: string): Promise<boolean> {
     console.error('Failed to void transaction:', updateError);
     return false;
   }
+
+  revalidatePath('/transactions');
+  revalidatePath('/people');
+  revalidatePath('/accounts');
   const personLine = lines.find((line) => line?.person_id);
 
   if (personLine?.person_id) {
@@ -786,6 +791,16 @@ export async function voidTransaction(id: string): Promise<boolean> {
         console.error('Sheet Sync Error (Void):', err);
       }
     }
+  }
+
+  // Recalculate balances
+  const accountIds = new Set<string>();
+  lines.forEach(l => {
+    if (l.account_id) accountIds.add(l.account_id);
+  });
+  if (accountIds.size > 0) {
+    const { recalculateBalance } = await import('./account.service');
+    await Promise.all(Array.from(accountIds).map(id => recalculateBalance(id)));
   }
 
   return true;
@@ -853,6 +868,20 @@ export async function restoreTransaction(id: string): Promise<boolean> {
       console.error('Sheet Sync Error (Restore):', err);
     }
   }
+
+  // Recalculate balances
+  const accountIds = new Set<string>();
+  lines.forEach(l => {
+    if (l.account_id) accountIds.add(l.account_id);
+  });
+  if (accountIds.size > 0) {
+    const { recalculateBalance } = await import('./account.service');
+    await Promise.all(Array.from(accountIds).map(id => recalculateBalance(id)));
+  }
+
+  revalidatePath('/transactions');
+  revalidatePath('/people');
+  revalidatePath('/accounts');
 
   return true;
 }
