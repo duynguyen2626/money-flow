@@ -27,7 +27,7 @@ export async function upsertService(
   // 1. Upsert subscription
   const { data: service, error: serviceError } = await supabase
     .from('subscriptions')
-    .upsert([serviceData])
+    .upsert([serviceData] as any)
     .select()
     .single()
 
@@ -37,7 +37,7 @@ export async function upsertService(
   }
 
   if (members) {
-    const serviceId = service.id
+    const serviceId = (service as any).id
 
     // 2. Delete all service_members for this ID
     const { error: deleteError } = await supabase
@@ -61,7 +61,7 @@ export async function upsertService(
 
       const { error: insertError } = await supabase
         .from('service_members')
-        .insert(memberInsertData)
+        .insert(memberInsertData as any)
 
       if (insertError) {
         console.error('Error inserting service members:', insertError)
@@ -91,10 +91,12 @@ export async function distributeService(serviceId: string) {
   }
   console.log('Service found:', service)
 
-  const { data: members, error: membersError } = await supabase
+  const { data: membersResult, error: membersError } = await supabase
     .from('service_members')
     .select('*, profiles (name, is_owner, accounts(*))')
     .eq('service_id', serviceId)
+
+  const members = membersResult as any[];
 
   if (membersError || !members) {
     console.error('Error fetching service members:', membersError)
@@ -106,25 +108,27 @@ export async function distributeService(serviceId: string) {
   if (totalSlots === 0) {
     throw new Error('Total slots is zero, cannot distribute.')
   }
-  const unitCost = (service.price || 0) / totalSlots
+  const unitCost = ((service as any).price || 0) / totalSlots
   console.log('Unit cost:', unitCost)
 
-  const createdTransactions = []
+  const createdTransactions: any[] = []
 
   for (const member of members) {
     const cost = unitCost * member.slots
     const transactionDate = new Date().toISOString()
-    const note = `Auto: ${service.name} for ${member.profiles.name} [${new Date().toLocaleString('default', { month: 'short' })}]`
+    const note = `Auto: ${(service as any).name} for ${member.profiles.name} [${new Date().toLocaleString('default', { month: 'short' })}]`
 
     // Create Header
-    const { data: transaction, error: transactionError } = await supabase
+      const { data: transactionData, error: transactionError } = await supabase
       .from('transactions')
       .insert([{
         occurred_at: transactionDate,
         note: note,
-      }])
+        }] as any)
       .select()
       .single()
+
+    const transaction = transactionData as any;
 
     if (transactionError || !transaction) {
       console.error('Error creating transaction header for member:', member.profile_id, transactionError)
@@ -149,12 +153,12 @@ export async function distributeService(serviceId: string) {
       // Debit: Category SERVICE_CAT_ID. (My Expense).
       transactionLines.push({
         transaction_id: transaction.id,
-        category_id: SYSTEM_CATEGORIES.SERVICE,
+        category_id: 'e0000000-0000-0000-0000-000000000088',
         amount: cost,
         type: 'debit',
       })
     } else {
-      const debtAccount = member.profiles.accounts.find(acc => acc.type === 'debt')
+      const debtAccount = member.profiles.accounts.find((acc: any) => acc.type === 'debt')
       if (!debtAccount) {
         console.error(`Debt account not found for member ${member.profile_id}`)
         // Continue to next member, or should we rollback?
@@ -174,7 +178,7 @@ export async function distributeService(serviceId: string) {
 
     const { error: linesError } = await supabase
       .from('transaction_lines')
-      .insert(transactionLines)
+      .insert(transactionLines as any)
 
     if (linesError) {
       console.error('Error inserting transaction lines for member:', member.profile_id, linesError)
@@ -318,7 +322,7 @@ export async function deleteService(serviceId: string) {
 
         .from('service_members')
 
-        .insert(memberInsertData)
+        .insert(memberInsertData as any)
 
   
 
