@@ -1,14 +1,12 @@
 'use server'
 
 import { randomUUID } from 'crypto'
-import { addMonths, format, isValid, parseISO } from 'date-fns'
+
 
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { Subscription, SubscriptionMember } from '@/types/moneyflow.types'
-import { ensureDebtAccount } from './people.service'
-import { syncTransactionToSheet } from './sheet.service'
-import { resolveMissingDebtAccountIds } from '@/lib/debt-account-links'
+
 
 type SubscriptionRow = Database['public']['Tables']['subscriptions']['Row']
 type SubscriptionInsert = Database['public']['Tables']['subscriptions']['Insert']
@@ -27,15 +25,7 @@ type SubscriptionWithMembersRow = SubscriptionRow & {
   shop_id?: string | null
 }
 
-function formatNoteTemplate(row: SubscriptionWithMembersRow, billingDate: string, memberCount: number) {
-  const base = row.note_template?.trim() || 'Auto: {name} {date}'
-  const safePrice = Math.max(0, Number(row.price ?? 0))
-  return base
-    .replace('{name}', row.name ?? '')
-    .replace('{date}', format(parseISO(billingDate), 'MM-yyyy'))
-    .replace('{price}', String(safePrice))
-    .replace('{members}', String(memberCount))
-}
+
 
 export type SubscriptionPayload = {
   name: string
@@ -48,17 +38,7 @@ export type SubscriptionPayload = {
   shop_id?: string | null
 }
 
-function dateOnly(date: Date) {
-  return date.toISOString().slice(0, 10)
-}
 
-function parseBillingDate(value?: string | null): string {
-  if (!value) {
-    return dateOnly(new Date())
-  }
-  const parsed = parseISO(value)
-  return isValid(parsed) ? dateOnly(parsed) : dateOnly(new Date())
-}
 
 async function fetchDebtAccountsMap(
   supabase: ReturnType<typeof createClient>,
@@ -87,15 +67,7 @@ async function fetchDebtAccountsMap(
   return debtMap
 }
 
-async function ensureDebtAccounts(profileIds: string[], debtMap: Map<string, string>) {
-  for (const profileId of profileIds) {
-    if (debtMap.has(profileId)) continue
-    const createdId = await ensureDebtAccount(profileId)
-    if (createdId) {
-      debtMap.set(profileId, createdId)
-    }
-  }
-}
+
 
 function mapSubscriptionRow(
   row: SubscriptionWithMembersRow,
@@ -357,7 +329,7 @@ export async function updateSubscription(id: string, payload: SubscriptionPayloa
 
   if (Object.keys(updatePayload).length > 0) {
     const attemptUpdate = async (data: any) =>
-      (supabase.from('subscriptions').update as any)(data).eq('id', id) // TODO: Fix strict types later
+      (supabase.from('subscriptions').update as any)(data).eq('id', id)
 
     let { error } = await attemptUpdate(updatePayload)
 
@@ -374,351 +346,42 @@ export async function updateSubscription(id: string, payload: SubscriptionPayloa
     }
   }
 
+  // Always sync members if provided, using Delete-then-Insert strategy
   if (Array.isArray(payload.members)) {
-    await syncSubscriptionMembers(supabase, id, payload.members)
+    // 1. Delete all existing members for this subscription
+    const { error: deleteError } = await supabase
+      .from('subscription_members')
+      .delete()
+      .eq('subscription_id', id)
+
+    if (deleteError) {
+      console.error('Failed to delete existing subscription members:', deleteError)
+      return false
+    }
+
+    // 2. Insert new members
+    const membersToInsert = payload.members
+      .filter(m => m.profile_id)
+      .map(m => ({
+        id: randomUUID(),
+        subscription_id: id,
+        profile_id: m.profile_id,
+        fixed_amount: typeof m.fixed_amount === 'number' ? m.fixed_amount : null,
+        slots: typeof m.slots === 'number' ? m.slots : 1,
+      }))
+
+    if (membersToInsert.length > 0) {
+      const { error: insertError } = await (supabase.from('subscription_members').insert as any)(
+        membersToInsert
+      )
+      if (insertError) {
+        console.error('Failed to insert new subscription members:', insertError)
+        return false
+      }
+    }
   }
 
   return true
 }
 
-async function resolveExpenseCategoryId(supabase: ReturnType<typeof createClient>) {
-  // Ordered by preference: Utilities -> Shopping -> Subscriptions -> others
-  const targetNames = ['Utilities', 'Shopping', 'My Expense', 'Subscriptions', 'Dich vu dinh ky']
-  const { data, error } = await supabase
-    .from('categories')
-    .select('id, name, type')
-    .eq('type', 'expense')
-    .in('name', targetNames)
 
-  if (!error && (data?.length ?? 0) > 0) {
-    const rows = (data as Pick<CategoryRow, 'id' | 'name'>[])
-    // Sort based on targetNames index to ensure preference order
-    rows.sort((a, b) => targetNames.indexOf(a.name) - targetNames.indexOf(b.name))
-    return rows[0].id
-  }
-
-  const { data: created, error: createError } = await (supabase
-    .from('categories')
-    .insert as any)({ name: 'Subscriptions', type: 'expense' })
-    .select('id')
-    .single()
-
-  if (createError || !created) {
-    console.error('Failed to resolve expense category for subscriptions:', createError ?? error)
-    return null
-  }
-
-  return (created as Pick<CategoryRow, 'id'>).id
-}
-
-async function resolvePaymentAccountId(supabase: ReturnType<typeof createClient>) {
-  const { data, error } = await supabase
-    .from('accounts')
-    .select('id, type')
-    .neq('type', 'debt')
-    .order('current_balance', { ascending: false } as any)
-    .limit(1)
-
-  if (error || !data?.length) {
-    console.error('Failed to find payment account for subscriptions:', error)
-    return null
-  }
-
-  return (data as Pick<AccountRow, 'id'>[])[0].id
-}
-
-type DueSubscription = SubscriptionWithMembersRow & {
-  members_with_debt?: (SubscriptionMember & { profile_name?: string | null })[]
-}
-
-function buildMemberShareList(
-  subscription: DueSubscription,
-  debtMap: Map<string, string>
-) {
-  const members = subscription.subscription_members ?? []
-  return members.map(member => {
-    const personName = member.profiles?.name ?? 'Thanh vien'
-    const debtAccountId = debtMap.get(member.profile_id) ?? null
-
-    return {
-      profile_id: member.profile_id,
-      profile_name: personName,
-      fixed_amount: typeof member.fixed_amount === 'number' ? member.fixed_amount : 0,
-      slots: (member as any).slots ?? 1,
-      debt_account_id: debtAccountId,
-    }
-  })
-}
-
-export async function checkAndProcessSubscriptions(isManualForce: boolean = false): Promise<{
-  processedCount: number
-  names: string[]
-  skippedCount: number
-  skippedNames: string[]
-}> {
-  const supabase = createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66'
-  console.log('[Bot] Running with UserId:', userId)
-  const today = new Date()
-  const todayStr = dateOnly(today)
-  const currentMonthTag = format(today, 'MMMyy').toUpperCase()
-
-  let query = supabase
-    .from('subscriptions')
-    .select(
-      `
-      id, name, price, next_billing_date, payment_account_id, shop_id,
-      subscription_members (
-        profile_id,
-        fixed_amount,
-        slots,
-        profiles ( name )
-      )
-    `
-    )
-
-  if (!isManualForce) {
-    query = query.lte('next_billing_date', todayStr)
-  }
-
-  let { data, error } = await query
-
-  if (error) {
-    console.error('Failed to scan due subscriptions:', error)
-    // Try fallback query
-    const { data: fallbackData, error: fallbackError } = await supabase
-      .from('subscriptions')
-      .select(
-        `
-        id, name, price, next_billing_date, payment_account_id, shop_id, note_template,
-        subscription_members (
-          profile_id,
-          fixed_amount,
-          slots,
-          profiles ( name )
-        )
-      `
-      )
-      .lte('next_billing_date', todayStr)
-
-    if (fallbackError) {
-      console.error('Fallback scan failed:', fallbackError)
-      return { processedCount: 0, names: [], skippedCount: 0, skippedNames: [] }
-    }
-    data = fallbackData
-  }
-
-  const dueRows = (data ?? []) as DueSubscription[]
-  if (dueRows.length === 0) {
-    return { processedCount: 0, names: [], skippedCount: 0, skippedNames: [] }
-  }
-
-  let existingTxnsSet = new Set<string>()
-  if (isManualForce) {
-    const { data: existingTxns, error: existingTxnsError } = await supabase
-      .from('transactions')
-      .select('shop_id, tag')
-      .in(
-        'shop_id',
-        dueRows.map(s => s.shop_id).filter(Boolean) as string[]
-      )
-      .eq('tag', currentMonthTag)
-      .eq('status', 'posted')
-
-    if (existingTxnsError) {
-      console.error('Failed to check for existing transactions:', existingTxnsError)
-    } else if (existingTxns && existingTxns.length > 0) {
-      existingTxnsSet = new Set(
-        (existingTxns as { shop_id: string; tag: string }[]).map(t => `${t.shop_id}-${t.tag}`)
-      )
-    }
-  }
-
-  const memberIds = new Set<string>()
-  dueRows.forEach(row =>
-    row.subscription_members?.forEach(member => memberIds.add(member.profile_id))
-  )
-  const debtMap = await fetchDebtAccountsMap(supabase, Array.from(memberIds))
-  await ensureDebtAccounts(Array.from(memberIds), debtMap)
-
-  const paymentAccountId = await resolvePaymentAccountId(supabase)
-  const expenseCategoryId = await resolveExpenseCategoryId(supabase)
-  if (!paymentAccountId || !expenseCategoryId) {
-    return {
-      processedCount: 0,
-      names: [],
-      skippedCount: 0,
-      skippedNames: [],
-    }
-  }
-
-  const processedNames: string[] = []
-  const skippedNames: string[] = []
-
-  for (const row of dueRows) {
-    if (isManualForce && existingTxnsSet.has(`${row.shop_id}-${currentMonthTag}`)) {
-      skippedNames.push(row.name)
-      continue
-    }
-    const price = Math.max(0, Number(row.price ?? 0))
-    if (!price) {
-      continue
-    }
-
-    const billingDate = isManualForce
-      ? todayStr
-      : parseBillingDate(row.next_billing_date ?? todayStr)
-    const txnNote = formatNoteTemplate(row, billingDate, row.subscription_members?.length ?? 0)
-    const txnTag = format(parseISO(billingDate), 'MMMyy').toUpperCase()
-
-    const members = buildMemberShareList(row, debtMap)
-
-    // Calculate shares based on slots
-    const totalSlots = members.reduce((sum, m) => sum + (m.slots ?? 1), 0)
-    const unitCost = totalSlots > 0 ? price / totalSlots : 0
-
-    console.log(`[Bot] Processing ${row.name}: Price=${price}, Members=${members.length}, TotalSlots=${totalSlots}, UnitCost=${unitCost}`)
-    members.forEach(m => console.log(`   - Member ${m.profile_name} (${m.profile_id}): Slots=${m.slots}, DebtAcc=${m.debt_account_id}`))
-
-    const paymentSource = row.payment_account_id ?? paymentAccountId
-    const { data: txn, error: txnError } = await (supabase
-      .from('transactions')
-      .insert as any)({
-        occurred_at: `${billingDate}T00:00:00.000Z`,
-        note: txnNote,
-        status: 'posted',
-        tag: txnTag,
-        created_by: userId,
-        shop_id: row.shop_id,
-      })
-      .select('id')
-      .single()
-
-    if (txnError || !txn) {
-      console.error('Failed to create auto transaction for subscription:', {
-        subscriptionId: row.id,
-        message: txnError?.message ?? 'unknown error',
-      })
-      continue
-    }
-
-    const lines: TransactionLineInsert[] = [
-      {
-        id: randomUUID(),
-        transaction_id: txn.id,
-        account_id: paymentSource,
-        amount: -price,
-        type: 'credit',
-        metadata: { subscription_id: row.id },
-      },
-    ]
-
-    members.forEach(member => {
-      const slots = member.slots ?? 1
-      const share = unitCost * slots
-
-      if (share <= 0 || !member.debt_account_id) {
-        return
-      }
-
-      if (member.profile_id === userId) {
-        console.log(`   -> Skipping self (Me): ${member.profile_id}`)
-        return
-      }
-
-      lines.push({
-        id: randomUUID(),
-        transaction_id: txn.id,
-        account_id: member.debt_account_id,
-        amount: share,
-        type: 'debit',
-        // @ts-ignore: person_id exists in DB though generated types may lag
-        person_id: member.profile_id,
-        metadata: {
-          subscription_id: row.id,
-          member_profile_id: member.profile_id,
-          member_name: member.profile_name,
-          slots: slots,
-          note: slots > 1 ? `[Slot: ${slots}]` : undefined
-        },
-      })
-    })
-
-    const debtSum = lines
-      .filter(line => line.type === 'debit' && line.account_id)
-      .reduce((sum, line) => sum + line.amount, 0)
-
-    const myShare = Math.max(0, price - debtSum)
-
-    if (myShare > 0) {
-      lines.push({
-        id: randomUUID(),
-        transaction_id: txn.id,
-        category_id: expenseCategoryId,
-        amount: myShare,
-        type: 'debit',
-        metadata: { subscription_id: row.id, role: 'owner_share' },
-      })
-    }
-
-    await resolveMissingDebtAccountIds(supabase, lines)
-    const { error: lineError } = await (supabase.from('transaction_lines').insert as any)(lines)
-    if (lineError) {
-      console.error('Failed to create transaction lines for subscription:', {
-        subscriptionId: row.id,
-        message: lineError?.message ?? 'unknown error',
-      })
-      continue
-    }
-
-    const syncBase = {
-      id: txn.id,
-      occurred_at: `${billingDate}T00:00:00.000Z`,
-      note: txnNote,
-      tag: txnTag,
-    }
-
-    for (const line of lines) {
-      const personId = (line as { person_id?: string | null }).person_id
-      if (!personId) continue
-      const originalAmount =
-        typeof line.original_amount === 'number' ? line.original_amount : line.amount
-
-      void syncTransactionToSheet(
-        personId,
-        {
-          ...syncBase,
-          original_amount: originalAmount,
-          cashback_share_percent: line.cashback_share_percent ?? undefined,
-          cashback_share_fixed: line.cashback_share_fixed ?? undefined,
-          amount: line.amount,
-        },
-        'create'
-      )
-        .then(() => {
-          console.log(`[Sheet Sync] Triggered for Person ${personId} (subscription bot)`)
-        })
-        .catch(err => {
-          console.error('Sheet Sync Error (Bot Background):', err)
-        })
-    }
-
-    const nextCycleDate = addMonths(parseISO(billingDate), 1)
-    await (supabase
-      .from('subscriptions')
-      .update as any)({ next_billing_date: dateOnly(nextCycleDate) })
-      .eq('id', row.id)
-
-    processedNames.push(row.name)
-  }
-
-  return {
-    processedCount: processedNames.length,
-    names: processedNames,
-    skippedCount: skippedNames.length,
-    skippedNames: skippedNames,
-  }
-}

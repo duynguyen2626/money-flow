@@ -17,7 +17,8 @@ function formatPreview(template: string, serviceName: string, price: number, mem
   return template
     .replace('{name}', serviceName)
     .replace('{date}', `${month}-${year}`)
-    .replace('{member}', String(memberCount))
+    .replace('{price}', formatMoney(safePrice))
+    .replace('{members}', String(memberCount))
 }
 
 type MemberSelection = {

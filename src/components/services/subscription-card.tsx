@@ -37,6 +37,20 @@ function getStatus(nextDate?: string | null) {
   return { label: 'Scheduled', tone: 'bg-emerald-100 text-emerald-700' }
 }
 
+function formatTemplate(template: string, subscription: Subscription) {
+  const now = subscription.next_billing_date ? new Date(subscription.next_billing_date) : new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const year = String(now.getFullYear())
+  const safePrice = Math.max(0, Math.round(subscription.price ?? 0))
+  const memberCount = subscription.members?.length ?? 0
+
+  return template
+    .replace('{name}', subscription.name)
+    .replace('{date}', `${month}-${year}`)
+    .replace('{price}', formatMoney(safePrice))
+    .replace('{members}', String(memberCount))
+}
+
 export function SubscriptionCard({ subscription, onEdit, onMemberClick }: SubscriptionCardProps) {
   const brand = getServiceBranding(subscription.name)
   const status = getStatus(subscription.next_billing_date)
@@ -79,6 +93,15 @@ export function SubscriptionCard({ subscription, onEdit, onMemberClick }: Subscr
         <span className="font-semibold">{formatDate(subscription.next_billing_date)}</span>
       </div>
 
+      {subscription.note_template && (
+        <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          <span className="block font-semibold text-slate-700 mb-1">Note Template</span>
+          <code className="block rounded bg-slate-100 px-1 py-0.5 font-mono text-[10px] text-slate-800 break-all">
+            {formatTemplate(subscription.note_template, subscription)}
+          </code>
+        </div>
+      )}
+
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-500">
           <span>Members</span>
@@ -101,6 +124,11 @@ export function SubscriptionCard({ subscription, onEdit, onMemberClick }: Subscr
                 {typeof member.fixed_amount === 'number' && (
                   <span className="text-[11px] text-slate-500">
                     {formatMoney(member.fixed_amount)}
+                  </span>
+                )}
+                {(member.slots ?? 1) > 1 && (
+                  <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-slate-100 px-1 text-[9px] font-bold text-slate-600">
+                    {member.slots}
                   </span>
                 )}
               </button>

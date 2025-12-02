@@ -5,7 +5,7 @@ import { LayoutDashboard, List, Undo2, Landmark, Users, BadgePercent, Tags, Stor
 import Link from "next/link"
 
 import { SidebarNav, type NavItem } from "./sidebar-nav"
-import { AutomationChecker } from "./automation-checker"
+
 import { cn } from "@/lib/utils"
 
 const navItems: NavItem[] = [
@@ -74,7 +74,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             <h1 className="text-xl font-semibold text-slate-900">Control Center</h1>
           </div>
           <div className="flex items-center gap-3">
-            <AutomationChecker />
+
             <Link
               href="/transactions"
               className="text-sm font-medium text-blue-600 hover:text-blue-800 transition-colors"

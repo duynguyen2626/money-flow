@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Loader2, Zap } from 'lucide-react'
+import { Loader2, MoreHorizontal } from 'lucide-react'
 
 import {
   parseSavingsConfig,
@@ -130,7 +130,7 @@ export function AccountTable({
                           aria-label="Account actions"
                           className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-900 transition hover:border-slate-300 hover:bg-slate-50"
                         >
-                          <Zap className="h-4 w-4" />
+                          <MoreHorizontal className="h-4 w-4" />
                         </button>
                         <div className="pointer-events-none absolute right-0 top-full z-10 mt-2 hidden min-w-[160px] flex-col gap-1 rounded-lg border border-slate-200 bg-white p-2 text-xs font-semibold text-slate-700 shadow transition group-hover:flex group-hover:pointer-events-auto group-focus-within:flex group-focus-within:pointer-events-auto">
                           <EditAccountDialog

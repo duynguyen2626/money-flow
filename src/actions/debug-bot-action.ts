@@ -2,7 +2,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { checkAndProcessSubscriptions } from '@/services/subscription.service'
+
 
 export async function debugSubscriptionBotAction(serviceName?: string) {
     const supabase = createClient()
@@ -27,7 +27,7 @@ export async function debugSubscriptionBotAction(serviceName?: string) {
     // However, the user wants to check if code runs correctly.
 
     // Let's check debt accounts for these members
-    const memberIds = sub?.subscription_members?.map((m: any) => m.profile_id) || []
+    const memberIds = (sub as any)?.subscription_members?.map((m: any) => m.profile_id) || []
     const { data: debtAccounts } = await supabase
         .from('accounts')
         .select('id, owner_id, name')

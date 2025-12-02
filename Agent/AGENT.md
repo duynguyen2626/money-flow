@@ -1,85 +1,59 @@
-PROJECT: MONEY FLOW 3.0
+AGENT TASK: PHASE 59 - REMOVE AUTOMATION BOT & STABILIZE
 
-PHASE: 51.5 - SERVICE LOGIC FIXES & BOT MATH CORRECTION
+Context:
+The "Lazy Bot" (Subscription Automation) is buggy, generating incorrect transaction data (wrong splits, missing accounts).
+Decision: COMPLETELY REMOVE the Bot logic and the UI Trigger (Zap Icon) for now. We will rewrite it from scratch later.
 
-WORKFLOW:
+Objective:
 
-Branch: fix/phase-51-5-service-bot
+Delete UI: Remove AutomationChecker component and the "Zap" icon from the Layout.
 
-Safety: Run npm run build.
+Clean Backend: Remove checkAndProcessSubscriptions logic (or stub it).
 
-OBJECTIVE:
+Verify: Ensure the app builds and runs without the bot.
 
-Fix Service UI: Ensure "Total Members" and "Preview" update immediately upon editing/saving. Fix "Update" button state.
+I. FRONTEND CLEANUP
 
-Fix Bot Math: Calculate debt share based on SLOTS, not just Member Count.
+1. Delete Component
 
-I. BACKEND: FIX BOT MATH (src/services/subscription.service.ts)
+Action: Delete file src/components/moneyflow/automation-checker.tsx.
 
-Target: checkAndProcessSubscriptions
+2. Update Layout (src/components/moneyflow/app-layout.tsx)
 
-Correct Logic (Weighted Split):
+Action: Remove the import of AutomationChecker.
 
-Calculate Total Slots:
+Action: Remove the <AutomationChecker /> JSX tag from the render tree.
 
-MemberSlots = Sum of slots from subscription_members.
+Action: Remove any "Zap" icon button in the Header area (if manually placed there).
 
-MySlots = 1 (Default assumption: Owner uses 1 slot).
+II. BACKEND CLEANUP (src/services/subscription.service.ts)
 
-Refinement: Or assume Price is the total bill, and we split by MemberSlots + 1.
+1. Remove Logic
 
-Decision: TotalDivisor = MemberSlots + 1.
+Target: checkAndProcessSubscriptions function.
 
-Calculate Unit Cost:
+Action:
 
-UnitCost = SubscriptionPrice / TotalDivisor.
+Option A: Delete the function entirely.
 
-Create Debt Transactions:
+Option B (Safer if imported elsewhere): Keep the function signature but make the body empty (return empty array).
 
-Loop through Members.
+Instruction: Delete the function entirely and remove its export. If api/batch or other routes use it, remove those usages too.
 
-DebtAmount = UnitCost * member.slots.
+2. Clean Imports
 
-Note Generation:
+Remove unused imports (e.g., transaction.service, debt.service imports used only by the bot).
 
-Base: subscription.name (or Template).
+III. ROUTE CLEANUP
 
-Suffix: If member.slots > 1 -> Add " (x{member.slots} slots)" or similar.
+1. Check API Routes
 
-Create Line: One line per person with the calculated DebtAmount.
+If there is an API route specifically for triggering the bot (e.g., src/app/api/automation/route.ts or similar), DELETE IT.
 
-II. UI: FIX SERVICE EDIT PAGE (src/components/services/service-edit-page-content.tsx)
+IV. EXECUTION STEPS
 
-1. Fix Reactivity (Stale Data)
+Frontend: Remove UI elements (Icon/Component).
 
-Problem: "Total Members" or "Cost" doesn't update after Save.
+Backend: Strip out the Bot logic code.
 
-Fix:
-
-Ensure updateSubscription returns the updated object (including relations count).
-
-Update the local state (service object) with the response.
-
-Call router.refresh() to ensure Server Components (like Sidebar counts) update.
-
-2. Fix "Update" Button State
-
-Logic: Disable button if !form.formState.isDirty OR isSaving.
-
-Trigger: Ensure changing the "Member List" (Checkboxes/Slots) marks the form as dirty.
-
-3. Fix Template Preview
-
-Logic: Add a useEffect watching note_template, price, and members.
-
-Render: Real-time string replacement (e.g., "Youtube 12-2025 (166k/5)") shown in a gray box below the input.
-
-III. EXECUTION STEPS
-
-Backend: Rewrite Bot Math to include Slot multiplier.
-
-Frontend: Fix State Update logic in ServiceEditPageContent.
-
-Frontend: Implement Live Preview for Note Template.
-
-Verify: Run manual bot check.
+Build: Run npm run build to ensure no dangling references remain.
