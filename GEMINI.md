@@ -1,64 +1,43 @@
-AGENT TASK: FIX BROKEN SUBSCRIPTION/SERVICE REFERENCES
+AGENT TASK: FIX SERVICE CATEGORY & DEBT VOID LOGIC
 
-CRITICAL BUG:
+Context:
 
-Error: PGRST205: Could not find the table 'public.subscription_members'.
+Bug 1: Auto-distributed transactions show "Uncategorized" because the Service logic might be using a wrong Category ID or missing the join.
 
-Cause: We migrated to service_members table in Phase 62, but the codebase (services/components) is still querying the old table name.
+Bug 2: Voiding a transaction does NOT reduce the Debt on the People Page. (Fixed via SQL get_debt_by_tags, but need to verify frontend reactivity).
 
-OBJECTIVE:
-Search and replace all legacy references to subscription_members with service_members in the entire codebase.
+Objective:
 
-I. BACKEND FIXES (src/services/*.ts)
+Update subscription.service.ts (or service-manager.ts) to use the correct Fixed Category ID for "Online Services".
 
-1. subscription.service.ts (or service-manager.ts)
+Verify Frontend refresh logic.
 
-Search: from('subscription_members')
+I. BACKEND FIX (src/services/service-manager.ts / subscription.service.ts)
 
-Replace: from('service_members')
-
-Search: select('..., subscription_members(...)')
-
-Replace: select('..., service_members(...)')
-
-2. people.service.ts
-
-Function: getPeople / getPersonDetails.
-
-Fix: The query joining subscriptions likely uses the old relation name. Update it to service_members.
-
-3. dashboard.service.ts
-
-Check if any dashboard stats rely on member counts from the old table.
-
-II. FRONTEND FIXES (src/components/**/*.tsx)
-
-1. ServiceCard.tsx / ServicePage
-
-The component expects a subscription_members array property.
-
-Action: Update the TypeScript interface Subscription (in moneyflow.types.ts) to rename the property to service_members (or map it in the transformer).
-
-Fix Render: Update the map loop: service.service_members.map(...).
-
-2. PersonCard.tsx
-
-Check where it counts "Active Subs". Ensure it reads from the correct joined table.
-
-III. TYPE DEFINITIONS (src/types/database.types.ts)
+Target: distributeService function.
 
 Action:
 
-If you are using a generated types file, run supabase gen types (or manually update it if you maintain it).
+Locate where category_id is assigned for the Owner's expense line.
 
-Ensure Tables['service_members'] exists and Tables['subscription_members'] is removed/deprecated.
+Hardcode/Constant: Ensure it uses e0000000-0000-0000-0000-000000000088 (Online Services).
 
-IV. EXECUTION STEPS
+Check: If using SYSTEM_CATEGORIES constant, update the constant file to match this ID.
 
-Global Search: Find "subscription_members".
+II. FRONTEND REFRESH (src/app/people/page.tsx)
 
-Replace: Logic update to "service_members".
+Action:
 
-Types: Update moneyflow.types.ts.
+The Debt List relies on getDebtByTags.
 
-Verify: Run npm run build to catch type errors.
+Since we updated the SQL function get_debt_by_tags, the data will be correct on refresh.
+
+Enhancement: Ensure that when a transaction is Voided in /transactions, we invalidate the cache or trigger a refresh if we are navigating back to People page. (Next.js revalidatePath or router.refresh()).
+
+III. EXECUTION STEPS
+
+Constants: Verify src/lib/constants.ts has ONLINE_SERVICES: 'e000...88'.
+
+Service: Update the distribute logic to use this constant.
+
+Verify: Run build.

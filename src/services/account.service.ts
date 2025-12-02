@@ -656,7 +656,6 @@ export async function getAccountTransactionDetails(
  */
 export async function recalculateBalance(accountId: string): Promise<boolean> {
   const supabase = createClient()
-  console.log(`[recalculateBalance] Starting for account: ${accountId}`)
 
   try {
     // Get all transaction lines for this account, excluding void transactions
@@ -667,10 +666,9 @@ export async function recalculateBalance(accountId: string): Promise<boolean> {
       .neq('transactions.status', 'void')
 
     if (error) {
-      console.error(`[recalculateBalance] Error fetching transaction lines for account ${accountId}:`, error)
+      console.error('Error fetching transaction lines for recalculation:', error)
       return false
     }
-    console.log(`[recalculateBalance] Fetched ${lines?.length} lines for account ${accountId}.`)
 
     // Calculate totals
     let currentBalance = 0
@@ -690,7 +688,6 @@ export async function recalculateBalance(accountId: string): Promise<boolean> {
         totalOut += amount
       }
     })
-    console.log(`[recalculateBalance] Calculated balance for ${accountId}: currentBalance=${currentBalance}, totalIn=${totalIn}, totalOut=${totalOut}`)
 
     // Update account with recalculated values
     const { error: updateError } = await (supabase
@@ -703,14 +700,13 @@ export async function recalculateBalance(accountId: string): Promise<boolean> {
       .eq('id', accountId)
 
     if (updateError) {
-      console.error(`[recalculateBalance] Error updating account ${accountId} with recalculated values:`, updateError)
+      console.error('Error updating account with recalculated values:', updateError)
       return false
     }
-    console.log(`[recalculateBalance] Successfully updated balance for account: ${accountId}`)
 
     return true
   } catch (err) {
-    console.error(`[recalculateBalance] Unexpected error during balance recalculation for account ${accountId}:`, err)
+    console.error('Unexpected error during balance recalculation:', err)
     return false
   }
 }
