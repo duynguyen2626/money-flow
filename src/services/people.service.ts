@@ -42,6 +42,7 @@ async function createDebtAccountForPerson(
   personName: string
 ): Promise<string | null> {
   const { data: { user } } = await supabase.auth.getUser()
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66'
 
   const { data, error } = await (supabase
@@ -49,7 +50,9 @@ async function createDebtAccountForPerson(
     .insert as any)({
       name: buildDebtAccountName(personName),
       type: 'debt',
-      owner_id: userId,
+      // Correctly assign the debt account to the Person (Friend), not Me (System User).
+      // This allows lookup by personId later.
+      owner_id: personId,
       current_balance: 0,
     })
     .select('id')

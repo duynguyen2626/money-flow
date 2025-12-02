@@ -89,6 +89,7 @@ export default async function ServicePage({ params }: ServicePageProps) {
 
             <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                 <ServiceEditPageContent
+                    key={subscription.id}
                     subscription={subscription}
                     people={people}
                     accounts={accounts}
