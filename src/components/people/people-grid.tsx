@@ -8,6 +8,7 @@ import { CustomTooltip } from '@/components/ui/custom-tooltip'
 import { EditPersonDialog } from './edit-person-dialog'
 import { CreatePersonDialog } from './create-person-dialog'
 import { PersonCard } from '@/components/moneyflow/person-card'
+import { CollapsibleSection } from './collapsible-section'
 import { Account, Category, Person, Shop, Subscription } from '@/types/moneyflow.types'
 import { ensureDebtAccountAction } from '@/actions/people-actions'
 
@@ -59,8 +60,9 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
     })
   }
 
-  const activePeople = filteredPeople.filter(person => (person.balance ?? 0) !== 0)
-  const settledPeople = filteredPeople.filter(person => (person.balance ?? 0) === 0)
+  const activePeople = filteredPeople.filter(person => !person.is_archived && (person.balance ?? 0) !== 0)
+  const settledPeople = filteredPeople.filter(person => !person.is_archived && (person.balance ?? 0) === 0)
+  const archivedPeople = filteredPeople.filter(person => person.is_archived)
 
   const showActive = filterStatus === 'all' || filterStatus === 'active'
   const showSettled = filterStatus === 'all' || filterStatus === 'settled'
@@ -115,11 +117,12 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
       </div>
 
       {showActive && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-rose-500">⚠️ Outstanding Debt</h3>
-            <p className="text-xs text-slate-500">{activePeople.length} people</p>
-          </div>
+        <CollapsibleSection
+          title="⚠️ Outstanding Debt"
+          count={activePeople.length}
+          titleColor="text-rose-500"
+          defaultOpen={true}
+        >
           {activePeople.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
               No outstanding debters right now.
@@ -140,15 +143,16 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
               ))}
             </div>
           )}
-        </section>
+        </CollapsibleSection>
       )}
 
       {showSettled && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-emerald-500">✅ Settled / Clean</h3>
-            <p className="text-xs text-slate-500">{settledPeople.length} people</p>
-          </div>
+        <CollapsibleSection
+          title="✅ Settled / Clean"
+          count={settledPeople.length}
+          titleColor="text-emerald-500"
+          defaultOpen={false}
+        >
           {settledPeople.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-xs text-slate-500">
               Everyone currently owes you something.
@@ -170,7 +174,32 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
               ))}
             </div>
           )}
-        </section>
+        </CollapsibleSection>
+      )}
+
+      {archivedPeople.length > 0 && (
+        <CollapsibleSection
+          title="Archived members"
+          count={archivedPeople.length}
+          titleColor="text-slate-500"
+          defaultOpen={false}
+        >
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+            {archivedPeople.map(person => (
+              <PersonCard
+                key={person.id}
+                person={person}
+                shops={shops}
+                accounts={accounts}
+                categories={categories}
+                subscriptions={subscriptions}
+                onEdit={() => setEditId(person.id)}
+                onOpenDebt={() => handleOpenDebt(person)}
+                variant="compact"
+              />
+            ))}
+          </div>
+        </CollapsibleSection>
       )}
 
       {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}

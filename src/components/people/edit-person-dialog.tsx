@@ -78,6 +78,8 @@ export function EditPersonDialog({ person, subscriptions, initiallyOpen, onClose
                 avatar_url: person.avatar_url ?? '',
                 sheet_link: person.sheet_link ?? '',
                 subscriptionIds: person.subscription_ids ?? [],
+                is_owner: person.is_owner ?? false,
+                is_archived: person.is_archived ?? false,
               }}
               onCancel={closeDialog}
               onSubmit={async values => {

@@ -84,6 +84,8 @@ export function CreatePersonDialog({ subscriptions, trigger, open: controlledOpe
                   avatar_url: values.avatar_url,
                   sheet_link: values.sheet_link,
                   subscriptionIds: values.subscriptionIds,
+                  is_owner: values.is_owner,
+                  is_archived: values.is_archived,
                 })
                 handleSuccess()
               }}

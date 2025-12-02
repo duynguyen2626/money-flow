@@ -9,15 +9,18 @@ import { Account, Person, Shop, Subscription } from '@/types/moneyflow.types'
 
 import { getServiceBranding } from './service-branding'
 
-function formatPreview(template: string, serviceName: string, price: number, memberCount: number) {
-  const now = new Date()
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const year = String(now.getFullYear())
+function formatPreview(template: string, serviceName: string, price: number, totalSlots: number, billingDate?: string | null) {
+  const baseDate = billingDate ? new Date(billingDate) : new Date()
+  const month = String(baseDate.getMonth() + 1).padStart(2, '0')
+  const year = String(baseDate.getFullYear())
   const safePrice = Math.max(0, Math.round(price))
+  const formattedPrice = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(safePrice)
   return template
     .replace('{name}', serviceName)
     .replace('{date}', `${month}-${year}`)
-    .replace('{member}', String(memberCount))
+    .replace('{price}', formattedPrice)
+    .replace('{members}', String(totalSlots))
+    .replace('{member}', String(totalSlots))
 }
 
 type MemberSelection = {
@@ -279,7 +282,8 @@ export function SubscriptionForm({
                 noteTemplate || defaultTemplate,
                 name || initialData?.name || 'Service',
                 priceNumber,
-                members.length
+                totalSlots,
+                nextBillingDate
               )}
             </span>
             <div className="flex flex-wrap gap-2 text-[11px] text-slate-600 mt-1">
@@ -445,7 +449,7 @@ export function SubscriptionForm({
                         <div className="flex flex-col">
                           <span className="text-sm font-semibold text-slate-900">{person?.name ?? 'Member'}</span>
                           <span className="text-[11px] text-slate-500">
-                            {slots > 0 ? `${formatMoney(unitCost * slots)}` : 'Slots: 0'}
+                            {slots > 0 ? `${formatMoney(unitCost * slots)}` : 'Slots: 0'}{slots > 1 ? ` (x${slots})` : ''}
                           </span>
                         </div>
                       </div>
@@ -487,7 +491,7 @@ export function SubscriptionForm({
             </div>
             <div className="flex items-center justify-between text-xs text-slate-500">
               <span>Total persons</span>
-              <span className="font-semibold">{members.length}</span>
+              <span className="font-semibold">{totalSlots}</span>
             </div>
           </div>
         </div>

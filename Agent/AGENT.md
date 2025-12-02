@@ -1,97 +1,94 @@
-PROJECT: MONEY FLOW 3.0
+AGENT TASK: FIX BOT MANUAL RUN & PREVIEW UI
 
-PHASE: 58 - PEOPLE UI HIGH-DENSITY & LAYOUT SPLIT
+Context:
 
-WORKFLOW:
+Error: "Manual run not implemented". The backend handler is missing.
 
-Branch: feat/phase-58-people-density
+UX: User wants to see exactly what the bot will do before it runs (Preview Mode).
 
-Safety: Run npm run build.
+Confusion: "Auto Renew" bot card is confusing -> Hide it for now.
 
-OBJECTIVE:
-The current People Grid is inefficient and ugly due to varying card heights.
-Solution: Split the view into two distinct sections with different card designs.
+Objective:
 
-Active Debtors: Standard Cards (Detailed Debt Breakdown).
+Implement previewSubscriptionRun (Backend) to list due services.
 
-Settled / Friends: Mini Cards (Square, Avatar-centric).
+Implement runBotManual (Backend) to execute the creation.
 
-I. UI: REDESIGN PeopleGrid (src/components/people/people-grid.tsx)
+Connect UI: Click Run -> Show Preview Modal -> Confirm -> Success.
+
+I. BACKEND LOGIC (src/services/subscription.service.ts)
+
+1. Implement previewSubscriptionRun()
 
 Logic:
 
-Filter people by Search query.
+Fetch subscriptions where next_billing_date <= NOW AND is_active = true.
 
-Split into debtors (total_debt !== 0) and others (total_debt === 0).
+Calculations: For each sub, calculate UnitCost and MembersDebt.
 
-Layout:
+Return:
 
-Filter Bar: Search Input + [Add Person Button].
+{
+  dueCount: number,
+  totalAmount: number,
+  items: [
+    { id, name: "Youtube", price: 166000, nextDate: "2025-12-01", membersCount: 3 }
+  ]
+}
 
-Section 1: "⚠️ Outstanding Debtors"
 
-Grid: grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4.
+2. Implement processSubscriptions(force: boolean)
 
-Render: PersonCard (Detailed Variant).
+Logic:
 
-Section 2: "✅ Friends & Family (Settled)"
+Fetch due subscriptions.
 
-Grid: grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3. (Higher density).
+Loop & Create Transactions:
 
-Render: PersonCard (Compact Variant).
+Use transaction.service.createTransaction.
 
-II. UI: REDESIGN PersonCard (src/components/moneyflow/person-card.tsx)
+Important: Use shop_id, category_id (from Config or Default '88...88'), and generate Notes with Slot info.
 
-Props: variant?: 'detailed' | 'compact'
+Update Date: Set next_billing_date = Next Month.
 
-Variant A: DETAILED (For Debtors)
+Log: Update bot_configs -> last_run_at, last_run_status.
 
-Header: Avatar (40px) | Name (Bold) | Total Debt Badge (Red).
+II. BACKEND WIREING (src/services/bot-config.service.ts)
 
-Body (Debt List):
+Update runBotManual(key):
 
-Background bg-red-50/50 rounded-md p-2.
+Switch key:
 
-List top 3 debt tags (e.g., "NOV25: 50k").
+Case 'subscription_bot': Call subscriptionService.processSubscriptions(true).
 
-Action: Small check button to settle specific tag.
+Default: Throw error.
 
-Footer:
+III. UI: RUN PREVIEW DIALOG (src/components/automation/run-bot-dialog.tsx)
 
-Services: Row of small Service Icons (Youtube, etc.). Label "No Services" if empty.
+Flow:
 
-Actions: Icon Buttons (Lend 💸, Repay 🤝). No text labels. Tooltip only.
+Trigger: User clicks "Run Now" on the Card.
 
-Variant B: COMPACT (For Settled)
+State 1 (Loading): Call API /api/automation/preview?key=subscription_bot.
 
-Style: Square-ish Card, Center Aligned content.
+State 2 (Preview):
 
-Layout:
+If Empty: Show "✅ No services due today."
 
-Top: Large Avatar (56px) centered.
+If Data:
 
-Middle: Name (Truncate) centered.
+Show Table: Service Name | Price | Members.
 
-Bottom: Row of Actions (Lend Button only basically, or Edit).
+Button: "🚀 Execute (Tạo [x] Giao dịch)".
 
-Service Indicators: Tiny dots or mini icons at the top-right corner.
-
-III. UI: ICONS & TOOLTIPS
-
-Replace Text Buttons: Use Lucide icons for everything in the card footer.
-
-Lend: HandCoins (Color: Rose-500).
-
-Settle/Repay: Banknote (Color: Emerald-500).
-
-Edit: Pencil (Gray-400).
-
-Tooltips: Wrap all icons in <Tooltip> to explain functionality.
+State 3 (Executing): Call API /api/automation/run. Show Toast on success.
 
 IV. EXECUTION STEPS
 
-Component: Refactor PersonCard to support variant prop and new styles.
+Service: Implement previewSubscriptionRun & processSubscriptions.
 
-Page: Update PeopleGrid to implement the Split Layout strategy.
+API: Ensure /api/automation/preview and /api/automation/run endpoints call the service.
 
-Verify: Check mobile responsiveness (stack grids).
+UI: Finish the RunBotDialog to display the preview data.
+
+Cleanup: Hide the Batch Clone bot from the UI list if it's confusing.

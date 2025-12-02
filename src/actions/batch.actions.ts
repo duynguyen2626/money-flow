@@ -9,13 +9,13 @@ import {
     addBatchItem,
     updateBatchItem,
     deleteBatchItem,
-    sendBatchToSheet,
-    cloneBatch,
-    checkAndAutoCloneBatches,
     confirmBatchItem,
     voidBatchItem,
     importBatchItemsFromExcel,
     fundBatch,
+    confirmBatchSource,
+    sendBatchToSheet,
+    cloneBatch,
     Batch,
     BatchItem
 } from '@/services/batch.service'
@@ -32,59 +32,17 @@ export async function voidBatchItemAction(itemId: string, batchId: string) {
     revalidatePath('/accounts')
 }
 
-export async function checkAndAutoCloneBatchesAction() {
-    const result = await checkAndAutoCloneBatches()
-    if (result.length > 0) {
-        revalidatePath('/batch')
-    }
-    return result
+export async function deleteBatchItemAction(itemId: string, batchId: string) {
+    await deleteBatchItem(itemId)
+    revalidatePath(`/batch/${batchId}`)
 }
 
 export async function getBatchesAction() {
     return await getBatches()
 }
 
-export async function createBatchAction(data: any) {
-    const result = await createBatch(data)
-    revalidatePath('/batch')
-    return result
-}
-
-export async function updateBatchAction(id: string, data: any) {
-    const result = await updateBatch(id, data)
-    revalidatePath('/batch')
-    revalidatePath(`/batch/${id}`)
-    return result
-}
-
-export async function deleteBatchAction(id: string) {
-    await deleteBatch(id)
-    revalidatePath('/batch')
-}
-
-export async function cloneBatchAction(id: string, forcedNewTag?: string) {
-    const result = await cloneBatch(id, forcedNewTag)
-    revalidatePath('/batch')
-    return result
-}
-
 export async function getBatchByIdAction(id: string) {
     return await getBatchById(id)
-}
-
-export async function addBatchItemAction(data: any) {
-    const result = await addBatchItem(data)
-    revalidatePath(`/batch/${data.batch_id}`)
-    return result
-}
-
-export async function deleteBatchItemAction(id: string, batchId: string) {
-    await deleteBatchItem(id)
-    revalidatePath(`/batch/${batchId}`)
-}
-
-export async function sendBatchToSheetAction(batchId: string) {
-    return await sendBatchToSheet(batchId)
 }
 
 export async function fundBatchAction(batchId: string) {
@@ -118,5 +76,45 @@ export async function importBatchItemsAction(
 ) {
     const result = await importBatchItemsFromExcel(batchId, excelData, batchTag)
     revalidatePath(`/batch/${batchId}`)
+    return result
+}
+export async function confirmBatchSourceAction(batchId: string, accountId: string) {
+    await confirmBatchSource(batchId, accountId)
+    revalidatePath(`/batch/${batchId}`)
+    revalidatePath('/accounts')
+}
+
+export async function sendBatchToSheetAction(batchId: string) {
+    const result = await sendBatchToSheet(batchId)
+    return result
+}
+
+export async function deleteBatchAction(batchId: string) {
+    await deleteBatch(batchId)
+    revalidatePath('/batch')
+}
+
+export async function updateBatchAction(id: string, data: any) {
+    const result = await updateBatch(id, data)
+    revalidatePath('/batch')
+    revalidatePath(`/batch/${id}`)
+    return result
+}
+
+export async function createBatchAction(data: any) {
+    const result = await createBatch(data)
+    revalidatePath('/batch')
+    return result
+}
+
+export async function cloneBatchAction(batchId: string, newTag: string) {
+    const result = await cloneBatch(batchId, newTag)
+    revalidatePath('/batch')
+    return result
+}
+
+export async function addBatchItemAction(data: any) {
+    const result = await addBatchItem(data)
+    revalidatePath(`/batch/${data.batch_id}`)
     return result
 }

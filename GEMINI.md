@@ -1,52 +1,59 @@
-# **PROJECT CONTEXT: MONEY FLOW 3.0 (FINANCE MANAGEMENT)**
+AGENT TASK: PHASE 59 - REMOVE AUTOMATION BOT & STABILIZE
 
-## **1\. Overview**
+Context:
+The "Lazy Bot" (Subscription Automation) is buggy, generating incorrect transaction data (wrong splits, missing accounts).
+Decision: COMPLETELY REMOVE the Bot logic and the UI Trigger (Zap Icon) for now. We will rewrite it from scratch later.
 
-We are building a Personal Finance App using Next.js 14 (App Router), Supabase (PostgreSQL), and TailwindCSS.  
-The core philosophy is Modified Double-Entry Bookkeeping.
+Objective:
 
-## **2\. Tech Stack Structure**
+Delete UI: Remove AutomationChecker component and the "Zap" icon from the Layout.
 
-* **Frontend**: Next.js 14, Shadcn UI, TailwindCSS.  
-* **Backend/Data**: Supabase.  
-* **Logic Layer**: All business logic MUST be placed in src/services/.  
-  * UI Components should ONLY call functions from src/services/, never query DB directly if complex logic is involved.
+Clean Backend: Remove checkAndProcessSubscriptions logic (or stub it).
 
-## **3\. Core Business Logic (The "Services")**
+Verify: Ensure the app builds and runs without the bot.
 
-### **A. Transaction Service (src/services/transaction.service.ts)**
+I. FRONTEND CLEANUP
 
-* **Double-Entry Rule**: Every user action (create transaction) must result in creating **multiple rows** in transaction\_lines.  
-* **Validation**: sum(debit) must equal sum(credit).  
-* **Example**: Spending 50k from VCB for Food.  
-  * Line 1: Account VCB, Amount \-50k (Credit).  
-  * Line 2: Category Food, Amount \+50k (Debit).
+1. Delete Component
 
-### **B. Debt Service (src/services/debt.service.ts)**
+Action: Delete file src/components/moneyflow/automation-checker.tsx.
 
-* **Debt is an Account**: We treat "Debt with Person A" as an Asset Account.  
-* **Lending Money**: Credit Bank / Debit Debt Account (Increase Asset).  
-* **Repayment**: Credit Debt Account (Decrease Asset) / Debit Bank.
+2. Update Layout (src/components/moneyflow/app-layout.tsx)
 
-### **C. Cashback Service (src/services/cashback.service.ts)**
+Action: Remove the import of AutomationChecker.
 
-* **Logic**: Calculate cashback based on accounts.cashback\_config JSON field.  
-* **Tracking**: Real-time tracking via Database Views (already set up in Supabase).
+Action: Remove the <AutomationChecker /> JSX tag from the render tree.
 
-## **4\. Database Schema (Reference)**
+Action: Remove any "Zap" icon button in the Header area (if manually placed there).
 
-*Agent should check src/types/database.types.ts for exact types.*
+II. BACKEND CLEANUP (src/services/subscription.service.ts)
 
-* profiles: Users.  
-* accounts: Bank accounts, Credit cards, and DEBT accounts.  
-* transactions: Headers.  
-* transaction\_lines: The actual money movement.  
-* subscriptions: Recurring bills configs.
+1. Remove Logic
 
-## **5\. Your Job**
+Target: checkAndProcessSubscriptions function.
 
-When I ask you to code a feature (e.g., "Create Transaction Form"), please:
+Action:
 
-1. Use Shadcn UI for the form.  
-2. Write the submission logic in src/services/transaction.service.ts first.  
-3. Connect the UI to the Service.
+Option A: Delete the function entirely.
+
+Option B (Safer if imported elsewhere): Keep the function signature but make the body empty (return empty array).
+
+Instruction: Delete the function entirely and remove its export. If api/batch or other routes use it, remove those usages too.
+
+2. Clean Imports
+
+Remove unused imports (e.g., transaction.service, debt.service imports used only by the bot).
+
+III. ROUTE CLEANUP
+
+1. Check API Routes
+
+If there is an API route specifically for triggering the bot (e.g., src/app/api/automation/route.ts or similar), DELETE IT.
+
+IV. EXECUTION STEPS
+
+Frontend: Remove UI elements (Icon/Component).
+
+Backend: Strip out the Bot logic code.
+
+Build: Run npm run build to ensure no dangling references remain.
