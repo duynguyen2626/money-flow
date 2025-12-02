@@ -71,6 +71,8 @@ export type Person = {
   sheet_link?: string | null
   debt_account_id?: string | null
   balance?: number | null
+  is_owner?: boolean | null
+  is_archived?: boolean | null
   subscription_ids?: string[]
   subscription_count?: number
   subscription_details?: { id: string; name: string; slots: number }[]

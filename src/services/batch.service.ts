@@ -39,6 +39,11 @@ export async function getBatchById(id: string) {
 
 export async function createBatch(batch: Database['public']['Tables']['batches']['Insert']) {
     const supabase: any = createClient()
+
+    if (!batch.source_account_id) {
+        batch.source_account_id = SYSTEM_ACCOUNTS.DRAFT_FUND
+    }
+
     const { data, error } = await supabase
         .from('batches')
         .insert(batch as any)
@@ -248,217 +253,6 @@ export async function voidBatchItem(itemId: string) {
     return true
 }
 
-
-export async function cloneBatch(originalBatchId: string, forcedNewTag?: string) {
-    const supabase: any = createClient()
-
-    // 1. Fetch original batch
-    const { data: originalBatch, error: batchError } = await supabase
-        .from('batches')
-        .select('*, batch_items(*)')
-        .eq('id', originalBatchId)
-        .single()
-
-    if (batchError || !originalBatch) throw new Error('Original batch not found')
-
-    // 2. Calculate new name/tag
-    // Expected format: "CKL NOV25" -> "CKL DEC25"
-    // We try to find a date tag in the name
-    let newName = originalBatch.name + ' (Copy)'
-    let oldTag = ''
-    let newTag = ''
-
-    const nameParts = originalBatch.name.split(' ')
-    const potentialTag = nameParts[nameParts.length - 1] // e.g., NOV25
-
-    try {
-        const parsedDate = parse(potentialTag, 'MMMyy', new Date())
-        if (!isNaN(parsedDate.getTime())) {
-            oldTag = potentialTag
-
-            if (forcedNewTag) {
-                newTag = forcedNewTag
-            } else {
-                const nextMonth = addMonths(parsedDate, 1)
-                newTag = format(nextMonth, 'MMMyy').toUpperCase()
-            }
-
-            // Replace last part with new tag
-            nameParts[nameParts.length - 1] = newTag
-            newName = nameParts.join(' ')
-        } else if (forcedNewTag) {
-            // If we can't parse the old tag but have a forced new tag, just append it
-            newName = originalBatch.name + ' ' + forcedNewTag
-            newTag = forcedNewTag
-        }
-    } catch (e) {
-        // Ignore parsing error, just append Copy
-        console.log('Could not parse date tag from batch name', e)
-        if (forcedNewTag) {
-            newName = originalBatch.name + ' ' + forcedNewTag
-            newTag = forcedNewTag
-        }
-    }
-
-    // 3. Create new batch
-    const { data: newBatch, error: createError } = await supabase
-        .from('batches')
-        .insert({
-            name: newName,
-            source_account_id: originalBatch.source_account_id,
-            sheet_link: originalBatch.sheet_link,
-            status: 'draft'
-        })
-        .select()
-        .single()
-
-    if (createError) throw createError
-
-    // 4. Clone items
-    if (originalBatch.batch_items && originalBatch.batch_items.length > 0) {
-        const newItems = originalBatch.batch_items.map((item: any) => {
-            let newNote = item.note
-            if (oldTag && newTag && item.note) {
-                newNote = item.note.replace(oldTag, newTag)
-            } else if (newTag && item.note) {
-                // If we didn't find an old tag but have a new tag, maybe we should append? 
-                // Or just leave it. The requirement says "replace".
-                // Let's try to replace if the note contains the old tag (if we found one)
-            }
-
-            return {
-                batch_id: newBatch.id,
-                receiver_name: item.receiver_name,
-                target_account_id: item.target_account_id,
-                amount: item.amount,
-                note: newNote,
-                bank_name: item.bank_name,
-                bank_number: item.bank_number,
-                card_name: item.card_name,
-                status: 'pending'
-            }
-        })
-
-        const { error: itemsError } = await supabase
-            .from('batch_items')
-            .insert(newItems)
-
-        if (itemsError) throw itemsError
-    }
-
-    return newBatch
-}
-
-export async function sendBatchToSheet(batchId: string) {
-    const supabase: any = createClient()
-
-    // Fetch batch details + items
-    const { data, error: batchError } = await supabase
-        .from('batches')
-        .select('*, batch_items(*, target_account:accounts(name, type))')
-        .eq('id', batchId)
-        .single()
-
-    if (batchError || !data) throw new Error('Batch not found')
-
-    // Fetch bank mappings to lookup codes
-    const { data: bankMappings } = await supabase
-        .from('bank_mappings')
-        .select('bank_code, short_name')
-
-    const bankCodeMap = new Map(bankMappings?.map((b: any) => [b.short_name, b.bank_code]) || [])
-
-    const batch = data as any
-
-    if (!batch.sheet_link) {
-        throw new Error('Vui lòng cấu hình Link Sheet cho lô này')
-    }
-
-    const payload = {
-        batchName: batch.name,
-        items: batch.batch_items.map((item: any) => {
-            let bankName = item.bank_name || ''
-            // Try to find bank code
-            if (bankName) {
-                const code = bankCodeMap.get(bankName)
-                if (code) {
-                    bankName = `${code} - ${bankName}`
-                }
-            }
-
-            return {
-                receiver_name: item.receiver_name || item.target_account?.name || 'Unknown',
-                bank_number: item.bank_number || '',
-                bank_name: bankName,
-                amount: item.amount,
-                note: item.note
-            }
-        })
-    }
-
-    try {
-        const response = await fetch(batch.sheet_link, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-        })
-
-        if (!response.ok) {
-            throw new Error(`Failed to send to sheet: ${response.statusText}`)
-        }
-
-        return true
-    } catch (error) {
-        console.error('Error sending to sheet:', error)
-        throw error
-    }
-}
-
-export async function checkAndAutoCloneBatches() {
-    const supabase: any = createClient()
-    const today = new Date()
-    const currentDay = today.getDate()
-    const currentMonthTag = format(today, 'MMMyy').toUpperCase()
-
-    // 1. Fetch templates that need cloning
-    // Condition: is_template = true AND auto_clone_day <= currentDay AND (last_cloned_month_tag != currentMonthTag OR last_cloned_month_tag IS NULL)
-    const { data: templates, error } = await supabase
-        .from('batches')
-        .select('*')
-        .eq('is_template', true)
-        .lte('auto_clone_day', currentDay)
-
-    if (error) throw error
-    if (!templates || templates.length === 0) return []
-
-    const clonedBatches = []
-
-    for (const template of templates) {
-        // Double check the month tag to avoid duplicate cloning in the same month
-        if (template.last_cloned_month_tag === currentMonthTag) {
-            continue
-        }
-
-        try {
-            // Clone with current month tag
-            const newBatch = await cloneBatch(template.id, currentMonthTag)
-
-            // Update template's last_cloned_month_tag
-            await supabase
-                .from('batches')
-                .update({ last_cloned_month_tag: currentMonthTag })
-                .eq('id', template.id)
-
-            clonedBatches.push(newBatch)
-        } catch (e) {
-            console.error(`Failed to auto-clone batch ${template.id}`, e)
-        }
-    }
-
-    return clonedBatches
-}
 
 /**
  * Get pending batch items for a specific account
@@ -823,4 +617,198 @@ export async function getAccountsWithPendingBatchItems() {
     // Return unique account IDs
     const accountIds = new Set(data.map((item: any) => item.target_account_id).filter(Boolean))
     return Array.from(accountIds) as string[]
+}
+
+export async function sendBatchToSheet(batchId: string) {
+    const supabase: any = createClient()
+
+    const { data: batch, error: batchError } = await supabase
+        .from('batches')
+        .select('*, batch_items(*)')
+        .eq('id', batchId)
+        .single()
+
+    if (batchError || !batch) throw new Error('Batch not found')
+    if (!batch.sheet_link) throw new Error('No sheet link configured')
+
+    const items = batch.batch_items || []
+    let sent = 0
+
+    for (const item of items) {
+        const payload = {
+            date: new Date().toISOString().slice(0, 10),
+            receiver: item.receiver_name,
+            amount: item.amount,
+            note: item.note,
+            bank: item.bank_name,
+            status: item.status
+        }
+
+        try {
+            await fetch(batch.sheet_link, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            sent++
+        } catch (e) {
+            console.error('Failed to send item to sheet', e)
+        }
+
+        await new Promise(r => setTimeout(r, 100))
+    }
+
+    return { success: true, count: sent }
+}
+
+export async function confirmBatchSource(batchId: string, realAccountId: string) {
+    const supabase: any = createClient()
+
+    // 1. Get Batch
+    const { data: batch, error: batchError } = await supabase
+        .from('batches')
+        .select('*')
+        .eq('id', batchId)
+        .single()
+
+    if (batchError || !batch) throw new Error('Batch not found')
+
+    if (batch.source_account_id !== SYSTEM_ACCOUNTS.DRAFT_FUND) {
+        throw new Error('Batch source is not Draft Fund')
+    }
+
+    // 2. Calculate Total Amount (from funding transaction)
+    if (!batch.funding_transaction_id) throw new Error('Batch not funded yet')
+
+    const { data: lines } = await supabase
+        .from('transaction_lines')
+        .select('amount')
+        .eq('transaction_id', batch.funding_transaction_id)
+        .eq('account_id', SYSTEM_ACCOUNTS.DRAFT_FUND)
+        .eq('type', 'credit')
+
+    const amount = lines?.reduce((sum: number, l: any) => sum + Math.abs(l.amount), 0) || 0
+
+    if (amount <= 0) throw new Error('No funded amount found')
+
+    const {
+        data: { user }
+    } = await supabase.auth.getUser()
+    const userId = user?.id ?? SYSTEM_ACCOUNTS.DEFAULT_USER_ID
+
+    // 3. Create Transfer: Real -> Draft
+    const { data: txn, error: txnError } = await supabase
+        .from('transactions')
+        .insert({
+            occurred_at: new Date().toISOString(),
+            note: `Confirm Source for Batch: ${batch.name}`,
+            status: 'posted',
+            tag: 'BATCH_CONFIRM',
+            created_by: userId
+        })
+        .select()
+        .single()
+
+    if (txnError) throw txnError
+
+    const transferLines = [
+        {
+            transaction_id: txn.id,
+            account_id: realAccountId,
+            amount: -amount,
+            type: 'credit'
+        },
+        {
+            transaction_id: txn.id,
+            account_id: SYSTEM_ACCOUNTS.DRAFT_FUND,
+            amount: amount,
+            type: 'debit'
+        }
+    ]
+
+    const { error: linesError } = await supabase
+        .from('transaction_lines')
+        .insert(transferLines)
+
+    if (linesError) throw linesError
+
+    // 4. Update Batch Source
+    const { error: updateError } = await supabase
+        .from('batches')
+        .update({ source_account_id: realAccountId })
+        .eq('id', batchId)
+
+    if (updateError) throw updateError
+
+    // 5. Recalculate Balances
+    const { recalculateBalance } = await import('./account.service')
+    await recalculateBalance(realAccountId)
+    await recalculateBalance(SYSTEM_ACCOUNTS.DRAFT_FUND)
+
+    return true
+}
+
+export async function cloneBatch(batchId: string, newTag: string) {
+    const supabase: any = createClient()
+
+    const { data: originalBatch, error: batchError } = await supabase
+        .from('batches')
+        .select('*, batch_items(*)')
+        .eq('id', batchId)
+        .single()
+
+    if (batchError || !originalBatch) throw new Error('Original batch not found')
+
+    let newName = originalBatch.name
+    const nameParts = originalBatch.name.split(' ')
+    const lastPart = nameParts[nameParts.length - 1]
+
+    try {
+        const parsedDate = parse(lastPart, 'MMMyy', new Date())
+        if (!isNaN(parsedDate.getTime())) {
+            nameParts[nameParts.length - 1] = newTag
+            newName = nameParts.join(' ')
+        } else {
+            newName = `${originalBatch.name} ${newTag}`
+        }
+    } catch (e) {
+        newName = `${originalBatch.name} ${newTag}`
+    }
+
+    const { data: newBatch, error: createError } = await supabase
+        .from('batches')
+        .insert({
+            name: newName,
+            sheet_link: originalBatch.sheet_link,
+            source_account_id: originalBatch.source_account_id,
+            status: 'draft',
+            is_template: false
+        })
+        .select()
+        .single()
+
+    if (createError) throw createError
+
+    const items = originalBatch.batch_items || []
+    if (items.length > 0) {
+        const newItems = items.map((item: any) => ({
+            batch_id: newBatch.id,
+            receiver_name: item.receiver_name,
+            target_account_id: item.target_account_id,
+            amount: item.amount,
+            note: item.note,
+            bank_name: item.bank_name,
+            bank_number: item.bank_number,
+            card_name: item.card_name,
+            status: 'pending'
+        }))
+
+        const { error: itemsError } = await supabase
+            .from('batch_items')
+            .insert(newItems)
+
+        if (itemsError) throw itemsError
+    }
+
+    return newBatch
 }

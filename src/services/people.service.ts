@@ -41,15 +41,12 @@ async function createDebtAccountForPerson(
   personId: string,
   personName: string
 ): Promise<string | null> {
-  const { data: { user } } = await supabase.auth.getUser()
-  const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66'
-
   const { data, error } = await (supabase
     .from('accounts')
     .insert as any)({
       name: buildDebtAccountName(personName),
       type: 'debt',
-      owner_id: userId,
+      owner_id: personId,
       current_balance: 0,
     })
     .select('id')
@@ -72,7 +69,8 @@ export async function createPerson(
   email?: string,
   avatar_url?: string,
   sheet_link?: string,
-  subscriptionIds?: string[]
+  subscriptionIds?: string[],
+  opts?: { is_owner?: boolean; is_archived?: boolean }
 ): Promise<{ profileId: string; debtAccountId: string | null } | null> {
   const supabase = createClient()
   const trimmedName = name?.trim()
@@ -82,19 +80,32 @@ export async function createPerson(
     return null
   }
 
-  const profilePayload: ProfileInsert = {
+  const profilePayload: ProfileInsert & { is_archived?: boolean | null } = {
     id: randomUUID(),
     name: trimmedName,
     email: email?.trim() || null,
     avatar_url: avatar_url?.trim() || null,
     sheet_link: sheet_link?.trim() || null,
+    is_owner: opts?.is_owner ?? null,
+    is_archived: typeof opts?.is_archived === 'boolean' ? opts.is_archived : null,
   }
 
-  const { data: profile, error: profileError } = await (supabase
+  let { data: profile, error: profileError } = await (supabase
     .from('profiles')
     .insert as any)(profilePayload)
     .select('id, name')
     .single()
+
+  if (profileError?.code === '42703') {
+    const { is_archived: _ignoreArchived, is_owner: _ignoreOwner, ...fallbackPayload } = profilePayload
+    const fallback = await (supabase
+      .from('profiles')
+      .insert as any)(fallbackPayload)
+      .select('id, name')
+      .single()
+    profile = fallback.data
+    profileError = fallback.error as any
+  }
 
   if (profileError || !profile) {
     console.error('Failed to create profile:', profileError)
@@ -115,8 +126,24 @@ export async function createPerson(
   }
 }
 
-export async function getPeople(): Promise<Person[]> {
+export async function getPeople(options?: { includeArchived?: boolean }): Promise<Person[]> {
   const supabase = createClient()
+  const includeArchived = options?.includeArchived ?? false
+
+  const profileSelect = async () => {
+    const attempt = await supabase
+      .from('profiles')
+      .select('id, name, email, avatar_url, sheet_link, is_owner, is_archived')
+      .order('name', { ascending: true })
+    if (attempt.error?.code === '42703') {
+      const fallback = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, sheet_link, is_owner')
+        .order('name', { ascending: true })
+      return { data: fallback.data, error: fallback.error }
+    }
+    return attempt
+  }
 
   const [
     { data: profiles, error: profileError },
@@ -124,10 +151,7 @@ export async function getPeople(): Promise<Person[]> {
     { data: subscriptionMembers, error: subError },
   ] =
     await Promise.all([
-      supabase
-        .from('profiles')
-        .select('id, name, email, avatar_url, sheet_link')
-        .order('name', { ascending: true }),
+      profileSelect(),
       supabase
         .from('accounts')
         .select('id, owner_id')
@@ -278,7 +302,7 @@ export async function getPeople(): Promise<Person[]> {
     })
   }
 
-  return (profiles as ProfileRow[] | null)?.map(person => {
+  const mapped = (profiles as ProfileRow[] | null)?.map(person => {
     const debtInfo = debtAccountMap.get(person.id)
     const subs = subscriptionMap.get(person.id) ?? []
 
@@ -288,6 +312,8 @@ export async function getPeople(): Promise<Person[]> {
       email: person.email,
       avatar_url: person.avatar_url,
       sheet_link: person.sheet_link,
+      is_owner: (person as any).is_owner ?? null,
+      is_archived: (person as any).is_archived ?? null,
       debt_account_id: debtInfo?.id ?? null,
       balance: debtInfo?.balance ?? null,
       subscription_count: subs.length,
@@ -296,6 +322,9 @@ export async function getPeople(): Promise<Person[]> {
       monthly_debts: monthlyDebtsByPerson.get(person.id) ?? [],
     }
   }) ?? []
+
+  if (includeArchived) return mapped
+  return mapped.filter(person => !person.is_archived)
 }
 
 export async function ensureDebtAccount(
@@ -348,10 +377,12 @@ export async function updatePerson(
     avatar_url?: string | null
     sheet_link?: string | null
     subscriptionIds?: string[]
+    is_owner?: boolean
+    is_archived?: boolean
   }
 ): Promise<boolean> {
   const supabase = createClient()
-  const payload: ProfileUpdate = {}
+  const payload: ProfileUpdate & { is_archived?: boolean } = {}
   const normalizedSheetLink =
     typeof data.sheet_link === 'undefined' ? undefined : data.sheet_link?.trim() || null
 
@@ -359,9 +390,16 @@ export async function updatePerson(
   if (typeof data.email !== 'undefined') payload.email = data.email?.trim() || null
   if (typeof data.avatar_url !== 'undefined') payload.avatar_url = data.avatar_url?.trim() || null
   if (normalizedSheetLink !== undefined) payload.sheet_link = normalizedSheetLink
+  if (typeof data.is_owner === 'boolean') payload.is_owner = data.is_owner
+  if (typeof data.is_archived === 'boolean') payload.is_archived = data.is_archived
 
   if (Object.keys(payload).length > 0) {
-    const { error } = await (supabase.from('profiles').update as any)(payload).eq('id', id)
+    let { error } = await (supabase.from('profiles').update as any)(payload).eq('id', id)
+    if (error?.code === '42703') {
+      const { is_archived: _ignoreArchived, is_owner: _ignoreOwner, ...fallbackPayload } = payload
+      const fallback = await (supabase.from('profiles').update as any)(fallbackPayload).eq('id', id)
+      error = fallback.error
+    }
     if (error) {
       console.error('Failed to update profile:', error)
       return false
@@ -378,17 +416,31 @@ export async function updatePerson(
 export async function getPersonWithSubs(id: string): Promise<Person | null> {
   const supabase = createClient()
 
+  const profileSelect = async () => {
+    const attempt = await supabase
+      .from('profiles')
+      .select('id, name, email, avatar_url, sheet_link, is_owner, is_archived')
+      .eq('id', id)
+      .maybeSingle()
+
+    if (attempt.error?.code === '42703') {
+      const fallback = await supabase
+        .from('profiles')
+        .select('id, name, email, avatar_url, sheet_link, is_owner')
+        .eq('id', id)
+        .maybeSingle()
+      return fallback
+    }
+    return attempt
+  }
+
   const [
     { data: profile, error: profileError },
     { data: memberships, error: memberError },
     { data: debtAccounts, error: debtError },
   ] =
     await Promise.all([
-      supabase
-        .from('profiles')
-        .select('id, name, email, avatar_url, sheet_link')
-        .eq('id', id)
-        .maybeSingle(),
+      profileSelect(),
       supabase
         .from('subscription_members')
         .select('subscription_id')
@@ -429,6 +481,8 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     email: (profile as any).email,
     avatar_url: (profile as any).avatar_url,
     sheet_link: (profile as any).sheet_link,
+    is_owner: (profile as any).is_owner ?? null,
+    is_archived: (profile as any).is_archived ?? null,
     subscription_ids,
     subscription_count: subscription_ids.length,
     debt_account_id,

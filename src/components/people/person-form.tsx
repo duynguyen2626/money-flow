@@ -13,6 +13,8 @@ type PersonFormValues = {
   avatar_url?: string
   sheet_link?: string
   subscriptionIds: string[]
+  is_owner?: boolean
+  is_archived?: boolean
 }
 
 type PersonFormProps = {
@@ -30,6 +32,8 @@ const schema = z.object({
   avatar_url: z.string().url('Link avatar khong hop le').optional().or(z.literal('')),
   sheet_link: z.string().url('Link sheet khong hop le').optional().or(z.literal('')),
   subscriptionIds: z.array(z.string()),
+  is_owner: z.boolean().optional(),
+  is_archived: z.boolean().optional(),
 })
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
@@ -76,11 +80,15 @@ export function PersonForm({
       avatar_url: initialValues?.avatar_url ?? '',
       sheet_link: initialValues?.sheet_link ?? '',
       subscriptionIds: initialValues?.subscriptionIds ?? [],
+      is_owner: initialValues?.is_owner ?? false,
+      is_archived: initialValues?.is_archived ?? false,
     },
   })
 
   const watchedAvatar = watch('avatar_url')
   const watchedSubs = watch('subscriptionIds')
+  const watchedIsOwner = watch('is_owner')
+  const watchedIsArchived = watch('is_archived')
 
   useEffect(() => {
     setAvatarPreview(watchedAvatar || null)
@@ -179,6 +187,34 @@ export function PersonForm({
               <p className="text-sm text-rose-600">{errors.sheet_link.message}</p>
             )}
           </div>
+
+          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Toi la chu? (Owner)</p>
+              <p className="text-xs text-slate-500">Flag de bot Subscription biet day la chi phi cua minh.</p>
+            </div>
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-blue-600"
+              checked={watchedIsOwner}
+              onChange={e => setValue('is_owner', e.target.checked, { shouldValidate: true })}
+            />
+          </div>
+
+          {mode === 'edit' && (
+            <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Archive member</p>
+                <p className="text-xs text-slate-500">An thanh vien khoi danh sach va dropdown giao dich.</p>
+              </div>
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-blue-600"
+                checked={watchedIsArchived}
+                onChange={e => setValue('is_archived', e.target.checked, { shouldValidate: true })}
+              />
+            </div>
+          )}
         </div>
 
         <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">

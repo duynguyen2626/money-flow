@@ -198,6 +198,7 @@ export interface Database {
           avatar_url: string | null
           sheet_link: string | null
           created_at: string
+          is_owner: boolean | null
         }
         Insert: {
           id?: string
@@ -206,6 +207,7 @@ export interface Database {
           avatar_url?: string | null
           sheet_link?: string | null
           created_at?: string
+          is_owner?: boolean | null
         }
         Update: {
           id?: string
@@ -214,6 +216,7 @@ export interface Database {
           avatar_url?: string | null
           sheet_link?: string | null
           created_at?: string
+          is_owner?: boolean | null
         }
       }
       subscriptions: {
@@ -383,6 +386,32 @@ export interface Database {
           logo_url?: string | null
           created_at?: string
           updated_at?: string
+        }
+      }
+      bot_configs: {
+        Row: {
+          key: string
+          name: string | null
+          is_enabled: boolean | null
+          config: Json | null
+          last_run_at: string | null
+          created_at: string
+        }
+        Insert: {
+          key: string
+          name?: string | null
+          is_enabled?: boolean | null
+          config?: Json | null
+          last_run_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          key?: string
+          name?: string | null
+          is_enabled?: boolean | null
+          config?: Json | null
+          last_run_at?: string | null
+          created_at?: string
         }
       }
     }

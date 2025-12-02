@@ -16,6 +16,8 @@ import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { formatCurrency } from '@/lib/account-utils'
+import { ConfirmSourceDialog } from './confirm-source-dialog'
+import { SYSTEM_ACCOUNTS } from '@/lib/constants'
 
 export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, accounts: any[], bankMappings?: any[] }) {
     const [sending, setSending] = useState(false)
@@ -139,6 +141,10 @@ export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, acc
                     </Button>
 
                     <div className="w-px h-8 bg-slate-200 mx-2" />
+
+                    {batch.source_account_id === SYSTEM_ACCOUNTS.DRAFT_FUND && batch.status === 'funded' && (
+                        <ConfirmSourceDialog batchId={batch.id} accounts={accounts} />
+                    )}
 
                     <Button
                         onClick={handleFund}

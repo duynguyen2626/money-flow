@@ -12,6 +12,9 @@ export const SYSTEM_ACCOUNTS = {
 
     // User ID mặc định (Fallback khi chưa có Auth)
     DEFAULT_USER_ID: '917455ba-16c0-42f9-9cea-264f81a3db66',
+
+    // Tài khoản Draft Fund (Phase 60)
+    DRAFT_FUND: '88888888-9999-9999-9999-111111111111',
 };
 
 export const SYSTEM_CATEGORIES = {

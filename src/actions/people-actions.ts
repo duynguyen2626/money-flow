@@ -15,13 +15,16 @@ export async function createPersonAction(payload: {
   avatar_url?: string | null
   sheet_link?: string | null
   subscriptionIds?: string[]
+  is_owner?: boolean
+  is_archived?: boolean
 }) {
   const result = await createPerson(
     payload.name,
     payload.email ?? undefined,
     payload.avatar_url ?? undefined,
     payload.sheet_link ?? undefined,
-    payload.subscriptionIds
+    payload.subscriptionIds,
+    { is_owner: payload.is_owner, is_archived: payload.is_archived }
   )
   if (result) {
     revalidatePath('/people')
@@ -45,6 +48,8 @@ export async function updatePersonAction(
     avatar_url?: string | null
     sheet_link?: string | null
     subscriptionIds?: string[]
+    is_owner?: boolean
+    is_archived?: boolean
   }
 ) {
   const ok = await updatePerson(id, payload)

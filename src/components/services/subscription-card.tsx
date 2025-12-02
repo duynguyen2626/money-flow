@@ -41,6 +41,7 @@ export function SubscriptionCard({ subscription, onEdit, onMemberClick }: Subscr
   const brand = getServiceBranding(subscription.name)
   const status = getStatus(subscription.next_billing_date)
   const members = subscription.members ?? []
+  const totalSlots = members.reduce((sum, m) => sum + (m.slots ?? 1), 0)
 
   return (
     <div className="flex h-full flex-col gap-3 rounded-xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4 shadow-sm">
@@ -81,28 +82,29 @@ export function SubscriptionCard({ subscription, onEdit, onMemberClick }: Subscr
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-500">
           <span>Members</span>
-          <span>{members.length}</span>
+          <span>{totalSlots}</span>
         </div>
         {members.length === 0 ? (
           <p className="text-sm text-slate-500">Chua gan thanh vien nao.</p>
         ) : (
           <div className="flex flex-wrap gap-2">
             {members.map(member => (
-              <button
-                key={`${subscription.id}-${member.profile_id}`}
-                type="button"
-                className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs shadow-sm hover:border-blue-200 hover:text-blue-700 focus:outline-none"
-                onClick={() => onMemberClick?.(member.profile_id)}
-              >
-                <span className="text-[11px] font-semibold text-slate-800">
-                  {member.profile_name ?? 'Thanh vien'}
+            <button
+              key={`${subscription.id}-${member.profile_id}`}
+              type="button"
+              className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs shadow-sm hover:border-blue-200 hover:text-blue-700 focus:outline-none"
+              onClick={() => onMemberClick?.(member.profile_id)}
+            >
+              <span className="text-[11px] font-semibold text-slate-800">
+                {member.profile_name ?? 'Thanh vien'}
+              </span>
+              {typeof member.fixed_amount === 'number' && (
+                <span className="text-[11px] text-slate-500">
+                  {formatMoney(member.fixed_amount)}
+                  {member.slots && member.slots > 1 ? ` (x${member.slots})` : ''}
                 </span>
-                {typeof member.fixed_amount === 'number' && (
-                  <span className="text-[11px] text-slate-500">
-                    {formatMoney(member.fixed_amount)}
-                  </span>
-                )}
-              </button>
+              )}
+            </button>
             ))}
           </div>
         )}

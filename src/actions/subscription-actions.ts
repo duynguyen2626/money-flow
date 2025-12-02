@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache'
 
 import {
   SubscriptionPayload,
-  checkAndProcessSubscriptions,
   createSubscription,
   updateSubscription,
 } from '@/services/subscription.service'
@@ -25,8 +24,4 @@ export async function updateSubscriptionAction(id: string, payload: Subscription
     revalidatePath('/people')
   }
   return ok
-}
-
-export async function runSubscriptionBotAction(isManualForce: boolean = false) {
-  return checkAndProcessSubscriptions(isManualForce)
 }

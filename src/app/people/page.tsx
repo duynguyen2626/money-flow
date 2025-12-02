@@ -9,15 +9,15 @@ import { getShops } from '@/services/shop.service'
 export const dynamic = 'force-dynamic'
 
 export default async function PeoplePage() {
-  const [people, subscriptions, shops, accounts, categories] = await Promise.all([
-    getPeople(),
+  const [peopleAll, subscriptions, shops, accounts, categories] = await Promise.all([
+    getPeople({ includeArchived: true }),
     getSubscriptions(),
     getShops(),
     getAccounts(),
     getCategories(),
   ])
   const peopleWithSubs = await Promise.all(
-    people.map(async person => {
+    peopleAll.map(async person => {
       const enriched = await getPersonWithSubs(person.id)
       return enriched ? { ...person, ...enriched } : person
     })
