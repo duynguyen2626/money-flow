@@ -70,19 +70,23 @@ async function fetchDebtAccountsMap(
   const debtMap = new Map<string, string>()
   if (!profileIds.length) return debtMap
 
+  // "If multiple debt accounts exist, pick the one created most recently"
   const { data, error } = await supabase
     .from('accounts')
-    .select('id, owner_id')
+    .select('id, owner_id, created_at')
     .eq('type', 'debt')
     .in('owner_id', profileIds)
+    .order('created_at', { ascending: false })
 
   if (error) {
     console.error('Failed to fetch debt accounts for members:', error)
     return debtMap
   }
 
+  // Since we ordered by created_at desc, the first one we encounter for each owner_id is the latest.
+  // We can just iterate and set if not exists.
   (data as Pick<AccountRow, 'id' | 'owner_id'>[] | null)?.forEach(row => {
-    if (row.owner_id) {
+    if (row.owner_id && !debtMap.has(row.owner_id)) {
       debtMap.set(row.owner_id, row.id)
     }
   })
