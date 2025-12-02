@@ -21,9 +21,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TransactionForm, TransactionFormValues } from "./transaction-form"
 import {
   restoreTransaction,
-  voidTransaction,
   deleteTransaction,
 } from "@/services/transaction.service"
+import {
+  voidTransactionAction,
+} from "@/actions/transaction-actions"
 import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
 import { cn } from "@/lib/utils"
@@ -399,7 +401,7 @@ export function UnifiedTransactionTable({
     if (!confirmVoidTarget) return
     setVoidError(null)
     setIsVoiding(true)
-    void voidTransaction(confirmVoidTarget.id)
+    void voidTransactionAction(confirmVoidTarget.id)
       .then(ok => {
         if (!ok) {
           setVoidError('Unable to void transaction. Please try again.')
@@ -533,7 +535,7 @@ export function UnifiedTransactionTable({
           break
         }
         try {
-          const ok = await voidTransaction(id)
+          const ok = await voidTransactionAction(id)
           if (ok) {
             setStatusOverrides(prev => ({ ...prev, [id]: 'void' }))
           } else {

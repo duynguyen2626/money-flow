@@ -1,74 +1,36 @@
-1/2 ## Error Type
-Console Error
+# Agent Logs
 
-## Error Message
-Error fetching monthly debt lines: {}
+## Issue: Voided Transactions Not Updating Debt on /people page
 
+**Date:** December 2, 2025
 
-    at getPeople (src\services\people.service.ts:207:15)
-    at Function.all (<anonymous>:1:21)
-    at PeoplePage (src\app\people\page.tsx:12:64)
-    at PeoplePage (<anonymous>:null:null)
+**Problem Description:**
+The user reported that voided transactions are not automatically deducting from the debt balance displayed on the `/people` page. This suggests an issue with either the balance recalculation for debt accounts or the revalidation of the `/people` path.
 
-## Code Frame
-  205 |
-  206 |     if (monthlyLinesError) {
-> 207 |       console.error('Error fetching monthly debt lines:', monthlyLinesError)
-      |               ^
-  208 |     } else {
-  209 |       ;(monthlyLines as any[] | null)?.forEach(line => {
-  210 |         const accountId = line.account_id
+**Initial Investigation:**
+- The `voidTransactionAction` in `src/actions/transaction-actions.ts` explicitly calls `revalidatePath('/people')` and `revalidatePath('/')`.
+- The `voidTransaction` service function calls `recalculateBalance` for affected accounts.
+- The `recalculateBalance` function in `src/services/account.service.ts` appears to correctly calculate the balance by summing debits and credits from non-voided transaction lines.
 
-Next.js version: 16.0.3 (Turbopack)
+**Debugging Steps:**
+1.  **Added logging to `recalculateBalance` in `src/services/account.service.ts`:**
+    *   Logs were added to confirm when `recalculateBalance` is called, with which `accountId`, the number of lines fetched, and the calculated `currentBalance`, `totalIn`, and `totalOut` before updating the database. This will help verify if the function is being triggered for the correct debt accounts and if the calculations are as expected.
 
-2/2 ## Error Type
-Console Error
+## Issue: Missing "Online Service" Category
 
-## Error Message
-A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+**Date:** December 2, 2025
 
-- A server/client branch `if (typeof window !== 'undefined')`.
-- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
-- Date formatting in a user's locale which doesn't match the server.
-- External changing data without sending a snapshot of it along with the HTML.
-- Invalid HTML tag nesting.
+**Problem Description:**
+The "Online Service" category is missing.
 
-It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+**Resolution:**
+1.  **Created `hotfix-phase-64-category.sql`:**
+    *   A SQL migration file was created to insert the "Online Service" category into the `public.categories` table.
+    *   The `id` field uses `uuid_generate_v4()` to generate a unique ID.
+    *   The `name` is 'Online Service'.
+    *   The `type` is 'expense'.
+    *   The `created_at` field uses `NOW()`.
 
-https://react.dev/link/hydration-mismatch
-
-  ...
-    <InnerScrollAndFocusHandler segmentPath={[...]} focusAndScrollRef={{apply:false, ...}}>
-      <ErrorBoundary errorComponent={undefined} errorStyles={undefined} errorScripts={undefined}>
-        <LoadingBoundary name="people/" loading={null}>
-          <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
-            <RedirectBoundary>
-              <RedirectErrorBoundary router={{...}}>
-                <InnerLayoutRouter url="/people" tree={[...]} params={{}} cacheNode={{lazyData:null, ...}} ...>
-                  <SegmentViewNode type="page" pagePath="/money-flo...">
-                    <SegmentTrieNode>
-                    <PeoplePage>
-                      <div className="space-y-6">
-                        <section className="bg-white s...">
-                          <div>
-                          <PeopleGrid people={[...]} subscriptions={[...]} shops={[...]} accounts={[...]} ...>
-                            <div className="space-y-3 ...">
-                              <div>
-                              <div className="relative m...">
-                                <Search>
-                                <input
-                                  type="text"
-                                  placeholder="Search people..."
-                                  value=""
-                                  onChange={function onChange}
-                                  className="w-full rounded-full border border-slate-200 bg-white px-3 py-2 pl-10 text..."
--                                 pwa2-uuid="EDITOR/input-7C1-F0E-70C75-C72"
--                                 pwa-fake-editor=""
-                                >
-                            ...
-                  ...
-                ...
-      ...
-
-
-Next.js version: 16.0.3 (Turbopack)
+**Next Steps:**
+- Monitor logs from `recalculateBalance` to understand the flow and data during a void transaction affecting a debt account.
+- Test the hotfix for the missing category.

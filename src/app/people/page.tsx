@@ -1,5 +1,4 @@
 import { getPeople, getPersonWithSubs } from '@/services/people.service'
-import { getSubscriptions } from '@/services/subscription.service'
 import { CreatePersonDialog } from '@/components/people/create-person-dialog'
 import { PeopleGrid } from '@/components/people/people-grid'
 import { getAccounts } from '@/services/account.service'
@@ -9,9 +8,8 @@ import { getShops } from '@/services/shop.service'
 export const dynamic = 'force-dynamic'
 
 export default async function PeoplePage() {
-  const [peopleAll, subscriptions, shops, accounts, categories] = await Promise.all([
+  const [peopleAll, shops, accounts, categories] = await Promise.all([
     getPeople({ includeArchived: true }),
-    getSubscriptions(),
     getShops(),
     getAccounts(),
     getCategories(),
@@ -27,7 +25,7 @@ export default async function PeoplePage() {
     <div className="space-y-6">
       <PeopleGrid
         people={peopleWithSubs}
-        subscriptions={subscriptions}
+        subscriptions={[]}
         shops={shops}
         accounts={accounts}
         categories={categories}

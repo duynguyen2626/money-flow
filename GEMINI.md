@@ -1,59 +1,64 @@
-AGENT TASK: PHASE 59 - REMOVE AUTOMATION BOT & STABILIZE
+AGENT TASK: FIX BROKEN SUBSCRIPTION/SERVICE REFERENCES
 
-Context:
-The "Lazy Bot" (Subscription Automation) is buggy, generating incorrect transaction data (wrong splits, missing accounts).
-Decision: COMPLETELY REMOVE the Bot logic and the UI Trigger (Zap Icon) for now. We will rewrite it from scratch later.
+CRITICAL BUG:
 
-Objective:
+Error: PGRST205: Could not find the table 'public.subscription_members'.
 
-Delete UI: Remove AutomationChecker component and the "Zap" icon from the Layout.
+Cause: We migrated to service_members table in Phase 62, but the codebase (services/components) is still querying the old table name.
 
-Clean Backend: Remove checkAndProcessSubscriptions logic (or stub it).
+OBJECTIVE:
+Search and replace all legacy references to subscription_members with service_members in the entire codebase.
 
-Verify: Ensure the app builds and runs without the bot.
+I. BACKEND FIXES (src/services/*.ts)
 
-I. FRONTEND CLEANUP
+1. subscription.service.ts (or service-manager.ts)
 
-1. Delete Component
+Search: from('subscription_members')
 
-Action: Delete file src/components/moneyflow/automation-checker.tsx.
+Replace: from('service_members')
 
-2. Update Layout (src/components/moneyflow/app-layout.tsx)
+Search: select('..., subscription_members(...)')
 
-Action: Remove the import of AutomationChecker.
+Replace: select('..., service_members(...)')
 
-Action: Remove the <AutomationChecker /> JSX tag from the render tree.
+2. people.service.ts
 
-Action: Remove any "Zap" icon button in the Header area (if manually placed there).
+Function: getPeople / getPersonDetails.
 
-II. BACKEND CLEANUP (src/services/subscription.service.ts)
+Fix: The query joining subscriptions likely uses the old relation name. Update it to service_members.
 
-1. Remove Logic
+3. dashboard.service.ts
 
-Target: checkAndProcessSubscriptions function.
+Check if any dashboard stats rely on member counts from the old table.
+
+II. FRONTEND FIXES (src/components/**/*.tsx)
+
+1. ServiceCard.tsx / ServicePage
+
+The component expects a subscription_members array property.
+
+Action: Update the TypeScript interface Subscription (in moneyflow.types.ts) to rename the property to service_members (or map it in the transformer).
+
+Fix Render: Update the map loop: service.service_members.map(...).
+
+2. PersonCard.tsx
+
+Check where it counts "Active Subs". Ensure it reads from the correct joined table.
+
+III. TYPE DEFINITIONS (src/types/database.types.ts)
 
 Action:
 
-Option A: Delete the function entirely.
+If you are using a generated types file, run supabase gen types (or manually update it if you maintain it).
 
-Option B (Safer if imported elsewhere): Keep the function signature but make the body empty (return empty array).
-
-Instruction: Delete the function entirely and remove its export. If api/batch or other routes use it, remove those usages too.
-
-2. Clean Imports
-
-Remove unused imports (e.g., transaction.service, debt.service imports used only by the bot).
-
-III. ROUTE CLEANUP
-
-1. Check API Routes
-
-If there is an API route specifically for triggering the bot (e.g., src/app/api/automation/route.ts or similar), DELETE IT.
+Ensure Tables['service_members'] exists and Tables['subscription_members'] is removed/deprecated.
 
 IV. EXECUTION STEPS
 
-Frontend: Remove UI elements (Icon/Component).
+Global Search: Find "subscription_members".
 
-Backend: Strip out the Bot logic code.
+Replace: Logic update to "service_members".
 
-Build: Run npm run build to ensure no dangling references remain.
+Types: Update moneyflow.types.ts.
+
+Verify: Run npm run build to catch type errors.

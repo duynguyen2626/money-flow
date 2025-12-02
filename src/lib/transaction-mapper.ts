@@ -217,7 +217,10 @@ export function mapTransactionRow(
         line => line && line.type === 'debit' && line.accounts?.type === 'debt'
     )
 
-    if (categoryLine && categoryLine.categories) {
+    if (txn.note?.startsWith('Auto:')) {
+      type = 'expense'
+      displayType = 'expense'
+    } else if (categoryLine && categoryLine.categories) {
         categoryName = categoryLine.categories.name
         categoryIcon = categoryLine.categories.icon ?? undefined
         categoryImageUrl = categoryLine.categories.image_url ?? undefined
@@ -237,11 +240,6 @@ export function mapTransactionRow(
         categoryName = 'Money Transfer'
     } else if (accountLine?.amount !== undefined) {
         type = accountLine.amount >= 0 ? 'income' : 'expense'
-    }
-
-    if (categoryLine?.category_id === REFUND_CATEGORY_ID) {
-        type = 'income'
-        displayType = 'income'
     }
 
     displayType = displayType ?? (type === 'repayment' ? 'income' : type)

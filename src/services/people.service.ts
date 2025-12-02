@@ -2,6 +2,7 @@
 
 import { randomUUID } from 'crypto'
 import { format } from 'date-fns'
+import { enUS } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { MonthlyDebtSummary, Person } from '@/types/moneyflow.types'
@@ -10,7 +11,15 @@ type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type ProfileInsert = Database['public']['Tables']['profiles']['Insert']
 type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
 type AccountRow = Database['public']['Tables']['accounts']['Row']
-type SubscriptionMemberRow = Database['public']['Tables']['subscription_members']['Row']
+// TODO: The 'service_members' table is not in database.types.ts.
+// This is a temporary type definition.
+// The database schema needs to be updated.
+type ServiceMemberRow = {
+  service_id: string;
+  profile_id: string;
+  slots: number;
+  subscriptions?: { name: string };
+};
 
 function buildDebtAccountName(personName: string) {
   const safeName = personName?.trim() || 'Nguoi moi'
@@ -157,10 +166,10 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         .select('id, owner_id')
         .eq('type', 'debt'),
       supabase
-        .from('subscription_members')
+        .from('service_members')
         .select(`
           profile_id, 
-          subscription_id, 
+          service_id, 
           slots,
           subscriptions ( name )
         `),
@@ -228,7 +237,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       .order('occurred_at', { ascending: false, foreignTable: 'transactions' })
 
     if (monthlyLinesError) {
-      console.error('Error fetching monthly debt lines:', monthlyLinesError)
+      console.error('Error fetching monthly debt lines:', JSON.stringify(monthlyLinesError, null, 2))
     } else {
       ;(monthlyLines as any[] | null)?.forEach(line => {
         const accountId = line.account_id
@@ -244,7 +253,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         const fallbackKey = validDate ? format(validDate, 'yyyy-MM') : 'unknown'
         const groupingKey = tagValue ?? fallbackKey
         const label =
-          tagValue ?? (validDate ? format(validDate, 'MMM yy').toUpperCase() : 'Debt')
+          tagValue ?? (validDate ? format(validDate, 'MMM yy', { locale: enUS }).toUpperCase() : 'Debt')
 
         const parsedAmount =
           typeof line.amount === 'string' ? Number.parseFloat(line.amount) : line.amount ?? 0
@@ -292,9 +301,9 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       if (!subscriptionMap.has(row.profile_id)) {
         subscriptionMap.set(row.profile_id, [])
       }
-      if (row.subscription_id) {
+      if (row.service_id) {
         subscriptionMap.get(row.profile_id)?.push({
-          id: row.subscription_id,
+          id: row.service_id,
           name: row.subscriptions?.name ?? 'Unknown',
           slots: row.slots ?? 1
         })
@@ -347,7 +356,7 @@ async function syncSubscriptionMemberships(
   subscriptionIds: string[]
 ) {
   await supabase
-    .from('subscription_members')
+    .from('service_members')
     .delete()
     .eq('profile_id', personId)
 
@@ -355,14 +364,14 @@ async function syncSubscriptionMemberships(
     return
   }
 
-  const rows = subscriptionIds.map<Partial<SubscriptionMemberRow>>(id => ({
-    subscription_id: id,
+  const rows = subscriptionIds.map<Partial<ServiceMemberRow>>(id => ({
+    service_id: id,
     profile_id: personId,
   }))
 
   const { error } = await (supabase
-    .from('subscription_members')
-    .insert as any)(rows as SubscriptionMemberRow[])
+    .from('service_members')
+    .insert as any)(rows as ServiceMemberRow[])
 
   if (error) {
     console.error('Failed to sync subscription memberships:', error)
@@ -442,8 +451,8 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     await Promise.all([
       profileSelect(),
       supabase
-        .from('subscription_members')
-        .select('subscription_id')
+        .from('service_members')
+        .select('service_id')
         .eq('profile_id', id),
       supabase
         .from('accounts')
@@ -469,8 +478,8 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     console.error('Failed to load debt account for person:', debtError)
   }
 
-  const subscription_ids = (memberships as { subscription_id: string }[] | null)?.map(
-    row => row.subscription_id
+  const subscription_ids = (memberships as { service_id: string }[] | null)?.map(
+    row => row.service_id
   ) ?? []
   const debt_account_id = (debtAccounts as { id: string; current_balance: number }[] | null)?.[0]?.id ?? null
   const balance = (debtAccounts as { id: string; current_balance: number }[] | null)?.[0]?.current_balance ?? null

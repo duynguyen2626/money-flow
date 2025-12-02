@@ -48,10 +48,6 @@ export const runBotManual = async (key: string, options?: { force?: boolean }) =
   const supabase = createClient()
 
   const handlers: Record<string, () => Promise<any>> = {
-    subscription_bot: async () => {
-      const { processSubscription } = await import('./subscription.service')
-      return processSubscription({ force: options?.force })
-    },
   }
 
   const handler = handlers[key]

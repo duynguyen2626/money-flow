@@ -656,6 +656,7 @@ export async function getAccountTransactionDetails(
  */
 export async function recalculateBalance(accountId: string): Promise<boolean> {
   const supabase = createClient()
+  console.log(`[recalculateBalance] Starting for account: ${accountId}`)
 
   try {
     // Get all transaction lines for this account, excluding void transactions
@@ -666,9 +667,10 @@ export async function recalculateBalance(accountId: string): Promise<boolean> {
       .neq('transactions.status', 'void')
 
     if (error) {
-      console.error('Error fetching transaction lines for recalculation:', error)
+      console.error(`[recalculateBalance] Error fetching transaction lines for account ${accountId}:`, error)
       return false
     }
+    console.log(`[recalculateBalance] Fetched ${lines?.length} lines for account ${accountId}.`)
 
     // Calculate totals
     let currentBalance = 0
@@ -679,45 +681,6 @@ export async function recalculateBalance(accountId: string): Promise<boolean> {
       // Double check status just in case
       if (line.transactions?.status === 'void') return
 
-      // For debt accounts:
-      // Lending (Debit) -> Increase Asset (Positive Balance)
-      // Collecting (Credit) -> Decrease Asset (Negative Balance)
-      // Wait, standard accounting:
-      // Asset Account (Bank, Debt): Debit increases, Credit decreases.
-      // Liability Account (Credit Card): Credit increases (debt), Debit decreases (payment).
-
-      // However, MoneyFlow might store signed amounts or rely on type.
-      // In transaction_lines:
-      // type='debit', amount is usually positive.
-      // type='credit', amount is usually negative.
-      // But let's check how it's stored.
-      // Usually `amount` in DB is signed? Or unsigned and `type` determines sign?
-      // Looking at `mapTransactionRow`: 
-      // "displayAmount = ... lines.reduce((sum, line) => sum + Math.abs(line.amount), 0)"
-      // "type = accountLine.amount >= 0 ? 'income' : 'expense'"
-      // This implies `amount` is signed in the DB.
-
-      // Let's assume `amount` is signed.
-      // If `amount` is signed, we just sum it up to get the balance?
-      // Let's check `getDebtByTags`: "netBalance += amount".
-      // Yes, it seems `amount` is signed and we just sum it.
-
-      // BUT, the existing code in `recalculateBalance` (lines 700-709) does:
-      // amount = Math.abs(line.amount)
-      // if type == 'debit' -> currentBalance += amount
-      // if type == 'credit' -> currentBalance -= amount
-
-      // This logic assumes:
-      // Debit = Increase Balance
-      // Credit = Decrease Balance
-      // This is correct for Asset accounts (Bank, Cash, Debt).
-      // For Liability accounts (Credit Card), it's reversed usually, OR the balance is negative.
-      // If Credit Card balance is positive in UI (meaning debt), then Credit should INCREASE it.
-      // But usually Credit Card balance is displayed as negative or positive depending on convention.
-
-      // Let's stick to the existing logic which seems to be:
-      // Balance = Sum(Debits) - Sum(Credits)
-
       const amount = Math.abs(line.amount)
       if (line.type === 'debit') {
         currentBalance += amount
@@ -727,6 +690,7 @@ export async function recalculateBalance(accountId: string): Promise<boolean> {
         totalOut += amount
       }
     })
+    console.log(`[recalculateBalance] Calculated balance for ${accountId}: currentBalance=${currentBalance}, totalIn=${totalIn}, totalOut=${totalOut}`)
 
     // Update account with recalculated values
     const { error: updateError } = await (supabase
@@ -739,13 +703,14 @@ export async function recalculateBalance(accountId: string): Promise<boolean> {
       .eq('id', accountId)
 
     if (updateError) {
-      console.error('Error updating account with recalculated values:', updateError)
+      console.error(`[recalculateBalance] Error updating account ${accountId} with recalculated values:`, updateError)
       return false
     }
+    console.log(`[recalculateBalance] Successfully updated balance for account: ${accountId}`)
 
     return true
   } catch (err) {
-    console.error('Unexpected error during balance recalculation:', err)
+    console.error(`[recalculateBalance] Unexpected error during balance recalculation for account ${accountId}:`, err)
     return false
   }
 }
