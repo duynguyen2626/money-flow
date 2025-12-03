@@ -869,16 +869,6 @@ export async function restoreTransaction(id: string): Promise<boolean> {
     }
   }
 
-  // Recalculate balances
-  const accountIds = new Set<string>();
-  lines.forEach(l => {
-    if (l.account_id) accountIds.add(l.account_id);
-  });
-  if (accountIds.size > 0) {
-    const { recalculateBalance } = await import('./account.service');
-    await Promise.all(Array.from(accountIds).map(id => recalculateBalance(id)));
-  }
-
   revalidatePath('/transactions');
   revalidatePath('/people');
   revalidatePath('/accounts');
