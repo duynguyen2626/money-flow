@@ -16,6 +16,7 @@ import { deleteBatchItemAction, updateBatchItemAction, confirmBatchItemAction, v
 import { Checkbox } from '@/components/ui/checkbox'
 import { EditItemDialog } from './edit-item-dialog'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
+import { ConfirmTransferDialog } from './confirm-transfer-dialog'
 
 interface ItemsTableProps {
     items: any[]
@@ -26,6 +27,8 @@ interface ItemsTableProps {
 export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProps) {
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [showConfirm, setShowConfirm] = useState(false)
+    const [showTransferDialog, setShowTransferDialog] = useState(false)
+    const [selectedItemForTransfer, setSelectedItemForTransfer] = useState<any>(null)
     const [confirmConfig, setConfirmConfig] = useState<{
         title: string
         description: string
@@ -56,8 +59,15 @@ export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProp
         setShowConfirm(true)
     }
 
-    async function handleConfirm(id: string) {
-        await confirmBatchItemAction(id, batchId)
+    function openTransferDialog(item: any) {
+        setSelectedItemForTransfer(item)
+        setShowTransferDialog(true)
+    }
+
+    async function handleConfirmTransfer(targetAccountId: string) {
+        if (selectedItemForTransfer) {
+            await confirmBatchItemAction(selectedItemForTransfer.id, batchId, targetAccountId)
+        }
     }
 
     async function handleVoid(id: string) {
@@ -103,7 +113,7 @@ export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProp
                         <TableHead>Number</TableHead>
                         <TableHead>Amount</TableHead>
                         <TableHead>Note</TableHead>
-                        <TableHead>Bank</TableHead>
+                        <TableHead>Account Flow</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="w-[150px]">Actions</TableHead>
                     </TableRow>
@@ -125,17 +135,20 @@ export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProp
                             <TableCell>{new Intl.NumberFormat('en-US').format(item.amount)}</TableCell>
                             <TableCell>{item.note}</TableCell>
                             <TableCell>
-                                {item.target_account_id ? (
-                                    <Link href={`/accounts/${item.target_account_id}`} className="text-blue-600 hover:underline">
-                                        {item.bank_name || item.target_account?.name || '-'}
-                                        {item.card_name && ` (${item.card_name})`}
-                                    </Link>
-                                ) : (
-                                    <span>
-                                        {item.bank_name || '-'}
-                                        {item.card_name && ` (${item.card_name})`}
-                                    </span>
-                                )}
+                                <div className="flex items-center gap-1 text-sm">
+                                    <span className="text-muted-foreground">Draft Fund</span>
+                                    <span className="text-muted-foreground">➔</span>
+                                    {item.target_account_id ? (
+                                        <Link href={`/accounts/${item.target_account_id}`} className="text-blue-600 hover:underline font-medium">
+                                            {item.target_account?.name || 'Account'}
+                                        </Link>
+                                    ) : (
+                                        <span className="text-orange-500 italic">Select...</span>
+                                    )}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                    {item.bank_name} {item.card_name && `(${item.card_name})`}
+                                </div>
                             </TableCell>
                             <TableCell>
                                 {item.status === 'confirmed' ? (
@@ -155,9 +168,9 @@ export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProp
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                onClick={() => handleConfirm(item.id)}
+                                                onClick={() => openTransferDialog(item)}
                                                 className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                                                title="Confirm"
+                                                title="Confirm Transfer"
                                             >
                                                 <CheckCircle2 className="h-4 w-4" />
                                             </Button>
@@ -175,13 +188,13 @@ export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProp
                                     )}
                                     {item.status === 'confirmed' && (
                                         <>
-                                            <span className="text-green-600 text-xs font-medium mr-2">Confirmed</span>
+                                            <span className="text-green-600 text-xs font-medium mr-2">Done</span>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
                                                 onClick={() => handleVoid(item.id)}
                                                 className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                                                title="Void"
+                                                title="Void (Revert)"
                                             >
                                                 <Ban className="h-4 w-4" />
                                             </Button>
@@ -203,6 +216,13 @@ export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProp
                 variant={confirmConfig.variant}
                 confirmText="Confirm"
                 cancelText="Cancel"
+            />
+
+            <ConfirmTransferDialog
+                open={showTransferDialog}
+                onOpenChange={setShowTransferDialog}
+                item={selectedItemForTransfer}
+                onConfirm={handleConfirmTransfer}
             />
         </>
     )

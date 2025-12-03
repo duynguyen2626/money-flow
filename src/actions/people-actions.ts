@@ -58,43 +58,47 @@ export async function updatePersonAction(
   return ok
 }
 
+import { getServices } from '@/services/service-manager';
+
 export async function getPeoplePageData(id: string) {
-    const person = await getPersonDetails(id);
-    const ownerId = person?.owner_id ?? id;
+  const person = await getPersonDetails(id);
+  const ownerId = person?.owner_id ?? id;
 
-    const [
-        debtCycles,
-        transactions,
-        accounts,
-        categories,
-        personProfile,
-        shops,
-        allPeople,
-    ] = await Promise.all([
-        getDebtByTags(id),
-        getAccountTransactions(id, 100),
-        getAccounts(),
-        getCategories(),
-        getPersonWithSubs(ownerId),
-        getShops(),
-        getPeople(),
-    ]);
+  const [
+    debtCycles,
+    transactions,
+    accounts,
+    categories,
+    personProfile,
+    shops,
+    subscriptions,
+    allPeople,
+  ] = await Promise.all([
+    getDebtByTags(id),
+    getAccountTransactions(id, 100),
+    getAccounts(),
+    getCategories(),
+    getPersonWithSubs(ownerId),
+    getShops(),
+    getServices(),
+    getPeople(),
+  ]);
 
-    // The data returned from server actions must be serializable.
-    // Convert any non-serializable properties if necessary.
-    // For example, Date objects can be converted to ISO strings.
-    // In this case, the data from Supabase should already be serializable.
-    return {
-        person,
-        debtCycles,
-        transactions,
-        accounts,
-        categories,
-        personProfile,
-        shops,
-        subscriptions: [],
-        allPeople,
-    };
+  // The data returned from server actions must be serializable.
+  // Convert any non-serializable properties if necessary.
+  // For example, Date objects can be converted to ISO strings.
+  // In this case, the data from Supabase should already be serializable.
+  return {
+    person,
+    debtCycles,
+    transactions,
+    accounts,
+    categories,
+    personProfile,
+    shops,
+    subscriptions,
+    allPeople,
+  };
 }
 
 export async function testSheetConnectionAction(personId: string) {

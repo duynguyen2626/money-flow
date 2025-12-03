@@ -118,3 +118,18 @@ export async function recalculateAccountBalanceAction(accountId: string) {
     return { success: false, error: 'An unexpected error occurred' }
   }
 }
+
+export async function getAccountsAction() {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('accounts')
+    .select('id, name, type, logo_url, bank_name')
+    .eq('is_active', true)
+    .order('name')
+
+  if (error) {
+    console.error('Error fetching accounts:', error)
+    return []
+  }
+  return data
+}

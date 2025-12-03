@@ -18,7 +18,6 @@ const navItems: NavItem[] = [
   { label: "Shops", href: "/shops", icon: Store },
   { label: "Batch Transfer", href: "/batch", icon: Layers },
   { label: "Services", href: "/services", icon: Cloud },
-  { label: "Automation", href: "/automation", icon: Bot },
 ]
 
 type AppLayoutProps = {

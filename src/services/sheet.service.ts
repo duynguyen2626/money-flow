@@ -209,6 +209,7 @@ export async function syncAllTransactions(personId: string) {
           id,
           occurred_at,
           note,
+          status,
           tag,
           shop_id,
           shops ( name ),
@@ -228,6 +229,11 @@ export async function syncAllTransactions(personId: string) {
       return { success: false, message: 'Failed to load transactions' }
     }
 
+    console.log(`[SheetSync] syncAllTransactions for personId: ${personId}. Found ${data?.length} lines.`);
+    if (data && data.length > 0) {
+      console.log(`[SheetSync] Sample line person_id: ${(data[0] as any).person_id}`);
+    }
+
     const rows = (data ?? []) as {
       id: string
       transaction_id: string
@@ -240,6 +246,7 @@ export async function syncAllTransactions(personId: string) {
         id: string;
         occurred_at: string;
         note: string | null;
+        status: string;
         tag: string | null;
         shop_id: string | null;
         shops: { name: string | null } | null;
@@ -284,6 +291,8 @@ export async function syncAllTransactions(personId: string) {
       // Determine type: if amount < 0, it's a repayment (In), otherwise Debt
       const type = row.amount < 0 ? 'In' : 'Debt'
 
+      const action = row.transactions.status === 'void' ? 'delete' : 'create'
+
       const payload = buildPayload(
         {
           id: row.transactions.id,
@@ -298,7 +307,7 @@ export async function syncAllTransactions(personId: string) {
           cashback_share_amount: cashbackAmount,
           type: type,
         },
-        'create'
+        action
       )
 
       await postToSheet(sheetLink, payload)

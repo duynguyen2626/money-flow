@@ -197,6 +197,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       .from('transaction_lines')
       .select('account_id, amount, type, transactions!inner(status)')
       .in('account_id', debtAccountIds)
+      // [M2-SP1] Fix: Exclude void transactions
       .neq('transactions.status', 'void')
 
     if (linesError) {
@@ -241,7 +242,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     if (monthlyLinesError) {
       console.error('Error fetching monthly debt lines:', JSON.stringify(monthlyLinesError, null, 2))
     } else {
-      ;(monthlyLines as any[] | null)?.forEach(line => {
+      ; (monthlyLines as any[] | null)?.forEach(line => {
         const accountId = line.account_id
         if (!accountId) return
 
@@ -266,16 +267,16 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
 
         const updated: MonthlyDebtSummary = existing
           ? {
-              ...existing,
-              amount: existing.amount + amountValue,
-              occurred_at: existing.occurred_at ?? (validDate ? validDate.toISOString() : occurredAt),
-            }
+            ...existing,
+            amount: existing.amount + amountValue,
+            occurred_at: existing.occurred_at ?? (validDate ? validDate.toISOString() : occurredAt),
+          }
           : {
-              tag: tagValue ?? undefined,
-              tagLabel: label,
-              amount: amountValue,
-              occurred_at: validDate ? validDate.toISOString() : occurredAt ?? undefined,
-            }
+            tag: tagValue ?? undefined,
+            tagLabel: label,
+            amount: amountValue,
+            occurred_at: validDate ? validDate.toISOString() : occurredAt ?? undefined,
+          }
 
         personMap.set(groupingKey, updated)
         monthlyDebtMap.set(ownerId, personMap)
@@ -484,7 +485,26 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     row => row.service_id
   ) ?? []
   const debt_account_id = (debtAccounts as { id: string; current_balance: number }[] | null)?.[0]?.id ?? null
-  const balance = (debtAccounts as { id: string; current_balance: number }[] | null)?.[0]?.current_balance ?? null
+
+  // [M2-SP1] Fix: Calculate balance dynamically to exclude void transactions (Phantom Debt Fix)
+  let balance = 0;
+  if (debt_account_id) {
+    const { data: lines } = await supabase
+      .from('transaction_lines')
+      .select('amount, type, transactions!inner(status)')
+      .eq('account_id', debt_account_id)
+      .neq('transactions.status', 'void');
+
+    if (lines) {
+      lines.forEach((line: any) => {
+        const amount = line.amount ?? 0;
+        const change = line.type === 'debit' ? Math.abs(amount) : -Math.abs(amount);
+        balance += change;
+      });
+    }
+  } else {
+    balance = (debtAccounts as { id: string; current_balance: number }[] | null)?.[0]?.current_balance ?? 0;
+  }
 
   return {
     id: (profile as any).id,

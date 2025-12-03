@@ -1,0 +1,69 @@
+{
+  "name": "Youtube",
+  "count": 9,
+  "members": [
+    {
+      "id": "df1ed5aa-b8b0-4c70-9e7f-e17de3b2b881",
+      "slots": 2,
+      "is_owner": false,
+      "profile_id": "eccde148-a84e-455f-ba96-c8aa0b149ac8",
+      "service_id": "af12cd04-1915-49b2-974e-d2d20419f597"
+    },
+    {
+      "id": "a5d5e4b7-109f-4373-94b9-f9ed80381e03",
+      "slots": 1,
+      "is_owner": true,
+      "profile_id": "917455ba-16c0-42f9-9cea-264f81a3db66",
+      "service_id": "af12cd04-1915-49b2-974e-d2d20419f597"
+    },
+    {
+      "id": "fcf18412-f646-41d7-94f2-7d2127850dfd",
+      "slots": 1,
+      "is_owner": false,
+      "profile_id": "7a54609d-d6bf-4692-aead-6432479b9cb1",
+      "service_id": "af12cd04-1915-49b2-974e-d2d20419f597"
+    },
+    {
+      "id": "802ead37-3f17-4518-afdd-0c8d016a5052",
+      "slots": 2,
+      "is_owner": false,
+      "profile_id": "eccde148-a84e-455f-ba96-c8aa0b149ac8",
+      "service_id": "af12cd04-1915-49b2-974e-d2d20419f597"
+    },
+    {
+      "id": "8ce3bca1-032f-499c-adfc-c249b7f69c6a",
+      "slots": 1,
+      "is_owner": true,
+      "profile_id": "917455ba-16c0-42f9-9cea-264f81a3db66",
+      "service_id": "af12cd04-1915-49b2-974e-d2d20419f597"
+    },
+    {
+      "id": "3019daaf-deda-42ec-b87a-e1fb357afbde",
+      "slots": 1,
+      "is_owner": false,
+      "profile_id": "7a54609d-d6bf-4692-aead-6432479b9cb1",
+      "service_id": "af12cd04-1915-49b2-974e-d2d20419f597"
+    },
+    {
+      "id": "314a251e-45ec-4683-8504-8451dcdbca9d",
+      "slots": 2,
+      "is_owner": false,
+      "profile_id": "eccde148-a84e-455f-ba96-c8aa0b149ac8",
+      "service_id": "af12cd04-1915-49b2-974e-d2d20419f597"
+    },
+    {
+      "id": "181ba716-98f8-4bc8-b566-3533c08982cd",
+      "slots": 1,
+      "is_owner": true,
+      "profile_id": "917455ba-16c0-42f9-9cea-264f81a3db66",
+      "service_id": "af12cd04-1915-49b2-974e-d2d20419f597"
+    },
+    {
+      "id": "8d9bb63f-fb74-4aa0-a1a0-2c0a679cb08e",
+      "slots": 1,
+      "is_owner": false,
+      "profile_id": "7a54609d-d6bf-4692-aead-6432479b9cb1",
+      "service_id": "af12cd04-1915-49b2-974e-d2d20419f597"
+    }
+  ]
+}

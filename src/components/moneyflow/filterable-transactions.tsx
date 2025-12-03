@@ -1,6 +1,8 @@
 'use client'
 
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { FilterIcon, X } from 'lucide-react'
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
@@ -72,6 +74,28 @@ export function FilterableTransactions({
     const handleBulkActionStateChange = useCallback((next: BulkActionState) => {
         setBulkActions(next);
     }, [])
+
+    const router = useRouter()
+
+    // [M2-SP1] Realtime: Subscribe to transaction changes
+    useEffect(() => {
+        const supabase = createClient()
+        const channel = supabase
+            .channel('transactions-realtime')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'transactions' },
+                () => {
+                    console.log('Realtime update detected in transactions, refreshing...')
+                    router.refresh()
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [router])
 
     // ... (memoized values remain same)
 
