@@ -9,12 +9,12 @@ export async function updateServiceMembersAction(
   members: any[]
 ) {
   await updateServiceMembers(serviceId, members)
-  revalidatePath('/services')
+  // revalidatePath('/services') // Disable to prevent loop
 }
 
-export async function distributeServiceAction(serviceId: string) {
+export async function distributeServiceAction(serviceId: string, customDate?: string, customNoteFormat?: string) {
   try {
-    const transactions = await distributeService(serviceId)
+    const transactions = await distributeService(serviceId, customDate, customNoteFormat)
     revalidatePath('/services')
     revalidatePath('/')
     revalidatePath('/transactions')
@@ -22,14 +22,14 @@ export async function distributeServiceAction(serviceId: string) {
   } catch (error: any) {
     return { success: false, error: error.message }
   }
-}  
-  export async function deleteServiceAction(serviceId: string) {
-    try {
-      await deleteService(serviceId)
-      revalidatePath('/services')
-      return { success: true }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
+}
+
+export async function deleteServiceAction(serviceId: string) {
+  try {
+    await deleteService(serviceId)
+    revalidatePath('/services')
+    return { success: true }
+  } catch (error: any) {
+    return { success: false, error: error.message }
   }
-  
+}

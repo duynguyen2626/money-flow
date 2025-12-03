@@ -125,6 +125,13 @@ export async function confirmBatchItem(itemId: string) {
     if (itemError || !item) throw new Error('Item not found')
     if (item.status === 'confirmed') return // Already confirmed
 
+    // [M2-SP1] Fix: Map Category for Online Services
+    let categoryId = null;
+    const noteLower = item.note?.toLowerCase() || '';
+    if (noteLower.includes('online service')) {
+        categoryId = 'e0000000-0000-0000-0000-000000000088';
+    }
+
     // 2. Create Transaction (CKL -> Target)
     const { data: txn, error: txnError } = await supabase
         .from('transactions')
@@ -133,7 +140,8 @@ export async function confirmBatchItem(itemId: string) {
             note: item.note,
             status: 'posted',
             tag: 'BATCH_AUTO',
-            created_by: SYSTEM_ACCOUNTS.DEFAULT_USER_ID
+            created_by: SYSTEM_ACCOUNTS.DEFAULT_USER_ID,
+            category_id: categoryId
         })
         .select()
         .single()

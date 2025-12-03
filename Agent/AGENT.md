@@ -1,89 +1,156 @@
-# **PROJECT: MONEY FLOW 3.0**
+MILESTONE 2 - SPRINT 2: REAL MONEY AUTOMATION & BOT
 
-# **PHASE: 62 \- SERVICE REBOOT (UNIFIED PAGE & LOGIC)**
+Goal: Implement the "Confirm" workflow to turn Draft allocations into Real Transactions, and build the Service Automation Bot UI.
 
-**WORKFLOW:**
+1. Git Convention
 
-1. **Branch:** feat/phase-62-service-reboot  
-2. **Safety:** Run npm run build.
+Branch: feat/M2-SP2-batch-confirm-and-bot
 
-**OBJECTIVE:**
+Commit: [M2-SP2] feat: ...
 
-1. **Rebuild UI:** Create a single powerful page /services that handles CRUD, Member Assignment, and Bot Trigger.  
-2. **Logic Rewrite:** Implement distributeServiceCost from scratch with the "Draft Fund" pattern.  
-3. **Cleanup:** Delete old subscription.service.ts code and start fresh.
+2. Feature 1: Batch Confirmation & Revert Logic
 
-**CONSTANTS:**
+Context:
+Currently, Batch Items are just "Draft" allocations. We need a "Confirm" button to materialize them into REAL transactions in the transactions table. Conversely, voiding that transaction must "Revert" the batch item status so it can be re-processed.
 
-* DRAFT\_FUND\_ID: '88888888-9999-9999-9999-111111111111'  
-* SERVICE\_CAT\_ID: 'e0000000-0000-0000-0000-000000000088'
+A. Backend Logic (Batch Service)
 
-## **I. BACKEND: src/services/service-manager.ts (NEW SERVICE)**
+File: src/services/batch.service.ts
 
-**1\. createService(data) / updateService(id, data, members)**
+Task 1: confirmBatchItem(itemId, targetAccountId)
 
-* **Logic:**  
-  * Upsert subscriptions.  
-  * **Delete** all service\_members for this ID.  
-  * **Insert** new members list (with slots).  
-  * *Important:* Ensure is\_owner flag is saved if the selected person is "Me".
+Input: itemId (UUID), targetAccountId (UUID - The Real Bank Account receiving money).
 
-**2\. distributeService(id) (The Bot Logic)**
+Process:
 
-* **Step 1: Calculate Math**  
-  * Fetch Service \+ Members.  
-  * TotalSlots \= Sum(member.slots).  
-  * UnitCost \= ServicePrice / TotalSlots.  
-* **Step 2: Create Header**  
-  * From: DRAFT\_FUND\_ID.  
-  * Note: Auto: ${service.name} \[${CurrentMonth}\].  
-  * Amount: \-ServicePrice.  
-* **Step 3: Create Lines (Loop Members)**  
-  * Cost \= UnitCost \* slots.  
-  * **If Member is Me (is\_owner):**  
-    * Debit: Category SERVICE\_CAT\_ID. (My Expense).  
-  * **If Member is Other:**  
-    * Debit: Debt Account of that Person. (Their Debt).  
-    * Note: ${service.name} (x${slots}).
+Fetch Batch Item. Verify status is funded (which means Pending in our UI terms).
 
-## **II. FRONTEND: UNIFIED PAGE (src/app/services/page.tsx)**
+Create Transaction:
 
-**Layout:**
+from_account_id: '88888888-9999-9999-9999-111111111111' (Fixed ID for "Draft Fund").
 
-* **Header:** Title "Quản lý Dịch vụ" \+ Button "New Service".  
-* **Main Content:** Grid of ServiceCard.
+to_account_id: targetAccountId.
 
-**Component: ServiceCard (The Control Center)**
+amount: item.amount.
 
-* **Header:** Logo (Shop) | Name | Price.  
-* **Body (Member List):**  
-  * List rows: Avatar | Name | **Slot Input** (Editable directly).  
-  * *Interaction:* Changing slot \-\> Auto-save to DB (Debounced).  
-  * **Add Member:** "+ Add" button (Popover to select Person).  
-* **Footer (Actions):**  
-  * **Status:** "Next Bill: 01/12".  
-  * **Action:** Button "⚡ Distribute Now".  
-    * Click \-\> Call distributeService \-\> Show Result Toast.
+type: 'transfer' (Internal movement).
 
-**Component: ServiceCreateDialog**
+category_id: Use the Service's Category ID (if available) or leave null for transfers.
 
-* Simple form to add Name, Price, Shop.
+description: CKL: ${item.note} (CKL = Chu Kỳ Lương/Cycle).
 
-## **III. CLEANUP\*\***
+transaction_date: new Date().
 
-* Delete src/services/subscription.service.ts (Old/Buggy).  
-* Delete src/components/services/\* (Old components).  
-* Delete /automation page (Merged here).
+Update Batch Item:
 
-## **IV. EXECUTION STEPS**
+status: 'confirmed'.
 
-1. **Service:** Create service-manager.ts with clean logic.  
-2. **UI:** Build the ServiceCard with embedded member management.  
-3. **Page:** Assemble /services.  
-4. **Verify:**  
-   * Create "Netflix" (260k).  
-   * Add "Lâm" (Slot 1). Add "Me" (Slot 1).  
-   * Click Distribute.  
-   * Check Transactions: Should see 1 Draft Txn split into 130k Expense (Me) \+ 130k Debt (Lâm).  
-1.   
-1. 
+transaction_id: The ID of the newly created transaction.
+
+Task 2: revertBatchItem(transactionId)
+
+Process:
+
+Find the batch_item linked to this transactionId.
+
+Update batch_item:
+
+status: 'funded' (Reset to Pending).
+
+transaction_id: null (Unlink).
+
+B. Backend Logic (Transaction Service)
+
+File: src/services/transaction.service.ts
+
+Task: Hook into voidTransaction or updateTransactionStatus.
+
+Logic:
+
+// Inside voidTransaction function
+// ... existing void logic ...
+
+// [M2-SP2] Trigger Batch Revert if applicable
+const { data: batchItem } = await supabase
+    .from('batch_items')
+    .select('id')
+    .eq('transaction_id', transactionId)
+    .single();
+
+if (batchItem) {
+    // Call the revert function from BatchService (you might need to inject dependencies or use a shared helper to avoid circular imports)
+    // Ideally, emit an event or call a dedicated handler.
+    await BatchService.revertBatchItem(transactionId); 
+}
+
+
+C. UI Update (Batch Detail Page)
+
+File: src/app/batch/[id]/page.tsx & src/components/batch/items-table.tsx
+
+Column "Account":
+
+Old: Shows only "Draft Fund".
+
+New Requirement:
+
+If status === 'confirmed': Show Draft Fund ➔ [Target Account Name]. Use a visual arrow icon (e.g., Lucide ArrowRight).
+
+If status === 'funded': Show Draft Fund ➔ [Greyed out Placeholder].
+
+Action "Confirm":
+
+Add a Green "Confirm" Button for items with status funded.
+
+Behavior: Clicking "Confirm" opens a Modal/Dialog:
+
+Title: "Confirm Transfer to Real Account".
+
+Dropdown: Select "Target Account" (Load list from accounts table).
+
+Auto-select: If the batch item already has a target_account_id set (from Bot config), pre-select it.
+
+On Save: Call confirmBatchItem action. Update UI state to "Confirmed" (Disable button or change to "View Txn").
+
+3. Feature 2: Service Bot Automation Settings
+
+Context:
+Each Service (e.g., Netflix, Spotify) needs a "Settings" tab to configure auto-distribution rules.
+
+File: src/app/services/[id]/page.tsx (or new component ServiceSettingsTab)
+
+UI Requirements:
+
+Tab Layout: Add a new tab named "Settings & Bot".
+
+Card 1: Automation Config
+
+Toggle Switch: "Auto Run Monthly".
+
+Input Number: "Run Day" (1-31).
+
+Input Text: "Note Template" (e.g., "Tiền {Service} T{Month}").
+
+Note: Save these configs to the bot_configs table (linked to service_id).
+
+Card 2: Manual Trigger (Testing)
+
+Button: "⚡ Run Distribution Now".
+
+Behavior: Trigger the existing distribution logic immediately (Manual Mode).
+
+Logic Constraint: If re-running, DO NOT overwrite items that are already confirmed. Only update amount for funded (pending) items if the Service price changed.
+
+4. Execution Plan (Step-by-Step for Agent)
+
+Step 1: Implement confirmBatchItem and revertBatchItem in batch.service.ts.
+
+Step 2: Hook voidTransaction in transaction.service.ts to call revertBatchItem.
+
+Step 3: Update Batch Items Table UI (Columns & Confirm Button + Dialog).
+
+Step 4: Build Service Settings Tab with Auto/Manual controls.
+
+Step 5: Verification: Run npm run build to ensure no circular dependency errors between Services.
+
+👉 Acknowledge this plan and start with Step 1.

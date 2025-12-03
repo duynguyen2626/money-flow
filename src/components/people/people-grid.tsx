@@ -1,8 +1,9 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, UserPlus } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
 
 import { EditPersonDialog } from './edit-person-dialog'
@@ -42,6 +43,26 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
     const lower = searchQuery.toLowerCase()
     return people.filter(p => p.name.toLowerCase().includes(lower))
   }, [people, searchQuery])
+
+  // [M2-SP1] Realtime: Subscribe to transaction changes to update debt immediately
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('people-grid-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        () => {
+          console.log('Realtime update detected, refreshing...')
+          router.refresh()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [router])
 
   const handleOpenDebt = (person: Person) => {
     setError(null)

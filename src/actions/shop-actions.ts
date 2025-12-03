@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { createShop, updateShop } from '@/services/shop.service'
+import { createShop, updateShop, getShops } from '@/services/shop.service'
 
 export async function createShopAction(payload: {
   name: string
@@ -30,4 +30,9 @@ export async function updateShopAction(
     revalidatePath('/people')
   }
   return ok
+}
+
+export async function getShopsAction() {
+  const shops = await getShops()
+  return shops
 }

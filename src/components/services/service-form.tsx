@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { useEffect } from 'react'
+import { ShopCombobox } from '@/components/shops/shop-combobox'
 
 const formSchema = z.object({
   name: z.string().min(2, {
@@ -25,7 +26,7 @@ const formSchema = z.object({
   price: z.coerce.number().min(0, {
     message: 'Price must be a positive number.',
   }),
-  shop_id: z.string().uuid().optional(),
+  shop_id: z.string().uuid().optional().nullable(),
 })
 
 export type ServiceFormValues = z.infer<typeof formSchema>
@@ -48,6 +49,7 @@ export function ServiceForm({
     defaultValues: {
       name: '',
       price: 0,
+      shop_id: null,
       ...initialValues,
     },
   })
@@ -89,7 +91,20 @@ export function ServiceForm({
             </FormItem>
           )}
         />
-        {/* TODO: Add Shop Combobox */}
+        <FormField
+          control={form.control}
+          name="shop_id"
+          render={({ field }) => (
+            <FormItem className="flex flex-col">
+              <FormLabel>Shop (Optional)</FormLabel>
+              <ShopCombobox
+                value={field.value || ''}
+                onChange={field.onChange}
+              />
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={onCancel}>
             Cancel

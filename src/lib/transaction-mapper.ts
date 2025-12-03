@@ -237,6 +237,12 @@ export function mapTransactionRow(
     if (txn.note?.startsWith('Auto:')) {
         type = 'expense'
         displayType = 'expense'
+        // [M2-SP1] Fix: Extract category even for Auto transactions
+        if (categoryLine && categoryLine.categories) {
+            categoryName = categoryLine.categories.name
+            categoryIcon = categoryLine.categories.icon ?? undefined
+            categoryImageUrl = categoryLine.categories.image_url ?? undefined
+        }
     } else if (context?.primaryLineId && accountLine) {
         // A. If we are in Split View (primaryLineId present), we trust the primary line.
         // If the primary line is a DEBIT, it's usually an Expense or Debt assignment

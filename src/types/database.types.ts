@@ -229,6 +229,7 @@ export interface Database {
           payment_account_id: string | null
           note_template: string | null
           created_at: string
+          shop_id: string | null
         }
         Insert: {
           id?: string
@@ -239,6 +240,7 @@ export interface Database {
           payment_account_id?: string | null
           note_template?: string | null
           created_at?: string
+          shop_id?: string | null
         }
         Update: {
           id?: string
@@ -249,6 +251,7 @@ export interface Database {
           payment_account_id?: string | null
           note_template?: string | null
           created_at?: string
+          shop_id?: string | null
         }
       }
       subscription_members: {

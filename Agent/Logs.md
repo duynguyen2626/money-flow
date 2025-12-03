@@ -1,33 +1,34 @@
-# Agent Logs
+1/2
+## Error Type
+Runtime Error
 
-## Issue: Voided Transactions Not Updating Debt on /people page
+## Error Message
+invalid input syntax for type integer: ""
 
-**Date:** December 2, 2025
 
-**Problem Description:**
-The user reported that voided transactions are not automatically deducting from the debt balance displayed on the `/people` page.
+    at updateServiceMembers (src\services\service-manager.ts:333:15)
+    at  updateServiceMembersAction (src\actions\service-actions.ts:11:3)
 
-**Resolution Status:**
-The user has confirmed that the SQL function `get_debt_by_tags` has been updated to correctly handle voided transactions at the database level. This means the frontend logic now only needs to ensure proper data fetching and revalidation.
+## Code Frame
+  331 |         console.error('Error inserting service members:', insertError)
+  332 |
+> 333 |         throw new Error(insertError.message)
+      |               ^
+  334 |
+  335 |       }
+  336 |
 
-**Previous Debugging Steps:**
--   **Added logging to `recalculateBalance` in `src/services/account.service.ts`:** This logging was added to verify the behavior of balance recalculation. (Logging has since been removed as the primary fix is at the SQL level).
+Next.js version: 16.0.3 (Turbopack)
 
-## Issue: Missing "Online Service" Category / Incorrect Category ID for Service
+2/2
+## Error Type
+Runtime i
 
-**Date:** December 2, 2025
+## Error Message
+Failed to connect to MetaMask
 
-**Problem Description:**
-The "Online Service" category was missing, leading to "Uncategorized" issues for auto-distributed transactions. The service code also needed to be verified to use the correct category ID.
 
-**Resolution Status:**
-1.  **SQL Hotfix for "Online Services" Category:**
-    *   `hotfix-phase-64-category.sql` was created and applied (by the user) to insert the "Online Service" category into the `public.categories` table with the ID `e0000000-0000-0000-0000-000000000088`.
-2.  **Code Verification for Category ID Usage:**
-    *   Checked `src/services/service-manager.ts` (`distributeService` function) and `src/lib/constants.ts`.
-    *   Confirmed that `SYSTEM_CATEGORIES.SERVICE` in `src/lib/constants.ts` already correctly uses the ID `e0000000-0000-0000-0000-000000000088`. Therefore, no code changes were required in the service logic for this part.
+    at Object.connect (chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/scripts/inpage.js:1:58695)
+    at async s (chrome-extension://nkbihfbeogaeaoehlefnkodbefgpgknn/scripts/inpage.js:1:56490)
 
-**Next Steps for User:**
--   Ensure the `hotfix-phase-64-category.sql` has been successfully applied to the database.
--   Refresh the `/people` page to observe if the debt for voided transactions now updates correctly (since the SQL fix is in place).
--   Run the Distribute Service to confirm that new transactions correctly show the "Online Services" category icon.
+Next.js version: 16.0.3 (Turbopack)

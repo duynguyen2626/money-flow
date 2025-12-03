@@ -6,7 +6,13 @@ import { ServiceForm, ServiceFormValues } from './service-form'
 import { upsertService } from '@/services/service-manager'
 
 type ServiceEditDialogProps = {
-  service: { id: string; name: string; price: number | null }
+  service: {
+    id: string;
+    name: string;
+    price: number | null;
+    shop_id?: string | null;
+    shop?: { id: string; name: string; logo_url: string | null } | null;
+  }
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }
@@ -16,6 +22,7 @@ export function ServiceEditDialog({
   open: controlledOpen,
   onOpenChange: setControlledOpen,
 }: ServiceEditDialogProps) {
+  // ... (keep existing state logic)
   const [internalOpen, setInternalOpen] = useState(false)
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : internalOpen
@@ -70,7 +77,11 @@ export function ServiceEditDialog({
 
             <ServiceForm
               mode="edit"
-              initialValues={{...service, price: service.price ?? 0}}
+              initialValues={{
+                ...service,
+                price: service.price ?? 0,
+                shop_id: service.shop_id || service.shop?.id || null
+              }}
               onCancel={closeDialog}
               onSubmit={handleSubmit}
             />
