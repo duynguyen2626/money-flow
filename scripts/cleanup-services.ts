@@ -29,60 +29,77 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 async function cleanup() {
     console.log('Connecting to Supabase...');
 
-    // 1. Find transactions to delete
-    // We want to delete:
-    // 1. Old "Auto:" transactions
-    // 2. New transactions with "slots]" in the note
-    // 3. Transactions with metadata containing service_id (if metadata column exists)
+    // 1. Delete Transactions (Distributions & Payments)
+    console.log('Step 1: finding transactions to delete...');
 
-    let query = supabase
+    // We look for:
+    // - Service Distributions (Note contains "Slot:")
+    // - Service Payments (Note contains "Payment for Service")
+    // - Metadata contains 'service_id'
+
+    const { data: transactions, error: fetchError } = await supabase
         .from('transactions')
-        .select('id')
-        .or('note.ilike.Auto:%,note.ilike.%slots]%');
-
-    // Try to check for metadata if possible, but .or with jsonb might be tricky in one go if column doesn't exist.
-    // Since we know the user might not have metadata column yet, let's stick to note matching for safety,
-    // OR we can try to fetch all and filter in memory if the dataset is small (it likely is for test).
-    // But let's trust the 'note' pattern for now as it covers both cases.
-
-    const { data: transactions, error: fetchError } = await query;
+        .select('id, note, metadata')
+        .or('note.ilike.%Slot:%,note.ilike.Payment for Service%');
 
     if (fetchError) {
         console.error('Error fetching transactions:', fetchError.message);
-        process.exit(1);
+    } else if (transactions && transactions.length > 0) {
+        const ids = transactions.map(t => t.id);
+        console.log(`Found ${ids.length} transactions to delete.`);
+
+        // Delete lines first
+        const { error: linesError } = await supabase
+            .from('transaction_lines')
+            .delete()
+            .in('transaction_id', ids);
+
+        if (linesError) console.error('Error deleting transaction lines:', linesError.message);
+        else console.log('Deleted transaction lines.');
+
+        // Delete transactions
+        const { error: txnsError } = await supabase
+            .from('transactions')
+            .delete()
+            .in('id', ids);
+
+        if (txnsError) console.error('Error deleting transactions:', txnsError.message);
+        else console.log('Deleted transactions.');
+    } else {
+        console.log('No service transactions found.');
     }
 
-    if (!transactions || transactions.length === 0) {
-        console.log('No matching transactions found (checked "Auto:" and "slots]").');
-        return;
-    }
-
-    const ids = transactions.map(t => t.id);
-    console.log(`Found ${ids.length} transactions to delete.`);
-
-    // 2. Delete transaction lines
-    const { error: linesError } = await supabase
-        .from('transaction_lines')
+    // 2. Delete Service Members
+    console.log('Step 2: Deleting service members...');
+    const { error: membersError } = await supabase
+        .from('service_members')
         .delete()
-        .in('transaction_id', ids);
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
 
-    if (linesError) {
-        console.error('Error deleting transaction lines:', linesError.message);
-        process.exit(1);
-    }
-    console.log('Deleted associated transaction lines.');
+    if (membersError) console.error('Error deleting service members:', membersError.message);
+    else console.log('Deleted service members.');
 
-    // 3. Delete transactions
-    const { error: txnsError } = await supabase
-        .from('transactions')
+    // 3. Delete Subscriptions (Services)
+    console.log('Step 3: Deleting subscriptions...');
+    const { error: servicesError } = await supabase
+        .from('subscriptions')
         .delete()
-        .in('id', ids);
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all
 
-    if (txnsError) {
-        console.error('Error deleting transactions:', txnsError.message);
-        process.exit(1);
-    }
-    console.log('Deleted transactions successfully.');
+    if (servicesError) console.error('Error deleting subscriptions:', servicesError.message);
+    else console.log('Deleted subscriptions.');
+
+    // 4. Delete Bot Configs
+    console.log('Step 4: Deleting bot configs...');
+    const { error: botsError } = await supabase
+        .from('bot_configs')
+        .delete()
+        .like('key', 'service_%');
+
+    if (botsError) console.error('Error deleting bot configs:', botsError.message);
+    else console.log('Deleted bot configs.');
+
+    console.log('Cleanup complete.');
 }
 
 cleanup();

@@ -82,7 +82,7 @@ export async function upsertService(
 }
 
 export async function distributeService(serviceId: string, customDate?: string, customNoteFormat?: string) {
-  const supabase = createClient()
+  const supabase: any = createClient()
   console.log('Distributing service:', serviceId)
 
   // Step 1: Calculate Math
@@ -122,7 +122,12 @@ export async function distributeService(serviceId: string, customDate?: string, 
   const createdTransactions: any[] = []
 
   const transactionDate = customDate ? new Date(customDate).toISOString() : new Date().toISOString()
-  const monthTag = new Date(transactionDate).toLocaleString('default', { month: '2-digit', year: 'numeric' }).replace('/', '-');
+
+  // [M2-SP2] Tag Format: MMMYY (e.g., DEC25)
+  const dateObj = new Date(transactionDate)
+  const monthStr = dateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase()
+  const yearStr = dateObj.getFullYear().toString().slice(-2)
+  const monthTag = `${monthStr}${yearStr}`
 
   for (const member of members) {
     const cost = unitCost * member.slots
@@ -135,12 +140,14 @@ export async function distributeService(serviceId: string, customDate?: string, 
       note = customNoteFormat
         .replace('{service}', (service as any).name)
         .replace('{member}', member.profiles.name)
+        .replace('{name}', (service as any).name) // {name} now maps to Service Name as requested
         .replace('{slots}', member.slots.toString())
         .replace('{date}', monthTag)
         .replace('{price}', pricePerSlot.toLocaleString())
         .replace('{total_slots}', totalSlots.toString());
     } else {
-      note = `${(service as any).name} ${monthTag} [${member.slots} slots] [${pricePerSlot.toLocaleString()}]`
+      // Default: MemberName DEC25 Slot: 1 (35,571)/7
+      note = `${member.profiles.name} ${monthTag} Slot: ${member.slots} (${pricePerSlot.toLocaleString()})/${totalSlots}`
     }
 
     // [M2-SP1] Idempotency Check: Use metadata to find existing transaction
@@ -159,16 +166,17 @@ export async function distributeService(serviceId: string, customDate?: string, 
       .contains('metadata', metadata)
       .single();
 
-    let transactionId = existingTx?.id;
+    let transactionId = (existingTx as any)?.id;
 
     if (existingTx) {
-      console.log('Updating existing transaction:', existingTx.id);
+      console.log('Updating existing transaction:', (existingTx as any).id);
       // Update Header
       await supabase
         .from('transactions')
         .update({
           note: note,
           occurred_at: transactionDate,
+          tag: monthTag // [M2-SP2] Ensure tag is updated
         } as any)
         .eq('id', transactionId);
 
@@ -186,7 +194,8 @@ export async function distributeService(serviceId: string, customDate?: string, 
         .insert([{
           occurred_at: transactionDate,
           note: note,
-          metadata: metadata
+          metadata: metadata,
+          tag: monthTag // [M2-SP2] Add tag for filtering
         }] as any)
         .select()
         .single();
@@ -209,6 +218,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
       account_id: SYSTEM_ACCOUNTS.DRAFT_FUND,
       amount: -cost,
       type: 'credit',
+      category_id: SYSTEM_CATEGORIES.ONLINE_SERVICES // Ensure category is set for credit line too if needed, but usually for debit
     })
 
     if (member.profiles.is_owner) {
@@ -248,44 +258,24 @@ export async function distributeService(serviceId: string, customDate?: string, 
   return createdTransactions;
 }
 
-
-
 export async function getServices() {
-
   const supabase = createClient()
-
   const { data, error } = await supabase
-
     .from('subscriptions')
-
     .select(`
-
         *,
-
         shop:shops(*),
-
         service_members:service_members(*, profile:profiles(*))
-
       `)
-
     .order('name', { ascending: true })
 
-
-
   if (error) {
-
     console.error('Error fetching services:', error)
-
     // TEMP: Return empty array until DB schema is updated
-
     return []
-
   }
 
-
-
   return data
-
 }
 
 export async function deleteService(serviceId: string) {
@@ -301,96 +291,99 @@ export async function deleteService(serviceId: string) {
     throw new Error(membersError.message)
   }
 
-
-
   const { error: serviceError } = await supabase
-
     .from('subscriptions')
-
     .delete()
-
     .eq('id', serviceId)
 
-
-
   if (serviceError) {
-
     console.error('Error deleting service:', serviceError)
-
     throw new Error(serviceError.message)
-
   }
-
 }
 
-
-
 export async function updateServiceMembers(
-
   serviceId: string,
-
   members: Omit<ServiceMember, 'id' | 'service_id' | 'profiles'>[]
-
 ) {
-
   const supabase = createClient()
 
   // 1. Delete all service_members for this ID
-
   const { error: deleteError } = await supabase
-
     .from('service_members')
-
     .delete()
-
     .eq('service_id', serviceId)
 
-
-
   if (deleteError) {
-
     console.error('Error deleting service members:', deleteError)
-
     throw new Error(deleteError.message)
-
   }
-
-
 
   // 2. Insert new members list
-
   if (members && members.length > 0) {
-
     const memberInsertData = members.map(member => ({
-
       service_id: serviceId,
-
       profile_id: member.profile_id,
-
-      slots: member.slots,
-
+      slots: Number(member.slots) || 0,
       is_owner: member.is_owner,
-
     }))
 
-
-
     const { error: insertError } = await supabase
-
       .from('service_members')
-
       .insert(memberInsertData as any)
 
-
-
     if (insertError) {
-
       console.error('Error inserting service members:', insertError)
-
       throw new Error(insertError.message)
-
     }
-
   }
+}
 
+export async function getServiceById(id: string) {
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('subscriptions')
+    .select(`
+        *,
+        shop:shops(*),
+        service_members:service_members(*, profile:profiles(*))
+      `)
+    .eq('id', id)
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+export async function getServiceBotConfig(serviceId: string) {
+  const supabase = createClient()
+  const key = `service_${serviceId}`
+  const { data, error } = await supabase
+    .from('bot_configs')
+    .select('*')
+    .eq('key', key)
+    .single()
+
+  if (error && error.code !== 'PGRST116') { // PGRST116 is "Row not found"
+    console.error('Error fetching bot config:', error)
+  }
+  return data
+}
+
+export async function saveServiceBotConfig(serviceId: string, config: any) {
+  const supabase = createClient()
+  const key = `service_${serviceId}`
+
+  const { error } = await supabase
+    .from('bot_configs')
+    .upsert({
+      key: key,
+      name: `Bot for Service ${serviceId}`,
+      is_enabled: config.isEnabled,
+      config: config,
+      updated_at: new Date().toISOString() // Assuming updated_at exists or just rely on created_at/default
+    } as any)
+
+  if (error) throw error
+  return true
 }

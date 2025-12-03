@@ -10,7 +10,7 @@ import {
     updateBatchItem,
     deleteBatchItem,
     confirmBatchItem,
-    voidBatchItem,
+    revertBatchItem,
     importBatchItemsFromExcel,
     fundBatch,
     confirmBatchSource,
@@ -21,13 +21,13 @@ import {
 } from '@/services/batch.service'
 import { revalidatePath } from 'next/cache'
 
-export async function confirmBatchItemAction(itemId: string, batchId: string) {
-    await confirmBatchItem(itemId)
+export async function confirmBatchItemAction(itemId: string, batchId: string, targetAccountId?: string) {
+    await confirmBatchItem(itemId, targetAccountId)
     revalidatePath(`/batch/${batchId}`)
 }
 
 export async function voidBatchItemAction(itemId: string, batchId: string) {
-    await voidBatchItem(itemId)
+    await revertBatchItem(itemId)
     revalidatePath(`/batch/${batchId}`)
     revalidatePath('/accounts')
 }

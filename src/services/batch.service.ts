@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { addMonths, format, parse } from 'date-fns'
-import { SYSTEM_ACCOUNTS } from '@/lib/constants'
+import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants'
 
 export type Batch = Database['public']['Tables']['batches']['Row']
 export type BatchItem = Database['public']['Tables']['batch_items']['Row']
@@ -112,7 +112,7 @@ export async function deleteBatchItem(id: string) {
     if (error) throw error
 }
 
-export async function confirmBatchItem(itemId: string) {
+export async function confirmBatchItem(itemId: string, targetAccountId?: string) {
     const supabase: any = createClient()
 
     // 1. Fetch Item
@@ -125,14 +125,18 @@ export async function confirmBatchItem(itemId: string) {
     if (itemError || !item) throw new Error('Item not found')
     if (item.status === 'confirmed') return // Already confirmed
 
+    // Use provided targetAccountId or fallback to item's target
+    const finalTargetId = targetAccountId || item.target_account_id;
+    if (!finalTargetId) throw new Error('No target account specified');
+
     // [M2-SP1] Fix: Map Category for Online Services
     let categoryId = null;
     const noteLower = item.note?.toLowerCase() || '';
     if (noteLower.includes('online service')) {
-        categoryId = 'e0000000-0000-0000-0000-000000000088';
+        categoryId = SYSTEM_CATEGORIES.ONLINE_SERVICES;
     }
 
-    // 2. Create Transaction (CKL -> Target)
+    // 2. Create Transaction (Draft Fund -> Target)
     const { data: txn, error: txnError } = await supabase
         .from('transactions')
         .insert({
@@ -152,13 +156,13 @@ export async function confirmBatchItem(itemId: string) {
     const lines = [
         {
             transaction_id: txn.id,
-            account_id: SYSTEM_ACCOUNTS.BATCH_CLEARING,
+            account_id: SYSTEM_ACCOUNTS.DRAFT_FUND, // Use Draft Fund
             amount: -Math.abs(item.amount),
             type: 'credit'
         },
         {
             transaction_id: txn.id,
-            account_id: item.target_account_id,
+            account_id: finalTargetId,
             amount: Math.abs(item.amount),
             type: 'debit',
             receiver_name: item.receiver_name,
@@ -180,6 +184,7 @@ export async function confirmBatchItem(itemId: string) {
         .update({
             status: 'confirmed',
             transaction_id: txn.id,
+            target_account_id: finalTargetId, // Update target if changed
             is_confirmed: true
         })
         .eq('id', itemId)
@@ -188,73 +193,40 @@ export async function confirmBatchItem(itemId: string) {
 
     // 5. Recalculate Balances
     const { recalculateBalance } = await import('./account.service')
-    await recalculateBalance(SYSTEM_ACCOUNTS.BATCH_CLEARING)
-    await recalculateBalance(item.target_account_id)
+    await recalculateBalance(SYSTEM_ACCOUNTS.DRAFT_FUND)
+    await recalculateBalance(finalTargetId)
 
     return true
 }
 
 /**
- * Void a confirmed batch item and its associated transaction
- * This will reverse the balance changes and mark both item and transaction as voided
+ * Revert a batch item when its transaction is voided.
+ * This resets the item to 'funded' (Pending) so it can be processed again.
  */
-export async function voidBatchItem(itemId: string) {
+export async function revertBatchItem(transactionId: string) {
     const supabase: any = createClient()
 
-    // 1. Fetch Item with transaction details
+    // 1. Find the batch item linked to this transaction
     const { data: item, error: itemError } = await supabase
         .from('batch_items')
-        .select('*')
-        .eq('id', itemId)
+        .select('id')
+        .eq('transaction_id', transactionId)
         .single()
 
-    if (itemError || !item) throw new Error('Item not found')
-    if (item.status !== 'confirmed') throw new Error('Only confirmed items can be voided')
-    if (!item.transaction_id) throw new Error('No transaction found for this item')
-
-    // 2. Fetch transaction lines to reverse balances
-    const { data: lines, error: linesError } = await supabase
-        .from('transaction_lines')
-        .select('*')
-        .eq('transaction_id', item.transaction_id)
-
-    if (linesError) throw linesError
-
-    // 3. Reverse the balance changes for each account
-    for (const line of lines) {
-        const { data: account, error: accountError } = await supabase
-            .from('accounts')
-            .select('current_balance')
-            .eq('id', line.account_id)
-            .single()
-
-        if (accountError) continue // Skip if account not found
-
-        // Reverse the transaction: subtract what was added, add what was subtracted
-        const newBalance = account.current_balance - line.amount
-
-        await supabase
-            .from('accounts')
-            .update({ current_balance: newBalance })
-            .eq('id', line.account_id)
+    if (itemError || !item) {
+        // It's possible this transaction isn't linked to a batch item. Just ignore.
+        return false;
     }
 
-    // 4. Void the transaction
-    const { error: voidError } = await supabase
-        .from('transactions')
-        .update({ status: 'void' })
-        .eq('id', item.transaction_id)
-
-    if (voidError) throw voidError
-
-    // 5. Update item status to voided
+    // 2. Reset item status
     const { error: updateError } = await supabase
         .from('batch_items')
         .update({
-            status: 'voided',
+            status: 'funded', // Reset to Pending/Funded
+            transaction_id: null,
             is_confirmed: false
         })
-        .eq('id', itemId)
+        .eq('id', item.id)
 
     if (updateError) throw updateError
 

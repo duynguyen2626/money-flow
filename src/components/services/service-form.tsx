@@ -99,7 +99,7 @@ export function ServiceForm({
               <FormLabel>Shop (Optional)</FormLabel>
               <ShopCombobox
                 value={field.value || ''}
-                onChange={field.onChange}
+                onChange={(val) => field.onChange(val || null)}
               />
               <FormMessage />
             </FormItem>

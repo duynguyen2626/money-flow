@@ -457,29 +457,29 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     }
 
     // Recalculate balances for all involved accounts
-  const accountIds = new Set<string>();
-  for (const line of lines) {
-    if (line?.account_id) accountIds.add(line.account_id);
-    if (line?.person_id && line?.account_id) {
-      // If a person is involved in this line, also add their associated debt account for recalculation
-      // assuming the debt account itself is one of the line's accounts.
-      // Or we can fetch it explicitly if needed.
-      accountIds.add(line.account_id);
+    const accountIds = new Set<string>();
+    for (const line of lines) {
+      if (line?.account_id) accountIds.add(line.account_id);
+      if (line?.person_id && line?.account_id) {
+        // If a person is involved in this line, also add their associated debt account for recalculation
+        // assuming the debt account itself is one of the line's accounts.
+        // Or we can fetch it explicitly if needed.
+        accountIds.add(line.account_id);
+      }
     }
-  }
 
-  // Also gather original account IDs from the existing transaction (before voiding)
-  // to ensure all affected accounts are re-calculated
-  const originalAccountIds = new Set<string>();
-  lines.forEach(l => {
-    if (l.account_id) originalAccountIds.add(l.account_id);
-  });
+    // Also gather original account IDs from the existing transaction (before voiding)
+    // to ensure all affected accounts are re-calculated
+    const originalAccountIds = new Set<string>();
+    lines.forEach(l => {
+      if (l.account_id) originalAccountIds.add(l.account_id);
+    });
 
-  if (accountIds.size > 0 || originalAccountIds.size > 0) {
-    const { recalculateBalance } = await import('./account.service');
-    const allUniqueAccountIds = new Set([...Array.from(accountIds), ...Array.from(originalAccountIds)]);
-    await Promise.all(Array.from(allUniqueAccountIds).map(id => recalculateBalance(id)));
-  }
+    if (accountIds.size > 0 || originalAccountIds.size > 0) {
+      const { recalculateBalance } = await import('./account.service');
+      const allUniqueAccountIds = new Set([...Array.from(accountIds), ...Array.from(originalAccountIds)]);
+      await Promise.all(Array.from(allUniqueAccountIds).map(id => recalculateBalance(id)));
+    }
 
     return true;
   } catch (error) {
@@ -647,6 +647,16 @@ export async function voidTransaction(id: string): Promise<boolean> {
   if (fetchError || !existing) {
     console.error('Failed to load transaction for void:', fetchError);
     return false;
+  }
+
+  // [M2-SP2] Hook: Revert Batch Item if this transaction is linked to one
+  try {
+    const { revertBatchItem } = await import('./batch.service');
+    await revertBatchItem(realId);
+  } catch (e) {
+    console.error('Failed to revert batch item:', e);
+    // Continue with voiding even if batch revert fails? 
+    // Ideally yes, but we should log it.
   }
 
   // --- VOID PROTECTION FOR REFUNDS ---
