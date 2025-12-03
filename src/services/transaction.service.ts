@@ -775,6 +775,7 @@ export async function voidTransaction(id: string): Promise<boolean> {
   const personLine = lines.find((line) => line?.person_id);
 
   if (personLine?.person_id) {
+    revalidatePath(`/people/${personLine.person_id}`);
     let shopName = (existing as any).shops?.name ?? null;
     if (!shopName) {
       const creditLine = lines.find(l => l.type === 'credit');
@@ -872,6 +873,11 @@ export async function restoreTransaction(id: string): Promise<boolean> {
   revalidatePath('/transactions');
   revalidatePath('/people');
   revalidatePath('/accounts');
+
+  const personLine = lines.find((line) => line?.person_id);
+  if (personLine?.person_id) {
+    revalidatePath(`/people/${personLine.person_id}`);
+  }
 
   return true;
 }

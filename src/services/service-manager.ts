@@ -153,7 +153,7 @@ export async function distributeService(serviceId: string) {
       // Debit: Category SERVICE_CAT_ID. (My Expense).
       transactionLines.push({
         transaction_id: transaction.id,
-        category_id: 'e0000000-0000-0000-0000-000000000088',
+        category_id: SYSTEM_CATEGORIES.SERVICE,
         amount: cost,
         type: 'debit',
       })
