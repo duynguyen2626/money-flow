@@ -533,7 +533,41 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
     return [];
   }
 
-  return (data as TransactionRow[]).map(txn => mapTransactionRow(txn));
+  return flattenTransactionSplits(data as TransactionRow[]);
+}
+
+function flattenTransactionSplits(txns: TransactionRow[]): TransactionWithDetails[] {
+  const result: TransactionWithDetails[] = [];
+
+  for (const txn of txns) {
+    const lines = txn.transaction_lines || [];
+    const debitLines = lines.filter(l => l.type === 'debit');
+
+    // Logic: If multiple debits, split them.
+    if (debitLines.length > 1) {
+      const creditLines = lines.filter(l => l.type === 'credit');
+
+      debitLines.forEach((debitLine, index) => {
+        // Construct a "Virtual" transaction for this split
+        // We keep ALL lines so that "Edit" works correctly (editing the full transaction)
+        // But we pass primaryLineId so the display focuses on this specific split.
+        const virtualTxn = {
+          ...txn,
+          transaction_lines: lines
+        };
+
+        // Pass the debit line ID as primary to ensure correct amount display
+        const mapped = mapTransactionRow(virtualTxn, undefined, { primaryLineId: debitLine.id });
+        // Composite ID: realID_split_index
+        mapped.id = `${txn.id}_split_${index}`;
+        result.push(mapped);
+      });
+    } else {
+      result.push(mapTransactionRow(txn));
+    }
+  }
+
+  return result;
 }
 
 export async function getTransactionsByShop(shopId: string, limit: number = 50): Promise<TransactionWithDetails[]> {
@@ -574,10 +608,12 @@ export async function getTransactionsByShop(shopId: string, limit: number = 50):
     return [];
   }
 
-  return (data as TransactionRow[]).map(txn => mapTransactionRow(txn));
+  return flattenTransactionSplits(data as TransactionRow[]);
 }
 
 export async function voidTransaction(id: string): Promise<boolean> {
+  // Handle composite ID from split view
+  const realId = id.split('_split_')[0];
   const supabase = createClient();
 
   const { data: existing, error: fetchError } = await supabase
@@ -605,7 +641,7 @@ export async function voidTransaction(id: string): Promise<boolean> {
       )
     `
     )
-    .eq('id', id)
+    .eq('id', realId)
     .maybeSingle();
 
   if (fetchError || !existing) {
@@ -762,7 +798,7 @@ export async function voidTransaction(id: string): Promise<boolean> {
     }
   }
 
-  const { error: updateError } = await (supabase.from('transactions').update as any)({ status: 'void' }).eq('id', id);
+  const { error: updateError } = await (supabase.from('transactions').update as any)({ status: 'void' }).eq('id', realId);
 
   if (updateError) {
     console.error('Failed to void transaction:', updateError);
@@ -807,6 +843,7 @@ export async function voidTransaction(id: string): Promise<boolean> {
 }
 
 export async function restoreTransaction(id: string): Promise<boolean> {
+  const realId = id.split('_split_')[0];
   const supabase = createClient();
 
   const { data: existing, error: fetchError } = await supabase
@@ -826,12 +863,14 @@ export async function restoreTransaction(id: string): Promise<boolean> {
         cashback_share_fixed,
         metadata,
         person_id,
+        account_id,
+        category_id,
         type,
         accounts ( name )
       )
     `
     )
-    .eq('id', id)
+    .eq('id', realId)
     .maybeSingle();
 
   if (fetchError || !existing) {
@@ -839,39 +878,101 @@ export async function restoreTransaction(id: string): Promise<boolean> {
     return false;
   }
 
-  const { error: updateError } = await (supabase
-    .from('transactions')
-    .update as any)({ status: 'posted' })
-    .eq('id', id);
+  const { error: updateError } = await (supabase.from('transactions').update as any)({ status: 'posted' }).eq('id', realId);
 
   if (updateError) {
     console.error('Failed to restore transaction:', updateError);
     return false;
   }
 
-  const lines = ((existing as any).transaction_lines as any[]) ?? [];
+  const lines = (existing as any).transaction_lines ?? [];
+  const personLine = lines.find((line: any) => line?.person_id);
 
-  for (const line of lines) {
-    if (!line?.person_id) continue;
+  if (personLine?.person_id) {
     let shopName = (existing as any).shops?.name ?? null;
     if (!shopName) {
-      const creditLine = lines.find(l => l.type === 'credit');
+      const creditLine = lines.find((l: any) => l.type === 'credit');
       if (creditLine?.accounts?.name) {
         shopName = creditLine.accounts.name;
       }
     }
-    const payload = buildSheetPayload({ ...existing as any, shop_name: shopName }, line);
-    if (!payload) continue;
-    try {
-      await syncTransactionToSheet(line.person_id, payload, 'create');
-    } catch (err) {
-      console.error('Sheet Sync Error (Restore):', err);
+
+    const payload = buildSheetPayload({ ...existing as any, shop_name: shopName }, personLine);
+    if (payload) {
+      try {
+        await syncTransactionToSheet(personLine.person_id, payload, 'create');
+      } catch (err) {
+        console.error('Sheet Sync Error (Restore):', err);
+      }
     }
   }
 
   revalidatePath('/transactions');
   revalidatePath('/people');
   revalidatePath('/accounts');
+
+  return true;
+}
+
+export async function deleteTransaction(id: string): Promise<boolean> {
+  const realId = id.split('_split_')[0];
+  const supabase = createClient();
+
+  // 1. Check if transaction exists and has sheet links
+  const { data: existing, error: fetchError } = await supabase
+    .from('transactions')
+    .select(`
+      id,
+      transaction_lines (
+        person_id,
+        amount,
+        type,
+        accounts ( name )
+      ),
+      shops ( name )
+    `)
+    .eq('id', realId)
+    .single();
+
+  if (fetchError || !existing) {
+    console.error('Failed to fetch transaction for delete:', fetchError);
+    return false;
+  }
+
+  // 2. Sync "delete" to Sheets if applicable
+  const lines = (existing as any).transaction_lines ?? [];
+  const personLine = lines.find((l: any) => l.person_id);
+
+  if (personLine?.person_id) {
+    let shopName = (existing as any).shops?.name ?? null;
+    if (!shopName) {
+      const creditLine = lines.find((l: any) => l.type === 'credit');
+      if (creditLine?.accounts?.name) {
+        shopName = creditLine.accounts.name;
+      }
+    }
+
+    const payload = {
+      id: realId,
+      occurred_at: new Date().toISOString(), // Not used for delete
+      amount: 0,
+      shop_name: shopName
+    };
+
+    try {
+      await syncTransactionToSheet(personLine.person_id, payload as any, 'delete');
+    } catch (err) {
+      console.error('Sheet Sync Error (Delete):', err);
+    }
+  }
+
+  // 3. Delete from DB
+  const { error } = await supabase.from('transactions').delete().eq('id', realId);
+
+  if (error) {
+    console.error('Error deleting transaction:', error);
+    return false;
+  }
 
   return true;
 }
@@ -1816,13 +1917,3 @@ export async function getUnifiedTransactions(
   return (data as any[]).map(txn => mapTransactionRow(txn, accountId, { mode: context }))
 }
 
-export async function deleteTransaction(id: string): Promise<boolean> {
-  const supabase = createClient();
-  const { error } = await supabase.from('transactions').delete().eq('id', id);
-
-  if (error) {
-    console.error('Failed to delete transaction:', error);
-    return false;
-  }
-  return true;
-}

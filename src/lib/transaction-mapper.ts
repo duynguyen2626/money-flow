@@ -21,6 +21,7 @@ export type TransactionRow = {
     shop_id?: string | null
     shops?: ShopRow | null
     transaction_lines: Array<{
+        id?: string
         amount: number
         type: 'debit' | 'credit'
         account_id?: string | null
@@ -125,7 +126,6 @@ function resolveAccountMovementInfo(
         destinationLine = accountLines.find(line => line.type === 'debit');
     }
 
-
     const fallbackName = txn.shops?.name ?? fallbackCategoryName ?? null
     const fallbackLogo = txn.shops?.logo_url ?? null
 
@@ -173,6 +173,7 @@ export function mapTransactionRow(
     context?: {
         mode?: 'person' | 'account';
         accountInfo?: { type: string; cashback_config: Json | null }
+        primaryLineId?: string
     }
 ): TransactionWithDetails {
     const lines = txn.transaction_lines ?? []
@@ -181,6 +182,13 @@ export function mapTransactionRow(
     const isAccountContext = context?.mode === 'account'
 
     let accountLine = lines.find(line => line && typeof line.original_amount === 'number')
+
+    if (context?.primaryLineId) {
+        const primary = lines.find(l => l && l.id === context.primaryLineId)
+        if (primary) {
+            accountLine = primary
+        }
+    }
 
     if (!accountLine) {
         accountLine = accountId
@@ -193,6 +201,11 @@ export function mapTransactionRow(
             ? accountLine.amount
             : lines.reduce((sum, line) => sum + (line ? Math.abs(line.amount) : 0), 0) / 2
 
+    // Force display amount to be the primary line's amount if set
+    if (context?.primaryLineId && accountLine?.amount !== undefined) {
+        displayAmount = accountLine.amount;
+    }
+
     let type: 'income' | 'expense' | 'transfer' | 'repayment' = 'transfer'
     let displayType: TransactionWithDetails['displayType'] | undefined
     let categoryName: string | undefined
@@ -200,7 +213,11 @@ export function mapTransactionRow(
     let categoryImageUrl: string | undefined
     let accountName: string | undefined
 
-    const categoryLine = lines.find(line => line && Boolean(line.category_id))
+    let categoryLine = lines.find(line => line && Boolean(line.category_id))
+    if (accountLine?.category_id) {
+        categoryLine = accountLine
+    }
+
     const accountLines = lines.filter(line => line && line.account_id)
     const creditAccountLine = accountLines.find(line => line && line.type === 'credit')
     const debitAccountLine = accountLines.find(line => line && line.type === 'debit')
@@ -218,8 +235,26 @@ export function mapTransactionRow(
     )
 
     if (txn.note?.startsWith('Auto:')) {
-      type = 'expense'
-      displayType = 'expense'
+        type = 'expense'
+        displayType = 'expense'
+    } else if (context?.primaryLineId && accountLine) {
+        // A. If we are in Split View (primaryLineId present), we trust the primary line.
+        // If the primary line is a DEBIT, it's usually an Expense or Debt assignment
+        if (accountLine.type === 'debit') {
+            type = 'expense'; // Default to expense for debit lines in splits
+        } else {
+            type = 'income';
+        }
+
+        // Override Category if present on the line
+        if (accountLine.categories) {
+            categoryName = accountLine.categories.name
+            categoryIcon = accountLine.categories.icon ?? undefined
+            categoryImageUrl = accountLine.categories.image_url ?? undefined
+            if (accountLine.categories.type) {
+                type = accountLine.categories.type as any;
+            }
+        }
     } else if (categoryLine && categoryLine.categories) {
         categoryName = categoryLine.categories.name
         categoryIcon = categoryLine.categories.icon ?? undefined
@@ -297,10 +332,11 @@ export function mapTransactionRow(
 
     const percentRaw = txn.cashback_share_percent ?? cashbackFromLines.cashback_share_percent
     const cashbackAmount = txn.cashback_share_amount ?? cashbackFromLines.cashback_share_amount
-    const personLine = lines.find(line => line && line.person_id)
+    let personLine = lines.find(line => line && line.person_id)
+    if (accountLine?.person_id) {
+        personLine = accountLine
+    }
     let categoryId = categoryLine?.category_id ?? null
-    const source_account_name = creditAccountLine?.accounts?.name ?? null
-    const destination_account_name = debitAccountLine?.accounts?.name ?? null
     const { source_name: resolvedSourceName, source_logo: resolvedSourceLogo, destination_name: resolvedDestinationName, destination_logo: resolvedDestinationLogo } =
         resolveAccountMovementInfo(txn.transaction_lines, txn, type, categoryName ?? null)
 
@@ -335,7 +371,6 @@ export function mapTransactionRow(
     }
 
     // --- Arrow Logic for Account Context ---
-    // Debt is typically mapped as 'transfer' or 'repayment' in this function's local scope
     if (isAccountContext && accountId && (type === 'transfer' || type === 'repayment')) {
         const myLine = lines.find(l => l && l.account_id === accountId)
         if (myLine) {
@@ -345,17 +380,12 @@ export function mapTransactionRow(
             if (myLine.amount < 0) {
                 // Money leaving -> Arrow to Partner
                 source_name = `➡️ ${partnerName}`
-                // Note: We don't change destination_name, or we could set it to null to simplify UI rendering
                 destination_name = null
             } else {
                 // Money entering <- Arrow from Partner
                 source_name = `⬅️ ${partnerName}`
                 destination_name = null
             }
-            // Ensure logo is hidden or set to partner's?
-            // The table uses source_logo. Maybe we want to show partner's logo?
-            // "Display Name: ➡️ + PartnerAccountName"
-            // Let's use Partner's logo as source_logo so it shows up next to arrow?
             if (otherLine?.accounts?.logo_url) {
                 source_logo = otherLine.accounts.logo_url
             } else {
@@ -422,8 +452,8 @@ export function mapTransactionRow(
         category_icon: categoryIcon ?? null,
         category_image_url: categoryImageUrl ?? null,
         account_name: accountName,
-        source_account_name,
-        destination_account_name,
+        source_account_name: creditAccountLine?.accounts?.name ?? null,
+        destination_account_name: debitAccountLine?.accounts?.name ?? null,
         source_name,
         source_logo,
         destination_name,

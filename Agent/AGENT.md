@@ -1,94 +1,89 @@
-AGENT TASK: FIX BOT MANUAL RUN & PREVIEW UI
+# **PROJECT: MONEY FLOW 3.0**
 
-Context:
+# **PHASE: 62 \- SERVICE REBOOT (UNIFIED PAGE & LOGIC)**
 
-Error: "Manual run not implemented". The backend handler is missing.
+**WORKFLOW:**
 
-UX: User wants to see exactly what the bot will do before it runs (Preview Mode).
+1. **Branch:** feat/phase-62-service-reboot  
+2. **Safety:** Run npm run build.
 
-Confusion: "Auto Renew" bot card is confusing -> Hide it for now.
+**OBJECTIVE:**
 
-Objective:
+1. **Rebuild UI:** Create a single powerful page /services that handles CRUD, Member Assignment, and Bot Trigger.  
+2. **Logic Rewrite:** Implement distributeServiceCost from scratch with the "Draft Fund" pattern.  
+3. **Cleanup:** Delete old subscription.service.ts code and start fresh.
 
-Implement previewSubscriptionRun (Backend) to list due services.
+**CONSTANTS:**
 
-Implement runBotManual (Backend) to execute the creation.
+* DRAFT\_FUND\_ID: '88888888-9999-9999-9999-111111111111'  
+* SERVICE\_CAT\_ID: 'e0000000-0000-0000-0000-000000000088'
 
-Connect UI: Click Run -> Show Preview Modal -> Confirm -> Success.
+## **I. BACKEND: src/services/service-manager.ts (NEW SERVICE)**
 
-I. BACKEND LOGIC (src/services/subscription.service.ts)
+**1\. createService(data) / updateService(id, data, members)**
 
-1. Implement previewSubscriptionRun()
+* **Logic:**  
+  * Upsert subscriptions.  
+  * **Delete** all service\_members for this ID.  
+  * **Insert** new members list (with slots).  
+  * *Important:* Ensure is\_owner flag is saved if the selected person is "Me".
 
-Logic:
+**2\. distributeService(id) (The Bot Logic)**
 
-Fetch subscriptions where next_billing_date <= NOW AND is_active = true.
+* **Step 1: Calculate Math**  
+  * Fetch Service \+ Members.  
+  * TotalSlots \= Sum(member.slots).  
+  * UnitCost \= ServicePrice / TotalSlots.  
+* **Step 2: Create Header**  
+  * From: DRAFT\_FUND\_ID.  
+  * Note: Auto: ${service.name} \[${CurrentMonth}\].  
+  * Amount: \-ServicePrice.  
+* **Step 3: Create Lines (Loop Members)**  
+  * Cost \= UnitCost \* slots.  
+  * **If Member is Me (is\_owner):**  
+    * Debit: Category SERVICE\_CAT\_ID. (My Expense).  
+  * **If Member is Other:**  
+    * Debit: Debt Account of that Person. (Their Debt).  
+    * Note: ${service.name} (x${slots}).
 
-Calculations: For each sub, calculate UnitCost and MembersDebt.
+## **II. FRONTEND: UNIFIED PAGE (src/app/services/page.tsx)**
 
-Return:
+**Layout:**
 
-{
-  dueCount: number,
-  totalAmount: number,
-  items: [
-    { id, name: "Youtube", price: 166000, nextDate: "2025-12-01", membersCount: 3 }
-  ]
-}
+* **Header:** Title "Quản lý Dịch vụ" \+ Button "New Service".  
+* **Main Content:** Grid of ServiceCard.
 
+**Component: ServiceCard (The Control Center)**
 
-2. Implement processSubscriptions(force: boolean)
+* **Header:** Logo (Shop) | Name | Price.  
+* **Body (Member List):**  
+  * List rows: Avatar | Name | **Slot Input** (Editable directly).  
+  * *Interaction:* Changing slot \-\> Auto-save to DB (Debounced).  
+  * **Add Member:** "+ Add" button (Popover to select Person).  
+* **Footer (Actions):**  
+  * **Status:** "Next Bill: 01/12".  
+  * **Action:** Button "⚡ Distribute Now".  
+    * Click \-\> Call distributeService \-\> Show Result Toast.
 
-Logic:
+**Component: ServiceCreateDialog**
 
-Fetch due subscriptions.
+* Simple form to add Name, Price, Shop.
 
-Loop & Create Transactions:
+## **III. CLEANUP\*\***
 
-Use transaction.service.createTransaction.
+* Delete src/services/subscription.service.ts (Old/Buggy).  
+* Delete src/components/services/\* (Old components).  
+* Delete /automation page (Merged here).
 
-Important: Use shop_id, category_id (from Config or Default '88...88'), and generate Notes with Slot info.
+## **IV. EXECUTION STEPS**
 
-Update Date: Set next_billing_date = Next Month.
-
-Log: Update bot_configs -> last_run_at, last_run_status.
-
-II. BACKEND WIREING (src/services/bot-config.service.ts)
-
-Update runBotManual(key):
-
-Switch key:
-
-Case 'subscription_bot': Call subscriptionService.processSubscriptions(true).
-
-Default: Throw error.
-
-III. UI: RUN PREVIEW DIALOG (src/components/automation/run-bot-dialog.tsx)
-
-Flow:
-
-Trigger: User clicks "Run Now" on the Card.
-
-State 1 (Loading): Call API /api/automation/preview?key=subscription_bot.
-
-State 2 (Preview):
-
-If Empty: Show "✅ No services due today."
-
-If Data:
-
-Show Table: Service Name | Price | Members.
-
-Button: "🚀 Execute (Tạo [x] Giao dịch)".
-
-State 3 (Executing): Call API /api/automation/run. Show Toast on success.
-
-IV. EXECUTION STEPS
-
-Service: Implement previewSubscriptionRun & processSubscriptions.
-
-API: Ensure /api/automation/preview and /api/automation/run endpoints call the service.
-
-UI: Finish the RunBotDialog to display the preview data.
-
-Cleanup: Hide the Batch Clone bot from the UI list if it's confusing.
+1. **Service:** Create service-manager.ts with clean logic.  
+2. **UI:** Build the ServiceCard with embedded member management.  
+3. **Page:** Assemble /services.  
+4. **Verify:**  
+   * Create "Netflix" (260k).  
+   * Add "Lâm" (Slot 1). Add "Me" (Slot 1).  
+   * Click Distribute.  
+   * Check Transactions: Should see 1 Draft Txn split into 130k Expense (Me) \+ 130k Debt (Lâm).  
+1.   
+1. 
