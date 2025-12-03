@@ -2,6 +2,7 @@
 'use server';
 
 import { createClient } from '@/lib/supabase/server';
+import { revalidatePath } from 'next/cache';
 import { format, setDate, subMonths } from 'date-fns';
 import { Database, Json } from '@/types/database.types';
 import { TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types';
@@ -456,20 +457,29 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     }
 
     // Recalculate balances for all involved accounts
-    const accountIds = new Set<string>();
-    lines.forEach(l => {
-      if (l.account_id) accountIds.add(l.account_id);
-    });
-
-    // Also check for source/destination in input just in case lines missed something (unlikely but safe)
-    if (input.source_account_id) accountIds.add(input.source_account_id);
-    if (input.destination_account_id) accountIds.add(input.destination_account_id);
-    if (input.debt_account_id) accountIds.add(input.debt_account_id);
-
-    if (accountIds.size > 0) {
-      const { recalculateBalance } = await import('./account.service');
-      await Promise.all(Array.from(accountIds).map(id => recalculateBalance(id)));
+  const accountIds = new Set<string>();
+  for (const line of lines) {
+    if (line?.account_id) accountIds.add(line.account_id);
+    if (line?.person_id && line?.account_id) {
+      // If a person is involved in this line, also add their associated debt account for recalculation
+      // assuming the debt account itself is one of the line's accounts.
+      // Or we can fetch it explicitly if needed.
+      accountIds.add(line.account_id);
     }
+  }
+
+  // Also gather original account IDs from the existing transaction (before voiding)
+  // to ensure all affected accounts are re-calculated
+  const originalAccountIds = new Set<string>();
+  lines.forEach(l => {
+    if (l.account_id) originalAccountIds.add(l.account_id);
+  });
+
+  if (accountIds.size > 0 || originalAccountIds.size > 0) {
+    const { recalculateBalance } = await import('./account.service');
+    const allUniqueAccountIds = new Set([...Array.from(accountIds), ...Array.from(originalAccountIds)]);
+    await Promise.all(Array.from(allUniqueAccountIds).map(id => recalculateBalance(id)));
+  }
 
     return true;
   } catch (error) {
@@ -758,6 +768,10 @@ export async function voidTransaction(id: string): Promise<boolean> {
     console.error('Failed to void transaction:', updateError);
     return false;
   }
+
+  revalidatePath('/transactions');
+  revalidatePath('/people');
+  revalidatePath('/accounts');
   const personLine = lines.find((line) => line?.person_id);
 
   if (personLine?.person_id) {
@@ -777,6 +791,16 @@ export async function voidTransaction(id: string): Promise<boolean> {
         console.error('Sheet Sync Error (Void):', err);
       }
     }
+  }
+
+  // Recalculate balances
+  const accountIds = new Set<string>();
+  lines.forEach(l => {
+    if (l.account_id) accountIds.add(l.account_id);
+  });
+  if (accountIds.size > 0) {
+    const { recalculateBalance } = await import('./account.service');
+    await Promise.all(Array.from(accountIds).map(id => recalculateBalance(id)));
   }
 
   return true;
@@ -844,6 +868,10 @@ export async function restoreTransaction(id: string): Promise<boolean> {
       console.error('Sheet Sync Error (Restore):', err);
     }
   }
+
+  revalidatePath('/transactions');
+  revalidatePath('/people');
+  revalidatePath('/accounts');
 
   return true;
 }

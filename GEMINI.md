@@ -1,59 +1,43 @@
-AGENT TASK: PHASE 59 - REMOVE AUTOMATION BOT & STABILIZE
+AGENT TASK: FIX SERVICE CATEGORY & DEBT VOID LOGIC
 
 Context:
-The "Lazy Bot" (Subscription Automation) is buggy, generating incorrect transaction data (wrong splits, missing accounts).
-Decision: COMPLETELY REMOVE the Bot logic and the UI Trigger (Zap Icon) for now. We will rewrite it from scratch later.
+
+Bug 1: Auto-distributed transactions show "Uncategorized" because the Service logic might be using a wrong Category ID or missing the join.
+
+Bug 2: Voiding a transaction does NOT reduce the Debt on the People Page. (Fixed via SQL get_debt_by_tags, but need to verify frontend reactivity).
 
 Objective:
 
-Delete UI: Remove AutomationChecker component and the "Zap" icon from the Layout.
+Update subscription.service.ts (or service-manager.ts) to use the correct Fixed Category ID for "Online Services".
 
-Clean Backend: Remove checkAndProcessSubscriptions logic (or stub it).
+Verify Frontend refresh logic.
 
-Verify: Ensure the app builds and runs without the bot.
+I. BACKEND FIX (src/services/service-manager.ts / subscription.service.ts)
 
-I. FRONTEND CLEANUP
-
-1. Delete Component
-
-Action: Delete file src/components/moneyflow/automation-checker.tsx.
-
-2. Update Layout (src/components/moneyflow/app-layout.tsx)
-
-Action: Remove the import of AutomationChecker.
-
-Action: Remove the <AutomationChecker /> JSX tag from the render tree.
-
-Action: Remove any "Zap" icon button in the Header area (if manually placed there).
-
-II. BACKEND CLEANUP (src/services/subscription.service.ts)
-
-1. Remove Logic
-
-Target: checkAndProcessSubscriptions function.
+Target: distributeService function.
 
 Action:
 
-Option A: Delete the function entirely.
+Locate where category_id is assigned for the Owner's expense line.
 
-Option B (Safer if imported elsewhere): Keep the function signature but make the body empty (return empty array).
+Hardcode/Constant: Ensure it uses e0000000-0000-0000-0000-000000000088 (Online Services).
 
-Instruction: Delete the function entirely and remove its export. If api/batch or other routes use it, remove those usages too.
+Check: If using SYSTEM_CATEGORIES constant, update the constant file to match this ID.
 
-2. Clean Imports
+II. FRONTEND REFRESH (src/app/people/page.tsx)
 
-Remove unused imports (e.g., transaction.service, debt.service imports used only by the bot).
+Action:
 
-III. ROUTE CLEANUP
+The Debt List relies on getDebtByTags.
 
-1. Check API Routes
+Since we updated the SQL function get_debt_by_tags, the data will be correct on refresh.
 
-If there is an API route specifically for triggering the bot (e.g., src/app/api/automation/route.ts or similar), DELETE IT.
+Enhancement: Ensure that when a transaction is Voided in /transactions, we invalidate the cache or trigger a refresh if we are navigating back to People page. (Next.js revalidatePath or router.refresh()).
 
-IV. EXECUTION STEPS
+III. EXECUTION STEPS
 
-Frontend: Remove UI elements (Icon/Component).
+Constants: Verify src/lib/constants.ts has ONLINE_SERVICES: 'e000...88'.
 
-Backend: Strip out the Bot logic code.
+Service: Update the distribute logic to use this constant.
 
-Build: Run npm run build to ensure no dangling references remain.
+Verify: Run build.

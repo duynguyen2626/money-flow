@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { HandCoins, Banknote, ChevronRight, Check, Pencil } from 'lucide-react'
 
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
-import { EditSubscriptionDialog } from '@/components/services/edit-subscription-dialog'
 import { Account, Category, MonthlyDebtSummary, Person, Shop, Subscription } from '@/types/moneyflow.types'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
 
@@ -37,11 +36,7 @@ export function PersonCard({
   const isActive = balance !== 0
   const monthlyDebts = (person.monthly_debts ?? []).slice(0, 3)
   const firstDebtTag = monthlyDebts[0]?.tag ?? monthlyDebts[0]?.tagLabel
-  const [editingServiceId, setEditingServiceId] = useState<string | null>(null)
 
-  const editingSubscription = editingServiceId
-    ? subscriptions.find(sub => sub.id === editingServiceId)
-    : null
 
   const renderDebtRow = (entry: MonthlyDebtSummary) => (
     <div
@@ -134,17 +129,7 @@ export function PersonCard({
                       <span className="truncate text-slate-700 font-medium">{service.name}</span>
                       <span className="text-slate-400">: {service.slots}</span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={event => {
-                        event.stopPropagation()
-                        setEditingServiceId(service.id)
-                      }}
-                      className="text-slate-400 hover:text-blue-600 transition"
-                      aria-label={`Edit ${service.name}`}
-                    >
-                      <Pencil className="h-3 w-3" />
-                    </button>
+
                   </div>
                 )
               })
@@ -197,17 +182,7 @@ export function PersonCard({
               </button>
             </CustomTooltip>
 
-            {editingSubscription && (
-              <EditSubscriptionDialog
-                subscription={editingSubscription}
-                people={[person]}
-                accounts={accounts}
-                shops={shops}
-                initiallyOpen
-                focusProfileId={person.id}
-                onClose={() => setEditingServiceId(null)}
-              />
-            )}
+
           </div>
         </div>
       </article>
@@ -287,17 +262,7 @@ export function PersonCard({
                     <span className="truncate text-slate-700 font-medium">{service.name}</span>
                     <span className="text-slate-400">: {service.slots}</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={event => {
-                      event.stopPropagation()
-                      setEditingServiceId(service.id)
-                    }}
-                    className="text-slate-400 hover:text-blue-600 transition"
-                    aria-label={`Edit ${service.name}`}
-                  >
-                    <Pencil className="h-3 w-3" />
-                  </button>
+
                 </div>
               )
             })
@@ -350,17 +315,7 @@ export function PersonCard({
             </button>
           </CustomTooltip>
 
-          {editingSubscription && (
-            <EditSubscriptionDialog
-              subscription={editingSubscription}
-              people={[person]}
-              accounts={accounts}
-              shops={shops}
-              initiallyOpen
-              focusProfileId={person.id}
-              onClose={() => setEditingServiceId(null)}
-            />
-          )}
+
         </div>
       </div>
     </article>

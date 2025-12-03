@@ -5,7 +5,6 @@ import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Subscription } from '@/types/moneyflow.types'
-import { getServiceBranding } from '@/components/services/service-branding'
 
 type PersonFormValues = {
   name: string
@@ -228,7 +227,7 @@ export function PersonForm({
             ) : (
               subscriptionOptions.map(item => {
                 const checked = watchedSubs?.includes(item.id) ?? false
-                const brand = getServiceBranding(item.name)
+                const brand = { bg: 'bg-slate-100', text: 'text-slate-600', ring: 'ring-slate-200', icon: item.name.charAt(0) }
                 return (
                   <label
                     key={item.id}

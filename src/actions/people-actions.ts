@@ -6,7 +6,6 @@ import { getPersonDetails, getDebtByTags } from '@/services/debt.service';
 import { getAccounts, getAccountTransactions } from '@/services/account.service';
 import { getCategories } from '@/services/category.service';
 import { getShops } from '@/services/shop.service';
-import { getSubscriptions } from '@/services/subscription.service';
 import { syncAllTransactions, testConnection } from '@/services/sheet.service';
 
 export async function createPersonAction(payload: {
@@ -70,7 +69,6 @@ export async function getPeoplePageData(id: string) {
         categories,
         personProfile,
         shops,
-        subscriptions,
         allPeople,
     ] = await Promise.all([
         getDebtByTags(id),
@@ -79,7 +77,6 @@ export async function getPeoplePageData(id: string) {
         getCategories(),
         getPersonWithSubs(ownerId),
         getShops(),
-        getSubscriptions(),
         getPeople(),
     ]);
 
@@ -95,7 +92,7 @@ export async function getPeoplePageData(id: string) {
         categories,
         personProfile,
         shops,
-        subscriptions,
+        subscriptions: [],
         allPeople,
     };
 }

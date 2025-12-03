@@ -32,4 +32,7 @@ export const SYSTEM_CATEGORIES = {
 
     // Danh mục Shopping mặc định (Phase 17.5)
     SHOPPING: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99',
+
+    // Danh mục dùng cho Service (Phase 62)
+    SERVICE: 'e0000000-0000-0000-0000-000000000088',
 };

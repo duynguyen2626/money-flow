@@ -401,7 +401,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   return true;
 }
 
-export async function voidTransaction(id: string): Promise<boolean> {
+export async function voidTransactionAction(id: string): Promise<boolean> {
   const supabase = createClient();
 
   const { data: existing, error: fetchError } = await supabase
