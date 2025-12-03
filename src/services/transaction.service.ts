@@ -29,6 +29,7 @@ export type CreateTransactionInput = {
   person_id?: string | null;
   destination_account_id?: string | null;
   category_id?: string | null;
+  category_name?: string | null; // Allow resolving by name
   debt_account_id?: string | null;
   amount: number;
   tag: string;
@@ -44,6 +45,12 @@ async function resolveSystemCategory(
   name: string,
   type: 'income' | 'expense'
 ): Promise<string | null> {
+  // [M2-SP1] Hardcode fix for Online Services to prevent duplication/truncation
+  // This ensures that "Online Services" always maps to the correct system ID
+  if (name && name.toLowerCase().includes('online service')) {
+    return 'e0000000-0000-0000-0000-000000000088';
+  }
+
   const { data, error } = await supabase
     .from('categories')
     .select('id')
@@ -119,6 +126,11 @@ async function buildTransactionLines(
 ) {
   const lines: any[] = [];
   const tag = input.tag;
+
+  // Resolve category by name if ID is missing but name is present
+  if (!input.category_id && input.category_name && (input.type === 'expense' || input.type === 'income')) {
+    input.category_id = await resolveSystemCategory(supabase, input.category_name, input.type);
+  }
 
   if (input.type === 'expense' && input.category_id) {
     lines.push({

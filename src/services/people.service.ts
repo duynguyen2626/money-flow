@@ -193,9 +193,15 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   const debtBalanceMap = new Map<string, number>()
 
   if (debtAccountIds.length > 0) {
+    // [M2-SP1] Fix: Exclude void transactions
     const { data: lines, error: linesError } = await supabase
       .from('transaction_lines')
-      .select('account_id, amount, type, transactions!inner(status)')
+      .select(`
+        account_id,
+        amount,
+        type,
+        transactions!inner ( status )
+      `)
       .in('account_id', debtAccountIds)
       .neq('transactions.status', 'void')
 
