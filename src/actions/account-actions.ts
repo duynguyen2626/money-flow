@@ -123,7 +123,8 @@ export async function getAccountsAction() {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('accounts')
-    .select('id, name, type, logo_url, bank_name')
+    .select('id, name, type, logo_url')
+    .eq('is_active', true)
     .eq('is_active', true)
     .order('name')
 
@@ -131,5 +132,6 @@ export async function getAccountsAction() {
     console.error('Error fetching accounts:', error)
     return []
   }
+  console.log('getAccountsAction: returning', data?.length, 'accounts')
   return data
 }

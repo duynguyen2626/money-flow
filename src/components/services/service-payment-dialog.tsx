@@ -51,11 +51,11 @@ export function ServicePaymentDialog({ open, onOpenChange, service, onConfirm }:
         setFetchingAccounts(true)
         try {
             const data = await getAccountsAction()
+            console.log('ServicePaymentDialog: fetched accounts', data)
             if (data) {
-                // Filter out savings and investment accounts
-                const filtered = data.filter((acc: any) =>
-                    acc.type !== 'savings' && acc.type !== 'investment'
-                )
+                const validTypes = ['bank', 'credit_card', 'ewallet']
+                const filtered = data.filter((acc: any) => validTypes.includes(acc.type))
+                console.log('ServicePaymentDialog: filtered accounts', filtered)
                 setAccounts(filtered)
             }
         } catch (error) {
@@ -103,7 +103,8 @@ export function ServicePaymentDialog({ open, onOpenChange, service, onConfirm }:
                                     role="combobox"
                                     aria-expanded={comboboxOpen}
                                     className="w-full justify-between"
-                                    disabled={loading || fetchingAccounts || accounts.length === 0}
+                                    onClick={() => console.log('Dropdown clicked. Accounts:', accounts)}
+                                // disabled={loading || fetchingAccounts || accounts.length === 0} // User requested to enable for debugging
                                 >
                                     {selectedAccountId ? (
                                         <div className="flex items-center gap-2">

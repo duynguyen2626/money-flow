@@ -7,6 +7,7 @@ import Link from "next/link"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
 import { CustomTooltip, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/custom-tooltip'
+import { createClient } from '@/lib/supabase/client'
 import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
 import {
   Table,
@@ -278,6 +279,21 @@ export function UnifiedTransactionTable({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hidePeopleColumn, JSON.stringify(hiddenColumns)])
+
+  // Realtime Subscription
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('realtime-transactions')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => {
+        router.refresh()
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [router])
 
   // State for actions
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
@@ -1031,10 +1047,10 @@ export function UnifiedTransactionTable({
                               <img
                                 src={displayIcon}
                                 alt={displayName || 'Shop'}
-                                className="h-8 w-8 object-contain rounded-none"
+                                className="h-5 w-auto object-contain"
                               />
                             ) : (
-                              <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
+                              <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600">
                                 {displayName ? displayName.charAt(0).toUpperCase() : '🛍️'}
                               </span>
                             )
