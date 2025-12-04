@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { addMonths, format, parse } from 'date-fns'
 import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants'
+import { syncTransactionToSheet } from './sheet.service'
 
 export type Batch = Database['public']['Tables']['batches']['Row']
 export type BatchItem = Database['public']['Tables']['batch_items']['Row']
@@ -131,9 +132,11 @@ export async function confirmBatchItem(itemId: string, targetAccountId?: string)
 
     // [M2-SP1] Fix: Map Category for Online Services
     let categoryId = null;
+    let categoryName = null;
     const noteLower = item.note?.toLowerCase() || '';
     if (noteLower.includes('online service')) {
         categoryId = SYSTEM_CATEGORIES.ONLINE_SERVICES;
+        categoryName = 'Online Services';
     }
 
     // 2. Create Transaction (Draft Fund -> Target)
@@ -191,7 +194,22 @@ export async function confirmBatchItem(itemId: string, targetAccountId?: string)
 
     if (updateError) throw updateError
 
-    // 5. Recalculate Balances
+    // 5. Trigger Sheet Sync (Fire and Forget)
+    // We pass finalTargetId as personId. The service will resolve it to a profile if it's a debt account.
+    const payload = {
+        id: txn.id,
+        occurred_at: txn.occurred_at,
+        note: item.note,
+        shop_name: item.receiver_name, // Use Receiver Name as Shop Name
+        amount: Math.abs(item.amount),
+        category_name: categoryName,
+        // We don't have shop_id or image here, but that's fine.
+    };
+
+    syncTransactionToSheet(finalTargetId, payload, 'create')
+        .catch(err => console.error('Batch Sync Error:', err));
+
+    // 6. Recalculate Balances
     const { recalculateBalance } = await import('./account.service')
     await recalculateBalance(SYSTEM_ACCOUNTS.DRAFT_FUND)
     await recalculateBalance(finalTargetId)

@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Subscription } from '@/types/moneyflow.types'
+import { toast } from 'sonner'
 
 type PersonFormValues = {
   name: string
@@ -65,11 +66,15 @@ export function PersonForm({
   const [status, setStatus] = useState<{ type: 'error' | 'success'; text: string } | null>(
     null
   )
+
+  // ...
+
   const {
     register,
     handleSubmit,
     watch,
     setValue,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<PersonFormValues>({
     resolver: zodResolver(schema),
@@ -98,14 +103,30 @@ export function PersonForm({
     register('subscriptionIds')
   }, [register])
 
+  // ...
+
   const submission = async (values: PersonFormValues) => {
     setStatus(null)
     try {
       await onSubmit(values)
       setStatus({ type: 'success', text: mode === 'create' ? 'Da tao thanh vien.' : 'Da cap nhat thanh vien.' })
+      toast.success(mode === 'create' ? 'Person added successfully!' : 'Person updated successfully!')
+
+      if (mode === 'create') {
+        reset({
+          name: '',
+          email: '',
+          avatar_url: '',
+          sheet_link: '',
+          subscriptionIds: [],
+          is_owner: false,
+          is_archived: false
+        })
+      }
     } catch (error) {
       console.error(error)
       setStatus({ type: 'error', text: 'Khong the luu thong tin. Vui long thu lai.' })
+      toast.error('Failed to save person.')
     }
   }
 

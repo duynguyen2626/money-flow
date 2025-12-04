@@ -13,12 +13,14 @@ type ServiceEditDialogProps = {
     shop_id?: string | null;
     shop?: { id: string; name: string; logo_url: string | null } | null;
   }
+  people: any[]
   open?: boolean
   onOpenChange?: (open: boolean) => void
 }
 
 export function ServiceEditDialog({
   service,
+  people,
   open: controlledOpen,
   onOpenChange: setControlledOpen,
 }: ServiceEditDialogProps) {
@@ -77,6 +79,7 @@ export function ServiceEditDialog({
 
             <ServiceForm
               mode="edit"
+              people={people}
               initialValues={{
                 ...service,
                 price: service.price ?? 0,

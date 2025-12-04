@@ -84,6 +84,7 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
       percentValue !== undefined && percentValue !== null ? percentValue * 100 : undefined,
     cashback_share_fixed:
       typeof txn.cashback_share_fixed === "number" ? txn.cashback_share_fixed : undefined,
+    is_voluntary: lines.some(l => (l.metadata as any)?.is_voluntary === true),
   };
 }
 
@@ -572,17 +573,17 @@ export function RecentTransactions({
               txn.type === "income"
                 ? "text-emerald-700"
                 : txn.type === "expense"
-                ? "text-red-500"
-                : "text-slate-600"
+                  ? "text-red-500"
+                  : "text-slate-600"
             const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount
             const amountValue = numberFormatter.format(Math.abs(originalAmount ?? 0))
             const percentValue = typeof txn.cashback_share_percent === "number" ? txn.cashback_share_percent : null
             const percentBack =
               percentValue && percentValue > 0
                 ? `${(percentValue * 100).toLocaleString("en-US", {
-                    maximumFractionDigits: 2,
-                    minimumFractionDigits: percentValue * 100 < 1 ? 1 : 0,
-                  })}%`
+                  maximumFractionDigits: 2,
+                  minimumFractionDigits: percentValue * 100 < 1 ? 1 : 0,
+                })}%`
                 : "-"
             const fixedValue = typeof txn.cashback_share_fixed === "number" ? txn.cashback_share_fixed : 0
             const fixBack = fixedValue > 0 ? numberFormatter.format(fixedValue) : "-"
@@ -591,8 +592,8 @@ export function RecentTransactions({
               typeof txn.cashback_share_amount === "number" && txn.cashback_share_amount > 0
                 ? txn.cashback_share_amount
                 : derivedSumBack
-          const sumBack = cashbackAmount > 0 ? numberFormatter.format(cashbackAmount) : "-"
-          const finalPrice = Math.abs(txn.amount ?? 0)
+            const sumBack = cashbackAmount > 0 ? numberFormatter.format(cashbackAmount) : "-"
+            const finalPrice = Math.abs(txn.amount ?? 0)
             const isSelected = selection.has(txn.id)
             const effectiveStatus = statusOverrides[txn.id] ?? txn.status
             const isVoided = effectiveStatus === 'void'
@@ -692,17 +693,17 @@ export function RecentTransactions({
             // If person_id is present, it's likely a debt-related transaction (Lending or Repayment)
             // In this case, we want to show the REAL source (Bank) if possible.
             if (txn.person_id) {
-                 const accountLines = (txn.transaction_lines ?? []).filter(l => l && l.account_id);
-                 // Find the Bank/Cash account (not the debt account)
-                 // Usually Debt transaction: Credit Bank, Debit DebtAccount.
-                 // Repayment: Debit Bank, Credit DebtAccount.
-                 // We look for an account that does NOT have "Nợ" or "Debt" in its name.
-                 // This is a heuristic, but often debt accounts are named specially.
-                 // Or we can check account type if we had it in line relations, but we only have 'accounts' name.
-                 const bankLine = accountLines.find(l => l.account_id && !l.accounts?.name?.toLowerCase().includes('nợ') && !l.accounts?.name?.toLowerCase().includes('debt'));
-                 if (bankLine && bankLine.accounts?.name) {
-                     displayAccountName = bankLine.accounts.name;
-                 }
+              const accountLines = (txn.transaction_lines ?? []).filter(l => l && l.account_id);
+              // Find the Bank/Cash account (not the debt account)
+              // Usually Debt transaction: Credit Bank, Debit DebtAccount.
+              // Repayment: Debit Bank, Credit DebtAccount.
+              // We look for an account that does NOT have "Nợ" or "Debt" in its name.
+              // This is a heuristic, but often debt accounts are named specially.
+              // Or we can check account type if we had it in line relations, but we only have 'accounts' name.
+              const bankLine = accountLines.find(l => l.account_id && !l.accounts?.name?.toLowerCase().includes('nợ') && !l.accounts?.name?.toLowerCase().includes('debt'));
+              if (bankLine && bankLine.accounts?.name) {
+                displayAccountName = bankLine.accounts.name;
+              }
             }
 
             const renderCell = (key: ColumnKey) => {
@@ -710,12 +711,12 @@ export function RecentTransactions({
                 case "date":
                   return formattedDate(txn.occurred_at)
                 case "type":
-                   if (txn.type === 'income') return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> In</span>
-                   if (txn.type === 'expense') return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Out</span>
-                   return <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
+                  if (txn.type === 'income') return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> In</span>
+                  if (txn.type === 'expense') return <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Out</span>
+                  return <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
                 case "shop":
-                   // Merged Shop and Note
-                   return (
+                  // Merged Shop and Note
+                  return (
                     <div className="flex flex-col gap-1">
                       {txn.shop_name && (
                         <div className="flex items-center gap-2">
@@ -724,10 +725,10 @@ export function RecentTransactions({
                             <img
                               src={txn.shop_logo_url}
                               alt={txn.shop_name}
-                              className="h-5 w-5 rounded-full object-cover"
+                              className="h-9 w-9 rounded-full object-cover"
                             />
                           ) : (
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
+                            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
                               {txn.shop_name.charAt(0).toUpperCase()}
                             </span>
                           )}
@@ -736,7 +737,7 @@ export function RecentTransactions({
                       )}
                       {txn.note && <span className="text-xs text-slate-500 truncate">{txn.note}</span>}
                     </div>
-                   )
+                  )
                 case "note":
                   return txn.note
                 case "category":
@@ -744,17 +745,17 @@ export function RecentTransactions({
                 case "account":
                   return displayAccountName
                 case "people": {
-                   // Merged People and Tag
+                  // Merged People and Tag
                   const personName = (txn as any).person_name ?? txn.person_name ?? null
                   const tag = txn.tag
                   return (
                     <div className="flex flex-col gap-1">
-                        {personName && <span className="font-medium text-slate-700">{personName}</span>}
-                        {tag && (
-                             <span className="inline-flex w-fit items-center rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                                {tag}
-                             </span>
-                        )}
+                      {personName && <span className="font-medium text-slate-700">{personName}</span>}
+                      {tag && (
+                        <span className="inline-flex w-fit items-center rounded bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                          {tag}
+                        </span>
+                      )}
                     </div>
                   )
                 }
@@ -799,9 +800,8 @@ export function RecentTransactions({
                 {displayedColumns.map(col => (
                   <TableCell
                     key={`${txn.id}-${col.key}`}
-                    className={`border-r text-sm ${col.key === "amount" || col.key === "finalPrice" || col.key === "percent" || col.key === "fixed" || col.key === "sumBack" ? "text-right" : ""} ${
-                      col.key === "amount" || col.key === "finalPrice" ? "font-semibold" : ""
-                    } ${col.key === "amount" || col.key === "finalPrice" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass}`}
+                    className={`border-r text-sm ${col.key === "amount" || col.key === "finalPrice" || col.key === "percent" || col.key === "fixed" || col.key === "sumBack" ? "text-right" : ""} ${col.key === "amount" || col.key === "finalPrice" ? "font-semibold" : ""
+                      } ${col.key === "amount" || col.key === "finalPrice" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass}`}
                     style={{ width: columnWidths[col.key], maxWidth: columnWidths[col.key] }}
                   >
                     {renderCell(col.key)}
@@ -946,10 +946,10 @@ export function RecentTransactions({
           className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4 py-4 sm:py-10"
           onClick={() => setEditingTxn(null)}
         >
-            <div
-              className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-2xl scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200"
-              onClick={event => event.stopPropagation()}
-            >
+          <div
+            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-2xl scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200"
+            onClick={event => event.stopPropagation()}
+          >
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-slate-900">Edit Transaction</h3>
               <button

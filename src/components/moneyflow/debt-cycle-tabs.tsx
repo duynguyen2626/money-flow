@@ -83,23 +83,23 @@ export function DebtCycleTabs({
                                         {cycle.tag === 'UNTAGGED' ? 'No tag' : cycle.tag}
                                     </h3>
                                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full whitespace-nowrap ${cycle.status === 'settled'
-                                            ? 'bg-gray-200 text-gray-600'
-                                            : cycle.balance > 0
-                                                ? 'bg-green-100 text-green-700'
-                                                : 'bg-red-100 text-red-700'
+                                        ? 'bg-gray-200 text-gray-600'
+                                        : cycle.balance > 0
+                                            ? 'bg-green-100 text-green-700'
+                                            : 'bg-red-100 text-red-700'
                                         }`}>
                                         {cycle.status === 'settled'
                                             ? 'Settled'
                                             : cycle.balance > 0
-                                                ? 'Owes'
-                                                : 'Owe'}
+                                                ? 'Receivable'
+                                                : 'Payable'}
                                     </span>
                                 </div>
                                 <p className={`mt-1 text-lg font-bold ${cycle.status === 'settled'
-                                        ? 'text-gray-400'
-                                        : cycle.balance > 0
-                                            ? 'text-green-600'
-                                            : 'text-red-600'
+                                    ? 'text-gray-400'
+                                    : cycle.balance > 0
+                                        ? 'text-green-600'
+                                        : 'text-red-600'
                                     }`}>
                                     {new Intl.NumberFormat('en-US', {
                                         maximumFractionDigits: 0,

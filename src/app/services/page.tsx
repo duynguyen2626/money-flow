@@ -22,6 +22,7 @@ export default async function ServicesPage() {
           </div>
           <div className="flex items-center gap-3">
             <ServiceCreateDialog
+              people={people}
               trigger={
                 <div className={cn(buttonVariants({ variant: 'outline' }), 'flex items-center gap-2')}>
                   <PlusCircle size={18} />

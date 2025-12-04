@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants'
+import { syncTransactionToSheet } from './sheet.service'
 
 // TODO: The 'service_members' table is not in database.types.ts. 
 // This is a temporary type definition.
@@ -89,7 +90,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
   // Fetch Service + Members.
   const { data: service, error: serviceError } = await supabase
     .from('subscriptions')
-    .select('*')
+    .select('*, shops(name, logo_url)')
     .eq('id', serviceId)
     .single()
 
@@ -164,7 +165,10 @@ export async function distributeService(serviceId: string, customDate?: string, 
       .from('transactions')
       .select('*')
       .contains('metadata', metadata)
+      .contains('metadata', metadata)
       .single();
+
+    console.log(`[Distribute] Member ${member.profile_id}: Existing Tx: ${(existingTx as any)?.id || 'None'}`);
 
     let transactionId = (existingTx as any)?.id;
 
@@ -176,7 +180,8 @@ export async function distributeService(serviceId: string, customDate?: string, 
         .update({
           note: note,
           occurred_at: transactionDate,
-          tag: monthTag // [M2-SP2] Ensure tag is updated
+          tag: monthTag, // [M2-SP2] Ensure tag is updated
+          shop_id: (service as any).shop_id // Ensure shop_id is updated
         } as any)
         .eq('id', transactionId);
 
@@ -195,13 +200,17 @@ export async function distributeService(serviceId: string, customDate?: string, 
           occurred_at: transactionDate,
           note: note,
           metadata: metadata,
-          tag: monthTag // [M2-SP2] Add tag for filtering
+          tag: monthTag, // [M2-SP2] Add tag for filtering
+          shop_id: (service as any).shop_id // Add shop_id for image display
         }] as any)
+        .select()
         .select()
         .single();
 
+      console.log(`[Distribute] Member ${member.profile_id}: New Tx Created: ${(newTx as any)?.id}`);
+
       if (txError || !newTx) {
-        console.error('Error creating transaction:', txError);
+        console.error(`[Distribute] Error creating transaction for ${member.profile_id}:`, txError);
         continue;
       }
       transactionId = newTx.id;
@@ -252,6 +261,38 @@ export async function distributeService(serviceId: string, customDate?: string, 
 
     if (linesError) {
       console.error('Error inserting lines:', linesError)
+    }
+
+    // [M2-SP2] Sync to Sheet
+    // We ONLY sync for the CURRENT member being processed in this iteration.
+    const shopName = (service as any).shops?.name || (service as any).name;
+    const shopLogo = (service as any).shops?.logo_url;
+
+    if (member.profile_id) {
+      const memberCost = unitCost * member.slots;
+
+      // Construct Sync Payload
+      const syncPayload = {
+        id: transactionId,
+        occurred_at: transactionDate,
+        date: transactionDate,
+        note: note,
+        tag: monthTag,
+        shop_name: shopName,
+        shop_id: (service as any).shop_id,
+        shop_image_url: shopLogo,
+        category_name: 'Online Services', // Hardcoded as per SYSTEM_CATEGORIES.ONLINE_SERVICES
+        category_type: 'expense',
+        amount: memberCost, // This is the amount they pay (Debit)
+        original_amount: memberCost,
+        type: 'expense'
+      };
+
+      try {
+        await syncTransactionToSheet(member.profile_id, syncPayload, 'create');
+      } catch (error) {
+        console.error(`Error syncing to sheet for member ${member.profile_id}:`, error);
+      }
     }
   }
 
@@ -380,9 +421,8 @@ export async function saveServiceBotConfig(serviceId: string, config: any) {
       key: key,
       name: `Bot for Service ${serviceId}`,
       is_enabled: config.isEnabled,
-      config: config,
-      updated_at: new Date().toISOString() // Assuming updated_at exists or just rely on created_at/default
-    } as any)
+      config: config
+    } as any, { onConflict: 'key' })
 
   if (error) throw error
   return true

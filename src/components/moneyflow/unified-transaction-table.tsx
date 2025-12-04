@@ -138,6 +138,7 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
       percentValue !== undefined && percentValue !== null ? percentValue * 100 : undefined,
     cashback_share_fixed:
       typeof txn.cashback_share_fixed === "number" ? txn.cashback_share_fixed : undefined,
+    is_voluntary: lines.some(l => (l.metadata as any)?.is_voluntary === true),
   };
 }
 
@@ -1031,10 +1032,10 @@ export function UnifiedTransactionTable({
                               <img
                                 src={displayIcon}
                                 alt={displayName || 'Shop'}
-                                className="h-8 w-8 object-contain rounded-none"
+                                className="h-10 w-10 object-contain rounded-none"
                               />
                             ) : (
-                              <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
+                              <span className="flex h-10 w-10 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
                                 {displayName ? displayName.charAt(0).toUpperCase() : '🛍️'}
                               </span>
                             )
@@ -1209,10 +1210,10 @@ export function UnifiedTransactionTable({
                           <img
                             src={personAvatar}
                             alt={personName}
-                            className="h-6 w-6 object-cover rounded-none"
+                            className="h-6 w-6 object-cover rounded-full"
                           />
                         ) : (
-                          <span className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 rounded-none">
+                          <span className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 rounded-full">
                             {personName.charAt(0).toUpperCase()}
                           </span>
                         )}

@@ -21,7 +21,7 @@ export async function getCategories(): Promise<Category[]> {
     .order('name', { ascending: true })
 
   if (error) {
-    console.error('Error fetching categories:', error)
+    console.error('Error fetching categories:', error.message || error)
     return []
   }
 

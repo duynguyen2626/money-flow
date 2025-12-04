@@ -9,6 +9,10 @@ type SheetSyncTransaction = {
   note?: string | null
   tag?: string | null
   shop_name?: string | null
+  shop_id?: string | null
+  shop_image_url?: string | null
+  category_name?: string | null
+  category_type?: string | null
   amount?: number | null
   original_amount?: number | null
   cashback_share_percent?: number | null
@@ -73,11 +77,14 @@ async function getProfileSheetLink(personId: string): Promise<string | null> {
     console.log('[Sheet] Profile lookup result', {
       lookupId: personId,
       profileId: profileRow.id ?? null,
-      sheet_link: sheetLink,
+      sheet_link: sheetLink ? sheetLink.substring(0, 20) + '...' : 'NULL',
     })
     if (isValidWebhook(sheetLink)) {
       return sheetLink
     }
+    console.log('[Sheet] Profile sheet link is invalid', { lookupId: personId, sheet_link: sheetLink ? String(sheetLink).substring(0, 20) + '...' : 'NULL' })
+  } else {
+    console.log('[Sheet] Profile lookup failed (No Data)', { lookupId: personId })
   }
 
   const { data: accountRow, error: accountError } = await supabase
@@ -130,13 +137,51 @@ function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete') {
   // Allow override via txn.type
   const type = txn.type ?? ((txn.amount ?? 0) < 0 ? 'In' : 'Debt');
 
+  // --- MAPPING LOGIC (Sprint 3) ---
+  // Priority 1: Real Shop Name (if shop_id exists)
+  // Priority 2: Service Name (if category is "Online Services")
+  // Priority 3: Counterparty Name (if category type is "debt")
+  // Fallback: Description (Note)
+
+  let finalShopName = txn.shop_name || '';
+  const noteContent = txn.note || '';
+
+  if (txn.shop_id && txn.shop_name) {
+    // Priority 1: Real Shop
+    finalShopName = txn.shop_name;
+  } else if (txn.category_name === 'Online Services') {
+    // Priority 2: Service Name (from Note)
+    finalShopName = noteContent;
+  } else if (txn.category_type === 'debt') {
+    // Priority 3: Counterparty Name (usually passed as shop_name by caller, or fallback to note)
+    if (!finalShopName) {
+      finalShopName = noteContent;
+    }
+  } else {
+    // Fallback
+    if (!finalShopName) {
+      finalShopName = noteContent;
+    }
+  }
+
+  // Constraint: NEVER send "Draft Fund" or "System Account"
+  if (finalShopName === 'Draft Fund' || finalShopName === 'System Account') {
+    finalShopName = noteContent;
+  }
+
+  // 2. Notes Logic
+  // Format: [Icon] Note Content
+  // If we have an icon/emoji, prepend it.
+  // For now, we just pass the note.
+  const finalNote = noteContent;
+
   return {
     action,
     id: txn.id,
     type: type,
     date: txn.occurred_at ?? txn.date ?? null,
-    shop: txn.shop_name ?? '',
-    notes: txn.note ?? '',
+    shop: finalShopName,
+    notes: finalNote,
     amount: originalAmount,
     percent_back: txn.cashback_share_percent_input ?? Math.round(percentRate * 10000) / 100,
     fixed_back: fixedBack,
@@ -212,12 +257,14 @@ export async function syncAllTransactions(personId: string) {
           status,
           tag,
           shop_id,
-          shops ( name ),
+          shops ( name, logo_url ),
           transaction_lines (
             id,
             type,
             account_id,
-            accounts ( name, type )
+            category_id,
+            accounts ( name, type, logo_url ),
+            categories ( name, type )
           )
         )
       `)
@@ -230,36 +277,14 @@ export async function syncAllTransactions(personId: string) {
     }
 
     console.log(`[SheetSync] syncAllTransactions for personId: ${personId}. Found ${data?.length} lines.`);
-    if (data && data.length > 0) {
-      console.log(`[SheetSync] Sample line person_id: ${(data[0] as any).person_id}`);
-    }
 
-    const rows = (data ?? []) as {
-      id: string
-      transaction_id: string
-      amount: number
-      original_amount?: number | null
-      cashback_share_percent?: number | null
-      cashback_share_fixed?: number | null
-      metadata?: unknown
-      transactions: {
-        id: string;
-        occurred_at: string;
-        note: string | null;
-        status: string;
-        tag: string | null;
-        shop_id: string | null;
-        shops: { name: string | null } | null;
-        transaction_lines: Array<{
-          id: string
-          type: 'debit' | 'credit'
-          account_id: string | null
-          accounts: { name: string; type: string } | null
-        }> | null
-      } | null
-    }[]
+    const rows = (data ?? []) as any[]
 
     let sent = 0
+    // Collect all payloads to send in ONE batch (Sprint 3 Requirement)
+    // "Send this entire array in ONE POST request to the Webhook."
+    const payloads: any[] = [];
+
     for (const row of rows) {
       if (!row.transactions) continue
 
@@ -271,20 +296,71 @@ export async function syncAllTransactions(personId: string) {
 
       const shopData = row.transactions.shops as any
       let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
+      const shopId = row.transactions.shop_id
+      let shopImageUrl = Array.isArray(shopData) ? shopData[0]?.logo_url : shopData?.logo_url
+
+      // Determine Category Info
+      // We need to find the "Debit" line (Expense/Asset) to get the category.
+      // Usually the person line is a Credit to Debt Account (if Repayment) or Debit to Debt Account (if Lending).
+      // Wait, if I lend money: Credit Bank, Debit DebtAccount.
+      // The person line is the Debit DebtAccount line.
+      // But the category is on the OTHER Debit line? No, usually Lending has:
+      // Line 1: Credit Source
+      // Line 2: Debit DebtAccount (with category_id)
+      // So the person line ITSELF has the category_id.
+      // Let's check `row.transactions.transaction_lines`.
+      // `row` is from `transaction_lines` table. `row.transactions` is the parent.
+      // `row.transactions.transaction_lines` contains ALL lines.
+
+      // We need to find the category associated with this debt.
+      // If `row` (the person line) has a category_id, use it.
+      // But `row` in the select above doesn't explicitly select `category_id` at the top level, 
+      // but `transactions.transaction_lines` does.
+      // Actually `row` is a `transaction_lines` record.
+      // Let's look at the query: `transaction_lines` -> `transactions` -> `transaction_lines`.
+      // We can find the line in `row.transactions.transaction_lines` that matches `row.id`.
+
+      const allLines = row.transactions.transaction_lines || [];
+      const currentLine = allLines.find((l: any) => l.id === row.id);
+
+      let categoryName = currentLine?.categories?.name;
+      let categoryType = currentLine?.categories?.type;
 
       if (!shopName) {
         // Fallback to Credit Account Name (Source) if available
-        const lines = row.transactions.transaction_lines ?? []
-        // Find a credit line that is NOT the debt account (if possible to distinguish)
-        // Usually the debt account is the one in 'row.account_id' if this was a direct debt line query?
-        // But 'row' is from 'transaction_lines' table.
-        // We want the OTHER account.
-        // Typically Payer = Credit, Debt = Debit (Asset).
-        // Wait, if I lend money: Credit Bank, Debit DebtAccount.
-        // So Source is Credit.
-        const creditLine = lines.find(l => l.type === 'credit')
-        if (creditLine?.accounts?.name) {
-          shopName = creditLine.accounts.name
+        // For Repayment (In), the "Source" is actually the Bank Account (which is Credited in accounting terms if we view from Debt Account perspective? No.)
+        // Repayment: Credit Debt Account (Person), Debit Bank Account.
+        // Wait, Repayment = Money IN to Bank.
+        // Transaction: Debit Bank (Asset Up), Credit Debt Account (Asset Down / Liability Down).
+        // In `transaction_lines`:
+        // Line 1: Debit Bank (type='debit', account_id=Bank)
+        // Line 2: Credit Debt Account (type='credit', account_id=PersonDebtAccount)
+        // The `row` here is the Person Line.
+        // If `row.amount` < 0, it means Credit. So it is a Repayment.
+
+        if (row.amount < 0) {
+          // It is a Repayment. We want the Bank Name.
+          // The Bank Line is the DEBIT line.
+          const debitLine = allLines.find((l: any) => l.type === 'debit' && l.id !== row.id)
+          if (debitLine?.accounts?.name) {
+            shopName = debitLine.accounts.name
+            if (debitLine.accounts.logo_url) {
+              shopImageUrl = debitLine.accounts.logo_url
+            }
+          }
+        } else {
+          // It is a Debt (Lending). Money OUT from Bank.
+          // Transaction: Credit Bank, Debit Debt Account.
+          // `row` is Debit Debt Account (amount > 0).
+          // We want the Bank Name (Source).
+          // The Bank Line is the CREDIT line.
+          const creditLine = allLines.find((l: any) => l.type === 'credit' && l.id !== row.id)
+          if (creditLine?.accounts?.name) {
+            shopName = creditLine.accounts.name
+            if (creditLine.accounts.logo_url) {
+              shopImageUrl = creditLine.accounts.logo_url
+            }
+          }
         }
       }
 
@@ -299,6 +375,10 @@ export async function syncAllTransactions(personId: string) {
           occurred_at: row.transactions.occurred_at,
           note: row.transactions.note,
           shop_name: shopName,
+          shop_id: shopId,
+          shop_image_url: shopImageUrl,
+          category_name: categoryName,
+          category_type: categoryType,
           tag: row.transactions.tag ?? undefined,
           amount: row.amount,
           original_amount: row.original_amount ?? Math.abs(row.amount),
@@ -310,13 +390,23 @@ export async function syncAllTransactions(personId: string) {
         action
       )
 
-      await postToSheet(sheetLink, payload)
-      sent += 1
+      payloads.push(payload);
+    }
 
-      // Gentle pacing to avoid rate limiting
-      if (rows.length > 1) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
+    // Send all in one batch
+    if (payloads.length > 0) {
+      console.log(`[SheetSync] Sending batch of ${payloads.length} transactions to ${sheetLink}`);
+      // Log the first few payloads to debug
+      console.log('[SheetSync] Sample Payloads:', payloads.slice(0, 3).map(p => ({ note: p.notes, amount: p.amount, shop: p.shop })));
+
+      // Wrap in sync_all action structure
+      const finalPayload = {
+        action: 'sync_all',
+        transactions: payloads
+      };
+
+      await postToSheet(sheetLink, finalPayload as any);
+      sent = payloads.length;
     }
 
     return { success: true, count: sent }

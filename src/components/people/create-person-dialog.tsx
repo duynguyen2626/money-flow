@@ -20,7 +20,7 @@ export function CreatePersonDialog({ subscriptions, trigger, open: controlledOpe
   const router = useRouter()
 
   const handleSuccess = () => {
-    setOpen?.(false)
+    // setOpen?.(false) // Keep open to allow adding more
     router.refresh()
   }
 

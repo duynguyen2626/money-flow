@@ -124,6 +124,7 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
       percentValue !== undefined && percentValue !== null ? percentValue * 100 : undefined,
     cashback_share_fixed:
       typeof txn.cashback_share_fixed === "number" ? txn.cashback_share_fixed : undefined,
+    is_voluntary: lines.some(l => (l.metadata as any)?.is_voluntary === true),
   };
 }
 
@@ -851,10 +852,10 @@ export function TransactionTable({
                               <img
                                 src={txn.shop_logo_url}
                                 alt={txn.shop_name}
-                                className="h-5 w-5 rounded-full object-cover"
+                                className="h-9 w-9 rounded-full object-cover"
                               />
                             ) : (
-                              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
+                              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-slate-600">
                                 {txn.shop_name.charAt(0).toUpperCase()}
                               </span>
                             )}

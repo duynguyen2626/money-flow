@@ -261,7 +261,15 @@ async function calculatePersistedCycleTag(
 }
 
 function buildSheetPayload(
-  txn: { id: string; occurred_at: string; note?: string | null; tag?: string | null; shop_name?: string | null },
+  txn: {
+    id: string;
+    occurred_at: string;
+    note?: string | null;
+    tag?: string | null;
+    shop_name?: string | null;
+    shop_id?: string | null;
+    shop_image_url?: string | null;
+  },
   line:
     | {
       amount: number
@@ -269,6 +277,7 @@ function buildSheetPayload(
       cashback_share_percent?: number | null
       cashback_share_fixed?: number | null
       metadata?: Json | null
+      categories?: { name?: string | null; type?: string | null } | null
     }
     | null
 ) {
@@ -283,6 +292,10 @@ function buildSheetPayload(
     note: txn.note ?? undefined,
     tag: txn.tag ?? undefined,
     shop_name: txn.shop_name ?? undefined,
+    shop_id: txn.shop_id ?? undefined,
+    shop_image_url: txn.shop_image_url ?? undefined,
+    category_name: line.categories?.name ?? undefined,
+    category_type: line.categories?.type ?? undefined,
     amount: line.amount,
     original_amount:
       typeof line.original_amount === 'number' ? line.original_amount : Math.abs(line.amount),
@@ -408,6 +421,11 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     }
 
     const shopInfo = await loadShopInfo(supabase, input.shop_id)
+    let categoryInfo: any = null;
+    if (input.category_id) {
+      const { data } = await supabase.from('categories').select('name, type').eq('id', input.category_id).single();
+      categoryInfo = data;
+    }
     let shopName = shopInfo?.name ?? null;
 
     if (!shopName && input.source_account_id) {
@@ -424,6 +442,10 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
         note: input.note,
         tag,
         shop_name: shopName,
+        shop_id: input.shop_id,
+        shop_image_url: shopInfo?.logo_url,
+        category_name: categoryInfo?.name,
+        category_type: categoryInfo?.type,
       };
 
       for (const line of linesWithId) {
@@ -637,7 +659,8 @@ export async function voidTransaction(id: string): Promise<boolean> {
         account_id,
         category_id,
         type,
-        accounts ( name )
+        accounts ( name ),
+        categories ( name, type )
       )
     `
     )
@@ -829,7 +852,12 @@ export async function voidTransaction(id: string): Promise<boolean> {
       }
     }
 
-    const payload = buildSheetPayload({ ...existing as any, shop_name: shopName }, personLine);
+    const payload = buildSheetPayload({
+      ...existing as any,
+      shop_name: shopName,
+      shop_id: (existing as any).shop_id,
+      shop_image_url: (existing as any).shops?.logo_url
+    }, personLine);
     if (payload) {
       try {
         await syncTransactionToSheet(personLine.person_id, payload, 'delete');
@@ -860,25 +888,26 @@ export async function restoreTransaction(id: string): Promise<boolean> {
     .from('transactions')
     .select(
       `
-      id,
-      occurred_at,
-      note,
-      tag,
-      shop_id,
-      shops ( name ),
-      transaction_lines (
-        amount,
-        original_amount,
-        cashback_share_percent,
-        cashback_share_fixed,
-        metadata,
-        person_id,
-        account_id,
-        category_id,
-        type,
-        accounts ( name )
-      )
-    `
+  id,
+    occurred_at,
+    note,
+    tag,
+    shop_id,
+    shops(name),
+    transaction_lines(
+      amount,
+      original_amount,
+      cashback_share_percent,
+      cashback_share_fixed,
+      metadata,
+      person_id,
+      account_id,
+      category_id,
+      type,
+      accounts(name),
+      categories(name, type)
+    )
+      `
     )
     .eq('id', realId)
     .maybeSingle();
@@ -907,7 +936,12 @@ export async function restoreTransaction(id: string): Promise<boolean> {
       }
     }
 
-    const payload = buildSheetPayload({ ...existing as any, shop_name: shopName }, personLine);
+    const payload = buildSheetPayload({
+      ...existing as any,
+      shop_name: shopName,
+      shop_id: (existing as any).shop_id,
+      shop_image_url: (existing as any).shops?.logo_url
+    }, personLine);
     if (payload) {
       try {
         await syncTransactionToSheet(personLine.person_id, payload, 'create');
@@ -932,15 +966,16 @@ export async function deleteTransaction(id: string): Promise<boolean> {
   const { data: existing, error: fetchError } = await supabase
     .from('transactions')
     .select(`
-      id,
-      transaction_lines (
-        person_id,
-        amount,
-        type,
-        accounts ( name )
-      ),
-      shops ( name )
-    `)
+  id,
+    transaction_lines(
+      person_id,
+      amount,
+      type,
+      accounts(name),
+      categories(name, type)
+    ),
+    shops(name, logo_url)
+      `)
     .eq('id', realId)
     .single();
 
@@ -966,7 +1001,11 @@ export async function deleteTransaction(id: string): Promise<boolean> {
       id: realId,
       occurred_at: new Date().toISOString(), // Not used for delete
       amount: 0,
-      shop_name: shopName
+      shop_name: shopName,
+      shop_id: (existing as any).shop_id,
+      shop_image_url: (existing as any).shops?.logo_url,
+      category_name: personLine.categories?.name,
+      category_type: personLine.categories?.type
     };
 
     try {
@@ -994,23 +1033,23 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     .from('transactions')
     .select(
       `
-      id,
-      occurred_at,
-      note,
-      tag,
-      shop_id,
-      shops ( name ),
-      transaction_lines (
-        amount,
-        original_amount,
-        cashback_share_percent,
-        cashback_share_fixed,
-        metadata,
-        person_id,
-        type,
-        accounts ( name )
-      )
-    `
+  id,
+    occurred_at,
+    note,
+    tag,
+    shop_id,
+    shops(name),
+    transaction_lines(
+      amount,
+      original_amount,
+      cashback_share_percent,
+      cashback_share_fixed,
+      metadata,
+      person_id,
+      type,
+      accounts(name)
+    )
+      `
     )
     .eq('id', id)
     .maybeSingle();
@@ -1129,6 +1168,7 @@ type RefundTransactionLine = {
   metadata?: Json | null
   categories?: {
     name?: string | null
+    type?: string | null
   } | null
   accounts?: {
     name?: string | null
@@ -1202,22 +1242,22 @@ export async function requestRefund(
   const { data: existing, error: fetchError } = await supabase
     .from('transactions')
     .select(`
+  id,
+    note,
+    tag,
+    shop_id,
+    transaction_lines(
       id,
-      note,
-      tag,
-      shop_id,
-      transaction_lines (
-        id,
-        amount,
-        type,
-        account_id,
-        category_id,
-        original_amount,
-        person_id,
-        metadata,
-        categories ( name )
-      )
-    `)
+      amount,
+      type,
+      account_id,
+      category_id,
+      original_amount,
+      person_id,
+      metadata,
+      categories(name)
+    )
+      `)
     .eq('id', transactionId)
     .maybeSingle();
 
@@ -1260,7 +1300,7 @@ export async function requestRefund(
   if (currentRefundedAmount + requestedAmount > totalOriginalAmount) {
     return {
       success: false,
-      error: `Refund amount (${requestedAmount}) plus refunded (${currentRefundedAmount}) exceeds original total (${totalOriginalAmount}).`,
+      error: `Refund amount(${requestedAmount}) plus refunded(${currentRefundedAmount}) exceeds original total(${totalOriginalAmount}).`,
     }
   }
 
@@ -1274,17 +1314,17 @@ export async function requestRefund(
   // 0. Update Original Transaction Note with Sequence 1 if needed
   const originalNote = (existing as any).note ?? '';
   if (!originalNote.includes(groupTag)) {
-    const newOriginalNote = `1.${groupTag} ${originalNote}`;
+    const newOriginalNote = `1.${groupTag} ${originalNote} `;
     await (supabase.from('transactions').update as any)({ note: newOriginalNote }).eq('id', transactionId);
   } else if (!originalNote.startsWith('1.')) {
     // If it has tag but no sequence, maybe add it? Or assume it's fine. 
     // Let's just prepend 1. if it's not there.
-    const newOriginalNote = `1.${originalNote}`;
+    const newOriginalNote = `1.${originalNote} `;
     await (supabase.from('transactions').update as any)({ note: newOriginalNote }).eq('id', transactionId);
   }
 
   const requestNote = options?.note
-    ? `2.${groupTag} ${options.note}`
+    ? `2.${groupTag} ${options.note} `
     : `2.${groupTag} Refund Request for ${originalNote}`
 
   const originalCashbackPercent = ((existing as any).transaction_lines as any[]).find((l: any) => typeof l.cashback_share_percent === 'number')?.cashback_share_percent;
@@ -1477,17 +1517,17 @@ export async function confirmRefund(
   const { data: pending, error: pendingError } = await supabase
     .from('transactions')
     .select(`
+  id,
+    note,
+    tag,
+    transaction_lines(
       id,
-      note,
-      tag,
-      transaction_lines (
-        id,
-        amount,
-        type,
-        account_id,
-        metadata
-      )
-    `)
+      amount,
+      type,
+      account_id,
+      metadata
+    )
+      `)
     .eq('id', pendingTransactionId)
     .maybeSingle();
 
@@ -1746,19 +1786,19 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
   const { data, error } = await supabase
     .from('transactions')
     .select(`
-      id,
-      occurred_at,
-      note,
-      tag,
-      transaction_lines!inner (
-        amount,
-        type,
-        account_id,
-        category_id,
-        metadata,
-        categories ( name )
-      )
-    `)
+  id,
+    occurred_at,
+    note,
+    tag,
+    transaction_lines!inner(
+      amount,
+      type,
+      account_id,
+      category_id,
+      metadata,
+      categories(name)
+    )
+      `)
     .filter('transaction_lines.metadata->>refund_status', 'eq', 'requested')
     .order('occurred_at', { ascending: false })
 
@@ -1813,29 +1853,29 @@ export async function getUnifiedTransactions(
 ): Promise<TransactionWithDetails[]> {
   const supabase = createClient()
   const selection = `
-      id,
-      occurred_at,
-      note,
-      tag,
-      status,
-      created_at,
-      shop_id,
-      shops ( id, name, logo_url, default_category_id, categories ( id, name, type, image_url, icon ) ),
-      transaction_lines (
-        amount,
-        type,
-        account_id,
-        metadata,
-        category_id,
-        person_id,
-        original_amount,
-        cashback_share_percent,
-        cashback_share_fixed,
-        profiles ( name, avatar_url ),
-        accounts (name, type, logo_url),
-        categories (name, type, image_url, icon)
-      )
-    `
+  id,
+    occurred_at,
+    note,
+    tag,
+    status,
+    created_at,
+    shop_id,
+    shops(id, name, logo_url, default_category_id, categories(id, name, type, image_url, icon)),
+    transaction_lines(
+      amount,
+      type,
+      account_id,
+      metadata,
+      category_id,
+      person_id,
+      original_amount,
+      cashback_share_percent,
+      cashback_share_fixed,
+      profiles(name, avatar_url),
+      accounts(name, type, logo_url),
+      categories(name, type, image_url, icon)
+    )
+      `
 
   const parsed =
     typeof accountOrOptions === 'object' && accountOrOptions !== null

@@ -42,10 +42,18 @@ export function ConfirmMoneyReceived({ accountId, minimal = false }: ConfirmMone
 
     const fetchPendingItems = async () => {
         try {
-            const response = await fetch(`/api/batch/pending-items?accountId=${accountId}`)
-            if (response.ok) {
-                const data = await response.json()
-                setPendingItems(data)
+            const supabase = createClient()
+            const { data, error } = await supabase
+                .from('batch_items')
+                .select('id, amount, receiver_name, note, batch_id, batch:batches(name)')
+                .eq('target_account_id', accountId)
+                .eq('status', 'pending')
+                .order('created_at', { ascending: false })
+
+            if (error) throw error
+
+            if (data) {
+                setPendingItems(data as any[])
             }
         } catch (error) {
             console.error('Failed to fetch pending items:', error)

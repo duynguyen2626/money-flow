@@ -89,6 +89,7 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
   const [botNoteTemplate, setBotNoteTemplate] = useState('')
   const [isBotLoading, setIsBotLoading] = useState(false)
   const [isBotSaving, setIsBotSaving] = useState(false)
+  const [maxSlots, setMaxSlots] = useState<number | null>(null)
 
   // Payment Status State
   const [paymentStatus, setPaymentStatus] = useState<{ confirmed: boolean, amount: number }>({ confirmed: false, amount: 0 })
@@ -137,10 +138,12 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
           const c = config.config as any
           setBotRunDay(c.runDay || 1)
           setBotNoteTemplate(c.noteTemplate || '')
+          setMaxSlots(c.maxSlots || null)
         }
       } else {
         // Default values
         setBotNoteTemplate(service.note_template || `{service} {date} [{slots} slots] [{price}]`)
+        setMaxSlots(null)
       }
     } catch (error) {
       console.error('Failed to load bot config:', error)
@@ -167,7 +170,8 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
       await saveServiceBotConfigAction(service.id, {
         isEnabled: isBotEnabled,
         runDay: botRunDay,
-        noteTemplate: botNoteTemplate
+        noteTemplate: botNoteTemplate,
+        maxSlots: maxSlots
       })
 
       toast.success('Settings saved successfully')
@@ -235,7 +239,7 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
     const updatedMembers = [...watchedMembers, newMember]
     setWatchedMembers(updatedMembers)
     await updateServiceMembersAction(service.id, updatedMembers)
-    setIsAddMemberDialogOpen(false)
+    // setIsAddMemberDialogOpen(false) // Keep open for multiple adds
   }
 
   async function handleRemoveMember(memberId: string) {
@@ -304,7 +308,15 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
         {/* Members Section */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Members</h4>
+            <div className="flex items-center gap-2">
+              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Members</h4>
+              <span className={cn(
+                "text-xs font-medium px-2 py-0.5 rounded-full",
+                maxSlots && totalSlots > maxSlots ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-600"
+              )}>
+                {totalSlots} {maxSlots ? `/ ${maxSlots}` : ''} Slots
+              </span>
+            </div>
             <Dialog open={isAddMemberDialogOpen} onOpenChange={setIsAddMemberDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm" className="h-7 text-xs">
@@ -354,7 +366,14 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">Slots:</span>
+                  <span className="text-xs text-slate-400">
+                    {member.slots > 0 && (
+                      <span className="mr-2 font-mono">
+                        {(Math.round((price || 0) / totalSlots * member.slots)).toLocaleString()}đ
+                      </span>
+                    )}
+                    Slots:
+                  </span>
                   <Input
                     type="number"
                     min="0"
@@ -452,6 +471,16 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
                         value={botRunDay}
                         onChange={(e) => setBotRunDay(parseInt(e.target.value))}
                         className="h-8"
+                      />
+                    </div>
+                    <div className="grid gap-1">
+                      <Label className="text-xs">Max Slots (Optional)</Label>
+                      <Input
+                        type="number" min={1}
+                        value={maxSlots ?? ''}
+                        onChange={(e) => setMaxSlots(e.target.value ? parseInt(e.target.value) : null)}
+                        className="h-8"
+                        placeholder="Unlimited"
                       />
                     </div>
                   </div>

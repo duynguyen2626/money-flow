@@ -5,16 +5,20 @@ import { useRouter } from 'next/navigation'
 import { ServiceForm, ServiceFormValues } from './service-form'
 import { upsertService } from '@/services/service-manager'
 
+import { Person } from '@/types/moneyflow.types'
+
 type CreateServiceDialogProps = {
   trigger?: React.ReactNode
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  people: Person[]
 }
 
 export function ServiceCreateDialog({
   trigger,
   open: controlledOpen,
   onOpenChange: setControlledOpen,
+  people,
 }: CreateServiceDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false)
   const isControlled = controlledOpen !== undefined
@@ -33,9 +37,10 @@ export function ServiceCreateDialog({
   const stopPropagation = (event: MouseEvent<HTMLDivElement>) => {
     event.stopPropagation()
   }
-  
+
   const handleSubmit = async (values: ServiceFormValues) => {
-    await upsertService(values, []);
+    // @ts-ignore
+    await upsertService(values, values.members || []);
     handleSuccess();
   }
 
@@ -85,6 +90,7 @@ export function ServiceCreateDialog({
               mode="create"
               onCancel={closeDialog}
               onSubmit={handleSubmit}
+              people={people}
             />
           </div>
         </div>

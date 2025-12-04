@@ -544,6 +544,8 @@ export function TransactionForm({
     // REMOVED: Auto-selection for 'transfer' type to fix incorrect Money Transfer category bug
   }, [transactionType, categories, shops, form, isEditMode]);
 
+
+
   const watchedCategoryId = useWatch({
     control,
     name: 'category_id',
@@ -1064,7 +1066,19 @@ export function TransactionForm({
 
   useEffect(() => {
     if (!manualTagMode && watchedDate) {
-      form.setValue('tag', generateTag(watchedDate));
+      // form.setValue('tag', generateTag(watchedDate)); // OLD LOGIC
+      // NEW LOGIC:
+      try {
+        const date = new Date(watchedDate);
+        if (!isNaN(date.getTime())) {
+          const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+          const year = date.getFullYear().toString().slice(-2);
+          const newTag = `${month}${year}`;
+          if (form.getValues('tag') !== newTag) {
+            form.setValue('tag', newTag);
+          }
+        }
+      } catch (e) { }
     }
   }, [watchedDate, manualTagMode, form]);
 
@@ -1235,10 +1249,9 @@ export function TransactionForm({
   }, [transactionType, watchedDebtAccountId, allAccounts]);
 
   const ShopInput =
-    transactionType === 'expense' ||
+    (transactionType === 'expense' ||
       transactionType === 'debt' ||
-      transactionType === 'repayment' ||
-      (isEditMode && transactionType !== 'income' && transactionType !== 'transfer') ? (
+      (isEditMode && transactionType !== 'income' && transactionType !== 'transfer' && transactionType !== 'repayment')) ? (
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
           <Store className="h-4 w-4 text-slate-500" />
@@ -1624,7 +1637,6 @@ export function TransactionForm({
 
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-600">% Back</label>
           <Controller
             control={control}
             name="cashback_share_percent"
@@ -1641,7 +1653,7 @@ export function TransactionForm({
                   const clamped = Math.min(val, max)
                   field.onChange(clamped)
                 }}
-                disabled={budgetMaxed}
+                disabled={budgetMaxed && !isVoluntary}
                 className="w-full"
                 placeholder="Enter percentage"
               />
@@ -1654,7 +1666,6 @@ export function TransactionForm({
           )}
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-600">Fixed Back</label>
           <Controller
             control={control}
             name="cashback_share_fixed"
@@ -1669,7 +1680,7 @@ export function TransactionForm({
                   const clamped = amountValue > 0 ? Math.min(val, amountValue) : val
                   field.onChange(clamped)
                 }}
-                disabled={budgetMaxed}
+                disabled={budgetMaxed && !isVoluntary}
                 placeholder="Enter fixed amount"
                 label="Fixed Amount"
                 className="w-full"
@@ -1754,7 +1765,7 @@ export function TransactionForm({
   const showVoluntaryToggle =
     (transactionType === 'expense' || transactionType === 'debt') &&
     selectedAccount &&
-    (selectedAccount.type !== 'credit_card' || !selectedAccount.cashback_config)
+    (selectedAccount.type !== 'credit_card' || !selectedAccount.cashback_config || budgetMaxed)
 
   const VoluntaryCashbackInput = showVoluntaryToggle ? (
     <div className="flex items-center justify-between rounded-lg border border-slate-200 p-4 bg-slate-50">
