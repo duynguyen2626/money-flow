@@ -171,9 +171,9 @@ export async function getServicePaymentStatusAction(serviceId: string, monthTag:
 }
 
 
-export async function runAllServiceDistributionsAction() {
+export async function runAllServiceDistributionsAction(date?: string) {
   try {
-    const result = await distributeAllServices()
+    const result = await distributeAllServices(date)
     revalidatePath('/services')
     revalidatePath('/')
     revalidatePath('/transactions')
