@@ -177,7 +177,8 @@ export async function distributeService(serviceId: string, customDate?: string, 
         .update({
           note: note,
           occurred_at: transactionDate,
-          tag: monthTag // [M2-SP2] Ensure tag is updated
+          tag: monthTag, // [M2-SP2] Ensure tag is updated
+          shop_id: (service as any).shop_id
         } as any)
         .eq('id', transactionId);
 
@@ -196,7 +197,8 @@ export async function distributeService(serviceId: string, customDate?: string, 
           occurred_at: transactionDate,
           note: note,
           metadata: metadata,
-          tag: monthTag // [M2-SP2] Add tag for filtering
+          tag: monthTag, // [M2-SP2] Add tag for filtering
+          shop_id: (service as any).shop_id
         }] as any)
         .select()
         .single();
@@ -404,4 +406,44 @@ export async function saveServiceBotConfig(serviceId: string, config: any) {
 
   if (error) throw error
   return true
+}
+
+export async function distributeAllServices() {
+  const supabase: any = createClient()
+  console.log('Starting batch distribution for all active services...')
+
+  // 1. Fetch all active services
+  const { data: services, error } = await supabase
+    .from('subscriptions')
+    .select('id, name')
+    .eq('is_active', true)
+
+  if (error) {
+    console.error('Error fetching active services:', error)
+    throw new Error('Failed to fetch active services')
+  }
+
+  if (!services || services.length === 0) {
+    console.log('No active services found.')
+    return { success: 0, failed: 0, total: 0 }
+  }
+
+  console.log(`Found ${services.length} active services.`)
+
+  let successCount = 0
+  let failedCount = 0
+
+  // 2. Distribute each service
+  for (const service of services) {
+    try {
+      await distributeService(service.id)
+      successCount++
+    } catch (err) {
+      console.error(`Failed to distribute service ${service.name} (${service.id}):`, err)
+      failedCount++
+    }
+  }
+
+  console.log(`Batch distribution completed. Success: ${successCount}, Failed: ${failedCount}`)
+  return { success: successCount, failed: failedCount, total: services.length }
 }

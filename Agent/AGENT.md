@@ -1,156 +1,92 @@
-MILESTONE 2 - SPRINT 2: REAL MONEY AUTOMATION & BOT
+MILESTONE 2 - SPRINT 3.2: AUTO-DISTRIBUTE FIXES, BULK ACTION & UI POLISH
 
-Goal: Implement the "Confirm" workflow to turn Draft allocations into Real Transactions, and build the Service Automation Bot UI.
+Goal: Ensure Data Integrity for Auto-Distributed Transactions (Shop Image/ID), implement "Run All", and standardize Icon sizing across the app.
 
 1. Git Convention
 
-Branch: feat/M2-SP2-batch-confirm-and-bot
+Branch: fix/M2-SP3.2-distribute-polish
 
-Commit: [M2-SP2] feat: ...
+Commit: [M2-SP3.2] fix: ...
 
-2. Feature 1: Batch Confirmation & Revert Logic
+PART A: DATA INTEGRITY FIX (Backend)
 
-Context:
-Currently, Batch Items are just "Draft" allocations. We need a "Confirm" button to materialize them into REAL transactions in the transactions table. Conversely, voiding that transaction must "Revert" the batch item status so it can be re-processed.
+1. Fix Missing Shop ID in Auto-Distribute
 
-A. Backend Logic (Batch Service)
+File: src/services/service-manager.ts (Function: distributeServiceCost)
 
-File: src/services/batch.service.ts
+The Bug:
+Transactions created by auto-distribution have shop_id: null. This breaks the Sheet Sync (missing Shop Name) and causes UI inconsistency (fallback to Category icon instead of Shop Logo).
 
-Task 1: confirmBatchItem(itemId, targetAccountId)
+The Fix:
 
-Input: itemId (UUID), targetAccountId (UUID - The Real Bank Account receiving money).
+Retrieve: Ensure shop_id is selected when fetching subscriptions.
 
-Process:
+Insert: Pass shop_id explicitly to TransactionService.createTransaction.
 
-Fetch Batch Item. Verify status is funded (which means Pending in our UI terms).
-
-Create Transaction:
-
-from_account_id: '88888888-9999-9999-9999-111111111111' (Fixed ID for "Draft Fund").
-
-to_account_id: targetAccountId.
-
-amount: item.amount.
-
-type: 'transfer' (Internal movement).
-
-category_id: Use the Service's Category ID (if available) or leave null for transfers.
-
-description: CKL: ${item.note} (CKL = Chu Kỳ Lương/Cycle).
-
-transaction_date: new Date().
-
-Update Batch Item:
-
-status: 'confirmed'.
-
-transaction_id: The ID of the newly created transaction.
-
-Task 2: revertBatchItem(transactionId)
-
-Process:
-
-Find the batch_item linked to this transactionId.
-
-Update batch_item:
-
-status: 'funded' (Reset to Pending).
-
-transaction_id: null (Unlink).
-
-B. Backend Logic (Transaction Service)
-
-File: src/services/transaction.service.ts
-
-Task: Hook into voidTransaction or updateTransactionStatus.
-
-Logic:
-
-// Inside voidTransaction function
-// ... existing void logic ...
-
-// [M2-SP2] Trigger Batch Revert if applicable
-const { data: batchItem } = await supabase
-    .from('batch_items')
-    .select('id')
-    .eq('transaction_id', transactionId)
-    .single();
-
-if (batchItem) {
-    // Call the revert function from BatchService (you might need to inject dependencies or use a shared helper to avoid circular imports)
-    // Ideally, emit an event or call a dedicated handler.
-    await BatchService.revertBatchItem(transactionId); 
+// Ensure payload includes:
+{
+  shop_id: subscription.shop_id, // <--- MUST BE PRESENT
+  // ... other fields
 }
 
 
-C. UI Update (Batch Detail Page)
+PART B: UI POLISH (Frontend)
 
-File: src/app/batch/[id]/page.tsx & src/components/batch/items-table.tsx
+1. Standardize Transaction Icons
 
-Column "Account":
+File: src/components/moneyflow/unified-transaction-table.tsx (or transaction-table.tsx)
 
-Old: Shows only "Draft Fund".
+The Bug:
+Icons have inconsistent sizes. Some are Emojis (Category), some are Images (Shop/Account). Youtube icon is showing at wrong size/ratio compared to iCloud.
 
-New Requirement:
+The Fix:
 
-If status === 'confirmed': Show Draft Fund ➔ [Target Account Name]. Use a visual arrow icon (e.g., Lucide ArrowRight).
+Locate the Avatar or Image component rendering the transaction icon/logo.
 
-If status === 'funded': Show Draft Fund ➔ [Greyed out Placeholder].
+Enforce Strict Classes:
 
-Action "Confirm":
+Container: w-8 h-8 (or w-10 h-10), flex items-center justify-center, overflow-hidden, rounded-full (or rounded-md).
 
-Add a Green "Confirm" Button for items with status funded.
+Image: w-full h-full object-cover (or object-contain).
 
-Behavior: Clicking "Confirm" opens a Modal/Dialog:
+Emoji Fallback: text-lg (or specific size to match image visual weight).
 
-Title: "Confirm Transfer to Real Account".
+Logic: Always try to render shop.logo_url first. If not, category.icon (Emoji).
 
-Dropdown: Select "Target Account" (Load list from accounts table).
+PART C: NEW FEATURE - DISTRIBUTE ALL (Backend & Frontend)
 
-Auto-select: If the batch item already has a target_account_id set (from Bot config), pre-select it.
+1. Backend Action
 
-On Save: Call confirmBatchItem action. Update UI state to "Confirmed" (Disable button or change to "View Txn").
+File: src/actions/service-actions.ts
+Task: Create runAllServiceDistributions().
 
-3. Feature 2: Service Bot Automation Settings
+Fetch active subscriptions.
 
-Context:
-Each Service (e.g., Netflix, Spotify) needs a "Settings" tab to configure auto-distribution rules.
+Run distributeServiceCost for each in parallel (Promise.allSettled).
 
-File: src/app/services/[id]/page.tsx (or new component ServiceSettingsTab)
+Return summary stats.
 
-UI Requirements:
+2. UI Button
 
-Tab Layout: Add a new tab named "Settings & Bot".
+File: src/app/services/page.tsx
+Task: Add "⚡ Distribute All" button next to "Add Service".
 
-Card 1: Automation Config
+Interaction: Confirm Dialog -> Call Action -> Toast Success.
 
-Toggle Switch: "Auto Run Monthly".
+4. Execution Plan
 
-Input Number: "Run Day" (1-31).
+Step 1 (Backend): Fix service-manager.ts (Shop ID logic).
 
-Input Text: "Note Template" (e.g., "Tiền {Service} T{Month}").
+Step 2 (Frontend): Fix transaction-table.tsx (Strict Icon CSS).
 
-Note: Save these configs to the bot_configs table (linked to service_id).
+Step 3 (Feature): Implement "Distribute All" (Action + UI).
 
-Card 2: Manual Trigger (Testing)
+Step 4 (Verify):
 
-Button: "⚡ Run Distribution Now".
+Delete old "Youtube" transaction.
 
-Behavior: Trigger the existing distribution logic immediately (Manual Mode).
+Click "Distribute All".
 
-Logic Constraint: If re-running, DO NOT overwrite items that are already confirmed. Only update amount for funded (pending) items if the Service price changed.
+Check: New transaction MUST have the Youtube Shop Logo (not generic Category icon) and it must be the same size as other icons.
 
-4. Execution Plan (Step-by-Step for Agent)
-
-Step 1: Implement confirmBatchItem and revertBatchItem in batch.service.ts.
-
-Step 2: Hook voidTransaction in transaction.service.ts to call revertBatchItem.
-
-Step 3: Update Batch Items Table UI (Columns & Confirm Button + Dialog).
-
-Step 4: Build Service Settings Tab with Auto/Manual controls.
-
-Step 5: Verification: Run npm run build to ensure no circular dependency errors between Services.
-
-👉 Acknowledge this plan and start with Step 1.
+👉 Acknowledge Sprint 3.2 and start with Step 1.

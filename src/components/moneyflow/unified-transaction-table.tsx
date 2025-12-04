@@ -1026,6 +1026,12 @@ export function UnifiedTransactionTable({
                       displayName = txn.destination_name;
                     }
 
+                    // [Fix] Service Payment: Use Bank Icon if no Shop Logo
+                    const isServicePayment = txn.note?.startsWith('Payment for Service') || (txn.metadata as any)?.type === 'service_payment';
+                    if (isServicePayment && !displayIcon) {
+                      displayIcon = txn.source_logo;
+                    }
+
                     return (
                       <div className="flex items-center gap-2 max-w-[260px] overflow-hidden">
                         <button
@@ -1044,13 +1050,15 @@ export function UnifiedTransactionTable({
                           {!(txn.note && txn.note.match(/^(\d+)\.\[([A-Z0-9]+)\]/)) && (
                             displayIcon ? (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={displayIcon}
-                                alt={displayName || 'Shop'}
-                                className="h-5 w-auto object-contain"
-                              />
+                              <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
+                                <img
+                                  src={displayIcon}
+                                  alt={displayName || 'Shop'}
+                                  className="h-full w-full object-contain"
+                                />
+                              </div>
                             ) : (
-                              <span className="flex h-5 w-5 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600">
+                              <span className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-xs font-bold text-slate-600 shrink-0 rounded-full border border-slate-200">
                                 {displayName ? displayName.charAt(0).toUpperCase() : '🛍️'}
                               </span>
                             )
@@ -1090,13 +1098,15 @@ export function UnifiedTransactionTable({
                         <div className="flex items-center gap-2 max-w-[200px]">
                           {txn.category_image_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={txn.category_image_url}
-                              alt={txn.category_name ?? 'Category'}
-                              className="h-8 w-8 object-contain rounded-none"
-                            />
+                            <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
+                              <img
+                                src={txn.category_image_url}
+                                alt={txn.category_name ?? 'Category'}
+                                className="h-full w-full object-contain"
+                              />
+                            </div>
                           ) : (
-                            <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
+                            <span className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-lg font-semibold text-slate-600 rounded-full border border-slate-200">
                               {txn.category_icon ?? (txn.category_name ? txn.category_name.charAt(0).toUpperCase() : '?')}
                             </span>
                           )}
@@ -1109,17 +1119,21 @@ export function UnifiedTransactionTable({
                   }
                   case "account": {
                     const sourceIcon = txn.source_logo ? (
-                      <img src={txn.source_logo} alt={txn.source_name ?? ''} className="h-8 w-8 object-contain rounded-none" />
+                      <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
+                        <img src={txn.source_logo} alt={txn.source_name ?? ''} className="h-full w-full object-contain" />
+                      </div>
                     ) : (
-                      <div className="flex h-8 w-8 items-center justify-center bg-slate-100 text-sm font-bold border rounded-none">
+                      <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-xs font-bold border border-slate-200 rounded-full">
                         {(txn.source_name ?? '?').charAt(0).toUpperCase()}
                       </div>
                     );
 
                     const destIcon = txn.destination_logo ? (
-                      <img src={txn.destination_logo} alt={txn.destination_name ?? ''} className="h-8 w-8 object-contain rounded-none" />
+                      <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
+                        <img src={txn.destination_logo} alt={txn.destination_name ?? ''} className="h-full w-full object-contain" />
+                      </div>
                     ) : (
-                      <div className="flex h-8 w-8 items-center justify-center bg-slate-100 text-sm font-bold border rounded-none">
+                      <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-xs font-bold border border-slate-200 rounded-full">
                         {(txn.destination_name ?? '?').charAt(0).toUpperCase()}
                       </div>
                     );
@@ -1186,9 +1200,11 @@ export function UnifiedTransactionTable({
                       <div className="flex items-center gap-2 min-w-[150px]">
                         {txn.source_name ? sourceIcon : (
                           accountLogo ? (
-                            <img src={accountLogo} alt={txn.account_name ?? ''} className="h-8 w-8 object-contain rounded-none" />
+                            <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
+                              <img src={accountLogo} alt={txn.account_name ?? ''} className="h-full w-full object-contain" />
+                            </div>
                           ) : (
-                            <div className="flex h-8 w-8 items-center justify-center bg-slate-100 text-sm font-bold border rounded-none">
+                            <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-xs font-bold border border-slate-200 rounded-full">
                               {(txn.account_name ?? '?').charAt(0).toUpperCase()}
                             </div>
                           )
