@@ -1,6 +1,6 @@
 'use server'
 
-import { upsertService, distributeService, deleteService, updateServiceMembers, getServiceBotConfig, saveServiceBotConfig } from '@/services/service-manager'
+import { upsertService, distributeService, distributeAllServices, deleteService, updateServiceMembers, getServiceBotConfig, saveServiceBotConfig } from '@/services/service-manager'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants'
@@ -32,6 +32,18 @@ export async function distributeServiceAction(serviceId: string, customDate?: st
     revalidatePath('/')
     revalidatePath('/transactions')
     return { success: true, transactions }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+export async function distributeAllServicesAction(customDate?: string, customNoteFormat?: string) {
+  try {
+    const result = await distributeAllServices(customDate, customNoteFormat)
+    revalidatePath('/services')
+    revalidatePath('/')
+    revalidatePath('/transactions')
+    return { success: true, results: result.results }
   } catch (error: any) {
     return { success: false, error: error.message }
   }

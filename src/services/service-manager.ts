@@ -427,3 +427,46 @@ export async function saveServiceBotConfig(serviceId: string, config: any) {
   if (error) throw error
   return true
 }
+
+export async function distributeAllServices(customDate?: string, customNoteFormat?: string) {
+  const supabase = createClient()
+  console.log('Distributing ALL services...')
+
+  // 1. Fetch all active subscriptions
+  const { data: services, error } = await supabase
+    .from('subscriptions')
+    .select('id, name')
+    .eq('status', 'active')
+
+  if (error) {
+    console.error('Error fetching services:', error)
+    throw new Error('Failed to fetch services')
+  }
+
+  const activeServices = services as { id: string; name: string }[] | null
+
+  if (!activeServices || activeServices.length === 0) {
+    console.log('No active services found.')
+    return { transactions: [], results: [] }
+  }
+
+  console.log(`Found ${activeServices.length} services to distribute.`)
+
+  const allTransactions = []
+  const results = []
+
+  // 2. Distribute each service
+  for (const service of activeServices) {
+    try {
+      console.log(`Distributing service: ${service.name} (${service.id})`)
+      const txns = await distributeService(service.id, customDate, customNoteFormat)
+      allTransactions.push(...txns)
+      results.push({ service: service.name, status: 'success', count: txns.length })
+    } catch (err) {
+      console.error(`Failed to distribute service ${service.name}:`, err)
+      results.push({ service: service.name, status: 'error', error: err })
+    }
+  }
+
+  return { transactions: allTransactions, results }
+}

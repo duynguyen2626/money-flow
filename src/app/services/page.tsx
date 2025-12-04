@@ -2,6 +2,7 @@ import { getServices } from '@/services/service-manager'
 import { getPeople } from '@/services/people.service'
 import { ServiceCard } from '@/components/services/service-card'
 import { ServiceCreateDialog } from '@/components/services/service-create-dialog'
+import { DistributeAllButton } from '@/components/services/distribute-all-button'
 import { PlusCircle } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -21,6 +22,7 @@ export default async function ServicesPage() {
             <p className="text-sm text-slate-500">Manage your services and allocations.</p>
           </div>
           <div className="flex items-center gap-3">
+            <DistributeAllButton />
             <ServiceCreateDialog
               people={people}
               trigger={
