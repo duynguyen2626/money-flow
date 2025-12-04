@@ -286,6 +286,8 @@ export interface Database {
           name: string
           source_account_id: string | null
           sheet_link: string | null
+          display_link: string | null
+          sheet_name: string | null
           created_at: string
           updated_at: string
           status: string | null
@@ -298,6 +300,8 @@ export interface Database {
           name: string
           source_account_id?: string | null
           sheet_link?: string | null
+          display_link?: string | null
+          sheet_name?: string | null
           created_at?: string
           updated_at?: string
           status?: string | null
@@ -310,6 +314,8 @@ export interface Database {
           name?: string
           source_account_id?: string | null
           sheet_link?: string | null
+          display_link?: string | null
+          sheet_name?: string | null
           created_at?: string
           updated_at?: string
           status?: string | null

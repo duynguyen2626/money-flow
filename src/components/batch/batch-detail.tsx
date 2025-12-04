@@ -7,25 +7,27 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AddItemDialog } from './add-item-dialog'
 import { ItemsTable } from './items-table'
-import { sendBatchToSheetAction, fundBatchAction, deleteBatchAction, confirmBatchItemAction } from '@/actions/batch.actions'
-import { Loader2, CheckCircle2, DollarSign, Trash2, Send } from 'lucide-react'
+import { Loader2, CheckCircle2, DollarSign, Trash2, Send, ExternalLink, Settings, ChevronLeft, ChevronRight } from 'lucide-react'
+import { sendBatchToSheetAction, fundBatchAction, deleteBatchAction, confirmBatchItemAction, updateBatchCycleAction } from '@/actions/batch.actions'
 import { useRouter } from 'next/navigation'
 import { CloneBatchDialog } from './clone-batch-dialog'
 import { BatchSettingsDialog } from './batch-settings-dialog'
 import { toast } from 'sonner'
-
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { formatCurrency } from '@/lib/account-utils'
 import { ConfirmSourceDialog } from './confirm-source-dialog'
 import { SYSTEM_ACCOUNTS } from '@/lib/constants'
+import { LinkSheetDialog } from './link-sheet-dialog'
 
 export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, accounts: any[], bankMappings?: any[] }) {
     const [sending, setSending] = useState(false)
     const [funding, setFunding] = useState(false)
     const [deleting, setDeleting] = useState(false)
     const [confirming, setConfirming] = useState(false)
+    const [updatingCycle, setUpdatingCycle] = useState(false)
     const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
     const [showConfirmDialog, setShowConfirmDialog] = useState(false)
+    const [linkDialogOpen, setLinkDialogOpen] = useState(false)
     const router = useRouter()
 
     const sourceAccount = accounts.find(a => a.id === batch.source_account_id)
@@ -108,15 +110,70 @@ export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, acc
         }
     }
 
+    async function handleCycleUpdate(action: 'prev' | 'next') {
+        setUpdatingCycle(true)
+        try {
+            await updateBatchCycleAction(batch.id, action)
+            toast.success('Batch cycle updated')
+            router.refresh()
+        } catch (error) {
+            console.error(error)
+            toast.error('Failed to update batch cycle')
+        } finally {
+            setUpdatingCycle(false)
+        }
+    }
+
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
                     <div className="flex items-center gap-3">
-                        <h1 className="text-3xl font-bold">{batch.name}</h1>
+                        <div className="flex items-center gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => handleCycleUpdate('prev')} disabled={updatingCycle} className="h-8 w-8">
+                                <ChevronLeft className="h-4 w-4" />
+                            </Button>
+                            <h1 className="text-3xl font-bold">{batch.name}</h1>
+                            <Button variant="ghost" size="icon" onClick={() => handleCycleUpdate('next')} disabled={updatingCycle} className="h-8 w-8">
+                                <ChevronRight className="h-4 w-4" />
+                            </Button>
+                        </div>
                         <span className="inline-flex items-center rounded-md bg-rose-100 px-3 py-1 text-xl font-bold text-rose-700 border border-rose-200">
                             Total: {new Intl.NumberFormat('en-US').format(batch.batch_items.reduce((sum: number, item: any) => sum + Math.abs(item.amount ?? 0), 0))}
                         </span>
+                        {batch.display_link && (
+                            <div className="flex items-center gap-2">
+                                <a
+                                    href={batch.display_link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                                    title={batch.display_link}
+                                >
+                                    <ExternalLink className="h-4 w-4" />
+                                    {batch.sheet_name || "Sheet Link"}
+                                </a>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-muted-foreground hover:text-blue-600"
+                                    onClick={() => setLinkDialogOpen(true)}
+                                >
+                                    <Settings className="h-3 w-3" />
+                                </Button>
+                            </div>
+                        )}
+                        {!batch.display_link && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs text-muted-foreground hover:text-blue-600 h-6"
+                                onClick={() => setLinkDialogOpen(true)}
+                            >
+                                <ExternalLink className="h-3 w-3 mr-1" />
+                                Link Sheet
+                            </Button>
+                        )}
                     </div>
                     <div className="text-muted-foreground flex items-center gap-2">
                         Source:
@@ -222,6 +279,15 @@ export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, acc
                 confirmText="Confirm"
                 cancelText="Cancel"
                 variant="default"
+            />
+
+            <LinkSheetDialog
+                isOpen={linkDialogOpen}
+                onClose={() => setLinkDialogOpen(false)}
+                batchId={batch.id}
+                initialLink={batch.display_link}
+                initialName={batch.sheet_name}
+                onSuccess={() => router.refresh()}
             />
         </div>
     )

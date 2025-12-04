@@ -1,6 +1,7 @@
 'use server'
 
 import { upsertService, distributeService, deleteService, updateServiceMembers, getServiceBotConfig, saveServiceBotConfig, distributeAllServices } from '@/services/service-manager'
+import { processBatchInstallments } from '@/services/installment.service'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants'
@@ -174,6 +175,14 @@ export async function getServicePaymentStatusAction(serviceId: string, monthTag:
 export async function runAllServiceDistributionsAction(date?: string) {
   try {
     const result = await distributeAllServices(date)
+
+    // Also run Installment Batch Processing
+    try {
+      await processBatchInstallments(date)
+    } catch (e) {
+      console.error('Error processing installments:', e)
+    }
+
     revalidatePath('/services')
     revalidatePath('/')
     revalidatePath('/transactions')

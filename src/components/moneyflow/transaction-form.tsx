@@ -8,6 +8,7 @@ import { useRouter } from 'next/navigation'
 import { z } from 'zod'
 import { ensureDebtAccountAction } from '@/actions/people-actions'
 import { createTransaction, updateTransaction, requestRefund, confirmRefund } from '@/services/transaction.service'
+import { convertTransactionToInstallment } from '@/services/installment.service'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
 import { CashbackCard, AccountSpendingStats } from '@/types/cashback.types'
@@ -40,6 +41,7 @@ const formSchema = z.object({
   cashback_share_fixed: z.coerce.number().min(0).optional(),
   shop_id: z.string().optional(),
   is_voluntary: z.boolean().optional(),
+  is_installment: z.boolean().optional(),
 }).refine(data => {
   if ((data.type === 'expense' || data.type === 'income') && !data.category_id) {
     return false
@@ -224,6 +226,7 @@ export function TransactionForm({
   const [accountFilter, setAccountFilter] = useState<'all' | 'bank' | 'credit' | 'other'>('all')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [payerName, setPayerName] = useState<string>('')
+  const [isInstallment, setIsInstallment] = useState(false)
 
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
   const [isShopDialogOpen, setIsShopDialogOpen] = useState(false)
@@ -256,6 +259,7 @@ export function TransactionForm({
       cashback_share_percent: undefined,
       cashback_share_fixed: undefined,
       is_voluntary: false,
+      is_installment: false,
     }),
     [defaultDebtAccountId, defaultSourceAccountId, defaultTag, defaultType, isRefundMode, refundCategoryId]
   )
@@ -323,6 +327,7 @@ export function TransactionForm({
     form.reset(newValues)
     setManualTagMode(true)
     setTransactionType(newValues.type)
+    setIsInstallment(Boolean(initialValues.is_installment))
   }, [baseDefaults, form, initialValues, allAccounts])
 
   useEffect(() => {
@@ -460,18 +465,26 @@ export function TransactionForm({
         note: finalNote,
         destination_account_id: values.type === 'income' ? values.source_account_id : undefined,
         is_voluntary: values.is_voluntary,
+        is_installment: isInstallment,
       }
+
+      console.log('[TransactionForm] Submitting payload:', {
+        isInstallmentState: isInstallment,
+        payloadIsInstallment: payload.is_installment,
+        transactionId
+      });
 
       const result = transactionId
         ? await updateTransaction(transactionId, payload)
         : await createTransaction(payload)
 
       if (result) {
-        router.refresh()
         setStatus({
           type: 'success',
           text: isEditMode ? 'Transaction updated successfully.' : 'Transaction created successfully.',
         })
+
+        router.refresh()
         if (isEditMode) {
           onSuccess?.()
           return
@@ -491,6 +504,7 @@ export function TransactionForm({
           cashback_share_fixed: undefined,
         })
         setManualTagMode(Boolean(defaultTag))
+        setIsInstallment(false)
         applyDefaultPersonSelection()
         onSuccess?.()
       } else {
@@ -1756,7 +1770,24 @@ export function TransactionForm({
     selectedAccount &&
     (selectedAccount.type !== 'credit_card' || !selectedAccount.cashback_config)
 
-  const VoluntaryCashbackInput = showVoluntaryToggle ? (
+  const InstallmentInput = ((transactionType === 'expense' || transactionType === 'debt') && !isRefundMode) ? (
+    <div className="rounded-lg border border-slate-200 p-4 space-y-4 bg-slate-50/50">
+      <div className="flex items-center justify-between">
+        <div className="space-y-0.5">
+          <label className="text-sm font-medium text-slate-900">Installment Plan</label>
+          <p className="text-xs text-slate-500">Convert this transaction into an installment plan</p>
+        </div>
+        <Switch
+          checked={isInstallment}
+          onCheckedChange={setIsInstallment}
+        />
+      </div>
+
+    </div>
+
+  ) : null
+
+  const VoluntaryCashbackInput = (transactionType === 'expense' || (selectedAccount?.type === 'credit_card' && transactionType !== 'transfer')) ? (
     <div className="flex items-center justify-between rounded-lg border border-slate-200 p-4 bg-slate-50">
       <div className="space-y-0.5">
         <label htmlFor="is_voluntary" className="text-sm font-medium text-slate-900">
@@ -1791,130 +1822,138 @@ export function TransactionForm({
 
   return (
     <>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
         {/* Refund Status (Full Width) */}
         {RefundStatusInput}
 
         {/* Type Selection (Full Width) - Sticky */}
-        <div className="sticky top-0 z-10 bg-white pb-4 pt-2 -mt-2">
+        <div className="sticky top-0 z-10 bg-white border-b border-slate-100 px-6 py-3 shadow-sm">
           {TypeInput}
         </div>
 
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          {(transactionType === 'debt' || transactionType === 'repayment') ? (
-            <>
-              {/* LENDING MODE: Person First */}
-              <div className="col-span-2">
-                {PersonInput}
-              </div>
-
-              {/* Date & Tag */}
-              <div className="col-span-1">
-                {DateInput}
-              </div>
-              <div className="col-span-1">
-                {TagInput}
-              </div>
-
-              {/* From Account & Amount (Side-by-Side) */}
-              <div className="col-span-1">
-                {SourceAccountInput}
-              </div>
-              <div className="col-span-1">
-                {AmountInput}
-              </div>
-
-              {/* Category & Shop */}
-              {transactionType !== 'repayment' && (
-                <div className="col-span-1">
-                  {CategoryInput}
+        {/* Scrollable Content Area with Padding */}
+        <div className="flex-1 px-6 py-6 space-y-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            {(transactionType === 'debt' || transactionType === 'repayment') ? (
+              <>
+                {/* LENDING MODE: Person First */}
+                <div className="col-span-2">
+                  {PersonInput}
                 </div>
-              )}
-              <div className={transactionType === 'repayment' ? "col-span-2" : "col-span-1"}>
-                {ShopInput}
-              </div>
-            </>
-          ) : (
-            <>
-              {/* OTHER MODES */}
-              <div className="col-span-2">
-                {DateInput}
-              </div>
 
-              {transactionType === 'transfer' ? (
-                <>
-                  <div className="col-span-1">
-                    {SourceAccountInput}
-                  </div>
-                  <div className="col-span-1">
-                    {DestinationAccountInput}
-                  </div>
-                  <div className="col-span-1">
-                    {CategoryInput}
-                  </div>
-                  <div className="col-span-1">
-                    {AmountInput}
-                  </div>
-                </>
-              ) : transactionType === 'income' ? (
-                <>
-                  <div className="col-span-1">
-                    {CategoryInput}
-                  </div>
-                  <div className="col-span-1">
-                    {SourceAccountInput}
-                  </div>
-                  <div className="col-span-1">
-                    {AmountInput}
-                  </div>
-                  <div className="col-span-1">
-                    {PersonInput}
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="col-span-1">
-                    {CategoryInput}
-                  </div>
-                  <div className="col-span-1">
-                    {ShopInput}
-                  </div>
-                  <div className="col-span-1">
-                    {SourceAccountInput}
-                  </div>
-                  <div className="col-span-1">
-                    {AmountInput}
-                  </div>
-                  <div className="col-span-2">
-                    {PersonInput}
-                  </div>
-                </>
-              )}
-            </>
-          )}
+                {/* Date & Tag */}
+                <div className="col-span-1">
+                  {DateInput}
+                </div>
+                <div className="col-span-1">
+                  {TagInput}
+                </div>
 
-          {/* Common Bottom Section */}
-          <div className="col-span-2 space-y-4 pt-2 border-t border-slate-100">
-            {VoluntaryCashbackInput}
-            {CashbackInputs}
-            {NoteInput}
+                {/* From Account & Amount (Side-by-Side) */}
+                <div className="col-span-1">
+                  {SourceAccountInput}
+                </div>
+                <div className="col-span-1">
+                  {AmountInput}
+                </div>
+
+                {/* Category & Shop */}
+                {transactionType !== 'repayment' && (
+                  <div className="col-span-1">
+                    {CategoryInput}
+                  </div>
+                )}
+                <div className={transactionType === 'repayment' ? "col-span-2" : "col-span-1"}>
+                  {ShopInput}
+                </div>
+              </>
+            ) : (
+              <>
+                {/* OTHER MODES */}
+                <div className="col-span-2">
+                  {DateInput}
+                </div>
+
+                {transactionType === 'transfer' ? (
+                  <>
+                    <div className="col-span-1">
+                      {SourceAccountInput}
+                    </div>
+                    <div className="col-span-1">
+                      {DestinationAccountInput}
+                    </div>
+                    <div className="col-span-1">
+                      {CategoryInput}
+                    </div>
+                    <div className="col-span-1">
+                      {AmountInput}
+                    </div>
+                  </>
+                ) : transactionType === 'income' ? (
+                  <>
+                    <div className="col-span-1">
+                      {CategoryInput}
+                    </div>
+                    <div className="col-span-1">
+                      {SourceAccountInput}
+                    </div>
+                    <div className="col-span-1">
+                      {AmountInput}
+                    </div>
+                    <div className="col-span-1">
+                      {PersonInput}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="col-span-1">
+                      {CategoryInput}
+                    </div>
+                    <div className="col-span-1">
+                      {ShopInput}
+                    </div>
+                    <div className="col-span-1">
+                      {SourceAccountInput}
+                    </div>
+                    <div className="col-span-1">
+                      {AmountInput}
+                    </div>
+                    <div className="col-span-2">
+                      {PersonInput}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Common Bottom Section */}
+            <div className="col-span-2 space-y-4 pt-2 border-t border-slate-100">
+              {InstallmentInput}
+              {VoluntaryCashbackInput}
+              {CashbackInputs}
+              {NoteInput}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))}
+              className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
+            >
+              {submitLabel}
+            </button>
           </div>
         </div>
-
-        {status && (
-          <p className={`text-sm ${status.type === 'success' ? 'text-green-600' : 'text-red-600'}`}>
-            {status.text}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full rounded-md bg-blue-600 px-4 py-3 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
-        >
-          {submitLabel}
-        </button>
       </form>
+
 
       <CategoryDialog
         open={isCategoryDialogOpen}

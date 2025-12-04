@@ -1,92 +1,116 @@
-MILESTONE 2 - SPRINT 3.2: AUTO-DISTRIBUTE FIXES, BULK ACTION & UI POLISH
+MILESTONE 3 - PHASE 1 (FINAL): INSTALLMENT WORKFLOW "MARK & PLAN"
 
-Goal: Ensure Data Integrity for Auto-Distributed Transactions (Shop Image/ID), implement "Run All", and standardize Icon sizing across the app.
+Goal: Implement a streamlined Installment workflow: Mark transaction as installment -> Setup Plan later in a dedicated Dashboard.
 
 1. Git Convention
 
-Branch: fix/M2-SP3.2-distribute-polish
+Branch: feat/M3-P1-installment-workflow
 
-Commit: [M2-SP3.2] fix: ...
+Commit: [M3-P1] feat: ...
 
-PART A: DATA INTEGRITY FIX (Backend)
+PART A: DATABASE SCHEMA
 
-1. Fix Missing Shop ID in Auto-Distribute
+1. Update transactions Table
 
-File: src/services/service-manager.ts (Function: distributeServiceCost)
+Task: Create migration supabase/migrations/20251206000000_add_installment_flag.sql.
 
-The Bug:
-Transactions created by auto-distribution have shop_id: null. This breaks the Sheet Sync (missing Shop Name) and causes UI inconsistency (fallback to Category icon instead of Shop Logo).
+-- Flag to mark a transaction as intended for installment
+alter table transactions add column is_installment boolean default false;
 
-The Fix:
-
-Retrieve: Ensure shop_id is selected when fetching subscriptions.
-
-Insert: Pass shop_id explicitly to TransactionService.createTransaction.
-
-// Ensure payload includes:
-{
-  shop_id: subscription.shop_id, // <--- MUST BE PRESENT
-  // ... other fields
-}
+-- (Ensure 'installments' table exists from previous plan, linking to transactions.id)
 
 
-PART B: UI POLISH (Frontend)
+PART B: UI - TRANSACTION ENTRY (Capture Phase)
 
-1. Standardize Transaction Icons
+1. Add/Edit Transaction Dialog
 
-File: src/components/moneyflow/unified-transaction-table.tsx (or transaction-table.tsx)
+File: src/components/moneyflow/add-transaction-dialog.tsx & transaction-form.tsx
+Task: Add "Mark as Installment" Toggle.
 
-The Bug:
-Icons have inconsistent sizes. Some are Emojis (Category), some are Images (Shop/Account). Youtube icon is showing at wrong size/ratio compared to iCloud.
+Location: Tab "Expense" (and potentially "Lend").
 
-The Fix:
+UI: A simple Switch "Trả góp (Installment)?".
 
-Locate the Avatar or Image component rendering the transaction icon/logo.
+Logic:
 
-Enforce Strict Classes:
+If ON: Set form value is_installment = true.
 
-Container: w-8 h-8 (or w-10 h-10), flex items-center justify-center, overflow-hidden, rounded-full (or rounded-md).
+Constraint: DO NOT show Term/Interest fields here. Keep the modal clean. We only flag it.
 
-Image: w-full h-full object-cover (or object-contain).
+PART C: UI - INSTALLMENT DASHBOARD (Management Phase)
 
-Emoji Fallback: text-lg (or specific size to match image visual weight).
+1. Page Structure
 
-Logic: Always try to render shop.logo_url first. If not, category.icon (Emoji).
+File: src/app/installments/page.tsx
+Layout: Use Tabs component with 3 triggers:
 
-PART C: NEW FEATURE - DISTRIBUTE ALL (Backend & Frontend)
+Pending (Chờ thiết lập): Transactions marked as is_installment but NOT yet linked to an installment record.
 
-1. Backend Action
+Active (Đang góp): Records in installments table where status = 'active'.
 
-File: src/actions/service-actions.ts
-Task: Create runAllServiceDistributions().
+Done (Xong): Records where status = 'completed'.
 
-Fetch active subscriptions.
+2. Tab "Pending" Logic
 
-Run distributeServiceCost for each in parallel (Promise.allSettled).
+Data: Fetch transactions where is_installment = true. Check if they have a linked plan.
 
-Return summary stats.
+UI: Simple Table (Date, Content, Amount).
 
-2. UI Button
+Action: Button "⚙️ Setup Plan".
 
-File: src/app/services/page.tsx
-Task: Add "⚡ Distribute All" button next to "Add Service".
+Behavior: Opens CreateInstallmentDialog (pre-filled with Transaction Info).
 
-Interaction: Confirm Dialog -> Call Action -> Toast Success.
+On Save: Creates record in installments, links it to the transaction. The item moves from "Pending" to "Active".
+
+3. Tab "Active" Logic (Main Tab)
+
+Data: Fetch installments.
+
+UI: Cards or Table showing Progress bars.
+
+Action: "Pay Manual" or "Settle Early".
+
+PART D: UI - TRANSACTION HISTORY (Linking)
+
+1. Note Column Enhancement
+
+File: src/components/moneyflow/transaction-table.tsx (Columns definition)
+Task: Modify the "Note" column renderer.
+
+Logic: If row.original.is_installment is true:
+
+Render the text note.
+
+Append a Link Icon (🔗 Link from Lucide).
+
+Style: Small, muted color (blue/gray), clickable.
+
+Tooltip: "Installment Plan Details".
+
+Action: Navigate to /installments?id={planId} (or open detail modal).
 
 4. Execution Plan
 
-Step 1 (Backend): Fix service-manager.ts (Shop ID logic).
+Step 1 (DB): Add is_installment column to transactions.
 
-Step 2 (Frontend): Fix transaction-table.tsx (Strict Icon CSS).
+Step 2 (Capture): Add Toggle to Transaction Form.
 
-Step 3 (Feature): Implement "Distribute All" (Action + UI).
+Step 3 (Dashboard): Build the 3-Tab Layout for /installments.
 
-Step 4 (Verify):
+Implement "Pending" list first.
 
-Delete old "Youtube" transaction.
+Implement "Setup Plan" Modal.
 
-Click "Distribute All".
+Step 4 (Link): Add the 🔗 icon to Transaction Table.
 
-Check: New transaction MUST have the Youtube Shop Logo (not generic Category icon) and it must be the same size as other icons.
+Step 5 (Verify):
 
-👉 Acknowledge Sprint 3.2 and start with Step 1.
+Create a transaction with "Installment = ON".
+
+Go to /installments, see it in "Pending".
+
+Click "Setup", create plan (6 months).
+
+See it move to "Active".
+
+👉 Acknowledge the "Mark & Plan" workflow and start with Step 1.

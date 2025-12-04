@@ -30,6 +30,8 @@ import { useRouter } from 'next/navigation'
 const formSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     sheet_link: z.string().optional(),
+    display_link: z.string().optional(),
+    sheet_name: z.string().optional(),
     is_template: z.boolean().optional(),
     auto_clone_day: z.number().min(1).max(31).optional().or(z.literal(0)),
 })
@@ -43,6 +45,8 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
         defaultValues: {
             name: batch.name,
             sheet_link: batch.sheet_link || '',
+            display_link: batch.display_link || '',
+            sheet_name: batch.sheet_name || '',
             is_template: batch.is_template || false,
             auto_clone_day: Number(batch.auto_clone_day) || 1,
         },
@@ -53,6 +57,8 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
             await updateBatchAction(batch.id, {
                 name: values.name,
                 sheet_link: values.sheet_link,
+                display_link: values.display_link,
+                sheet_name: values.sheet_name,
                 is_template: values.is_template ?? false,
                 auto_clone_day: values.is_template ? (values.auto_clone_day ?? null) : null
             })
@@ -96,9 +102,35 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
                             name="sheet_link"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Sheet Webhook Link</FormLabel>
+                                    <FormLabel>Sheet Webhook Link (Script)</FormLabel>
                                     <FormControl>
-                                        <Input {...field} />
+                                        <Input {...field} placeholder="https://script.google.com/..." />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="display_link"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Sheet Link (Display)</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} placeholder="https://docs.google.com/..." />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="sheet_name"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Display Name</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} placeholder="e.g. Google Sheet" />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

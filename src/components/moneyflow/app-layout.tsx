@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { LayoutDashboard, List, Undo2, Landmark, Users, BadgePercent, Tags, Store, Layers, Cloud, ChevronLeft, ChevronRight, Bot } from "lucide-react"
+import { LayoutDashboard, List, Undo2, Landmark, Users, BadgePercent, Tags, Store, Layers, Cloud, ChevronLeft, ChevronRight, Bot, CreditCard } from "lucide-react"
 import Link from "next/link"
 
 import { SidebarNav, type NavItem } from "./sidebar-nav"
@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils"
 const navItems: NavItem[] = [
   { label: "Overview", href: "/", icon: LayoutDashboard },
   { label: "Transactions", href: "/transactions", icon: List },
+  { label: "Installments", href: "/installments", icon: CreditCard },
   { label: "Refunds", href: "/refunds", icon: Undo2 },
   { label: "Accounts", href: "/accounts", icon: Landmark },
   { label: "People", href: "/people", icon: Users },

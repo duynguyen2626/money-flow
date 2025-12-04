@@ -14,8 +14,9 @@ import { deleteBankMappingsAction } from '@/actions/bank.actions'
 import { toast } from 'sonner'
 import { Loader2, Trash2 } from 'lucide-react'
 import { SheetWebhookLinkManager } from './sheet-webhook-link-manager'
+import { Batch } from '@/services/batch.service'
 
-export function BatchPageClient({ batches, accounts, bankMappings, webhookLinks }: { batches: any[], accounts: any[], bankMappings: any[], webhookLinks: any[] }) {
+export function BatchPageClient({ batches, accounts, bankMappings, webhookLinks }: { batches: Batch[], accounts: any[], bankMappings: any[], webhookLinks: any[] }) {
     const router = useRouter()
     const [importDialogOpen, setImportDialogOpen] = useState(false)
     const [selectedMappingIds, setSelectedMappingIds] = useState<string[]>([])

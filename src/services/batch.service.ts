@@ -612,33 +612,52 @@ export async function sendBatchToSheet(batchId: string) {
     if (!batch.sheet_link) throw new Error('No sheet link configured')
 
     const items = batch.batch_items || []
-    let sent = 0
 
-    for (const item of items) {
-        const payload = {
-            date: new Date().toISOString().slice(0, 10),
-            receiver: item.receiver_name,
-            amount: item.amount,
-            note: item.note,
-            bank: item.bank_name,
-            status: item.status
-        }
+    if (items.length === 0) return { success: true, count: 0 }
 
-        try {
-            await fetch(batch.sheet_link, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            })
-            sent++
-        } catch (e) {
-            console.error('Failed to send item to sheet', e)
-        }
+    // Fetch bank mappings to lookup codes
+    const { data: bankMappings } = await supabase
+        .from('bank_mappings')
+        .select('bank_code, bank_name, short_name')
 
-        await new Promise(r => setTimeout(r, 100))
+    const bankMap = new Map()
+    bankMappings?.forEach((b: any) => {
+        if (b.bank_name) bankMap.set(b.bank_name.toLowerCase(), b.bank_code)
+        if (b.short_name) bankMap.set(b.short_name.toLowerCase(), b.bank_code)
+    })
+
+    const payload = {
+        items: items.map((item: any) => {
+            let bankName = item.bank_name || ''
+            if (bankName && !bankName.includes(' - ')) {
+                // Try to find code by name or short name
+                const code = bankMap.get(bankName.toLowerCase())
+                if (code) {
+                    bankName = `${code} - ${bankName}`
+                }
+            }
+
+            return {
+                receiver_name: item.receiver_name || '',
+                bank_number: item.bank_number || '',
+                amount: item.amount || 0,
+                note: item.note || '',
+                bank_name: bankName
+            }
+        })
     }
 
-    return { success: true, count: sent }
+    try {
+        await fetch(batch.sheet_link, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        return { success: true, count: items.length }
+    } catch (e) {
+        console.error('Failed to send items to sheet', e)
+        throw e
+    }
 }
 
 export async function confirmBatchSource(batchId: string, realAccountId: string) {
@@ -778,7 +797,6 @@ export async function cloneBatch(batchId: string, newTag: string) {
             amount: item.amount,
             note: item.note,
             bank_name: item.bank_name,
-            bank_number: item.bank_number,
             card_name: item.card_name,
             status: 'pending'
         }))
@@ -791,4 +809,47 @@ export async function cloneBatch(batchId: string, newTag: string) {
     }
 
     return newBatch
+}
+
+export async function updateBatchCycle(batchId: string, action: 'prev' | 'next') {
+    const supabase: any = createClient()
+
+    // 1. Fetch Batch
+    const { data: batch, error: batchError } = await supabase
+        .from('batches')
+        .select('*, batch_items(*)')
+        .eq('id', batchId)
+        .single()
+
+    if (batchError || !batch) throw new Error('Batch not found')
+
+    // 2. Detect Current Tag
+    // Assume format "... MMMyy" (e.g. "DEC25")
+    const nameParts = batch.name.split(' ')
+    const currentTag = nameParts.find((p: string) => /^[A-Z]{3}\d{2}$/.test(p))
+
+    if (!currentTag) throw new Error('Could not detect month tag (e.g. DEC25) in batch name')
+
+    // 3. Calculate New Tag
+    const currentDate = parse(currentTag, 'MMMyy', new Date())
+    const newDate = addMonths(currentDate, action === 'next' ? 1 : -1)
+    const newTag = format(newDate, 'MMMyy').toUpperCase()
+
+    // 4. Update Batch Name
+    const newName = batch.name.replace(currentTag, newTag)
+    await supabase.from('batches').update({ name: newName }).eq('id', batchId)
+
+    // 5. Update Batch Items
+    const items = batch.batch_items || []
+    for (const item of items) {
+        if (item.note && item.note.includes(currentTag)) {
+            const newNote = item.note.replace(currentTag, newTag)
+            await supabase
+                .from('batch_items')
+                .update({ note: newNote })
+                .eq('id', item.id)
+        }
+    }
+
+    return { success: true, oldTag: currentTag, newTag }
 }

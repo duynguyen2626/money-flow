@@ -1,0 +1,74 @@
+import { getActiveInstallments, getCompletedInstallments, getPendingInstallmentTransactions } from "@/services/installment.service"
+import { InstallmentStats } from "@/components/installments/installment-stats"
+import { InstallmentTable } from "@/components/installments/installment-table"
+import { PendingInstallmentTable } from "@/components/installments/pending-installment-table"
+import { Plus, Clock, CheckCircle, AlertCircle } from "lucide-react"
+import { CreateInstallmentDialog } from "@/components/installments/create-installment-dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+export default async function InstallmentsPage() {
+    const [activeInstallments, completedInstallments, pendingTransactions] = await Promise.all([
+        getActiveInstallments(),
+        getCompletedInstallments(),
+        getPendingInstallmentTransactions()
+    ])
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h2 className="text-2xl font-bold tracking-tight">Installment Plans</h2>
+                    <p className="text-muted-foreground">
+                        Manage your active installment plans and track progress.
+                    </p>
+                </div>
+                <CreateInstallmentDialog />
+            </div>
+
+            <InstallmentStats installments={activeInstallments} />
+
+            <Tabs defaultValue="active" className="space-y-4">
+                <TabsList>
+                    <TabsTrigger value="pending" className="gap-2">
+                        <AlertCircle className="h-4 w-4" />
+                        Pending Setup
+                        {pendingTransactions && pendingTransactions.length > 0 && (
+                            <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                                {pendingTransactions.length}
+                            </span>
+                        )}
+                    </TabsTrigger>
+                    <TabsTrigger value="active" className="gap-2">
+                        <Clock className="h-4 w-4" />
+                        Active Plans
+                        {activeInstallments && activeInstallments.length > 0 && (
+                            <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                                {activeInstallments.length}
+                            </span>
+                        )}
+                    </TabsTrigger>
+                    <TabsTrigger value="done" className="gap-2">
+                        <CheckCircle className="h-4 w-4" />
+                        Completed
+                    </TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="pending" className="space-y-4">
+                    <div className="rounded-md border bg-amber-50/50 p-4 text-sm text-amber-800">
+                        <p className="font-medium">Pending Setup</p>
+                        <p>These transactions were marked as installments but haven't been set up yet. Click "Setup Plan" to configure terms.</p>
+                    </div>
+                    <PendingInstallmentTable transactions={pendingTransactions as any[]} />
+                </TabsContent>
+
+                <TabsContent value="active" className="space-y-4">
+                    <InstallmentTable installments={activeInstallments} />
+                </TabsContent>
+
+                <TabsContent value="done" className="space-y-4">
+                    <InstallmentTable installments={completedInstallments} />
+                </TabsContent>
+            </Tabs>
+        </div>
+    )
+}

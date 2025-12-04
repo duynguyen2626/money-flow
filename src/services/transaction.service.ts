@@ -37,6 +37,7 @@ export type CreateTransactionInput = {
   discount_category_id?: string | null;
   shop_id?: string | null;
   is_voluntary?: boolean;
+  is_installment?: boolean;
 };
 
 async function resolveSystemCategory(
@@ -346,7 +347,7 @@ async function syncRepaymentTransaction(
   }
 }
 
-export async function createTransaction(input: CreateTransactionInput): Promise<boolean> {
+export async function createTransaction(input: CreateTransactionInput): Promise<string | null> {
   try {
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -370,7 +371,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
 
     const built = await buildTransactionLines(supabase, input);
     if (!built) {
-      return false;
+      return null;
     }
     const { lines, tag } = built;
 
@@ -390,13 +391,14 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
         persisted_cycle_tag: persistedCycleTag,
         shop_id: input.shop_id ?? null,
         created_by: userId,
+        is_installment: input.is_installment ?? false,
       })
       .select()
       .single();
 
     if (txnError || !txn) {
       console.error('Error creating transaction header:', txnError);
-      return false;
+      return null;
     }
 
     const linesWithId = lines.map(l => ({ ...l, transaction_id: txn.id }));
@@ -404,7 +406,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
 
     if (linesError) {
       console.error('Error creating transaction lines:', linesError);
-      return false;
+      return null;
     }
 
     const shopInfo = await loadShopInfo(supabase, input.shop_id)
@@ -481,10 +483,10 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       await Promise.all(Array.from(allUniqueAccountIds).map(id => recalculateBalance(id)));
     }
 
-    return true;
+    return txn.id;
   } catch (error) {
     console.error('Unhandled error in createTransaction:', error);
-    return false;
+    return null;
   }
 }
 
@@ -1043,6 +1045,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       status: 'posted',
       persisted_cycle_tag: persistedCycleTag,
       shop_id: input.shop_id ?? null,
+      is_installment: input.is_installment ?? false,
     })
     .eq('id', id);
 
