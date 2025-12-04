@@ -436,7 +436,7 @@ export async function distributeAllServices(customDate?: string, customNoteForma
   const { data: services, error } = await supabase
     .from('subscriptions')
     .select('id, name')
-    .eq('status', 'active')
+    .eq('is_active', true)
 
   if (error) {
     console.error('Error fetching services:', error)
