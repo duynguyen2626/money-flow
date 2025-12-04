@@ -408,9 +408,9 @@ export async function saveServiceBotConfig(serviceId: string, config: any) {
   return true
 }
 
-export async function distributeAllServices() {
+export async function distributeAllServices(customDate?: string) {
   const supabase: any = createClient()
-  console.log('Starting batch distribution for all active services...')
+  console.log('Starting batch distribution for all active services...', customDate ? `Date: ${customDate}` : 'Date: Current')
 
   // 1. Fetch all active services
   const { data: services, error } = await supabase
@@ -436,7 +436,7 @@ export async function distributeAllServices() {
   // 2. Distribute each service
   for (const service of services) {
     try {
-      await distributeService(service.id)
+      await distributeService(service.id, customDate)
       successCount++
     } catch (err) {
       console.error(`Failed to distribute service ${service.name} (${service.id}):`, err)
