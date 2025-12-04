@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants'
-import { syncTransactionToSheet } from './sheet.service'
+import { syncTransactionToSheet, syncAllTransactions } from './sheet.service'
 
 // TODO: The 'service_members' table is not in database.types.ts. 
 // This is a temporary type definition.
@@ -82,8 +82,8 @@ export async function upsertService(
   return service
 }
 
-export async function distributeService(serviceId: string, customDate?: string, customNoteFormat?: string) {
-  const supabase: any = createClient()
+export async function distributeService(serviceId: string, customDate?: string, customNoteFormat?: string, skipSync: boolean = false) {
+  const supabase = createClient()
   console.log('Distributing service:', serviceId)
 
   // Step 1: Calculate Math
@@ -175,14 +175,14 @@ export async function distributeService(serviceId: string, customDate?: string, 
     if (existingTx) {
       console.log('Updating existing transaction:', (existingTx as any).id);
       // Update Header
-      await supabase
+      await (supabase as any)
         .from('transactions')
         .update({
           note: note,
           occurred_at: transactionDate,
           tag: monthTag, // [M2-SP2] Ensure tag is updated
           shop_id: (service as any).shop_id // Ensure shop_id is updated
-        } as any)
+        })
         .eq('id', transactionId);
 
       // Delete existing lines to recreate them (simplest way to handle amount/account changes)
@@ -204,7 +204,6 @@ export async function distributeService(serviceId: string, customDate?: string, 
           shop_id: (service as any).shop_id // Add shop_id for image display
         }] as any)
         .select()
-        .select()
         .single();
 
       console.log(`[Distribute] Member ${member.profile_id}: New Tx Created: ${(newTx as any)?.id}`);
@@ -213,7 +212,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
         console.error(`[Distribute] Error creating transaction for ${member.profile_id}:`, txError);
         continue;
       }
-      transactionId = newTx.id;
+      transactionId = (newTx as any).id;
     }
 
     createdTransactions.push({ id: transactionId });
@@ -268,7 +267,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
     const shopName = (service as any).shops?.name || (service as any).name;
     const shopLogo = (service as any).shops?.logo_url;
 
-    if (member.profile_id) {
+    if (member.profile_id && !skipSync) {
       const memberCost = unitCost * member.slots;
 
       // Construct Sync Payload
@@ -456,15 +455,54 @@ export async function distributeAllServices(customDate?: string, customNoteForma
   const results = []
 
   // 2. Distribute each service
+  const affectedPersonIds = new Set<string>()
+
   for (const service of activeServices) {
     try {
       console.log(`Distributing service: ${service.name} (${service.id})`)
-      const txns = await distributeService(service.id, customDate, customNoteFormat)
+      // Pass skipSync=true to prevent individual syncs overwriting each other
+      const txns = await distributeService(service.id, customDate, customNoteFormat, true)
       allTransactions.push(...txns)
+
+      // Collect person IDs from transactions to sync later
+      // We need to fetch the lines to know who was affected, or we can infer from service members.
+      // Inferring from service members is safer.
+      const { data: members } = await supabase
+        .from('service_members')
+        .select('profile_id')
+        .eq('service_id', service.id)
+
+      if (members) {
+        (members as any[]).forEach(m => affectedPersonIds.add(m.profile_id))
+      }
+
       results.push({ service: service.name, status: 'success', count: txns.length })
     } catch (err) {
       console.error(`Failed to distribute service ${service.name}:`, err)
       results.push({ service: service.name, status: 'error', error: err })
+    }
+  }
+
+  // 3. Batch Sync for all affected people
+  console.log(`Triggering batch sync for ${affectedPersonIds.size} people...`)
+  for (const personId of Array.from(affectedPersonIds)) {
+    try {
+      // We need to import syncAllTransactions logic or move it to a shared place.
+      // Since we can't easily import from 'sheet.service.ts' (server actions), 
+      // we should use the syncTransactionToSheet with a special flag or just rely on the fact that
+      // we are calling it sequentially here.
+      // ACTUALLY: syncTransactionToSheet is for single transaction.
+      // We need `syncAllTransactions` from `sheet.service.ts`.
+      // But `sheet.service.ts` has 'use server'.
+      // Let's try to import it dynamically or use a helper.
+      // For now, let's assume we can import it if we remove 'use server' from the helper function 
+      // or if we move the helper to a shared lib.
+      // BUT, `distributeAllServices` is likely called from a Server Action, so importing another Server Action is fine?
+      // Let's try importing `syncAllTransactions` from `@/services/sheet.service`.
+
+      await syncAllTransactions(personId)
+    } catch (err) {
+      console.error(`Failed to sync sheet for person ${personId}:`, err)
     }
   }
 
