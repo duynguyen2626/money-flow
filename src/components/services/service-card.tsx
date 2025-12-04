@@ -46,6 +46,7 @@ type Service = {
   price: number | null
   note_template?: string
   shop_id?: string
+  max_slots?: number | null
 }
 
 type ServiceMember = {
@@ -87,6 +88,7 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
   const [isBotEnabled, setIsBotEnabled] = useState(false)
   const [botRunDay, setBotRunDay] = useState(1)
   const [botNoteTemplate, setBotNoteTemplate] = useState('')
+  const [maxSlots, setMaxSlots] = useState<number>(service.max_slots || 0) // 0 means unlimited
   const [isBotLoading, setIsBotLoading] = useState(false)
   const [isBotSaving, setIsBotSaving] = useState(false)
 
@@ -137,6 +139,7 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
           const c = config.config as any
           setBotRunDay(c.runDay || 1)
           setBotNoteTemplate(c.noteTemplate || '')
+          // maxSlots is now in service table
         }
       } else {
         // Default values
@@ -159,7 +162,8 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
         name,
         price,
         shop_id: shopId === 'none' ? null : shopId,
-        note_template: botNoteTemplate // Save template to service too as backup/default
+        note_template: botNoteTemplate, // Save template to service too as backup/default
+        max_slots: maxSlots
       }
       await upsertServiceAction(serviceUpdate)
 
@@ -217,6 +221,16 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
     const updatedMembers = watchedMembers.map(m =>
       m.id === memberId ? { ...m, ...updates } : m
     )
+
+    // Validate Max Slots
+    if (maxSlots > 0) {
+      const newTotal = updatedMembers.reduce((sum, m) => sum + (m.slots || 0), 0)
+      if (newTotal > maxSlots) {
+        toast.error(`Cannot exceed max slots (${maxSlots})`)
+        return
+      }
+    }
+
     setWatchedMembers(updatedMembers)
     await updateServiceMembersAction(service.id, updatedMembers)
   }
@@ -224,6 +238,15 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
   async function handleAddMember(profileId: string) {
     const profile = allPeople.find(p => p.id === profileId)
     if (!profile) return
+
+    // Validate Max Slots
+    if (maxSlots > 0) {
+      const currentTotal = watchedMembers.reduce((sum, m) => sum + (m.slots || 0), 0)
+      if (currentTotal + 1 > maxSlots) {
+        toast.error(`Cannot add member. Max slots (${maxSlots}) reached.`)
+        return
+      }
+    }
 
     const newMember = {
       profile_id: profileId,
@@ -235,10 +258,12 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
     const updatedMembers = [...watchedMembers, newMember]
     setWatchedMembers(updatedMembers)
     await updateServiceMembersAction(service.id, updatedMembers)
-    setIsAddMemberDialogOpen(false)
+    // setIsAddMemberDialogOpen(false) // Keep open as requested
+    toast.success('Member added successfully')
   }
 
   async function handleRemoveMember(memberId: string) {
+    if (!confirm('Are you sure you want to remove this member?')) return
     const updatedMembers = watchedMembers.filter(m => m.id !== memberId)
     setWatchedMembers(updatedMembers)
     await updateServiceMembersAction(service.id, updatedMembers)
@@ -252,7 +277,7 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
   const previewNote = botNoteTemplate
     .replace('{service}', name)
     .replace('{member}', 'MemberName')
-    .replace('{name}', 'MemberName')
+    .replace('{name}', name) // {name} should be Service Name
     .replace('{slots}', '1')
     .replace('{date}', monthTag)
     .replace('{price}', pricePerSlot.toLocaleString())
@@ -268,6 +293,8 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
   const isAmountChanged = paymentStatus.confirmed && paymentStatus.amount !== currentTotalCost
   const showReConfirm = paymentStatus.confirmed && isAmountChanged
   const showConfirmed = paymentStatus.confirmed && !isAmountChanged
+
+  const isMaxSlotsReached = maxSlots > 0 && totalSlots >= maxSlots
 
   return (
     <Card className="w-full bg-white shadow-sm border-slate-200 flex flex-col">
@@ -304,10 +331,17 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
         {/* Members Section */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Members</h4>
+            <div className="flex items-center gap-2">
+              <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Members</h4>
+              {maxSlots > 0 && (
+                <span className={`text-xs font-medium ${isMaxSlotsReached ? 'text-red-600' : 'text-slate-500'}`}>
+                  ({totalSlots}/{maxSlots})
+                </span>
+              )}
+            </div>
             <Dialog open={isAddMemberDialogOpen} onOpenChange={setIsAddMemberDialogOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="h-7 text-xs">
+                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={isMaxSlotsReached}>
                   + Add Member
                 </Button>
               </DialogTrigger>
@@ -322,6 +356,11 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="mb-4"
                   />
+                  {isMaxSlotsReached && (
+                    <div className="mb-4 p-2 bg-red-50 text-red-600 text-sm rounded border border-red-100">
+                      Max slots reached ({maxSlots}). Cannot add more members.
+                    </div>
+                  )}
                   <div className="max-h-[300px] overflow-y-auto space-y-2">
                     {allPeople
                       .filter(p =>
@@ -331,7 +370,7 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
                       .map(person => (
                         <div key={person.id} className="flex items-center justify-between p-2 hover:bg-slate-50 rounded border">
                           <span>{person.name}</span>
-                          <Button size="sm" onClick={() => handleAddMember(person.id)}>Add</Button>
+                          <Button size="sm" onClick={() => handleAddMember(person.id)} disabled={isMaxSlotsReached}>Add</Button>
                         </div>
                       ))
                     }
@@ -342,40 +381,48 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
           </div>
 
           <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-            {watchedMembers.map((member) => (
-              <div key={member.id || member.profile_id} className="flex items-center justify-between p-2 rounded-lg border border-slate-100 bg-slate-50/50">
-                <div className="flex items-center gap-3">
-                  <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${member.profile.is_owner ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
-                    }`}>
-                    {member.profile.name.substring(0, 2).toUpperCase()}
+            {watchedMembers.map((member) => {
+              const memberCost = Math.round(unitCost * (member.slots || 0));
+              return (
+                <div key={member.id || member.profile_id} className="flex items-center justify-between p-2 rounded-lg border border-slate-100 bg-slate-50/50">
+                  <div className="flex items-center gap-3">
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${member.profile.is_owner ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
+                      }`}>
+                      {member.profile.name.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-slate-700">
+                        {member.profile.name} {member.profile.is_owner && '(Mine)'}
+                      </span>
+                      <span className="text-[10px] text-slate-500">
+                        {memberCost.toLocaleString()} đ
+                      </span>
+                    </div>
                   </div>
-                  <span className="text-sm font-medium text-slate-700">
-                    {member.profile.name} {member.profile.is_owner && '(Mine)'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">Slots:</span>
+                    <Input
+                      type="number"
+                      min="0"
+                      className="w-16 h-7 text-center"
+                      value={member.slots}
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? 0 : parseInt(e.target.value)
+                        handleUpdateMember(member.id, { slots: isNaN(val) ? 0 : val })
+                      }}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-slate-400 hover:text-red-500"
+                      onClick={() => handleRemoveMember(member.id)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">Slots:</span>
-                  <Input
-                    type="number"
-                    min="0"
-                    className="w-16 h-7 text-center"
-                    value={member.slots}
-                    onChange={(e) => {
-                      const val = e.target.value === '' ? 0 : parseInt(e.target.value)
-                      handleUpdateMember(member.id, { slots: isNaN(val) ? 0 : val })
-                    }}
-                  />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-slate-400 hover:text-red-500"
-                    onClick={() => handleRemoveMember(member.id)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
@@ -406,6 +453,16 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
                       value={shopId}
                       onValueChange={setShopId}
                       placeholder="Select shop"
+                      className="h-8"
+                    />
+                  </div>
+                  <div className="grid gap-1">
+                    <Label className="text-xs">Max Slots (0 = Unlimited)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      value={maxSlots}
+                      onChange={(e) => setMaxSlots(Number(e.target.value))}
                       className="h-8"
                     />
                   </div>

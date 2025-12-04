@@ -98,6 +98,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
     throw new Error('Service not found')
   }
   console.log('Service found:', service)
+  console.log('Service shop_id:', (service as any).shop_id)
 
   const { data: membersResult, error: membersError } = await supabase
     .from('service_members')
@@ -218,14 +219,14 @@ export async function distributeService(serviceId: string, customDate?: string, 
       account_id: SYSTEM_ACCOUNTS.DRAFT_FUND,
       amount: -cost,
       type: 'credit',
-      category_id: SYSTEM_CATEGORIES.ONLINE_SERVICES // Ensure category is set for credit line too if needed, but usually for debit
+      category_id: SYSTEM_CATEGORIES.ONLINE_SERVICES
     })
 
     if (member.profiles.is_owner) {
       // Debit: Category SERVICE_CAT_ID. (My Expense).
       transactionLines.push({
         transaction_id: transactionId,
-        category_id: 'e0000000-0000-0000-0000-000000000088',
+        category_id: 'e0000000-0000-0000-0000-000000000088', // Online Services
         amount: cost,
         type: 'debit',
       })
@@ -242,7 +243,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
         amount: cost,
         type: 'debit',
         person_id: member.profile_id,
-        category_id: 'e0000000-0000-0000-0000-000000000088',
+        category_id: 'e0000000-0000-0000-0000-000000000088', // Online Services
       })
     }
 
@@ -252,6 +253,23 @@ export async function distributeService(serviceId: string, customDate?: string, 
 
     if (linesError) {
       console.error('Error inserting lines:', linesError)
+    }
+
+    // [M2-SP3] Sync to Google Sheet
+    try {
+      const { syncTransactionToSheet } = await import('./sheet.service');
+      const payload = {
+        id: transactionId,
+        occurred_at: transactionDate,
+        note: note,
+        tag: monthTag,
+        amount: cost,
+        type: 'Debt',
+        shop_name: (service as any).name || 'Service',
+      };
+      await syncTransactionToSheet(member.profile_id, payload as any, 'create');
+    } catch (syncError) {
+      console.error('Error syncing to sheet:', syncError);
     }
   }
 

@@ -280,7 +280,6 @@ export async function syncAllTransactions(personId: string) {
         // But 'row' is from 'transaction_lines' table.
         // We want the OTHER account.
         // Typically Payer = Credit, Debt = Debit (Asset).
-        // Wait, if I lend money: Credit Bank, Debit DebtAccount.
         // So Source is Credit.
         const creditLine = lines.find(l => l.type === 'credit')
         if (creditLine?.accounts?.name) {

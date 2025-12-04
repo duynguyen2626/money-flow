@@ -230,6 +230,7 @@ export interface Database {
           note_template: string | null
           created_at: string
           shop_id: string | null
+          max_slots: number | null
         }
         Insert: {
           id?: string
@@ -241,6 +242,7 @@ export interface Database {
           note_template?: string | null
           created_at?: string
           shop_id?: string | null
+          max_slots?: number | null
         }
         Update: {
           id?: string
@@ -252,6 +254,7 @@ export interface Database {
           note_template?: string | null
           created_at?: string
           shop_id?: string | null
+          max_slots?: number | null
         }
       }
       subscription_members: {
