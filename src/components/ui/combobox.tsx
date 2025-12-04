@@ -91,18 +91,18 @@ export function Combobox({
           title={disabled ? 'This field is locked in Refund mode' : undefined}
           aria-expanded={open}
         >
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-2 min-w-0 flex-1">
             {selectedItem?.icon && <span className="text-slate-500 flex-shrink-0">{selectedItem.icon}</span>}
-            <span className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium text-slate-900">
+            <span className="flex flex-col gap-0.5 min-w-0 flex-1">
+              <span className="text-sm font-medium text-slate-900 truncate">
                 {selectedItem ? selectedItem.label : placeholder}
               </span>
               {selectedItem?.description && (
-                <span className="text-[11px] text-slate-500">{selectedItem.description}</span>
+                <span className="text-[11px] text-slate-500 truncate">{selectedItem.description}</span>
               )}
             </span>
           </span>
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-1 flex-shrink-0 ml-2">
             {disabled && <Lock className="h-4 w-4 text-slate-400" aria-hidden />}
             <ChevronDown className="h-4 w-4 text-slate-500" />
           </span>
