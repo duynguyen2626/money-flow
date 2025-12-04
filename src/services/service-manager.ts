@@ -137,8 +137,10 @@ export async function distributeService(serviceId: string, customDate?: string, 
     let note = '';
     const pricePerSlot = Math.round(unitCost);
 
-    if (customNoteFormat) {
-      note = customNoteFormat
+    const templateToUse = customNoteFormat || (service as any).note_template;
+
+    if (templateToUse) {
+      note = templateToUse
         .replace('{service}', (service as any).name)
         .replace('{member}', member.profiles.name)
         .replace('{name}', (service as any).name) // {name} now maps to Service Name as requested
