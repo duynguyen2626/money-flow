@@ -5,6 +5,7 @@ import { ServiceCreateDialog } from '@/components/services/service-create-dialog
 import { PlusCircle } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { DistributeAllButton } from '@/components/services/distribute-all-button'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,7 @@ export default async function ServicesPage() {
             <p className="text-sm text-slate-500">Manage your services and allocations.</p>
           </div>
           <div className="flex items-center gap-3">
+            <DistributeAllButton />
             <ServiceCreateDialog
               trigger={
                 <div className={cn(buttonVariants({ variant: 'outline' }), 'flex items-center gap-2')}>

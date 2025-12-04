@@ -1,6 +1,6 @@
 'use server'
 
-import { upsertService, distributeService, deleteService, updateServiceMembers, getServiceBotConfig, saveServiceBotConfig } from '@/services/service-manager'
+import { upsertService, distributeService, deleteService, updateServiceMembers, getServiceBotConfig, saveServiceBotConfig, distributeAllServices } from '@/services/service-manager'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants'
@@ -168,4 +168,18 @@ export async function getServicePaymentStatusAction(serviceId: string, monthTag:
   const amount = Math.abs((transaction as any).transaction_lines[0].amount)
 
   return { confirmed: true, amount: amount, transactionId: (transaction as any).id }
+}
+
+
+export async function runAllServiceDistributionsAction() {
+  try {
+    const result = await distributeAllServices()
+    revalidatePath('/services')
+    revalidatePath('/')
+    revalidatePath('/transactions')
+    return result
+  } catch (error: any) {
+    console.error('Error running all distributions:', error)
+    return { success: 0, failed: 0, total: 0, error: error.message }
+  }
 }
