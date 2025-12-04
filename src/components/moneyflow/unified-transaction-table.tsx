@@ -1032,10 +1032,10 @@ export function UnifiedTransactionTable({
                               <img
                                 src={displayIcon}
                                 alt={displayName || 'Shop'}
-                                className="h-10 w-10 object-contain rounded-none"
+                                className="h-11 w-11 object-contain rounded-none shrink-0"
                               />
                             ) : (
-                              <span className="flex h-10 w-10 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
+                              <span className="flex h-11 w-11 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none shrink-0">
                                 {displayName ? displayName.charAt(0).toUpperCase() : '🛍️'}
                               </span>
                             )
