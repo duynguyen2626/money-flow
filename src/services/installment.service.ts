@@ -23,13 +23,18 @@ export interface Installment {
     next_due_date: string | null;
     status: InstallmentStatus;
     type: InstallmentType;
+    original_transaction?: {
+        account?: {
+            name: string;
+        } | null;
+    } | null;
 }
 
 export async function getInstallments() {
     const supabase: any = createClient();
     const { data, error } = await supabase
         .from('installments')
-        .select('*')
+        .select('*, original_transaction:transactions(account:accounts(name))')
         .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -40,20 +45,43 @@ export async function getActiveInstallments() {
     const supabase: any = createClient();
     const { data, error } = await supabase
         .from('installments')
-        .select('*')
+        .select('*, original_transaction:transactions(account:accounts(name))')
         .eq('status', 'active')
         .order('next_due_date', { ascending: true });
 
     if (error) throw error;
     return data as Installment[];
+}
 
+export async function getAccountsWithActiveInstallments() {
+    const supabase: any = createClient();
+    // We need to find which accounts have active installments.
+    // The installment is linked to a transaction, which is linked to an account.
+    // But wait, the installment table has `original_transaction_id`.
+    // We need to join: installments -> transactions -> accounts.
+
+    const { data, error } = await supabase
+        .from('installments')
+        .select('original_transaction:transactions(account_id)')
+        .eq('status', 'active');
+
+    if (error) throw error;
+
+    const accountIds = new Set<string>();
+    data?.forEach((item: any) => {
+        if (item.original_transaction?.account_id) {
+            accountIds.add(item.original_transaction.account_id);
+        }
+    });
+
+    return Array.from(accountIds);
 }
 
 export async function getCompletedInstallments() {
     const supabase: any = createClient();
     const { data, error } = await supabase
         .from('installments')
-        .select('*')
+        .select('*, original_transaction:transactions(account:accounts(name))')
         .eq('status', 'completed')
         .order('created_at', { ascending: false });
 

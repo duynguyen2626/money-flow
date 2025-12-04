@@ -23,8 +23,8 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { updateBatchAction } from '@/actions/batch.actions'
-import { Settings } from 'lucide-react'
+import { updateBatchAction, updateBatchNoteModeAction } from '@/actions/batch.actions'
+import { Settings, RefreshCw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 const formSchema = z.object({
@@ -38,6 +38,7 @@ const formSchema = z.object({
 
 export function BatchSettingsDialog({ batch }: { batch: any }) {
     const [open, setOpen] = useState(false)
+    const [updatingMode, setUpdatingMode] = useState(false)
     const router = useRouter()
 
     const form = useForm<z.infer<typeof formSchema>>({
@@ -67,6 +68,23 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
         } catch (error) {
             console.error(error)
             alert('Failed to update batch settings')
+        }
+    }
+
+    async function handleModeUpdate(mode: 'previous' | 'current') {
+        if (!confirm(`Are you sure you want to update all notes to ${mode} month?`)) return
+        setUpdatingMode(true)
+        try {
+            const result = await updateBatchNoteModeAction(batch.id, mode)
+            if (result.success) {
+                alert(`Updated ${result.count} items`)
+                router.refresh()
+            }
+        } catch (error) {
+            console.error(error)
+            alert('Failed to update notes')
+        } finally {
+            setUpdatingMode(false)
         }
     }
 
@@ -185,6 +203,39 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
                                 )}
                             />
                         )}
+
+                        <div className="rounded-lg border p-3 shadow-sm space-y-3">
+                            <div className="space-y-0.5">
+                                <FormLabel>Batch Note Mode</FormLabel>
+                                <FormDescription>
+                                    Bulk update transaction notes (e.g. NOV24 ↔ DEC24)
+                                </FormDescription>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleModeUpdate('previous')}
+                                    disabled={updatingMode}
+                                    className="flex-1"
+                                >
+                                    {updatingMode && <RefreshCw className="mr-2 h-3 w-3 animate-spin" />}
+                                    Previous Month
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleModeUpdate('current')}
+                                    disabled={updatingMode}
+                                    className="flex-1"
+                                >
+                                    {updatingMode && <RefreshCw className="mr-2 h-3 w-3 animate-spin" />}
+                                    Current Month
+                                </Button>
+                            </div>
+                        </div>
 
                         <Button type="submit" className="w-full">Save Changes</Button>
                     </form>

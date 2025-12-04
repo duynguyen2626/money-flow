@@ -125,3 +125,10 @@ export async function updateBatchCycleAction(batchId: string, action: 'prev' | '
     revalidatePath(`/batch/${batchId}`)
     return result
 }
+
+export async function updateBatchNoteModeAction(batchId: string, mode: 'previous' | 'current') {
+    const { updateBatchNoteMode } = await import('@/services/batch.service')
+    const result = await updateBatchNoteMode(batchId, mode)
+    revalidatePath(`/batch/${batchId}`)
+    return result
+}

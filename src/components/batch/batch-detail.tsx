@@ -19,7 +19,17 @@ import { ConfirmSourceDialog } from './confirm-source-dialog'
 import { SYSTEM_ACCOUNTS } from '@/lib/constants'
 import { LinkSheetDialog } from './link-sheet-dialog'
 
-export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, accounts: any[], bankMappings?: any[] }) {
+export function BatchDetail({
+    batch,
+    accounts,
+    bankMappings,
+    activeInstallmentAccounts = []
+}: {
+    batch: any,
+    accounts: any[],
+    bankMappings?: any[],
+    activeInstallmentAccounts?: string[]
+}) {
     const [sending, setSending] = useState(false)
     const [funding, setFunding] = useState(false)
     const [deleting, setDeleting] = useState(false)
@@ -257,6 +267,7 @@ export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, acc
                                 items={pendingItems}
                                 batchId={batch.id}
                                 onSelectionChange={setSelectedItemIds}
+                                activeInstallmentAccounts={activeInstallmentAccounts}
                             />
                         </TabsContent>
                         <TabsContent value="confirmed" className="mt-4">
@@ -264,6 +275,7 @@ export function BatchDetail({ batch, accounts, bankMappings }: { batch: any, acc
                                 items={confirmedItems}
                                 batchId={batch.id}
                                 onSelectionChange={setSelectedItemIds}
+                                activeInstallmentAccounts={activeInstallmentAccounts}
                             />
                         </TabsContent>
                     </Tabs>

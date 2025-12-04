@@ -23,6 +23,7 @@ export type ParsedCashbackConfig = {
   maxAmount: number | null
   cycleType: CashbackCycleType
   statementDay: number | null
+  dueDate: number | null
   minSpend: number | null
   // Tiered cashback support
   hasTiers?: boolean
@@ -61,6 +62,16 @@ function parseConfigCandidate(raw: Record<string, unknown> | null): ParsedCashba
       ? Math.min(Math.max(Math.floor(statementNumber), 1), 31)
       : null
 
+  const dueCandidate = raw?.due_date ?? raw?.dueDate
+  const dueNumber =
+    dueCandidate === null || dueCandidate === undefined
+      ? null
+      : Number(dueCandidate)
+  const dueDate =
+    typeof dueNumber === 'number' && Number.isFinite(dueNumber)
+      ? Math.min(Math.max(Math.floor(dueNumber), 1), 31)
+      : null
+
   const minCandidate = raw?.min_spend ?? raw?.minSpend
   const minNumber =
     minCandidate === null || minCandidate === undefined
@@ -88,6 +99,7 @@ function parseConfigCandidate(raw: Record<string, unknown> | null): ParsedCashba
     maxAmount,
     cycleType,
     statementDay,
+    dueDate,
     minSpend,
     hasTiers,
     tiers,
@@ -101,6 +113,7 @@ export function parseCashbackConfig(raw: unknown): ParsedCashbackConfig {
       maxAmount: null,
       cycleType: 'calendar_month',
       statementDay: null,
+      dueDate: null,
       minSpend: null,
       hasTiers: false,
       tiers: undefined,
@@ -117,6 +130,7 @@ export function parseCashbackConfig(raw: unknown): ParsedCashbackConfig {
         maxAmount: null,
         cycleType: 'calendar_month',
         statementDay: null,
+        dueDate: null,
         minSpend: null,
         hasTiers: false,
         tiers: undefined,
@@ -133,6 +147,7 @@ export function parseCashbackConfig(raw: unknown): ParsedCashbackConfig {
     maxAmount: null,
     cycleType: 'calendar_month',
     statementDay: null,
+    dueDate: null,
     minSpend: null,
     hasTiers: false,
     tiers: undefined,

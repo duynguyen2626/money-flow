@@ -15,6 +15,8 @@ import { formatCurrency } from "@/lib/utils"
 import { format } from "date-fns"
 import { Badge } from "@/components/ui/badge"
 
+import { InstallmentDetailsDialog } from "./installment-details-dialog"
+
 interface InstallmentTableProps {
     installments: Installment[]
 }
@@ -26,6 +28,7 @@ export function InstallmentTable({ installments }: InstallmentTableProps) {
                 <TableHeader>
                     <TableRow>
                         <TableHead>Plan Name</TableHead>
+                        <TableHead>Account</TableHead>
                         <TableHead>Progress</TableHead>
                         <TableHead>Monthly</TableHead>
                         <TableHead>Next Due</TableHead>
@@ -36,7 +39,7 @@ export function InstallmentTable({ installments }: InstallmentTableProps) {
                 <TableBody>
                     {installments.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={6} className="h-24 text-center">
+                            <TableCell colSpan={7} className="h-24 text-center">
                                 No active installments.
                             </TableCell>
                         </TableRow>
@@ -50,6 +53,9 @@ export function InstallmentTable({ installments }: InstallmentTableProps) {
                                         <div className="text-xs text-muted-foreground">
                                             {formatCurrency(inst.total_amount)} total
                                         </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        {inst.original_transaction?.account?.name || '-'}
                                     </TableCell>
                                     <TableCell className="w-[200px]">
                                         <div className="flex items-center gap-2">
@@ -67,7 +73,12 @@ export function InstallmentTable({ installments }: InstallmentTableProps) {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <Button variant="ghost" size="sm">Details</Button>
+                                        <InstallmentDetailsDialog
+                                            installment={inst}
+                                            trigger={
+                                                <Button variant="ghost" size="sm">Details</Button>
+                                            }
+                                        />
                                     </TableCell>
                                 </TableRow>
                             )

@@ -8,6 +8,8 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
     const batch = await getBatchByIdAction(id)
     const accounts = await getAccounts()
     const bankMappings = await getBankMappings()
+    const { getAccountsWithActiveInstallments } = await import('@/services/installment.service')
+    const activeInstallmentAccounts = await getAccountsWithActiveInstallments()
 
     if (!batch) {
         return <div>Batch not found</div>
@@ -34,7 +36,12 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                     Back to Batches
                 </a>
             </div>
-            <BatchDetail batch={batch} accounts={accounts} bankMappings={bankMappings} />
+            <BatchDetail
+                batch={batch}
+                accounts={accounts}
+                bankMappings={bankMappings}
+                activeInstallmentAccounts={activeInstallmentAccounts}
+            />
         </div>
     )
 }

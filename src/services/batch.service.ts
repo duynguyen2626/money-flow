@@ -29,7 +29,7 @@ export async function getBatchById(id: string) {
     const supabase: any = createClient()
     const { data, error } = await supabase
         .from('batches')
-        .select('*, batch_items(*, target_account:accounts(name, type))')
+        .select('*, batch_items(*, target_account:accounts(name, type, cashback_config))')
         .eq('id', id)
         .single()
 
@@ -852,4 +852,63 @@ export async function updateBatchCycle(batchId: string, action: 'prev' | 'next')
     }
 
     return { success: true, oldTag: currentTag, newTag }
+}
+
+export async function updateBatchNoteMode(batchId: string, mode: 'previous' | 'current') {
+    const supabase: any = createClient()
+
+    // 1. Get Batch Items
+    const { data: batch, error: batchError } = await supabase
+        .from('batches')
+        .select('*, batch_items(*)')
+        .eq('id', batchId)
+        .single()
+
+    if (batchError || !batch) throw new Error('Batch not found')
+
+    const items = batch.batch_items || []
+    if (items.length === 0) return { success: true, count: 0 }
+
+    // 2. Determine Month Tags
+    // Current Month: e.g. DEC24
+    // Previous Month: e.g. NOV24
+    const today = new Date()
+    const currentMonthTag = format(today, 'MMMyy').toUpperCase()
+    const prevMonthTag = format(addMonths(today, -1), 'MMMyy').toUpperCase()
+
+    const targetTag = mode === 'current' ? currentMonthTag : prevMonthTag
+    const sourceTag = mode === 'current' ? prevMonthTag : currentMonthTag
+
+    // 3. Update Notes
+    let updatedCount = 0
+    const updates = items.map((item: any) => {
+        let note = item.note || ''
+        if (note.includes(sourceTag)) {
+            note = note.replace(sourceTag, targetTag)
+            updatedCount++
+            return {
+                id: item.id,
+                note: note
+            }
+        }
+        // If note doesn't have source tag, but we want to enforce the target tag?
+        // For now, only swap if source tag exists to avoid messing up other notes.
+        return null
+    }).filter(Boolean)
+
+    if (updates.length === 0) return { success: true, count: 0 }
+
+    // 4. Perform Bulk Update
+    // Supabase doesn't have a simple bulk update for different values in one go via SDK easily without RPC or loop.
+    // We'll use a loop for now as batch size is usually small (<50).
+    // Optimization: Use upsert if possible, but we only want to update note.
+
+    for (const update of updates) {
+        await supabase
+            .from('batch_items')
+            .update({ note: update.note })
+            .eq('id', update.id)
+    }
+
+    return { success: true, count: updatedCount }
 }
