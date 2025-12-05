@@ -236,12 +236,12 @@ export function UnifiedTransactionTable({
       shop: true,
       category: true,
       people: !hidePeopleColumn,
-      tag: true,
+      tag: false, // Hidden by default (Merged into People/Account)
       account: true,
       amount: true,
       back_info: true,
       final_price: true,
-      status: true,
+      status: false, // Hidden by default (Merged into Type)
       id: false,
       task: true,
       initial_back: true,
@@ -713,8 +713,8 @@ export function UnifiedTransactionTable({
 
   return (
     <div className="relative space-y-3">
-      <div className="rounded-md border-2 border-slate-300 bg-white shadow-sm overflow-hidden">
-        <Table wrapperClassName="max-h-[75vh] overflow-auto relative scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200">
+      <div className="relative w-full overflow-x-auto border rounded-md bg-white shadow-sm">
+        <Table className="min-w-[1000px]">
           <TableHeader className="bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/60 sticky top-0 z-20 shadow-sm">
             <TableRow className="hover:bg-transparent border-b-2 border-slate-300">
               <TableHead className="border-r-2 border-slate-300 whitespace-nowrap sticky left-0 z-30 bg-slate-50" style={{ width: 52 }}>
@@ -743,11 +743,39 @@ export function UnifiedTransactionTable({
                   )
                 }
 
+                // Sticky Logic Calculation
+                let stickyStyle: React.CSSProperties = { width: columnWidths[col.key] };
+                let stickyClass = "";
+
+                if (col.key === 'date') {
+                  stickyClass = "sticky left-[52px] z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]";
+                } else if (col.key === 'type') {
+                  // Only sticky if Date is also visible? Assuming Date is always first.
+                  // If Date is hidden, Type should be left-[52px].
+                  // We need dynamic calculation based on visible columns.
+                  // For now, hardcode assuming default order for "Critical Columns".
+                  // Actually, let's just make Date and Type sticky.
+                  if (visibleColumns.date) {
+                    stickyClass = `sticky left-[${52 + columnWidths.date}px] z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]`;
+                    stickyStyle.left = 52 + columnWidths.date;
+                  } else {
+                    stickyClass = "sticky left-[52px] z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]";
+                  }
+                } else if (col.key === 'shop') {
+                  // Shop/Note
+                  let left = 52;
+                  if (visibleColumns.date) left += columnWidths.date;
+                  if (visibleColumns.type) left += columnWidths.type;
+
+                  stickyClass = "sticky z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]";
+                  stickyStyle.left = left;
+                }
+
                 return (
                   <TableHead
                     key={col.key}
-                    className="border-r-2 border-slate-300 bg-slate-100 font-semibold text-slate-700 whitespace-nowrap"
-                    style={{ width: columnWidths[col.key] }}
+                    className={cn("border-r-2 border-slate-300 bg-slate-100 font-semibold text-slate-700 whitespace-nowrap", stickyClass)}
+                    style={stickyStyle}
                   >
                     {col.key === 'date' || col.key === 'amount' ? (
                       <button
@@ -1012,10 +1040,36 @@ export function UnifiedTransactionTable({
                     )
                   }
                   case "type":
+                    let icon = "❓";
+                    let statusIndicator = null;
+
+                    if (txn.type === 'repayment') icon = "💸";
+                    else if (visualType === 'expense') icon = "➖";
+                    else if (visualType === 'income') icon = "➕";
+                    else if (visualType === 'transfer') {
+                      if (accountId) {
+                        if (txn.amount >= 0) icon = "➡️"; // In
+                        else icon = "⬅️"; // Out
+                      } else {
+                        icon = "↔️";
+                      }
+                    } else if (visualType === 'debt') icon = "📒";
+
+                    // Status Logic
+                    if (isVoided) statusIndicator = "🚫";
+                    else if (effectiveStatus === 'pending') statusIndicator = "⏸️";
+                    else if (effectiveStatus === 'waiting_refund') statusIndicator = "↩️";
+
                     return (
-                      <div className="flex flex-col gap-1 items-start">
-                        {typeBadge}
-                        {/* Removed Refunded/Partial badges from Type column as requested */}
+                      <div className="flex items-center justify-center gap-1 text-xl">
+                        <CustomTooltip content={typeBadge}>
+                          <span>{icon}</span>
+                        </CustomTooltip>
+                        {statusIndicator && (
+                          <CustomTooltip content={effectiveStatus}>
+                            <span className="text-sm">{statusIndicator}</span>
+                          </CustomTooltip>
+                        )}
                       </div>
                     )
                   case "shop": {
@@ -1202,33 +1256,41 @@ export function UnifiedTransactionTable({
                     const accountLogo = accountLine?.accounts?.logo_url ?? txn.source_logo
 
                     return (
-                      <div className="flex items-center gap-2 min-w-[150px]">
-                        {txn.source_name ? sourceIcon : (
-                          accountLogo ? (
-                            <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
-                              <img src={accountLogo} alt={txn.account_name ?? ''} className="h-full w-full object-contain" />
-                            </div>
-                          ) : (
-                            <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-xs font-bold border border-slate-200 rounded-full">
-                              {(txn.account_name ?? '?').charAt(0).toUpperCase()}
-                            </div>
-                          )
-                        )}
-                        <CustomTooltip content={txn.account_name}>
-                          {displayAccountId ? (
-                            <Link
-                              href={`/accounts/${displayAccountId}`}
-                              onClick={e => e.stopPropagation()}
-                              className="truncate max-w-[120px] cursor-pointer font-medium hover:text-blue-600 transition-colors"
-                            >
-                              {txn.account_name ?? 'Unknown'}
-                            </Link>
-                          ) : (
-                            <span className="truncate max-w-[120px] cursor-help">
-                              {txn.account_name ?? 'Unknown'}
-                            </span>
+                      <div className="flex flex-col gap-0.5 min-w-[150px]">
+                        <div className="flex items-center gap-2">
+                          {txn.source_name ? sourceIcon : (
+                            accountLogo ? (
+                              <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
+                                <img src={accountLogo} alt={txn.account_name ?? ''} className="h-full w-full object-contain" />
+                              </div>
+                            ) : (
+                              <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-xs font-bold border border-slate-200 rounded-full">
+                                {(txn.account_name ?? '?').charAt(0).toUpperCase()}
+                              </div>
+                            )
                           )}
-                        </CustomTooltip>
+                          <CustomTooltip content={txn.account_name}>
+                            {displayAccountId ? (
+                              <Link
+                                href={`/accounts/${displayAccountId}`}
+                                onClick={e => e.stopPropagation()}
+                                className="truncate max-w-[120px] cursor-pointer font-medium hover:text-blue-600 transition-colors"
+                              >
+                                {txn.account_name ?? 'Unknown'}
+                              </Link>
+                            ) : (
+                              <span className="truncate max-w-[120px] cursor-help">
+                                {txn.account_name ?? 'Unknown'}
+                              </span>
+                            )}
+                          </CustomTooltip>
+                        </div>
+                        {/* Cycle Info Merged Here */}
+                        {cycleLabel !== "-" && (
+                          <span className="inline-flex w-fit items-center rounded-md bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 border border-slate-100">
+                            {cycleLabel}
+                          </span>
+                        )}
                       </div>
                     );
                   }
@@ -1240,20 +1302,28 @@ export function UnifiedTransactionTable({
                     if (!personName) return <span className="text-slate-400">-</span>
 
                     const content = (
-                      <div className="flex items-center gap-2 min-w-[120px]">
-                        {personAvatar ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={personAvatar}
-                            alt={personName}
-                            className="h-6 w-6 object-cover rounded-none"
-                          />
-                        ) : (
-                          <span className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 rounded-none">
-                            {personName.charAt(0).toUpperCase()}
+                      <div className="flex flex-col gap-0.5 min-w-[120px]">
+                        <div className="flex items-center gap-2">
+                          {personAvatar ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={personAvatar}
+                              alt={personName}
+                              className="h-6 w-6 object-cover rounded-none"
+                            />
+                          ) : (
+                            <span className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 rounded-none">
+                              {personName.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                          <span className="font-medium text-slate-700 hover:text-blue-600 transition-colors">{personName}</span>
+                        </div>
+                        {/* Tag Merged Here */}
+                        {txn.tag && (
+                          <span className="inline-flex w-fit items-center rounded-md bg-white px-1.5 py-0.5 text-[10px] font-medium text-slate-500 border border-slate-200">
+                            {txn.tag}
                           </span>
                         )}
-                        <span className="font-medium text-slate-700 hover:text-blue-600 transition-colors">{personName}</span>
                       </div>
                     )
 
@@ -1455,16 +1525,42 @@ export function UnifiedTransactionTable({
                       onChange={e => handleSelectOne(txn.id, e.target.checked)}
                     />
                   </TableCell>
-                  {displayedColumns.map(col => (
-                    <TableCell
-                      key={`${txn.id}-${col.key}`}
-                      className={`border-r-2 border-slate-300 text-sm ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
-                        } ${col.key === "amount" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass} truncate`}
-                      style={{ width: columnWidths[col.key], maxWidth: columnWidths[col.key], overflow: 'hidden', whiteSpace: 'nowrap' }}
-                    >
-                      {renderCell(col.key)}
-                    </TableCell>
-                  ))}
+                  {displayedColumns.map(col => {
+                    // Sticky Logic for Cells
+                    let stickyStyle: React.CSSProperties = { width: columnWidths[col.key], maxWidth: columnWidths[col.key], overflow: 'hidden', whiteSpace: 'nowrap' };
+                    let stickyClass = "";
+
+                    if (col.key === 'date') {
+                      stickyClass = "sticky left-[52px] z-20 bg-white shadow-[1px_0_0_0_rgba(0,0,0,0.05)]";
+                    } else if (col.key === 'type') {
+                      if (visibleColumns.date) {
+                        stickyStyle.left = 52 + columnWidths.date;
+                        stickyClass = "sticky z-20 bg-white shadow-[1px_0_0_0_rgba(0,0,0,0.05)]";
+                      } else {
+                        stickyClass = "sticky left-[52px] z-20 bg-white shadow-[1px_0_0_0_rgba(0,0,0,0.05)]";
+                      }
+                    } else if (col.key === 'shop') {
+                      let left = 52;
+                      if (visibleColumns.date) left += columnWidths.date;
+                      if (visibleColumns.type) left += columnWidths.type;
+                      stickyStyle.left = left;
+                      stickyClass = "sticky z-20 bg-white shadow-[1px_0_0_0_rgba(0,0,0,0.05)]";
+                    }
+
+                    return (
+                      <TableCell
+                        key={`${txn.id}-${col.key}`}
+                        className={cn(
+                          `border-r-2 border-slate-300 text-sm ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
+                          } ${col.key === "amount" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass} truncate`,
+                          stickyClass
+                        )}
+                        style={stickyStyle}
+                      >
+                        {renderCell(col.key)}
+                      </TableCell>
+                    )
+                  })}
                 </TableRow>
               )
             })}
