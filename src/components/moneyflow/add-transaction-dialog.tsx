@@ -1,9 +1,9 @@
 'use client'
 
-import { MouseEvent, ReactNode, useState } from 'react'
+import { MouseEvent, ReactNode, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { TransactionForm } from './transaction-form'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 
 type AddTransactionDialogProps = {
@@ -21,6 +21,7 @@ type AddTransactionDialogProps = {
   defaultAmount?: number;
   triggerContent?: ReactNode;
   onOpen?: () => void;
+  listenToUrlParams?: boolean;
 }
 
 export function AddTransactionDialog({
@@ -38,16 +39,55 @@ export function AddTransactionDialog({
   defaultAmount,
   triggerContent,
   onOpen,
+  listenToUrlParams,
 }: AddTransactionDialogProps) {
   const [open, setOpen] = useState(false)
   const router = useRouter()
 
+  const searchParams = useSearchParams()
+  const [urlValues, setUrlValues] = useState<any>(null)
+
+  useEffect(() => {
+    if (listenToUrlParams && searchParams.get('action') === 'new') {
+      setOpen(true)
+
+      const amountParam = searchParams.get('amount')
+      const noteParam = searchParams.get('note')
+      const shopParam = searchParams.get('shop')
+      const personParam = searchParams.get('for')
+
+      const amount = amountParam ? parseFloat(amountParam) : undefined
+
+      let shopId = undefined
+      if (shopParam) {
+        const found = shops.find(s => s.name.toLowerCase() === shopParam.toLowerCase())
+        shopId = found?.id
+
+        if (!shopId && shopParam.toLowerCase() === 'shopee') {
+          const shopee = shops.find(s => s.name.toLowerCase().includes('shopee'))
+          shopId = shopee?.id
+        }
+      }
+
+      setUrlValues({
+        amount,
+        note: noteParam || undefined,
+        shop_id: shopId,
+        person_id: personParam || undefined,
+      })
+    }
+  }, [listenToUrlParams, searchParams, shops])
+
   const handleSuccess = () => {
     setOpen(false)
+    setUrlValues(null) // Reset
     router.refresh()
   }
 
-  const closeDialog = () => setOpen(false)
+  const closeDialog = () => {
+    setOpen(false)
+    setUrlValues(null)
+  }
 
   const stopPropagation = (event: MouseEvent<HTMLDivElement>) => {
     event.stopPropagation()
@@ -123,11 +163,14 @@ export function AddTransactionDialog({
                   shops={shops}
                   onSuccess={handleSuccess}
                   defaultTag={defaultTag}
-                  defaultPersonId={defaultPersonId}
+                  defaultPersonId={urlValues?.person_id ?? defaultPersonId}
                   defaultType={defaultType}
                   defaultSourceAccountId={defaultSourceAccountId}
                   defaultDebtAccountId={defaultDebtAccountId}
-                  initialValues={defaultAmount ? { amount: defaultAmount } : undefined}
+                  initialValues={{
+                    ...(defaultAmount ? { amount: defaultAmount } : {}),
+                    ...urlValues
+                  }}
                 />
               </div>
             </div>

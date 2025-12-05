@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react"
-import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy, ArrowUp, ArrowDown, ArrowUpDown, Trash2, Sigma, CheckCheck, CreditCard } from "lucide-react"
+import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy, ArrowUp, ArrowDown, ArrowUpDown, Trash2, Sigma, CheckCheck, CreditCard, Tag, Link2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createPortal } from "react-dom"
@@ -214,7 +214,7 @@ export function UnifiedTransactionTable({
     { key: "shop", label: "Notes", defaultWidth: 260, minWidth: 200 },
     { key: "category", label: "Category", defaultWidth: 150 },
     ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 160, minWidth: 140 } as ColumnConfig] : []),
-    { key: "account", label: "Account", defaultWidth: 200, minWidth: 180 },
+    { key: "account", label: "Account", defaultWidth: 160, minWidth: 140 },
     { key: "amount", label: "Amount", defaultWidth: 120 },
     { key: "back_info", label: "Back Info", defaultWidth: 140 },
     { key: "initial_back", label: "Initial Back", defaultWidth: 110 },
@@ -232,16 +232,16 @@ export function UnifiedTransactionTable({
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
     const initial: Record<ColumnKey, boolean> = {
       date: true,
-      type: true,
+      type: false, // Hidden by default (Merged into Date)
       shop: true,
       category: true,
       people: !hidePeopleColumn,
-      tag: true,
+      tag: false, // Hidden by default (Merged into People/Account)
       account: true,
       amount: true,
-      back_info: true,
+      back_info: false, // Hidden by default
       final_price: true,
-      status: true,
+      status: false, // Hidden by default (Merged into Type)
       id: false,
       task: true,
       initial_back: true,
@@ -713,9 +713,9 @@ export function UnifiedTransactionTable({
 
   return (
     <div className="relative space-y-3">
-      <div className="rounded-md border-2 border-slate-300 bg-white shadow-sm overflow-hidden">
-        <Table wrapperClassName="max-h-[75vh] overflow-auto relative scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200">
-          <TableHeader className="bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/60 sticky top-0 z-20 shadow-sm">
+      <div className="relative w-full overflow-x-auto border rounded-md bg-white shadow-sm">
+        <Table className="min-w-[1000px]">
+          <TableHeader className="sticky top-0 z-50 bg-white shadow-sm">
             <TableRow className="hover:bg-transparent border-b-2 border-slate-300">
               <TableHead className="border-r-2 border-slate-300 whitespace-nowrap sticky left-0 z-30 bg-slate-50" style={{ width: 52 }}>
                 <input
@@ -743,11 +743,32 @@ export function UnifiedTransactionTable({
                   )
                 }
 
+                let stickyStyle: React.CSSProperties = { width: columnWidths[col.key] };
+                let stickyClass = "";
+
+                if (col.key === 'date') {
+                  stickyClass = "sticky left-[52px] z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]";
+                } else if (col.key === 'type') {
+                  if (visibleColumns.date) {
+                    stickyClass = `sticky left-[${52 + columnWidths.date}px] z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]`;
+                    stickyStyle.left = 52 + columnWidths.date;
+                  } else {
+                    stickyClass = "sticky left-[52px] z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]";
+                  }
+                } else if (col.key === 'shop') {
+                  let left = 52;
+                  if (visibleColumns.date) left += columnWidths.date;
+                  if (visibleColumns.type) left += columnWidths.type;
+
+                  stickyClass = "sticky z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]";
+                  stickyStyle.left = left;
+                }
+
                 return (
                   <TableHead
                     key={col.key}
-                    className="border-r-2 border-slate-300 bg-slate-100 font-semibold text-slate-700 whitespace-nowrap"
-                    style={{ width: columnWidths[col.key] }}
+                    className={cn("border-r-2 border-slate-300 bg-slate-100 font-semibold text-slate-700 whitespace-nowrap", stickyClass)}
+                    style={stickyStyle}
                   >
                     {col.key === 'date' || col.key === 'amount' ? (
                       <button
@@ -824,26 +845,31 @@ export function UnifiedTransactionTable({
               // --- Type Logic ---
               let typeBadge = null;
               if (txn.type === 'repayment') {
-                typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowLeft className="mr-1 h-3 w-3" /> Repayment</span>;
+                typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-1.5 py-0 text-[10px] font-bold text-emerald-800 h-5">REPAY</span>;
               } else if (visualType === 'expense') {
-                typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowUpRight className="mr-1 h-3 w-3" /> Expense</span>
+                typeBadge = <span className="inline-flex items-center rounded-md bg-red-100 px-1.5 py-0 text-[10px] font-bold text-red-800 h-5">OUT</span>
               } else if (visualType === 'income') {
-                typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> Income</span>
+                typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-1.5 py-0 text-[10px] font-bold text-emerald-800 h-5">IN</span>
               } else {
-                // Transfer
                 if (accountId) {
                   if (txn.amount >= 0) {
-                    // In-Transfer -> Green
-                    typeBadge = <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowLeft className="mr-1 h-3 w-3" /> TF In</span>
+                    typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-1.5 py-0 text-[10px] font-bold text-emerald-800 h-5">TF IN</span>
                   } else {
-                    // Out-Transfer -> Red
-                    typeBadge = <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800"><ArrowRight className="mr-1 h-3 w-3" /> TF Out</span>
+                    typeBadge = <span className="inline-flex items-center rounded-md bg-red-100 px-1.5 py-0 text-[10px] font-bold text-red-800 h-5">TF OUT</span>
                   }
                 } else {
-                  // Neutral Transfer -> Blue
-                  typeBadge = <span className="inline-flex items-center rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-medium text-blue-800"><ArrowLeftRight className="mr-1 h-3 w-3" /> Transfer</span>
+                  typeBadge = <span className="inline-flex items-center rounded-md bg-blue-100 px-1.5 py-0 text-[10px] font-bold text-blue-800 h-5">TF</span>
                 }
               }
+
+              // --- Status Logic ---
+              let statusIndicator = null;
+              let statusTooltip = "";
+              if (isVoided) { statusIndicator = "🚫"; statusTooltip = "Voided"; }
+              else if (effectiveStatus === 'pending') { statusIndicator = "⏳"; statusTooltip = "Pending"; }
+              else if (effectiveStatus === 'waiting_refund') { statusIndicator = "⏳"; statusTooltip = "Waiting Refund"; }
+
+              const rowBgClass = isVoided ? "" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') ? "bg-emerald-50/50" : "";
 
               const taskCell = (
                 <div className="relative flex justify-end">
@@ -952,8 +978,6 @@ export function UnifiedTransactionTable({
                 </div>
               )
 
-              // Only apply line-through to void transactions, not pending or waiting_refund
-              // User requested to remove line-through and opacity for void
               const voidedTextClass = ""
               const percentRaw = txn.cashback_share_percent
               const fixedRaw = txn.cashback_share_fixed
@@ -970,7 +994,6 @@ export function UnifiedTransactionTable({
                 if (acc && acc.cashback_config) {
                   const config = parseCashbackConfig(acc.cashback_config)
                   const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
-                  // Format: DD/MM - DD/MM
                   const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
                   cycleLabel = `${fmt(range.start)} - ${fmt(range.end)}`
                 }
@@ -985,37 +1008,42 @@ export function UnifiedTransactionTable({
                       month: '2-digit',
                       timeZone: 'Asia/Ho_Chi_Minh',
                     })
-
-                    // Time Logic: If occurred_at is midnight UTC (00:00 UTC), it means it's a date-only entry.
-                    // In VN (UTC+7), this shows as 07:00. We want to avoid showing 07:00 for date-only entries.
-                    // We try to use created_at time instead.
-                    let timeDate = d;
-                    const isMidnightUTC = d.getUTCHours() === 0 && d.getUTCMinutes() === 0;
-
-                    if (isMidnightUTC && txn.created_at) {
-                      const created = new Date(txn.created_at);
-                      timeDate = created;
-                    }
-
-                    const timeFormatter = new Intl.DateTimeFormat('en-GB', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                      hour12: false,
-                      timeZone: 'Asia/Ho_Chi_Minh',
-                    })
-
                     return (
-                      <div className="flex flex-col">
-                        <span className="font-semibold">{dateFormatter.format(d)}</span>
-                        <span className="text-xs text-gray-400">{timeFormatter.format(timeDate)}</span>
+                      <div className="flex flex-row items-center gap-2">
+                        <span className="font-semibold min-w-[40px]">{dateFormatter.format(d)}</span>
+                        {typeBadge}
+                        {statusIndicator && (
+                          <CustomTooltip content={statusTooltip}>
+                            <span className="text-sm cursor-help">{statusIndicator}</span>
+                          </CustomTooltip>
+                        )}
                       </div>
                     )
                   }
                   case "type":
+                    let icon = "❓";
+                    if (txn.type === 'repayment') icon = "💸";
+                    else if (visualType === 'expense') icon = "➖";
+                    else if (visualType === 'income') icon = "➕";
+                    else if (visualType === 'transfer') {
+                      if (accountId) {
+                        if (txn.amount >= 0) icon = "TF➕";
+                        else icon = "TF➖";
+                      } else {
+                        icon = "TF↔️";
+                      }
+                    } else if (visualType === 'debt') icon = "📒";
+
                     return (
-                      <div className="flex flex-col gap-1 items-start">
-                        {typeBadge}
-                        {/* Removed Refunded/Partial badges from Type column as requested */}
+                      <div className="flex items-center justify-center gap-1 text-xl">
+                        <CustomTooltip content={typeBadge}>
+                          <span>{icon}</span>
+                        </CustomTooltip>
+                        {statusIndicator && (
+                          <CustomTooltip content={effectiveStatus}>
+                            <span className="text-sm">{statusIndicator}</span>
+                          </CustomTooltip>
+                        )}
                       </div>
                     )
                   case "shop": {
@@ -1027,7 +1055,6 @@ export function UnifiedTransactionTable({
                       displayName = txn.destination_name;
                     }
 
-                    // [Fix] Service Payment: Use Bank Icon if no Shop Logo
                     const isServicePayment = txn.note?.startsWith('Payment for Service') || (txn.metadata as any)?.type === 'service_payment';
                     if (isServicePayment && !displayIcon) {
                       displayIcon = txn.source_logo;
@@ -1071,7 +1098,6 @@ export function UnifiedTransactionTable({
                               !txn.note?.match(/^[123]\. /) && (
                                 <span className="truncate">{displayName}</span>
                               )}
-                            {/* Installment Link Removed from here */}
                           </div>
                         </div>
                         {txn.note && (
@@ -1085,7 +1111,6 @@ export function UnifiedTransactionTable({
                                 accountName={effectiveStatus === 'completed' && txn.note?.startsWith('3.') ? txn.destination_name : txn.source_name}
                                 status={effectiveStatus}
                               />
-                              {/* Installment Link Removed from here */}
                             </div>
                           </CustomTooltip>
                         )}
@@ -1143,9 +1168,7 @@ export function UnifiedTransactionTable({
                       </div>
                     );
 
-                    // Special Account Context Logic
                     if (context === 'account' && accountId) {
-                      // If Transfer (or Debt/Repayment acting as transfer)
                       if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
                         const isInflow = txn.amount > 0;
                         const rawName = isInflow ? txn.source_name : txn.destination_name;
@@ -1166,7 +1189,6 @@ export function UnifiedTransactionTable({
                         )
                       }
 
-                      // Normal Expense/Income
                       return (
                         <div className="flex items-center gap-2 min-w-[150px]">
                           {txn.source_name && sourceIcon}
@@ -1179,8 +1201,6 @@ export function UnifiedTransactionTable({
                       )
                     }
 
-                    // Render for Transfer / Debt / Repayment (General Context)
-                    // Also handle Refund transactions (GD3) which are income type but should show flow
                     const isRefundTransaction = effectiveStatus === 'completed' &&
                       (txn.source_name?.includes('Pending') || txn.source_name?.includes('Refund'));
 
@@ -1196,39 +1216,52 @@ export function UnifiedTransactionTable({
                       );
                     }
 
-                    // Render for Single Account (Expense/Income)
                     const accountLine = txn.transaction_lines?.find(l => l.accounts?.name === txn.account_name)
                     const displayAccountId = accountLine?.account_id
                     const accountLogo = accountLine?.accounts?.logo_url ?? txn.source_logo
 
                     return (
-                      <div className="flex items-center gap-2 min-w-[150px]">
-                        {txn.source_name ? sourceIcon : (
-                          accountLogo ? (
-                            <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
-                              <img src={accountLogo} alt={txn.account_name ?? ''} className="h-full w-full object-contain" />
-                            </div>
-                          ) : (
-                            <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-xs font-bold border border-slate-200 rounded-full">
-                              {(txn.account_name ?? '?').charAt(0).toUpperCase()}
-                            </div>
-                          )
-                        )}
-                        <CustomTooltip content={txn.account_name}>
-                          {displayAccountId ? (
-                            <Link
-                              href={`/accounts/${displayAccountId}`}
-                              onClick={e => e.stopPropagation()}
-                              className="truncate max-w-[120px] cursor-pointer font-medium hover:text-blue-600 transition-colors"
-                            >
-                              {txn.account_name ?? 'Unknown'}
-                            </Link>
-                          ) : (
-                            <span className="truncate max-w-[120px] cursor-help">
-                              {txn.account_name ?? 'Unknown'}
-                            </span>
+                      <div className="flex flex-col gap-0.5 min-w-[150px]">
+                        <div className="flex items-center gap-2">
+                          {txn.source_name ? sourceIcon : (
+                            accountLogo ? (
+                              <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
+                                <img src={accountLogo} alt={txn.account_name ?? ''} className="h-full w-full object-contain" />
+                              </div>
+                            ) : (
+                              <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-xs font-bold border border-slate-200 rounded-full">
+                                {(txn.account_name ?? '?').charAt(0).toUpperCase()}
+                              </div>
+                            )
                           )}
-                        </CustomTooltip>
+                          <CustomTooltip content={txn.account_name}>
+                            {displayAccountId ? (
+                              <Link
+                                href={`/accounts/${displayAccountId}`}
+                                onClick={e => e.stopPropagation()}
+                                className="truncate max-w-[120px] cursor-pointer font-medium hover:text-blue-600 transition-colors"
+                              >
+                                {txn.account_name ?? 'Unknown'}
+                              </Link>
+                            ) : (
+                              <span className="truncate max-w-[120px] cursor-help">
+                                {txn.account_name ?? 'Unknown'}
+                              </span>
+                            )}
+                          </CustomTooltip>
+                          {cycleLabel !== "-" && (
+                            <CustomTooltip content={`Cycle: ${cycleLabel}`}>
+                              <span className="inline-flex items-center rounded-md bg-slate-50 px-1.5 py-0.5 text-xs font-medium text-slate-500 border border-slate-100 truncate max-w-[80px]">
+                                {cycleLabel}
+                              </span>
+                            </CustomTooltip>
+                          )}
+                        </div>
+                        {txn.is_installment && (
+                          <CustomTooltip content="Installment Linked">
+                            <Link2 className="h-3 w-3 text-blue-500 ml-1" />
+                          </CustomTooltip>
+                        )}
                       </div>
                     );
                   }
@@ -1241,19 +1274,27 @@ export function UnifiedTransactionTable({
 
                     const content = (
                       <div className="flex items-center gap-2 min-w-[120px]">
-                        {personAvatar ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={personAvatar}
-                            alt={personName}
-                            className="h-6 w-6 object-cover rounded-none"
-                          />
-                        ) : (
-                          <span className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 rounded-none">
-                            {personName.charAt(0).toUpperCase()}
-                          </span>
+                        <div className="flex items-center gap-2">
+                          {personAvatar ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={personAvatar}
+                              alt={personName}
+                              className="h-6 w-6 object-cover rounded-none"
+                            />
+                          ) : (
+                            <span className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 rounded-none">
+                              {personName.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                          <span className="font-medium text-slate-700 hover:text-blue-600 transition-colors">{personName}</span>
+                        </div>
+                        {/* Tag Merged Inline */}
+                        {txn.tag && (
+                          <CustomTooltip content={txn.tag}>
+                            <Tag className="h-3 w-3 text-slate-400" />
+                          </CustomTooltip>
                         )}
-                        <span className="font-medium text-slate-700 hover:text-blue-600 transition-colors">{personName}</span>
                       </div>
                     )
 
@@ -1366,44 +1407,27 @@ export function UnifiedTransactionTable({
                     )
                   }
                   case "final_price":
-                    return <span className={cn("font-bold", amountClass)}>{numberFormatter.format(finalPrice)}</span>
-                  case "status":
-                    const refundId = (txn.metadata as any)?.refund_confirmed_transaction_id ||
-                      (txn.metadata as any)?.pending_refund_transaction_id ||
-                      (txn.metadata as any)?.original_transaction_id;
-
-                    const StatusBadge = () => {
-                      if (isVoided) return <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-800">Void</span>
-                      if (effectiveStatus === 'waiting_refund') return <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Waiting Refund</span>
-                      if (effectiveStatus === 'refunded') return <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
-                      if (effectiveStatus === 'pending') return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Pending</span>
-                      if (effectiveStatus === 'completed') return <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">Completed</span>
-
-                      if (refundStatus === 'full' || isFullyRefunded) return <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-800">Refunded</span>
-                      if (refundStatus === 'partial' || isPartialRefund) return <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800">Partial</span>
-                      return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Active</span>
-                    }
-
-                    const isCopiedRefund = copiedId === `refund-${refundId}-${txn.id}`;
+                    const percent = txn.cashback_share_percent ? Math.round(txn.cashback_share_percent * 100) : 0;
+                    const fixed = txn.cashback_share_fixed ? Math.round(txn.cashback_share_fixed) : 0;
+                    const final = Math.round(finalPrice);
 
                     return (
-                      <div className="flex items-center gap-1.5 min-w-[120px]">
-                        <StatusBadge />
-                        {refundId && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigator.clipboard.writeText(refundId);
-                              setCopiedId(`refund-${refundId}-${txn.id}`);
-                              setTimeout(() => setCopiedId(null), 2000);
-                            }}
-                            className="text-slate-400 hover:text-slate-600 transition-colors"
-                            title={`Copy Refund ID: ${refundId}`}
-                          >
-                            {isCopiedRefund ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-                          </button>
+                      <div className="flex flex-col">
+                        <span className={cn("font-bold", amountClass)}>{numberFormatter.format(final)}</span>
+                        {(percent > 0 || fixed > 0) && (
+                          <div className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 border border-slate-200 mt-0.5 w-fit whitespace-nowrap">
+                            {percent > 0 && fixed > 0 ? (
+                              // Case 3: Both % and Fixed
+                              <span>{percent}% + {numberFormatter.format(fixed)} = {numberFormatter.format(final)}</span>
+                            ) : percent > 0 ? (
+                              // Case 2: Only % (Show formula: % * Amount = Final)
+                              <span>{percent}% * {numberFormatter.format(Math.abs(txn.amount))} = {numberFormatter.format(final)}</span>
+                            ) : (
+                              // Case 1: Only Fixed (Show label)
+                              <span>Fix Amount = {numberFormatter.format(fixed)}</span>
+                            )}
+                          </div>
                         )}
-                        {/* Installment Link Removed from here */}
                       </div>
                     )
                   case "id":
@@ -1444,7 +1468,7 @@ export function UnifiedTransactionTable({
                   data-state={isSelected ? "selected" : undefined}
                   className={cn(
                     "hover:bg-slate-50/50 border-b-2 border-slate-300 transition-colors",
-                    isMenuOpen ? "bg-blue-50" : ""
+                    isMenuOpen ? "bg-blue-50" : rowBgClass
                   )}
                 >
                   <TableCell className="border-r-2 border-slate-300">
@@ -1455,48 +1479,76 @@ export function UnifiedTransactionTable({
                       onChange={e => handleSelectOne(txn.id, e.target.checked)}
                     />
                   </TableCell>
-                  {displayedColumns.map(col => (
-                    <TableCell
-                      key={`${txn.id}-${col.key}`}
-                      className={`border-r-2 border-slate-300 text-sm ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
-                        } ${col.key === "amount" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass} truncate`}
-                      style={{ width: columnWidths[col.key], maxWidth: columnWidths[col.key], overflow: 'hidden', whiteSpace: 'nowrap' }}
-                    >
-                      {renderCell(col.key)}
-                    </TableCell>
-                  ))}
+                  {displayedColumns.map(col => {
+                    // Sticky Logic for Cells
+                    let stickyStyle: React.CSSProperties = { width: columnWidths[col.key], maxWidth: columnWidths[col.key], overflow: 'hidden', whiteSpace: 'nowrap' };
+                    let stickyClass = "";
+
+                    if (col.key === 'date') {
+                      stickyClass = cn("sticky left-[52px] z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
+                    } else if (col.key === 'type') {
+                      if (visibleColumns.date) {
+                        stickyStyle.left = 52 + columnWidths.date;
+                        stickyClass = cn("sticky z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
+                      } else {
+                        stickyClass = cn("sticky left-[52px] z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
+                      }
+                    } else if (col.key === 'shop') {
+                      let left = 52;
+                      if (visibleColumns.date) left += columnWidths.date;
+                      if (visibleColumns.type) left += columnWidths.type;
+                      stickyStyle.left = left;
+                      stickyClass = cn("sticky z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
+                    }
+
+                    return (
+                      <TableCell
+                        key={`${txn.id}-${col.key}`}
+                        className={cn(
+                          `border-r-2 border-slate-300 text-sm ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
+                          } ${col.key === "amount" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass} truncate`,
+                          stickyClass
+                        )}
+                        style={stickyStyle}
+                      >
+                        {renderCell(col.key)}
+                      </TableCell>
+                    )
+                  })}
                 </TableRow>
               )
             })}
           </TableBody>
-          {selection.size > 0 && (
-            <TableFooter>
-              {summary.incomeSummary.sumAmount > 0 && (
-                <TableRow className="bg-emerald-50">
-                  <TableCell
-                    colSpan={1 + displayedColumns.findIndex(c => c.key === 'amount')}
-                    className="font-bold text-emerald-700 border-r text-right"
-                  >
-                    Total Income
-                  </TableCell>
-                  <TableCell className="text-right font-bold text-emerald-700 border-r">{numberFormatter.format(summary.incomeSummary.sumAmount)}</TableCell>
-                  <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')}></TableCell>
-                </TableRow>
-              )}
-              {summary.expenseSummary.sumAmount > 0 && (
-                <TableRow className="bg-red-50">
-                  <TableCell
-                    colSpan={1 + displayedColumns.findIndex(c => c.key === 'amount')}
-                    className="font-bold text-red-500 border-r text-right"
-                  >
-                    Total Expense
-                  </TableCell>
-                  <TableCell className="text-right font-bold text-red-500 border-r">{numberFormatter.format(summary.expenseSummary.sumAmount)}</TableCell>
-                  <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')}></TableCell>
-                </TableRow>
-              )}
-            </TableFooter>
-          )}
+          {
+            selection.size > 0 && (
+              <TableFooter>
+                {summary.incomeSummary.sumAmount > 0 && (
+                  <TableRow className="bg-emerald-50">
+                    <TableCell
+                      colSpan={1 + displayedColumns.findIndex(c => c.key === 'amount')}
+                      className="font-bold text-emerald-700 border-r text-right"
+                    >
+                      Total Income
+                    </TableCell>
+                    <TableCell className="text-right font-bold text-emerald-700 border-r">{numberFormatter.format(summary.incomeSummary.sumAmount)}</TableCell>
+                    <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')}></TableCell>
+                  </TableRow>
+                )}
+                {summary.expenseSummary.sumAmount > 0 && (
+                  <TableRow className="bg-red-50">
+                    <TableCell
+                      colSpan={1 + displayedColumns.findIndex(c => c.key === 'amount')}
+                      className="font-bold text-red-500 border-r text-right"
+                    >
+                      Total Expense
+                    </TableCell>
+                    <TableCell className="text-right font-bold text-red-500 border-r">{numberFormatter.format(summary.expenseSummary.sumAmount)}</TableCell>
+                    <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')}></TableCell>
+                  </TableRow>
+                )}
+              </TableFooter>
+            )
+          }
         </Table>
       </div>
 

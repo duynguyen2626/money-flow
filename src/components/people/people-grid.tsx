@@ -1,17 +1,15 @@
 'use client'
 
-import { useMemo, useState, useTransition, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, UserPlus } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
 
-import { EditPersonDialog } from './edit-person-dialog'
 import { CreatePersonDialog } from './create-person-dialog'
 import { PersonCard } from '@/components/moneyflow/person-card'
 import { CollapsibleSection } from './collapsible-section'
 import { Account, Category, Person, Shop, Subscription } from '@/types/moneyflow.types'
-import { ensureDebtAccountAction } from '@/actions/people-actions'
 
 type PeopleGridProps = {
   people: Person[]
@@ -24,19 +22,10 @@ type PeopleGridProps = {
 type FilterStatus = 'all' | 'active' | 'settled'
 
 export function PeopleGrid({ people, subscriptions, shops, accounts, categories }: PeopleGridProps) {
-  const peopleMap = useMemo(() => {
-    const map = new Map<string, Person>()
-    people.forEach(p => map.set(p.id, p))
-    return map
-  }, [people])
-
-  const [editId, setEditId] = useState<string | null>(null)
-  const selectedPerson = editId ? peopleMap.get(editId) ?? null : null
   const router = useRouter()
-  const [, startEnsuring] = useTransition()
-  const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
 
   const filteredPeople = useMemo(() => {
     if (!searchQuery.trim()) return people
@@ -44,7 +33,7 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
     return people.filter(p => p.name.toLowerCase().includes(lower))
   }, [people, searchQuery])
 
-  // [M2-SP1] Realtime: Subscribe to transaction changes to update debt immediately
+  // Realtime subscription
   useEffect(() => {
     const supabase = createClient()
     const channel = supabase
@@ -64,21 +53,9 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
     }
   }, [router])
 
-  const handleOpenDebt = (person: Person) => {
-    setError(null)
-    const navigate = (accountId: string) => router.push(`/people/${accountId}`)
-    if (person.debt_account_id) {
-      navigate(person.debt_account_id)
-      return
-    }
-    startEnsuring(async () => {
-      const accountId = await ensureDebtAccountAction(person.id, person.name)
-      if (!accountId) {
-        setError('Khong the tao ho so cong no.')
-        return
-      }
-      navigate(accountId)
-    })
+  const handleSelect = (person: Person) => {
+    setSelectedId(person.id)
+    router.push(`/people/${person.id}`)
   }
 
   const activePeople = filteredPeople.filter(person => !person.is_archived && (person.balance ?? 0) !== 0)
@@ -91,6 +68,7 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
   return (
     <>
       <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
+        {/* Header Controls (Search, Filter, Add) */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex-1 min-w-[220px]">
             <p className="text-[11px] uppercase tracking-wider text-slate-500">People directory</p>
@@ -149,17 +127,18 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
               No outstanding debters right now.
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
               {activePeople.map(person => (
                 <PersonCard
                   key={person.id}
                   person={person}
-                  shops={shops}
+                  subscriptions={subscriptions}
+                  variant="compact"
+                  isSelected={selectedId === person.id}
+                  onSelect={() => handleSelect(person)}
                   accounts={accounts}
                   categories={categories}
-                  subscriptions={subscriptions}
-                  onEdit={() => setEditId(person.id)}
-                  onOpenDebt={() => handleOpenDebt(person)}
+                  shops={shops}
                 />
               ))}
             </div>
@@ -179,18 +158,18 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
               Everyone currently owes you something.
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
               {settledPeople.map(person => (
                 <PersonCard
                   key={person.id}
                   person={person}
-                  shops={shops}
+                  subscriptions={subscriptions}
+                  variant="compact"
+                  isSelected={selectedId === person.id}
+                  onSelect={() => handleSelect(person)}
                   accounts={accounts}
                   categories={categories}
-                  subscriptions={subscriptions}
-                  onEdit={() => setEditId(person.id)}
-                  onOpenDebt={() => handleOpenDebt(person)}
-                  variant="compact"
+                  shops={shops}
                 />
               ))}
             </div>
@@ -205,33 +184,22 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
           titleColor="text-slate-500"
           defaultOpen={false}
         >
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
             {archivedPeople.map(person => (
               <PersonCard
                 key={person.id}
                 person={person}
-                shops={shops}
+                subscriptions={subscriptions}
+                variant="compact"
+                isSelected={selectedId === person.id}
+                onSelect={() => handleSelect(person)}
                 accounts={accounts}
                 categories={categories}
-                subscriptions={subscriptions}
-                onEdit={() => setEditId(person.id)}
-                onOpenDebt={() => handleOpenDebt(person)}
-                variant="compact"
+                shops={shops}
               />
             ))}
           </div>
         </CollapsibleSection>
-      )}
-
-      {error && <p className="mt-3 text-sm text-rose-600">{error}</p>}
-
-      {selectedPerson && (
-        <EditPersonDialog
-          person={selectedPerson}
-          subscriptions={subscriptions}
-          initiallyOpen
-          onClose={() => setEditId(null)}
-        />
       )}
     </>
   )

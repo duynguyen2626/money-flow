@@ -6,14 +6,17 @@ import { PersonForm } from './person-form'
 import { Subscription, Person } from '@/types/moneyflow.types'
 import { updatePersonAction } from '@/actions/people-actions'
 
+import { Slot } from '@radix-ui/react-slot'
+
 type EditPersonDialogProps = {
   person: Person
   subscriptions: Subscription[]
   initiallyOpen?: boolean
   onClose?: () => void
+  trigger?: React.ReactNode
 }
 
-export function EditPersonDialog({ person, subscriptions, initiallyOpen, onClose }: EditPersonDialogProps) {
+export function EditPersonDialog({ person, subscriptions, initiallyOpen, onClose, trigger }: EditPersonDialogProps) {
   const [open, setOpen] = useState(Boolean(initiallyOpen))
   const router = useRouter()
 
@@ -34,13 +37,17 @@ export function EditPersonDialog({ person, subscriptions, initiallyOpen, onClose
 
   return (
     <>
-      <button
-        type="button"
-        className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-        onClick={() => setOpen(true)}
-      >
-        Sua thong tin
-      </button>
+      {trigger ? (
+        <Slot onClick={() => setOpen(true)}>{trigger}</Slot>
+      ) : (
+        <button
+          type="button"
+          className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+          onClick={() => setOpen(true)}
+        >
+          Sua thong tin
+        </button>
+      )}
 
       {open && (
         <div
