@@ -158,4 +158,6 @@ export type TransactionWithDetails = TransactionRow & {
   bank_back?: number;
   bank_rate?: number;
   people_rate?: number;
+  is_installment?: boolean | null;
+  installment_plan_id?: string | null;
 }

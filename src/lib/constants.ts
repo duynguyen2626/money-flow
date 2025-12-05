@@ -37,4 +37,7 @@ export const SYSTEM_CATEGORIES = {
     SERVICE: 'e0000000-0000-0000-0000-000000000088',
     // Danh mục Online Services (Phase 62)
     ONLINE_SERVICES: 'e0000000-0000-0000-0000-000000000088',
+
+    // Danh mục Phí Ngân hàng (Phase 63)
+    BANK_FEE: 'e0000000-0000-0000-0000-000000000099',
 };

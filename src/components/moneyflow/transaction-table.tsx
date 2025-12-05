@@ -1,7 +1,8 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight } from "lucide-react"
+import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, CreditCard, Link as LinkIcon } from "lucide-react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
 import { CustomTooltip } from "@/components/ui/custom-tooltip"
@@ -25,6 +26,7 @@ import {
 } from "@/services/transaction.service"
 import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
+import { ConvertInstallmentDialog } from "@/components/installments/convert-installment-dialog"
 
 type ColumnKey =
   | "date"
@@ -237,6 +239,7 @@ export function TransactionTable({
   const [refundTargetAccountId, setRefundTargetAccountId] = useState<string | null>(null)
   const [isRefunding, setIsRefunding] = useState(false)
   const [refundDialogMode, setRefundDialogMode] = useState<'request' | 'confirm'>('request')
+  const [convertDialogTxn, setConvertDialogTxn] = useState<TransactionWithDetails | null>(null)
   const editingInitialValues = useMemo(
     () => (editingTxn ? buildEditInitialValues(editingTxn) : null),
     [editingTxn]
@@ -770,6 +773,19 @@ export function TransactionTable({
                           <span>Request Refund</span>
                         </button>
                       )}
+                      {!isVoided && !isPendingRefund && (
+                        <button
+                          className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                          onClick={event => {
+                            event.stopPropagation()
+                            setConvertDialogTxn(txn)
+                            setActionMenuOpen(null)
+                          }}
+                        >
+                          <CreditCard className="h-4 w-4 text-slate-600" />
+                          <span>Convert to Installment</span>
+                        </button>
+                      )}
                       {isPendingRefund && (
                         <button
                           className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
@@ -865,6 +881,12 @@ export function TransactionTable({
                           <CustomTooltip content={<div className="max-w-xs break-words">{txn.note}</div>}>
                             <span className="text-xs text-slate-500 truncate max-w-[200px]">{txn.note}</span>
                           </CustomTooltip>
+                        )}
+                        {txn.is_installment && (
+                          <Link href="/installments" className="flex items-center gap-1 text-xs text-blue-600 hover:underline">
+                            <LinkIcon className="h-3 w-3" />
+                            <span>Installment</span>
+                          </Link>
                         )}
                       </div>
                     )
@@ -1258,6 +1280,13 @@ export function TransactionTable({
           </div>
         </div>,
         document.body
+      )}
+      {convertDialogTxn && (
+        <ConvertInstallmentDialog
+          open={!!convertDialogTxn}
+          onOpenChange={(open) => !open && setConvertDialogTxn(null)}
+          transaction={convertDialogTxn}
+        />
       )}
     </div>
   )

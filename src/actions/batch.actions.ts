@@ -118,3 +118,17 @@ export async function addBatchItemAction(data: any) {
     revalidatePath(`/batch/${data.batch_id}`)
     return result
 }
+
+export async function updateBatchCycleAction(batchId: string, action: 'prev' | 'next') {
+    const { updateBatchCycle } = await import('@/services/batch.service')
+    const result = await updateBatchCycle(batchId, action)
+    revalidatePath(`/batch/${batchId}`)
+    return result
+}
+
+export async function updateBatchNoteModeAction(batchId: string, mode: 'previous' | 'current') {
+    const { updateBatchNoteMode } = await import('@/services/batch.service')
+    const result = await updateBatchNoteMode(batchId, mode)
+    revalidatePath(`/batch/${batchId}`)
+    return result
+}

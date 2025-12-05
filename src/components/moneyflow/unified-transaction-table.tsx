@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react"
-import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy, ArrowUp, ArrowDown, ArrowUpDown, Trash2, Sigma, CheckCheck } from "lucide-react"
+import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy, ArrowUp, ArrowDown, ArrowUpDown, Trash2, Sigma, CheckCheck, CreditCard } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createPortal } from "react-dom"
@@ -139,6 +139,7 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
       percentValue !== undefined && percentValue !== null ? percentValue * 100 : undefined,
     cashback_share_fixed:
       typeof txn.cashback_share_fixed === "number" ? txn.cashback_share_fixed : undefined,
+    is_installment: txn.is_installment ?? false,
   };
 }
 
@@ -219,7 +220,7 @@ export function UnifiedTransactionTable({
     { key: "initial_back", label: "Initial Back", defaultWidth: 110 },
     { key: "people_back", label: "People Back", defaultWidth: 110 },
     { key: "final_price", label: "Final Price", defaultWidth: 120 },
-    { key: "tag", label: "Tag / Cycle", defaultWidth: 200, minWidth: 180 },
+    { key: "tag", label: "Cycle Info", defaultWidth: 200, minWidth: 180 },
     { key: "status", label: "Status", defaultWidth: 130, minWidth: 120 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
@@ -712,11 +713,11 @@ export function UnifiedTransactionTable({
 
   return (
     <div className="relative space-y-3">
-      <div className="rounded-md border-2 border-slate-300 bg-white shadow-sm">
-        <Table>
-          <TableHeader className="bg-slate-50/80">
-            <TableRow>
-              <TableHead className="border-r-2 border-slate-300 whitespace-nowrap" style={{ width: 52 }}>
+      <div className="rounded-md border-2 border-slate-300 bg-white shadow-sm overflow-hidden">
+        <Table wrapperClassName="max-h-[75vh] overflow-auto relative scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200">
+          <TableHeader className="bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/60 sticky top-0 z-20 shadow-sm">
+            <TableRow className="hover:bg-transparent border-b-2 border-slate-300">
+              <TableHead className="border-r-2 border-slate-300 whitespace-nowrap sticky left-0 z-30 bg-slate-50" style={{ width: 52 }}>
                 <input
                   type="checkbox"
                   className="rounded border-gray-300"
@@ -729,7 +730,7 @@ export function UnifiedTransactionTable({
                   return (
                     <TableHead
                       key={col.key}
-                      className="text-right border-l-2 border-slate-300 bg-slate-100 whitespace-nowrap"
+                      className="text-right border-l-2 border-slate-300 bg-slate-100 whitespace-nowrap sticky right-0 z-30 shadow-[-1px_0_0_0_rgba(0,0,0,0.1)]"
                       style={{ width: columnWidths[col.key] }}
                     >
                       <button
@@ -1041,7 +1042,7 @@ export function UnifiedTransactionTable({
                             setCopiedId(txn.id);
                             setTimeout(() => setCopiedId(null), 2000);
                           }}
-                          className="text-slate-300 hover:text-slate-500 transition-colors shrink-0"
+                          className="text-slate-500 hover:text-slate-700 transition-colors shrink-0"
                           title="Copy ID"
                         >
                           {copiedId === txn.id ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
@@ -1063,12 +1064,15 @@ export function UnifiedTransactionTable({
                               </span>
                             )
                           )}
-                          {displayName &&
-                            !txn.note &&
-                            !isFullyRefunded &&
-                            !txn.note?.match(/^[123]\. /) && (
-                              <span className="truncate">{displayName}</span>
-                            )}
+                          <div className="flex flex-col truncate">
+                            {displayName &&
+                              !txn.note &&
+                              !isFullyRefunded &&
+                              !txn.note?.match(/^[123]\. /) && (
+                                <span className="truncate">{displayName}</span>
+                              )}
+                            {/* Installment Link Removed from here */}
+                          </div>
                         </div>
                         {txn.note && (
                           <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
@@ -1081,6 +1085,7 @@ export function UnifiedTransactionTable({
                                 accountName={effectiveStatus === 'completed' && txn.note?.startsWith('3.') ? txn.destination_name : txn.source_name}
                                 status={effectiveStatus}
                               />
+                              {/* Installment Link Removed from here */}
                             </div>
                           </CustomTooltip>
                         )}
@@ -1281,7 +1286,18 @@ export function UnifiedTransactionTable({
                             </span>
                           </CustomTooltip>
                         )}
-                        {!txn.tag && cycleLabel === "-" && <span className="text-slate-400">-</span>}
+                        {/* Installment Icon moved here */}
+                        {(txn.is_installment || txn.installment_plan_id) && (
+                          <Link
+                            href="/installments"
+                            className="text-blue-600 hover:text-blue-800 transition-colors"
+                            title="View Installment Plan"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <CreditCard className="h-4 w-4" />
+                          </Link>
+                        )}
+                        {!txn.tag && cycleLabel === "-" && !txn.is_installment && !txn.installment_plan_id && <span className="text-slate-400">-</span>}
                       </div>
                     )
                   case "amount":
@@ -1387,6 +1403,7 @@ export function UnifiedTransactionTable({
                             {isCopiedRefund ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                           </button>
                         )}
+                        {/* Installment Link Removed from here */}
                       </div>
                     )
                   case "id":
@@ -1539,10 +1556,10 @@ export function UnifiedTransactionTable({
           onClick={() => setEditingTxn(null)}
         >
           <div
-            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-2xl scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200"
+            className="flex w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden max-h-[90vh]"
             onClick={event => event.stopPropagation()}
           >
-            <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-white z-20">
               <h3 className="text-lg font-semibold text-slate-900">Edit Transaction</h3>
               <button
                 className="rounded px-2 py-1 text-slate-500 transition hover:bg-slate-100"
@@ -1552,16 +1569,19 @@ export function UnifiedTransactionTable({
                 X
               </button>
             </div>
-            <TransactionForm
-              accounts={accounts}
-              categories={categories}
-              people={people}
-              shops={shops}
-              transactionId={editingTxn.id}
-              initialValues={editingInitialValues}
-              mode="edit"
-              onSuccess={handleEditSuccess}
-            />
+
+            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200">
+              <TransactionForm
+                accounts={accounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+                transactionId={editingTxn.id}
+                initialValues={editingInitialValues}
+                mode="edit"
+                onSuccess={handleEditSuccess}
+              />
+            </div>
           </div>
         </div>,
         document.body

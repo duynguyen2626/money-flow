@@ -448,6 +448,7 @@ export function EditAccountDialog({
   const [minSpend, setMinSpend] = useState(formatWithSeparators(toNumericString(parsedCashbackConfig.minSpend)))
   const [cycleType, setCycleType] = useState<CashbackCycleType>(parsedCashbackConfig.cycleType)
   const [statementDay, setStatementDay] = useState(toNumericString(parsedCashbackConfig.statementDay))
+  const [dueDate, setDueDate] = useState(toNumericString(parsedCashbackConfig.dueDate))
   const [interestRate, setInterestRate] = useState(toNumericString(parsedSavingsConfig.interestRate))
   const [termMonths, setTermMonths] = useState(toNumericString(parsedSavingsConfig.termMonths))
   const [maturityDate, setMaturityDate] = useState(parsedSavingsConfig.maturityDate ?? '')
@@ -500,6 +501,7 @@ export function EditAccountDialog({
     setMinSpend(formatWithSeparators(toNumericString(freshCashback.minSpend)))
     setCycleType(freshCashback.cycleType)
     setStatementDay(toNumericString(freshCashback.statementDay))
+    setDueDate(toNumericString(freshCashback.dueDate))
     setInterestRate(toNumericString(freshSavings.interestRate))
     setTermMonths(toNumericString(freshSavings.termMonths))
     setMaturityDate(freshSavings.maturityDate ?? '')
@@ -571,6 +573,7 @@ export function EditAccountDialog({
         statementDay: cycleType === 'statement_cycle'
           ? parseStatementDayValue(statementDay)
           : null,
+        dueDate: parseStatementDayValue(dueDate),
         parentAccountId: parentAccountId || null,
         hasTiers: tiers.length > 0,
         tiers: tiers.length > 0 ? tiers.map(t => {
@@ -978,6 +981,30 @@ export function EditAccountDialog({
                             onChange={event => setInterestRate(event.target.value)}
                             className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                             placeholder="Ex: 7.2"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-slate-600">Statement Day</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="31"
+                            value={statementDay}
+                            onChange={e => setStatementDay(e.target.value)}
+                            className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
+                            placeholder="Day (1-31)"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs font-medium text-slate-600">Due Date</label>
+                          <input
+                            type="number"
+                            min="1"
+                            max="31"
+                            value={dueDate}
+                            onChange={e => setDueDate(e.target.value)}
+                            className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
+                            placeholder="Day (1-31)"
                           />
                         </div>
                         <div className="space-y-1">

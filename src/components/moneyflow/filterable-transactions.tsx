@@ -437,7 +437,7 @@ export function FilterableTransactions({
                         </div>
 
                         <button
-                            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 shrink-0"
+                            className="relative z-20 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 shrink-0"
                             onClick={() => setShowFilterMenu(prev => !prev)}
                             title="Filter options"
                         >

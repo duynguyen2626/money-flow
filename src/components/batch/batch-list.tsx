@@ -63,17 +63,17 @@ export function BatchList({ batches, mode }: BatchListProps) {
                                 </div>
                             </div>
 
-                            {batch.sheet_link && (
+                            {batch.display_link && (
                                 <div className="mt-3 pt-3 border-t flex items-center gap-2 text-xs text-blue-600" onClick={(e) => e.stopPropagation()}>
                                     <ExternalLink className="h-3 w-3 flex-shrink-0" />
                                     <a
-                                        href={batch.sheet_link}
+                                        href={batch.display_link}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="hover:underline truncate max-w-[200px]"
-                                        title={batch.sheet_link}
+                                        title={batch.display_link}
                                     >
-                                        {batch.sheet_link}
+                                        {batch.sheet_name || batch.display_link}
                                     </a>
                                 </div>
                             )}

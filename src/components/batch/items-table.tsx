@@ -22,9 +22,28 @@ interface ItemsTableProps {
     items: any[]
     batchId: string
     onSelectionChange?: (selectedIds: string[]) => void
+    activeInstallmentAccounts?: string[]
 }
 
-export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProps) {
+import { parseCashbackConfig } from '@/lib/cashback'
+import { Badge } from '@/components/ui/badge'
+import { CalendarClock, CreditCard } from 'lucide-react'
+import { format } from 'date-fns'
+
+export function ItemsTable({ items: initialItems, batchId, onSelectionChange, activeInstallmentAccounts = [] }: ItemsTableProps) {
+    // Sort items: Due Date (asc) -> Created At (desc)
+    const items = [...initialItems].sort((a, b) => {
+        const getDueDate = (item: any) => {
+            if (!item.target_account?.cashback_config) return 999
+            const config = parseCashbackConfig(item.target_account.cashback_config)
+            return config.dueDate || 999
+        }
+        const dueA = getDueDate(a)
+        const dueB = getDueDate(b)
+        if (dueA !== dueB) return dueA - dueB
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    })
+
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [showConfirm, setShowConfirm] = useState(false)
     const [showTransferDialog, setShowTransferDialog] = useState(false)
@@ -115,6 +134,7 @@ export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProp
                         <TableHead>Note</TableHead>
                         <TableHead>Account Flow</TableHead>
                         <TableHead>Status</TableHead>
+                        <TableHead>Type</TableHead>
                         <TableHead className="w-[150px]">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -133,14 +153,43 @@ export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProp
                             </TableCell>
                             <TableCell>{item.bank_number || '-'}</TableCell>
                             <TableCell>{new Intl.NumberFormat('en-US').format(item.amount)}</TableCell>
-                            <TableCell>{item.note}</TableCell>
+                            <TableCell>
+                                <div className="flex flex-col gap-1">
+                                    <span>{item.note}</span>
+                                    {item.target_account?.cashback_config && (
+                                        (() => {
+                                            const config = parseCashbackConfig(item.target_account.cashback_config)
+                                            if (config.dueDate) {
+                                                const today = new Date()
+                                                const dueDay = config.dueDate
+                                                const currentDay = today.getDate()
+
+                                                // Simple logic: if due day is close?
+                                                // Just show the day for now
+                                                return (
+                                                    <Badge variant="outline" className="w-fit gap-1 text-[10px] h-5 px-1.5 font-normal text-slate-500">
+                                                        <CalendarClock className="h-3 w-3" />
+                                                        Due: {dueDay}
+                                                    </Badge>
+                                                )
+                                            }
+                                            return null
+                                        })()
+                                    )}
+                                </div>
+                            </TableCell>
                             <TableCell>
                                 <div className="flex items-center gap-1 text-sm">
                                     <span className="text-muted-foreground">Draft Fund</span>
                                     <span className="text-muted-foreground">➔</span>
                                     {item.target_account_id ? (
-                                        <Link href={`/accounts/${item.target_account_id}`} className="text-blue-600 hover:underline font-medium">
+                                        <Link href={`/accounts/${item.target_account_id}`} className="text-blue-600 hover:underline font-medium flex items-center gap-1">
                                             {item.target_account?.name || 'Account'}
+                                            {activeInstallmentAccounts.includes(item.target_account_id) && (
+                                                <span title="Has Active Installments">
+                                                    <CreditCard className="h-3 w-3 text-purple-500" />
+                                                </span>
+                                            )}
                                         </Link>
                                     ) : (
                                         <span className="text-orange-500 italic">Select...</span>
@@ -160,6 +209,27 @@ export function ItemsTable({ items, batchId, onSelectionChange }: ItemsTableProp
                                         Pending
                                     </span>
                                 )}
+                            </TableCell>
+                            <TableCell>
+                                <div className="flex items-center gap-2">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id={`inst-${item.id}`}
+                                            checked={item.is_installment_payment}
+                                            onCheckedChange={async (checked) => {
+                                                await updateBatchItemAction(item.id, { is_installment_payment: checked })
+                                            }}
+                                            disabled={item.status === 'confirmed'}
+                                        />
+                                        <label
+                                            htmlFor={`inst-${item.id}`}
+                                            className="text-xs font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer text-slate-500"
+                                            title="Mark as Installment Payment"
+                                        >
+                                            Inst.
+                                        </label>
+                                    </div>
+                                </div>
                             </TableCell>
                             <TableCell>
                                 <div className="flex items-center gap-1">

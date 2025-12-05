@@ -23,19 +23,22 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { updateBatchAction } from '@/actions/batch.actions'
-import { Settings } from 'lucide-react'
+import { updateBatchAction, updateBatchNoteModeAction } from '@/actions/batch.actions'
+import { Settings, RefreshCw } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 const formSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     sheet_link: z.string().optional(),
+    display_link: z.string().optional(),
+    sheet_name: z.string().optional(),
     is_template: z.boolean().optional(),
     auto_clone_day: z.number().min(1).max(31).optional().or(z.literal(0)),
 })
 
 export function BatchSettingsDialog({ batch }: { batch: any }) {
     const [open, setOpen] = useState(false)
+    const [updatingMode, setUpdatingMode] = useState(false)
     const router = useRouter()
 
     const form = useForm<z.infer<typeof formSchema>>({
@@ -43,6 +46,8 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
         defaultValues: {
             name: batch.name,
             sheet_link: batch.sheet_link || '',
+            display_link: batch.display_link || '',
+            sheet_name: batch.sheet_name || '',
             is_template: batch.is_template || false,
             auto_clone_day: Number(batch.auto_clone_day) || 1,
         },
@@ -53,6 +58,8 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
             await updateBatchAction(batch.id, {
                 name: values.name,
                 sheet_link: values.sheet_link,
+                display_link: values.display_link,
+                sheet_name: values.sheet_name,
                 is_template: values.is_template ?? false,
                 auto_clone_day: values.is_template ? (values.auto_clone_day ?? null) : null
             })
@@ -61,6 +68,23 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
         } catch (error) {
             console.error(error)
             alert('Failed to update batch settings')
+        }
+    }
+
+    async function handleModeUpdate(mode: 'previous' | 'current') {
+        if (!confirm(`Are you sure you want to update all notes to ${mode} month?`)) return
+        setUpdatingMode(true)
+        try {
+            const result = await updateBatchNoteModeAction(batch.id, mode)
+            if (result.success) {
+                alert(`Updated ${result.count} items`)
+                router.refresh()
+            }
+        } catch (error) {
+            console.error(error)
+            alert('Failed to update notes')
+        } finally {
+            setUpdatingMode(false)
         }
     }
 
@@ -96,9 +120,35 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
                             name="sheet_link"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Sheet Webhook Link</FormLabel>
+                                    <FormLabel>Sheet Webhook Link (Script)</FormLabel>
                                     <FormControl>
-                                        <Input {...field} />
+                                        <Input {...field} placeholder="https://script.google.com/..." />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="display_link"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Sheet Link (Display)</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} placeholder="https://docs.google.com/..." />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="sheet_name"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Display Name</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} placeholder="e.g. Google Sheet" />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -153,6 +203,39 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
                                 )}
                             />
                         )}
+
+                        <div className="rounded-lg border p-3 shadow-sm space-y-3">
+                            <div className="space-y-0.5">
+                                <FormLabel>Batch Note Mode</FormLabel>
+                                <FormDescription>
+                                    Bulk update transaction notes (e.g. NOV24 ↔ DEC24)
+                                </FormDescription>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleModeUpdate('previous')}
+                                    disabled={updatingMode}
+                                    className="flex-1"
+                                >
+                                    {updatingMode && <RefreshCw className="mr-2 h-3 w-3 animate-spin" />}
+                                    Previous Month
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleModeUpdate('current')}
+                                    disabled={updatingMode}
+                                    className="flex-1"
+                                >
+                                    {updatingMode && <RefreshCw className="mr-2 h-3 w-3 animate-spin" />}
+                                    Current Month
+                                </Button>
+                            </div>
+                        </div>
 
                         <Button type="submit" className="w-full">Save Changes</Button>
                     </form>
