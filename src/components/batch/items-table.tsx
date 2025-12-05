@@ -11,12 +11,15 @@ import {
     TableRow,
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
-import { Trash2, CheckCircle2, Clock, Ban } from 'lucide-react'
+import { Trash2, CheckCircle2, Ban, CreditCard, CalendarClock } from 'lucide-react'
 import { deleteBatchItemAction, updateBatchItemAction, confirmBatchItemAction, voidBatchItemAction } from '@/actions/batch.actions'
 import { Checkbox } from '@/components/ui/checkbox'
 import { EditItemDialog } from './edit-item-dialog'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
 import { ConfirmTransferDialog } from './confirm-transfer-dialog'
+import { parseCashbackConfig } from '@/lib/cashback'
+import { Badge } from '@/components/ui/badge'
+import { TabsContent } from '@/components/ui/tabs'
 
 interface ItemsTableProps {
     items: any[]
@@ -25,21 +28,30 @@ interface ItemsTableProps {
     activeInstallmentAccounts?: string[]
 }
 
-import { parseCashbackConfig } from '@/lib/cashback'
-import { Badge } from '@/components/ui/badge'
-import { CalendarClock, CreditCard } from 'lucide-react'
-import { format } from 'date-fns'
-
 export function ItemsTable({ items: initialItems, batchId, onSelectionChange, activeInstallmentAccounts = [] }: ItemsTableProps) {
-    // Sort items: Due Date (asc) -> Created At (desc)
+    // Sort items: Nearest Due Date -> Created At (desc)
     const items = [...initialItems].sort((a, b) => {
-        const getDueDate = (item: any) => {
+        const getDaysUntilDue = (item: any) => {
             if (!item.target_account?.cashback_config) return 999
             const config = parseCashbackConfig(item.target_account.cashback_config)
-            return config.dueDate || 999
+            if (!config.dueDate) return 999
+
+            const today = new Date()
+            const currentDay = today.getDate()
+            const dueDay = config.dueDate
+
+            let daysDiff = dueDay - currentDay
+            if (daysDiff < 0) {
+                // Due date has passed this month, so it's next month
+                // Approximate days in month as 30 for sorting
+                daysDiff += 30
+            }
+            return daysDiff
         }
-        const dueA = getDueDate(a)
-        const dueB = getDueDate(b)
+
+        const dueA = getDaysUntilDue(a)
+        const dueB = getDaysUntilDue(b)
+
         if (dueA !== dueB) return dueA - dueB
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })
@@ -118,7 +130,6 @@ export function ItemsTable({ items: initialItems, batchId, onSelectionChange, ac
     return (
         <>
             <Table>
-
                 <TableHeader>
                     <TableRow>
                         <TableHead className="w-[50px]">
@@ -161,15 +172,27 @@ export function ItemsTable({ items: initialItems, batchId, onSelectionChange, ac
                                             const config = parseCashbackConfig(item.target_account.cashback_config)
                                             if (config.dueDate) {
                                                 const today = new Date()
-                                                const dueDay = config.dueDate
                                                 const currentDay = today.getDate()
+                                                const dueDay = config.dueDate
 
-                                                // Simple logic: if due day is close?
-                                                // Just show the day for now
+                                                let daysDiff = dueDay - currentDay
+                                                if (daysDiff < 0) {
+                                                    daysDiff += 30 // Approximate next month
+                                                }
+
+                                                let badgeClass = "text-slate-500 border-slate-200"
+                                                if (daysDiff <= 3) {
+                                                    badgeClass = "text-red-700 bg-red-50 border-red-200"
+                                                } else if (daysDiff <= 7) {
+                                                    badgeClass = "text-amber-700 bg-amber-50 border-amber-200"
+                                                } else {
+                                                    badgeClass = "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                                }
+
                                                 return (
-                                                    <Badge variant="outline" className="w-fit gap-1 text-[10px] h-5 px-1.5 font-normal text-slate-500">
+                                                    <Badge variant="outline" className={`w-fit gap-1 text-[10px] h-5 px-1.5 font-normal ${badgeClass}`}>
                                                         <CalendarClock className="h-3 w-3" />
-                                                        Due: {dueDay}
+                                                        Due in {daysDiff} days
                                                     </Badge>
                                                 )
                                             }
@@ -233,6 +256,7 @@ export function ItemsTable({ items: initialItems, batchId, onSelectionChange, ac
                             </TableCell>
                             <TableCell>
                                 <div className="flex items-center gap-1">
+                                    <EditItemDialog item={item} />
                                     {item.status !== 'confirmed' && (
                                         <>
                                             <Button
@@ -244,7 +268,6 @@ export function ItemsTable({ items: initialItems, batchId, onSelectionChange, ac
                                             >
                                                 <CheckCircle2 className="h-4 w-4" />
                                             </Button>
-                                            <EditItemDialog item={item} />
                                             <Button
                                                 variant="ghost"
                                                 size="icon"

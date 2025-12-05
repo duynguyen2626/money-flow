@@ -327,6 +327,7 @@ export function TransactionForm({
     form.reset(newValues)
     setManualTagMode(true)
     setTransactionType(newValues.type)
+    console.log('Editing Data:', initialValues); // Check if is_installment comes from DB
     setIsInstallment(Boolean(initialValues.is_installment))
   }, [baseDefaults, form, initialValues, allAccounts])
 

@@ -1,97 +1,115 @@
-# **MILESTONE 3 \- PHASE 2: RESPONSIVE UI & VISUAL POLISH**
+MILESTONE 3 - PHASE 2 (REVISED 4): UI FINAL POLISH & BADGES REVERT
 
-**Goal:** Optimize Layout for Mobile/Tablet, "Freeze" Transaction Table, Compact Data Display (Icons), and enable iOS Shortcut integration.
+Goal: Revert to Text Badges for Transaction Types (Compact), optimize the "Final Price" display, and fix the Installment Edit bug.
 
-## **1\. Git Convention**
+1. Git Convention
 
-* **Branch:** `feat/M3-P2-responsive-polish`  
-* **Commit:** `[M3-P2] feat: ...`
+Branch: fix/M3-P2-ui-badges-revert
 
-  ## **PART A: RESPONSIVE LAYOUT & FIXES**
+Commit: [M3-P2] fix: ...
 
-  ### **1\. Fix Account Card Overflow**
+PART A: TRANSACTION TABLE REDESIGN (The "Compact & Clear" Look)
 
-**File:** `src/components/moneyflow/account-card.tsx` **Bug:** Image breaks out of card layout when zoomed or on small screens. **Fix:**
+File: src/components/moneyflow/unified-transaction-table.tsx (Columns)
 
-* Ensure the image container has: `relative w-full aspect-video overflow-hidden rounded-t-lg`.  
-* Ensure the `Image` (Next.js) or `img` tag has: `object-cover w-full h-full`.
+1. Column: "Date" (Merged with Type & Status)
 
-  ### **2\. Fix Transaction Table Scroll (The "Freeze" Effect)**
+Layout: flex flex-row items-center gap-2 (No wrapping).
 
-**File:** `src/components/moneyflow/transaction-table.tsx` (and `unified-transaction-table.tsx`) **Requirement:** Never show the Browser's bottom scrollbar. Show scrollbar INSIDE the table container only. **Fix:**
+Content:
 
-* **Container:** Wrap the `Table` component in a `div` with:
+Date: DD/MM (e.g., 04/12).
 
-```
-"relative w-full overflow-x-auto border rounded-md" 
-// Ensure parent has max-width: calc(100vw - sidebar_width) or similar logic via Flexbox
-```
+Type Badge (Reverted): Use Shadcn Badge with SHORT TEXT:
 
-*   
-  **Table:** Ensure `table` has `min-w-[1000px]` (or sufficient width) so it forces internal scrolling on small screens.  
-* **Sticky Columns (Freeze):**  
-  * Apply `sticky left-0 bg-background z-10` to the first few critical columns (Date, Note/Shop).  
-  * Apply `sticky right-0 bg-background z-10` to the Actions column.  
-  * *Note:* Add a slight shadow or border to separate sticky columns.
+expense -> [OUT] (Red/Destructive)
 
-  ## **PART B: TABLE VISUAL ENHANCEMENT (Compact Mode)**
+income -> [IN] (Green/Success)
 
-**File:** `src/components/moneyflow/unified-transaction-table.tsx` (Columns Definition)
+transfer -> [TF] (Blue/Secondary)
 
-### **1\. Column: "Type & Status" (Merged)**
+transfer_in -> [TF IN]
 
-* **Header:** "Type" (Icon only).  
-* **Display Logic:** Combine Icons.  
-  * **Types:**  
-    * `income` \-\> ➕  
-    * `expense` \-\> ➖  
-    * `transfer` \-\> ↔️  
-    * `transfer_in` (received) \-\> ➡️  
-    * `transfer_out` (sent) \-\> ⬅️  
-    * `debt/loan` \-\> 📒  
-    * `repayment` \-\> 💸  
-  * **Statuses:**  
-    * `posted` (completed) \-\> (No extra icon needed, or small ✅) \-\> *Decision: Just bold the Type icon.*  
-    * `pending` \-\> ⏸️  
-    * `void` \-\> 🚫 (Strike-through entire row text)  
-  * **Result:** Render **ONE** combined visual indicator. Tooltip shows full text status.
+transfer_out -> [TF OUT]
 
-  ### **2\. Column: "Account" (Merged with Cycle)**
+Style: px-1.5 py-0 text-[10px] font-bold h-5.
 
-* **Row 1:** Account Name (Bold).  
-* **Row 2:** `Cycle Badge` (Small, gray, e.g., "DEC25").  
-* **Action:** Remove separate "Cycle Info" column.
+Status Icon:
 
-  ### **3\. Column: "People" (Merged with Tag)**
+pending / waiting -> ⏳ (Yellow Clock).
 
-* **Row 1:** Person Avatar/Name.  
-* **Row 2:** `Tag Badge` (Small, outline variant).  
-* **Action:** Remove separate "Tag" column.
+void -> 🚫 (Red Ban).
 
-  ## **PART C: iOS SHORTCUT BRIDGE (URL Params)**
+completed -> (None).
 
-  ### **1\. Auto-Open Modal via URL**
+2. Column: "People" (Compact Tag)
 
-**File:** `src/app/transactions/page.tsx` (Client Component) **Task:**
+Layout: Avatar/Name + Tag Icon.
 
-* Use `useSearchParams` from `next/navigation`.  
-* **Logic:**  
-  * Check for param `action=new`.  
-  * If present, set `isAddTransactionModalOpen = true`.  
-  * **Pre-fill Form:**  
-    * `amount`: Read from `searchParams.get('amount')`.  
-    * `note`: Read from `searchParams.get('note')`.  
-    * `shop_name`: Read from `searchParams.get('shop')` (Logic: Find shop by name, default to 'Shopee' if param is 'shopee').  
-    * `person_id`: Read from `searchParams.get('for')`.
+Content:
 
-  ## **4\. Execution Plan**
+Person: Avatar or Name.
 
-1. **Step 1 (CSS):** Fix Account Card images.  
-2. **Step 2 (CSS):** Refactor Transaction Table container for "Internal Scrolling" & Sticky Columns.  
-3. **Step 3 (Table UI):** Implement Merged Columns (Type+Status, Account+Cycle, People+Tag).  
-4. **Step 4 (Feature):** Implement URL Params listener in Transaction Page for iOS Shortcuts.
+Tag: Instead of text "DEC25", render a Tag Icon (🏷️ Tag from Lucide).
 
-👉 **Acknowledge M3-P2 and start with Step 1\.**
+Tooltip: Hovering the icon shows the full Tag Name (e.g., "Cycle: DEC25").
 
-3.   
-1. 
+3. Column: "Final Price" (Merged with Back Logic)
+
+Content:
+
+Line 1: Final Amount (Bold).
+
+Line 2: Cashback Formula (If applicable).
+
+Format: 3% + 3,000 = 4,000 (Integers only).
+
+Constraint: Use Math.round to remove decimals. Do NOT use the Σ icon.
+
+Style: text-[10px] text-muted-foreground font-medium.
+
+4. Installment Link Position
+
+Question: Where to put the 🔗 icon?
+
+Answer: Append it to the Account Column (next to Account Name) OR the Note Column.
+
+Decision: Put it in Account Column. Reason: "Paid via VIB Credit (Linked 🔗)". It indicates the source is part of a plan.
+
+PART B: CRITICAL BUG FIXES
+
+1. Fix Installment Toggle (Edit Mode)
+
+File: src/components/moneyflow/transaction-form.tsx
+The Bug: The "Trả góp?" toggle is OFF when editing a transaction that has is_installment = true.
+The Fix:
+
+In the useEffect that loads data into the form (or defaultValues):
+
+Ensure is_installment is explicitly mapped.
+
+// Debugging tip for Agent:
+console.log('Editing Data:', data); // Check if is_installment comes from DB
+form.reset({
+    // ... other fields
+    is_installment: Boolean(data.is_installment), // Force boolean cast
+});
+
+
+2. Fix Filter Button
+
+File: src/components/moneyflow/filterable-transactions.tsx
+
+Action: Ensure the Popover content is rendering and the Context Provider is wrapping the component correctly.
+
+4. Execution Plan
+
+Step 1 (Table): Revert Type Icons to Short Badges (IN, OUT, TF) inside Date Column.
+
+Step 2 (Table): Change People Tag to Tooltip Icon.
+
+Step 3 (Table): Format Final Price with Integer Formula (3% + 3,000 = ...).
+
+Step 4 (Form): Fix is_installment loading logic in Edit Modal.
+
+👉 Acknowledge M3-P2 Revised 4 and start with Step 1.

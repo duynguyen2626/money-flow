@@ -666,389 +666,405 @@ export function EditAccountDialog({
                 </button>
               </div>
 
-              <form className="p-6 flex-1 overflow-y-auto" onSubmit={handleSubmit}>
-                {/* Account Type Selection - Main Tabs */}
-                <div className="mb-6 space-y-4">
-                  <label className="block text-sm font-medium text-slate-700">Account Type</label>
+              <form className="flex flex-col flex-1 min-h-0" onSubmit={handleSubmit}>
+                <div className="flex-1 overflow-y-auto p-6">
+                  {/* Account Type Selection - Main Tabs */}
+                  <div className="mb-6 space-y-4">
+                    <label className="block text-sm font-medium text-slate-700">Account Type</label>
 
-                  {/* Main Category Tabs */}
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setAccountType('credit_card')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${accountType === 'credit_card'
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                    >
-                      💳 Credit Card
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAccountType('bank')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${accountType === 'bank'
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                    >
-                      🏦 Bank
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!['savings', 'investment', 'asset'].includes(accountType)) {
-                          setAccountType('savings')
-                        }
-                      }}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${['savings', 'investment', 'asset'].includes(accountType)
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                    >
-                      💰 Savings & Investment
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!['cash', 'ewallet', 'debt'].includes(accountType)) {
-                          setAccountType('cash')
-                        }
-                      }}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${['cash', 'ewallet', 'debt'].includes(accountType)
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                    >
-                      📦 Others
-                    </button>
-                  </div>
-
-                  {/* Sub-tabs for Savings & Investment */}
-                  {['savings', 'investment', 'asset'].includes(accountType) && (
-                    <div className="flex gap-2 pl-4 border-l-2 border-blue-200">
+                    {/* Main Category Tabs */}
+                    <div className="flex gap-2 flex-wrap">
                       <button
                         type="button"
-                        onClick={() => setAccountType('savings')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'savings'
-                          ? 'bg-blue-100 text-blue-700 font-semibold'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        onClick={() => setAccountType('credit_card')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${accountType === 'credit_card'
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                           }`}
                       >
-                        Savings
+                        💳 Credit Card
                       </button>
                       <button
                         type="button"
-                        onClick={() => setAccountType('investment')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'investment'
-                          ? 'bg-blue-100 text-blue-700 font-semibold'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        onClick={() => setAccountType('bank')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${accountType === 'bank'
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                           }`}
                       >
-                        Investment
+                        🏦 Bank
                       </button>
                       <button
                         type="button"
-                        onClick={() => setAccountType('asset')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'asset'
-                          ? 'bg-blue-100 text-blue-700 font-semibold'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        onClick={() => {
+                          if (!['savings', 'investment', 'asset'].includes(accountType)) {
+                            setAccountType('savings')
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${['savings', 'investment', 'asset'].includes(accountType)
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                           }`}
                       >
-                        Secured Asset
+                        💰 Savings & Investment
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!['cash', 'ewallet', 'debt'].includes(accountType)) {
+                            setAccountType('cash')
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${['cash', 'ewallet', 'debt'].includes(accountType)
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                      >
+                        📦 Others
                       </button>
                     </div>
-                  )}
 
-                  {/* Sub-tabs for Others */}
-                  {['cash', 'ewallet', 'debt'].includes(accountType) && (
-                    <div className="flex gap-2 pl-4 border-l-2 border-blue-200">
-                      <button
-                        type="button"
-                        onClick={() => setAccountType('cash')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'cash'
-                          ? 'bg-blue-100 text-blue-700 font-semibold'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                          }`}
-                      >
-                        Cash
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAccountType('ewallet')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'ewallet'
-                          ? 'bg-blue-100 text-blue-700 font-semibold'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                          }`}
-                      >
-                        E-wallet
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAccountType('debt')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'debt'
-                          ? 'bg-blue-100 text-blue-700 font-semibold'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                          }`}
-                      >
-                        Debt
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* 2 Column Layout */}
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                  {/* Left Column - Basic Info */}
-                  <div className="space-y-5">
-                    <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Basic Information</h3>
-
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-slate-600">Name</label>
-                      <input
-                        type="text"
-                        value={name}
-                        onChange={event => setName(event.target.value)}
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        placeholder="Account name"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-sm font-medium text-slate-600">Logo URL</label>
-                      <input
-                        type="url"
-                        value={logoUrl}
-                        onChange={event => setLogoUrl(event.target.value)}
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                        placeholder="https://logo.example.com/bank.png"
-                      />
-                    </div>
-
-                    {isCreditCard && (
-                      <>
-                        <div className="space-y-1">
-                          <label className="text-sm font-medium text-slate-600">Credit Limit</label>
-                          <NumberInputWithSuggestions
-                            value={creditLimit}
-                            onChange={setCreditLimit}
-                            className="w-full"
-                            placeholder="Credit limit"
-                          />
-                        </div>
-
-                        <div className="space-y-1">
-                          <label className="text-sm font-medium text-slate-600">Parent Account (Shared Limit)</label>
-                          <CustomDropdown
-                            options={[
-                              { value: '', label: 'None (Primary Card)' },
-                              ...accounts
-                                .filter(acc => acc.type === 'credit_card' && acc.id !== account.id)
-                                .map(acc => ({ value: acc.id, label: acc.name }))
-                            ]}
-                            value={parentAccountId}
-                            onChange={setParentAccountId}
-                            className="w-full"
-                          />
-                          <p className="text-xs text-slate-500">
-                            If this is a supplementary card, select the primary card here.
-                          </p>
-                        </div>
-
-                        {collateralOptions.length > 0 && (
-                          <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                            <div className="flex items-center justify-between">
-                              <label className="text-sm font-medium text-slate-700">
-                                Secured (collateral)
-                              </label>
-                              <Switch
-                                checked={isSecured}
-                                onCheckedChange={(checked) => {
-                                  setIsSecured(checked)
-                                  if (!checked) setSecuredByAccountId('')
-                                }}
-                              />
-                            </div>
-                            {isSecured && (
-                              <div className="space-y-1">
-                                <label className="text-sm font-medium text-slate-600">Secured by</label>
-                                <CustomDropdown
-                                  options={[
-                                    { value: '', label: 'None' },
-                                    ...collateralOptions.map(option => ({ value: option.id, label: option.name }))
-                                  ]}
-                                  value={securedByAccountId}
-                                  onChange={setSecuredByAccountId}
-                                  className="w-full"
-                                />
-                                <p className="text-xs text-slate-500">
-                                  Choose a savings/investment account as collateral for this card.
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </>
+                    {/* Sub-tabs for Savings & Investment */}
+                    {['savings', 'investment', 'asset'].includes(accountType) && (
+                      <div className="flex gap-2 pl-4 border-l-2 border-blue-200">
+                        <button
+                          type="button"
+                          onClick={() => setAccountType('savings')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'savings'
+                            ? 'bg-blue-100 text-blue-700 font-semibold'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                          Savings
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAccountType('investment')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'investment'
+                            ? 'bg-blue-100 text-blue-700 font-semibold'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                          Investment
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAccountType('asset')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'asset'
+                            ? 'bg-blue-100 text-blue-700 font-semibold'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                          Secured Asset
+                        </button>
+                      </div>
                     )}
 
-
+                    {/* Sub-tabs for Others */}
+                    {['cash', 'ewallet', 'debt'].includes(accountType) && (
+                      <div className="flex gap-2 pl-4 border-l-2 border-blue-200">
+                        <button
+                          type="button"
+                          onClick={() => setAccountType('cash')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'cash'
+                            ? 'bg-blue-100 text-blue-700 font-semibold'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                          Cash
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAccountType('ewallet')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'ewallet'
+                            ? 'bg-blue-100 text-blue-700 font-semibold'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                          E-wallet
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAccountType('debt')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'debt'
+                            ? 'bg-blue-100 text-blue-700 font-semibold'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                          Debt
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Right Column */}
-                  <div className="space-y-5">
-                    {isCreditCard && (
-                      <div className="space-y-5">
-                        <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Cashback Configuration</h3>
+                  {/* 2 Column Layout */}
+                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                    {/* Left Column - Basic Info */}
+                    <div className="space-y-5">
+                      <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Basic Information</h3>
 
-                        <div className="space-y-1">
-                          <label className="text-sm font-medium text-slate-600">Rate (%)</label>
-                          <input
-                            type="number"
-                            step="any"
-                            min="0"
-                            max="100"
-                            value={rate ? (parseFloat(rate) * 100).toString() : ''}
-                            onChange={event => {
-                              const val = parseFloat(event.target.value)
-                              setRate(isNaN(val) ? '0' : (val / 100).toString())
-                            }}
-                            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            placeholder="10"
-                          />
-                        </div>
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-600">Name</label>
+                        <input
+                          type="text"
+                          value={name}
+                          onChange={event => setName(event.target.value)}
+                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          placeholder="Account name"
+                        />
+                      </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-600">Logo URL</label>
+                        <input
+                          type="url"
+                          value={logoUrl}
+                          onChange={event => setLogoUrl(event.target.value)}
+                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          placeholder="https://logo.example.com/bank.png"
+                        />
+                      </div>
+
+                      {isCreditCard && (
+                        <>
                           <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-600">Max amount</label>
+                            <label className="text-sm font-medium text-slate-600">Credit Limit</label>
                             <NumberInputWithSuggestions
-                              value={maxAmount}
-                              onChange={setMaxAmount}
+                              value={creditLimit}
+                              onChange={setCreditLimit}
                               className="w-full"
-                              placeholder="Ex: 100000"
+                              placeholder="Credit limit"
                             />
                           </div>
+
                           <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-600">Min spend</label>
-                            <NumberInputWithSuggestions
-                              value={minSpend}
-                              onChange={setMinSpend}
+                            <label className="text-sm font-medium text-slate-600">Parent Account (Shared Limit)</label>
+                            <CustomDropdown
+                              options={[
+                                { value: '', label: 'None (Primary Card)' },
+                                ...accounts
+                                  .filter(acc => acc.type === 'credit_card' && acc.id !== account.id)
+                                  .map(acc => ({ value: acc.id, label: acc.name }))
+                              ]}
+                              value={parentAccountId}
+                              onChange={setParentAccountId}
                               className="w-full"
-                              placeholder="Ex: 500000"
+                            />
+                            <p className="text-xs text-slate-500">
+                              If this is a supplementary card, select the primary card here.
+                            </p>
+                          </div>
+
+                          {collateralOptions.length > 0 && (
+                            <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                              <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium text-slate-700">
+                                  Secured (collateral)
+                                </label>
+                                <Switch
+                                  checked={isSecured}
+                                  onCheckedChange={(checked) => {
+                                    setIsSecured(checked)
+                                    if (!checked) setSecuredByAccountId('')
+                                  }}
+                                />
+                              </div>
+                              {isSecured && (
+                                <div className="space-y-1">
+                                  <label className="text-sm font-medium text-slate-600">Secured by</label>
+                                  <CustomDropdown
+                                    options={[
+                                      { value: '', label: 'None' },
+                                      ...collateralOptions.map(option => ({ value: option.id, label: option.name }))
+                                    ]}
+                                    value={securedByAccountId}
+                                    onChange={setSecuredByAccountId}
+                                    className="w-full"
+                                  />
+                                  <p className="text-xs text-slate-500">
+                                    Choose a savings/investment account as collateral for this card.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      )}
+
+
+                    </div>
+
+                    {/* Right Column */}
+                    <div className="space-y-5">
+                      {isCreditCard && (
+                        <div className="space-y-5">
+                          <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Cashback Configuration</h3>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-600">Rate (%)</label>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              max="100"
+                              value={rate ? (parseFloat(rate) * 100).toString() : ''}
+                              onChange={event => {
+                                const val = parseFloat(event.target.value)
+                                setRate(isNaN(val) ? '0' : (val / 100).toString())
+                              }}
+                              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                              placeholder="10"
                             />
                           </div>
-                        </div>
 
-                        <div className="space-y-1">
-                          <label className="text-sm font-medium text-slate-600">Cycle type</label>
-                          <CustomDropdown
-                            options={[
-                              { value: 'calendar_month', label: 'Calendar month' },
-                              { value: 'statement_cycle', label: 'Statement cycle' }
-                            ]}
-                            value={cycleType}
-                            onChange={(val) => setCycleType(val as CashbackCycleType)}
-                            className="w-full"
-                          />
-                        </div>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium text-slate-600">Max amount</label>
+                              <NumberInputWithSuggestions
+                                value={maxAmount}
+                                onChange={setMaxAmount}
+                                className="w-full"
+                                placeholder="Ex: 100000"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium text-slate-600">Min spend</label>
+                              <NumberInputWithSuggestions
+                                value={minSpend}
+                                onChange={setMinSpend}
+                                className="w-full"
+                                placeholder="Ex: 500000"
+                              />
+                            </div>
+                          </div>
 
-                        {cycleType === 'statement_cycle' && (
                           <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-600">Statement day</label>
+                            <label className="text-sm font-medium text-slate-600">Cycle type</label>
+                            <CustomDropdown
+                              options={[
+                                { value: 'calendar_month', label: 'Calendar month' },
+                                { value: 'statement_cycle', label: 'Statement cycle' }
+                              ]}
+                              value={cycleType}
+                              onChange={(val) => setCycleType(val as CashbackCycleType)}
+                              className="w-full"
+                            />
+                          </div>
+
+                          {cycleType === 'statement_cycle' && (
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium text-slate-600">Statement day</label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="31"
+                                step="1"
+                                value={statementDay}
+                                onChange={event => setStatementDay(event.target.value)}
+                                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                placeholder="Day of month"
+                              />
+                            </div>
+                          )}
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-600">Due Date (Day)</label>
                             <input
                               type="number"
                               min="1"
                               max="31"
                               step="1"
-                              value={statementDay}
-                              onChange={event => setStatementDay(event.target.value)}
+                              value={dueDate}
+                              onChange={event => setDueDate(event.target.value)}
                               className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                               placeholder="Day of month"
                             />
                           </div>
-                        )}
-                      </div>
-                    )}
+                        </div>
+                      )}
 
-                    {isAssetAccount && (
-                      <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                        <h4 className="text-sm font-semibold text-slate-700">Interest Info</h4>
-                        <div className="space-y-1">
-                          <label className="text-sm font-medium text-slate-600">Interest rate (%)</label>
-                          <input
-                            type="number"
-                            step="any"
-                            min="0"
-                            value={interestRate}
-                            onChange={event => setInterestRate(event.target.value)}
-                            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            placeholder="Ex: 7.2"
-                          />
+                      {isAssetAccount && (
+                        <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                          <h4 className="text-sm font-semibold text-slate-700">Interest Info</h4>
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-600">Interest rate (%)</label>
+                            <input
+                              type="number"
+                              step="any"
+                              min="0"
+                              value={interestRate}
+                              onChange={event => setInterestRate(event.target.value)}
+                              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                              placeholder="Ex: 7.2"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-slate-600">Statement Day</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="31"
+                              value={statementDay}
+                              onChange={e => setStatementDay(e.target.value)}
+                              className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
+                              placeholder="Day (1-31)"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-medium text-slate-600">Due Date</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="31"
+                              value={dueDate}
+                              onChange={e => setDueDate(e.target.value)}
+                              className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
+                              placeholder="Day (1-31)"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-600">Term (months)</label>
+                            <input
+                              type="number"
+                              step="1"
+                              min="0"
+                              value={termMonths}
+                              onChange={event => setTermMonths(event.target.value)}
+                              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                              placeholder="Ex: 12"
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-600">Maturity date</label>
+                            <input
+                              type="date"
+                              value={maturityDate}
+                              onChange={event => setMaturityDate(event.target.value)}
+                              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            />
+                          </div>
                         </div>
-                        <div className="space-y-1">
-                          <label className="text-xs font-medium text-slate-600">Statement Day</label>
-                          <input
-                            type="number"
-                            min="1"
-                            max="31"
-                            value={statementDay}
-                            onChange={e => setStatementDay(e.target.value)}
-                            className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                            placeholder="Day (1-31)"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-xs font-medium text-slate-600">Due Date</label>
-                          <input
-                            type="number"
-                            min="1"
-                            max="31"
-                            value={dueDate}
-                            onChange={e => setDueDate(e.target.value)}
-                            className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                            placeholder="Day (1-31)"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-sm font-medium text-slate-600">Term (months)</label>
-                          <input
-                            type="number"
-                            step="1"
-                            min="0"
-                            value={termMonths}
-                            onChange={event => setTermMonths(event.target.value)}
-                            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            placeholder="Ex: 12"
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-sm font-medium text-slate-600">Maturity date</label>
-                          <input
-                            type="date"
-                            value={maturityDate}
-                            onChange={event => setMaturityDate(event.target.value)}
-                            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                          />
-                        </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
+
+                  {/* Advanced Tiers - Full Width */}
+                  {isCreditCard && (
+                    <div className="mt-6 pt-6 border-t border-slate-200">
+                      <TierList tiers={tiers} onChange={setTiers} categoryOptions={categoryOptions} />
+                    </div>
+                  )}
+
+                  {status && (
+                    <p
+                      className={`mt-4 text-sm ${status.variant === 'error' ? 'text-red-600' : 'text-green-600'}`}
+                    >
+                      {status.text}
+                    </p>
+                  )}
+
                 </div>
-
-                {/* Advanced Tiers - Full Width */}
-                {isCreditCard && (
-                  <div className="mt-6 pt-6 border-t border-slate-200">
-                    <TierList tiers={tiers} onChange={setTiers} categoryOptions={categoryOptions} />
-                  </div>
-                )}
-
-                {status && (
-                  <p
-                    className={`mt-4 text-sm ${status.variant === 'error' ? 'text-red-600' : 'text-green-600'}`}
-                  >
-                    {status.text}
-                  </p>
-                )}
-
-                <div className="mt-6 flex justify-end gap-3 border-t border-slate-200 pt-6">
+                <div className="flex justify-end gap-3 border-t border-slate-200 p-6 bg-white rounded-b-xl shrink-0">
                   <button
                     type="button"
                     className="rounded-md border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"

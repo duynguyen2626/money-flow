@@ -3,11 +3,16 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { FilterIcon, X } from 'lucide-react'
+import { FilterIcon, X, Trash2, Undo } from 'lucide-react'
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
 import { Combobox } from '@/components/ui/combobox'
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover'
 
 type SortKey = 'date' | 'amount'
 type SortDir = 'asc' | 'desc'
@@ -58,7 +63,6 @@ export function FilterableTransactions({
     const setSearchTerm = onSearchChange ?? setSearchTermInternal
     const [selectedTxnIds, setSelectedTxnIds] = useState(new Set<string>());
     const [showSelectedOnly, setShowSelectedOnly] = useState(false)
-    const [showFilterMenu, setShowFilterMenu] = useState(false)
     const currentYear = String(new Date().getFullYear())
     const [selectedYear, setSelectedYear] = useState<string>('')
     const [moreTagsOpen, setMoreTagsOpen] = useState(false)
@@ -68,7 +72,7 @@ export function FilterableTransactions({
     const [activeTab, setActiveTab] = useState<'active' | 'void' | 'pending'>('active')
     const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
     const [bulkActions, setBulkActions] = useState<BulkActionState | null>(null)
-    const [selectedType, setSelectedType] = useState<'all' | 'income' | 'expense' | 'transfer'>('all')
+    const [selectedType, setSelectedType] = useState<'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay'>('all')
     const [sortState, setSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
 
     const handleBulkActionStateChange = useCallback((next: BulkActionState) => {
@@ -271,7 +275,13 @@ export function FilterableTransactions({
         return searchedTransactions.filter(txn => {
             const visualType = (txn as any).displayType ?? txn.type
             if (selectedType === 'transfer') {
-                return visualType === 'transfer' || visualType === 'debt' || visualType === 'repayment'
+                return visualType === 'transfer'
+            }
+            if (selectedType === 'lend') {
+                return visualType === 'debt'
+            }
+            if (selectedType === 'repay') {
+                return visualType === 'repayment'
             }
             return visualType === selectedType
         })
@@ -369,22 +379,63 @@ export function FilterableTransactions({
                             </button>
                         </div>
 
-                        <div className="relative flex-1">
-                            <input
-                                type="text"
-                                placeholder="Search by note..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                className="w-full rounded-md border border-gray-300 px-3 py-2 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            />
-                            {searchTerm && (
-                                <button
-                                    className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:text-slate-600"
-                                    onClick={() => setSearchTerm('')}
-                                    title="Clear search"
-                                >
-                                    <X className="h-3 w-3" />
-                                </button>
+                        {selectedTxnIds.size > 0 && (
+                            <button
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap shadow-sm text-white transition-colors ${currentBulkTab === 'void'
+                                    ? 'bg-green-600 hover:bg-green-500'
+                                    : 'bg-red-600 hover:bg-red-500'
+                                    }`}
+                                onClick={() => bulkActionHandler?.()}
+                                disabled={bulkActionDisabled}
+                            >
+                                {currentBulkTab === 'void' ? <Undo className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                {bulkActionBusy ? 'Working...' : `${bulkActionLabel} (${selectedTxnIds.size})`}
+                            </button>
+                        )}
+
+                        <div className="relative flex-1 flex items-center gap-2">
+                            <div className="relative flex-1">
+                                <input
+                                    type="text"
+                                    placeholder="Search by note..."
+                                    value={searchTerm}
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                    className="w-full rounded-md border border-gray-300 px-3 py-2 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                />
+                                {searchTerm && (
+                                    <button
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:text-slate-600"
+                                        onClick={() => setSearchTerm('')}
+                                        title="Clear search"
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                )}
+                            </div>
+                            {selectedTxnIds.size > 0 && (
+                                <>
+                                    {currentBulkTab === 'void' && (
+                                        <button
+                                            className="px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap shadow-sm bg-red-700 text-white hover:bg-red-800"
+                                            onClick={() => bulkActions?.onDeleteSelected?.()}
+                                            disabled={!bulkActions?.onDeleteSelected || bulkActions?.isDeleting}
+                                        >
+                                            {bulkActions?.isDeleting ? 'Deleting...' : `Delete Forever (${selectedTxnIds.size})`}
+                                        </button>
+                                    )}
+                                    <button
+                                        className="px-3 py-2 rounded-md text-sm font-medium bg-gray-200 text-gray-800 hover:bg-gray-300 whitespace-nowrap"
+                                        onClick={() => { setSelectedTxnIds(new Set()); setShowSelectedOnly(false) }}
+                                    >
+                                        Deselect ({selectedTxnIds.size})
+                                    </button>
+                                    <button
+                                        className={`px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap ${showSelectedOnly ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
+                                        onClick={() => setShowSelectedOnly(prev => !prev)}
+                                    >
+                                        {showSelectedOnly ? 'Show All' : 'Show Selected'}
+                                    </button>
+                                </>
                             )}
                         </div>
 
@@ -400,13 +451,13 @@ export function FilterableTransactions({
                                 className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'income' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-emerald-700'}`}
                                 onClick={() => setSelectedType('income')}
                             >
-                                In
+                                In: {numberFormatter.format(totals.income)}
                             </button>
                             <button
                                 className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'expense' ? 'bg-white text-rose-700 shadow-sm' : 'text-slate-500 hover:text-rose-700'}`}
                                 onClick={() => setSelectedType('expense')}
                             >
-                                Out
+                                Out: {numberFormatter.format(totals.expense)}
                             </button>
                             <button
                                 className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'transfer' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-blue-700'}`}
@@ -414,40 +465,51 @@ export function FilterableTransactions({
                             >
                                 Transfer
                             </button>
+                            <button
+                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'lend' ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-500 hover:text-amber-700'}`}
+                                onClick={() => setSelectedType('lend')}
+                            >
+                                Lend: {numberFormatter.format(totals.lend)}
+                            </button>
+                            <button
+                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'repay' ? 'bg-white text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-indigo-700'}`}
+                                onClick={() => setSelectedType('repay')}
+                            >
+                                Repay: {numberFormatter.format(totals.collect)}
+                            </button>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-2 overflow-x-auto">
-                        {/* Tags Dropdown */}
-                        <div className="w-[180px] shrink-0">
-                            <Combobox
-                                items={tagOptions}
-                                value={selectedTag ?? undefined}
-                                onValueChange={value => {
-                                    const next = value ?? null
-                                    setSelectedTag(next)
-                                    if (accountType === 'credit_card') {
-                                        setSelectedCycle(next)
-                                    }
-                                }}
-                                placeholder="Select Tag..."
-                                inputPlaceholder="Search tag..."
-                                emptyState="No tags found"
-                            />
-                        </div>
-
-                        <button
-                            className="relative z-20 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 shrink-0"
-                            onClick={() => setShowFilterMenu(prev => !prev)}
-                            title="Filter options"
-                        >
-                            <FilterIcon className="h-4 w-4" />
-                            Filters
-                        </button>
-                        {showFilterMenu && (
-                            <>
-                                <div className="fixed inset-0 z-10" onClick={() => setShowFilterMenu(false)} />
-                                <div className="absolute right-0 top-full z-20 mt-1 w-72 rounded-md border border-slate-200 bg-white p-3 text-xs shadow-lg space-y-3">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <button
+                                    className="relative z-20 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 shrink-0"
+                                    title="Filter options"
+                                >
+                                    <FilterIcon className="h-4 w-4" />
+                                    Filters
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className="w-72 p-3">
+                                <div className="space-y-3">
+                                    <div className="space-y-2">
+                                        <p className="text-[11px] font-semibold text-slate-700">Tag / Cycle</p>
+                                        <Combobox
+                                            items={tagOptions}
+                                            value={selectedTag ?? undefined}
+                                            onValueChange={value => {
+                                                const next = value ?? null
+                                                setSelectedTag(next)
+                                                if (accountType === 'credit_card') {
+                                                    setSelectedCycle(next)
+                                                }
+                                            }}
+                                            placeholder="Select Tag..."
+                                            inputPlaceholder="Search tag..."
+                                            emptyState="No tags found"
+                                        />
+                                    </div>
                                     <div className="space-y-2">
                                         <p className="text-[11px] font-semibold text-slate-700">Category</p>
                                         <Combobox
@@ -500,16 +562,10 @@ export function FilterableTransactions({
                                         >
                                             Reset All
                                         </button>
-                                        <button
-                                            className="text-xs text-slate-600 hover:text-slate-800"
-                                            onClick={() => setShowFilterMenu(false)}
-                                        >
-                                            Close
-                                        </button>
                                     </div>
                                 </div>
-                            </>
-                        )}
+                            </PopoverContent>
+                        </Popover>
 
                         {/* Year Select */}
                         <select
@@ -540,52 +596,6 @@ export function FilterableTransactions({
                                 Reset Sort
                             </button>
                         )}
-                        <button
-                            className="px-3 py-1 rounded-full text-sm font-medium bg-gray-200 text-gray-800 hover:bg-gray-300"
-                            onClick={() => { setSelectedTxnIds(new Set()); setShowSelectedOnly(false) }}
-                        >
-                            Deselect All ({selectedTxnIds.size})
-                        </button>
-                        <button
-                            className={`px-3 py-1 rounded-full text-sm font-semibold shadow-sm ${currentBulkTab === 'void'
-                                ? 'bg-green-600 text-white hover:bg-green-500'
-                                : 'bg-red-600 text-white hover:bg-red-500'
-                                }`}
-                            onClick={() => bulkActionHandler?.()}
-                            disabled={bulkActionDisabled}
-                        >
-                            {bulkActionBusy ? 'Working...' : `${bulkActionLabel} (${selectedTxnIds.size})`}
-                        </button>
-                        {currentBulkTab === 'void' && (
-                            <button
-                                className="px-3 py-1 rounded-full text-sm font-semibold shadow-sm bg-red-700 text-white hover:bg-red-800"
-                                onClick={() => bulkActions?.onDeleteSelected?.()}
-                                disabled={!bulkActions?.onDeleteSelected || bulkActions?.isDeleting}
-                            >
-                                {bulkActions?.isDeleting ? 'Deleting...' : `Delete Forever (${selectedTxnIds.size})`}
-                            </button>
-                        )}
-                        <button
-                            className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700 hover:bg-blue-200"
-                            onClick={() => setShowSelectedOnly(prev => !prev)}
-                        >
-                            {showSelectedOnly ? 'Show All' : 'Show Selected'}
-                        </button>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-                        <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
-                            Income: {numberFormatter.format(totals.income)}
-                        </span>
-                        <span className="rounded-full bg-red-50 px-3 py-1 text-red-600">
-                            Expense: {numberFormatter.format(totals.expense)}
-                        </span>
-                        <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-600">
-                            Lend: {numberFormatter.format(totals.lend)}
-                        </span>
-                        <span className="rounded-full bg-indigo-50 px-3 py-1 text-indigo-600">
-                            Collect: {numberFormatter.format(totals.collect)}
-                        </span>
                     </div>
                 </div>
             )}

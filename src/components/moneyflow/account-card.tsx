@@ -250,39 +250,37 @@ export function AccountCard({
       className="group relative flex flex-col justify-between rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-md h-full overflow-hidden"
       onClick={openDetails}
     >
-      {/* Card Image - Full Width Top */}
-      <div onClick={stopCardNavigation}>
-        <EditAccountDialog
-          account={account}
-          collateralAccounts={collateralAccounts}
-          triggerContent={
-            <div className="relative w-full aspect-video overflow-hidden bg-slate-50">
-              {account.logo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={account.logo_url as string}
-                  alt={account.name}
-                  className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-                />
-              ) : (
-                <div className="h-full w-full flex items-center justify-center text-slate-300">
-                  {getAccountIcon(account.type)}
-                </div>
-              )}
-              {/* Overlay Gradient for better text contrast if we ever put text over it, but mostly for polish */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-            </div>
-          }
-          onOpen={stopCardNavigation}
-        />
-      </div>
-
       <div className="flex flex-col flex-grow p-5">
         {/* Top Section */}
         <div className="flex justify-between items-start mb-4">
           <div className="flex flex-col gap-2 w-full">
             <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-2 overflow-hidden">
+              <div className="flex items-center gap-3 overflow-hidden">
+                {/* Small Logo */}
+                <div onClick={stopCardNavigation} className="flex-shrink-0">
+                  <EditAccountDialog
+                    account={account}
+                    collateralAccounts={collateralAccounts}
+                    triggerContent={
+                      <div className="h-12 w-auto min-w-[3rem] overflow-hidden flex items-center justify-center">
+                        {account.logo_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={account.logo_url as string}
+                            alt={account.name}
+                            className="h-full w-auto object-contain"
+                          />
+                        ) : (
+                          <div className="text-slate-400">
+                            {getAccountIcon(account.type)}
+                          </div>
+                        )}
+                      </div>
+                    }
+                    onOpen={stopCardNavigation}
+                  />
+                </div>
+
                 <CustomTooltip content={account.name}>
                   <h3 className="font-bold text-slate-900 text-lg leading-tight truncate">
                     {account.name}

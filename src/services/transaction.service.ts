@@ -1371,6 +1371,15 @@ export async function requestRefund(
         type: 'credit',
         metadata: { ...lineMetadata, original_category_id: line.category_id },
       });
+    } else if (line.account_id) {
+      // [FIX] Handle Transfer Refund (Credit the original destination account)
+      linesToInsert.push({
+        transaction_id: requestTxn.id,
+        account_id: line.account_id,
+        amount: -refundForLine,
+        type: 'credit',
+        metadata: { ...lineMetadata, original_category_id: null },
+      });
     }
 
     remainingRefund -= refundForLine;

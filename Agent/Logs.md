@@ -1,41 +1,24 @@
 ## Error Type
-Build Error
+Runtime ReferenceError
 
 ## Error Message
-Ecmascript file had an error
+refundId is not defined
 
-## Build Output
-./money-flow-3/src/lib/supabase/server.ts:2:1
-Ecmascript file had an error
-  1 | import { createServerClient, type CookieOptions } from '@supabase/ssr'
-> 2 | import { cookies } from 'next/headers'
-    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  3 | import { Database } from '@/types/database.types'
-  4 |
-  5 | export function createClient() {
 
-You're importing a component that needs "next/headers". That only works in a Server Component which is not supported in the pages/ directory. Read more: https://nextjs.org/docs/app/building-your-application/rendering/server-components
+    at renderCell (src/components/moneyflow/unified-transaction-table.tsx:1484:67)
+    at <unknown> (src/components/moneyflow/unified-transaction-table.tsx:1587:26)
+    at Array.map (<anonymous>:null:null)
+    at <unknown> (src/components/moneyflow/unified-transaction-table.tsx:1555:37)
+    at Array.map (<anonymous>:null:null)
+    at UnifiedTransactionTable (src/components/moneyflow/unified-transaction-table.tsx:809:36)
 
-Import traces:
-  Server Component:
-    ./money-flow-3/src/lib/supabase/server.ts
-    ./money-flow-3/src/services/bank.service.ts
-    ./money-flow-3/src/app/batch/[id]/page.tsx
-
-  Client Component Browser:
-    ./money-flow-3/src/lib/supabase/server.ts [Client Component Browser]
-    ./money-flow-3/src/services/batch.service.ts [Client Component Browser]
-    ./money-flow-3/src/components/batch/link-sheet-dialog.tsx [Client Component Browser]
-    ./money-flow-3/src/components/batch/batch-detail.tsx [Client Component Browser]
-    ./money-flow-3/src/components/batch/batch-detail.tsx [Server Component]
-    ./money-flow-3/src/app/batch/[id]/page.tsx [Server Component]
-
-  Client Component SSR:
-    ./money-flow-3/src/lib/supabase/server.ts [Client Component SSR]
-    ./money-flow-3/src/services/batch.service.ts [Client Component SSR]
-    ./money-flow-3/src/components/batch/link-sheet-dialog.tsx [Client Component SSR]
-    ./money-flow-3/src/components/batch/batch-detail.tsx [Client Component SSR]
-    ./money-flow-3/src/components/batch/batch-detail.tsx [Server Component]
-    ./money-flow-3/src/app/batch/[id]/page.tsx [Server Component]
+## Code Frame
+  1482 |                     }
+  1483 |
+> 1484 |                     const isCopiedRefund = copiedId === `refund-${refundId}-${txn.id}`;
+       |                                                                   ^
+  1485 |
+  1486 |                     return (
+  1487 |                       <div className="flex items-center gap-1.5 min-w-[120px]">
 
 Next.js version: 16.0.7 (Turbopack)
