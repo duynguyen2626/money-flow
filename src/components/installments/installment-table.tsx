@@ -55,7 +55,7 @@ export function InstallmentTable({ installments }: InstallmentTableProps) {
                                         </div>
                                     </TableCell>
                                     <TableCell>
-                                        {inst.original_transaction?.account?.name || '-'}
+                                        {inst.original_transaction?.transaction_lines?.find((l: any) => l.type === 'credit')?.account?.name || '-'}
                                     </TableCell>
                                     <TableCell className="w-[200px]">
                                         <div className="flex items-center gap-2">

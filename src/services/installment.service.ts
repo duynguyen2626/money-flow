@@ -24,9 +24,12 @@ export interface Installment {
     status: InstallmentStatus;
     type: InstallmentType;
     original_transaction?: {
-        account?: {
-            name: string;
-        } | null;
+        transaction_lines?: {
+            account?: {
+                name: string;
+            } | null;
+            type: 'debit' | 'credit';
+        }[] | null;
     } | null;
 }
 
@@ -34,7 +37,7 @@ export async function getInstallments() {
     const supabase: any = createClient();
     const { data, error } = await supabase
         .from('installments')
-        .select('*, original_transaction:transactions(account:accounts(name))')
+        .select('*, original_transaction:transactions!installments_original_transaction_id_fkey(transaction_lines(account:accounts(name)))')
         .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -45,7 +48,7 @@ export async function getActiveInstallments() {
     const supabase: any = createClient();
     const { data, error } = await supabase
         .from('installments')
-        .select('*, original_transaction:transactions(account:accounts(name))')
+        .select('*, original_transaction:transactions!installments_original_transaction_id_fkey(transaction_lines(account:accounts(name)))')
         .eq('status', 'active')
         .order('next_due_date', { ascending: true });
 
@@ -62,15 +65,18 @@ export async function getAccountsWithActiveInstallments() {
 
     const { data, error } = await supabase
         .from('installments')
-        .select('original_transaction:transactions(account_id)')
+        .select('original_transaction:transactions!installments_original_transaction_id_fkey(transaction_lines(account_id, type))')
         .eq('status', 'active');
 
     if (error) throw error;
 
     const accountIds = new Set<string>();
     data?.forEach((item: any) => {
-        if (item.original_transaction?.account_id) {
-            accountIds.add(item.original_transaction.account_id);
+        if (item.original_transaction?.transaction_lines) {
+            const creditLine = item.original_transaction.transaction_lines.find((l: any) => l.type === 'credit');
+            if (creditLine?.account_id) {
+                accountIds.add(creditLine.account_id);
+            }
         }
     });
 
@@ -81,7 +87,7 @@ export async function getCompletedInstallments() {
     const supabase: any = createClient();
     const { data, error } = await supabase
         .from('installments')
-        .select('*, original_transaction:transactions(account:accounts(name))')
+        .select('*, original_transaction:transactions!installments_original_transaction_id_fkey(transaction_lines(account:accounts(name)))')
         .eq('status', 'completed')
         .order('created_at', { ascending: false });
 

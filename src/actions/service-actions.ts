@@ -152,7 +152,8 @@ export async function getServicePaymentStatusAction(serviceId: string, monthTag:
     .select(`
       *,
       transaction_lines!inner (
-        amount
+        amount,
+        account_id
       )
     `)
     .contains('metadata', metadata)
