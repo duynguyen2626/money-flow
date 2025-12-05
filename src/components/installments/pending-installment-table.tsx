@@ -47,7 +47,8 @@ export function PendingInstallmentTable({ transactions }: PendingInstallmentTabl
                         </TableRow>
                     ) : (
                         transactions.map((txn) => {
-                            const amount = Math.abs(txn.amount)
+                            const originalAmount = typeof (txn as any).original_amount === 'number' ? (txn as any).original_amount : txn.amount;
+                            const amount = originalAmount ? Math.abs(Number(originalAmount)) : 0;
                             return (
                                 <TableRow key={txn.id}>
                                     <TableCell>

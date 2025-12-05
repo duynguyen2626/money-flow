@@ -2,6 +2,11 @@
 
 import { Installment } from "@/services/installment.service"
 import {
+    Copy,
+    CheckCheck,
+} from "lucide-react"
+import { useState } from "react"
+import {
     Table,
     TableBody,
     TableCell,
@@ -22,11 +27,13 @@ interface InstallmentTableProps {
 }
 
 export function InstallmentTable({ installments }: InstallmentTableProps) {
+    const [copiedId, setCopiedId] = useState<string | null>(null)
     return (
         <div className="rounded-md border">
             <Table>
                 <TableHeader>
                     <TableRow>
+                        <TableHead>Original Txn</TableHead>
                         <TableHead>Plan Name</TableHead>
                         <TableHead>Account</TableHead>
                         <TableHead>Progress</TableHead>
@@ -39,7 +46,7 @@ export function InstallmentTable({ installments }: InstallmentTableProps) {
                 <TableBody>
                     {installments.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={7} className="h-24 text-center">
+                            <TableCell colSpan={8} className="h-24 text-center">
                                 No active installments.
                             </TableCell>
                         </TableRow>
@@ -48,6 +55,31 @@ export function InstallmentTable({ installments }: InstallmentTableProps) {
                             const progress = ((inst.total_amount - inst.remaining_amount) / inst.total_amount) * 100
                             return (
                                 <TableRow key={inst.id}>
+                                    <TableCell>
+                                        <div className="flex items-center gap-1">
+                                            {inst.original_transaction_id ? (
+                                                <>
+                                                    <span className="font-mono text-xs text-muted-foreground" title={inst.original_transaction_id}>
+                                                        {inst.original_transaction_id.slice(0, 8) + '...'}
+                                                    </span>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            navigator.clipboard.writeText(inst.original_transaction_id!);
+                                                            setCopiedId(inst.original_transaction_id!);
+                                                            setTimeout(() => setCopiedId(null), 2000);
+                                                        }}
+                                                        className="text-slate-400 hover:text-slate-600 transition-colors"
+                                                        title="Copy ID"
+                                                    >
+                                                        {copiedId === inst.original_transaction_id ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                                                    </button>
+                                                </>
+                                            ) : (
+                                                '-'
+                                            )}
+                                        </div>
+                                    </TableCell>
                                     <TableCell className="font-medium">
                                         <div>{inst.name}</div>
                                         <div className="text-xs text-muted-foreground">

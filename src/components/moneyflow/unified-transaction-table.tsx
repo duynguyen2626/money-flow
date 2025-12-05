@@ -139,6 +139,7 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
       percentValue !== undefined && percentValue !== null ? percentValue * 100 : undefined,
     cashback_share_fixed:
       typeof txn.cashback_share_fixed === "number" ? txn.cashback_share_fixed : undefined,
+    is_installment: txn.is_installment ?? false,
   };
 }
 
@@ -219,7 +220,7 @@ export function UnifiedTransactionTable({
     { key: "initial_back", label: "Initial Back", defaultWidth: 110 },
     { key: "people_back", label: "People Back", defaultWidth: 110 },
     { key: "final_price", label: "Final Price", defaultWidth: 120 },
-    { key: "tag", label: "Tag / Cycle", defaultWidth: 200, minWidth: 180 },
+    { key: "tag", label: "Cycle Info", defaultWidth: 200, minWidth: 180 },
     { key: "status", label: "Status", defaultWidth: 130, minWidth: 120 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
@@ -1070,16 +1071,7 @@ export function UnifiedTransactionTable({
                               !txn.note?.match(/^[123]\. /) && (
                                 <span className="truncate">{displayName}</span>
                               )}
-                            {(txn.is_installment || txn.installment_plan_id) && (
-                              <Link
-                                href="/installments"
-                                className="flex items-center gap-1 text-[10px] text-blue-600 hover:underline"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <CreditCard className="h-3 w-3" />
-                                Installment
-                              </Link>
-                            )}
+                            {/* Installment Link Removed from here */}
                           </div>
                         </div>
                         {txn.note && (
@@ -1093,16 +1085,7 @@ export function UnifiedTransactionTable({
                                 accountName={effectiveStatus === 'completed' && txn.note?.startsWith('3.') ? txn.destination_name : txn.source_name}
                                 status={effectiveStatus}
                               />
-                              {(txn.is_installment || txn.installment_plan_id) && (
-                                <Link
-                                  href="/installments"
-                                  className="flex items-center gap-1 text-[10px] text-blue-600 hover:underline mt-0.5"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <CreditCard className="h-3 w-3" />
-                                  Installment
-                                </Link>
-                              )}
+                              {/* Installment Link Removed from here */}
                             </div>
                           </CustomTooltip>
                         )}
@@ -1303,7 +1286,18 @@ export function UnifiedTransactionTable({
                             </span>
                           </CustomTooltip>
                         )}
-                        {!txn.tag && cycleLabel === "-" && <span className="text-slate-400">-</span>}
+                        {/* Installment Icon moved here */}
+                        {(txn.is_installment || txn.installment_plan_id) && (
+                          <Link
+                            href="/installments"
+                            className="text-blue-600 hover:text-blue-800 transition-colors"
+                            title="View Installment Plan"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <CreditCard className="h-4 w-4" />
+                          </Link>
+                        )}
+                        {!txn.tag && cycleLabel === "-" && !txn.is_installment && !txn.installment_plan_id && <span className="text-slate-400">-</span>}
                       </div>
                     )
                   case "amount":
@@ -1409,6 +1403,7 @@ export function UnifiedTransactionTable({
                             {isCopiedRefund ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                           </button>
                         )}
+                        {/* Installment Link Removed from here */}
                       </div>
                     )
                   case "id":
