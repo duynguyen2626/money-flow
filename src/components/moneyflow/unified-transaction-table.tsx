@@ -26,6 +26,7 @@ import {
   Ban,
   Loader2,
   Store,
+  CheckCircle,
   CheckCircle2
 } from 'lucide-react'
 import { useRouter } from "next/navigation"
@@ -922,6 +923,8 @@ export function UnifiedTransactionTable({
                 (visualType === 'expense' || txn.type === 'expense') &&
                 (Boolean(txn.shop_id) || hasShoppingCategory) &&
                 !isFullyRefunded
+              const canConfirmPendingRefund =
+                txn.status === 'pending' || txn.account_id === REFUND_PENDING_ACCOUNT_ID || isPendingRefund
 
               // --- Type Logic ---
               let typeBadge = null;
@@ -1028,7 +1031,7 @@ export function UnifiedTransactionTable({
                                 <span>Cancel Order (100%)</span>
                               </button>
                             )}
-                            {isPendingRefund && (
+                            {canConfirmPendingRefund && (
                               <button
                                 className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-green-700 hover:bg-green-50"
                                 onClick={event => {
@@ -1036,7 +1039,7 @@ export function UnifiedTransactionTable({
                                   handleOpenConfirmRefund(txn);
                                 }}
                               >
-                                <CheckCircle2 className="h-4 w-4" />
+                                <CheckCircle className="h-4 w-4 text-green-600" />
                                 <span>Confirm Money Received</span>
                               </button>
                             )}
@@ -1954,6 +1957,7 @@ export function UnifiedTransactionTable({
             refundFormStage === 'confirm'
               ? Math.abs(pendingLine?.amount ?? refundFormTxn.original_amount ?? refundFormTxn.amount ?? 0)
               : Math.abs(refundFormTxn.original_amount ?? refundFormTxn.amount ?? 0)
+          const shortId = refundFormTxn.id.substring(0, 4).toUpperCase()
           const sourceAccountLine =
             refundFormTxn.transaction_lines?.find(
               line => line?.type === 'credit' && line.account_id && line.account_id !== REFUND_PENDING_ACCOUNT_ID
@@ -1964,7 +1968,7 @@ export function UnifiedTransactionTable({
           const defaultAccountId = sourceAccountLine?.account_id ?? refundAccountOptions[0]?.id ?? null
           const initialNote =
             refundFormStage === 'confirm'
-              ? refundFormTxn.note ?? 'Confirm refund'
+              ? `[${shortId}] Refund Received`
               : `Refund: ${refundFormTxn.note ?? refundFormTxn.id}`
 
           return createPortal(
@@ -1992,19 +1996,31 @@ export function UnifiedTransactionTable({
                   categories={categories}
                   people={people}
                   shops={shops}
-                  mode="refund"
+                  mode={refundFormStage === 'confirm' ? 'confirm_refund' : 'refund'}
                   refundTransactionId={refundFormTxn.id}
                   refundAction={refundFormStage}
                   refundMaxAmount={baseAmount}
                   defaultRefundStatus={refundFormStage === 'confirm' ? 'received' : 'pending'}
-                  defaultSourceAccountId={defaultAccountId ?? undefined}
+                  defaultSourceAccountId={
+                    refundFormStage === 'confirm'
+                      ? REFUND_PENDING_ACCOUNT_ID
+                      : defaultAccountId ?? undefined
+                  }
+                  defaultDebtAccountId={
+                    refundFormStage === 'confirm' ? defaultAccountId ?? refundAccountOptions[0]?.id ?? undefined : undefined
+                  }
                   initialValues={{
                     amount: baseAmount,
                     note: initialNote,
                     shop_id: refundFormTxn.shop_id ?? undefined,
                     tag: refundFormTxn.tag ?? undefined,
                     occurred_at: refundFormTxn.occurred_at ? new Date(refundFormTxn.occurred_at) : new Date(),
-                    source_account_id: defaultAccountId ?? undefined,
+                    source_account_id: refundFormStage === 'confirm'
+                      ? REFUND_PENDING_ACCOUNT_ID
+                      : defaultAccountId ?? undefined,
+                    debt_account_id: refundFormStage === 'confirm'
+                      ? defaultAccountId ?? refundAccountOptions[0]?.id ?? undefined
+                      : undefined,
                     category_id: refundFormTxn.category_id ?? undefined,
                     person_id: refundFormTxn.person_id ?? undefined,
                   }}

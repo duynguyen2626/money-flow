@@ -140,7 +140,7 @@ type TransactionFormProps = {
     category_name?: string
     account_name?: string
   };
-  mode?: 'create' | 'edit' | 'refund';
+  mode?: 'create' | 'edit' | 'refund' | 'confirm_refund';
   refundTransactionId?: string;
   refundAction?: 'request' | 'confirm';
   refundMaxAmount?: number;
@@ -237,8 +237,9 @@ export function TransactionForm({
   const [debtEnsureError, setDebtEnsureError] = useState<string | null>(null)
   const [isEnsuringDebt, startEnsuringDebt] = useTransition()
   const isEditMode = mode === 'edit' || (mode !== 'refund' && Boolean(transactionId))
-  const isRefundMode = mode === 'refund'
-  const isConfirmRefund = isRefundMode && refundAction === 'confirm'
+  const isConfirmRefundMode = mode === 'confirm_refund'
+  const isRefundMode = mode === 'refund' || isConfirmRefundMode
+  const isConfirmRefund = isConfirmRefundMode || (isRefundMode && refundAction === 'confirm')
   const [refundStatus, setRefundStatus] = useState<'pending' | 'received'>(
     isConfirmRefund ? 'received' : defaultRefundStatus
   )
@@ -251,7 +252,7 @@ export function TransactionForm({
       amount: 0,
       note: '',
       tag: defaultTag ?? generateTag(new Date()),
-      source_account_id: defaultSourceAccountId ?? undefined,
+      source_account_id: isConfirmRefundMode ? REFUND_PENDING_ACCOUNT_ID : defaultSourceAccountId ?? undefined,
       person_id: undefined,
       debt_account_id: defaultDebtAccountId ?? undefined,
       category_id: isRefundMode ? refundCategoryId ?? undefined : undefined,
@@ -261,7 +262,7 @@ export function TransactionForm({
       is_voluntary: false,
       is_installment: false,
     }),
-    [defaultDebtAccountId, defaultSourceAccountId, defaultTag, defaultType, isRefundMode, refundCategoryId]
+    [defaultDebtAccountId, defaultSourceAccountId, defaultTag, defaultType, isConfirmRefundMode, isRefundMode, refundCategoryId]
   )
 
   const form = useForm<TransactionFormValues>({
@@ -336,6 +337,15 @@ export function TransactionForm({
     form.setValue('type', 'income')
     setTransactionType('income')
     form.setValue('category_id', refundCategoryId ?? REFUND_CATEGORY_ID, { shouldValidate: true })
+    if (isConfirmRefund) {
+      const sourceId = refundTransactionId ?? transactionId ?? (initialValues as any)?.id ?? ''
+      const shortId = sourceId ? sourceId.substring(0, 4).toUpperCase() : 'REFD'
+      const nextNote = `[${shortId}] Refund Received`
+      form.setValue('note', nextNote)
+      form.setValue('source_account_id', REFUND_PENDING_ACCOUNT_ID, { shouldValidate: true })
+      setRefundStatus('received')
+      return
+    }
     const currentNote = form.getValues('note')
     if (!currentNote || currentNote.trim().length === 0) {
       // Clean the note - use only the original note without shop name
@@ -350,7 +360,7 @@ export function TransactionForm({
       const nextNote = baseNote ? `Refund: ${baseNote}` : 'Refund'
       form.setValue('note', nextNote)
     }
-  }, [form, initialValues?.note, isRefundMode, refundCategoryId])
+  }, [form, initialValues?.note, isConfirmRefund, isRefundMode, refundCategoryId, refundTransactionId, transactionId])
 
   async function onSubmit(values: TransactionFormValues) {
     console.log('[Form Submit] Category ID being submitted:', values.category_id);
@@ -382,7 +392,7 @@ export function TransactionForm({
         const partialFlag = safeAmount < maxRefund
 
         if (isConfirmRefund) {
-          const targetAccountId = values.source_account_id
+          const targetAccountId = values.debt_account_id ?? values.source_account_id
           if (!targetAccountId || targetAccountId === REFUND_PENDING_ACCOUNT_ID) {
             setStatus({ type: 'error', text: 'Choose the receiving account for this refund.' })
             return
@@ -675,7 +685,7 @@ export function TransactionForm({
 
           // Hide system accounts (e.g., "System Account") unless in specific modes if needed
           // Based on previous context, REFUND_PENDING_ACCOUNT_ID is a system account.
-          if (acc.id === REFUND_PENDING_ACCOUNT_ID && (!isRefundMode || refundStatus !== 'pending')) return false
+          if (acc.id === REFUND_PENDING_ACCOUNT_ID && (!isRefundMode || (!isConfirmRefund && refundStatus !== 'pending'))) return false
 
           return true
         })
@@ -707,7 +717,7 @@ export function TransactionForm({
         ),
       }))
     },
-    [sourceAccounts, watchedCategoryId, categories, transactionType, accountFilter, isRefundMode, refundStatus]
+    [sourceAccounts, watchedCategoryId, categories, transactionType, accountFilter, isConfirmRefund, isRefundMode, refundStatus]
   )
 
   const destinationAccountOptions = useMemo(
@@ -1384,7 +1394,7 @@ export function TransactionForm({
     </div>
   ) : null
 
-  const DestinationAccountInput = (transactionType === 'transfer') ? (
+  const DestinationAccountInput = (transactionType === 'transfer' || isConfirmRefund) ? (
     <div className="space-y-3">
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700">Destination account</label>
@@ -1535,7 +1545,7 @@ export function TransactionForm({
           <Wallet className="h-4 w-4 text-slate-500" />
           <span>
             {isRefundMode
-              ? refundStatus === 'pending'
+              ? refundStatus === 'pending' || isConfirmRefundMode
                 ? 'Holding Account'
                 : 'Receiving Account'
               : transactionType === 'income' || transactionType === 'repayment'
@@ -1553,10 +1563,10 @@ export function TransactionForm({
               items={accountOptions}
               value={field.value}
               onValueChange={field.onChange}
-              placeholder={isRefundMode && refundStatus === 'pending' ? 'System Account' : 'Select account'}
+              placeholder={isRefundMode && (refundStatus === 'pending' || isConfirmRefundMode) ? 'System Account' : 'Select account'}
               inputPlaceholder="Search account..."
               emptyState="No account found"
-              disabled={isRefundMode && refundStatus === 'pending'}
+              disabled={(isRefundMode && refundStatus === 'pending') || isConfirmRefundMode}
               className="h-11"
               tabs={[
                 { value: 'all', label: 'All', active: accountFilter === 'all', onClick: () => setAccountFilter('all') },

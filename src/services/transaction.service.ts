@@ -669,6 +669,21 @@ export async function requestRefund(
 
   if (isFullRefund) {
     updatePayload.status = 'waiting_refund'; // Orange/Amber badge
+
+    if (originalRow.person_id) {
+      const { data: personRow } = await supabase
+        .from('profiles')
+        .select('name')
+        .eq('id', originalRow.person_id)
+        .maybeSingle();
+
+      const personName = personRow?.name ?? 'Unknown';
+      const baseNote = originalRow.note ?? '';
+      const separator = baseNote ? ' ' : '';
+
+      updatePayload.person_id = null;
+      updatePayload.note = `${baseNote}${separator}[Cancelled Debt: ${personName}]`;
+    }
   }
 
   await (supabase.from('transactions').update as any)(updatePayload).eq('id', transactionId);
