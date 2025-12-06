@@ -6,7 +6,7 @@ type SpendingData = {
     name: string
     value: number
     icon?: string | null
-    image_url?: string | null
+    logo_url?: string | null
 }
 
 type DashboardChartsProps = {
@@ -53,10 +53,10 @@ export function DashboardCharts({ spendingByCategory }: DashboardChartsProps) {
             return (
                 <div className="bg-white border border-slate-200 rounded-lg shadow-lg p-3">
                     <div className="flex items-center gap-2 mb-1">
-                        {data.image_url ? (
+                        {data.logo_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                                src={data.image_url}
+                                src={data.logo_url}
                                 alt={data.name}
                                 className="h-6 w-6 object-contain"
                             />
@@ -84,10 +84,10 @@ export function DashboardCharts({ spendingByCategory }: DashboardChartsProps) {
                             style={{ backgroundColor: entry.color }}
                         />
                         <div className="flex items-center gap-1 min-w-0 flex-1">
-                            {entry.payload.image_url ? (
+                            {entry.payload.logo_url ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
-                                    src={entry.payload.image_url}
+                                    src={entry.payload.logo_url}
                                     alt={entry.value}
                                     className="h-4 w-4 object-contain flex-shrink-0"
                                 />

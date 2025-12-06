@@ -25,51 +25,33 @@ type StatsAccountRow = {
   cashback_config: unknown
 }
 
-type TransactionLineRow = {
-  amount: number | null
+type TransactionRow = {
+  id: string
+  occurred_at: string
+  note: string | null
+  amount: number
   metadata: Record<string, unknown> | null
-  transactions: {
-    id: string
-    occurred_at: string
-    note: string | null
-    shops: {
-      name: string
-      logo_url: string | null
-    } | null
-    transaction_lines: Array<{
-      id: string
-      type: 'debit' | 'credit'
-      category_id: string | null
-      categories: {
-        name: string
-        icon: string | null
-        image_url: string | null
-      } | null
-      metadata: Record<string, unknown> | null
-      cashback_share_percent?: number | null
-      cashback_share_fixed?: number | null
-      accounts?: {
-        name: string
-        type: string
-      } | null
-      profiles?: {
-        name: string
-      } | null
-    }>
-  } | null
-  // For tiered cashback - we need to know the category
-  category_id?: string | null
-  categories?: {
+  category_id: string | null
+  categories: {
     name: string
     icon: string | null
-    image_url: string | null
+    logo_url: string | null
   } | null
-  cashback_share_percent?: number | null
-  cashback_share_fixed?: number | null
-  accounts?: {
+  shops: {
+    name: string
+    logo_url: string | null
+  } | null
+  profiles: {
+    name: string
+  } | null
+  // For target account name (e.g. debt account)
+  target_account: {
     name: string
     type: string
   } | null
+  // Optional columns if they exist or from metadata
+  cashback_share_percent?: number | null
+  cashback_share_fixed?: number | null
 }
 
 type CashbackMetadata = {
@@ -88,75 +70,56 @@ async function fetchAccountLines(
   accountId: string,
   rangeStart: Date,
   rangeEnd: Date
-): Promise<TransactionLineRow[]> {
+): Promise<TransactionRow[]> {
   const { data, error } = await supabase
-    .from('transaction_lines')
+    .from('transactions')
     .select(`
+      id,
+      occurred_at,
+      note,
       amount,
       metadata,
       category_id,
-      categories(name, icon, image_url),
-      transactions!inner(
-        id,
-        occurred_at,
-        note,
-        shops(name, logo_url),
-        transaction_lines(
-          id,
-          type,
-          category_id,
-          categories(name, icon, image_url),
-          metadata,
-          cashback_share_percent,
-          cashback_share_fixed,
-          cashback_share_fixed,
-          accounts(name, type),
-          profiles(name)
-        )
-      )
+      categories(name, icon, logo_url),
+      shops(name, logo_url),
+      profiles(name),
+      target_account:accounts!target_account_id(name, type)
     `)
     .eq('account_id', accountId)
-    .eq('type', 'credit')
-    .gte('transactions.occurred_at', rangeStart.toISOString())
-    .lte('transactions.occurred_at', rangeEnd.toISOString())
+    .lt('amount', 0) // Spending is negative in single-table
+    .gte('occurred_at', rangeStart.toISOString())
+    .lte('occurred_at', rangeEnd.toISOString())
 
   if (error) {
     console.error(`Failed to load cashback lines for account ${accountId}:`, error)
     return []
   }
 
-  return (data ?? []) as unknown as TransactionLineRow[]
+  return (data ?? []) as unknown as TransactionRow[]
 }
 
 /**
  * Calculate cashback for a transaction line with tiered support
- * @param line - Transaction line with category info
+ * @param txn - Transaction row
  * @param config - Cashback configuration
  * @param totalSpendInCycle - Total spend in the cycle (for tier determination)
  * @returns CashbackTransaction with profit tracking
  */
 function toTransaction(
-  line: TransactionLineRow,
+  txn: TransactionRow,
   config: ParsedCashbackConfig,
   totalSpendInCycle: number
 ): CashbackTransaction | null {
-  if (typeof line.amount !== 'number' || !line.transactions) {
+  if (typeof txn.amount !== 'number') {
     return null
   }
 
-  const amount = Math.abs(line.amount)
+  const amount = Math.abs(txn.amount)
   let earnedRate = config.rate // Default rate
 
-  // Find the "other" line (Debit) to get the true category
-  // In a credit card purchase, the Credit Card line is Credit, the Expense line is Debit.
-  const relatedLines = line.transactions.transaction_lines || []
-  const debitLine = relatedLines.find(l => l.type === 'debit')
-
-  // Use category from debit line if available, otherwise fallback to current line
-  const categoryInfo = debitLine?.categories || line.categories
-  const categoryName = categoryInfo?.name
-  const categoryIcon = categoryInfo?.icon
-  const categoryImageUrl = categoryInfo?.image_url
+  const categoryName = txn.categories?.name
+  const categoryIcon = txn.categories?.icon
+  const categoryLogoUrl = txn.categories?.logo_url
 
   // Tiered cashback logic
   if (config.hasTiers && config.tiers && config.tiers.length > 0) {
@@ -190,23 +153,15 @@ function toTransaction(
 
   const bankBack = amount * earnedRate
 
-  // Check for share info in BOTH the credit line and the debit line
-  // Sometimes the share info is on the expense line (debit)
-  const creditShareInfo = extractShareInfo(line.metadata)
-  const debitShareInfo = extractShareInfo(debitLine?.metadata)
+  const shareInfo = extractShareInfo(txn.metadata)
 
-  // Prioritize explicit amount > percent > fixed
-  // Merge logic: if credit line has info, use it. If not, check debit line.
-  // Also check columns on the debit line (where share info is usually stored for Debt/Lending)
-  const debitShareFromColumns = {
-    amount: 0,
-    percent: debitLine?.cashback_share_percent ?? undefined,
-    fixed: debitLine?.cashback_share_fixed ?? undefined
+  // Fallback check for columns if they exist (though legacy)
+  if (shareInfo.amount === 0 && shareInfo.percent === undefined && shareInfo.fixed === undefined) {
+    if (txn.cashback_share_percent !== undefined || txn.cashback_share_fixed !== undefined) {
+      shareInfo.percent = txn.cashback_share_percent ?? undefined
+      shareInfo.fixed = txn.cashback_share_fixed ?? undefined
+    }
   }
-
-  const shareInfo = creditShareInfo.amount > 0 || creditShareInfo.percent !== undefined
-    ? creditShareInfo
-    : (debitShareInfo.amount > 0 || debitShareInfo.percent !== undefined ? debitShareInfo : debitShareFromColumns)
 
   let peopleBack = shareInfo.amount
   if (peopleBack === 0 && (shareInfo.percent !== undefined || shareInfo.fixed !== undefined)) {
@@ -214,10 +169,15 @@ function toTransaction(
   }
   const profit = bankBack - peopleBack
 
+  // Determine person name:
+  // Use profile name if available (linked person)
+  // Else if target account is Debt, use account name
+  const personName = txn.profiles?.name ?? (txn.target_account?.type === 'debt' ? txn.target_account?.name : undefined)
+
   return {
-    id: line.transactions.id,
-    occurred_at: line.transactions.occurred_at,
-    note: line.transactions.note,
+    id: txn.id,
+    occurred_at: txn.occurred_at,
+    note: txn.note,
     amount,
     earned: bankBack, // Keep for backward compatibility
     bankBack,
@@ -226,12 +186,12 @@ function toTransaction(
     effectiveRate: earnedRate,
     sharePercent: shareInfo.percent,
     shareFixed: shareInfo.fixed,
-    shopName: line.transactions.shops?.name,
-    shopLogoUrl: line.transactions.shops?.logo_url,
-    categoryName: categoryName,
-    categoryIcon: categoryIcon,
-    categoryImageUrl: categoryImageUrl,
-    personName: debitLine?.profiles?.name ?? (debitLine?.accounts?.type === 'debt' ? debitLine.accounts.name : undefined),
+    shopName: txn.shops?.name,
+    shopLogoUrl: txn.shops?.logo_url,
+    categoryName,
+    categoryIcon,
+    categoryLogoUrl,
+    personName,
   }
 }
 
@@ -360,14 +320,14 @@ export async function getCashbackProgress(
     )
 
     // Calculate total spend first (needed for tier determination)
-    const currentSpend = lines.reduce((sum, line) => {
-      if (typeof line.amount !== 'number') return sum
-      return sum + Math.abs(line.amount)
+    const currentSpend = lines.reduce((sum, txn) => {
+      if (typeof txn.amount !== 'number') return sum
+      return sum + Math.abs(txn.amount)
     }, 0)
 
     // Now map transactions with the total spend context for tiered cashback
     const transactions = lines
-      .map(line => toTransaction(line, config, currentSpend))
+      .map(txn => toTransaction(txn, config, currentSpend))
       .filter(Boolean) as CashbackTransaction[]
 
     // Calculate totals from transactions
@@ -427,7 +387,7 @@ export async function getCashbackProgress(
     cards.push({
       accountId: account.id,
       accountName: account.name,
-      accountImageUrl: account.logo_url,
+      accountLogoUrl: account.logo_url,
       currentSpend: safeCurrentSpend,
       totalEarned: safeTotalEarned,
       sharedAmount: safeSharedAmount,
@@ -480,11 +440,11 @@ export async function getAccountSpendingStats(
     cycleRange.end
   )
 
-  const currentSpend = lines.reduce((sum, line) => {
-    if (typeof line.amount !== 'number') {
+  const currentSpend = lines.reduce((sum, txn) => {
+    if (typeof txn.amount !== 'number') {
       return sum
     }
-    return sum + Math.abs(line.amount)
+    return sum + Math.abs(txn.amount)
   }, 0)
 
   const rawEarned = currentSpend * config.rate

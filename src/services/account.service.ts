@@ -266,7 +266,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     original_amount: typeof accountLine?.original_amount === 'number'
       ? accountLine.original_amount
       : cashbackFromLines.original_amount,
-    person_id: personLine?.person_id,
+    person_id: personLine?.person_id ?? null,
     person_name: personLine?.profiles?.name ?? null,
     persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,
     metadata: extractMetadataFromLines(lines),
@@ -274,6 +274,11 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     shop_name: txn.shops?.name ?? null,
     shop_logo_url: txn.shops?.logo_url ?? null,
     transaction_lines: (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[],
+    account_id: accountId ?? '',
+    target_account_id: null,
+    created_by: null,
+    is_installment: null,
+    installment_plan_id: null,
   }
 }
 
@@ -350,6 +355,11 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
     shop_name: txn.shops?.name ?? null,
     shop_logo_url: txn.shops?.logo_url ?? null,
     transaction_lines: (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[],
+    account_id: debtAccountId,
+    target_account_id: null,
+    created_by: null,
+    is_installment: null,
+    installment_plan_id: null,
   }
 }
 
@@ -649,64 +659,91 @@ export async function getAccountTransactionDetails(
   return Array.from(grouped.values())
 }
 
-/**
- * Recalculate account balance based on transaction lines
- * @param accountId The account ID to recalculate
- * @returns Boolean indicating success
- */
+// New implementation of recalculateBalance using single transactions table
 export async function recalculateBalance(accountId: string): Promise<boolean> {
   const supabase = createClient()
 
-  try {
-    // Get all transaction lines for this account, excluding void transactions
-    const { data: lines, error } = await supabase
-      .from('transaction_lines')
-      .select('amount, type, transactions!inner(status)')
-      .eq('account_id', accountId)
-      .neq('transactions.status', 'void')
+  // 1. Get current balance from transactions
+  // Get account type first
+  const { data: account, error: accError } = await supabase
+    .from('accounts')
+    .select('type')
+    .eq('id', accountId)
+    .single() as any
 
-    if (error) {
-      console.error('Error fetching transaction lines for recalculation:', error)
-      return false
-    }
 
-    // Calculate totals
-    let currentBalance = 0
-    let totalIn = 0
-    let totalOut = 0
-
-    lines.forEach((line: any) => {
-      // Double check status just in case
-      if (line.transactions?.status === 'void') return
-
-      const amount = Math.abs(line.amount)
-      if (line.type === 'debit') {
-        currentBalance += amount
-        totalIn += amount
-      } else if (line.type === 'credit') {
-        currentBalance -= amount
-        totalOut += amount
-      }
-    })
-
-    // Update account with recalculated values
-    const { error: updateError } = await (supabase
-      .from('accounts')
-      .update as any)({
-        current_balance: currentBalance,
-        total_in: totalIn,
-        total_out: totalOut
-      })
-      .eq('id', accountId)
-
-    if (updateError) {
-      console.error('Error updating account with recalculated values:', updateError)
-      return false
-    }
-
-    return true
-  } catch (err) {
-    console.error('Unexpected error during balance recalculation:', err)
+  if (accError || !account) {
+    console.error('Account not found for balance calc:', accountId)
     return false
   }
+
+  // Fetch all transactions involving this account
+  const { data: txns, error: txnError } = await supabase
+    .from('transactions')
+    .select('amount, type, category_id, account_id, target_account_id, status')
+    .eq('status', 'posted')
+    .or(`account_id.eq.${accountId},target_account_id.eq.${accountId}`)
+
+  if (txnError) {
+    console.error('Error fetching transactions for balance:', txnError)
+    return false
+  }
+
+  const isCredit = account.type === 'credit_card' || account.type === 'loan'
+
+  let netFlow = 0
+  let totalIn = 0
+  let totalOut = 0
+
+  for (const t of (txns as any[] || [])) {
+    const amt = Number(t.amount) || 0
+
+    // Determine direction relative to this account
+    let isIncoming = false
+    let isOutgoing = false
+
+    if (t.account_id === accountId) {
+      // This account is the SOURCE
+      if (t.type === 'income') {
+        isIncoming = true
+      } else {
+        // expense, transfer (source), debt (lending?), repayment (paying)
+        isOutgoing = true
+      }
+    } else if (t.target_account_id === accountId) {
+      // This account is the TARGET (mostly transfers)
+      isIncoming = true
+    }
+
+    if (isIncoming) {
+      netFlow += amt
+      totalIn += amt
+    } else if (isOutgoing) {
+      netFlow -= amt
+      totalOut += amt
+    }
+  }
+
+  // For Credit Cards: 
+  // - Spending (Outgoing) increases Debt (Visualized as Negative Balance or Positive Owed amount?)
+  // In MoneyFlow generic logic:
+  // Current Balance = Total In - Total Out.
+  // - Credit Card starts at 0. Spend 100 -> Balance -100. Repay 100 -> Balance 0.
+  // This matches standard accounting.
+
+  const { error: updateError } = await (supabase
+    .from('accounts')
+    .update as any)({
+      current_balance: netFlow,
+      total_in: totalIn,
+      total_out: totalOut
+    })
+    .eq('id', accountId)
+
+  if (updateError) {
+    console.error('Error updating account balance:', updateError)
+    return false
+  }
+
+  return true
 }

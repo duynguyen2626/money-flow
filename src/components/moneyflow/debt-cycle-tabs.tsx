@@ -126,6 +126,7 @@ export function DebtCycleTabs({
                                         defaultType="debt"
                                         defaultPersonId={personId}
                                         defaultTag={cycle.tag === 'UNTAGGED' ? undefined : cycle.tag}
+                                        asChild
                                         triggerContent={
                                             <button className="flex w-full items-center justify-center gap-1 rounded-md bg-red-50 px-2 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors">
                                                 <Plus className="h-3 w-3" /> Debt
@@ -141,6 +142,7 @@ export function DebtCycleTabs({
                                         defaultPersonId={personId}
                                         defaultTag={cycle.tag === 'UNTAGGED' ? undefined : cycle.tag}
                                         defaultAmount={Math.abs(cycle.balance)}
+                                        asChild
                                         triggerContent={
                                             <button className="flex w-full items-center justify-center gap-1 rounded-md bg-emerald-50 px-2 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors">
                                                 <CheckCheck className="h-3 w-3" /> Settle

@@ -50,10 +50,10 @@ export function CashbackCard({ card }: CashbackCardProps) {
         >
             {/* Top: Full Width Image & Badges */}
             <div className="relative h-28 w-full bg-slate-100">
-                {card.accountImageUrl ? (
+                {card.accountLogoUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                        src={card.accountImageUrl}
+                        src={card.accountLogoUrl}
                         alt={accountName}
                         className="h-full w-full object-cover"
                     />

@@ -398,10 +398,7 @@ export function TransactionForm({
           return
         }
 
-        const requestResult = await requestRefund(targetTransactionId, safeAmount, partialFlag, {
-          note: values.note ?? undefined,
-          shop_id: values.shop_id ?? undefined,
-        })
+        const requestResult = await requestRefund(targetTransactionId, safeAmount, partialFlag)
 
         if (!requestResult.success) {
           setStatus({ type: 'error', text: requestResult.error ?? 'Unable to create refund request.' })
@@ -461,11 +458,8 @@ export function TransactionForm({
         ...values,
         occurred_at: values.occurred_at.toISOString(),
         shop_id: values.shop_id ?? undefined,
-        cashback_share_percent: sanitizedPercent > 0 ? sanitizedPercent : undefined,
-        cashback_share_fixed: sanitizedFixed > 0 ? sanitizedFixed : undefined,
         note: finalNote,
         destination_account_id: values.type === 'income' ? values.source_account_id : undefined,
-        is_voluntary: values.is_voluntary,
         is_installment: isInstallment,
       }
 
@@ -620,10 +614,10 @@ export function TransactionForm({
             label: refundCat?.name ?? 'Refund',
             description: refundCat?.type === 'income' ? 'Income' : 'Expense',
             searchValue: refundCat?.name ?? 'Refund',
-            icon: refundCat?.image_url ? (
+            icon: refundCat?.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={refundCat.image_url}
+                src={refundCat.logo_url}
                 alt={refundCat.name}
                 className="h-5 w-5 object-contain rounded-none"
               />
@@ -645,10 +639,10 @@ export function TransactionForm({
           label: cat.name,
           description: cat.type === 'expense' ? 'Expense' : 'Income',
           searchValue: `${cat.name} ${cat.type}`,
-          icon: cat.image_url ? (
+          icon: cat.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={cat.image_url}
+              src={cat.logo_url}
               alt={cat.name}
               className="h-5 w-5 object-contain rounded-none"
             />

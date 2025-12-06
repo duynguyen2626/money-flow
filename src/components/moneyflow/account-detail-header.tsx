@@ -297,7 +297,7 @@ export function AccountDetailHeader({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 relative z-40">
       <div className="flex items-center justify-between">
         <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600">
           Account overview

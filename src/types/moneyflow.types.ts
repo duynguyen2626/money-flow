@@ -1,6 +1,18 @@
 import { Json, Database } from '@/types/database.types'
 
-export type TransactionLineRow = Database["public"]["Tables"]["transaction_lines"]["Row"]
+export type TransactionLineRow = {
+  id: string
+  transaction_id?: string
+  account_id?: string | null
+  category_id?: string | null
+  person_id?: string | null
+  amount: number
+  type: 'debit' | 'credit'
+  original_amount?: number | null
+  cashback_share_percent?: number | null
+  cashback_share_fixed?: number | null
+  metadata?: Json | null
+}
 export type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"]
 export type AccountRow = Database["public"]["Tables"]["accounts"]["Row"]
 export type CategoryRow = Database["public"]["Tables"]["categories"]["Row"]
@@ -11,7 +23,7 @@ export type Category = {
   type: 'expense' | 'income'
   parent_id?: string | null
   icon?: string | null
-  image_url?: string | null
+  logo_url?: string | null
   mcc_codes?: string[] | null
 }
 
@@ -116,7 +128,7 @@ export type TransactionLine = {
 
 export type TransactionWithLineRelations = TransactionLineRow & {
   accounts: Pick<AccountRow, 'name' | 'logo_url' | 'type'> | null;
-  categories: Pick<CategoryRow, 'name' | 'type'> & { image_url?: string | null; icon?: string | null } | null;
+  categories: Pick<CategoryRow, 'name' | 'type'> & { logo_url?: string | null; icon?: string | null } | null;
   profiles?: { name?: string | null; avatar_url?: string | null } | null;
   people?: { name?: string | null; avatar_url?: string | null } | null;
   person_id?: string | null;
@@ -132,7 +144,7 @@ export type TransactionWithDetails = TransactionRow & {
   displayAccountName?: string;
   category_name?: string;
   category_icon?: string | null;
-  category_image_url?: string | null;
+  category_logo_url?: string | null;
   account_name?: string;
   source_name?: string | null;
   destination_name?: string | null;

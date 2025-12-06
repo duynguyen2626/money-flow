@@ -936,7 +936,7 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
         cashback_share_fixed,
         profiles ( name, avatar_url ),
         accounts (name, type, logo_url),
-        categories (name, image_url, icon)
+        categories (name, logo_url, icon)
       )
     `)
     .order('occurred_at', { ascending: false })

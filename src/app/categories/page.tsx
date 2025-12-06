@@ -69,9 +69,9 @@ export default function CategoriesPage() {
                         >
                             <CardContent className="flex flex-col items-center justify-center p-6 gap-3 text-center">
                                 <div className="text-4xl">
-                                    {category.image_url ? (
+                                    {category.logo_url ? (
                                         <img
-                                            src={category.image_url}
+                                            src={category.logo_url}
                                             alt={category.name}
                                             className="w-10 h-10 object-contain"
                                         />

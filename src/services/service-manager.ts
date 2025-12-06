@@ -98,7 +98,6 @@ export async function distributeService(serviceId: string, customDate?: string, 
     throw new Error('Service not found')
   }
   console.log('Service found:', service)
-  console.log('Service shop_id:', (service as any).shop_id)
 
   const { data: membersResult, error: membersError } = await supabase
     .from('service_members')
@@ -111,7 +110,6 @@ export async function distributeService(serviceId: string, customDate?: string, 
     console.error('Error fetching service members:', membersError)
     throw new Error('Service members not found')
   }
-  console.log('Members found:', members)
 
   const totalSlots = members.reduce((sum, member) => sum + member.slots, 0)
   if (totalSlots === 0) {
@@ -132,6 +130,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
 
   for (const member of members) {
     const cost = unitCost * member.slots
+    if (cost === 0) continue;
 
     // Format Note
     let note = '';
@@ -143,7 +142,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
       note = templateToUse
         .replace('{service}', (service as any).name)
         .replace('{member}', member.profiles.name)
-        .replace('{name}', (service as any).name) // {name} now maps to Service Name as requested
+        .replace('{name}', (service as any).name)
         .replace('{slots}', member.slots.toString())
         .replace('{date}', monthTag)
         .replace('{price}', pricePerSlot.toLocaleString())
@@ -160,120 +159,92 @@ export async function distributeService(serviceId: string, customDate?: string, 
       month_tag: monthTag
     };
 
+    // Construct Payload for Single Table
+    // Rule:
+    // account_id = DRAFT_FUND (Wait for allocation)
+    // type = expense
+    // amount = -cost (Expense is negative)
+    // person_id = member.profile_id (if not owner, so it is Debt), or NULL (if owner, so it is just Expense)
+    // Wait... if it is Owner, person_id = NULL means it's my expense.
+    // If it is Member, person_id = MemberID means it's "Expense on behalf of Member" -> System treats as Debt if I paid?
+    // User instruction: "Phần của Lâm: person_id = 'ID_Của_Lâm' (Hệ thống tự hiểu đây là Nợ)." -> Yes.
+    // "Phần của Me: person_id = NULL." -> Yes.
+
+    const personId = member.profiles.is_owner ? null : member.profile_id;
+
+    const payload = {
+      occurred_at: transactionDate,
+      note: note,
+      metadata: metadata,
+      tag: monthTag,
+      shop_id: (service as any).shop_id,
+      amount: -cost, // Expense is negative
+      type: 'expense',
+      account_id: SYSTEM_ACCOUNTS.DRAFT_FUND,
+      category_id: SYSTEM_CATEGORIES.ONLINE_SERVICES,
+      person_id: personId,
+      created_by: null // System/Bot doesn't have a user ID strictly, or could be owner? Let's leave null or DEFAULT_USER_ID if needed. 'created_by' is usually for RLS.
+    };
+
     // Query existing transaction
-    // Note: We use .contains for JSONB. 
-    // If 'metadata' column doesn't exist, this will fail. User needs to run migration.
     const { data: existingTx } = await supabase
       .from('transactions')
-      .select('*')
+      .select('id')
       .contains('metadata', metadata)
-      .single();
+      .maybeSingle();
 
     let transactionId = (existingTx as any)?.id;
 
     if (existingTx) {
-      console.log('Updating existing transaction:', (existingTx as any).id);
-      // Update Header
-      await supabase
+      console.log('Updating existing transaction:', transactionId);
+      const { error: updateError } = await supabase
         .from('transactions')
-        .update({
-          note: note,
-          occurred_at: transactionDate,
-          tag: monthTag, // [M2-SP2] Ensure tag is updated
-          shop_id: (service as any).shop_id
-        } as any)
+        .update(payload as any)
         .eq('id', transactionId);
 
-      // Delete existing lines to recreate them (simplest way to handle amount/account changes)
-      await supabase
-        .from('transaction_lines')
-        .delete()
-        .eq('transaction_id', transactionId);
+      if (updateError) console.error('Error updating transaction:', updateError);
 
     } else {
       console.log('Creating new transaction for member:', member.profile_id);
-      // Create Header
-      const { data: newTx, error: txError } = await supabase
+      const { data: newTx, error: insertError } = await supabase
         .from('transactions')
-        .insert([{
-          occurred_at: transactionDate,
-          note: note,
-          metadata: metadata,
-          tag: monthTag, // [M2-SP2] Add tag for filtering
-          shop_id: (service as any).shop_id
-        }] as any)
-        .select()
+        .insert([payload] as any)
+        .select('id')
         .single();
 
-      if (txError || !newTx) {
-        console.error('Error creating transaction:', txError);
+      if (insertError) {
+        console.error('Error creating transaction:', insertError);
         continue;
       }
       transactionId = newTx.id;
     }
 
-    createdTransactions.push({ id: transactionId });
+    if (transactionId) {
+      createdTransactions.push({ id: transactionId });
 
-    // Create Lines (for both new and updated)
-    const transactionLines = []
-
-    // Credit Draft Fund
-    transactionLines.push({
-      transaction_id: transactionId,
-      account_id: SYSTEM_ACCOUNTS.DRAFT_FUND,
-      amount: -cost,
-      type: 'credit',
-      category_id: SYSTEM_CATEGORIES.ONLINE_SERVICES
-    })
-
-    if (member.profiles.is_owner) {
-      // Debit: Category SERVICE_CAT_ID. (My Expense).
-      transactionLines.push({
-        transaction_id: transactionId,
-        category_id: 'e0000000-0000-0000-0000-000000000088', // Online Services
-        amount: cost,
-        type: 'debit',
-      })
-    } else {
-      const debtAccount = member.profiles.accounts.find((acc: any) => acc.type === 'debt')
-      if (!debtAccount) {
-        console.error(`Debt account not found for member ${member.profile_id}`)
-        continue
+      // [M2-SP3] Sync to Google Sheet
+      // Warning: Threading/Concurrency might be an issue if distributing many.
+      try {
+        const { syncTransactionToSheet } = await import('./sheet.service');
+        const sheetPayload = {
+          id: transactionId,
+          occurred_at: transactionDate,
+          note: note,
+          tag: monthTag,
+          amount: cost, // Sheet likely expects positive for "Amount" column? Or follow transaction? 
+          // Previous code passed 'cost' (positive). Let's keep it positive if that's what sheet expects.
+          // But wait, the transaction amount is negative.
+          // Let's pass the absolute cost for now as per previous logic.
+          type: 'Expense', // It's an expense from my wallet (Draft Fund)
+          shop_name: (service as any).name || 'Service',
+        };
+        // If it's a debt (person_id is set), we might want to label it Debt in sheet?
+        // User said: "Phần của Lâm: person_id = 'ID_Của_Lâm' (Hệ thống tự hiểu đây là Nợ)."
+        // For the Sheet, let's keep it simple.
+        await syncTransactionToSheet(member.profile_id, sheetPayload as any, 'create');
+      } catch (syncError) {
+        console.error('Error syncing to sheet:', syncError);
       }
-      // Debit: Debt Account of that Person. (Their Debt).
-      transactionLines.push({
-        transaction_id: transactionId,
-        account_id: debtAccount.id,
-        amount: cost,
-        type: 'debit',
-        person_id: member.profile_id,
-        category_id: 'e0000000-0000-0000-0000-000000000088', // Online Services
-      })
-    }
-
-    const { error: linesError } = await supabase
-      .from('transaction_lines')
-      .insert(transactionLines as any)
-
-    if (linesError) {
-      console.error('Error inserting lines:', linesError)
-    }
-
-    // [M2-SP3] Sync to Google Sheet
-    try {
-      const { syncTransactionToSheet } = await import('./sheet.service');
-      const payload = {
-        id: transactionId,
-        occurred_at: transactionDate,
-        note: note,
-        tag: monthTag,
-        amount: cost,
-        type: 'Debt',
-        shop_name: (service as any).name || 'Service',
-      };
-      await syncTransactionToSheet(member.profile_id, payload as any, 'create');
-    } catch (syncError) {
-      console.error('Error syncing to sheet:', syncError);
     }
   }
 

@@ -193,23 +193,38 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   const debtBalanceMap = new Map<string, number>()
 
   if (debtAccountIds.length > 0) {
-    const { data: lines, error: linesError } = await supabase
-      .from('transaction_lines')
-      .select('account_id, amount, type, transactions!inner(status)')
-      .in('account_id', debtAccountIds)
+    const { data: txns, error: txnsError } = await supabase
+      .from('transactions')
+      .select('account_id, target_account_id, amount, status')
+      .or(`account_id.in.(${debtAccountIds.join(',')}),target_account_id.in.(${debtAccountIds.join(',')})`)
       // [M2-SP1] Fix: Exclude void transactions
-      .neq('transactions.status', 'void')
+      .neq('status', 'void')
 
-    if (linesError) {
-      console.error('Error fetching debt transaction lines:', linesError)
+    if (txnsError) {
+      console.error('Error fetching debt transactions:', txnsError)
     } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (lines as any[])?.forEach(line => {
-        const current = debtBalanceMap.get(line.account_id) ?? 0
-        // Debit = Asset Increases (They owe more)
-        // Credit = Asset Decreases (They paid back)
-        const change = line.type === 'debit' ? Math.abs(line.amount) : -Math.abs(line.amount)
-        debtBalanceMap.set(line.account_id, current + change)
+      (txns as any[])?.forEach(txn => {
+        // If account_id is debt account: Money leaving it (usually repayment/outflow) -> Balance decreases (amount is usually negative)
+        // If target_account_id is debt account: Money entering it (usually lending/inflow) -> Balance increases (add abs amount)
+
+        // Check if account_id is one of our debt accounts
+        if (txn.account_id && debtAccountIds.includes(txn.account_id)) {
+          const current = debtBalanceMap.get(txn.account_id) ?? 0
+          // amount is negative for outflow. So adding it decreases balance.
+          // However, if we lend money, account_id is BANK. target is DEBT.
+          // If we repay money, account_id is DEBT?? No, typically Repayment is Expense for Person.
+          // Let's stick to standard flow:
+          // Lent: Bank -> Debt (Target). Target Balance increases.
+          // Repaid: Debt (Source) -> Bank. Source Balance decreases.
+
+          debtBalanceMap.set(txn.account_id, current + txn.amount)
+        }
+
+        // Check if target_account_id is one of our debt accounts
+        if (txn.target_account_id && debtAccountIds.includes(txn.target_account_id)) {
+          const current = debtBalanceMap.get(txn.target_account_id) ?? 0
+          debtBalanceMap.set(txn.target_account_id, current + Math.abs(txn.amount))
+        }
       })
     }
   }
@@ -231,26 +246,26 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   const monthlyDebtMap = new Map<string, Map<string, MonthlyDebtSummary>>()
 
   if (debtAccountIds.length > 0) {
-    const { data: monthlyLines, error: monthlyLinesError } = await supabase
-      .from('transaction_lines')
-      .select('account_id, amount, type, transactions!inner(tag, occurred_at, status)')
-      .eq('type', 'debit')
-      .in('account_id', debtAccountIds)
-      .neq('transactions.status', 'void')
-      .order('occurred_at', { ascending: false, foreignTable: 'transactions' })
+    // Fetch Lending transactions (where debt account is the target)
+    const { data: monthlyTxns, error: monthlyTxnsError } = await supabase
+      .from('transactions')
+      .select('target_account_id, amount, occurred_at, tag, status')
+      .in('target_account_id', debtAccountIds)
+      .neq('status', 'void')
+      .order('occurred_at', { ascending: false })
 
-    if (monthlyLinesError) {
-      console.error('Error fetching monthly debt lines:', JSON.stringify(monthlyLinesError, null, 2))
+    if (monthlyTxnsError) {
+      console.error('Error fetching monthly debt lines:', JSON.stringify(monthlyTxnsError, null, 2))
     } else {
-      ; (monthlyLines as any[] | null)?.forEach(line => {
-        const accountId = line.account_id
+      (monthlyTxns as any[])?.forEach(txn => {
+        const accountId = txn.target_account_id
         if (!accountId) return
 
         const ownerId = accountOwnerByAccountId.get(accountId)
         if (!ownerId) return
 
-        const tagValue = line.transactions?.tag ?? null
-        const occurredAt = line.transactions?.occurred_at ?? null
+        const tagValue = txn.tag ?? null
+        const occurredAt = txn.occurred_at ?? null
         const parsedDate = occurredAt ? new Date(occurredAt) : null
         const validDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null
         const fallbackKey = validDate ? format(validDate, 'yyyy-MM') : 'unknown'
@@ -258,9 +273,9 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         const label =
           tagValue ?? (validDate ? format(validDate, 'MMM yy', { locale: enUS }).toUpperCase() : 'Debt')
 
-        const parsedAmount =
-          typeof line.amount === 'string' ? Number.parseFloat(line.amount) : line.amount ?? 0
-        const amountValue = Math.abs(Number.isFinite(parsedAmount) ? parsedAmount : 0)
+        // Amount is inflow to debt account (Lending), so it's positive debt.
+        // Usually amount from source is negative, but we want the magnitude added to debt.
+        const amountValue = Math.abs(txn.amount)
 
         const personMap = monthlyDebtMap.get(ownerId) ?? new Map<string, MonthlyDebtSummary>()
         const existing = personMap.get(groupingKey)
@@ -489,17 +504,20 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
   // [M2-SP1] Fix: Calculate balance dynamically to exclude void transactions (Phantom Debt Fix)
   let balance = 0;
   if (debt_account_id) {
-    const { data: lines } = await supabase
-      .from('transaction_lines')
-      .select('amount, type, transactions!inner(status)')
-      .eq('account_id', debt_account_id)
-      .neq('transactions.status', 'void');
+    const { data: txns } = await supabase
+      .from('transactions')
+      .select('account_id, target_account_id, amount, status')
+      .or(`account_id.eq.${debt_account_id},target_account_id.eq.${debt_account_id}`)
+      .neq('status', 'void');
 
-    if (lines) {
-      lines.forEach((line: any) => {
-        const amount = line.amount ?? 0;
-        const change = line.type === 'debit' ? Math.abs(amount) : -Math.abs(amount);
-        balance += change;
+    if (txns) {
+      (txns as any[]).forEach((txn: any) => {
+        if (txn.account_id === debt_account_id) {
+          balance += txn.amount; // Outflow decreases balance
+        }
+        if (txn.target_account_id === debt_account_id) {
+          balance += Math.abs(txn.amount); // Inflow increases balance
+        }
       });
     }
   } else {
