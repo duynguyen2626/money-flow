@@ -6,13 +6,13 @@ Note Format Bug: Refund transactions lack the ID badge reference (e.g., [A1B2]).
 
 Missing Action: The "Confirm Refund" button does not appear for Pending transactions (GD2).
 
-Goal: Complete the 3-Step Refund Workflow on the UI.
+Logic Bug: Full Refund logic fails to UNLINK the person from the original transaction.
 
 Constants:
 
 PENDING_REFUNDS_ID: '99999999-9999-9999-9999-999999999999'
 
-I. BACKEND: FORMAT NOTE (src/services/transaction.service.ts)
+I. BACKEND: FORMAT NOTE & UNLINK LOGIC (src/services/transaction.service.ts)
 
 Target: requestRefund function.
 
@@ -24,9 +24,19 @@ Format Note (GD2):
 
 Format: [${shortId}] Refund Request: ${originalTxn.note}
 
-Format Note (GD3 - Confirm):
+Unlink Logic (Crucial):
 
-Format: [${shortId}] Refund Received
+IF isFullRefund AND originalTxn.person_id:
+
+Fetch Person Name.
+
+Update GD1 (Original):
+
+person_id: NULL (Remove debt).
+
+note: ${originalTxn.note} [Cancelled Debt: ${PersonName}].
+
+status: 'waiting_refund'.
 
 II. FRONTEND: ENABLE CONFIRM ACTION (src/components/moneyflow/unified-transaction-table.tsx)
 
@@ -42,30 +52,32 @@ Icon: CheckCircle (Green).
 
 Label: "Confirm Money Received".
 
-2. Build ConfirmRefundDialog
+Action: Open ConfirmRefundDialog (reuse Refund mode or dedicated dialog).
 
-Trigger: Clicking the menu item opens this dialog.
+2. Update TransactionForm for Confirm
 
-UI:
+If opening for "Confirm":
 
-Title: "Xác nhận tiền về (Confirm Refund)".
+mode: 'confirm_refund'.
 
-Text: "Khoản tiền [Amount] đã về tài khoản nào?"
+from_account: PENDING_REFUNDS_ID (Fixed).
 
-Input: Select Account (Filter: Real Banks/Cash only).
+to_account: Selectable (Real Bank).
 
-Action: Call transactionService.confirmRefund(pendingTxnId, targetAccountId).
+amount: Fixed (from pending txn).
+
+note: [${shortId}] Refund Received.
 
 III. EXECUTION STEPS
 
-Service: Update requestRefund to include the [ID] badge in notes.
+Service: Fix requestRefund (Add Unlink logic & Note formatting).
 
-Component: Create ConfirmRefundDialog (Simple selection).
+UI: Add "Confirm Refund" item to the Action Menu for pending rows.
 
-Table: Add the "Confirm" action to the dropdown menu.
+Form: Handle confirm_refund mode to auto-fill Source=System, Target=Selectable.
 
-Verify:
+Test:
 
-Cancel an order -> Check Note format.
+Cancel Debt Order -> Original Note should change, Person removed.
 
-See Pending row -> Click Confirm -> Select VCB -> Check Result.
+See Pending Row -> Click Confirm -> Select Bank -> Money in Bank.
