@@ -40,6 +40,13 @@ EXCEPTION
     WHEN duplicate_column THEN null;
 END $$;
 
+-- 6. created_at (Essential column safety check)
+DO $$ BEGIN
+    ALTER TABLE public.transactions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
+EXCEPTION
+    WHEN duplicate_column THEN null;
+END $$;
+
 -- Indexes for performance on these columns
 CREATE INDEX IF NOT EXISTS idx_transactions_is_installment ON public.transactions(is_installment);
 CREATE INDEX IF NOT EXISTS idx_transactions_installment_plan_id ON public.transactions(installment_plan_id);

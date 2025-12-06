@@ -1,71 +1,93 @@
-AGENT TASK: PHASE 70.5 - REFUND UI POLISH & CONFIRM ACTION
+AGENT TASK: REFUND LOGIC HARDENING & HISTORY TRACKING
 
 Context:
 
-Note Format Bug: Refund transactions lack the ID badge reference (e.g., [A1B2]).
+Refund Bugs: Notes lack [ID] badges. "Confirm Refund" menu item is missing for Pending items.
 
-Missing Action: The "Confirm Refund" button does not appear for Pending transactions (GD2).
+Logic Flaws: Full Refund doesn't unlink Person correctly. Voiding allows deleting intermediate transactions out of order.
 
-Goal: Complete the 3-Step Refund Workflow on the UI.
+Audit: User needs to track Edits (History).
 
-Constants:
+Objective:
 
-PENDING_REFUNDS_ID: '99999999-9999-9999-9999-999999999999'
+Fix requestRefund (Note Format & Unlink).
 
-I. BACKEND: FORMAT NOTE (src/services/transaction.service.ts)
+Fix voidTransaction (Constraint Chain).
 
-Target: requestRefund function.
+Implement logHistory on Edit/Void.
 
-Logic Update:
+Fix UnifiedTransactionTable (Menu Actions & Void Tab).
 
-Extract Short ID: const shortId = originalTxn.id.substring(0, 4).toUpperCase();
+I. BACKEND: LOGIC HARDENING (src/services/transaction.service.ts)
 
-Format Note (GD2):
+1. Upgrade requestRefund
 
-Format: [${shortId}] Refund Request: ${originalTxn.note}
+Note Format:
 
-Format Note (GD3 - Confirm):
+Get Short ID of Original: original.id.split('-')[0].toUpperCase().
 
-Format: [${shortId}] Refund Received
+Format: Refund Request [${ShortID}].
 
-II. FRONTEND: ENABLE CONFIRM ACTION (src/components/moneyflow/unified-transaction-table.tsx)
+If Debt: Append  - Cancel Debt: ${PersonName}.
 
-1. Add "Confirm Refund" to Menu
+Unlink Logic (Full Refund):
 
-Condition: Show this menu item ONLY if:
+Verify person_id is explicitly set to null in the update payload.
 
-row.status === 'pending'
+Crucial: Also clear tag if it was a Debt Tag, or keep it for reference? -> Keep Tag for history context, but clear Person.
 
-OR row.account_id === PENDING_REFUNDS_ID
+2. Upgrade voidTransaction (The Guard)
 
-Icon: CheckCircle (Green).
+Check Children:
 
-Label: "Confirm Money Received".
+Before voiding txn, query if ANY other transaction has linked_transaction_id == txn.id AND status != 'void'.
 
-2. Build ConfirmRefundDialog
+If found: Throw Error: "Không thể hủy! Tồn tại giao dịch liên quan (VD: Đã xác nhận hoàn tiền). Hãy hủy giao dịch đó trước."
 
-Trigger: Clicking the menu item opens this dialog.
+3. Implement logHistory & Update updateTransaction
 
-UI:
+Before Update:
 
-Title: "Xác nhận tiền về (Confirm Refund)".
+Insert into transaction_history:
 
-Text: "Khoản tiền [Amount] đã về tài khoản nào?"
+transaction_id: id
 
-Input: Select Account (Filter: Real Banks/Cash only).
+snapshot_before: current data from DB.
 
-Action: Call transactionService.confirmRefund(pendingTxnId, targetAccountId).
+change_type: 'edit'
+
+Hook: Call this inside updateTransaction and voidTransaction.
+
+II. FRONTEND: UI POLISH
+
+1. Fix "Confirm Refund" Visibility
+
+Target: UnifiedTransactionTable -> Action Menu.
+
+Condition:
+
+Show "Confirm Refund" IF:
+
+status === 'pending' (Yellow Badge)
+
+AND (account.type === 'system' OR account_id === PENDING_REFUNDS_ID).
+
+Current bug: Likely checking for expense type only. Pending Refund is income.
+
+2. Fix Void Tab
+
+Target: getUnifiedTransactions or Page Filter.
+
+Logic: Ensure that when "Void" tab is selected, the API fetches status = 'void'.
+
+Visual: In Void Tab, show rows normally (no opacity). In All Tab, show Void rows with opacity (or hide them based on user pref).
 
 III. EXECUTION STEPS
 
-Service: Update requestRefund to include the [ID] badge in notes.
+Service: Implement History Logging.
 
-Component: Create ConfirmRefundDialog (Simple selection).
+Service: Harden Refund/Void logic.
 
-Table: Add the "Confirm" action to the dropdown menu.
+UI: Update Menu Conditions.
 
-Verify:
-
-Cancel an order -> Check Note format.
-
-See Pending row -> Click Confirm -> Select VCB -> Check Result.
+Build: Verify.

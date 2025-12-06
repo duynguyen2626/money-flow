@@ -2,6 +2,10 @@
 ALTER TABLE public.transactions 
 ADD COLUMN IF NOT EXISTS created_by uuid REFERENCES auth.users(id);
 
+-- Safety fix for missing created_at
+ALTER TABLE public.transactions 
+ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now();
+
 -- Add index for performance
 CREATE INDEX IF NOT EXISTS idx_transactions_created_by ON public.transactions(created_by);
 
