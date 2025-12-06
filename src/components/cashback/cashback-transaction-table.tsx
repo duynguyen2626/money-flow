@@ -104,10 +104,10 @@ export function CashbackTransactionTable({ transactions, onEdit }: CashbackTrans
 
                                     <TableCell>
                                         <div className="flex items-center gap-2">
-                                            {txn.categoryImageUrl ? (
+                                            {txn.categoryLogoUrl ? (
                                                 // eslint-disable-next-line @next/next/no-img-element
                                                 <img
-                                                    src={txn.categoryImageUrl}
+                                                    src={txn.categoryLogoUrl}
                                                     alt="Category"
                                                     className="h-5 w-5 object-contain"
                                                 />

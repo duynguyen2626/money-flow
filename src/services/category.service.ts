@@ -9,7 +9,7 @@ type CategoryRow = {
   type: Category['type']
   parent_id: string | null
   icon: string | null
-  image_url: string | null
+  logo_url: string | null
 }
 
 export async function getCategories(): Promise<Category[]> {
@@ -33,7 +33,7 @@ export async function getCategories(): Promise<Category[]> {
     type: item.type,
     parent_id: item.parent_id ?? undefined,
     icon: item.icon,
-    image_url: item.image_url,
+    logo_url: item.logo_url,
   }))
 }
 
@@ -47,7 +47,7 @@ export async function createCategory(category: Omit<Category, 'id'>): Promise<Ca
       type: category.type,
       parent_id: category.parent_id ?? null,
       icon: category.icon ?? null,
-      image_url: category.image_url ?? null,
+      logo_url: category.logo_url ?? null,
     } as any)
     .select()
     .single()
@@ -70,7 +70,7 @@ export async function updateCategory(id: string, updates: Partial<Category>): Pr
       type: updates.type,
       parent_id: updates.parent_id,
       icon: updates.icon,
-      image_url: updates.image_url,
+      logo_url: updates.logo_url,
     } as any)
     .eq('id', id)
     .select()

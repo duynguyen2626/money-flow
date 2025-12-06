@@ -1,115 +1,101 @@
-MILESTONE 3 - PHASE 2 (REVISED 4): UI FINAL POLISH & BADGES REVERT
+AGENT TASK: PHASE 68 - FIX SINGLE LEDGER LOGIC & REFUND WORKFLOW
 
-Goal: Revert to Text Badges for Transaction Types (Compact), optimize the "Final Price" display, and fix the Installment Edit bug.
+Context:
 
-1. Git Convention
+Critical Bug: "Refund flow is disabled in single-table mode" error prevents refunds.
 
-Branch: fix/M3-P2-ui-badges-revert
+Data Mapping: Debt Transactions show "-> Unknown". Cashback Share values are not saving.
 
-Commit: [M3-P2] fix: ...
+Logic Update: Full Refund (100%) for a Debt transaction should UNLINK the person from the original transaction.
 
-PART A: TRANSACTION TABLE REDESIGN (The "Compact & Clear" Look)
+UI Bugs: Header overlaps Modal. Badges alignment. Notes column too wide.
 
-File: src/components/moneyflow/unified-transaction-table.tsx (Columns)
+Objective:
 
-1. Column: "Date" (Merged with Type & Status)
+Enable Refund Logic for Single Table.
 
-Layout: flex flex-row items-center gap-2 (No wrapping).
+Implement "Unlink Person" on Full Refund.
 
-Content:
+Fix UI mapping and styling.
 
-Date: DD/MM (e.g., 04/12).
+I. BACKEND: src/services/transaction.service.ts
 
-Type Badge (Reverted): Use Shadcn Badge with SHORT TEXT:
+1. Fix requestRefund (The "Unlink" & "Smart Note" Logic)
 
-expense -> [OUT] (Red/Destructive)
+Remove Error Throw: Delete Refund flow is disabled....
 
-income -> [IN] (Green/Success)
+Logic Update:
 
-transfer -> [TF] (Blue/Secondary)
+If Full Refund (Amount == Original):
 
-transfer_in -> [TF IN]
+Fetch Original Txn.
 
-transfer_out -> [TF OUT]
+If original.person_id exists:
 
-Style: px-1.5 py-0 text-[10px] font-bold h-5.
+Get Person Name.
 
-Status Icon:
+Update Original:
 
-pending / waiting -> ⏳ (Yellow Clock).
+person_id = NULL (Remove debt relationship).
 
-void -> 🚫 (Red Ban).
+note = original.note + " [Cancelled Debt: " + Name + "]".
 
-completed -> (None).
+status = 'waiting_refund' (if pending) or 'refunded' (if instant).
 
-2. Column: "People" (Compact Tag)
+Create Refund Txn (GD2/GD3):
 
-Layout: Avatar/Name + Tag Icon.
+Note Format: Refund for [${original.id.substring(0, 4).toUpperCase()}].
 
-Content:
+If Debt involved: ... with ${PersonName}.
 
-Person: Avatar or Name.
+2. Fix getUnifiedTransactions (The "Unknown" Fix)
 
-Tag: Instead of text "DEC25", render a Tag Icon (🏷️ Tag from Lucide).
+Transfer Logic:
 
-Tooltip: Hovering the icon shows the full Tag Name (e.g., "Cycle: DEC25").
+If target_account_id exists -> Dest = TargetAccount.name.
 
-3. Column: "Final Price" (Merged with Back Logic)
+Else If person_id exists (Lending) -> Dest = Person.name (Fixes "Unknown").
 
-Content:
+Else -> Do not show arrow "->". Just show Source Account.
 
-Line 1: Final Amount (Bold).
+3. Fix Save Logic (create/updateTransaction)
 
-Line 2: Cashback Formula (If applicable).
+Ensure cashback_share_percent and cashback_share_fixed are included in the insert/update payload.
 
-Format: 3% + 3,000 = 4,000 (Integers only).
+II. FRONTEND: UnifiedTransactionTable & UI
 
-Constraint: Use Math.round to remove decimals. Do NOT use the Σ icon.
+1. Fix "Refund flow disabled" Error
 
-Style: text-[10px] text-muted-foreground font-medium.
+Locate the error check in the Table component (around line 464) and REMOVE IT. Connect it to the Service.
 
-4. Installment Link Position
+2. Fix UI Issues
 
-Question: Where to put the 🔗 icon?
+Z-Index: Update AccountDetailHeader to z-30. Ensure Modal is z-50.
 
-Answer: Append it to the Account Column (next to Account Name) OR the Note Column.
+Alignment:
 
-Decision: Put it in Account Column. Reason: "Paid via VIB Credit (Linked 🔗)". It indicates the source is part of a plan.
+Cycle/Tag Badges: Use flex flex-row gap-1 (not flex-col) to keep them on one line.
 
-PART B: CRITICAL BUG FIXES
+Notes Column: Add max-w-[250px] truncate to prevent excessive whitespace.
 
-1. Fix Installment Toggle (Edit Mode)
+ID Display:
 
-File: src/components/moneyflow/transaction-form.tsx
-The Bug: The "Trả góp?" toggle is OFF when editing a transaction that has is_installment = true.
-The Fix:
+Ensure ID is visible (or copyable icon) to match the Note format [ID].
 
-In the useEffect that loads data into the form (or defaultValues):
+3. Restore Cashback Info
 
-Ensure is_installment is explicitly mapped.
+In the Amount Cell, check cashback_share_percent.
 
-// Debugging tip for Agent:
-console.log('Editing Data:', data); // Check if is_installment comes from DB
-form.reset({
-    // ... other fields
-    is_installment: Boolean(data.is_installment), // Force boolean cast
-});
+If > 0, render a small row below amount: 🎁 ${percent}% or fixed amount.
 
+III. EXECUTION STEPS
 
-2. Fix Filter Button
+Service: Update requestRefund (Unlink logic & Note format) and createTransaction (Cashback fields).
 
-File: src/components/moneyflow/filterable-transactions.tsx
+Service: Fix "Unknown" destination mapping.
 
-Action: Ensure the Popover content is rendering and the Context Provider is wrapping the component correctly.
+Frontend: Remove the Refund Error Block.
 
-4. Execution Plan
+Frontend: Fix CSS (Z-Index, Spacing, Badges Row).
 
-Step 1 (Table): Revert Type Icons to Short Badges (IN, OUT, TF) inside Date Column.
-
-Step 2 (Table): Change People Tag to Tooltip Icon.
-
-Step 3 (Table): Format Final Price with Integer Formula (3% + 3,000 = ...).
-
-Step 4 (Form): Fix is_installment loading logic in Edit Modal.
-
-👉 Acknowledge M3-P2 Revised 4 and start with Step 1.
+Build: Verify.

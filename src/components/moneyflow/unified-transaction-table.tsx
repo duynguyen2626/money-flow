@@ -1,7 +1,31 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react"
-import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, ArrowRight, ArrowLeft, Copy, ArrowUp, ArrowDown, ArrowUpDown, Trash2, Sigma, CheckCheck, CreditCard, Tag, Link2 } from "lucide-react"
+import {
+  ArrowUpDown,
+  Calendar,
+  MoreHorizontal,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  X,
+  CreditCard,
+  Check,
+  Copy,
+  CheckCheck,
+  Sigma,
+  Link2,
+  Info,
+  ArrowLeft,
+  ArrowUp,
+  ArrowDown,
+  Trash2,
+  Tag,
+  RotateCcw,
+  Pencil,
+  Ban,
+  Loader2
+} from 'lucide-react'
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createPortal } from "react-dom"
@@ -39,8 +63,8 @@ type ColumnKey =
   | "shop" // Merged Shop/Note
   | "category"
   | "people" // Separated
-  | "tag" // Separated
-  | "tag" // Separated
+  | "tag"
+  | "note" // Added Note Column
   | "account" // Smart Account
   | "amount"
   | "back_info"
@@ -211,7 +235,8 @@ export function UnifiedTransactionTable({
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 80, minWidth: 70 },
     { key: "type", label: "Type", defaultWidth: 130, minWidth: 110 },
-    { key: "shop", label: "Notes", defaultWidth: 260, minWidth: 200 },
+    { key: "shop", label: "Shop", defaultWidth: 200, minWidth: 160 },
+    { key: "note", label: "Note", defaultWidth: 200, minWidth: 150 },
     { key: "category", label: "Category", defaultWidth: 150 },
     ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 160, minWidth: 140 } as ColumnConfig] : []),
     { key: "account", label: "Account", defaultWidth: 160, minWidth: 140 },
@@ -234,6 +259,7 @@ export function UnifiedTransactionTable({
       date: true,
       type: false, // Hidden by default (Merged into Date)
       shop: true,
+      note: true,
       category: true,
       people: !hidePeopleColumn,
       tag: false, // Hidden by default (Merged into People/Account)
@@ -353,6 +379,7 @@ export function UnifiedTransactionTable({
       date: true,
       type: true,
       shop: true,
+      note: true,
       category: true,
       people: !hidePeopleColumn,
       tag: true,
@@ -457,8 +484,7 @@ export function UnifiedTransactionTable({
         const reqRes = await requestRefund(
           confirmCancelTarget.id,
           amountToRefund,
-          false, // isPending = false means it goes to Pending account? No, partial=false means full refund.
-          { note: "Cancel Order (Full Refund)" }
+          false // isPending = false means it goes to Pending account? No, partial=false means full refund.
         )
 
         if (!reqRes.success || !reqRes.refundTransactionId) {
@@ -715,7 +741,7 @@ export function UnifiedTransactionTable({
     <div className="relative space-y-3">
       <div className="relative w-full overflow-x-auto border rounded-md bg-white shadow-sm">
         <Table className="min-w-[1000px]">
-          <TableHeader className="sticky top-0 z-50 bg-white shadow-sm">
+          <TableHeader className="sticky top-0 z-40 bg-white shadow-sm">
             <TableRow className="hover:bg-transparent border-b-2 border-slate-300">
               <TableHead className="border-r-2 border-slate-300 whitespace-nowrap sticky left-0 z-30 bg-slate-50" style={{ width: 52 }}>
                 <input
@@ -899,7 +925,7 @@ export function UnifiedTransactionTable({
                       >
                         {currentTab === 'void' || isVoided ? (
                           <button
-                            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
                             disabled={isRestoring}
                             onClick={event => {
                               event.stopPropagation();
@@ -912,7 +938,7 @@ export function UnifiedTransactionTable({
                         ) : (
                           <>
                             <button
-                              className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                              className="flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
                               onClick={event => {
                                 event.stopPropagation();
                                 setEditingTxn(txn);
@@ -924,7 +950,7 @@ export function UnifiedTransactionTable({
                             </button>
                             {canRequestRefund && !isPendingRefund && (
                               <button
-                                className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                                className="flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
                                 onClick={event => {
                                   event.stopPropagation();
                                   openRefundForm(txn, 'request');
@@ -935,7 +961,7 @@ export function UnifiedTransactionTable({
                             )}
                             {canRequestRefund && !isPendingRefund && !isFullyRefunded && (
                               <button
-                                className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                                className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-red-600 hover:bg-red-50"
                                 onClick={event => {
                                   event.stopPropagation();
                                   setConfirmCancelTarget(txn);
@@ -948,7 +974,7 @@ export function UnifiedTransactionTable({
                             )}
                             {isPendingRefund && (
                               <button
-                                className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                                className="flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
                                 onClick={event => {
                                   event.stopPropagation();
                                   openRefundForm(txn, 'confirm');
@@ -958,7 +984,7 @@ export function UnifiedTransactionTable({
                               </button>
                             )}
                             <button
-                              className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                              className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-red-600 hover:bg-red-50"
                               onClick={event => {
                                 event.stopPropagation();
                                 setConfirmVoidTarget(txn);
@@ -1100,23 +1126,24 @@ export function UnifiedTransactionTable({
                               )}
                           </div>
                         </div>
-                        {txn.note && (
-                          <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
-                            <div className="max-w-[300px]">
-                              <RefundNoteDisplay
-                                note={txn.note}
-                                shopLogoUrl={displayIcon}
-                                shopName={displayName}
-                                accountLogoUrl={effectiveStatus === 'completed' && txn.note?.startsWith('3.') ? txn.destination_logo : txn.source_logo}
-                                accountName={effectiveStatus === 'completed' && txn.note?.startsWith('3.') ? txn.destination_name : txn.source_name}
-                                status={effectiveStatus}
-                              />
-                            </div>
-                          </CustomTooltip>
-                        )}
                       </div>
                     );
                   }
+                  case "note":
+                    return (
+                      <div className="flex flex-col gap-1 max-w-[250px]">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-slate-700 font-medium" title={txn.note ?? ''}>
+                            {txn.note}
+                          </span>
+                          {txn.note && (
+                            <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
+                              <Info className="h-3 w-3 text-slate-400 flex-shrink-0" />
+                            </CustomTooltip>
+                          )}
+                        </div>
+                      </div>
+                    );
                   case "category": {
                     if (!txn.category_name) {
                       if (txn.type === 'repayment') return <span className="text-slate-500">Repayment</span>;
@@ -1126,11 +1153,11 @@ export function UnifiedTransactionTable({
                     return (
                       <CustomTooltip content={txn.category_name ?? "No Category"}>
                         <div className="flex items-center gap-2 max-w-[200px]">
-                          {txn.category_image_url ? (
+                          {txn.category_logo_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
                               <img
-                                src={txn.category_image_url}
+                                src={txn.category_logo_url}
                                 alt={txn.category_name ?? 'Category'}
                                 className="h-full w-full object-contain"
                               />
@@ -1167,6 +1194,12 @@ export function UnifiedTransactionTable({
                         {(txn.destination_name ?? '?').charAt(0).toUpperCase()}
                       </div>
                     );
+
+                    // Cycle Logic: Prioritize persisted_cycle_tag
+                    let displayCycle = txn.persisted_cycle_tag || cycleLabel;
+                    if (displayCycle === '-' || !displayCycle) {
+                      displayCycle = 'None';
+                    }
 
                     if (context === 'account' && accountId) {
                       if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
@@ -1209,8 +1242,8 @@ export function UnifiedTransactionTable({
                         <CustomTooltip content={`${txn.source_name ?? 'Unknown'} ➡️ ${txn.destination_name ?? 'Unknown'}`}>
                           <div className="flex items-center gap-2 cursor-help min-w-[150px]">
                             {txn.source_name && sourceIcon}
-                            {txn.source_name && txn.destination_name && <span className="text-xl">➡️</span>}
-                            {txn.destination_name && destIcon}
+                            {txn.source_name && <span className="text-xl">➡️</span>}
+                            {destIcon}
                           </div>
                         </CustomTooltip>
                       );
@@ -1234,34 +1267,45 @@ export function UnifiedTransactionTable({
                               </div>
                             )
                           )}
-                          <CustomTooltip content={txn.account_name}>
-                            {displayAccountId ? (
-                              <Link
-                                href={`/accounts/${displayAccountId}`}
-                                onClick={e => e.stopPropagation()}
-                                className="truncate max-w-[120px] cursor-pointer font-medium hover:text-blue-600 transition-colors"
-                              >
-                                {txn.account_name ?? 'Unknown'}
-                              </Link>
-                            ) : (
-                              <span className="truncate max-w-[120px] cursor-help">
-                                {txn.account_name ?? 'Unknown'}
-                              </span>
-                            )}
-                          </CustomTooltip>
-                          {cycleLabel !== "-" && (
-                            <CustomTooltip content={`Cycle: ${cycleLabel}`}>
-                              <span className="inline-flex items-center rounded-md bg-slate-50 px-1.5 py-0.5 text-xs font-medium text-slate-500 border border-slate-100 truncate max-w-[80px]">
-                                {cycleLabel}
+                          <div className="flex items-center justify-between gap-2 min-w-0 w-full">
+                            <CustomTooltip content={txn.account_name}>
+                              {displayAccountId ? (
+                                <Link
+                                  href={`/accounts/${displayAccountId}`}
+                                  onClick={e => e.stopPropagation()}
+                                  className="truncate max-w-[120px] cursor-pointer font-medium hover:text-blue-600 transition-colors"
+                                >
+                                  {txn.account_name ?? 'Unknown'}
+                                </Link>
+                              ) : (
+                                <span className="truncate max-w-[120px] cursor-help">
+                                  {txn.account_name ?? 'Unknown'}
+                                </span>
+                              )}
+                            </CustomTooltip>
+
+
+                            <CustomTooltip content={`Cycle: ${displayCycle}`}>
+                              <span className={cn(
+                                "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium border truncate max-w-[80px] w-fit shrink-0",
+                                displayCycle === 'None'
+                                  ? "bg-slate-100 text-slate-400 border-slate-200"
+                                  : "bg-blue-50 text-blue-600 border-blue-100"
+                              )}>
+                                {displayCycle}
                               </span>
                             </CustomTooltip>
-                          )}
+                          </div>
+
+
+                          {
+                            txn.is_installment && (
+                              <CustomTooltip content="Installment Linked">
+                                <Link2 className="h-3 w-3 text-blue-500 ml-1" />
+                              </CustomTooltip>
+                            )
+                          }
                         </div>
-                        {txn.is_installment && (
-                          <CustomTooltip content="Installment Linked">
-                            <Link2 className="h-3 w-3 text-blue-500 ml-1" />
-                          </CustomTooltip>
-                        )}
                       </div>
                     );
                   }
@@ -1273,7 +1317,7 @@ export function UnifiedTransactionTable({
                     if (!personName) return <span className="text-slate-400">-</span>
 
                     const content = (
-                      <div className="flex items-center gap-2 min-w-[120px]">
+                      <div className="flex flex-col gap-1 min-w-[120px]">
                         <div className="flex items-center gap-2">
                           {personAvatar ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -1289,11 +1333,11 @@ export function UnifiedTransactionTable({
                           )}
                           <span className="font-medium text-slate-700 hover:text-blue-600 transition-colors">{personName}</span>
                         </div>
-                        {/* Tag Merged Inline */}
+                        {/* Tag Full Badge */}
                         {txn.tag && (
-                          <CustomTooltip content={txn.tag}>
-                            <Tag className="h-3 w-3 text-slate-400" />
-                          </CustomTooltip>
+                          <span className="inline-flex items-center rounded-md bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 border border-purple-100 w-fit">
+                            {txn.tag}
+                          </span>
                         )}
                       </div>
                     )
@@ -1313,13 +1357,7 @@ export function UnifiedTransactionTable({
                   case "tag":
                     return (
                       <div className="flex flex-wrap gap-1 min-w-[180px]">
-                        {cycleLabel !== "-" && (
-                          <CustomTooltip content="Cycle">
-                            <span className="inline-block items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 border border-blue-100 cursor-help">
-                              {cycleLabel}
-                            </span>
-                          </CustomTooltip>
-                        )}
+                        {/* Removed duplicate cycle label here since it's in Account now */}
                         {txn.tag && (
                           <CustomTooltip content={txn.tag}>
                             <span className="inline-block items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 border border-slate-200 cursor-help whitespace-normal break-words">
@@ -1338,11 +1376,24 @@ export function UnifiedTransactionTable({
                             <CreditCard className="h-4 w-4" />
                           </Link>
                         )}
-                        {!txn.tag && cycleLabel === "-" && !txn.is_installment && !txn.installment_plan_id && <span className="text-slate-400">-</span>}
+                        {!txn.tag && !txn.is_installment && !txn.installment_plan_id && <span className="text-slate-400">-</span>}
                       </div>
                     )
                   case "amount":
-                    return amountValue
+                    return (
+                      <div className="flex flex-col">
+                        {amountValue}
+                        {(txn.cashback_share_percent || txn.cashback_share_fixed) && (
+                          <span className="text-[10px] text-slate-400 whitespace-nowrap flex items-center gap-1">
+                            🎁
+                            {txn.cashback_share_percent ? `${txn.cashback_share_percent * 100}%` : ''}
+                            {txn.cashback_share_percent && txn.cashback_share_fixed ? ' + ' : ''}
+                            {txn.cashback_share_fixed ? numberFormatter.format(txn.cashback_share_fixed) : ''}
+                          </span>
+                        )}
+                      </div>
+                    );
+
                   case "back_info":
                     if (txn.type === 'transfer' || txn.type === 'repayment' || txn.type === 'debt') return <span className="text-slate-300">-</span>
                     if (!percentRaw && !fixedRaw && typeof txn.profit !== 'number') return <span className="text-slate-300">-</span>
@@ -1414,17 +1465,27 @@ export function UnifiedTransactionTable({
                     return (
                       <div className="flex flex-col">
                         <span className={cn("font-bold", amountClass)}>{numberFormatter.format(final)}</span>
+                        {typeof txn.profit === 'number' && txn.profit !== 0 && (
+                          <div className="inline-flex items-center rounded-md bg-emerald-50 px-1 py-0.5 text-[10px] font-bold text-emerald-600 border border-emerald-100 mt-0.5 w-fit whitespace-nowrap">
+                            🤑 {numberFormatter.format(txn.profit)}
+                          </div>
+                        )}
+                        {typeof txn.bank_back === 'number' && txn.bank_back > 0 && (
+                          <div className="inline-flex items-center rounded-md bg-blue-50 px-1 py-0.5 text-[10px] font-bold text-blue-600 border border-blue-100 mt-0.5 w-fit whitespace-nowrap">
+                            🏦 {numberFormatter.format(txn.bank_back)}
+                          </div>
+                        )}
                         {(percent > 0 || fixed > 0) && (
                           <div className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 border border-slate-200 mt-0.5 w-fit whitespace-nowrap">
                             {percent > 0 && fixed > 0 ? (
                               // Case 3: Both % and Fixed
-                              <span>{percent}% + {numberFormatter.format(fixed)} = {numberFormatter.format(final)}</span>
+                              <span>{percent}% + {numberFormatter.format(fixed)}</span>
                             ) : percent > 0 ? (
                               // Case 2: Only % (Show formula: % * Amount = Final)
-                              <span>{percent}% * {numberFormatter.format(Math.abs(txn.amount))} = {numberFormatter.format(final)}</span>
+                              <span>{percent}%</span>
                             ) : (
                               // Case 1: Only Fixed (Show label)
-                              <span>Fix Amount = {numberFormatter.format(fixed)}</span>
+                              <span>Fix {numberFormatter.format(fixed)}</span>
                             )}
                           </div>
                         )}
@@ -1552,180 +1613,189 @@ export function UnifiedTransactionTable({
         </Table>
       </div>
 
-      {isCustomizerOpen && (
-        <>
-          <div
-            className="fixed inset-0 z-30 bg-black/10"
-            onClick={() => setIsCustomizerOpen(false)}
-          />
-          <div
-            className="absolute right-2 top-12 z-40 w-80 rounded-lg border border-slate-200 bg-white p-4 shadow-xl"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-sm font-semibold text-slate-800">Customize columns</p>
-                <p className="text-xs text-slate-500">Show/hide and resize</p>
-              </div>
-              <button
-                className="text-xs text-blue-600 hover:text-blue-800"
-                onClick={resetColumns}
-              >
-                Reset
-              </button>
-            </div>
-
-            <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-              {defaultColumns.map(col => (
-                <div key={col.key} className="flex items-center justify-between gap-2">
-                  <label className="flex items-center gap-2 text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={visibleColumns[col.key]}
-                      onChange={() => toggleColumnVisibility(col.key)}
-                      disabled={col.key === "task"}
-                    />
-                    <span>{col.key === "task" ? "Task (always on)" : col.label}</span>
-                  </label>
-                  <input
-                    type="range"
-                    min={col.minWidth ?? 80}
-                    max={360}
-                    value={columnWidths[col.key]}
-                    onChange={e => updateColumnWidth(col.key, Number(e.target.value))}
-                    className="flex-1 accent-blue-500"
-                  />
-                  <span className="w-12 text-right text-xs text-slate-500">{columnWidths[col.key]}px</span>
+      {
+        isCustomizerOpen && (
+          <>
+            <div
+              className="fixed inset-0 z-30 bg-black/10"
+              onClick={() => setIsCustomizerOpen(false)}
+            />
+            <div
+              className="absolute right-2 top-12 z-40 w-80 rounded-lg border border-slate-200 bg-white p-4 shadow-xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Customize columns</p>
+                  <p className="text-xs text-slate-500">Show/hide and resize</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
-      {editingTxn && editingInitialValues && createPortal(
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4 py-4 sm:py-10"
-          onClick={() => setEditingTxn(null)}
-        >
-          <div
-            className="flex w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden max-h-[90vh]"
-            onClick={event => event.stopPropagation()}
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-white z-20">
-              <h3 className="text-lg font-semibold text-slate-900">Edit Transaction</h3>
-              <button
-                className="rounded px-2 py-1 text-slate-500 transition hover:bg-slate-100"
-                onClick={() => setEditingTxn(null)}
-                aria-label="Close"
-              >
-                X
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200">
-              <TransactionForm
-                accounts={accounts}
-                categories={categories}
-                people={people}
-                shops={shops}
-                transactionId={editingTxn.id}
-                initialValues={editingInitialValues}
-                mode="edit"
-                onSuccess={handleEditSuccess}
-              />
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {confirmVoidTarget && createPortal(
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
-          onClick={closeVoidDialog}
-        >
-          <div
-            className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
-            onClick={event => event.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold text-slate-900">Void transaction?</h3>
-            <p className="mt-2 text-sm text-slate-600">
-              This action will mark the transaction as void and adjust the balances accordingly.
-            </p>
-            {voidError && (
-              <p className="mt-2 text-sm text-red-600">{voidError}</p>
-            )}
-            <div className="mt-4 flex justify-end gap-2">
-              <button
-                className="rounded-md px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100"
-                onClick={closeVoidDialog}
-                disabled={isVoiding}
-              >
-                Keep
-              </button>
-              <button
-                className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-70"
-                onClick={handleVoidConfirm}
-                disabled={isVoiding}
-              >
-                {isVoiding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Void Transaction
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {confirmCancelTarget && createPortal(
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
-          onClick={() => setConfirmCancelTarget(null)}
-        >
-          <div
-            className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
-            onClick={event => event.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold text-slate-900">Cancel Order (Full Refund)?</h3>
-            <p className="mt-2 text-sm text-slate-600">
-              This will request a full refund of {numberFormatter.format(Math.abs(confirmCancelTarget.original_amount ?? confirmCancelTarget.amount ?? 0))} and mark the order as cancelled.
-            </p>
-            <p className="mt-2 text-xs text-amber-600">
-              Money will stay in "Pending" account until you confirm receipt.
-            </p>
-            {voidError && (
-              <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-800">
-                {voidError}
+                <button
+                  className="text-xs text-blue-600 hover:text-blue-800"
+                  onClick={resetColumns}
+                >
+                  Reset
+                </button>
               </div>
-            )}
-            <div className="mt-4 flex gap-2">
-              <button
-                className="flex-1 rounded-md bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
-                onClick={() => setConfirmCancelTarget(null)}
-                disabled={isVoiding}
-              >
-                Cancel
-              </button>
-              <button
-                className="flex-1 rounded-md bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:opacity-50"
-                onClick={() => handleCancelOrderConfirm(false)}
-                disabled={isVoiding}
-              >
-                {isVoiding ? 'Processing...' : 'Pending (Wait)'}
-              </button>
-              <button
-                className="flex-1 rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
-                onClick={() => handleCancelOrderConfirm(true)}
-                disabled={isVoiding}
-              >
-                {isVoiding ? 'Processing...' : 'Received (Instant)'}
-              </button>
+
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                {defaultColumns.map(col => (
+                  <div key={col.key} className="flex items-center justify-between gap-2">
+                    <label className="flex items-center gap-2 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={visibleColumns[col.key]}
+                        onChange={() => toggleColumnVisibility(col.key)}
+                        disabled={col.key === "task"}
+                      />
+                      <span>{col.key === "task" ? "Task (always on)" : col.label}</span>
+                    </label>
+                    <input
+                      type="range"
+                      min={col.minWidth ?? 80}
+                      max={360}
+                      value={columnWidths[col.key]}
+                      onChange={e => updateColumnWidth(col.key, Number(e.target.value))}
+                      className="flex-1 accent-blue-500"
+                    />
+                    <span className="w-12 text-right text-xs text-slate-500">{columnWidths[col.key]}px</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
-      {refundFormTxn &&
+          </>
+        )
+      }
+      {
+        editingTxn && editingInitialValues && createPortal(
+          <div
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4 py-4 sm:py-10"
+            onClick={() => setEditingTxn(null)}
+          >
+            <div
+              className="flex w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden max-h-[90vh]"
+              onClick={event => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-white z-20">
+                <h3 className="text-lg font-semibold text-slate-900">Edit Transaction</h3>
+                <button
+                  className="rounded px-2 py-1 text-slate-500 transition hover:bg-slate-100"
+                  onClick={() => setEditingTxn(null)}
+                  aria-label="Close"
+                >
+                  X
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200">
+                <TransactionForm
+                  accounts={accounts}
+                  categories={categories}
+                  people={people}
+                  shops={shops}
+                  transactionId={editingTxn.id}
+                  initialValues={editingInitialValues}
+                  mode="edit"
+                  onSuccess={handleEditSuccess}
+                />
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      }
+
+      {
+        confirmVoidTarget && createPortal(
+          <div
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+            onClick={closeVoidDialog}
+          >
+            <div
+              className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
+              onClick={event => event.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-slate-900">Void transaction?</h3>
+              <p className="mt-2 text-sm text-slate-600">
+                This action will mark the transaction as void and adjust the balances accordingly.
+              </p>
+              {voidError && (
+                <p className="mt-2 text-sm text-red-600">{voidError}</p>
+              )}
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  className="rounded-md px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-100"
+                  onClick={closeVoidDialog}
+                  disabled={isVoiding}
+                >
+                  Keep
+                </button>
+                <button
+                  className="inline-flex items-center justify-center rounded-md bg-red-600 px-3 py-1 text-sm font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-70"
+                  onClick={handleVoidConfirm}
+                  disabled={isVoiding}
+                >
+                  {isVoiding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Void Transaction
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      }
+
+      {
+        confirmCancelTarget && createPortal(
+          <div
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4"
+            onClick={() => setConfirmCancelTarget(null)}
+          >
+            <div
+              className="w-full max-w-sm rounded-lg bg-white p-5 shadow-2xl"
+              onClick={event => event.stopPropagation()}
+            >
+              <h3 className="text-lg font-semibold text-slate-900">Cancel Order (Full Refund)?</h3>
+              <p className="mt-2 text-sm text-slate-600">
+                This will request a full refund of {numberFormatter.format(Math.abs(confirmCancelTarget.original_amount ?? confirmCancelTarget.amount ?? 0))} and mark the order as cancelled.
+              </p>
+              <p className="mt-2 text-xs text-amber-600">
+                Money will stay in "Pending" account until you confirm receipt.
+              </p>
+              {voidError && (
+                <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-800">
+                  {voidError}
+                </div>
+              )}
+              <div className="mt-4 flex gap-2">
+                <button
+                  className="flex-1 rounded-md bg-slate-100 px-4 py-1 text-sm font-semibold text-slate-700 transition hover:bg-slate-200"
+                  onClick={() => setConfirmCancelTarget(null)}
+                  disabled={isVoiding}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="flex-1 rounded-md bg-amber-500 px-4 py-1 text-sm font-semibold text-white transition hover:bg-amber-600 disabled:opacity-50"
+                  onClick={() => handleCancelOrderConfirm(false)}
+                  disabled={isVoiding}
+                >
+                  {isVoiding ? 'Processing...' : 'Pending (Wait)'}
+                </button>
+                <button
+                  className="flex-1 rounded-md bg-emerald-600 px-4 py-1 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-50"
+                  onClick={() => handleCancelOrderConfirm(true)}
+                  disabled={isVoiding}
+                >
+                  {isVoiding ? 'Processing...' : 'Received (Instant)'}
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      }
+      {
+        refundFormTxn &&
         (() => {
           const pendingLine = refundFormTxn.transaction_lines?.find(
             line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
@@ -1794,8 +1864,10 @@ export function UnifiedTransactionTable({
             </div>,
             document.body
           )
-        })()}
-      {bulkDialog?.open &&
+        })()
+      }
+      {
+        bulkDialog?.open &&
         createPortal(
           <div
             className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 px-4"
@@ -1817,7 +1889,7 @@ export function UnifiedTransactionTable({
               </p>
               <div className="mt-4 flex justify-end gap-2">
                 <button
-                  className="rounded-md px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100"
+                  className="rounded-md px-3 py-1 text-sm text-slate-600 transition hover:bg-slate-100"
                   onClick={() => {
                     if (isVoiding || isRestoring || isDeleting) {
                       stopBulk.current = true
@@ -1829,7 +1901,7 @@ export function UnifiedTransactionTable({
                   {isVoiding || isRestoring || isDeleting ? 'Stop' : 'Cancel'}
                 </button>
                 <button
-                  className={`inline-flex items-center justify-center rounded-md px-3 py-2 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-70 ${bulkDialog.mode === 'restore' ? 'bg-green-600 hover:bg-green-500' : 'bg-red-600 hover:bg-red-500'
+                  className={`inline-flex items-center justify-center rounded-md px-3 py-1 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:opacity-70 ${bulkDialog.mode === 'restore' ? 'bg-green-600 hover:bg-green-500' : 'bg-red-600 hover:bg-red-500'
                     }`}
                   onClick={() => executeBulk(bulkDialog.mode)}
                   disabled={isVoiding || isRestoring || isDeleting}
@@ -1841,7 +1913,8 @@ export function UnifiedTransactionTable({
             </div>
           </div>,
           document.body
-        )}
-    </div>
+        )
+      }
+    </div >
   )
 }

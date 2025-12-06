@@ -17,14 +17,14 @@ export type CashbackTransaction = {
   shopLogoUrl?: string | null
   categoryName?: string
   categoryIcon?: string | null
-  categoryImageUrl?: string | null
+  categoryLogoUrl?: string | null
   personName?: string | null
 }
 
 export type CashbackCard = {
   accountId: string
   accountName: string
-  accountImageUrl?: string | null
+  accountLogoUrl?: string | null
   currentSpend: number
   totalEarned: number
   sharedAmount: number

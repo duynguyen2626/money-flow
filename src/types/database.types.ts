@@ -58,28 +58,61 @@ export interface Database {
           id: string
           occurred_at: string
           note: string | null
+          amount: number
+          type: 'income' | 'expense' | 'transfer' | 'debt' | 'repayment'
+          account_id: string
+          target_account_id: string | null
+          category_id: string | null
+          person_id: string | null
+          metadata: Json | null
+          created_by: string | null
           status: 'posted' | 'pending' | 'void' | 'waiting_refund' | 'refunded' | 'completed'
           tag: string | null
           created_at: string
           shop_id: string | null
+          persisted_cycle_tag: string | null
+          is_installment: boolean | null
+          installment_plan_id: string | null
         }
         Insert: {
           id?: string
           occurred_at: string
           note?: string | null
+          amount: number
+          type: 'income' | 'expense' | 'transfer' | 'debt' | 'repayment'
+          account_id: string
+          target_account_id?: string | null
+          category_id?: string | null
+          person_id?: string | null
+          metadata?: Json | null
+          created_by?: string | null
           status?: 'posted' | 'pending' | 'void' | 'waiting_refund' | 'refunded' | 'completed'
           tag?: string | null
           created_at?: string
           shop_id?: string | null
+          persisted_cycle_tag?: string | null
+          is_installment?: boolean | null
+          installment_plan_id?: string | null
         }
         Update: {
           id?: string
           occurred_at?: string
           note?: string | null
+          amount?: number
+          type?: 'income' | 'expense' | 'transfer' | 'debt' | 'repayment'
+          account_id?: string
+          target_account_id?: string | null
+          category_id?: string | null
+          person_id?: string | null
+          metadata?: Json | null
+          created_by?: string | null
           status?: 'posted' | 'pending' | 'void' | 'waiting_refund' | 'refunded' | 'completed'
           tag?: string | null
           created_at?: string
           shop_id?: string | null
+          persisted_cycle_tag?: string | null
+          is_installment?: boolean | null
+          installment_plan_id?: string | null
         }
       }
       shops: {
@@ -168,7 +201,7 @@ export interface Database {
           type: 'expense' | 'income'
           parent_id: string | null
           icon: string | null
-          image_url: string | null
+          logo_url: string | null
           created_at: string
         }
         Insert: {
@@ -177,7 +210,7 @@ export interface Database {
           type: 'expense' | 'income'
           parent_id?: string | null
           icon?: string | null
-          image_url?: string | null
+          logo_url?: string | null
           created_at?: string
         }
         Update: {
@@ -186,7 +219,7 @@ export interface Database {
           type?: 'expense' | 'income'
           parent_id?: string | null
           icon?: string | null
-          image_url?: string | null
+          logo_url?: string | null
           created_at?: string
         }
       }

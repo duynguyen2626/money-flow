@@ -38,7 +38,7 @@ export type DashboardStats = {
     name: string
     value: number
     icon?: string | null
-    image_url?: string | null
+    logo_url?: string | null
   }>
   topDebtors: Array<{
     id: string
@@ -134,70 +134,80 @@ export async function getDashboardStats(
       ) || 0
 
     // ========================================================================
-    // 2. MONTHLY SPEND (Query transaction_lines, NOT transactions)
+    // 2. MONTHLY SPEND (Query transactions directly)
     // ========================================================================
-    const { data: expenseLines, error: spendError } = await supabase
-      .from('transaction_lines')
-      .select(
-        `
-        amount,
-        type,
-        categories!inner(id, name, icon, image_url, type),
-        transactions!inner(occurred_at, status)
-      `
-      )
-      .eq('type', 'debit')
-      .gte('transactions.occurred_at', startOfMonth.toISOString())
-      .lte('transactions.occurred_at', endOfMonth.toISOString())
-      .neq('transactions.status', 'void')
-      .eq('categories.type', 'expense')
+    const { data: expenseTxns, error: spendError } = await supabase
+      .from('transactions')
+      .select('amount, category_name:categories(name)')
+      .eq('type', 'expense')
+      .gte('occurred_at', startOfMonth.toISOString())
+      .lte('occurred_at', endOfMonth.toISOString())
+      .neq('status', 'void')
 
     if (spendError) throw spendError
 
-    // Exclude system categories (Transfer, Credit Payment, etc.)
-    const excludedCategories = ['Transfer', 'Credit Payment', 'Loan', 'Repayment']
-    const filteredExpenseLines = (expenseLines as any[])?.filter(
-      (line: any) =>
-        !excludedCategories.includes(line.categories?.name)
-    ) || []
+    // Exclude system categories if tracked by name (though usually Type=Expense is enough)
+    // In strict single table, Transfer is type='transfer', not expense.
+    // So type='expense' is already filtered.
 
-    const monthlySpend = filteredExpenseLines.reduce(
-      (sum, line) => sum + Math.abs(line.amount || 0),
+    const monthlySpend = (expenseTxns as any[])?.reduce(
+      (sum, tx) => sum + Math.abs(tx.amount || 0),
       0
-    )
+    ) || 0
 
     // ========================================================================
     // 3. SPENDING BY CATEGORY (For Chart)
     // ========================================================================
+    // We need to fetch category details for the chart
+    const { data: categoryStats, error: catError } = await supabase
+      .from('transactions')
+      .select(`
+        amount,
+        categories (
+          id, name, icon, logo_url, type
+        )
+      `)
+      .eq('type', 'expense')
+      .gte('occurred_at', startOfMonth.toISOString())
+      .lte('occurred_at', endOfMonth.toISOString())
+      .neq('status', 'void')
+
+    if (catError) throw catError
+
     const categoryMap = new Map<
       string,
       {
         name: string
         value: number
         icon?: string | null
-        image_url?: string | null
+        logo_url?: string | null
       }
     >()
 
-    filteredExpenseLines.forEach((line: any) => {
-      const categoryId = line.categories?.id
-      const categoryName = line.categories?.name || 'Uncategorized'
-      const categoryIcon = line.categories?.icon
-      const categoryImageUrl = line.categories?.image_url
-      const amount = Math.abs(line.amount || 0)
+      ; (categoryStats as any[])?.forEach((tx: any) => {
+        // Supabase returns array or single object for joined relation?
+        // Assuming 'categories' is an object because transactions have 1 category_id
+        const cat = tx.categories
+        if (!cat) return
 
-      if (categoryMap.has(categoryId)) {
-        const existing = categoryMap.get(categoryId)!
-        existing.value += amount
-      } else {
-        categoryMap.set(categoryId, {
-          name: categoryName,
-          value: amount,
-          icon: categoryIcon,
-          image_url: categoryImageUrl,
-        })
-      }
-    })
+        const categoryId = cat.id
+        const categoryName = cat.name || 'Uncategorized'
+        const categoryIcon = cat.icon
+        const categoryLogoUrl = cat.logo_url
+        const amount = Math.abs(tx.amount || 0)
+
+        if (categoryMap.has(categoryId)) {
+          const existing = categoryMap.get(categoryId)!
+          existing.value += amount
+        } else {
+          categoryMap.set(categoryId, {
+            name: categoryName,
+            value: amount,
+            icon: categoryIcon,
+            logo_url: categoryLogoUrl,
+          })
+        }
+      })
 
     const spendingByCategory = Array.from(categoryMap.values())
       .sort((a, b) => b.value - a.value)
@@ -206,26 +216,18 @@ export async function getDashboardStats(
     // ========================================================================
     // 4. MONTHLY INCOME
     // ========================================================================
-    const { data: incomeLines, error: incomeError } = await supabase
-      .from('transaction_lines')
-      .select(
-        `
-        amount,
-        type,
-        categories!inner(type),
-        transactions!inner(occurred_at, status)
-      `
-      )
-      .eq('type', 'debit')
-      .gte('transactions.occurred_at', startOfMonth.toISOString())
-      .lte('transactions.occurred_at', endOfMonth.toISOString())
-      .neq('transactions.status', 'void')
-      .eq('categories.type', 'income')
+    const { data: incomeTxns, error: incomeError } = await supabase
+      .from('transactions')
+      .select('amount')
+      .eq('type', 'income')
+      .gte('occurred_at', startOfMonth.toISOString())
+      .lte('occurred_at', endOfMonth.toISOString())
+      .neq('status', 'void')
 
     if (incomeError) throw incomeError
     const monthlyIncome =
-      (incomeLines as any[])?.reduce(
-        (sum, line) => sum + Math.abs(line.amount || 0),
+      (incomeTxns as any[])?.reduce(
+        (sum, tx) => sum + Math.abs(tx.amount || 0),
         0
       ) || 0
 
@@ -274,15 +276,21 @@ export async function getDashboardStats(
     let outstandingList: DashboardStats['outstandingByCycle'] = []
 
     if (debtorAccountIds.length > 0) {
-      const { data: debtLines, error: debtLinesError } = await supabase
-        .from('transaction_lines')
-        .select('account_id, amount, type, transactions!inner(tag, occurred_at, status)')
-        .in('account_id', debtorAccountIds)
-        .eq('type', 'debit')
-        .neq('transactions.status', 'void')
-        .order('occurred_at', { ascending: false, foreignTable: 'transactions' })
+      // In new schema: Debt = Money I lent.
+      // Transactions where target_account_id is the Debt Account?
+      // Or if `account_id` is Debt Account, and we have a negative balance?
+      // Wait, topDebtors comes from 'accounts' table with type='debt'.
+      // We want to find why they owe us.
+      // Query transactions interacting with these accounts.
 
-      if (!debtLinesError && debtLines) {
+      const { data: debtTxns, error: debtTxnsError } = await supabase
+        .from('transactions')
+        .select('target_account_id, amount, tag, occurred_at')
+        .in('target_account_id', debtorAccountIds)
+        .neq('status', 'void')
+        .order('occurred_at', { ascending: false })
+
+      if (!debtTxnsError && debtTxns) {
         // Group by (AccountId + Tag)
         const mapKey = (accId: string, tag: string) => `${accId}::${tag}`
         const cycleMap = new Map<string, {
@@ -290,12 +298,12 @@ export async function getDashboardStats(
           tag: string
           amount: number
           occurred_at: string | null
-        }>()
+        }>();
 
-        debtLines.forEach((line: any) => {
-          const accountId = line.account_id
-          const tagValue = line.transactions?.tag
-          const occurredAt = line.transactions?.occurred_at
+        (debtTxns as any[]).forEach((tx: any) => {
+          const accountId = tx.target_account_id
+          const tagValue = tx.tag
+          const occurredAt = tx.occurred_at
           const parsedDate = occurredAt ? new Date(occurredAt) : null
 
           // Determine label: Tag > Month/Year > "Debt"
@@ -306,7 +314,8 @@ export async function getDashboardStats(
             label = format(parsedDate, 'MMM yy').toUpperCase()
           }
 
-          const amount = Math.abs(line.amount || 0)
+          // Amount is inflow to debt account (Lending), so it increases debt.
+          const amount = Math.abs(tx.amount || 0)
           const key = mapKey(accountId, label)
 
           if (!cycleMap.has(key)) {
@@ -327,7 +336,7 @@ export async function getDashboardStats(
 
         // Convert map to list and enrich with person info
         outstandingList = Array.from(cycleMap.values())
-          .map(item => {
+          .map((item: any) => {
             const debtor = topDebtors.find(d => d.id === item.account_id)
             return {
               id: `${item.account_id}-${item.tag}`,
@@ -351,6 +360,7 @@ export async function getDashboardStats(
     // ========================================================================
     // 7. PENDING REFUNDS (System Account Balance)
     // ========================================================================
+    // Use account current_balance directly, or fetch from transactions
     const { data: refundAccount, error: refundAccountError } = await supabase
       .from('accounts')
       .select('current_balance')
@@ -363,18 +373,16 @@ export async function getDashboardStats(
 
     const refundBalance = (refundAccount as { current_balance: number } | null)?.current_balance || 0
 
-    // Get top 3 pending refund transactions
+    // Get top 3 pending refund transactions (Transactions targeting this account?)
+    // Refund flow: Account -> Refund System Account.
+    // So target_account_id = PENDING_REFUNDS.
+
     const { data: refundTransactions, error: refundTxError } = await supabase
-      .from('transaction_lines')
-      .select(
-        `
-        amount,
-        transactions!inner(id, note, occurred_at, status)
-      `
-      )
-      .eq('account_id', SYSTEM_ACCOUNTS.PENDING_REFUNDS)
-      .eq('type', 'debit')
-      .neq('transactions.status', 'void')
+      .from('transactions')
+      .select('id, note, amount, occurred_at')
+      .eq('target_account_id', SYSTEM_ACCOUNTS.PENDING_REFUNDS)
+      .neq('status', 'void')
+      .order('occurred_at', { ascending: false })
       .limit(3)
 
     if (refundTxError) {
@@ -382,85 +390,88 @@ export async function getDashboardStats(
     }
 
     const topRefundTransactions =
-      (refundTransactions as any[])
-        ?.sort((a: any, b: any) =>
-          new Date(b.transactions.occurred_at).getTime() - new Date(a.transactions.occurred_at).getTime()
-        )
-        .map((line: any) => ({
-          id: line.transactions.id,
-          note: line.transactions.note,
-          amount: Math.abs(line.amount || 0),
-          occurred_at: line.transactions.occurred_at,
-        })) || []
+      (refundTransactions as any[])?.map((tx: any) => ({
+        id: tx.id,
+        note: tx.note,
+        amount: Math.abs(tx.amount || 0),
+        occurred_at: tx.occurred_at,
+      })) || []
 
     // ========================================================================
     // 8. PENDING BATCHES (Count and Total Amount)
     // ========================================================================
-    const { data: pendingBatchItems, error: batchError } = await supabase
-      .from('batch_items')
-      .select('amount')
-      .eq('status', 'pending')
-
-    if (batchError) throw batchError
-
-    const pendingBatchCount = (pendingBatchItems as any[])?.length || 0
-    const pendingBatchAmount =
-      (pendingBatchItems as any[])?.reduce(
-        (sum, item) => sum + Math.abs(item.amount || 0),
-        0
-      ) || 0
-
-    // ========================================================================
-    // 8b. FUNDED BATCH ITEMS (Pending confirmation, grouped by bank)
-    // ========================================================================
-    const { data: fundedBatches, error: fundedBatchError } = await supabase
-      .from('batches')
-      .select('id')
-      .eq('status', 'funded')
-
-    if (fundedBatchError) throw fundedBatchError
-
-    const fundedBatchIds = (fundedBatches as any[])?.map(b => b.id) || []
+    // WRAPPED IN SAFE BLOCK since batch_items might be missing
+    let pendingBatchCount = 0
+    let pendingBatchAmount = 0
     let fundedBatchItemsGrouped: DashboardStats['fundedBatchItems'] = []
 
-    if (fundedBatchIds.length > 0) {
-      const { data: fundedItems, error: fundedItemsError } = await supabase
+    try {
+      const { data: pendingBatchItems, error: batchError } = await supabase
         .from('batch_items')
-        .select('id, amount, receiver_name, note, target_account_id, accounts!batch_items_target_account_id_fkey(name)')
-        .in('batch_id', fundedBatchIds)
+        .select('amount')
         .eq('status', 'pending')
-        .order('target_account_id')
 
-      if (!fundedItemsError && fundedItems) {
-        // Group by target_account_id
-        const groupedMap = new Map<string, any>()
-
-        for (const item of fundedItems as any[]) {
-          const accountId = item.target_account_id
-          const accountName = item.accounts?.name || 'Unknown Account'
-
-          if (!groupedMap.has(accountId)) {
-            groupedMap.set(accountId, {
-              id: accountId,
-              account_id: accountId,
-              account_name: accountName,
-              items: [],
-              totalAmount: 0
-            })
-          }
-
-          const group = groupedMap.get(accountId)!
-          group.items.push({
-            id: item.id,
-            amount: item.amount,
-            receiver_name: item.receiver_name,
-            note: item.note
-          })
-          group.totalAmount += Math.abs(item.amount || 0)
-        }
-
-        fundedBatchItemsGrouped = Array.from(groupedMap.values())
+      if (!batchError) {
+        pendingBatchCount = (pendingBatchItems as any[])?.length || 0
+        pendingBatchAmount =
+          (pendingBatchItems as any[])?.reduce(
+            (sum, item) => sum + Math.abs(item.amount || 0),
+            0
+          ) || 0
       }
+
+      // ========================================================================
+      // 8b. FUNDED BATCH ITEMS (Pending confirmation, grouped by bank)
+      // ========================================================================
+      const { data: fundedBatches, error: fundedBatchError } = await supabase
+        .from('batches')
+        .select('id')
+        .eq('status', 'funded')
+
+      if (!fundedBatchError) {
+        const fundedBatchIds = (fundedBatches as any[])?.map(b => b.id) || []
+        if (fundedBatchIds.length > 0) {
+          const { data: fundedItems, error: fundedItemsError } = await supabase
+            .from('batch_items')
+            .select('id, amount, receiver_name, note, target_account_id, accounts!batch_items_target_account_id_fkey(name)')
+            .in('batch_id', fundedBatchIds)
+            .eq('status', 'pending')
+            .order('target_account_id')
+
+          if (!fundedItemsError && fundedItems) {
+            // Group by target_account_id
+            const groupedMap = new Map<string, any>()
+
+            for (const item of fundedItems as any[]) {
+              const accountId = item.target_account_id
+              const accountName = item.accounts?.name || 'Unknown Account'
+
+              if (!groupedMap.has(accountId)) {
+                groupedMap.set(accountId, {
+                  id: accountId,
+                  account_id: accountId,
+                  account_name: accountName,
+                  items: [],
+                  totalAmount: 0
+                })
+              }
+
+              const group = groupedMap.get(accountId)!
+              group.items.push({
+                id: item.id,
+                amount: item.amount,
+                receiver_name: item.receiver_name,
+                note: item.note
+              })
+              group.totalAmount += Math.abs(item.amount || 0)
+            }
+
+            fundedBatchItemsGrouped = Array.from(groupedMap.values())
+          }
+        }
+      }
+    } catch (batchErr) {
+      console.warn('Dashboard: Batch items fetch failed (likely table missing), skipping batch stats.', batchErr)
     }
 
     // ========================================================================
@@ -474,14 +485,10 @@ export async function getDashboardStats(
         note,
         occurred_at,
         status,
-        transaction_lines (
-            amount,
-            type,
-            account_id,
-            categories (name, icon, type),
-            accounts (type)
-        )
-      `
+        amount,
+        type,
+        categories (name, icon, type)
+        `
       )
       .neq('status', 'void')
       .order('occurred_at', { ascending: false })
@@ -489,62 +496,31 @@ export async function getDashboardStats(
 
     if (recentTxError) throw recentTxError
 
-    const recentTransactions =
-      (recentTx as any[])?.map((tx) => {
-        const lines = tx.transaction_lines || []
+    const recentTransactions = (recentTx as any[])?.map((tx) => {
+      let categoryName = 'Uncategorized'
+      let categoryIcon = null
+      let type = tx.type
 
-        // Try to find category lines (Expense/Income)
-        const categoryLines = lines.filter((l: any) => l.categories)
+      if (tx.categories) {
+        categoryName = tx.categories.name
+        categoryIcon = tx.categories.icon
+      }
 
-        let amount = 0
-        let type = 'transfer' // Default
-        let categoryName = 'Uncategorized'
-        let categoryIcon = null
+      // Improve display logic
+      if (type === 'debt') categoryName = 'Lend'
+      if (type === 'repayment') categoryName = 'Repayment'
+      if (type === 'transfer') categoryName = 'Transfer'
 
-        if (categoryLines.length > 0) {
-          // It's an Expense or Income
-          amount = categoryLines.reduce(
-            (sum: number, l: any) => sum + Math.abs(l.amount || 0),
-            0
-          )
-          const firstCat = categoryLines[0].categories
-          type = firstCat.type // 'expense' or 'income'
-          categoryName = firstCat.name
-          categoryIcon = firstCat.icon
-        } else {
-          // No category -> Transfer, Debt, or Repayment
-          const debitLines = lines.filter((l: any) => l.type === 'debit')
-          amount = debitLines.reduce(
-            (sum: number, l: any) => sum + Math.abs(l.amount || 0),
-            0
-          )
-
-          // Check for Debt accounts
-          const debtLine = lines.find((l: any) => l.accounts?.type === 'debt')
-          if (debtLine) {
-            if (debtLine.type === 'debit') {
-              type = 'debt' // Lend
-              categoryName = 'Lend'
-            } else {
-              type = 'repayment' // Repay
-              categoryName = 'Repayment'
-            }
-          } else {
-            type = 'transfer'
-            categoryName = 'Transfer'
-          }
-        }
-
-        return {
-          id: tx.id,
-          amount,
-          description: tx.note,
-          occurred_at: tx.occurred_at,
-          type: type as 'income' | 'expense' | 'transfer' | 'debt' | 'repayment',
-          category_name: categoryName,
-          category_icon: categoryIcon,
-        }
-      }) || []
+      return {
+        id: tx.id,
+        amount: Math.abs(tx.amount || 0),
+        description: tx.note,
+        occurred_at: tx.occurred_at,
+        type: type as 'income' | 'expense' | 'transfer' | 'debt' | 'repayment',
+        category_name: categoryName,
+        category_icon: categoryIcon,
+      }
+    }) || []
 
     // ========================================================================
     // RETURN COMPLETE STATS

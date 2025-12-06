@@ -241,10 +241,10 @@ export default function CashbackDetailsPage() {
         {/* 1. Account Info */}
         <div className="flex items-center w-full xl:w-auto border-b xl:border-b-0 border-slate-100 pb-4 xl:pb-0">
           <Link href={`/accounts/${id}`} className="flex items-center gap-4 group">
-            {cardData.accountImageUrl ? (
+            {cardData.accountLogoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={cardData.accountImageUrl}
+                src={cardData.accountLogoUrl}
                 alt={cardData.accountName}
                 className="h-14 w-auto object-contain rounded-md group-hover:opacity-80 transition-opacity"
               />

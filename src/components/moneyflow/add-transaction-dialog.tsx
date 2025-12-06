@@ -2,6 +2,7 @@
 
 import { MouseEvent, ReactNode, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { Slot } from '@radix-ui/react-slot'
 import { TransactionForm } from './transaction-form'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
@@ -22,6 +23,7 @@ type AddTransactionDialogProps = {
   triggerContent?: ReactNode;
   onOpen?: () => void;
   listenToUrlParams?: boolean;
+  asChild?: boolean;
 }
 
 export function AddTransactionDialog({
@@ -40,6 +42,7 @@ export function AddTransactionDialog({
   triggerContent,
   onOpen,
   listenToUrlParams,
+  asChild = false,
 }: AddTransactionDialogProps) {
   const [open, setOpen] = useState(false)
   const router = useRouter()
@@ -94,14 +97,16 @@ export function AddTransactionDialog({
   }
 
   const defaultClassName =
-    triggerContent
+    triggerContent && !asChild
       ? 'inline-flex items-center justify-center rounded-md p-0 bg-transparent text-inherit focus:outline-none focus-visible:ring-0'
       : 'rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600'
 
+  const Comp = asChild ? Slot : 'button'
+
   return (
     <>
-      <button
-        type="button"
+      <Comp
+        type={asChild ? undefined : "button"}
         className={buttonClassName || defaultClassName}
         onMouseDown={onOpen}
         onClick={event => {
@@ -112,7 +117,7 @@ export function AddTransactionDialog({
         aria-label={typeof buttonText === 'string' ? buttonText : 'Add transaction'}
       >
         {triggerContent ?? buttonText}
-      </button>
+      </Comp>
 
       {open &&
         createPortal(

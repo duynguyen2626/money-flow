@@ -39,7 +39,7 @@ export type TransactionRow = {
         categories?: {
             name: string
             type: 'income' | 'expense'
-            image_url?: string | null
+            logo_url?: string | null
             icon?: string | null
         } | null
         metadata?: Json | null
@@ -210,7 +210,7 @@ export function mapTransactionRow(
     let displayType: TransactionWithDetails['displayType'] | undefined
     let categoryName: string | undefined
     let categoryIcon: string | undefined
-    let categoryImageUrl: string | undefined
+    let categoryLogoUrl: string | undefined
     let accountName: string | undefined
 
     let categoryLine = lines.find(line => line && Boolean(line.category_id))
@@ -241,7 +241,7 @@ export function mapTransactionRow(
         if (categoryLine && categoryLine.categories) {
             categoryName = categoryLine.categories.name
             categoryIcon = categoryLine.categories.icon ?? undefined
-            categoryImageUrl = categoryLine.categories.image_url ?? undefined
+            categoryLogoUrl = categoryLine.categories.logo_url ?? undefined
         }
     } else if (context?.primaryLineId && accountLine) {
         // A. If we are in Split View (primaryLineId present), we trust the primary line.
@@ -256,7 +256,7 @@ export function mapTransactionRow(
         if (accountLine.categories) {
             categoryName = accountLine.categories.name
             categoryIcon = accountLine.categories.icon ?? undefined
-            categoryImageUrl = accountLine.categories.image_url ?? undefined
+            categoryLogoUrl = accountLine.categories.logo_url ?? undefined
             if (accountLine.categories.type) {
                 type = accountLine.categories.type as any;
             }
@@ -264,7 +264,7 @@ export function mapTransactionRow(
     } else if (categoryLine && categoryLine.categories) {
         categoryName = categoryLine.categories.name
         categoryIcon = categoryLine.categories.icon ?? undefined
-        categoryImageUrl = categoryLine.categories.image_url ?? undefined
+        categoryLogoUrl = categoryLine.categories.logo_url ?? undefined
 
         if (categoryLine.categories.type === 'expense') {
             type = 'expense'
@@ -349,14 +349,14 @@ export function mapTransactionRow(
     const shopDefaultCategory = ((txn as any).shops?.categories as {
         id?: string
         name?: string | null
-        image_url?: string | null
+        logo_url?: string | null
         icon?: string | null
     } | null) ?? null
 
     if (!categoryName && shopDefaultCategory) {
         categoryName = shopDefaultCategory.name ?? undefined
         categoryIcon = shopDefaultCategory.icon ?? undefined
-        categoryImageUrl = shopDefaultCategory.image_url ?? undefined
+        categoryLogoUrl = shopDefaultCategory.logo_url ?? undefined
         categoryId = shopDefaultCategory.id ?? categoryId
     }
 
@@ -448,7 +448,7 @@ export function mapTransactionRow(
         occurred_at: txn.occurred_at,
         note: txn.note || null,
         status: txn.status,
-        tag: tag,
+        tag: tag || null,
         created_at: txn.created_at,
         amount: displayAmount,
         type,
@@ -456,7 +456,7 @@ export function mapTransactionRow(
         display_type: display_direction,
         category_name: categoryName,
         category_icon: categoryIcon ?? null,
-        category_image_url: categoryImageUrl ?? null,
+        category_logo_url: categoryLogoUrl ?? null,
         account_name: accountName,
         source_account_name: creditAccountLine?.accounts?.name ?? null,
         destination_account_name: debitAccountLine?.accounts?.name ?? null,
@@ -482,5 +482,11 @@ export function mapTransactionRow(
         bank_back: bankBack,
         bank_rate: bankRate,
         profit: profit,
+        account_id: accountLine?.account_id ?? '',
+        target_account_id: null,
+        created_by: null,
+        persisted_cycle_tag: null,
+        is_installment: null,
+        installment_plan_id: null,
     }
 }

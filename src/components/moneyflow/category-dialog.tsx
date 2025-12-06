@@ -32,7 +32,7 @@ const formSchema = z.object({
     name: z.string().min(1, "Name is required"),
     type: z.enum(["expense", "income"]),
     icon: z.string().optional(),
-    image_url: z.string().optional(),
+    logo_url: z.string().optional(),
     mcc_codes: z.string().optional(),
 })
 
@@ -59,7 +59,7 @@ export function CategoryDialog({
             name: "",
             type: defaultType,
             icon: "",
-            image_url: "",
+            logo_url: "",
             mcc_codes: "",
         },
     })
@@ -73,7 +73,7 @@ export function CategoryDialog({
                 name: category.name,
                 type: category.type,
                 icon: category.icon || "",
-                image_url: category.image_url || "",
+                logo_url: category.logo_url || "",
                 mcc_codes: mccCodesStr,
             })
         } else {
@@ -81,7 +81,7 @@ export function CategoryDialog({
                 name: "",
                 type: defaultType,
                 icon: "",
-                image_url: "",
+                logo_url: "",
                 mcc_codes: "",
             })
         }
@@ -99,7 +99,7 @@ export function CategoryDialog({
                 name: values.name,
                 type: values.type,
                 icon: values.icon,
-                image_url: values.image_url,
+                logo_url: values.logo_url,
                 mcc_codes: mccCodesArray.length > 0 ? mccCodesArray : undefined,
             };
 
@@ -160,7 +160,7 @@ export function CategoryDialog({
                             />
                             <FormField
                                 control={form.control}
-                                name="image_url"
+                                name="logo_url"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Image URL</FormLabel>
