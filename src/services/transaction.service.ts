@@ -616,9 +616,8 @@ export async function requestRefund(
   const originalRow = originalTxn as FlatTransactionRow;
   const originalMeta = (originalRow.metadata || {}) as Record<string, any>;
 
-  // 1a. Format Note with Short ID (GD2)
-  const shortId = originalRow.id.substring(0, 4).toUpperCase();
-  const formattedNote = `[${shortId}] Refund Request: ${originalRow.note ?? ''}`;
+  // 1a. Format Note with ID (GD2) - Updated to include full ID or consistent format
+  const formattedNote = `[${originalRow.id}] Refund Request: ${originalRow.note ?? ''}`;
 
   // 2. Create Refund Transaction (Income)
   // Park in PENDING_REFUNDS account initially
@@ -663,12 +662,10 @@ export async function requestRefund(
     }
   };
 
-  // If Full Refund, we MIGHT want to unlink debt, but let's keep it simple for now.
-  // The user says "Enable Refund 2.0 with standard 3 steps".
-  // Pending -> Confirm is the key.
-
+  // If Full Refund, unlink person to clear debt
   if (isFullRefund) {
     updatePayload.status = 'waiting_refund'; // Orange/Amber badge
+    updatePayload.person_id = null;
   }
 
   await (supabase.from('transactions').update as any)(updatePayload).eq('id', transactionId);
@@ -699,7 +696,7 @@ export async function confirmRefund(
 
   // Extract Short ID from Original Transaction ID (if available)
   const originalTxnId = pendingMeta.original_transaction_id as string | undefined;
-  const shortId = originalTxnId ? originalTxnId.substring(0, 4).toUpperCase() : '????';
+  const noteId = originalTxnId ? `[${originalTxnId}]` : `[${pendingTransactionId.substring(0, 8)}]`;
 
   // 2. Update GD2 -> Completed
   const { error: updateError } = await (supabase
@@ -721,7 +718,7 @@ export async function confirmRefund(
     type: 'income',
     account_id: targetAccountId, // The Real Bank
     category_id: 'e0000000-0000-0000-0000-000000000095', // REFUND_CAT_ID
-    note: `[${shortId}] Refund Received`,
+    note: `${noteId} Refund Received`,
     status: 'posted',
     created_by: null,
     metadata: {

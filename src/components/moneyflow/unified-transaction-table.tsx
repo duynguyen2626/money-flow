@@ -1028,7 +1028,7 @@ export function UnifiedTransactionTable({
                                 <span>Cancel Order (100%)</span>
                               </button>
                             )}
-                            {isPendingRefund && (
+                            {(isPendingRefund || (effectiveStatus === 'pending' && txn.account_id === REFUND_PENDING_ACCOUNT_ID)) && (
                               <button
                                 className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-green-700 hover:bg-green-50"
                                 onClick={event => {
@@ -1037,7 +1037,7 @@ export function UnifiedTransactionTable({
                                 }}
                               >
                                 <CheckCircle2 className="h-4 w-4" />
-                                <span>Confirm Money Received</span>
+                                <span>Confirm Refund</span>
                               </button>
                             )}
 
