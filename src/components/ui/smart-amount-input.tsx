@@ -61,6 +61,11 @@ export function SmartAmountInput({
         // Remove commas for evaluation
         const rawInput = inputValue.replace(/,/g, '')
 
+        if (isSelectingSuggestion.current) {
+            isSelectingSuggestion.current = false
+            return
+        }
+
         if (!rawInput) {
             onChange(undefined)
             return
@@ -113,23 +118,25 @@ export function SmartAmountInput({
 
         // If it's a number, format it with commas
         if (raw && !isNaN(Number(raw))) {
-            // Check if user is typing a decimal or just deleted a comma
-            // Simple approach: format only if it looks like a complete integer for now
-            // But to support typing "1000", we should format.
-            // However, formatting while typing can be tricky with cursor position.
-            // For now, let's just allow raw input and format on blur, OR
-            // format if it's a simple integer addition.
+            // Fix: Use parseFloat to support decimals
+            const num = parseFloat(raw)
 
-            // User request: "Amount nhập (đang focus on) không có ký tự phân cách thập phân" -> implies they WANT it.
-            // Let's try to format it if it's a valid integer.
-            const num = parseInt(raw)
-            if (!isNaN(num)) {
-                setInputValue(new Intl.NumberFormat('en-US').format(num))
-            } else {
-                setInputValue(val)
-            }
+            // Logic: If the user is typing, we only format if it's a "clean" integer and we want to enforce commas.
+            // But formatting while typing can be annoying if it moves cursor or changes decimals.
+            // Best practice: Update internal state with what user typed, only format on blur.
+            // OR: Format integers but leave decimals alone if they are being typed.
+
+            // Current approach (modified):
+            // If the value ends with '.', don't format (user is typing decimal).
+            // If the value has a fractional part being typed (e.g. "1.50"), formatting might strip the 0.
+
+            // SAFE MODE: Just set val to inputValue so the input reflects exactly what user types.
+            // We only trigger onChange with the parsed number.
+            setInputValue(val)
+            onChange(num)
         } else {
             setInputValue(val)
+            onChange(undefined)
         }
     }
 
@@ -150,6 +157,8 @@ export function SmartAmountInput({
             num * 1000000
         ].filter(n => n < 100_000_000_000) // Cap at reasonable amount
     }, [inputValue, isFocused])
+
+    const isSelectingSuggestion = React.useRef(false)
 
     const textParts = React.useMemo(() => {
         const currentVal = isFocused ? evaluateMath(inputValue.replace(/,/g, '')) : value
@@ -205,7 +214,8 @@ export function SmartAmountInput({
                                 type="button"
                                 className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 flex justify-between items-center"
                                 onMouseDown={(e) => {
-                                    e.preventDefault() // Prevent blur
+                                    e.preventDefault() // Prevent focus loss immediately
+                                    isSelectingSuggestion.current = true
                                     onChange(s)
                                     setInputValue(new Intl.NumberFormat('en-US').format(s))
                                     setIsFocused(false)

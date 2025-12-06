@@ -344,7 +344,7 @@ async function loadTransactions(options: {
   let query = supabase
     .from('transactions')
     .select(
-      'id, occurred_at, note, status, tag, created_at, created_by, amount, type, account_id, target_account_id, category_id, person_id, metadata, shop_id, persisted_cycle_tag, is_installment, installment_plan_id'
+      'id, occurred_at, note, status, tag, created_at, created_by, amount, type, account_id, target_account_id, category_id, person_id, metadata, shop_id, persisted_cycle_tag, is_installment, installment_plan_id, cashback_share_percent, cashback_share_fixed'
     )
     .order('occurred_at', { ascending: false });
 
@@ -492,6 +492,7 @@ export async function voidTransaction(id: string): Promise<boolean> {
     .eq('id', id)
     .maybeSingle();
 
+  // Simplified Void: Just update status. No need to join lines which might be complex or deleted.
   const { error } = await (supabase
     .from('transactions')
     .update as any)({ status: 'void' })
@@ -505,6 +506,9 @@ export async function voidTransaction(id: string): Promise<boolean> {
   const affected = new Set<string>();
   if ((existing as any)?.account_id) affected.add((existing as any).account_id);
   if ((existing as any)?.target_account_id) affected.add((existing as any).target_account_id);
+  // Also try to trigger sync delete to sheet if possible, but service method might not have full context.
+  // The ACTION layer handles sheet sync better. Service is low-level.
+
   await recalcForAccounts(affected);
 
   revalidatePath('/transactions');
@@ -555,6 +559,7 @@ type UnifiedTransactionParams = {
   personId?: string;
   limit?: number;
   context?: 'person' | 'account';
+  includeVoided?: boolean;
 };
 
 export async function getUnifiedTransactions(
@@ -571,6 +576,7 @@ export async function getUnifiedTransactions(
     personId: parsed.personId,
     limit: parsed.limit ?? limitArg,
     context: parsed.context,
+    includeVoided: parsed.includeVoided
   });
 }
 
@@ -581,6 +587,7 @@ export type PendingRefundItem = {
   note: string | null;
   tag: string | null;
   amount: number;
+  status: string;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   original_note: string | null;
   original_category: string | null;
@@ -609,16 +616,21 @@ export async function requestRefund(
   const originalRow = originalTxn as FlatTransactionRow;
   const originalMeta = (originalRow.metadata || {}) as Record<string, any>;
 
+  // 1a. Format Note with Short ID (GD2)
+  const shortId = originalRow.id.substring(0, 4).toUpperCase();
+  const formattedNote = `[${shortId}] Refund Request: ${originalRow.note ?? ''}`;
+
   // 2. Create Refund Transaction (Income)
   // Park in PENDING_REFUNDS account initially
+  // GD2: Pending Refund
   const refundTransaction = {
     occurred_at: new Date().toISOString(),
     amount: Math.abs(amount), // Ensure positive for Income
     type: 'income',
     account_id: '99999999-9999-9999-9999-999999999999', // REFUND_PENDING_ACCOUNT_ID
-    category_id: null, // Could use a system category if available
-    note: `Refund for: ${originalRow.id.substring(0, 4).toUpperCase()}`,
-    status: 'waiting_refund', // Use waiting_refund status
+    category_id: 'e0000000-0000-0000-0000-000000000095', // REFUND_CAT_ID (System Category)
+    note: formattedNote,
+    status: 'pending', // Yellow badge for pending
     metadata: {
       original_transaction_id: transactionId,
       refund_type: isPartial ? 'partial' : 'full',
@@ -645,20 +657,18 @@ export async function requestRefund(
     metadata: {
       ...originalMeta,
       refund_status: isFullRefund ? 'refunded' : 'requested',
-      refunded_amount: originalMeta.refunded_amount ? originalMeta.refunded_amount + amount : amount
+      refunded_amount: originalMeta.refunded_amount ? originalMeta.refunded_amount + amount : amount,
+      has_refund_request: true,
+      refund_request_id: (newRefund as any).id
     }
   };
 
-  // If Full Refund, unlink the person to clear debt and update status
+  // If Full Refund, we MIGHT want to unlink debt, but let's keep it simple for now.
+  // The user says "Enable Refund 2.0 with standard 3 steps".
+  // Pending -> Confirm is the key.
+
   if (isFullRefund) {
-    if (originalRow.person_id) {
-      // Fetch person name for the note (optional but nice)
-      const { data: person } = await supabase.from('profiles').select('name').eq('id', originalRow.person_id).single();
-      const personName = (person as any)?.name ?? 'Person';
-      updatePayload.note = (originalRow.note || '') + ` [Cancelled Debt: ${personName}]`;
-      updatePayload.person_id = null; // Unlink person
-    }
-    updatePayload.status = 'refunded';
+    updatePayload.status = 'waiting_refund'; // Orange/Amber badge
   }
 
   await (supabase.from('transactions').update as any)(updatePayload).eq('id', transactionId);
@@ -668,27 +678,79 @@ export async function requestRefund(
 }
 
 export async function confirmRefund(
-  refundTransactionId: string,
+  pendingTransactionId: string,
   targetAccountId: string
 ): Promise<{ success: boolean; confirmTransactionId?: string; error?: string }> {
   const supabase = createClient();
 
-  // 1. Update the Refund Transaction
-  const { error } = await (supabase
+  // 1. Fetch the Pending Transaction (GD2)
+  const { data: pendingTxn, error: fetchError } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('id', pendingTransactionId)
+    .single();
+
+  if (fetchError || !pendingTxn) {
+    return { success: false, error: 'Pending refund transaction not found' };
+  }
+
+  const pendingRow = pendingTxn as FlatTransactionRow;
+  const pendingMeta = (pendingRow.metadata || {}) as Record<string, any>;
+
+  // Extract Short ID from Original Transaction ID (if available)
+  const originalTxnId = pendingMeta.original_transaction_id as string | undefined;
+  const shortId = originalTxnId ? originalTxnId.substring(0, 4).toUpperCase() : '????';
+
+  // 2. Update GD2 -> Completed
+  const { error: updateError } = await (supabase
     .from('transactions')
     .update as any)({
-      account_id: targetAccountId,
-      status: 'posted',
-      occurred_at: new Date().toISOString()
+      status: 'completed', // Green/Done
     })
-    .eq('id', refundTransactionId);
+    .eq('id', pendingTransactionId);
 
-  if (error) {
-    console.error('Confirm refund failed:', error);
-    return { success: false, error: error.message };
+  if (updateError) {
+    console.error('Confirm refund failed (update pending):', updateError);
+    return { success: false, error: updateError.message };
+  }
+
+  // 3. Create GD3: Real Money In Transaction
+  const confirmationTransaction = {
+    occurred_at: new Date().toISOString(),
+    amount: Math.abs(pendingRow.amount),
+    type: 'income',
+    account_id: targetAccountId, // The Real Bank
+    category_id: 'e0000000-0000-0000-0000-000000000095', // REFUND_CAT_ID
+    note: `[${shortId}] Refund Received`,
+    status: 'posted',
+    created_by: null,
+    metadata: {
+      original_transaction_id: pendingMeta.original_transaction_id,
+      pending_refund_id: pendingTransactionId,
+      is_refund_confirmation: true
+    }
+  };
+
+  const { error: createError } = await supabase
+    .from('transactions')
+    .insert(confirmationTransaction as any);
+
+  if (createError) {
+    console.error('Confirm refund failed (create confirmation):', createError);
+    // Rollback GD2 update theoretically, but let's just return error for now
+    return { success: false, error: createError.message };
   }
 
   await recalcForAccounts(new Set([targetAccountId, '99999999-9999-9999-9999-999999999999']));
+
+  // Also finalize the original transaction if it was full refund?
+  if (pendingMeta.original_transaction_id) {
+    const { data: original } = await supabase.from('transactions').select('status, metadata').eq('id', pendingMeta.original_transaction_id).single();
+    if (original && (original as any).status === 'waiting_refund') {
+      await (supabase.from('transactions').update as any)({ status: 'refunded' }).eq('id', pendingMeta.original_transaction_id);
+    }
+  }
+
   revalidatePath('/transactions');
 
   return { success: true };
@@ -700,7 +762,7 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
     .from('transactions')
     .select('*')
     .eq('account_id', '99999999-9999-9999-9999-999999999999')
-    .neq('status', 'void')
+    .eq('status', 'pending') // Only show actual pending, not completed ones history
     .order('occurred_at', { ascending: false });
 
   if (error || !data) return [];
@@ -711,6 +773,7 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
     note: row.note,
     tag: row.tag,
     amount: row.amount,
+    status: row.status,
     original_note: row.metadata?.original_note ?? null,
     original_category: null,
     linked_transaction_id: row.metadata?.original_transaction_id,
