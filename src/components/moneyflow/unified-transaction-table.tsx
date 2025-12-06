@@ -1172,15 +1172,17 @@ export function UnifiedTransactionTable({
                           )
                           }
                         </div>
-                        <div className="flex flex-col min-w-0">
-                          {txn.note ? (
-                            <span className="text-sm font-medium text-slate-900 truncate" title={txn.note}>
-                              {txn.note}
-                            </span>
-                          ) : (
-                            <span className="text-sm font-medium text-slate-400 italic">No note</span>
-                          )}
-                        </div>
+
+                        <RefundNoteDisplay
+                          note={txn.note}
+                          shopLogoUrl={displayIcon}
+                          shopName={displayName}
+                          accountLogoUrl={txn.destination_logo}
+                          accountName={txn.destination_name}
+                          status={txn.status}
+                          amount={txn.amount}
+                        />
+
                         {/* Copy ID Button - Visible on Hover */}
                         <button
                           onClick={(e) => {

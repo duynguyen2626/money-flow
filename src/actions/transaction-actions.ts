@@ -414,7 +414,9 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
         tag,
         account_id,
         target_account_id,
-        person_id
+        person_id,
+        metadata,
+        status
       `
     )
     .eq('id', id)
@@ -424,6 +426,41 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     console.error('Failed to load transaction for void:', fetchError);
     return false;
   }
+
+  // --- Strict Void Order Logic (3-2-1) ---
+  const meta = parseMetadata((existing as any).metadata);
+  const currentStatus = (existing as any).status;
+
+  // 1. Check if this is GD2 (Pending Refund)
+  if (meta?.refund_confirmed_transaction_id) {
+    const gd3Id = meta.refund_confirmed_transaction_id as string;
+    const { data: gd3 } = await supabase
+      .from('transactions')
+      .select('status')
+      .eq('id', gd3Id)
+      .single();
+
+    if (gd3 && gd3.status !== 'void') {
+      throw new Error(`Cannot void Pending Refund (GD2) because Confirmation (GD3) exists. Please void the confirmation first.`);
+    }
+  }
+
+  // 2. Check if this is GD1 (Original Transaction)
+  // GD1 has 'refund_request_id' pointing to GD2
+  if (meta?.refund_request_id) {
+    const gd2Id = meta.refund_request_id as string;
+    const { data: gd2 } = await supabase
+      .from('transactions')
+      .select('status')
+      .eq('id', gd2Id)
+      .single();
+
+    if (gd2 && gd2.status !== 'void') {
+      throw new Error(`Cannot void Original Transaction (GD1) because Refund Request (GD2) exists. Please void the refund request first.`);
+    }
+  }
+  // --- End Strict Void Order Logic ---
+
 
   // Simplified Void: Just update status.
   const { error: updateError } = await (supabase.from('transactions').update as any)({ status: 'void' }).eq('id', id);

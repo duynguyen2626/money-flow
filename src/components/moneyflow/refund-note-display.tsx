@@ -1,6 +1,7 @@
 'use client'
 
 import { parseRefundNote } from '@/lib/refund-note-parser'
+import { Badge } from '@/components/ui/badge'
 
 type RefundNoteDisplayProps = {
     note: string | null | undefined
@@ -9,6 +10,7 @@ type RefundNoteDisplayProps = {
     accountLogoUrl?: string | null
     accountName?: string | null
     status?: string | null
+    amount?: number
 }
 
 export function RefundNoteDisplay({
@@ -18,57 +20,52 @@ export function RefundNoteDisplay({
     accountLogoUrl,
     accountName,
     status,
+    amount
 }: RefundNoteDisplayProps) {
     const parsed = parseRefundNote(note)
 
-    if (!parsed.isRefund || !parsed.sequence) {
-        return <span className="text-sm text-slate-700 font-medium truncate">{note}</span>
+    if (!parsed.isRefund) {
+        return (
+            <div className="flex flex-col min-w-0">
+                {note ? (
+                    <span className="text-sm font-medium text-slate-900 truncate" title={note}>
+                        {note}
+                    </span>
+                ) : (
+                    <span className="text-sm font-medium text-slate-400 italic">No note</span>
+                )}
+            </div>
+        )
     }
 
-    const isConfirmed = parsed.sequence === 3
+    // Determine if this is a "Money In" (Confirmation) based on keywords or context
+    // In new logic, confirmation notes often have "Refund Received"
+    const isConfirmation = parsed.cleanNote.toLowerCase().includes('received') || parsed.sequence === 3;
+    const isRequest = parsed.cleanNote.toLowerCase().includes('request');
+
+    // Badge Color Logic
+    let badgeClass = "bg-slate-100 text-slate-700 border-slate-200"; // Default
+    if (isConfirmation) badgeClass = "bg-green-100 text-green-800 border-green-200";
+    else if (isRequest) badgeClass = "bg-amber-100 text-amber-800 border-amber-200";
+    else badgeClass = "bg-blue-100 text-blue-800 border-blue-200"; // Intermediate/Pending
 
     return (
-        <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5">
-                <span className="text-xs font-semibold text-slate-600 shrink-0">
-                    {parsed.sequence}.
-                </span>
-                <span className="inline-flex items-center rounded-md bg-purple-100 px-1.5 py-0.5 text-[10px] font-mono font-bold text-purple-800 shrink-0">
-                    {parsed.groupId}
-                </span>
-            </div>
+        <div className="flex items-center gap-2 max-w-full overflow-hidden">
+            <Badge variant="outline" className={`shrink-0 px-1.5 py-0 h-5 font-mono text-[10px] ${badgeClass}`}>
+                {parsed.groupId}
+            </Badge>
 
-            {!isConfirmed && (
-                <div className="flex items-center gap-2">
-                    {shopLogoUrl ? (
-                        <img src={shopLogoUrl} alt={shopName || ''} className="h-8 w-8 object-contain rounded-none" />
-                    ) : (
-                        <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-[10px] font-semibold text-slate-600 rounded-none">
-                            {shopName ? shopName.charAt(0).toUpperCase() : '🛍️'}
-                        </span>
+            {isConfirmation ? (
+                 <div className="flex items-center gap-1 min-w-0">
+                    <span className="text-xs font-semibold text-green-700 truncate">Received</span>
+                    {accountLogoUrl && (
+                        <img src={accountLogoUrl} alt={accountName || ''} className="h-4 w-4 object-contain" />
                     )}
-                    <span className="text-xs text-slate-600 truncate" title={parsed.cleanNote}>
-                        {shopName && parsed.cleanNote.startsWith(shopName)
-                            ? parsed.cleanNote.slice(shopName.length).replace(/^[\s-:]+/, '')
-                            : parsed.cleanNote}
-                    </span>
-                </div>
-            )}
-
-            {isConfirmed && (
-                <div className="flex items-center gap-2">
-                    <span className="text-lg leading-none shrink-0">➡️</span>
-                    {accountLogoUrl ? (
-                        <img src={accountLogoUrl} alt={accountName || ''} className="h-8 w-8 object-contain rounded-none" />
-                    ) : (
-                        <span className="flex h-8 w-8 items-center justify-center bg-slate-100 text-sm font-bold border rounded-none">
-                            {(accountName ?? '?').charAt(0).toUpperCase()}
-                        </span>
-                    )}
-                    <span className="text-xs font-semibold text-slate-700 truncate">
-                        {accountName || 'Account'}
-                    </span>
-                </div>
+                 </div>
+            ) : (
+                <span className="text-sm font-medium text-slate-900 truncate" title={parsed.cleanNote}>
+                    {parsed.cleanNote}
+                </span>
             )}
         </div>
     )
