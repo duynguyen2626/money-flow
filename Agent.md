@@ -7,12 +7,14 @@ Refund Bugs: Notes lack [ID] badges. "Confirm Refund" menu item is missing for P
 Logic Flaws: Full Refund doesn't unlink Person correctly. Voiding allows deleting intermediate transactions out of order.
 
 Audit: User needs to track Edits (History).
+Logic Bug: Full Refund logic fails to UNLINK the person from the original transaction.
 
 Objective:
 
 Fix requestRefund (Note Format & Unlink).
 
 Fix voidTransaction (Constraint Chain).
+I. BACKEND: FORMAT NOTE & UNLINK LOGIC (src/services/transaction.service.ts)
 
 Implement logHistory on Edit/Void.
 
@@ -27,6 +29,19 @@ Note Format:
 Get Short ID of Original: original.id.split('-')[0].toUpperCase().
 
 Format: Refund Request [${ShortID}].
+Unlink Logic (Crucial):
+
+IF isFullRefund AND originalTxn.person_id:
+
+Fetch Person Name.
+
+Update GD1 (Original):
+
+person_id: NULL (Remove debt).
+
+note: ${originalTxn.note} [Cancelled Debt: ${PersonName}].
+
+status: 'waiting_refund'.
 
 If Debt: Append  - Cancel Debt: ${PersonName}.
 
@@ -55,6 +70,21 @@ transaction_id: id
 snapshot_before: current data from DB.
 
 change_type: 'edit'
+Action: Open ConfirmRefundDialog (reuse Refund mode or dedicated dialog).
+
+2. Update TransactionForm for Confirm
+
+If opening for "Confirm":
+
+mode: 'confirm_refund'.
+
+from_account: PENDING_REFUNDS_ID (Fixed).
+
+to_account: Selectable (Real Bank).
+
+amount: Fixed (from pending txn).
+
+note: [${shortId}] Refund Received.
 
 Hook: Call this inside updateTransaction and voidTransaction.
 
@@ -91,3 +121,14 @@ Service: Harden Refund/Void logic.
 UI: Update Menu Conditions.
 
 Build: Verify.
+Service: Fix requestRefund (Add Unlink logic & Note formatting).
+
+UI: Add "Confirm Refund" item to the Action Menu for pending rows.
+
+Form: Handle confirm_refund mode to auto-fill Source=System, Target=Selectable.
+
+Test:
+
+Cancel Debt Order -> Original Note should change, Person removed.
+
+See Pending Row -> Click Confirm -> Select Bank -> Money in Bank.
