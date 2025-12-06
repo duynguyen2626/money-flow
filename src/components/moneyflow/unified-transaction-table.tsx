@@ -960,9 +960,19 @@ export function UnifiedTransactionTable({
               // --- Status Logic ---
               let statusIndicator = null;
               let statusTooltip = "";
+              const meta = (txn.metadata as any) || {};
+              const isRefundConfirmation = meta?.is_refund_confirmation === true;
+              const metaRefundStatus = meta?.refund_status;
+
               if (isVoided) { statusIndicator = "🚫"; statusTooltip = "Voided"; }
-              else if (effectiveStatus === 'pending') { statusIndicator = "⏳"; statusTooltip = "Pending"; }
-              else if (effectiveStatus === 'waiting_refund') { statusIndicator = "⏳"; statusTooltip = "Waiting Refund"; }
+              else if (effectiveStatus === 'pending') { statusIndicator = "⏳"; statusTooltip = "Pending Refund"; }
+              else if (effectiveStatus === 'waiting_refund' || metaRefundStatus === 'waiting_refund') { statusIndicator = "⏳"; statusTooltip = "Waiting Refund"; }
+              else if (effectiveStatus === 'completed') { statusIndicator = "✅"; statusTooltip = "Refund Completed"; }
+              else if (effectiveStatus === 'refunded' || metaRefundStatus === 'refunded') { statusIndicator = "💸"; statusTooltip = "Refund Received"; }
+              // GD3: Refund confirmation with posted status
+              else if (isRefundConfirmation && effectiveStatus === 'posted') { statusIndicator = "💰"; statusTooltip = "Money Received"; }
+              // GD1: Has pending refund request (not yet confirmed)
+              else if (meta?.has_refund_request && !metaRefundStatus) { statusIndicator = "📝"; statusTooltip = "Refund Requested"; }
 
               const rowBgClass = isVoided ? "opacity-60 bg-gray-50 scale-[0.99] border-dashed grayscale" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') ? "bg-emerald-50/50" : "";
 
@@ -1088,12 +1098,15 @@ export function UnifiedTransactionTable({
               const cashbackCalc = (Math.abs(Number(originalAmount ?? 0)) * rate) + fixedRaw
               const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
 
-              const finalPrice = Math.max(0, Math.abs(Number(originalAmount ?? 0)) - cashbackAmount)
+              // Final Price: original - cashback. Use Math.max to prevent negative, but only if cashback is reasonable
+              // If cashback > amount, it's likely a configuration error - show the original amount instead
+              const baseAmount = Math.abs(Number(originalAmount ?? 0));
+              const finalPrice = cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount);
 
-              // Cycle Logic
+              // Cycle Logic - Use account_id directly (single-table mode)
               let cycleLabel = "-"
-              const sourceAccountId = txn.transaction_lines?.find(l => l.account_id && l.type === 'credit')?.account_id
-                ?? txn.transaction_lines?.find(l => l.account_id)?.account_id;
+              // In single-table mode, use txn.account_id directly instead of transaction_lines
+              const sourceAccountId = txn.account_id;
 
               if (sourceAccountId) {
                 const acc = accounts.find(a => a.id === sourceAccountId)
@@ -1128,7 +1141,7 @@ export function UnifiedTransactionTable({
                             {typeBadge}
                             {statusIndicator && (
                               <CustomTooltip content={statusTooltip}>
-                                <span className="text-sm cursor-help">{statusIndicator}</span>
+                                <span className="text-sm cursor-help" suppressHydrationWarning>{statusIndicator}</span>
                               </CustomTooltip>
                             )}
                           </div>
@@ -1153,11 +1166,11 @@ export function UnifiedTransactionTable({
                     return (
                       <div className="flex items-center justify-center gap-1 text-xl">
                         <CustomTooltip content={typeBadge}>
-                          <span>{icon}</span>
+                          <span suppressHydrationWarning>{icon}</span>
                         </CustomTooltip>
                         {statusIndicator && (
                           <CustomTooltip content={effectiveStatus}>
-                            <span className="text-sm">{statusIndicator}</span>
+                            <span className="text-sm" suppressHydrationWarning>{statusIndicator}</span>
                           </CustomTooltip>
                         )}
                       </div>
@@ -1177,7 +1190,7 @@ export function UnifiedTransactionTable({
                     }
 
                     return (
-                      <div className="flex items-center gap-2 max-w-[340px] overflow-hidden group">
+                      <div className="flex items-center gap-2 max-w-[340px] overflow-hidden">
                         {refundSeq > 0 && (
                           <span className="inline-flex items-center justify-center rounded-md bg-blue-100 text-blue-700 px-1.5 h-5 text-[10px] font-bold shrink-0 whitespace-nowrap" title={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
                             {refundSeq}. {shortIdBadge}
@@ -1196,16 +1209,18 @@ export function UnifiedTransactionTable({
                           )
                           }
                         </div>
-                        <div className="flex flex-col min-w-0">
+                        <div className="flex flex-col min-w-0 flex-1">
                           {txn.note ? (
-                            <span className="text-sm font-medium text-slate-900 truncate" title={txn.note}>
-                              {txn.note}
-                            </span>
+                            <CustomTooltip content={txn.note}>
+                              <span className="text-sm font-medium text-slate-900 truncate cursor-help">
+                                {txn.note}
+                              </span>
+                            </CustomTooltip>
                           ) : (
                             <span className="text-sm font-medium text-slate-400 italic">No note</span>
                           )}
                         </div>
-                        {/* Copy ID Button - Visible on Hover */}
+                        {/* Copy ID Button - Always Visible, Right-Aligned */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1214,12 +1229,14 @@ export function UnifiedTransactionTable({
                             setTimeout(() => setCopiedId(null), 2000);
                           }}
                           className={cn(
-                            "opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-100 rounded ml-auto text-slate-400 hover:text-slate-600",
-                            copiedId === txn.id && "opacity-100 text-emerald-500 hover:text-emerald-600"
+                            "flex-shrink-0 ml-auto p-1 rounded transition-colors",
+                            copiedId === txn.id
+                              ? "text-emerald-500 hover:text-emerald-600 bg-emerald-50"
+                              : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                           )}
                           title="Copy ID"
                         >
-                          {copiedId === txn.id ? <CheckCheck className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                          {copiedId === txn.id ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                         </button>
                       </div>
                     );
@@ -1377,11 +1394,23 @@ export function UnifiedTransactionTable({
                     if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment' || isRefundTransaction) {
                       // Fix Unknown logic here too
                       const sourceName = txn.source_name ?? 'Unknown';
-                      const destName = txn.destination_name ?? txn.person_name ?? 'Unknown';
+                      const destName = txn.destination_name ?? txn.person_name ?? null;
 
                       // Hide -> Unknown for System Accounts
                       const isSystemSource = txn.account_id === REFUND_PENDING_ACCOUNT_ID || sourceName === 'Pending Refunds';
                       const isSystemDest = txn.target_account_id === REFUND_PENDING_ACCOUNT_ID || destName === 'Pending Refunds';
+
+                      // If no destination (destName is null), show source only without arrow
+                      if (!destName || destName === 'Unknown') {
+                        return (
+                          <div className="flex items-center gap-2 cursor-help min-w-[150px]">
+                            {txn.source_name && sourceIcon}
+                            <span className="text-sm text-slate-700 font-medium">
+                              {txn.source_name ?? 'Unknown'}
+                            </span>
+                          </div>
+                        )
+                      }
 
                       if ((isSystemSource && destName === 'Unknown') || (isSystemDest && sourceName === 'Unknown')) {
                         return (
@@ -1398,8 +1427,8 @@ export function UnifiedTransactionTable({
                         <CustomTooltip content={`${sourceName} ➡️ ${destName}`}>
                           <div className="flex items-center gap-2 cursor-help min-w-[150px]">
                             {txn.source_name && sourceIcon}
-                            {txn.source_name && <span className="text-xl">➡️</span>}
-                            {destIcon}
+                            {txn.source_name && destName && <span className="text-xl">➡️</span>}
+                            {destName && destIcon}
                           </div>
                         </CustomTooltip>
                       );
@@ -1441,7 +1470,10 @@ export function UnifiedTransactionTable({
                             </CustomTooltip>
 
 
-                            {!(visualType === 'income' || (txn.type as string) === 'transfer') && (
+                            {/* Cycle Badge: Always show for expense transactions to help with cashback tracking.
+                                Show "None" if card has no cycle configured.
+                             */}
+                            {(visualType === 'expense' || txn.persisted_cycle_tag) && (
                               <CustomTooltip content={`Cycle: ${displayCycle}`}>
                                 <span className={cn(
                                   "inline-flex items-center rounded-md px-2 py-1 text-xs font-bold border whitespace-nowrap w-fit shrink-0",

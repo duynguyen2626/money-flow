@@ -303,10 +303,17 @@ function mapTransactionRow(
   const person = row.person_id ? lookups.people.get(row.person_id) ?? null : null;
   const shop = row.shop_id ? lookups.shops.get(row.shop_id) ?? null : null;
 
+  // Fix Unknown: If transfer-like but NO destination (no target account AND no person),
+  // force it to act like a simple income/expense so we don't show "Account -> Unknown"
+  let effectiveBaseType = baseType;
+  if (baseType === 'transfer' && !row.target_account_id && !row.person_id) {
+    effectiveBaseType = row.amount >= 0 ? 'income' : 'expense';
+  }
+
   let displayAmount = row.amount;
   if (
     contextAccountId &&
-    baseType === 'transfer' &&
+    effectiveBaseType === 'transfer' &&
     row.target_account_id === contextAccountId &&
     row.account_id !== contextAccountId
   ) {
@@ -314,15 +321,15 @@ function mapTransactionRow(
   }
 
   const displayType: TransactionWithDetails['displayType'] =
-    baseType === 'transfer'
+    effectiveBaseType === 'transfer'
       ? row.target_account_id && contextAccountId === row.target_account_id
         ? 'income'
         : 'expense'
-      : baseType === 'income'
+      : effectiveBaseType === 'income'
         ? 'income'
         : 'expense';
 
-  const lines = buildSyntheticLines(row, baseType, lookups);
+  const lines = buildSyntheticLines(row, effectiveBaseType, lookups);
 
   return {
     ...row,
@@ -513,19 +520,35 @@ export async function voidTransaction(id: string): Promise<boolean> {
     .eq('id', id)
     .maybeSingle();
 
-  // 1. Guard: Check for children (linked transactions)
-  // Check strict equality by building a robust query.
-  // We want to find any transaction where metadata->>original_transaction_id EQUALS id
-  // OR metadata->>pending_refund_id EQUALS id.
-  const { data: children, error: childError } = await supabase
+  // 1. Guard: Check for children (linked transactions) - STRICT CHECK
+  // We must prevent voiding if this transaction is a parent of another active transaction.
+  // This includes:
+  // - linked_transaction_id column pointing to this ID (used by some refund flows)
+  // - Being 'original_transaction_id' of a Refund Request (GD2) in metadata
+  // - Being 'pending_refund_id' of a Refund Confirmation (GD3) in metadata
+
+  // First check linked_transaction_id column directly
+  const { data: linkedChildren } = await supabase
     .from('transactions')
     .select('id, status')
     .neq('status', 'void')
-    .or(`metadata->>original_transaction_id.eq.${id},metadata->>pending_refund_id.eq.${id}`)
+    .eq('linked_transaction_id', id)
     .limit(1);
 
-  if (children && children.length > 0) {
-    throw new Error("Không thể hủy! Tồn tại giao dịch liên quan (VD: Đã xác nhận hoàn tiền). Hãy hủy giao dịch đó trước.");
+  if (linkedChildren && linkedChildren.length > 0) {
+    throw new Error("Không thể hủy giao dịch này vì đã có giao dịch liên quan (VD: Đã xác nhận tiền về). Vui lòng hủy giao dịch nối tiếp trước.");
+  }
+
+  // Also check metadata fields using contains filter (for JSONB)
+  const { data: metaChildren } = await supabase
+    .from('transactions')
+    .select('id, status, metadata')
+    .neq('status', 'void')
+    .or(`metadata.cs.{"original_transaction_id":"${id}"},metadata.cs.{"pending_refund_id":"${id}"}`)
+    .limit(1);
+
+  if (metaChildren && metaChildren.length > 0) {
+    throw new Error("Không thể hủy giao dịch này vì đã có giao dịch liên quan (VD: Đã xác nhận tiền về). Vui lòng hủy giao dịch nối tiếp trước.");
   }
 
   // 2. Log History
@@ -681,9 +704,9 @@ export async function requestRefund(
   const originalRow = originalTxn as FlatTransactionRow;
   const originalMeta = (originalRow.metadata || {}) as Record<string, any>;
 
-  // 1a. Format Note with Short ID (GD2)
+  // 1a. Format Note (GD2) - No prefix ID, badges show ID separately
   const shortId = originalRow.id.split('-')[0].toUpperCase();
-  let formattedNote = `[${shortId}] Refund Request: ${originalRow.note ?? ''}`;
+  let formattedNote = `Refund Request: ${originalRow.note ?? ''}`;
 
   // If original was debt (had person_id), append Cancel Debt info
   if (originalRow.person_id) {
@@ -815,9 +838,11 @@ export async function confirmRefund(
     type: 'income',
     account_id: targetAccountId, // The Real Bank
     category_id: 'e0000000-0000-0000-0000-000000000095', // REFUND_CAT_ID
-    note: `[${shortId}] Refund Received`,
+    note: `Refund Received`,
     status: 'posted',
     created_by: null,
+    // linked_transaction_id column = GD2's ID so void guard can detect it
+    linked_transaction_id: pendingTransactionId,
     metadata: {
       original_transaction_id: pendingMeta.original_transaction_id,
       pending_refund_id: pendingTransactionId,

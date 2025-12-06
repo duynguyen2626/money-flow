@@ -1043,6 +1043,9 @@ export function TransactionForm({
       transactionType !== 'repayment' &&
       ((selectedAccount?.type === 'credit_card' && amountValue > 0) || isVoluntary))
 
+  // Validation: Total cashback must be less than amount
+  const cashbackExceedsAmount = showCashbackInputs && rawShareTotal >= amountValue && amountValue > 0
+
   useEffect(() => {
     if (amountValue <= 0) {
       form.setValue('cashback_share_percent', undefined)
@@ -1706,6 +1709,12 @@ export function TransactionForm({
           Suggest lowering percentage to {suggestedPercent.toFixed(2)}% to not exceed budget.
         </p>
       )}
+      {/* Validation: Cashback >= Amount Warning */}
+      {cashbackExceedsAmount && (
+        <p className="text-xs text-rose-600 font-semibold">
+          ⚠️ Total cashback ({numberFormatter.format(rawShareTotal)}) must be less than amount ({numberFormatter.format(amountValue)}). Please reduce % or fixed amount.
+        </p>
+      )}
       <div className="border-t border-indigo-200/80 pt-2 text-slate-500 space-y-1">
         <p className="text-xs">
           <span className="font-semibold text-slate-700">Cycle:</span> {selectedCycleLabel ?? 'N/A'}
@@ -1940,8 +1949,9 @@ export function TransactionForm({
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-500 disabled:opacity-50"
+              disabled={isSubmitting || cashbackExceedsAmount}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={cashbackExceedsAmount ? "Cashback must be less than amount" : undefined}
             >
               {submitLabel}
             </button>

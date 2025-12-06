@@ -425,7 +425,97 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     return false;
   }
 
-  // Simplified Void: Just update status.
+  // GUARD: Check for child transactions before voiding
+  // 1. Check linked_transaction_id column (GD3 -> GD2 link)
+  const { data: linkedChildren } = await supabase
+    .from('transactions')
+    .select('id, status')
+    .neq('status', 'void')
+    .eq('linked_transaction_id', id)
+    .limit(1);
+
+  if (linkedChildren && linkedChildren.length > 0) {
+    console.error('Cannot void: has child via linked_transaction_id', (linkedChildren as any)[0].id);
+    throw new Error("Không thể hủy giao dịch này vì đã có giao dịch liên quan (VD: Đã xác nhận tiền về). Vui lòng hủy giao dịch nối tiếp trước.");
+  }
+
+  // 2. Check metadata fields (original_transaction_id, pending_refund_id)
+  const { data: metaChildren } = await supabase
+    .from('transactions')
+    .select('id, status')
+    .neq('status', 'void')
+    .or(`metadata.cs.{"original_transaction_id":"${id}"},metadata.cs.{"pending_refund_id":"${id}"}`)
+    .limit(1);
+
+  if (metaChildren && metaChildren.length > 0) {
+    console.error('Cannot void: has child via metadata', (metaChildren as any)[0].id);
+    throw new Error("Không thể hủy giao dịch này vì đã có giao dịch liên quan (VD: Đã xác nhận tiền về). Vui lòng hủy giao dịch nối tiếp trước.");
+  }
+
+  // ROLLBACK LOGIC (Refund Chain)
+  // Fetch full transaction with metadata for rollback
+  const { data: fullTxn } = await supabase
+    .from('transactions')
+    .select('metadata')
+    .eq('id', id)
+    .single();
+
+  const meta = parseMetadata((fullTxn as any)?.metadata);
+
+  // Case A: Voiding Confirmation (GD3) -> Revert Pending Refund (GD2) to 'pending'
+  // AND revert GD1's refund_status to 'waiting_refund' (no longer received)
+  if (meta?.is_refund_confirmation && meta?.pending_refund_id) {
+    await (supabase.from('transactions').update as any)({ status: 'pending' })
+      .eq('id', meta.pending_refund_id);
+    console.log('[Void Rollback] GD3 voided -> GD2 set to pending:', meta.pending_refund_id);
+
+    // Also update GD1's metadata to reflect waiting status
+    if (meta?.original_transaction_id) {
+      const { data: gd1 } = await supabase
+        .from('transactions')
+        .select('metadata')
+        .eq('id', meta.original_transaction_id)
+        .single();
+
+      if (gd1) {
+        const gd1Meta = parseMetadata((gd1 as any)?.metadata) || {};
+        gd1Meta.refund_status = 'waiting_refund'; // Change from 'refunded' to 'waiting'
+        delete gd1Meta.refunded_amount; // Clear the received amount
+
+        await (supabase.from('transactions').update as any)({
+          status: 'posted', // Keep as posted but with waiting_refund metadata
+          metadata: gd1Meta
+        }).eq('id', meta.original_transaction_id);
+        console.log('[Void Rollback] GD3 voided -> GD1 refund_status set to waiting_refund:', meta.original_transaction_id);
+      }
+    }
+  }
+
+  // Case B: Voiding Refund Request (GD2) -> Revert Original (GD1) to 'posted' & Clear Metadata
+  if (meta?.original_transaction_id && !meta?.is_refund_confirmation) {
+    const { data: gd1 } = await supabase
+      .from('transactions')
+      .select('metadata')
+      .eq('id', meta.original_transaction_id)
+      .single();
+
+    if (gd1) {
+      const gd1Meta = parseMetadata((gd1 as any)?.metadata) || {};
+      // Clear refund-related fields
+      delete gd1Meta.refund_status;
+      delete gd1Meta.refunded_amount;
+      delete gd1Meta.has_refund_request;
+      delete gd1Meta.refund_request_id;
+
+      await (supabase.from('transactions').update as any)({
+        status: 'posted',
+        metadata: gd1Meta
+      }).eq('id', meta.original_transaction_id);
+      console.log('[Void Rollback] GD2 voided -> GD1 set to posted:', meta.original_transaction_id);
+    }
+  }
+
+  // Now safe to void
   const { error: updateError } = await (supabase.from('transactions').update as any)({ status: 'void' }).eq('id', id);
 
   if (updateError) {
