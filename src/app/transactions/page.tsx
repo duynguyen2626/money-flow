@@ -1,6 +1,6 @@
 import { getAccounts } from '@/services/account.service'
 import { getCategories } from '@/services/category.service'
-import { getRecentTransactions } from '@/services/transaction.service'
+import { getUnifiedTransactions } from '@/services/transaction.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
@@ -14,7 +14,7 @@ export default async function TransactionsPage() {
     getAccounts(),
     getCategories(),
     getPeople(),
-    getRecentTransactions(50),
+    getUnifiedTransactions({ limit: 100, includeVoided: true }),
     getShops(),
   ])
 

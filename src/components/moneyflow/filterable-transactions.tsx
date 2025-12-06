@@ -264,9 +264,16 @@ export function FilterableTransactions({
         if (!searchTerm) {
             return filteredByCategory;
         }
+        const lowerTerm = searchTerm.toLowerCase();
         return filteredByCategory.filter(txn =>
-            txn.note?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            txn.id.toLowerCase().includes(searchTerm.toLowerCase())
+            txn.note?.toLowerCase().includes(lowerTerm) ||
+            txn.id.toLowerCase().includes(lowerTerm) ||
+            // Search in metadata for linked IDs
+            (txn.metadata && (
+                (typeof (txn.metadata as any).original_transaction_id === 'string' && (txn.metadata as any).original_transaction_id.toLowerCase().includes(lowerTerm)) ||
+                (typeof (txn.metadata as any).pending_refund_id === 'string' && (txn.metadata as any).pending_refund_id.toLowerCase().includes(lowerTerm)) ||
+                (typeof (txn.metadata as any).linked_transaction_id === 'string' && (txn.metadata as any).linked_transaction_id.toLowerCase().includes(lowerTerm))
+            ))
         );
     }, [filteredByCategory, searchTerm]);
 

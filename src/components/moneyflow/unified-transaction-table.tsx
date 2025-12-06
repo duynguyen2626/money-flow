@@ -923,6 +923,20 @@ export function UnifiedTransactionTable({
                 (Boolean(txn.shop_id) || hasShoppingCategory) &&
                 !isFullyRefunded
 
+              // Refund SEQ Logic (Global for row)
+              let refundSeq = 0;
+              if (txnMetadata?.has_refund_request || txn.status === 'waiting_refund') refundSeq = 1;
+              else if (txnMetadata?.original_transaction_id && !txnMetadata.is_refund_confirmation) refundSeq = 2;
+              else if (txnMetadata?.is_refund_confirmation) refundSeq = 3;
+
+              let displayIdForBadge = txn.id;
+              if (refundSeq === 2 || refundSeq === 3) {
+                displayIdForBadge = (txnMetadata?.original_transaction_id as string) || txn.id;
+              }
+              const shortIdBadge = displayIdForBadge.length > 4
+                ? `[${displayIdForBadge.slice(0, 2)}..${displayIdForBadge.slice(-2)}]`
+                : '';
+
               // --- Type Logic ---
               let typeBadge = null;
               if (txn.type === 'repayment') {
@@ -950,7 +964,7 @@ export function UnifiedTransactionTable({
               else if (effectiveStatus === 'pending') { statusIndicator = "⏳"; statusTooltip = "Pending"; }
               else if (effectiveStatus === 'waiting_refund') { statusIndicator = "⏳"; statusTooltip = "Waiting Refund"; }
 
-              const rowBgClass = isVoided ? "" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') ? "bg-emerald-50/50" : "";
+              const rowBgClass = isVoided ? "opacity-60 bg-gray-50 scale-[0.99] border-dashed grayscale" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') ? "bg-emerald-50/50" : "";
 
               const taskCell = (
                 <div className="relative flex justify-end">
@@ -1028,7 +1042,7 @@ export function UnifiedTransactionTable({
                                 <span>Cancel Order (100%)</span>
                               </button>
                             )}
-                            {isPendingRefund && (
+                            {(effectiveStatus === 'pending' && (txn.account_name === 'Pending Refunds' || txn.source_name?.includes('Pending'))) && (
                               <button
                                 className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-green-700 hover:bg-green-50"
                                 onClick={event => {
@@ -1063,13 +1077,18 @@ export function UnifiedTransactionTable({
               )
 
               const voidedTextClass = ""
+
+              // Final Price Logic
+              // Rename calculatedSum -> cashbackAmount for clarity
+              // If cashback > 0, we subtract it.
               const percentRaw = Number(txn.cashback_share_percent ?? 0)
               const fixedRaw = Number(txn.cashback_share_fixed ?? 0)
               // Normalize: if > 1, assume percent (e.g. 2 -> 2% = 0.02 rate), else rate
               const rate = percentRaw > 1 ? percentRaw / 100 : percentRaw
+              const cashbackCalc = (Math.abs(Number(originalAmount ?? 0)) * rate) + fixedRaw
+              const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
 
-              const calculatedSum = txn.cashback_share_amount ?? ((Math.abs(Number(originalAmount ?? 0)) * rate) + fixedRaw)
-              const finalPrice = Math.max(0, Math.abs(Number(originalAmount ?? 0)) - calculatedSum)
+              const finalPrice = Math.max(0, Math.abs(Number(originalAmount ?? 0)) - cashbackAmount)
 
               // Cycle Logic
               let cycleLabel = "-"
@@ -1159,6 +1178,11 @@ export function UnifiedTransactionTable({
 
                     return (
                       <div className="flex items-center gap-2 max-w-[340px] overflow-hidden group">
+                        {refundSeq > 0 && (
+                          <span className="inline-flex items-center justify-center rounded-md bg-blue-100 text-blue-700 px-1.5 h-5 text-[10px] font-bold shrink-0 whitespace-nowrap" title={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
+                            {refundSeq}. {shortIdBadge}
+                          </span>
+                        )}
                         <div className="shrink-0">
                           {displayIcon ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -1201,9 +1225,30 @@ export function UnifiedTransactionTable({
                     );
                   }
                   case "note":
+                    const linkedIdForCopy = (refundSeq === 2 || refundSeq === 3) ? displayIdForBadge : null;
                     return (
-                      <div className="flex flex-col gap-1 max-w-[250px]">
-                        <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 max-w-[250px] group/note">
+                        {/* Linked ID Copy (if exists) */}
+                        {linkedIdForCopy && linkedIdForCopy !== txn.id && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigator.clipboard.writeText(linkedIdForCopy);
+                              setCopiedId(`linked-${txn.id}`);
+                              setTimeout(() => setCopiedId(null), 2000);
+                            }}
+                            className={cn(
+                              "opacity-0 group-hover/note:opacity-100 transition-opacity p-0.5 hover:bg-blue-50 rounded text-blue-400 hover:text-blue-600",
+                              copiedId === `linked-${txn.id}` && "opacity-100 text-emerald-500"
+                            )}
+                            title={`Copy Linked ID: ${linkedIdForCopy}`}
+                          >
+                            {copiedId === `linked-${txn.id}` ? <CheckCheck className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
+                          </button>
+                        )}
+
+                        {/* Note Content */}
+                        <div className="flex items-center gap-2 truncate flex-1">
                           <span className="truncate text-slate-700 font-medium" title={txn.note ?? ''}>
                             {txn.note}
                           </span>
@@ -1213,6 +1258,23 @@ export function UnifiedTransactionTable({
                             </CustomTooltip>
                           )}
                         </div>
+
+                        {/* Transaction ID Copy */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(txn.id);
+                            setCopiedId(txn.id);
+                            setTimeout(() => setCopiedId(null), 2000);
+                          }}
+                          className={cn(
+                            "opacity-0 group-hover/note:opacity-100 transition-opacity p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 ml-1",
+                            copiedId === txn.id && "opacity-100 text-emerald-500"
+                          )}
+                          title={`Copy Transaction ID: ${txn.id}`}
+                        >
+                          {copiedId === txn.id ? <CheckCheck className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                        </button>
                       </div>
                     );
                   case "category": {
@@ -1316,6 +1378,21 @@ export function UnifiedTransactionTable({
                       // Fix Unknown logic here too
                       const sourceName = txn.source_name ?? 'Unknown';
                       const destName = txn.destination_name ?? txn.person_name ?? 'Unknown';
+
+                      // Hide -> Unknown for System Accounts
+                      const isSystemSource = txn.account_id === REFUND_PENDING_ACCOUNT_ID || sourceName === 'Pending Refunds';
+                      const isSystemDest = txn.target_account_id === REFUND_PENDING_ACCOUNT_ID || destName === 'Pending Refunds';
+
+                      if ((isSystemSource && destName === 'Unknown') || (isSystemDest && sourceName === 'Unknown')) {
+                        return (
+                          <div className="flex items-center gap-2 cursor-help min-w-[150px]">
+                            {txn.source_name && sourceIcon}
+                            <span className="text-sm text-slate-500 italic">
+                              {isSystemSource ? (destName === 'Unknown' ? 'Pending Refunds (System)' : sourceName) : destName}
+                            </span>
+                          </div>
+                        )
+                      }
 
                       return (
                         <CustomTooltip content={`${sourceName} ➡️ ${destName}`}>
@@ -1500,15 +1577,15 @@ export function UnifiedTransactionTable({
                         )}
                         {/* Sum and Profit on Bottom */}
                         <div className="flex items-center gap-2">
-                          {calculatedSum > 0 && (
+                          {cashbackAmount > 0 && (
                             <span className="text-emerald-600 font-bold flex items-center gap-1">
                               <Sigma className="h-3 w-3" />
-                              {numberFormatter.format(calculatedSum)}
+                              {numberFormatter.format(cashbackAmount)}
                             </span>
                           )}
                           {typeof txn.profit === 'number' && txn.profit !== 0 && (
                             <>
-                              {calculatedSum > 0 && <span className="text-slate-300">;</span>}
+                              {cashbackAmount > 0 && <span className="text-slate-300">;</span>}
                               <span className={`font-bold flex items-center gap-1 ${txn.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                 🤑 {numberFormatter.format(txn.profit)}
                               </span>

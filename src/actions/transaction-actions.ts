@@ -471,6 +471,41 @@ export async function confirmRefundAction(
   }
 }
 
+export async function getOriginalAccount(refundRequestId: string): Promise<string | null> {
+  const supabase = createClient();
+  const { data: refundTxn } = await supabase.from('transactions').select('metadata').eq('id', refundRequestId).single();
+
+  if (!refundTxn) return null;
+  const meta: any = parseMetadata((refundTxn as any).metadata);
+  const originalId = meta?.original_transaction_id || meta?.linked_transaction_id;
+
+  if (!originalId) return null;
+
+  // Try to get account_id directly from header first
+  const { data: originalTxn } = await supabase
+    .from('transactions')
+    .select(`
+      account_id,
+      transaction_lines (
+        account_id,
+        type,
+        amount
+      )
+    `)
+    .eq('id', originalId)
+    .single();
+
+  if (!originalTxn) return null;
+  if ((originalTxn as any).account_id) return (originalTxn as any).account_id;
+
+  const lines = ((originalTxn as any).transaction_lines as any[]) || [];
+  // For expense, source is usually the negative amount line (credit or just negative?)
+  // In `createTransaction`: expense input has source_account_id -> lines pushed type='credit', amount = -abs(amount)
+  const sourceLine = lines.find(l => l.amount < 0 && l.account_id);
+
+  return sourceLine?.account_id ?? null;
+}
+
 export async function restoreTransaction(id: string): Promise<boolean> {
   const supabase = createClient();
 

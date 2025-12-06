@@ -106,6 +106,24 @@ async function normalizeInput(input: CreateTransactionInput): Promise<Normalized
   };
 }
 
+async function logHistory(
+  transactionId: string,
+  changeType: 'edit' | 'void',
+  snapshot: any
+) {
+  const supabase = createClient();
+  const { error } = await supabase.from('transaction_history' as any).insert({
+    transaction_id: transactionId,
+    change_type: changeType,
+    snapshot_before: snapshot,
+    // created_at is default now()
+  } as any);
+
+  if (error) {
+    console.error('Failed to log transaction history:', error);
+  }
+}
+
 export async function calculateAccountImpacts(txn: {
   account_id: string;
   target_account_id?: string | null;
@@ -436,6 +454,9 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     return false;
   }
 
+  // LOG HISTORY BEFORE UPDATE
+  await logHistory(id, 'edit', existing);
+
   const { error } = await (supabase
     .from('transactions')
     .update as any)(normalized)
@@ -488,9 +509,53 @@ export async function voidTransaction(id: string): Promise<boolean> {
   const supabase = createClient();
   const { data: existing } = await supabase
     .from('transactions')
-    .select('account_id, target_account_id')
+    .select('account_id, target_account_id, metadata, status')
     .eq('id', id)
     .maybeSingle();
+
+  // 1. Guard: Check for children (linked transactions)
+  // Check strict equality by building a robust query.
+  // We want to find any transaction where metadata->>original_transaction_id EQUALS id
+  // OR metadata->>pending_refund_id EQUALS id.
+  const { data: children, error: childError } = await supabase
+    .from('transactions')
+    .select('id, status')
+    .neq('status', 'void')
+    .or(`metadata->>original_transaction_id.eq.${id},metadata->>pending_refund_id.eq.${id}`)
+    .limit(1);
+
+  if (children && children.length > 0) {
+    throw new Error("Không thể hủy! Tồn tại giao dịch liên quan (VD: Đã xác nhận hoàn tiền). Hãy hủy giao dịch đó trước.");
+  }
+
+  // 2. Log History
+  await logHistory(id, 'void', existing);
+
+  // 3. Rollback Logic (Refund Chain)
+  const meta = ((existing as any)?.metadata || {}) as any;
+
+  // Case A: Voiding Confirmation (GD3) -> Revert Pending Refund (GD2) to 'pending'
+  if (meta.is_refund_confirmation && meta.pending_refund_id) {
+    await (supabase.from('transactions').update as any)({ status: 'pending' }).eq('id', meta.pending_refund_id);
+  }
+
+  // Case B: Voiding Refund Request (GD2) -> Revert Original (GD1) to 'posted' & Clear Metadata
+  // Only if NOT a confirmation (which also has original_id)
+  if (meta.original_transaction_id && !meta.is_refund_confirmation) {
+    const { data: gd1 } = await supabase.from('transactions').select('metadata').eq('id', meta.original_transaction_id).single();
+    if (gd1) {
+      const newMeta = { ...((gd1 as any).metadata || {}) };
+      delete newMeta.refund_status;
+      delete newMeta.refunded_amount;
+      delete newMeta.has_refund_request;
+      delete newMeta.refund_request_id;
+
+      await (supabase.from('transactions').update as any)({
+        status: 'posted',
+        metadata: newMeta
+      }).eq('id', meta.original_transaction_id);
+    }
+  }
 
   // Simplified Void: Just update status. No need to join lines which might be complex or deleted.
   const { error } = await (supabase
@@ -617,8 +682,20 @@ export async function requestRefund(
   const originalMeta = (originalRow.metadata || {}) as Record<string, any>;
 
   // 1a. Format Note with Short ID (GD2)
-  const shortId = originalRow.id.substring(0, 4).toUpperCase();
-  const formattedNote = `[${shortId}] Refund Request: ${originalRow.note ?? ''}`;
+  const shortId = originalRow.id.split('-')[0].toUpperCase();
+  let formattedNote = `[${shortId}] Refund Request: ${originalRow.note ?? ''}`;
+
+  // If original was debt (had person_id), append Cancel Debt info
+  if (originalRow.person_id) {
+    // Fetch person name if possible, or just append generic. 
+    // We can try to fetch, or just accept that we might not have name handy here without extra query.
+    // But wait, we can do a quick lookup if we want, or just "Cancel Debt". 
+    // "Cancel Debt: ${PersonName}" was requested.
+    const { data: person } = await supabase.from('profiles').select('name').eq('id', originalRow.person_id).single();
+    if (person) {
+      formattedNote += ` - Cancel Debt: ${(person as any).name}`;
+    }
+  }
 
   // 2. Create Refund Transaction (Income)
   // Park in PENDING_REFUNDS account initially
@@ -663,9 +740,26 @@ export async function requestRefund(
     }
   };
 
-  // If Full Refund, we MIGHT want to unlink debt, but let's keep it simple for now.
-  // The user says "Enable Refund 2.0 with standard 3 steps".
-  // Pending -> Confirm is the key.
+  // UNLINK PERSON IF FULL REFUND
+  if (isFullRefund) {
+    updatePayload.person_id = null; // Unlink person to clear debt
+
+    // Preserve Person Name in Note if unlinking
+    if (originalRow.person_id) {
+      // We need to fetch the name if we want to save it, or use what we solved earlier.
+      // Let's maximize usage of existing data or quick fetch.
+      // We fetched `person` earlier at line 670? YES.
+      // "Cancel Debt: {Name}" logic was used for GD2 note. We can reuse 'person' data.
+      const { data: personP } = await supabase.from('profiles').select('name').eq('id', originalRow.person_id).single();
+      const personName = (personP as any)?.name;
+      if (personName) {
+        const currentNote = originalRow.note || '';
+        if (!currentNote.includes(`(Debtor: ${personName})`)) {
+          updatePayload.note = `${currentNote} - (Debtor: ${personName})`;
+        }
+      }
+    }
+  }
 
   if (isFullRefund) {
     updatePayload.status = 'waiting_refund'; // Orange/Amber badge

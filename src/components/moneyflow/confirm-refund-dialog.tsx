@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
-import { CheckCircle2, Wallet, X } from 'lucide-react'
+import { useEffect, useState } from "react"
+import { CheckCircle2, Search, Wallet, X } from 'lucide-react'
 import { toast } from "sonner"
 import { Account, TransactionWithDetails } from "@/types/moneyflow.types"
-import { confirmRefundAction } from "@/actions/transaction-actions"
+import { confirmRefundAction, getOriginalAccount } from "@/actions/transaction-actions"
 import {
     Dialog,
     DialogContent,
@@ -27,20 +27,47 @@ export function ConfirmRefundDialog({
     accounts,
 }: ConfirmRefundDialogProps) {
     const [selectedAccountId, setSelectedAccountId] = useState<string>("")
+    const [defaultAccountId, setDefaultAccountId] = useState<string | null>(null)
+    const [searchTerm, setSearchTerm] = useState("")
     const [isSubmitting, setIsSubmitting] = useState(false)
+    const [isLoadingDefault, setIsLoadingDefault] = useState(false)
+    const [showOtherAccounts, setShowOtherAccounts] = useState(false)
 
-    // Filter for real accounts (not credit cards unless they allow deposit, but usually bank/cash)
-    // Or just allow all except system accounts.
+    // Fetch original account when transaction opens
+    useEffect(() => {
+        if (transaction && open) {
+            setIsLoadingDefault(true);
+            setShowOtherAccounts(false);
+            getOriginalAccount(transaction.id)
+                .then((id) => {
+                    if (id) {
+                        setDefaultAccountId(id);
+                        setSelectedAccountId(id);
+                    } else {
+                        setDefaultAccountId(null);
+                        setSelectedAccountId("");
+                        setShowOtherAccounts(true); // Auto-show if no default
+                    }
+                })
+                .finally(() => setIsLoadingDefault(false));
+            setSearchTerm("");
+        }
+    }, [transaction, open]);
+
     const validAccounts = accounts.filter(
         acc => acc.id !== '99999999-9999-9999-9999-999999999999'
     )
+
+    const defaultAccount = validAccounts.find(a => a.id === defaultAccountId)
+    const otherAccounts = validAccounts.filter(a => a.id !== defaultAccountId && (
+        a.name.toLowerCase().includes(searchTerm.toLowerCase())
+    ))
 
     const handleConfirm = async () => {
         if (!transaction || !selectedAccountId) return
 
         setIsSubmitting(true)
         try {
-            // We assume confirmRefundAction wraps the service logic we just updated
             const result = await confirmRefundAction(transaction.id, selectedAccountId)
 
             if (result.success) {
@@ -63,6 +90,38 @@ export function ConfirmRefundDialog({
 
     if (!transaction) return null
 
+    const renderAccountCard = (account: Account) => (
+        <div
+            key={account.id}
+            onClick={() => setSelectedAccountId(account.id)}
+            className={`
+        flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-all
+        ${selectedAccountId === account.id
+                    ? 'border-green-500 bg-green-50 ring-1 ring-green-500 shadow-sm'
+                    : 'border-slate-200 hover:bg-slate-50'
+                }
+      `}
+        >
+            {account.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={account.logo_url} alt="" className="h-8 w-8 object-contain" />
+            ) : (
+                <div className="flex h-8 w-8 items-center justify-center bg-slate-200 rounded-full text-xs font-bold text-slate-600">
+                    {account.name.charAt(0)}
+                </div>
+            )}
+            <div className="flex-1">
+                <p className="font-medium text-sm text-slate-900">{account.name}</p>
+                <p className="text-xs text-slate-500">
+                    Current: {new Intl.NumberFormat('en-US').format(account.current_balance)}
+                </p>
+            </div>
+            {selectedAccountId === account.id && (
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+            )}
+        </div>
+    )
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[425px]">
@@ -84,43 +143,69 @@ export function ConfirmRefundDialog({
                         </p>
                     </div>
 
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium text-slate-700">
-                            Khoản tiền này đã về tài khoản nào?
-                        </label>
-                        <div className="grid gap-2 max-h-[200px] overflow-y-auto pr-1">
-                            {validAccounts.map(account => (
-                                <div
-                                    key={account.id}
-                                    onClick={() => setSelectedAccountId(account.id)}
-                                    className={`
-                    flex items-center gap-3 p-2 rounded-lg border cursor-pointer transition-all
-                    ${selectedAccountId === account.id
-                                            ? 'border-green-500 bg-green-50 ring-1 ring-green-500'
-                                            : 'border-slate-200 hover:bg-slate-50'
-                                        }
-                  `}
-                                >
-                                    {account.logo_url ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={account.logo_url} alt="" className="h-8 w-8 object-contain" />
-                                    ) : (
-                                        <div className="flex h-8 w-8 items-center justify-center bg-slate-200 rounded-full text-xs font-bold text-slate-600">
-                                            {account.name.charAt(0)}
-                                        </div>
-                                    )}
-                                    <div className="flex-1">
-                                        <p className="font-medium text-sm text-slate-900">{account.name}</p>
-                                        <p className="text-xs text-slate-500">
-                                            Current: {new Intl.NumberFormat('en-US').format(account.current_balance)}
-                                        </p>
-                                    </div>
-                                    {selectedAccountId === account.id && (
-                                        <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <div className="space-y-3">
+                        <h3 className="text-sm font-medium text-slate-700">Khoản tiền này đã về tài khoản nào?</h3>
+
+                        {/* Default Account Section */}
+                        {isLoadingDefault ? (
+                            <div className="h-14 bg-slate-100 animate-pulse rounded-lg"></div>
+                        ) : defaultAccount ? (
+                            <div className="mb-2">
+                                <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Tài khoản gốc (Recommended)</p>
+                                {renderAccountCard(defaultAccount)}
+                            </div>
+                        ) : null}
+
+                        {/* Other Accounts Toggle */}
+                        {defaultAccount && !showOtherAccounts && (
+                            <button
+                                onClick={() => setShowOtherAccounts(true)}
+                                className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                            >
+                                Change account target?
+                            </button>
+                        )}
+
+                        {/* Other Accounts Section */}
+                        {showOtherAccounts && (
+                            <div className="space-y-2 pt-2 border-t">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tài khoản khác</p>
+                                    {defaultAccount && (
+                                        <button
+                                            onClick={() => {
+                                                setShowOtherAccounts(false);
+                                                setSelectedAccountId(defaultAccountId!);
+                                            }}
+                                            className="text-xs text-slate-400 hover:text-slate-600"
+                                        >
+                                            Cancel change
+                                        </button>
                                     )}
                                 </div>
-                            ))}
-                        </div>
+
+                                {/* Search Bar */}
+                                <div className="relative">
+                                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="Search accounts..."
+                                        className="w-full pl-9 pr-3 py-2 text-sm border rounded-md focus:outline-none focus:ring-2 focus:ring-green-500/50"
+                                        value={searchTerm}
+                                        onChange={e => setSearchTerm(e.target.value)}
+                                        autoFocus
+                                    />
+                                </div>
+
+                                <div className="grid gap-2 max-h-[160px] overflow-y-auto pr-1">
+                                    {otherAccounts.length > 0 ? (
+                                        otherAccounts.map(renderAccountCard)
+                                    ) : (
+                                        <p className="text-sm text-slate-400 text-center py-2">No accounts found</p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
