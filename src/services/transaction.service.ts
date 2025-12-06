@@ -544,7 +544,7 @@ export async function voidTransaction(id: string): Promise<boolean> {
   if (meta.original_transaction_id && !meta.is_refund_confirmation) {
     const { data: gd1 } = await supabase.from('transactions').select('metadata').eq('id', meta.original_transaction_id).single();
     if (gd1) {
-      const newMeta = { ...((gd1.metadata as any) || {}) };
+      const newMeta = { ...((gd1 as any).metadata || {}) };
       delete newMeta.refund_status;
       delete newMeta.refunded_amount;
       delete newMeta.has_refund_request;
