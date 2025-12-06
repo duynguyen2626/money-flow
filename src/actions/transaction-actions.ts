@@ -412,14 +412,9 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
         occurred_at,
         note,
         tag,
-        transaction_lines (
-          amount,
-          original_amount,
-          cashback_share_percent,
-          cashback_share_fixed,
-          metadata,
-          person_id
-        )
+        account_id,
+        target_account_id,
+        person_id
       `
     )
     .eq('id', id)
@@ -430,6 +425,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     return false;
   }
 
+  // Simplified Void: Just update status.
   const { error: updateError } = await (supabase.from('transactions').update as any)({ status: 'void' }).eq('id', id);
 
   if (updateError) {
@@ -437,19 +433,42 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     return false;
   }
 
-  const lines = ((existing as any).transaction_lines as any[]) ?? [];
-  const personLine = lines.find((line) => line?.person_id);
+  // Try to remove from sheet if it has person_id
+  if ((existing as any).person_id) {
+    const personId = (existing as any).person_id;
+    const payload = {
+      id: (existing as any).id,
+      occurred_at: (existing as any).occurred_at,
+      amount: 0 // Amount 0 for delete or handling in sync service implies check logic
+    };
+    // Actually buildSheetPayload usually needs line info.
+    // But since lines might be gone or complex to fetch in single table (they ARE the txn now),
+    // We can try to construct enough info.
+    // However, for single table, we don't have separate lines.
+    // WE should just pass what we have.
 
-  if (personLine?.person_id) {
-    const payload = buildSheetPayload(existing as any, personLine);
-    if (payload) {
-      void syncTransactionToSheet(personLine.person_id, payload, 'delete').catch(err => {
-        console.error('Sheet Sync Error (Void):', err);
-      });
-    }
+    // NOTE: The previous logic relied on transaction_lines join which was failing.
+    // We will attempt to sync deletion but purely based on ID.
+    void syncTransactionToSheet(personId, payload as any, 'delete').catch(err => {
+      console.error('Sheet Sync Error (Void):', err);
+    });
   }
 
   return true;
+}
+
+export async function confirmRefundAction(
+  pendingTransactionId: string,
+  targetAccountId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { confirmRefund } = await import('@/services/transaction.service');
+    const result = await confirmRefund(pendingTransactionId, targetAccountId);
+    return { success: result.success, error: result.error };
+  } catch (error: any) {
+    console.error('Confirm Refund Action Error:', error);
+    return { success: false, error: error.message };
+  }
 }
 
 export async function restoreTransaction(id: string): Promise<boolean> {

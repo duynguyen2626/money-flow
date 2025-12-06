@@ -24,7 +24,9 @@ import {
   RotateCcw,
   Pencil,
   Ban,
-  Loader2
+  Loader2,
+  Store,
+  CheckCircle2
 } from 'lucide-react'
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -56,6 +58,7 @@ import { generateTag } from "@/lib/tag"
 import { cn } from "@/lib/utils"
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
 import { RefundNoteDisplay } from './refund-note-display'
+import { ConfirmRefundDialog } from "./confirm-refund-dialog"
 
 type ColumnKey =
   | "date"
@@ -160,9 +163,9 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     debt_account_id: destinationAccountId,
     shop_id: txn.shop_id ?? undefined,
     cashback_share_percent:
-      percentValue !== undefined && percentValue !== null ? percentValue * 100 : undefined,
+      percentValue !== undefined && percentValue !== null ? (Number(percentValue) > 1 ? Number(percentValue) : Number(percentValue) * 100) : undefined,
     cashback_share_fixed:
-      typeof txn.cashback_share_fixed === "number" ? txn.cashback_share_fixed : undefined,
+      txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined ? Number(txn.cashback_share_fixed) : undefined,
     is_installment: txn.is_installment ?? false,
   };
 }
@@ -235,16 +238,16 @@ export function UnifiedTransactionTable({
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 80, minWidth: 70 },
     { key: "type", label: "Type", defaultWidth: 130, minWidth: 110 },
-    { key: "shop", label: "Shop", defaultWidth: 200, minWidth: 160 },
-    { key: "note", label: "Note", defaultWidth: 200, minWidth: 150 },
+    { key: "shop", label: "Note", defaultWidth: 200, minWidth: 150 }, // Renamed to Note, minimized
     { key: "category", label: "Category", defaultWidth: 150 },
-    ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 160, minWidth: 140 } as ColumnConfig] : []),
+    ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 110, minWidth: 100 } as ColumnConfig] : []),
     { key: "account", label: "Account", defaultWidth: 160, minWidth: 140 },
-    { key: "amount", label: "Amount", defaultWidth: 120 },
+    { key: "amount", label: "Amount", defaultWidth: 100 },
+    // { key: "note", label: "Note", defaultWidth: 200, minWidth: 150 }, // Removed from default
     { key: "back_info", label: "Back Info", defaultWidth: 140 },
     { key: "initial_back", label: "Initial Back", defaultWidth: 110 },
     { key: "people_back", label: "People Back", defaultWidth: 110 },
-    { key: "final_price", label: "Final Price", defaultWidth: 120 },
+    { key: "final_price", label: "Final Price", defaultWidth: 100 },
     { key: "tag", label: "Cycle Info", defaultWidth: 200, minWidth: 180 },
     { key: "status", label: "Status", defaultWidth: 130, minWidth: 120 },
     { key: "id", label: "ID", defaultWidth: 100 },
@@ -259,7 +262,7 @@ export function UnifiedTransactionTable({
       date: true,
       type: false, // Hidden by default (Merged into Date)
       shop: true,
-      note: true,
+      note: false, // Merged into Shop
       category: true,
       people: !hidePeopleColumn,
       tag: false, // Hidden by default (Merged into People/Account)
@@ -332,6 +335,14 @@ export function UnifiedTransactionTable({
   const [isRestoring, setIsRestoring] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [voidError, setVoidError] = useState<string | null>(null)
+  const [confirmRefundOpen, setConfirmRefundOpen] = useState(false)
+  const [confirmRefundTxn, setConfirmRefundTxn] = useState<TransactionWithDetails | null>(null)
+
+  const handleOpenConfirmRefund = (txn: TransactionWithDetails) => {
+    setConfirmRefundTxn(txn)
+    setConfirmRefundOpen(true)
+    setActionMenuOpen(null)
+  }
   const [statusOverrides, setStatusOverrides] = useState<Record<string, TransactionWithDetails['status']>>({})
   const [refundFormTxn, setRefundFormTxn] = useState<TransactionWithDetails | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -339,9 +350,16 @@ export function UnifiedTransactionTable({
   const [internalSortState, setInternalSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
   const [bulkDialog, setBulkDialog] = useState<{ mode: 'void' | 'restore' | 'delete'; open: boolean } | null>(null)
   const stopBulk = useRef(false)
+  const [pageSize, setPageSize] = useState(20)
+  const [currentPage, setCurrentPage] = useState(1)
 
   const sortState = externalSortState ?? internalSortState
   const setSortState = onSortChange ?? setInternalSortState
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [data, transactions, selectedTxnIds, accountType, accountId, sortState, context])
+
 
   const editingInitialValues = useMemo(
     () => (editingTxn ? buildEditInitialValues(editingTxn) : null),
@@ -642,37 +660,54 @@ export function UnifiedTransactionTable({
   }
 
   const displayedTransactions = useMemo(() => {
-    let list = tableData;
-    if (currentTab === 'active') {
-      // All tab: Show everything except void
-      list = tableData.filter(t => (statusOverrides[t.id] ?? t.status) !== 'void');
-    } else if (currentTab === 'pending') {
-      list = tableData.filter(t => (statusOverrides[t.id] ?? t.status) === 'waiting_refund' || (statusOverrides[t.id] ?? t.status) === 'pending');
-    } else {
-      list = tableData.filter(t => (statusOverrides[t.id] ?? t.status) === 'void');
+    if (showSelectedOnly && selection.size > 0) {
+      return tableData.filter(t => selection.has(t.id))
     }
 
-    if (showSelectedOnly) {
-      return list.filter(txn => selection.has(txn.id))
-    }
-    const sorted = [...list].sort((a, b) => {
-      if (sortState.key === 'date') {
-        const aDate = new Date(a.occurred_at ?? a.created_at ?? '').getTime()
-        const bDate = new Date(b.occurred_at ?? b.created_at ?? '').getTime()
-        if (aDate !== bDate) {
-          return sortState.dir === 'asc' ? aDate - bDate : bDate - aDate
-        }
-        // Secondary sort by created_at to ensure deterministic order
-        const aCreated = new Date(a.created_at ?? '').getTime()
-        const bCreated = new Date(b.created_at ?? '').getTime()
-        return sortState.dir === 'asc' ? aCreated - bCreated : bCreated - aCreated
+    const filtered = tableData.filter(txn => {
+      // 1. Account Filter (Handled by server usually, but safety check)
+      if (context === 'account' && accountId) {
+        // If necessary, check if txn belongs to account. 
+        // Assuming tableData is correct from server/parent.
       }
-      const aAmt = typeof a.original_amount === 'number' ? a.original_amount : a.amount
-      const bAmt = typeof b.original_amount === 'number' ? b.original_amount : b.amount
-      return sortState.dir === 'asc' ? aAmt - bAmt : bAmt - aAmt
+
+      // 2. Tab Filter
+      const status = statusOverrides[txn.id] ?? txn.status
+      if (currentTab === 'void') {
+        if (status !== 'void') return false
+      } else if (currentTab === 'pending') {
+        // Pending logic (Yellow)
+        const isPending = status === 'pending'
+        const isWaitingRefund = status === 'waiting_refund'
+        if (!isPending && !isWaitingRefund) return false
+      } else {
+        // Active tab: Show everything EXCEPT void
+        if (status === 'void') return false
+      }
+
+      return true
     })
-    return sorted
-  }, [transactions, selection, showSelectedOnly, currentTab, statusOverrides, sortState])
+
+    // Sort
+    return filtered.sort((a, b) => {
+      const dateA = new Date(a.occurred_at ?? a.created_at ?? 0).getTime()
+      const dateB = new Date(b.occurred_at ?? b.created_at ?? 0).getTime()
+
+      if (sortState.key === 'date') {
+        return sortState.dir === 'asc' ? dateA - dateB : dateB - dateA
+      } else if (sortState.key === 'amount') {
+        const amtA = Math.abs(a.amount ?? 0)
+        const amtB = Math.abs(b.amount ?? 0)
+        return sortState.dir === 'asc' ? amtA - amtB : amtB - amtA
+      }
+      return 0
+    })
+  }, [tableData, showSelectedOnly, selection, context, accountId, statusOverrides, currentTab, sortState])
+
+  const paginatedTransactions = useMemo(() => {
+    const start = (currentPage - 1) * pageSize
+    return displayedTransactions.slice(start, start + pageSize)
+  }, [displayedTransactions, currentPage, pageSize])
 
 
   const handleSelectAll = (checked: boolean) => {
@@ -743,14 +778,6 @@ export function UnifiedTransactionTable({
         <Table className="min-w-[1000px]">
           <TableHeader className="sticky top-0 z-40 bg-white shadow-sm">
             <TableRow className="hover:bg-transparent border-b-2 border-slate-300">
-              <TableHead className="border-r-2 border-slate-300 whitespace-nowrap sticky left-0 z-30 bg-slate-50" style={{ width: 52 }}>
-                <input
-                  type="checkbox"
-                  className="rounded border-gray-300"
-                  checked={isAllSelected}
-                  onChange={e => handleSelectAll(e.target.checked)}
-                />
-              </TableHead>
               {displayedColumns.map(col => {
                 if (col.key === "task") {
                   return (
@@ -773,18 +800,18 @@ export function UnifiedTransactionTable({
                 let stickyClass = "";
 
                 if (col.key === 'date') {
-                  stickyClass = "sticky left-[52px] z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]";
+                  stickyClass = "sticky left-0 z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]";
                 } else if (col.key === 'type') {
                   if (visibleColumns.date) {
-                    stickyClass = `sticky left-[${52 + columnWidths.date}px] z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]`;
-                    stickyStyle.left = 52 + columnWidths.date;
+                    stickyClass = `sticky left-[${columnWidths.date}px] z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]`;
+                    stickyStyle.left = columnWidths.date;
                   } else {
-                    stickyClass = "sticky left-[52px] z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]";
+                    stickyClass = "sticky left-0 z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]";
                   }
                 } else if (col.key === 'shop') {
-                  let left = 52;
+                  let left = 0;
                   if (visibleColumns.date) left += columnWidths.date;
-                  if (visibleColumns.type) left += columnWidths.type;
+                  if (visibleColumns.type) left += visibleColumns.type ? columnWidths.type : 0;
 
                   stickyClass = "sticky z-30 bg-slate-100 shadow-[1px_0_0_0_rgba(0,0,0,0.1)]";
                   stickyStyle.left = left;
@@ -796,7 +823,35 @@ export function UnifiedTransactionTable({
                     className={cn("border-r-2 border-slate-300 bg-slate-100 font-semibold text-slate-700 whitespace-nowrap", stickyClass)}
                     style={stickyStyle}
                   >
-                    {col.key === 'date' || col.key === 'amount' ? (
+                    {col.key === 'date' ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300"
+                          checked={isAllSelected}
+                          onChange={e => handleSelectAll(e.target.checked)}
+                        />
+                        <button
+                          className="flex items-center gap-1 group"
+                          onClick={() => {
+                            const nextDir =
+                              sortState.key === col.key ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
+                            setSortState({ key: col.key as SortKey, dir: nextDir })
+                          }}
+                        >
+                          {col.label}
+                          {sortState.key === col.key ? (
+                            sortState.dir === 'asc' ? (
+                              <ArrowUp className="h-3 w-3 text-blue-600" />
+                            ) : (
+                              <ArrowDown className="h-3 w-3 text-blue-600" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          )}
+                        </button>
+                      </div>
+                    ) : col.key === 'amount' ? (
                       <button
                         className="flex items-center gap-1 group"
                         onClick={() => {
@@ -825,7 +880,7 @@ export function UnifiedTransactionTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {displayedTransactions.map(txn => {
+            {paginatedTransactions.map(txn => {
               const isRepayment = txn.type === 'repayment';
               const visualType = (txn as any).displayType ?? txn.type;
               const displayDirection = (txn as any).display_type as string | undefined;
@@ -871,20 +926,20 @@ export function UnifiedTransactionTable({
               // --- Type Logic ---
               let typeBadge = null;
               if (txn.type === 'repayment') {
-                typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-1.5 py-0 text-[10px] font-bold text-emerald-800 h-5">REPAY</span>;
+                typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800 h-6">REPAY</span>;
               } else if (visualType === 'expense') {
-                typeBadge = <span className="inline-flex items-center rounded-md bg-red-100 px-1.5 py-0 text-[10px] font-bold text-red-800 h-5">OUT</span>
+                typeBadge = <span className="inline-flex items-center rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-800 h-6">OUT</span>
               } else if (visualType === 'income') {
-                typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-1.5 py-0 text-[10px] font-bold text-emerald-800 h-5">IN</span>
+                typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800 h-6">IN</span>
               } else {
                 if (accountId) {
                   if (txn.amount >= 0) {
-                    typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-1.5 py-0 text-[10px] font-bold text-emerald-800 h-5">TF IN</span>
+                    typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800 h-6">TF IN</span>
                   } else {
-                    typeBadge = <span className="inline-flex items-center rounded-md bg-red-100 px-1.5 py-0 text-[10px] font-bold text-red-800 h-5">TF OUT</span>
+                    typeBadge = <span className="inline-flex items-center rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-800 h-6">TF OUT</span>
                   }
                 } else {
-                  typeBadge = <span className="inline-flex items-center rounded-md bg-blue-100 px-1.5 py-0 text-[10px] font-bold text-blue-800 h-5">TF</span>
+                  typeBadge = <span className="inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-xs font-bold text-blue-800 h-6">TF</span>
                 }
               }
 
@@ -912,11 +967,11 @@ export function UnifiedTransactionTable({
                   {isMenuOpen && createPortal(
                     <>
                       <div
-                        className="fixed inset-0 z-40 bg-transparent"
+                        className="fixed inset-0 z-[60] bg-transparent"
                         onClick={() => setActionMenuOpen(null)}
                       />
                       <div
-                        className="fixed z-50 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg"
+                        className="fixed z-[70] w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg"
                         style={{
                           top: document.getElementById(`action-btn-${txn.id}`)?.getBoundingClientRect().bottom ?? 0,
                           left: (document.getElementById(`action-btn-${txn.id}`)?.getBoundingClientRect().left ?? 0) - 150,
@@ -948,6 +1003,7 @@ export function UnifiedTransactionTable({
                               <Pencil className="h-4 w-4 text-slate-600" />
                               <span>Edit</span>
                             </button>
+
                             {canRequestRefund && !isPendingRefund && (
                               <button
                                 className="flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
@@ -974,15 +1030,17 @@ export function UnifiedTransactionTable({
                             )}
                             {isPendingRefund && (
                               <button
-                                className="flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
+                                className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-green-700 hover:bg-green-50"
                                 onClick={event => {
                                   event.stopPropagation();
-                                  openRefundForm(txn, 'confirm');
+                                  handleOpenConfirmRefund(txn);
                                 }}
                               >
-                                <span>Confirm Refund</span>
+                                <CheckCircle2 className="h-4 w-4" />
+                                <span>Confirm Money Received</span>
                               </button>
                             )}
+
                             <button
                               className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-red-600 hover:bg-red-50"
                               onClick={event => {
@@ -1005,10 +1063,13 @@ export function UnifiedTransactionTable({
               )
 
               const voidedTextClass = ""
-              const percentRaw = txn.cashback_share_percent
-              const fixedRaw = txn.cashback_share_fixed
-              const calculatedSum = txn.cashback_share_amount ?? ((Math.abs(originalAmount ?? 0) * (percentRaw ?? 0)) + (fixedRaw ?? 0))
-              const finalPrice = Math.abs(originalAmount ?? 0) - calculatedSum
+              const percentRaw = Number(txn.cashback_share_percent ?? 0)
+              const fixedRaw = Number(txn.cashback_share_fixed ?? 0)
+              // Normalize: if > 1, assume percent (e.g. 2 -> 2% = 0.02 rate), else rate
+              const rate = percentRaw > 1 ? percentRaw / 100 : percentRaw
+
+              const calculatedSum = txn.cashback_share_amount ?? ((Math.abs(Number(originalAmount ?? 0)) * rate) + fixedRaw)
+              const finalPrice = Math.max(0, Math.abs(Number(originalAmount ?? 0)) - calculatedSum)
 
               // Cycle Logic
               let cycleLabel = "-"
@@ -1035,14 +1096,24 @@ export function UnifiedTransactionTable({
                       timeZone: 'Asia/Ho_Chi_Minh',
                     })
                     return (
-                      <div className="flex flex-row items-center gap-2">
-                        <span className="font-semibold min-w-[40px]">{dateFormatter.format(d)}</span>
-                        {typeBadge}
-                        {statusIndicator && (
-                          <CustomTooltip content={statusTooltip}>
-                            <span className="text-sm cursor-help">{statusIndicator}</span>
-                          </CustomTooltip>
-                        )}
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300"
+                          checked={isSelected}
+                          onChange={e => handleSelectOne(txn.id, e.target.checked)}
+                        />
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-semibold">{dateFormatter.format(d)}</span>
+                          <div className="flex items-center gap-1">
+                            {typeBadge}
+                            {statusIndicator && (
+                              <CustomTooltip content={statusTooltip}>
+                                <span className="text-sm cursor-help">{statusIndicator}</span>
+                              </CustomTooltip>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     )
                   }
@@ -1087,7 +1158,30 @@ export function UnifiedTransactionTable({
                     }
 
                     return (
-                      <div className="flex items-center gap-2 max-w-[260px] overflow-hidden">
+                      <div className="flex items-center gap-2 max-w-[340px] overflow-hidden group">
+                        <div className="shrink-0">
+                          {displayIcon ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={displayIcon}
+                              alt={displayName || 'Shop'}
+                              className="h-5 w-5 object-contain"
+                            />
+                          ) : (
+                            <Store className="h-4 w-4 text-slate-400" />
+                          )
+                          }
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          {txn.note ? (
+                            <span className="text-sm font-medium text-slate-900 truncate" title={txn.note}>
+                              {txn.note}
+                            </span>
+                          ) : (
+                            <span className="text-sm font-medium text-slate-400 italic">No note</span>
+                          )}
+                        </div>
+                        {/* Copy ID Button - Visible on Hover */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1095,37 +1189,14 @@ export function UnifiedTransactionTable({
                             setCopiedId(txn.id);
                             setTimeout(() => setCopiedId(null), 2000);
                           }}
-                          className="text-slate-500 hover:text-slate-700 transition-colors shrink-0"
+                          className={cn(
+                            "opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-slate-100 rounded ml-auto text-slate-400 hover:text-slate-600",
+                            copiedId === txn.id && "opacity-100 text-emerald-500 hover:text-emerald-600"
+                          )}
                           title="Copy ID"
                         >
-                          {copiedId === txn.id ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                          {copiedId === txn.id ? <CheckCheck className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                         </button>
-                        <div className="flex items-center gap-2">
-                          {!(txn.note && txn.note.match(/^(\d+)\.\[([A-Z0-9]+)\]/)) && (
-                            displayIcon ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
-                                <img
-                                  src={displayIcon}
-                                  alt={displayName || 'Shop'}
-                                  className="h-full w-full object-contain"
-                                />
-                              </div>
-                            ) : (
-                              <span className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-xs font-bold text-slate-600 shrink-0 rounded-full border border-slate-200">
-                                {displayName ? displayName.charAt(0).toUpperCase() : '🛍️'}
-                              </span>
-                            )
-                          )}
-                          <div className="flex flex-col truncate">
-                            {displayName &&
-                              !txn.note &&
-                              !isFullyRefunded &&
-                              !txn.note?.match(/^[123]\. /) && (
-                                <span className="truncate">{displayName}</span>
-                              )}
-                          </div>
-                        </div>
                       </div>
                     );
                   }
@@ -1191,7 +1262,8 @@ export function UnifiedTransactionTable({
                       </div>
                     ) : (
                       <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-xs font-bold border border-slate-200 rounded-full">
-                        {(txn.destination_name ?? '?').charAt(0).toUpperCase()}
+                        {/* Fix Unknown: If destination name is missing, but person name exists (Lending), use person name initial */}
+                        {(txn.destination_name ?? txn.person_name ?? '?').charAt(0).toUpperCase()}
                       </div>
                     );
 
@@ -1205,7 +1277,10 @@ export function UnifiedTransactionTable({
                       if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
                         const isInflow = txn.amount > 0;
                         const rawName = isInflow ? txn.source_name : txn.destination_name;
-                        const otherAccountName = rawName?.replace(/^[⬅️➡️]\s*/, '') ?? 'Unknown';
+                        // Fix Unknown: Fallback to Person Name for Debt (Lending)
+                        const effectiveName = rawName ?? (txn.type === 'debt' ? txn.person_name : null) ?? 'Unknown';
+
+                        const otherAccountName = effectiveName?.replace(/^[⬅️➡️]\s*/, '') ?? 'Unknown';
                         const otherAccountIcon = isInflow ? sourceIcon : destIcon;
                         const arrow = isInflow ? "⬅️" : "➡️";
 
@@ -1238,8 +1313,12 @@ export function UnifiedTransactionTable({
                       (txn.source_name?.includes('Pending') || txn.source_name?.includes('Refund'));
 
                     if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment' || isRefundTransaction) {
+                      // Fix Unknown logic here too
+                      const sourceName = txn.source_name ?? 'Unknown';
+                      const destName = txn.destination_name ?? txn.person_name ?? 'Unknown';
+
                       return (
-                        <CustomTooltip content={`${txn.source_name ?? 'Unknown'} ➡️ ${txn.destination_name ?? 'Unknown'}`}>
+                        <CustomTooltip content={`${sourceName} ➡️ ${destName}`}>
                           <div className="flex items-center gap-2 cursor-help min-w-[150px]">
                             {txn.source_name && sourceIcon}
                             {txn.source_name && <span className="text-xl">➡️</span>}
@@ -1273,28 +1352,30 @@ export function UnifiedTransactionTable({
                                 <Link
                                   href={`/accounts/${displayAccountId}`}
                                   onClick={e => e.stopPropagation()}
-                                  className="truncate max-w-[120px] cursor-pointer font-medium hover:text-blue-600 transition-colors"
+                                  className="truncate cursor-pointer font-medium hover:text-blue-600 transition-colors flex-1 min-w-0"
                                 >
                                   {txn.account_name ?? 'Unknown'}
                                 </Link>
                               ) : (
-                                <span className="truncate max-w-[120px] cursor-help">
+                                <span className="truncate cursor-help flex-1 min-w-0">
                                   {txn.account_name ?? 'Unknown'}
                                 </span>
                               )}
                             </CustomTooltip>
 
 
-                            <CustomTooltip content={`Cycle: ${displayCycle}`}>
-                              <span className={cn(
-                                "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium border truncate max-w-[80px] w-fit shrink-0",
-                                displayCycle === 'None'
-                                  ? "bg-slate-100 text-slate-400 border-slate-200"
-                                  : "bg-blue-50 text-blue-600 border-blue-100"
-                              )}>
-                                {displayCycle}
-                              </span>
-                            </CustomTooltip>
+                            {!(visualType === 'income' || (txn.type as string) === 'transfer') && (
+                              <CustomTooltip content={`Cycle: ${displayCycle}`}>
+                                <span className={cn(
+                                  "inline-flex items-center rounded-md px-2 py-1 text-xs font-bold border whitespace-nowrap w-fit shrink-0",
+                                  displayCycle === 'None'
+                                    ? "bg-slate-100 text-slate-400 border-slate-200"
+                                    : "bg-blue-50 text-blue-600 border-blue-100"
+                                )}>
+                                  {displayCycle}
+                                </span>
+                              </CustomTooltip>
+                            )}
                           </div>
 
 
@@ -1317,28 +1398,31 @@ export function UnifiedTransactionTable({
                     if (!personName) return <span className="text-slate-400">-</span>
 
                     const content = (
-                      <div className="flex flex-col gap-1 min-w-[120px]">
-                        <div className="flex items-center gap-2">
-                          {personAvatar ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={personAvatar}
-                              alt={personName}
-                              className="h-6 w-6 object-cover rounded-none"
-                            />
-                          ) : (
-                            <span className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 rounded-none">
-                              {personName.charAt(0).toUpperCase()}
+                      <div className="flex flex-col justify-center min-w-[120px] h-full">
+                        <div className="flex items-center justify-between gap-2 w-full">
+                          <div className="flex items-center gap-2 truncate">
+                            {personAvatar ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={personAvatar}
+                                alt={personName}
+                                className="h-6 w-6 object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 rounded-full">
+                                {personName.charAt(0).toUpperCase()}
+                              </div>
+                            )}
+                            <span className="font-medium text-slate-700 hover:text-blue-600 transition-colors truncate" title={personName}>{personName}</span>
+                          </div>
+
+                          {/* Tag Full Badge - Aligned Right */}
+                          {txn.tag && (
+                            <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-bold text-purple-700 border border-purple-100 whitespace-nowrap shrink-0">
+                              {txn.tag}
                             </span>
                           )}
-                          <span className="font-medium text-slate-700 hover:text-blue-600 transition-colors">{personName}</span>
                         </div>
-                        {/* Tag Full Badge */}
-                        {txn.tag && (
-                          <span className="inline-flex items-center rounded-md bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 border border-purple-100 w-fit">
-                            {txn.tag}
-                          </span>
-                        )}
                       </div>
                     )
 
@@ -1379,32 +1463,39 @@ export function UnifiedTransactionTable({
                         {!txn.tag && !txn.is_installment && !txn.installment_plan_id && <span className="text-slate-400">-</span>}
                       </div>
                     )
-                  case "amount":
+                  case "amount": {
+                    const percentDisp = Number(txn.cashback_share_percent ?? 0)
+                    const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
+                    const displayPercent = percentDisp <= 1 && percentDisp > 0 ? percentDisp * 100 : percentDisp
+
                     return (
-                      <div className="flex flex-col">
-                        {amountValue}
-                        {(txn.cashback_share_percent || txn.cashback_share_fixed) && (
-                          <span className="text-[10px] text-slate-400 whitespace-nowrap flex items-center gap-1">
-                            🎁
-                            {txn.cashback_share_percent ? `${txn.cashback_share_percent * 100}%` : ''}
-                            {txn.cashback_share_percent && txn.cashback_share_fixed ? ' + ' : ''}
-                            {txn.cashback_share_fixed ? numberFormatter.format(txn.cashback_share_fixed) : ''}
-                          </span>
+                      <div className="flex flex-col items-end">
+                        <span className={amountClass}>{amountValue}</span>
+                        {(displayPercent > 0 || fixedDisp > 0) && (
+                          <div className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-600 border border-emerald-100 gap-1 mt-0.5 whitespace-nowrap">
+                            {displayPercent > 0 && <span>{Number(displayPercent.toFixed(2))}%</span>}
+                            {displayPercent > 0 && fixedDisp > 0 && <span>+</span>}
+                            {fixedDisp > 0 && <span>{numberFormatter.format(fixedDisp)}</span>}
+                            <span className="text-emerald-400 font-medium">Back</span>
+                          </div>
                         )}
                       </div>
                     );
+                  }
 
                   case "back_info":
                     if (txn.type === 'transfer' || txn.type === 'repayment' || txn.type === 'debt') return <span className="text-slate-300">-</span>
-                    if (!percentRaw && !fixedRaw && typeof txn.profit !== 'number') return <span className="text-slate-300">-</span>
+                    const pRaw = Number(txn.cashback_share_percent ?? 0)
+                    const fRaw = Number(txn.cashback_share_fixed ?? 0)
+                    if (!pRaw && !fRaw && typeof txn.profit !== 'number') return <span className="text-slate-300">-</span>
                     return (
                       <div className="flex flex-col text-sm">
                         {/* Formula on Top */}
-                        {(percentRaw || fixedRaw) && (
+                        {(pRaw || fRaw) && (
                           <span className="text-[10px] text-slate-500 mb-0.5">
-                            {percentRaw ? `${(percentRaw * 100).toFixed(2)}%` : ''}
-                            {percentRaw && fixedRaw ? ' + ' : ''}
-                            {fixedRaw ? numberFormatter.format(fixedRaw) : ''}
+                            {pRaw ? `${(pRaw * 100).toFixed(2)}%` : ''}
+                            {pRaw && fRaw ? ' + ' : ''}
+                            {fRaw ? numberFormatter.format(fRaw) : ''}
                           </span>
                         )}
                         {/* Sum and Profit on Bottom */}
@@ -1442,50 +1533,63 @@ export function UnifiedTransactionTable({
                     if (!txn.cashback_share_amount || txn.cashback_share_amount === 0) {
                       return <span className="text-slate-300">-</span>
                     }
-                    const percentRaw = txn.cashback_share_percent
-                    const fixedRaw = txn.cashback_share_fixed
+                    const perRaw = Number(txn.cashback_share_percent ?? 0)
+                    const fixRaw = Number(txn.cashback_share_fixed ?? 0)
                     return (
                       <div className="flex flex-col text-sm">
                         <span className="text-orange-600 font-bold">{numberFormatter.format(txn.cashback_share_amount)}</span>
-                        {(percentRaw || fixedRaw) && (
+                        {(perRaw || fixRaw) && (
                           <span className="text-[10px] text-slate-500">
-                            {percentRaw ? `${(percentRaw * 100).toFixed(1)}%` : ''}
-                            {percentRaw && fixedRaw ? ' + ' : ''}
-                            {fixedRaw ? numberFormatter.format(fixedRaw) : ''}
+                            {perRaw ? `${(perRaw * 100).toFixed(1)}%` : ''}
+                            {perRaw && fixRaw ? ' + ' : ''}
+                            {fixRaw ? numberFormatter.format(fixRaw) : ''}
                           </span>
                         )}
                       </div>
                     )
                   }
                   case "final_price":
-                    const percent = txn.cashback_share_percent ? Math.round(txn.cashback_share_percent * 100) : 0;
-                    const fixed = txn.cashback_share_fixed ? Math.round(txn.cashback_share_fixed) : 0;
-                    const final = Math.round(finalPrice);
+                    const percentDisp = Number(txn.cashback_share_percent ?? 0)
+                    const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
+                    // Display Percent: if rate 0.02 -> 2. If > 1 -> keep as is.
+                    const displayPercent = percentDisp <= 1 && percentDisp > 0 ? percentDisp * 100 : percentDisp
+                    const rate = percentDisp <= 1 && percentDisp > 0 ? percentDisp : percentDisp / 100
+                    const percentAmount = Math.abs(Number(originalAmount ?? 0)) * rate
+
+                    const finalDisp = Math.round(finalPrice);
+                    const hasBack = Math.abs(Number(originalAmount ?? 0)) > finalDisp
 
                     return (
-                      <div className="flex flex-col">
-                        <span className={cn("font-bold", amountClass)}>{numberFormatter.format(final)}</span>
-                        {typeof txn.profit === 'number' && txn.profit !== 0 && (
-                          <div className="inline-flex items-center rounded-md bg-emerald-50 px-1 py-0.5 text-[10px] font-bold text-emerald-600 border border-emerald-100 mt-0.5 w-fit whitespace-nowrap">
-                            🤑 {numberFormatter.format(txn.profit)}
-                          </div>
-                        )}
-                        {typeof txn.bank_back === 'number' && txn.bank_back > 0 && (
-                          <div className="inline-flex items-center rounded-md bg-blue-50 px-1 py-0.5 text-[10px] font-bold text-blue-600 border border-blue-100 mt-0.5 w-fit whitespace-nowrap">
-                            🏦 {numberFormatter.format(txn.bank_back)}
-                          </div>
-                        )}
-                        {(percent > 0 || fixed > 0) && (
-                          <div className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600 border border-slate-200 mt-0.5 w-fit whitespace-nowrap">
-                            {percent > 0 && fixed > 0 ? (
-                              // Case 3: Both % and Fixed
-                              <span>{percent}% + {numberFormatter.format(fixed)}</span>
-                            ) : percent > 0 ? (
-                              // Case 2: Only % (Show formula: % * Amount = Final)
-                              <span>{percent}%</span>
-                            ) : (
-                              // Case 1: Only Fixed (Show label)
-                              <span>Fix {numberFormatter.format(fixed)}</span>
+                      <div className="flex flex-col items-end">
+                        <span className={cn("font-bold text-lg", amountClass, isVoided && "line-through opacity-50")}>
+                          {numberFormatter.format(finalDisp)}
+                        </span>
+
+                        {hasBack && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            {/* Profit */}
+                            {typeof txn.profit === 'number' && txn.profit !== 0 && (
+                              <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-600 border border-emerald-100">
+                                🤑 {numberFormatter.format(txn.profit)}
+                              </span>
+                            )}
+                            {/* Bank Back */}
+                            {typeof txn.bank_back === 'number' && txn.bank_back > 0 && (
+                              <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-600 border border-blue-100">
+                                🏦 {numberFormatter.format(txn.bank_back)}
+                              </span>
+                            )}
+                            {/* Cashback Info */}
+                            {(displayPercent > 0 || fixedDisp > 0) && (
+                              <div className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600 border border-slate-200 whitespace-nowrap">
+                                {displayPercent > 0 && fixedDisp > 0 ? (
+                                  <span>{numberFormatter.format(percentAmount)} + {numberFormatter.format(fixedDisp)}</span>
+                                ) : displayPercent > 0 ? (
+                                  <span>{numberFormatter.format(percentAmount)} ({displayPercent}%)</span>
+                                ) : (
+                                  <span>Fix {numberFormatter.format(fixedDisp)}</span>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}
@@ -1528,36 +1632,28 @@ export function UnifiedTransactionTable({
                   key={txn.id}
                   data-state={isSelected ? "selected" : undefined}
                   className={cn(
-                    "hover:bg-slate-50/50 border-b-2 border-slate-300 transition-colors",
+                    "hover:bg-slate-50/50 border-b-2 border-slate-300 transition-colors text-base",
                     isMenuOpen ? "bg-blue-50" : rowBgClass
                   )}
                 >
-                  <TableCell className="border-r-2 border-slate-300">
-                    <input
-                      type="checkbox"
-                      className="rounded border-gray-300"
-                      checked={isSelected}
-                      onChange={e => handleSelectOne(txn.id, e.target.checked)}
-                    />
-                  </TableCell>
                   {displayedColumns.map(col => {
                     // Sticky Logic for Cells
                     let stickyStyle: React.CSSProperties = { width: columnWidths[col.key], maxWidth: columnWidths[col.key], overflow: 'hidden', whiteSpace: 'nowrap' };
                     let stickyClass = "";
 
                     if (col.key === 'date') {
-                      stickyClass = cn("sticky left-[52px] z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
+                      stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
                     } else if (col.key === 'type') {
                       if (visibleColumns.date) {
-                        stickyStyle.left = 52 + columnWidths.date;
+                        stickyStyle.left = columnWidths.date;
                         stickyClass = cn("sticky z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
                       } else {
-                        stickyClass = cn("sticky left-[52px] z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
+                        stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
                       }
                     } else if (col.key === 'shop') {
-                      let left = 52;
+                      let left = 0;
                       if (visibleColumns.date) left += columnWidths.date;
-                      if (visibleColumns.type) left += columnWidths.type;
+                      if (visibleColumns.type) left += visibleColumns.type ? columnWidths.type : 0;
                       stickyStyle.left = left;
                       stickyClass = cn("sticky z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
                     }
@@ -1613,96 +1709,150 @@ export function UnifiedTransactionTable({
         </Table>
       </div>
 
-      {
-        isCustomizerOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-30 bg-black/10"
-              onClick={() => setIsCustomizerOpen(false)}
-            />
-            <div
-              className="absolute right-2 top-12 z-40 w-80 rounded-lg border border-slate-200 bg-white p-4 shadow-xl"
-              onClick={e => e.stopPropagation()}
+      {/* Sticky Footer */}
+      <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-2 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] text-sm">
+        <div className="flex items-center gap-4">
+          {/* Pagination */}
+          <div className="flex items-center gap-1">
+            <button
+              className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+              disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              title="Previous Page"
             >
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">Customize columns</p>
-                  <p className="text-xs text-slate-500">Show/hide and resize</p>
-                </div>
-                <button
-                  className="text-xs text-blue-600 hover:text-blue-800"
-                  onClick={resetColumns}
-                >
-                  Reset
-                </button>
-              </div>
-
-              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                {defaultColumns.map(col => (
-                  <div key={col.key} className="flex items-center justify-between gap-2">
-                    <label className="flex items-center gap-2 text-sm text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={visibleColumns[col.key]}
-                        onChange={() => toggleColumnVisibility(col.key)}
-                        disabled={col.key === "task"}
-                      />
-                      <span>{col.key === "task" ? "Task (always on)" : col.label}</span>
-                    </label>
-                    <input
-                      type="range"
-                      min={col.minWidth ?? 80}
-                      max={360}
-                      value={columnWidths[col.key]}
-                      onChange={e => updateColumnWidth(col.key, Number(e.target.value))}
-                      className="flex-1 accent-blue-500"
-                    />
-                    <span className="w-12 text-right text-xs text-slate-500">{columnWidths[col.key]}px</span>
-                  </div>
-                ))}
-              </div>
+              <ArrowLeft className="h-4 w-4 text-slate-600" />
+            </button>
+            <div className="flex items-center gap-1">
+              <span className="rounded px-2 py-1 text-xs font-semibold bg-blue-600 text-white">{currentPage}</span>
+              <span className="text-xs text-slate-500">/ {Math.max(1, Math.ceil(displayedTransactions.length / pageSize))}</span>
             </div>
-          </>
-        )
-      }
-      {
-        editingTxn && editingInitialValues && createPortal(
-          <div
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4 py-4 sm:py-10"
-            onClick={() => setEditingTxn(null)}
+            <button
+              className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+              disabled={currentPage >= Math.ceil(displayedTransactions.length / pageSize)}
+              onClick={() => setCurrentPage(prev => prev + 1)}
+              title="Next Page"
+            >
+              <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
+            </button>
+          </div>
+          <div className="h-4 w-px bg-slate-200" />
+          {/* Page Size Selector */}
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
           >
-            <div
-              className="flex w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden max-h-[90vh]"
-              onClick={event => event.stopPropagation()}
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-white z-20">
-                <h3 className="text-lg font-semibold text-slate-900">Edit Transaction</h3>
-                <button
-                  className="rounded px-2 py-1 text-slate-500 transition hover:bg-slate-100"
-                  onClick={() => setEditingTxn(null)}
-                  aria-label="Close"
-                >
-                  X
-                </button>
-              </div>
+            <option value={10}>10 / p</option>
+            <option value={20}>20 / p</option>
+            <option value={50}>50 / p</option>
+            <option value={100}>100 / p</option>
+          </select>
+          <div className="h-4 w-px bg-slate-200" />
+          <button
+            onClick={() => {
+              setSortState({ key: 'date', dir: 'desc' });
+              updateSelection(new Set());
+              resetColumns();
+              setCurrentPage(1);
+            }}
+            className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span className="text-xs font-medium">Reset</span>
+          </button>
+        </div>
+        <div className="flex items-center gap-4">
+          <p className="text-slate-500 font-medium text-xs">
+            Showing <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, displayedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, displayedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{displayedTransactions.length}</span> rows
+          </p>
+        </div>
+      </div>
 
-              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200">
-                <TransactionForm
-                  accounts={accounts}
-                  categories={categories}
-                  people={people}
-                  shops={shops}
-                  transactionId={editingTxn.id}
-                  initialValues={editingInitialValues}
-                  mode="edit"
-                  onSuccess={handleEditSuccess}
-                />
-              </div>
+      {isCustomizerOpen && (
+        <div
+          className="absolute right-2 top-12 z-40 w-80 rounded-lg border border-slate-200 bg-white p-4 shadow-xl"
+          onClick={e => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Customize columns</p>
+              <p className="text-xs text-slate-500">Show/hide and resize</p>
             </div>
-          </div>,
-          document.body
-        )
-      }
+            <button
+              className="text-xs text-blue-600 hover:text-blue-800"
+              onClick={resetColumns}
+            >
+              Reset
+            </button>
+          </div>
+
+          <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+            {defaultColumns.map(col => (
+              <div key={col.key} className="flex items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300"
+                    checked={visibleColumns[col.key]}
+                    onChange={() => toggleColumnVisibility(col.key)}
+                    disabled={col.key === "task"}
+                  />
+                  <span>{col.key === "task" ? "Task (always on)" : col.label}</span>
+                </label>
+                <input
+                  type="range"
+                  min={col.minWidth ?? 80}
+                  max={360}
+                  value={columnWidths[col.key]}
+                  onChange={e => updateColumnWidth(col.key, Number(e.target.value))}
+                  className="flex-1 accent-blue-500"
+                />
+                <span className="w-12 text-right text-xs text-slate-500">{columnWidths[col.key]}px</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {editingTxn && editingInitialValues && createPortal(
+        <div
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4 py-4 sm:py-10"
+          onClick={() => setEditingTxn(null)}
+        >
+          <div
+            className="flex w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden max-h-[90vh]"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-white z-20">
+              <h3 className="text-lg font-semibold text-slate-900">Edit Transaction</h3>
+              <button
+                className="rounded px-2 py-1 text-slate-500 transition hover:bg-slate-100"
+                onClick={() => setEditingTxn(null)}
+                aria-label="Close"
+              >
+                X
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200">
+              <TransactionForm
+                accounts={accounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+                transactionId={editingTxn.id}
+                initialValues={editingInitialValues}
+                mode="edit"
+                onSuccess={handleEditSuccess}
+              />
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {
         confirmVoidTarget && createPortal(
@@ -1915,6 +2065,12 @@ export function UnifiedTransactionTable({
           document.body
         )
       }
+      <ConfirmRefundDialog
+        open={confirmRefundOpen}
+        onOpenChange={setConfirmRefundOpen}
+        transaction={confirmRefundTxn}
+        accounts={accounts}
+      />
     </div >
   )
 }

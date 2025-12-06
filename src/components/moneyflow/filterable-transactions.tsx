@@ -585,20 +585,7 @@ export function FilterableTransactions({
                 </div>
             )}
 
-            {selectedTxnIds.size > 0 && (
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-3 border rounded-md border-slate-200 bg-slate-50 px-3 py-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                        {isSortActive && (
-                            <button
-                                className="px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-700 hover:bg-orange-200"
-                                onClick={() => setSortState({ key: 'date', dir: 'desc' })}
-                            >
-                                Reset Sort
-                            </button>
-                        )}
-                    </div>
-                </div>
-            )}
+
 
             <div className="mt-2">
                 <UnifiedTransactionTable

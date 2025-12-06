@@ -1,101 +1,71 @@
-AGENT TASK: PHASE 68 - FIX SINGLE LEDGER LOGIC & REFUND WORKFLOW
+AGENT TASK: PHASE 70.5 - REFUND UI POLISH & CONFIRM ACTION
 
 Context:
 
-Critical Bug: "Refund flow is disabled in single-table mode" error prevents refunds.
+Note Format Bug: Refund transactions lack the ID badge reference (e.g., [A1B2]).
 
-Data Mapping: Debt Transactions show "-> Unknown". Cashback Share values are not saving.
+Missing Action: The "Confirm Refund" button does not appear for Pending transactions (GD2).
 
-Logic Update: Full Refund (100%) for a Debt transaction should UNLINK the person from the original transaction.
+Goal: Complete the 3-Step Refund Workflow on the UI.
 
-UI Bugs: Header overlaps Modal. Badges alignment. Notes column too wide.
+Constants:
 
-Objective:
+PENDING_REFUNDS_ID: '99999999-9999-9999-9999-999999999999'
 
-Enable Refund Logic for Single Table.
+I. BACKEND: FORMAT NOTE (src/services/transaction.service.ts)
 
-Implement "Unlink Person" on Full Refund.
-
-Fix UI mapping and styling.
-
-I. BACKEND: src/services/transaction.service.ts
-
-1. Fix requestRefund (The "Unlink" & "Smart Note" Logic)
-
-Remove Error Throw: Delete Refund flow is disabled....
+Target: requestRefund function.
 
 Logic Update:
 
-If Full Refund (Amount == Original):
+Extract Short ID: const shortId = originalTxn.id.substring(0, 4).toUpperCase();
 
-Fetch Original Txn.
+Format Note (GD2):
 
-If original.person_id exists:
+Format: [${shortId}] Refund Request: ${originalTxn.note}
 
-Get Person Name.
+Format Note (GD3 - Confirm):
 
-Update Original:
+Format: [${shortId}] Refund Received
 
-person_id = NULL (Remove debt relationship).
+II. FRONTEND: ENABLE CONFIRM ACTION (src/components/moneyflow/unified-transaction-table.tsx)
 
-note = original.note + " [Cancelled Debt: " + Name + "]".
+1. Add "Confirm Refund" to Menu
 
-status = 'waiting_refund' (if pending) or 'refunded' (if instant).
+Condition: Show this menu item ONLY if:
 
-Create Refund Txn (GD2/GD3):
+row.status === 'pending'
 
-Note Format: Refund for [${original.id.substring(0, 4).toUpperCase()}].
+OR row.account_id === PENDING_REFUNDS_ID
 
-If Debt involved: ... with ${PersonName}.
+Icon: CheckCircle (Green).
 
-2. Fix getUnifiedTransactions (The "Unknown" Fix)
+Label: "Confirm Money Received".
 
-Transfer Logic:
+2. Build ConfirmRefundDialog
 
-If target_account_id exists -> Dest = TargetAccount.name.
+Trigger: Clicking the menu item opens this dialog.
 
-Else If person_id exists (Lending) -> Dest = Person.name (Fixes "Unknown").
+UI:
 
-Else -> Do not show arrow "->". Just show Source Account.
+Title: "Xác nhận tiền về (Confirm Refund)".
 
-3. Fix Save Logic (create/updateTransaction)
+Text: "Khoản tiền [Amount] đã về tài khoản nào?"
 
-Ensure cashback_share_percent and cashback_share_fixed are included in the insert/update payload.
+Input: Select Account (Filter: Real Banks/Cash only).
 
-II. FRONTEND: UnifiedTransactionTable & UI
-
-1. Fix "Refund flow disabled" Error
-
-Locate the error check in the Table component (around line 464) and REMOVE IT. Connect it to the Service.
-
-2. Fix UI Issues
-
-Z-Index: Update AccountDetailHeader to z-30. Ensure Modal is z-50.
-
-Alignment:
-
-Cycle/Tag Badges: Use flex flex-row gap-1 (not flex-col) to keep them on one line.
-
-Notes Column: Add max-w-[250px] truncate to prevent excessive whitespace.
-
-ID Display:
-
-Ensure ID is visible (or copyable icon) to match the Note format [ID].
-
-3. Restore Cashback Info
-
-In the Amount Cell, check cashback_share_percent.
-
-If > 0, render a small row below amount: 🎁 ${percent}% or fixed amount.
+Action: Call transactionService.confirmRefund(pendingTxnId, targetAccountId).
 
 III. EXECUTION STEPS
 
-Service: Update requestRefund (Unlink logic & Note format) and createTransaction (Cashback fields).
+Service: Update requestRefund to include the [ID] badge in notes.
 
-Service: Fix "Unknown" destination mapping.
+Component: Create ConfirmRefundDialog (Simple selection).
 
-Frontend: Remove the Refund Error Block.
+Table: Add the "Confirm" action to the dropdown menu.
 
-Frontend: Fix CSS (Z-Index, Spacing, Badges Row).
+Verify:
 
-Build: Verify.
+Cancel an order -> Check Note format.
+
+See Pending row -> Click Confirm -> Select VCB -> Check Result.
