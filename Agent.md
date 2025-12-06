@@ -1,134 +1,77 @@
-AGENT TASK: REFUND LOGIC HARDENING & HISTORY TRACKING
+AGENT TASK: PHASE 70.6 - REFUND SAFETY GUARD & UI FIXES
 
 Context:
 
-Refund Bugs: Notes lack [ID] badges. "Confirm Refund" menu item is missing for Pending items.
+Critical Logic Gap: User can Void a Pending Refund (GD2) even if a Completed Refund (GD3) exists. This leaves orphan records.
 
-Logic Flaws: Full Refund doesn't unlink Person correctly. Voiding allows deleting intermediate transactions out of order.
+UI Bug: "Account" column shows "Card Test ➡️ Unknown" for single-sided transactions.
 
-Audit: User needs to track Edits (History).
-Logic Bug: Full Refund logic fails to UNLINK the person from the original transaction.
+UI UX: Copy Icon is hard to click (hover-only) and overlaps with text.
 
 Objective:
 
-Fix requestRefund (Note Format & Unlink).
+Backend: Implement Strict Checks in voidTransaction.
 
-Fix voidTransaction (Constraint Chain).
-I. BACKEND: FORMAT NOTE & UNLINK LOGIC (src/services/transaction.service.ts)
+Backend: Fix Account Name mapping in getUnifiedTransactions.
 
-Implement logHistory on Edit/Void.
+Frontend: Make Copy Icon permanent and fix spacing.
 
-Fix UnifiedTransactionTable (Menu Actions & Void Tab).
+I. BACKEND: REFUND SAFETY (src/services/transaction.service.ts)
 
-I. BACKEND: LOGIC HARDENING (src/services/transaction.service.ts)
+Target: voidTransaction(id)
 
-1. Upgrade requestRefund
+Logic Update:
 
-Note Format:
+Fetch the transaction.
 
-Get Short ID of Original: original.id.split('-')[0].toUpperCase().
+Constraint Check (The Guard):
 
-Format: Refund Request [${ShortID}].
-Unlink Logic (Crucial):
+Query: Check if ANY transaction has linked_transaction_id == id AND status != 'void'.
 
-IF isFullRefund AND originalTxn.person_id:
+Condition: If found -> THROW ERROR:
 
-Fetch Person Name.
+"Không thể hủy giao dịch này vì đã có giao dịch liên quan (VD: Đã xác nhận tiền về). Vui lòng hủy giao dịch nối tiếp trước."
 
-Update GD1 (Original):
+Rollback Logic (Existing): Keep the logic that reverts the Parent's status (e.g. Void GD3 -> Set GD2 to 'pending').
 
-person_id: NULL (Remove debt).
+II. BACKEND: FIX "UNKNOWN" DISPLAY (src/services/transaction.service.ts)
 
-note: ${originalTxn.note} [Cancelled Debt: ${PersonName}].
+Target: getUnifiedTransactions
 
-status: 'waiting_refund'.
+Logic Update:
 
-If Debt: Append  - Cancel Debt: ${PersonName}.
+Current: Likely setting dest_name = 'Unknown' default if type is transfer-like.
 
-Unlink Logic (Full Refund):
+Fix:
 
-Verify person_id is explicitly set to null in the update payload.
+If target_account_id is NULL AND person_id is NULL:
 
-Crucial: Also clear tag if it was a Debt Tag, or keep it for reference? -> Keep Tag for history context, but clear Person.
+dest_name = undefined (Do not return "Unknown").
 
-2. Upgrade voidTransaction (The Guard)
+display_type = 'expense' (or income), NOT 'transfer'.
 
-Check Children:
+Result: UI should render [Logo] Card Test (No arrow).
 
-Before voiding txn, query if ANY other transaction has linked_transaction_id == txn.id AND status != 'void'.
+III. FRONTEND: UI POLISH (UnifiedTransactionTable)
 
-If found: Throw Error: "Không thể hủy! Tồn tại giao dịch liên quan (VD: Đã xác nhận hoàn tiền). Hãy hủy giao dịch đó trước."
+1. Fix Copy Icon
 
-3. Implement logHistory & Update updateTransaction
+Action: Remove group-hover:opacity-100 and opacity-0.
 
-Before Update:
+Style: flex-shrink-0 ml-2 text-slate-400 hover:text-slate-600 cursor-pointer.
 
-Insert into transaction_history:
+Layout: Ensure parent container is flex items-center justify-between. Text container gets truncate. Icon stays visible on the right.
 
-transaction_id: id
+2. Fix Account Column
 
-snapshot_before: current data from DB.
+Action: Update logic to ONLY show Arrow ➡️ if destination_name is valid.
 
-change_type: 'edit'
-Action: Open ConfirmRefundDialog (reuse Refund mode or dedicated dialog).
+IV. EXECUTION STEPS
 
-2. Update TransactionForm for Confirm
+Service: Add the Child-Check query to voidTransaction.
 
-If opening for "Confirm":
+Service: Clean up the "Unknown" fallback logic.
 
-mode: 'confirm_refund'.
-
-from_account: PENDING_REFUNDS_ID (Fixed).
-
-to_account: Selectable (Real Bank).
-
-amount: Fixed (from pending txn).
-
-note: [${shortId}] Refund Received.
-
-Hook: Call this inside updateTransaction and voidTransaction.
-
-II. FRONTEND: UI POLISH
-
-1. Fix "Confirm Refund" Visibility
-
-Target: UnifiedTransactionTable -> Action Menu.
-
-Condition:
-
-Show "Confirm Refund" IF:
-
-status === 'pending' (Yellow Badge)
-
-AND (account.type === 'system' OR account_id === PENDING_REFUNDS_ID).
-
-Current bug: Likely checking for expense type only. Pending Refund is income.
-
-2. Fix Void Tab
-
-Target: getUnifiedTransactions or Page Filter.
-
-Logic: Ensure that when "Void" tab is selected, the API fetches status = 'void'.
-
-Visual: In Void Tab, show rows normally (no opacity). In All Tab, show Void rows with opacity (or hide them based on user pref).
-
-III. EXECUTION STEPS
-
-Service: Implement History Logging.
-
-Service: Harden Refund/Void logic.
-
-UI: Update Menu Conditions.
+UI: Update CSS for Copy Icon.
 
 Build: Verify.
-Service: Fix requestRefund (Add Unlink logic & Note formatting).
-
-UI: Add "Confirm Refund" item to the Action Menu for pending rows.
-
-Form: Handle confirm_refund mode to auto-fill Source=System, Target=Selectable.
-
-Test:
-
-Cancel Debt Order -> Original Note should change, Person removed.
-
-See Pending Row -> Click Confirm -> Select Bank -> Money in Bank.
