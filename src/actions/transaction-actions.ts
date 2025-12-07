@@ -687,24 +687,19 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     throw new Error('Cannot edit this transaction because it has linked Void/Refund transactions. Please delete the linked transactions first.');
   }
 
+  // Fetch existing transaction data (single-table: person_id is directly on transactions)
   const { data: existingData, error: existingError } = await supabase
     .from('transactions')
-    .select(
-      `
-        id,
-        occurred_at,
-        note,
-        tag,
-        transaction_lines (
-          amount,
-          original_amount,
-          cashback_share_percent,
-          cashback_share_fixed,
-          metadata,
-          person_id
-        )
-      `
-    )
+    .select(`
+      id,
+      occurred_at,
+      note,
+      tag,
+      person_id,
+      amount,
+      cashback_share_percent,
+      cashback_share_fixed
+    `)
     .eq('id', id)
     .maybeSingle();
 
@@ -727,6 +722,20 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     new Date(input.occurred_at)
   );
 
+  // Calculate final amounts for single-table storage
+  const originalAmount = Math.abs(input.amount);
+  const sharePercentEntry = Math.max(0, Number(input.cashback_share_percent ?? 0));
+  const sharePercentCapped = Math.min(100, sharePercentEntry);
+  const sharePercentRate = sharePercentCapped / 100;
+  const shareFixed = Math.max(0, Number(input.cashback_share_fixed ?? 0));
+  const percentContribution = sharePercentRate * originalAmount;
+  const rawCashback = percentContribution + shareFixed;
+  const cashbackGiven = Math.min(originalAmount, Math.max(0, rawCashback));
+  const finalAmount = input.type === 'debt'
+    ? (originalAmount - cashbackGiven)  // Debt: final = amount - cashback
+    : originalAmount;
+
+  // Update transaction header with all fields (single-table architecture)
   const { error: headerError } = await (supabase
     .from('transactions')
     .update as any)({
@@ -734,6 +743,14 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       note: input.note,
       tag: tag,
       status: 'posted',
+      type: input.type,
+      amount: finalAmount,
+      account_id: input.source_account_id,
+      target_account_id: input.destination_account_id ?? input.debt_account_id ?? null,
+      category_id: input.category_id ?? null,
+      person_id: input.person_id ?? null,
+      cashback_share_percent: input.cashback_share_percent ?? null,
+      cashback_share_fixed: input.cashback_share_fixed ?? null,
       persisted_cycle_tag: persistedCycleTag,
       shop_id: input.shop_id ?? null,
     })
@@ -744,52 +761,39 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     return false;
   }
 
-  const { error: deleteError } = await supabase.from('transaction_lines').delete().eq('transaction_id', id);
-  if (deleteError) {
-    console.error('Failed to clear old transaction lines:', deleteError);
-    return false;
-  }
-
-  const linesWithId = lines.map(line => ({ ...line, transaction_id: id }));
-  const { error: insertError } = await (supabase.from('transaction_lines').insert as any)(linesWithId);
-  if (insertError) {
-    console.error('Failed to insert new transaction lines:', insertError);
-    return false;
-  }
-
-  const existingLines = ((existingData as any).transaction_lines as any[]) ?? [];
-
-  for (const line of existingLines) {
-    if (!line.person_id) continue;
-    const payload = buildSheetPayload(existingData as any, line);
-    if (!payload) continue;
-    void syncTransactionToSheet(line.person_id, payload, 'delete').catch(err => {
+  // SHEET SYNC: Delete old entry if person existed
+  const oldPersonId = (existingData as any).person_id;
+  if (oldPersonId) {
+    const deletePayload = {
+      id: (existingData as any).id,
+      occurred_at: (existingData as any).occurred_at,
+      note: (existingData as any).note,
+      tag: (existingData as any).tag,
+      amount: (existingData as any).amount ?? 0,
+    };
+    void syncTransactionToSheet(oldPersonId, deletePayload as any, 'delete').catch(err => {
       console.error('Sheet Sync Error (Update/Delete):', err);
     });
   }
 
-  if (input.type === 'repayment') {
-    await syncRepaymentTransaction(supabase, id, input, linesWithId, shopInfo);
-  } else {
-    const syncBase = {
+  // SHEET SYNC: Create new entry if person exists
+  const newPersonId = input.person_id;
+  if (newPersonId) {
+    const syncPayload = {
       id,
       occurred_at: input.occurred_at,
       note: input.note,
       tag,
       shop_name: shopInfo?.name ?? null,
+      amount: finalAmount,
+      original_amount: originalAmount,
+      cashback_share_percent: sharePercentRate,
+      cashback_share_fixed: shareFixed,
+      type: input.type === 'repayment' ? 'In' : 'Debt',
     };
-
-    for (const line of linesWithId) {
-      const personId = line.person_id;
-      if (!personId) continue;
-
-      const payload = buildSheetPayload(syncBase, line);
-      if (!payload) continue;
-
-      void syncTransactionToSheet(personId, payload, 'create').catch(err => {
-        console.error('Sheet Sync Error (Update/Create):', err);
-      });
-    }
+    void syncTransactionToSheet(newPersonId, syncPayload as any, 'create').catch(err => {
+      console.error('Sheet Sync Error (Update/Create):', err);
+    });
   }
 
   return true;

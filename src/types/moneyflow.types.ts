@@ -87,8 +87,11 @@ export type Person = {
   is_archived?: boolean | null
   subscription_ids?: string[]
   subscription_count?: number
-  subscription_details?: { id: string; name: string; slots: number }[]
+  subscription_details?: { id: string; name: string; slots: number; logo_url?: string | null }[]
   monthly_debts?: MonthlyDebtSummary[]
+  current_cycle_debt?: number | null
+  outstanding_debt?: number | null
+  current_cycle_label?: string | null
 }
 
 export type SubscriptionMember = {

@@ -122,7 +122,7 @@ async function postToSheet(sheetLink: string, payload: Record<string, unknown>) 
   })
 }
 
-function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete') {
+function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete' | 'update') {
   const { originalAmount, percentRate, fixedBack, totalBack } = calculateTotals(txn)
 
   // If amount is negative, it's a credit to the debt account (Repayment) -> Type "In"
@@ -131,7 +131,7 @@ function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete') {
   const type = txn.type ?? ((txn.amount ?? 0) < 0 ? 'In' : 'Debt');
 
   return {
-    action,
+    action: action === 'update' ? 'edit' : action, // Map 'update' to 'edit' for backend if needed, or keep 'update'
     id: txn.id,
     type: type,
     date: txn.occurred_at ?? txn.date ?? null,
@@ -148,7 +148,7 @@ function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete') {
 export async function syncTransactionToSheet(
   personId: string,
   txn: SheetSyncTransaction,
-  action: 'create' | 'delete'
+  action: 'create' | 'delete' | 'update' = 'create'
 ) {
   try {
     const sheetLink = await getProfileSheetLink(personId)
@@ -194,119 +194,70 @@ export async function syncAllTransactions(personId: string) {
     }
 
     const supabase = createClient()
+
+    // Query transactions table directly - no more transaction_lines
     const { data, error } = await supabase
-      .from('transaction_lines')
+      .from('transactions')
       .select(`
         id,
-        transaction_id,
+        occurred_at,
+        note,
+        status,
+        tag,
+        type,
         amount,
-        original_amount,
         cashback_share_percent,
         cashback_share_fixed,
-        metadata,
-        person_id,
-        transactions!inner(
-          id,
-          occurred_at,
-          note,
-          status,
-          tag,
-          shop_id,
-          shops ( name ),
-          transaction_lines (
-            id,
-            type,
-            account_id,
-            accounts ( name, type )
-          )
-        )
+        shop_id,
+        shops ( name )
       `)
       .eq('person_id', personId)
-      .order('occurred_at', { foreignTable: 'transactions', ascending: true })
+      .neq('status', 'void')
+      .order('occurred_at', { ascending: true })
 
     if (error) {
       console.error('Failed to load transactions for sync:', error)
       return { success: false, message: 'Failed to load transactions' }
     }
 
-    console.log(`[SheetSync] syncAllTransactions for personId: ${personId}. Found ${data?.length} lines.`);
-    if (data && data.length > 0) {
-      console.log(`[SheetSync] Sample line person_id: ${(data[0] as any).person_id}`);
-    }
+    console.log(`[SheetSync] syncAllTransactions for personId: ${personId}. Found ${data?.length} transactions.`);
 
     const rows = (data ?? []) as {
       id: string
-      transaction_id: string
+      occurred_at: string
+      note: string | null
+      status: string
+      tag: string | null
+      type: string | null
       amount: number
-      original_amount?: number | null
       cashback_share_percent?: number | null
       cashback_share_fixed?: number | null
-      metadata?: unknown
-      transactions: {
-        id: string;
-        occurred_at: string;
-        note: string | null;
-        status: string;
-        tag: string | null;
-        shop_id: string | null;
-        shops: { name: string | null } | null;
-        transaction_lines: Array<{
-          id: string
-          type: 'debit' | 'credit'
-          account_id: string | null
-          accounts: { name: string; type: string } | null
-        }> | null
-      } | null
+      shop_id: string | null
+      shops: { name: string | null } | null
     }[]
 
     let sent = 0
-    for (const row of rows) {
-      if (!row.transactions) continue
+    for (const txn of rows) {
+      const shopData = txn.shops as any
+      const shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
 
-      const meta = (row.metadata as Record<string, unknown> | null) ?? null
-      const cashbackAmount =
-        typeof meta?.cashback_share_amount === 'number'
-          ? meta.cashback_share_amount
-          : undefined
-
-      const shopData = row.transactions.shops as any
-      let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
-
-      if (!shopName) {
-        // Fallback to Credit Account Name (Source) if available
-        const lines = row.transactions.transaction_lines ?? []
-        // Find a credit line that is NOT the debt account (if possible to distinguish)
-        // Usually the debt account is the one in 'row.account_id' if this was a direct debt line query?
-        // But 'row' is from 'transaction_lines' table.
-        // We want the OTHER account.
-        // Typically Payer = Credit, Debt = Debit (Asset).
-        // So Source is Credit.
-        const creditLine = lines.find(l => l.type === 'credit')
-        if (creditLine?.accounts?.name) {
-          shopName = creditLine.accounts.name
-        }
-      }
-
-      // Determine type: if amount < 0, it's a repayment (In), otherwise Debt
-      const type = row.amount < 0 ? 'In' : 'Debt'
-
-      const action = row.transactions.status === 'void' ? 'delete' : 'create'
+      // Determine type: debt = lending out, repayment = receiving back
+      const syncType = txn.type === 'repayment' ? 'In' : 'Debt'
 
       const payload = buildPayload(
         {
-          id: row.transactions.id,
-          occurred_at: row.transactions.occurred_at,
-          note: row.transactions.note,
-          shop_name: shopName,
-          tag: row.transactions.tag ?? undefined,
-          amount: row.amount,
-          original_amount: row.original_amount ?? Math.abs(row.amount),
-          cashback_share_percent: row.cashback_share_percent ?? undefined,
-          cashback_share_fixed: row.cashback_share_fixed ?? undefined,
-          cashback_share_amount: cashbackAmount,
-          type: type,
+          id: txn.id,
+          occurred_at: txn.occurred_at,
+          note: txn.note,
+          shop_name: shopName ?? '',
+          tag: txn.tag ?? undefined,
+          amount: txn.amount,
+          original_amount: Math.abs(txn.amount),
+          cashback_share_percent: txn.cashback_share_percent ?? undefined,
+          cashback_share_fixed: txn.cashback_share_fixed ?? undefined,
+          type: syncType,
         },
-        action
+        'create'
       )
 
       await postToSheet(sheetLink, payload)

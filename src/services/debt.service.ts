@@ -13,6 +13,9 @@ type DebtTransactionRow = {
   tag?: string | null
   occurred_at?: string | null
   status?: string | null
+  // Cashback fields for final price calculation
+  cashback_share_percent?: string | number | null
+  cashback_share_fixed?: string | number | null
 }
 
 export type DebtByTagAggregatedResult = {
@@ -38,17 +41,40 @@ function resolveBaseType(type: TransactionType | null | undefined): 'income' | '
   return 'expense'
 }
 
+/**
+ * Calculate final price (amount after cashback deduction)
+ * Final Price = Amount - Cashback
+ * Cashback = (amount * percent/100) + fixed
+ */
+function calculateFinalPrice(row: DebtTransactionRow): number {
+  const rawAmount = Math.abs(Number(row.amount ?? 0))
+
+  // Parse cashback values
+  const percentVal = Number(row.cashback_share_percent ?? 0)
+  const fixedVal = Number(row.cashback_share_fixed ?? 0)
+
+  // Normalize percent (could be stored as 2 for 2% or 0.02 for 2%)
+  const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
+
+  // Calculate total cashback
+  const cashbackFromPercent = rawAmount * normalizedPercent
+  const totalCashback = cashbackFromPercent + fixedVal
+
+  // Final price = amount - cashback
+  return rawAmount - totalCashback
+}
+
 export async function computeDebtFromTransactions(rows: DebtTransactionRow[], personId: string): Promise<number> {
   return rows
     .filter(row => row?.person_id === personId && row.status !== 'void')
     .reduce((sum, row) => {
-      const amount = Math.abs(Number(row.amount ?? 0))
+      const finalPrice = calculateFinalPrice(row)
       const baseType = resolveBaseType(row.type)
       if (baseType === 'income') {
-        return sum - amount
+        return sum - finalPrice
       }
       if (baseType === 'expense') {
-        return sum + amount
+        return sum + finalPrice
       }
       return sum
     }, 0)
@@ -59,7 +85,7 @@ export async function getPersonDebt(personId: string): Promise<number> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('transactions')
-    .select('amount, type, person_id, status')
+    .select('amount, type, person_id, status, cashback_share_percent, cashback_share_fixed')
     .eq('person_id', personId)
 
   if (error || !data) {
@@ -149,7 +175,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
   const supabase = createClient()
   const { data, error } = await supabase
     .from('transactions')
-    .select('tag, occurred_at, amount, type, person_id, status')
+    .select('tag, occurred_at, amount, type, person_id, status, cashback_share_percent, cashback_share_fixed')
     .eq('person_id', personId)
     .neq('status', 'void')
     .order('occurred_at', { ascending: false })
@@ -171,7 +197,8 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
     ; (data as DebtTransactionRow[]).forEach(row => {
       const tag = row.tag ?? 'UNTAGGED'
       const baseType = resolveBaseType(row.type)
-      const amount = Math.abs(Number(row.amount ?? 0))
+      // Use final price (amount - cashback) instead of raw amount
+      const finalPrice = calculateFinalPrice(row)
       const occurredAt = row.occurred_at ?? ''
 
       if (!tagMap.has(tag)) {
@@ -180,9 +207,9 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
 
       const current = tagMap.get(tag)!
       if (baseType === 'expense') {
-        current.lend += amount
+        current.lend += finalPrice
       } else if (baseType === 'income') {
-        current.repay += amount
+        current.repay += finalPrice
       }
 
       if (occurredAt && occurredAt > current.last_activity) {

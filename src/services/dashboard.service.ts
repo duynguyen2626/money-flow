@@ -271,37 +271,61 @@ export async function getDashboardStats(
 
     // ========================================================================
     // 5b. OUTSTANDING BY CYCLE (Flat List)
+    // Query debt transactions by person_id (not target_account_id)
     // ========================================================================
-    const debtorAccountIds = topDebtors.map(d => d.id)
     let outstandingList: DashboardStats['outstandingByCycle'] = []
 
-    if (debtorAccountIds.length > 0) {
-      // In new schema: Debt = Money I lent.
-      // Transactions where target_account_id is the Debt Account?
-      // Or if `account_id` is Debt Account, and we have a negative balance?
-      // Wait, topDebtors comes from 'accounts' table with type='debt'.
-      // We want to find why they owe us.
-      // Query transactions interacting with these accounts.
+    // Get all active profiles with potential debt
+    const { data: allProfiles, error: allProfilesError } = await supabase
+      .from('profiles')
+      .select('id, name, avatar_url')
+      .eq('is_archived', false)
 
+    if (!allProfilesError && allProfiles) {
+      const profileIds = (allProfiles as any[]).map(p => p.id)
+
+      // Query debt transactions by person_id
       const { data: debtTxns, error: debtTxnsError } = await supabase
         .from('transactions')
-        .select('target_account_id, amount, tag, occurred_at')
-        .in('target_account_id', debtorAccountIds)
+        .select('person_id, amount, tag, occurred_at')
+        .eq('type', 'debt')
+        .in('person_id', profileIds)
         .neq('status', 'void')
         .order('occurred_at', { ascending: false })
 
       if (!debtTxnsError && debtTxns) {
-        // Group by (AccountId + Tag)
-        const mapKey = (accId: string, tag: string) => `${accId}::${tag}`
+        // Also get repayments to calculate net debt
+        const { data: repayTxns } = await supabase
+          .from('transactions')
+          .select('person_id, amount')
+          .eq('type', 'repayment')
+          .in('person_id', profileIds)
+          .neq('status', 'void')
+
+        // Calculate net repayments per person
+        const repaymentByPerson = new Map<string, number>()
+        if (repayTxns) {
+          (repayTxns as any[]).forEach(tx => {
+            if (tx.person_id) {
+              const current = repaymentByPerson.get(tx.person_id) ?? 0
+              repaymentByPerson.set(tx.person_id, current + Math.abs(tx.amount || 0))
+            }
+          })
+        }
+
+        // Group by (PersonId + Tag)
+        const mapKey = (personId: string, tag: string) => `${personId}::${tag}`
         const cycleMap = new Map<string, {
-          account_id: string
+          person_id: string
           tag: string
           amount: number
           occurred_at: string | null
         }>();
 
         (debtTxns as any[]).forEach((tx: any) => {
-          const accountId = tx.target_account_id
+          const personId = tx.person_id
+          if (!personId) return
+
           const tagValue = tx.tag
           const occurredAt = tx.occurred_at
           const parsedDate = occurredAt ? new Date(occurredAt) : null
@@ -314,13 +338,12 @@ export async function getDashboardStats(
             label = format(parsedDate, 'MMM yy').toUpperCase()
           }
 
-          // Amount is inflow to debt account (Lending), so it increases debt.
           const amount = Math.abs(tx.amount || 0)
-          const key = mapKey(accountId, label)
+          const key = mapKey(personId, label)
 
           if (!cycleMap.has(key)) {
             cycleMap.set(key, {
-              account_id: accountId,
+              person_id: personId,
               tag: label,
               amount: 0,
               occurred_at: occurredAt
@@ -328,20 +351,22 @@ export async function getDashboardStats(
           }
           const entry = cycleMap.get(key)!
           entry.amount += amount
-          // Keep the most recent date
           if (occurredAt && entry.occurred_at && new Date(occurredAt) > new Date(entry.occurred_at)) {
             entry.occurred_at = occurredAt
           }
         })
 
         // Convert map to list and enrich with person info
+        const profileMap = new Map((allProfiles as any[]).map(p => [p.id, p]))
+
         outstandingList = Array.from(cycleMap.values())
-          .map((item: any) => {
-            const debtor = topDebtors.find(d => d.id === item.account_id)
+          .filter(item => item.amount > 0) // Only show actual debt
+          .map((item) => {
+            const profile = profileMap.get(item.person_id)
             return {
-              id: `${item.account_id}-${item.tag}`,
-              person_id: debtor?.id || item.account_id,
-              person_name: debtor?.name || 'Unknown',
+              id: `${item.person_id}-${item.tag}`,
+              person_id: item.person_id,
+              person_name: profile?.name || 'Unknown',
               tag: item.tag,
               amount: item.amount,
               occurred_at: item.occurred_at

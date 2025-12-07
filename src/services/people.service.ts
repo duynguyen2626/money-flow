@@ -139,6 +139,11 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   const supabase = createClient()
   const includeArchived = options?.includeArchived ?? false
 
+  // Calculate current month boundaries for cycle debt
+  const now = new Date()
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+  const currentCycleLabel = format(now, 'MMM yy', { locale: enUS }).toUpperCase() // e.g., "DEC 24"
+
   const profileSelect = async () => {
     const attempt = await supabase
       .from('profiles')
@@ -171,7 +176,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
           profile_id, 
           service_id, 
           slots,
-          subscriptions ( name )
+          subscriptions ( name, shop_id, shops ( logo_url ) )
         `),
     ])
 
@@ -188,55 +193,109 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     console.error('Error fetching subscription memberships for people:', subError)
   }
 
-  // Calculate balances from transaction lines
+  // Calculate balances from transactions
+  // Note: Some debt transactions use person_id instead of target_account_id
   const debtAccountIds = (debtAccounts as AccountRow[])?.map(a => a.id) ?? []
-  const debtBalanceMap = new Map<string, number>()
+  const personIds = (profiles as ProfileRow[])?.map(p => p.id) ?? []
+  const debtBalanceByPerson = new Map<string, number>()
+  const currentCycleDebtByPerson = new Map<string, number>()
 
-  if (debtAccountIds.length > 0) {
+  // Build mapping from debt account to person
+  const debtAccountToPersonMap = new Map<string, string>()
+  if (Array.isArray(debtAccounts)) {
+    (debtAccounts as AccountRow[]).forEach(account => {
+      if (account.owner_id) {
+        debtAccountToPersonMap.set(account.id, account.owner_id)
+      }
+    })
+  }
+
+  // Query debt transactions - include both target_account_id and person_id queries
+  if (personIds.length > 0) {
     const { data: txns, error: txnsError } = await supabase
       .from('transactions')
-      .select('account_id, target_account_id, amount, status')
-      .or(`account_id.in.(${debtAccountIds.join(',')}),target_account_id.in.(${debtAccountIds.join(',')})`)
-      // [M2-SP1] Fix: Exclude void transactions
+      .select('account_id, target_account_id, person_id, amount, status, occurred_at, type, tag, cashback_share_percent, cashback_share_fixed')
+      .eq('type', 'debt')
       .neq('status', 'void')
 
     if (txnsError) {
       console.error('Error fetching debt transactions:', txnsError)
     } else {
       (txns as any[])?.forEach(txn => {
-        // If account_id is debt account: Money leaving it (usually repayment/outflow) -> Balance decreases (amount is usually negative)
-        // If target_account_id is debt account: Money entering it (usually lending/inflow) -> Balance increases (add abs amount)
+        const txnDate = txn.occurred_at ? new Date(txn.occurred_at) : null
+        const isCurrentMonth = txnDate && txnDate >= currentMonthStart
 
-        // Check if account_id is one of our debt accounts
-        if (txn.account_id && debtAccountIds.includes(txn.account_id)) {
-          const current = debtBalanceMap.get(txn.account_id) ?? 0
-          // amount is negative for outflow. So adding it decreases balance.
-          // However, if we lend money, account_id is BANK. target is DEBT.
-          // If we repay money, account_id is DEBT?? No, typically Repayment is Expense for Person.
-          // Let's stick to standard flow:
-          // Lent: Bank -> Debt (Target). Target Balance increases.
-          // Repaid: Debt (Source) -> Bank. Source Balance decreases.
+        // Determine which person this debt belongs to
+        let personId: string | null = null
 
-          debtBalanceMap.set(txn.account_id, current + txn.amount)
+        // Check if person_id is set directly on transaction
+        if (txn.person_id && personIds.includes(txn.person_id)) {
+          personId = txn.person_id
+        }
+        // Or check if target_account_id is a debt account
+        else if (txn.target_account_id && debtAccountToPersonMap.has(txn.target_account_id)) {
+          personId = debtAccountToPersonMap.get(txn.target_account_id) ?? null
         }
 
-        // Check if target_account_id is one of our debt accounts
-        if (txn.target_account_id && debtAccountIds.includes(txn.target_account_id)) {
-          const current = debtBalanceMap.get(txn.target_account_id) ?? 0
-          debtBalanceMap.set(txn.target_account_id, current + Math.abs(txn.amount))
+        if (personId) {
+          // Calculate final price = amount - cashback
+          const rawAmount = Math.abs(txn.amount)
+          const percentVal = Number(txn.cashback_share_percent ?? 0)
+          const fixedVal = Number(txn.cashback_share_fixed ?? 0)
+          const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
+          const cashback = (rawAmount * normalizedPercent) + fixedVal
+          const finalPrice = rawAmount - cashback
+
+          const current = debtBalanceByPerson.get(personId) ?? 0
+          debtBalanceByPerson.set(personId, current + finalPrice)
+
+          // Track current cycle debt separately
+          if (isCurrentMonth) {
+            const currentCycle = currentCycleDebtByPerson.get(personId) ?? 0
+            currentCycleDebtByPerson.set(personId, currentCycle + finalPrice)
+          }
         }
       })
     }
   }
 
-  const debtAccountMap = new Map<string, { id: string; balance: number }>()
+  // Also query repayment transactions to subtract from debt
+  if (personIds.length > 0) {
+    const { data: repayTxns, error: repayError } = await supabase
+      .from('transactions')
+      .select('person_id, amount, status, cashback_share_percent, cashback_share_fixed')
+      .eq('type', 'repayment')
+      .neq('status', 'void')
+
+    if (!repayError && repayTxns) {
+      (repayTxns as any[]).forEach(txn => {
+        if (txn.person_id && personIds.includes(txn.person_id)) {
+          // Calculate final price = amount - cashback
+          const rawAmount = Math.abs(txn.amount)
+          const percentVal = Number(txn.cashback_share_percent ?? 0)
+          const fixedVal = Number(txn.cashback_share_fixed ?? 0)
+          const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
+          const cashback = (rawAmount * normalizedPercent) + fixedVal
+          const finalPrice = rawAmount - cashback
+
+          const current = debtBalanceByPerson.get(txn.person_id) ?? 0
+          debtBalanceByPerson.set(txn.person_id, current - finalPrice)
+        }
+      })
+    }
+  }
+
+  const debtAccountMap = new Map<string, { id: string; balance: number; currentCycleDebt: number }>()
   const accountOwnerByAccountId = new Map<string, string>()
   if (Array.isArray(debtAccounts)) {
     (debtAccounts as AccountRow[]).forEach(account => {
       if (account.owner_id) {
+        const balance = debtBalanceByPerson.get(account.owner_id) ?? 0
+        const currentCycleDebt = currentCycleDebtByPerson.get(account.owner_id) ?? 0
         debtAccountMap.set(account.owner_id, {
           id: account.id,
-          balance: debtBalanceMap.get(account.id) ?? 0,
+          balance,
+          currentCycleDebt,
         })
         accountOwnerByAccountId.set(account.id, account.owner_id)
       }
@@ -245,12 +304,12 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
 
   const monthlyDebtMap = new Map<string, Map<string, MonthlyDebtSummary>>()
 
-  if (debtAccountIds.length > 0) {
-    // Fetch Lending transactions (where debt account is the target)
+  // Fetch debt transactions for monthly breakdown
+  if (personIds.length > 0) {
     const { data: monthlyTxns, error: monthlyTxnsError } = await supabase
       .from('transactions')
-      .select('target_account_id, amount, occurred_at, tag, status')
-      .in('target_account_id', debtAccountIds)
+      .select('person_id, target_account_id, amount, occurred_at, tag, status, cashback_share_percent, cashback_share_fixed')
+      .eq('type', 'debt')
       .neq('status', 'void')
       .order('occurred_at', { ascending: false })
 
@@ -258,10 +317,15 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       console.error('Error fetching monthly debt lines:', JSON.stringify(monthlyTxnsError, null, 2))
     } else {
       (monthlyTxns as any[])?.forEach(txn => {
-        const accountId = txn.target_account_id
-        if (!accountId) return
+        // Determine which person this belongs to
+        let ownerId: string | null = null
 
-        const ownerId = accountOwnerByAccountId.get(accountId)
+        if (txn.person_id && personIds.includes(txn.person_id)) {
+          ownerId = txn.person_id
+        } else if (txn.target_account_id && debtAccountToPersonMap.has(txn.target_account_id)) {
+          ownerId = debtAccountToPersonMap.get(txn.target_account_id) ?? null
+        }
+
         if (!ownerId) return
 
         const tagValue = txn.tag ?? null
@@ -273,9 +337,13 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         const label =
           tagValue ?? (validDate ? format(validDate, 'MMM yy', { locale: enUS }).toUpperCase() : 'Debt')
 
-        // Amount is inflow to debt account (Lending), so it's positive debt.
-        // Usually amount from source is negative, but we want the magnitude added to debt.
-        const amountValue = Math.abs(txn.amount)
+        // Calculate final price = amount - cashback
+        const rawAmount = Math.abs(txn.amount)
+        const percentVal = Number(txn.cashback_share_percent ?? 0)
+        const fixedVal = Number(txn.cashback_share_fixed ?? 0)
+        const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
+        const cashback = (rawAmount * normalizedPercent) + fixedVal
+        const finalPrice = rawAmount - cashback
 
         const personMap = monthlyDebtMap.get(ownerId) ?? new Map<string, MonthlyDebtSummary>()
         const existing = personMap.get(groupingKey)
@@ -283,13 +351,13 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         const updated: MonthlyDebtSummary = existing
           ? {
             ...existing,
-            amount: existing.amount + amountValue,
+            amount: existing.amount + finalPrice,
             occurred_at: existing.occurred_at ?? (validDate ? validDate.toISOString() : occurredAt),
           }
           : {
             tag: tagValue ?? undefined,
             tagLabel: label,
-            amount: amountValue,
+            amount: finalPrice,
             occurred_at: validDate ? validDate.toISOString() : occurredAt ?? undefined,
           }
 
@@ -307,12 +375,12 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         const dateB = b.occurred_at ? new Date(b.occurred_at).getTime() : 0
         return dateB - dateA
       })
-      .slice(0, 3)
+      .slice(0, 5) // Keep more for expandable list
 
     monthlyDebtsByPerson.set(personId, entries)
   })
 
-  const subscriptionMap = new Map<string, Array<{ id: string; name: string; slots: number }>>()
+  const subscriptionMap = new Map<string, Array<{ id: string; name: string; slots: number; logo_url?: string | null }>>()
   if (Array.isArray(subscriptionMembers)) {
     (subscriptionMembers as any[]).forEach(row => {
       if (!row.profile_id) return
@@ -320,10 +388,13 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         subscriptionMap.set(row.profile_id, [])
       }
       if (row.service_id) {
+        // Extract logo_url from nested shops relation
+        const logoUrl = row.subscriptions?.shops?.logo_url ?? null
         subscriptionMap.get(row.profile_id)?.push({
           id: row.service_id,
           name: row.subscriptions?.name ?? 'Unknown',
-          slots: row.slots ?? 1
+          slots: row.slots ?? 1,
+          logo_url: logoUrl,
         })
       }
     })
@@ -332,6 +403,9 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   const mapped = (profiles as ProfileRow[] | null)?.map(person => {
     const debtInfo = debtAccountMap.get(person.id)
     const subs = subscriptionMap.get(person.id) ?? []
+    const balance = debtInfo?.balance ?? 0
+    const currentCycleDebt = debtInfo?.currentCycleDebt ?? 0
+    const outstandingDebt = Math.max(0, balance - currentCycleDebt)
 
     return {
       id: person.id,
@@ -342,10 +416,13 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       is_owner: (person as any).is_owner ?? null,
       is_archived: (person as any).is_archived ?? null,
       debt_account_id: debtInfo?.id ?? null,
-      balance: debtInfo?.balance ?? null,
+      balance: balance,
+      current_cycle_debt: currentCycleDebt,
+      outstanding_debt: outstandingDebt,
+      current_cycle_label: currentCycleLabel,
       subscription_count: subs.length,
       subscription_ids: subs.map(s => s.id), // Keep for backward compatibility if needed
-      subscription_details: subs, // New field
+      subscription_details: subs, // Now includes logo_url
       monthly_debts: monthlyDebtsByPerson.get(person.id) ?? [],
     }
   }) ?? []
