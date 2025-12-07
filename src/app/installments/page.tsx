@@ -6,7 +6,14 @@ import { Plus, Clock, CheckCircle, AlertCircle } from "lucide-react"
 import { CreateInstallmentDialog } from "@/components/installments/create-installment-dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-export default async function InstallmentsPage() {
+interface PageProps {
+    searchParams: Promise<{ highlight?: string; tab?: string }>
+}
+
+export default async function InstallmentsPage({ searchParams }: PageProps) {
+    const params = await searchParams
+    const highlightTxnId = params.highlight ?? null
+
     const [activeInstallments, completedInstallments, pendingTransactions] = await Promise.all([
         getActiveInstallments(),
         getCompletedInstallments(),
@@ -62,11 +69,11 @@ export default async function InstallmentsPage() {
                 </TabsContent>
 
                 <TabsContent value="active" className="space-y-4">
-                    <InstallmentTable installments={activeInstallments} />
+                    <InstallmentTable installments={activeInstallments} highlightTxnId={highlightTxnId} />
                 </TabsContent>
 
                 <TabsContent value="done" className="space-y-4">
-                    <InstallmentTable installments={completedInstallments} />
+                    <InstallmentTable installments={completedInstallments} highlightTxnId={highlightTxnId} />
                 </TabsContent>
             </Tabs>
         </div>

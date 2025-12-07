@@ -35,7 +35,7 @@ export async function getInstallments() {
     const supabase: any = createClient();
     const { data, error } = await supabase
         .from('installments')
-        .select('*, original_transaction:transactions(account:accounts(name))')
+        .select('*, original_transaction:transactions(account:accounts!transactions_account_id_fkey(id, name))')
         .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -46,7 +46,7 @@ export async function getActiveInstallments() {
     const supabase: any = createClient();
     const { data, error } = await supabase
         .from('installments')
-        .select('*, original_transaction:transactions(account:accounts(name))')
+        .select('*, original_transaction:transactions(account:accounts!transactions_account_id_fkey(id, name))')
         .eq('status', 'active')
         .order('next_due_date', { ascending: true });
 
@@ -81,7 +81,7 @@ export async function getCompletedInstallments() {
     const supabase: any = createClient();
     const { data, error } = await supabase
         .from('installments')
-        .select('*, original_transaction:transactions(account:accounts(name))')
+        .select('*, original_transaction:transactions(account:accounts!transactions_account_id_fkey(id, name))')
         .eq('status', 'completed')
         .order('created_at', { ascending: false });
 

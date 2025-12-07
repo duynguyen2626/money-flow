@@ -41,3 +41,4 @@
 - **Installments:** Bảng `installments` liên kết với `transaction_lines`.
 - **Bank Mappings:** Bảng `bank_mappings` để map keywords từ SMS/Bank app sang categories.
 - **Webhook Links:** Bảng `sheet_webhook_links` để sync với Google Sheets.
+
