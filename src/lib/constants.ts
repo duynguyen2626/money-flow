@@ -40,4 +40,7 @@ export const SYSTEM_CATEGORIES = {
 
     // Danh mục Phí Ngân hàng (Phase 63)
     BANK_FEE: 'e0000000-0000-0000-0000-000000000099',
+
+    // Danh mục Credit Payment (Batch Transfer)
+    CREDIT_PAYMENT: 'e0000000-0000-0000-0000-000000000091',
 };

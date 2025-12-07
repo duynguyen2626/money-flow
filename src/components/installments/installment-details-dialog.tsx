@@ -73,7 +73,7 @@ export function InstallmentDetailsDialog({
                         <div>
                             <p className="text-sm font-medium text-muted-foreground">Account</p>
                             <p className="text-sm font-medium">
-                                {installment.original_transaction?.transaction_lines?.find((l: any) => l.type === 'credit')?.account?.name || 'N/A'}
+                                {installment.original_transaction?.account?.name || 'N/A'}
                             </p>
                         </div>
                         <div>

@@ -6,13 +6,58 @@ import { getShops } from '@/services/shop.service'
 import { getAccountsWithPendingBatchItems } from '@/services/batch.service'
 import { AccountList } from '@/components/moneyflow/account-list'
 import { FixDataButton } from '@/components/moneyflow/fix-data-button'
-import { AccountCashbackSnapshot } from '@/types/moneyflow.types'
-import Link from 'next/link'
-import { buttonVariants } from '@/components/ui/button'
-import { PlusCircle } from 'lucide-react'
+import { AccountCashbackSnapshot, Account } from '@/types/moneyflow.types'
 import { cn } from '@/lib/utils'
+import { getSharedLimitParentId } from '@/lib/account-utils'
 
 export const dynamic = 'force-dynamic'
+
+// Helper to calculate total debt (expense debt from credit cards only)
+function calculateDebtSummary(accounts: Account[]): { totalDebt: number; totalLimit: number } {
+  const creditCards = accounts.filter(acc => acc.type === 'credit_card' && acc.is_active !== false)
+
+  let totalDebt = 0
+  let totalLimit = 0
+  const countedParentIds = new Set<string>()
+
+  for (const card of creditCards) {
+    // netBalance = total_in - total_out
+    // For credit cards: when you spend, total_out increases
+    // When you pay, total_in increases  
+    // Debt = negative netBalance (when spending > payments)
+    const totalIn = card.total_in ?? 0
+    const totalOut = card.total_out ?? 0
+    const netBalance = totalIn - totalOut
+
+    // If netBalance is negative, that's debt
+    if (netBalance < 0) {
+      totalDebt += Math.abs(netBalance)
+    }
+
+    // Only count limit from parent cards (avoid double-counting shared limits)
+    const sharedLimitParentId = getSharedLimitParentId(card.cashback_config)
+    if (sharedLimitParentId) {
+      if (!countedParentIds.has(sharedLimitParentId)) {
+        const parent = accounts.find(a => a.id === sharedLimitParentId)
+        if (parent) {
+          totalLimit += parent.credit_limit ?? 0
+          countedParentIds.add(sharedLimitParentId)
+        }
+      }
+    } else {
+      if (!countedParentIds.has(card.id)) {
+        totalLimit += card.credit_limit ?? 0
+        countedParentIds.add(card.id)
+      }
+    }
+  }
+
+  return { totalDebt, totalLimit }
+}
+
+const numberFormatter = new Intl.NumberFormat('en-US', {
+  maximumFractionDigits: 0,
+})
 
 export default async function AccountsPage() {
   const [accounts, categories, people, shops, pendingBatchAccountIds] = await Promise.all([
@@ -39,6 +84,9 @@ export default async function AccountsPage() {
     }
   })
 
+  // Calculate Total Debt / Limit
+  const { totalDebt, totalLimit } = calculateDebtSummary(accounts)
+
   if (accounts.length === 0) {
     return (
       <div className="rounded-lg border bg-white p-6 shadow">
@@ -60,15 +108,32 @@ export default async function AccountsPage() {
           </div>
           <div className="flex items-center gap-3">
             <FixDataButton />
-            <Link
-              href="/accounts/new"
-              className={cn(buttonVariants({ variant: 'outline' }), 'flex items-center gap-2')}
-            >
-              <PlusCircle size={18} />
-              Create New
-            </Link>
+
+            {/* Total Debt / Limit Badge - moved here */}
+            {totalLimit > 0 && (
+              <div className="flex items-center gap-2 rounded-lg bg-slate-100 px-3 py-2 text-sm">
+                <span className="text-slate-500">Debt:</span>
+                <span className={cn(
+                  "font-bold",
+                  totalDebt > totalLimit * 0.8 ? "text-red-600" :
+                    totalDebt > totalLimit * 0.5 ? "text-amber-600" : "text-slate-900"
+                )}>
+                  {numberFormatter.format(totalDebt)}
+                </span>
+                <span className="text-slate-400">/</span>
+                <span className="font-bold text-slate-700">{numberFormatter.format(totalLimit)}</span>
+                <span className={cn(
+                  "text-xs font-medium px-1.5 py-0.5 rounded",
+                  (totalDebt / totalLimit) > 0.8 ? "bg-red-100 text-red-700" :
+                    (totalDebt / totalLimit) > 0.5 ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                )}>
+                  {((totalDebt / totalLimit) * 100).toFixed(0)}%
+                </span>
+              </div>
+            )}
+
             <div className="rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
-              {accounts.length} accounts tracked
+              {accounts.length} accounts
             </div>
           </div>
         </div>

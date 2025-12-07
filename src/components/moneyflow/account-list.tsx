@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { LayoutGrid, List, Search } from 'lucide-react'
-import { CreateAccountDialog } from './create-account-dialog'
+import { useEffect, useMemo, useState, memo } from 'react'
+import { LayoutGrid, List, Search, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Check } from 'lucide-react'
 import { AccountCard } from './account-card'
 import { AccountTable } from './account-table'
 import { Account, AccountCashbackSnapshot, Category, Person, Shop } from '@/types/moneyflow.types'
 import { updateAccountConfigAction } from '@/actions/account-actions'
+import { computeNextDueDate, getSharedLimitParentId } from '@/lib/account-utils'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Button } from '@/components/ui/button'
 
 type AccountListProps = {
   accounts: Account[]
@@ -19,23 +21,74 @@ type AccountListProps = {
 
 type ViewMode = 'grid' | 'table'
 type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt' | 'waiting_confirm'
+type SortKey = 'due_date' | 'balance' | 'limit'
+type SortOrder = 'asc' | 'desc'
 
 const FILTERS: { key: FilterKey; label: string; match: (account: Account) => boolean }[] = [
   { key: 'all', label: 'All', match: () => true },
-  {
-    key: 'bank',
-    label: 'Bank',
-    match: account => ['bank', 'cash', 'ewallet'].includes(account.type),
-  },
+  { key: 'bank', label: 'Bank', match: account => ['bank', 'cash', 'ewallet'].includes(account.type) },
   { key: 'credit', label: 'Credit', match: account => account.type === 'credit_card' },
-  {
-    key: 'savings',
-    label: 'Savings',
-    match: account => ['savings', 'investment', 'asset'].includes(account.type),
-  },
+  { key: 'savings', label: 'Savings', match: account => ['savings', 'investment', 'asset'].includes(account.type) },
   { key: 'debt', label: 'Debt', match: account => account.type === 'debt' },
-  { key: 'waiting_confirm', label: 'Waiting Confirm', match: () => true }, // Logic handled in filteredItems
+  { key: 'waiting_confirm', label: 'Waiting Confirm', match: () => true },
 ]
+
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'due_date', label: 'Due Date' },
+  { key: 'balance', label: 'Balance' },
+  { key: 'limit', label: 'Limit' },
+]
+
+function getDaysUntilDue(account: Account): number {
+  const dueDate = computeNextDueDate(account.cashback_config ?? null)
+  if (!dueDate) return 999999
+  const now = new Date()
+  return Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+}
+
+function getAccountBalance(account: Account, allAccounts: Account[]): number {
+  const creditLimit = account.credit_limit ?? 0
+  const netBalance = (account.total_in ?? 0) - (account.total_out ?? 0)
+
+  if (account.type !== 'credit_card') return netBalance
+
+  const sharedLimitParentId = getSharedLimitParentId(account.cashback_config)
+  if (sharedLimitParentId) {
+    const parent = allAccounts.find(a => a.id === sharedLimitParentId)
+    if (parent) {
+      const parentNetBalance = (parent.total_in ?? 0) - (parent.total_out ?? 0)
+      const siblings = allAccounts.filter(a => getSharedLimitParentId(a.cashback_config) === parent.id)
+      const totalChildDebt = siblings.reduce((sum, child) => {
+        const childNet = (child.total_in ?? 0) - (child.total_out ?? 0)
+        return sum + Math.abs(childNet < 0 ? childNet : 0)
+      }, 0)
+      const parentDebt = Math.abs(parentNetBalance < 0 ? parentNetBalance : 0)
+      return (parent.credit_limit ?? 0) - (parentDebt + totalChildDebt)
+    }
+  }
+
+  return creditLimit + netBalance
+}
+
+// Memoized filter button
+const FilterButton = memo(({ filter, isActive, onClick }: {
+  filter: { key: FilterKey; label: string };
+  isActive: boolean;
+  onClick: () => void
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`rounded-full px-3 py-1 text-sm font-semibold transition ${isActive
+      ? 'bg-blue-600 text-white shadow-sm'
+      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+      }`}
+    aria-pressed={isActive}
+  >
+    {filter.label}
+  </button>
+))
+FilterButton.displayName = 'FilterButton'
 
 export function AccountList({ accounts, cashbackById = {}, categories, people, shops, pendingBatchAccountIds = [] }: AccountListProps) {
   const [view, setView] = useState<ViewMode>('grid')
@@ -43,7 +96,10 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
   const [searchQuery, setSearchQuery] = useState('')
   const [items, setItems] = useState<Account[]>(accounts)
   const [pendingId, setPendingId] = useState<string | null>(null)
-  const [showClosedAccounts, setShowClosedAccounts] = useState(false) // Thêm trạng thái cho phần tài khoản đã đóng
+  const [showClosedAccounts, setShowClosedAccounts] = useState(false)
+  const [sortKey, setSortKey] = useState<SortKey>('due_date')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+  const [sortOpen, setSortOpen] = useState(false)
 
   useEffect(() => {
     setItems(accounts)
@@ -53,18 +109,12 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
     () => items.filter(acc => ['savings', 'investment', 'asset'].includes(acc.type)),
     [items]
   )
-  const creditCardAccounts = useMemo(
-    () => items.filter(acc => acc.type === 'credit_card' && acc.is_active !== false),
-    [items]
-  )
 
-  // Lọc các tài khoản đang hoạt động
   const activeItems = useMemo(
     () => items.filter(acc => acc.is_active !== false),
     [items]
   )
 
-  // Lọc các tài khoản đã đóng
   const closedItems = useMemo(
     () => items.filter(acc => acc.is_active === false),
     [items]
@@ -73,21 +123,43 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
   const filteredItems = useMemo(() => {
     let filtered = activeItems
 
-    // Handle 'waiting_confirm' separately or via match
     if (activeFilter === 'waiting_confirm') {
       filtered = filtered.filter(acc => pendingBatchAccountIds.includes(acc.id))
     } else {
       filtered = filtered.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc))
     }
 
-    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(acc => acc.name.toLowerCase().includes(query))
     }
 
     return filtered
-  }, [activeItems, activeFilter, searchQuery])
+  }, [activeItems, activeFilter, searchQuery, pendingBatchAccountIds])
+
+  const sortedItems = useMemo(() => {
+    const sorted = [...filteredItems]
+
+    sorted.sort((a, b) => {
+      let comparison = 0
+
+      switch (sortKey) {
+        case 'due_date':
+          comparison = getDaysUntilDue(a) - getDaysUntilDue(b)
+          break
+        case 'balance':
+          comparison = getAccountBalance(a, items) - getAccountBalance(b, items)
+          break
+        case 'limit':
+          comparison = (a.credit_limit ?? 0) - (b.credit_limit ?? 0)
+          break
+      }
+
+      return sortOrder === 'asc' ? comparison : -comparison
+    })
+
+    return sorted
+  }, [filteredItems, sortKey, sortOrder, items])
 
   const grouped = useMemo(() => {
     const sections: { key: FilterKey; title: string; helper: string; accounts: Account[] }[] = [
@@ -95,29 +167,29 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
         key: 'credit',
         title: '💳 Credit Cards',
         helper: 'Statement cycles & repayments',
-        accounts: filteredItems.filter(acc => acc.type === 'credit_card'),
+        accounts: sortedItems.filter(acc => acc.type === 'credit_card'),
       },
       {
         key: 'bank',
         title: '🏦 Payment Accounts',
         helper: 'Banks · E-wallets · Cash',
-        accounts: filteredItems.filter(acc => ['bank', 'cash', 'ewallet'].includes(acc.type)),
+        accounts: sortedItems.filter(acc => ['bank', 'cash', 'ewallet'].includes(acc.type)),
       },
       {
         key: 'savings',
         title: '💰 Savings & Assets',
         helper: 'Term deposits · Investments',
-        accounts: filteredItems.filter(acc => ['savings', 'investment', 'asset'].includes(acc.type)),
+        accounts: sortedItems.filter(acc => ['savings', 'investment', 'asset'].includes(acc.type)),
       },
       {
         key: 'debt',
         title: '👥 Debt Accounts',
         helper: 'People & loans',
-        accounts: filteredItems.filter(acc => acc.type === 'debt'),
+        accounts: sortedItems.filter(acc => acc.type === 'debt'),
       },
     ]
     return sections.filter(section => section.accounts.length > 0)
-  }, [filteredItems])
+  }, [sortedItems])
 
   const handleToggleStatus = async (accountId: string, nextValue: boolean) => {
     setPendingId(accountId)
@@ -131,28 +203,91 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
     }
   }
 
+  const handleSortSelect = (key: SortKey, order: SortOrder) => {
+    setSortKey(key)
+    setSortOrder(order)
+    setSortOpen(false)
+  }
+
+  const handleResetSort = () => {
+    setSortKey('due_date')
+    setSortOrder('asc')
+    setSortOpen(false)
+  }
+
+  const currentSortLabel = SORT_OPTIONS.find(o => o.key === sortKey)?.label ?? 'Sort'
+
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
         <div className="flex flex-wrap items-center gap-2">
           {FILTERS.map(filter => (
-            <button
+            <FilterButton
               key={filter.key}
-              type="button"
+              filter={filter}
+              isActive={activeFilter === filter.key}
               onClick={() => setActiveFilter(filter.key)}
-              className={`rounded-full px-3 py-1 text-sm font-semibold transition ${activeFilter === filter.key
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
-              aria-pressed={activeFilter === filter.key}
-            >
-              {filter.label}
-            </button>
+            />
           ))}
+
+          {/* Sort Popover - Show all options with asc/desc */}
+          <Popover open={sortOpen} onOpenChange={setSortOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="ml-2 gap-1.5 text-xs h-8">
+                <ArrowUpDown className="h-3.5 w-3.5" />
+                {currentSortLabel}
+                {sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-52 p-1" align="start">
+              <div className="flex flex-col">
+                {SORT_OPTIONS.map(option => (
+                  <div key={option.key} className="flex flex-col">
+                    <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+                      {option.label}
+                    </div>
+                    <button
+                      onClick={() => handleSortSelect(option.key, 'asc')}
+                      className={`flex items-center justify-between px-3 py-1.5 text-sm rounded-md transition-colors ${sortKey === option.key && sortOrder === 'asc'
+                        ? 'bg-blue-50 text-blue-700 font-medium'
+                        : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <ArrowUp className="h-3 w-3" />
+                        Ascending
+                      </span>
+                      {sortKey === option.key && sortOrder === 'asc' && <Check className="h-3.5 w-3.5" />}
+                    </button>
+                    <button
+                      onClick={() => handleSortSelect(option.key, 'desc')}
+                      className={`flex items-center justify-between px-3 py-1.5 text-sm rounded-md transition-colors ${sortKey === option.key && sortOrder === 'desc'
+                        ? 'bg-blue-50 text-blue-700 font-medium'
+                        : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <ArrowDown className="h-3 w-3" />
+                        Descending
+                      </span>
+                      {sortKey === option.key && sortOrder === 'desc' && <Check className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
+                ))}
+                <hr className="my-1 border-slate-200" />
+                <button
+                  onClick={handleResetSort}
+                  className="flex items-center gap-2 px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 rounded-md"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  Reset to Default
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         <div className="flex items-center gap-2 flex-1 justify-end">
-          {/* Search Input */}
           <div className="relative w-full max-w-xs">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
@@ -167,8 +302,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
             <button
               type="button"
               onClick={() => setView('grid')}
-              className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold transition ${view === 'grid' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
+              className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold transition ${view === 'grid' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
               aria-pressed={view === 'grid'}
             >
               <LayoutGrid className="h-4 w-4" />
@@ -177,18 +311,13 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
             <button
               type="button"
               onClick={() => setView('table')}
-              className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold transition ${view === 'table' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'
-                }`}
+              className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold transition ${view === 'table' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
               aria-pressed={view === 'table'}
             >
               <List className="h-4 w-4" />
               Table
             </button>
           </div>
-          <CreateAccountDialog
-            collateralAccounts={collateralAccounts}
-            creditCardAccounts={creditCardAccounts}
-          />
         </div>
       </div>
 
@@ -209,7 +338,10 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
                   {section.accounts.length} accounts
                 </span>
               </div>
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+              <div className={`grid gap-4 grid-cols-1 md:grid-cols-2 ${section.key === 'credit'
+                  ? 'lg:grid-cols-4'
+                  : 'lg:grid-cols-5'
+                }`}>
                 {section.accounts.map(account => (
                   <AccountCard
                     key={account.id}
@@ -220,13 +352,13 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
                     allAccounts={items}
                     shops={shops}
                     collateralAccounts={collateralAccounts}
+                    hasPendingItems={pendingBatchAccountIds.includes(account.id)}
                   />
                 ))}
               </div>
             </div>
           ))}
 
-          {/* Thêm phần hiển thị tài khoản đã đóng */}
           {closedItems.length > 0 && (
             <details
               className="border-t border-slate-200 pt-6 mt-6"
@@ -253,6 +385,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
                     allAccounts={items}
                     shops={shops}
                     collateralAccounts={collateralAccounts}
+                    hasPendingItems={pendingBatchAccountIds.includes(account.id)}
                   />
                 ))}
               </div>
@@ -262,14 +395,13 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
       ) : (
         <>
           <AccountTable
-            accounts={filteredItems}
+            accounts={sortedItems}
             onToggleStatus={handleToggleStatus}
             pendingId={pendingId}
             collateralAccounts={collateralAccounts}
             allAccounts={items}
           />
 
-          {/* Thêm phần hiển thị tài khoản đã đóng trong chế độ bảng */}
           {closedItems.length > 0 && (
             <details
               className="mt-8 rounded-xl border border-dashed border-slate-200 bg-white px-4 py-3"
