@@ -58,8 +58,8 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
   }
 
   // Group people by status
-  const activePeople = filteredPeople.filter(person => !person.is_archived && (person.balance ?? 0) > 0)
-  const settledPeople = filteredPeople.filter(person => !person.is_archived && (person.balance ?? 0) <= 0)
+  const activePeople = filteredPeople.filter(person => !person.is_archived && Math.abs(person.balance ?? 0) > 0)
+  const settledPeople = filteredPeople.filter(person => !person.is_archived && Math.abs(person.balance ?? 0) === 0)
   const archivedPeople = filteredPeople.filter(person => person.is_archived)
 
   // Get current tab data

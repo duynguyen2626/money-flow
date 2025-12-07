@@ -27,7 +27,7 @@ export default async function TransactionsPage() {
               <h1 className="text-2xl font-semibold">Transactions</h1>
               <p className="text-sm text-slate-500">Manage your income and expenses, with real-time synchronization.</p>
             </div>
-            <AddTransactionDialog accounts={accounts} categories={categories} people={people} shops={shops} listenToUrlParams={true} />
+            {/* AddTransactionDialog moved to FilterableTransactions */}
           </div>
           <FilterableTransactions
             transactions={recentTransactions}

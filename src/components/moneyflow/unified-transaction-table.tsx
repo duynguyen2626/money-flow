@@ -29,6 +29,16 @@ import {
   Store,
   CheckCircle2,
   History,
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Edit,
+  ExternalLink,
+  Eye,
+  FileText,
+  Filter,
+  RefreshCw,
+  Wallet
 } from 'lucide-react'
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -63,6 +73,7 @@ import { RefundNoteDisplay } from './refund-note-display'
 import { ConfirmRefundDialog } from "./confirm-refund-dialog"
 import { TransactionHistoryModal } from './transaction-history-modal'
 import { AddTransactionDialog } from "./add-transaction-dialog"
+import { ExcelStatusBar } from "@/components/ui/excel-status-bar"
 
 type ColumnKey =
   | "date"
@@ -199,6 +210,7 @@ interface UnifiedTransactionTableProps {
   sortState?: { key: SortKey; dir: SortDir }
   onSortChange?: (state: { key: SortKey; dir: SortDir }) => void
   context?: 'account' | 'person' | 'general'
+  isExcelMode?: boolean
 }
 
 
@@ -237,6 +249,7 @@ export function UnifiedTransactionTable({
   sortState: externalSortState,
   onSortChange,
   context,
+  isExcelMode = false,
 }: UnifiedTransactionTableProps) {
   const tableData = data ?? transactions ?? []
   const defaultColumns: ColumnConfig[] = [
@@ -244,7 +257,7 @@ export function UnifiedTransactionTable({
     { key: "type", label: "Type", defaultWidth: 130, minWidth: 110 },
     { key: "shop", label: "Note", defaultWidth: 200, minWidth: 150 }, // Renamed to Note, minimized
     { key: "category", label: "Category", defaultWidth: 150 },
-    ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 110, minWidth: 100 } as ColumnConfig] : []),
+    { key: "people", label: "Person", defaultWidth: 140, minWidth: 120 },
     { key: "account", label: "Account", defaultWidth: 180, minWidth: 160 },
     { key: "amount", label: "Amount", defaultWidth: 100 },
     // { key: "note", label: "Note", defaultWidth: 200, minWidth: 150 }, // Removed from default
@@ -269,7 +282,7 @@ export function UnifiedTransactionTable({
       shop: true,
       note: false, // Merged into Shop
       category: true,
-      people: !hidePeopleColumn,
+      people: true,
       tag: false, // Hidden by default (Merged into People/Account)
       account: true,
       amount: true,
@@ -365,7 +378,121 @@ export function UnifiedTransactionTable({
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [data, transactions, selectedTxnIds, accountType, accountId, sortState, context])
+  }, [data, transactions, accountType, accountId, sortState, context])
+
+  // --- Excel Mode Logic ---
+  const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set())
+  const [isSelecting, setIsSelecting] = useState(false)
+  const [startTxnId, setStartTxnId] = useState<string | null>(null)
+  const [selectedColumn, setSelectedColumn] = useState<'amount' | 'final_price' | null>(null)
+
+  useEffect(() => {
+    if (!isExcelMode) {
+      setSelectedCells(new Set())
+      setIsSelecting(false)
+      setStartTxnId(null)
+      setSelectedColumn(null)
+    }
+  }, [isExcelMode])
+
+  const handleCellMouseDown = (txnId: string, colKey: 'amount' | 'final_price', event: React.MouseEvent) => {
+    if (!isExcelMode) return
+    // Only allow left click
+    if (event.button !== 0) return
+
+    event.preventDefault() // Prevent text selection
+    setIsSelecting(true)
+    setStartTxnId(txnId)
+    setSelectedColumn(colKey)
+    setSelectedCells(new Set([txnId]))
+  }
+
+  const handleCellMouseEnter = (txnId: string, colKey: 'amount' | 'final_price') => {
+    if (!isExcelMode || !isSelecting || !startTxnId || selectedColumn !== colKey) return
+
+    // Find range between startTxnId and current txnId in displayedTransactions
+    const startIdx = displayedTransactions.findIndex(t => t.id === startTxnId)
+    const currentIdx = displayedTransactions.findIndex(t => t.id === txnId)
+
+    if (startIdx === -1 || currentIdx === -1) return
+
+    const min = Math.min(startIdx, currentIdx)
+    const max = Math.max(startIdx, currentIdx)
+
+    const range = displayedTransactions.slice(min, max + 1)
+    const newSet = new Set(range.map(t => t.id))
+    setSelectedCells(newSet)
+  }
+
+  const handleCellMouseUp = () => {
+    if (!isExcelMode) return
+    setIsSelecting(false)
+    setStartTxnId(null)
+    // Keep selectedColumn for display purposes until Excel mode is off or new selection starts
+  }
+
+  // Global mouse up to catch drag release outside cell
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isSelecting) {
+        setIsSelecting(false)
+        setStartTxnId(null)
+      }
+    }
+    window.addEventListener('mouseup', handleGlobalMouseUp)
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp)
+  }, [isSelecting])
+
+  const selectedStats = useMemo(() => {
+    if (selectedCells.size === 0 || !selectedColumn) return { sum: 0, count: 0, average: 0, totalIn: 0, totalOut: 0 }
+
+    let sum = 0
+    let count = 0
+    let totalIn = 0
+    let totalOut = 0
+
+    selectedCells.forEach(id => {
+      const txn = tableData.find(t => t.id === id)
+      if (txn) {
+        let value = 0;
+        if (selectedColumn === 'final_price') {
+          const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount ?? 0;
+          const percentRaw = Number(txn.cashback_share_percent ?? 0);
+          const fixedRaw = Number(txn.cashback_share_fixed ?? 0);
+          const rate = percentRaw > 1 ? percentRaw / 100 : percentRaw;
+          const cashbackCalc = (Math.abs(originalAmount) * rate) + fixedRaw;
+          const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
+          const baseAmount = Math.abs(originalAmount);
+          value = cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount);
+        } else { // selectedColumn === 'amount'
+          value = Math.abs(typeof txn.original_amount === 'number' ? txn.original_amount : txn.amount ?? 0);
+        }
+
+        sum += value;
+        count++;
+
+        const visualType = (txn as any).displayType ?? txn.type;
+        // For totalIn/totalOut, use the original amount sign, but the calculated value
+        // Exclude transfers from totalIn/totalOut unless they are explicitly income/expense
+        if (visualType === 'income' && txn.type !== 'transfer') {
+          totalIn += value;
+        } else if (visualType === 'expense' && txn.type !== 'transfer') {
+          totalOut += value;
+        } else if (txn.type === 'repayment') {
+          // Repayments are usually expenses from the perspective of the payer
+          totalOut += value;
+        }
+      }
+    })
+
+    return {
+      sum,
+      count,
+      average: count > 0 ? sum / count : 0,
+      totalIn,
+      totalOut
+    }
+  }, [selectedCells, tableData, selectedColumn])
 
 
   const editingInitialValues = useMemo(
@@ -800,7 +927,10 @@ export function UnifiedTransactionTable({
 
   return (
     <div className="relative space-y-3">
-      <div className="relative w-full overflow-x-auto border rounded-md bg-white shadow-sm">
+      <div className={cn(
+        "relative w-full overflow-x-auto border rounded-md bg-white shadow-sm transition-colors duration-300",
+        isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
+      )}>
         <Table className="min-w-[1000px]">
           <TableHeader className="sticky top-0 z-40 bg-white shadow-sm">
             <TableRow className="hover:bg-transparent border-b-2 border-slate-300">
@@ -919,6 +1049,8 @@ export function UnifiedTransactionTable({
               const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount
               const amountValue = numberFormatter.format(Math.abs(originalAmount ?? 0))
 
+              const isExcelSelected = isExcelMode && selectedCells.has(txn.id)
+
               const isSelected = selection.has(txn.id)
               const effectiveStatus = statusOverrides[txn.id] ?? txn.status
               const isVoided = effectiveStatus === 'void'
@@ -1018,10 +1150,13 @@ export function UnifiedTransactionTable({
                 <div className="relative flex justify-end">
                   <button
                     id={`action-btn-${txn.id}`}
-                    className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-1 text-slate-600 shadow-sm transition hover:bg-slate-50"
+                    className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-1 text-slate-600 shadow-sm transition hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isExcelMode}
                     onClick={event => {
                       event.stopPropagation()
-                      setActionMenuOpen(prev => (prev === txn.id ? null : txn.id))
+                      if (!isExcelMode) {
+                        setActionMenuOpen(prev => (prev === txn.id ? null : txn.id))
+                      }
                     }}
                   >
                     <MoreHorizontal className="h-4 w-4" />
@@ -1278,67 +1413,74 @@ export function UnifiedTransactionTable({
                       </div>
                     )
                   case "shop": {
-                    let displayIcon = txn.shop_logo_url;
-                    let displayName = txn.shop_name;
+                    let shopLogo = txn.shop_logo_url;
+                    let shopName = txn.shop_name;
 
-                    if (txn.type === 'repayment' && !displayName) {
-                      displayIcon = txn.destination_logo;
-                      displayName = txn.destination_name;
+                    // Fallback logic for repayment/service
+                    if (txn.type === 'repayment' && !shopName) {
+                      shopLogo = txn.destination_logo;
+                      shopName = txn.destination_name;
                     }
 
                     const isServicePayment = txn.note?.startsWith('Payment for Service') || (txn.metadata as any)?.type === 'service_payment';
-                    if (isServicePayment && !displayIcon) {
-                      displayIcon = txn.source_logo;
+                    if (isServicePayment && !shopLogo) {
+                      shopLogo = txn.source_logo;
                     }
 
                     return (
-                      <div className="flex items-center gap-2 max-w-[340px] overflow-hidden">
+                      <div className="flex items-center gap-2 w-full overflow-hidden group">
+                        {/* Refund Badge */}
                         {refundSeq > 0 && (
                           <span className="inline-flex items-center justify-center rounded-md bg-blue-100 text-blue-700 px-1.5 h-5 text-[10px] font-bold shrink-0 whitespace-nowrap" title={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
                             {refundSeq}. {shortIdBadge}
                           </span>
                         )}
-                        <div className="shrink-0">
-                          {displayIcon ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={displayIcon}
-                              alt={displayName || 'Shop'}
-                              className="h-5 w-5 object-contain"
-                            />
+
+                        {/* Logo */}
+                        {shopLogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={shopLogo} alt="" className="h-6 w-6 object-contain rounded-full bg-white p-0.5 border border-slate-100 shrink-0" />
+                        ) : (
+                          shopName ? (
+                            <Store className="h-4 w-4 text-slate-400 shrink-0" />
                           ) : (
-                            <Store className="h-4 w-4 text-slate-400" />
+                            // Empty placeholder
+                            <div className="w-6 shrink-0" />
                           )
-                          }
-                        </div>
+                        )}
+
                         <div className="flex flex-col min-w-0 flex-1">
+                          {/* Name */}
+                          {shopName && (
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className="text-sm font-semibold text-slate-700 truncate">{shopName}</span>
+                            </div>
+                          )}
+
+                          {/* Note */}
                           {txn.note ? (
                             <CustomTooltip content={txn.note}>
-                              <span className="text-sm font-medium text-slate-900 truncate cursor-help">
+                              <span className="text-sm text-slate-600 truncate cursor-help block">
                                 {txn.note}
                               </span>
                             </CustomTooltip>
                           ) : (
-                            <span className="text-sm font-medium text-slate-400 italic">No note</span>
+                            <span className="text-sm text-slate-400 italic block">No note</span>
                           )}
                         </div>
-                        {/* Copy ID Button - Always Visible, Right-Aligned */}
+
+                        {/* Copy Button */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigator.clipboard.writeText(txn.id);
-                            setCopiedId(txn.id);
-                            setTimeout(() => setCopiedId(null), 2000);
+                            const textToCopy = [shopName, txn.note, numberFormatter.format(txn.amount)].filter(Boolean).join(' - ');
+                            navigator.clipboard.writeText(textToCopy);
+                            toast.success('Copied details');
                           }}
-                          className={cn(
-                            "flex-shrink-0 ml-auto p-1 rounded transition-colors",
-                            copiedId === txn.id
-                              ? "text-emerald-500 hover:text-emerald-600 bg-emerald-50"
-                              : "text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                          )}
-                          title="Copy ID"
+                          className="flex-shrink-0 ml-auto text-slate-300 hover:text-slate-500 transition-colors opacity-0 group-hover:opacity-100 p-1"
+                          title="Copy Details"
                         >
-                          {copiedId === txn.id ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                          <Copy className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     );
@@ -1427,256 +1569,132 @@ export function UnifiedTransactionTable({
                     )
                   }
                   case "account": {
+                    const cycleTag = txn.persisted_cycle_tag
+                    const displayCycle = cycleTag || 'None'
+
+                    // Determine Account Names
+                    const sourceName = txn.source_name || txn.account_name || 'Unknown'
+                    const destName = txn.destination_name
+
                     const sourceIcon = txn.source_logo ? (
-                      <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
-                        <img src={txn.source_logo} alt={txn.source_name ?? ''} className="h-full w-full object-contain" />
-                      </div>
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={txn.source_logo as string} alt="" className="h-full w-full object-contain rounded-md" />
                     ) : (
-                      <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-xs font-bold border border-slate-200 rounded-full">
-                        {(txn.source_name ?? '?').charAt(0).toUpperCase()}
+                      <div className="flex h-full w-full items-center justify-center bg-slate-100 rounded-md">
+                        <Wallet className="h-4 w-4 text-slate-400" />
                       </div>
-                    );
+                    )
 
+                    // Destination Icon
                     const destIcon = txn.destination_logo ? (
-                      <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
-                        <img src={txn.destination_logo} alt={txn.destination_name ?? ''} className="h-full w-full object-contain" />
-                      </div>
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={txn.destination_logo as string} alt="" className="h-full w-full object-contain rounded-md" />
                     ) : (
-                      <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-xs font-bold border border-slate-200 rounded-full">
-                        {/* Fix Unknown: If destination name is missing, but person name exists (Lending), use person name initial */}
-                        {(txn.destination_name ?? txn.person_name ?? '?').charAt(0).toUpperCase()}
+                      <div className="flex h-full w-full items-center justify-center bg-slate-100 rounded-md text-[10px] font-bold text-slate-600">
+                        {destName?.charAt(0)}
                       </div>
-                    );
+                    )
 
-                    // Cycle Logic: Prioritize persisted_cycle_tag
-                    let displayCycle = txn.persisted_cycle_tag || cycleLabel;
-                    if (displayCycle === '-' || !displayCycle) {
-                      displayCycle = 'None';
-                    }
-
-                    if (context === 'account' && accountId) {
-                      if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment') {
-                        const isInflow = txn.amount > 0;
-                        const rawName = isInflow ? txn.source_name : txn.destination_name;
-                        // Fix Unknown: Fallback to Person Name for Debt (Lending)
-                        const effectiveName = rawName ?? (txn.type === 'debt' ? txn.person_name : null) ?? 'Unknown';
-
-                        const otherAccountName = effectiveName?.replace(/^[⬅️➡️]\s*/, '') ?? 'Unknown';
-                        const otherAccountIcon = isInflow ? sourceIcon : destIcon;
-                        const arrow = isInflow ? "⬅️" : "➡️";
-
-                        return (
-                          <CustomTooltip content={otherAccountName}>
-                            <div className="flex items-center gap-2 min-w-[150px]">
-                              <span className="text-lg leading-none">{arrow}</span>
-                              {otherAccountIcon}
-                              {/* Use robust ID check: source_account_id ?? account_id, destination_account_id ?? target_account_id */}
-                              {(txn.source_account_id || txn.account_id) && (txn.destination_account_id || txn.target_account_id) ? (
-                                <Link
-                                  href={`/accounts/${isInflow ? (txn.source_account_id || txn.account_id) : (txn.destination_account_id || txn.target_account_id)}`}
-                                  onClick={e => e.stopPropagation()}
-                                  className="truncate max-w-[120px] cursor-pointer font-medium hover:text-blue-600 transition-colors"
-                                >
-                                  {otherAccountName}
-                                </Link>
-                              ) : (
-                                <span className="truncate max-w-[120px] cursor-help font-medium">
-                                  {otherAccountName}
-                                </span>
-                              )
-                              }
-                            </div>
-                          </CustomTooltip>
-                        )
-                      }
-
-                      return (
-                        <div className="flex items-center gap-2 min-w-[150px]">
-                          {txn.source_name && sourceIcon}
-                          <CustomTooltip content={txn.account_name}>
-                            <span className="truncate max-w-[120px] cursor-help font-medium">
-                              {txn.account_name ?? 'Unknown'}
-                            </span>
-                          </CustomTooltip>
-                        </div>
-                      )
-                    }
-
-                    const isRefundTransaction = effectiveStatus === 'completed' &&
-                      (txn.source_name?.includes('Pending') || txn.source_name?.includes('Refund'));
-
-                    if (txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment' || isRefundTransaction) {
-                      // Fix Unknown logic here too
-                      const sourceName = txn.source_name ?? 'Unknown';
-                      const destName = txn.destination_name ?? txn.person_name ?? null;
-
-                      // Hide -> Unknown for System Accounts
-                      const isSystemSource = txn.account_id === REFUND_PENDING_ACCOUNT_ID || sourceName === 'Pending Refunds';
-                      const isSystemDest = txn.target_account_id === REFUND_PENDING_ACCOUNT_ID || destName === 'Pending Refunds';
-
-                      // If no destination (destName is null), show source only without arrow
-                      if (!destName || destName === 'Unknown') {
-                        return (
-                          <div className="flex items-center gap-2 cursor-help min-w-[150px]">
-                            {txn.source_name && sourceIcon}
-                            <span className="text-sm text-slate-700 font-medium">
-                              {txn.source_name ?? 'Unknown'}
-                            </span>
-                          </div>
-                        )
-                      }
-
-                      if ((isSystemSource && destName === 'Unknown') || (isSystemDest && sourceName === 'Unknown')) {
-                        return (
-                          <div className="flex items-center gap-2 cursor-help min-w-[150px]">
-                            {txn.source_name && sourceIcon}
-                            <span className="text-sm text-slate-500 italic">
-                              {isSystemSource ? (destName === 'Unknown' ? 'Pending Refunds (System)' : sourceName) : destName}
-                            </span>
-                          </div>
-                        )
-                      }
-
-                      return (
-                        <CustomTooltip content={`${sourceName} ➡️ ${destName}`}>
-                          <div className="flex items-center gap-1.5 min-w-[150px]">
-                            {/* Source */}
-                            <div className="flex items-center gap-1.5 shrink-0 max-w-[120px]">
-                              {txn.source_name && sourceIcon}
-                              {(txn.source_account_id || txn.account_id) ? (
-                                <Link href={`/accounts/${txn.source_account_id || txn.account_id}`} onClick={e => e.stopPropagation()} className="bg-transparent hover:underline hover:text-blue-600 block truncate">
-                                  <span className="text-sm truncate text-slate-700 block" title={sourceName}>{sourceName}</span>
-                                </Link>
-                              ) : (
-                                <span className="text-sm truncate text-slate-700 font-medium" title={sourceName}>{sourceName}</span>
-                              )}
-                            </div>
-
-                            {/* Arrow + Dest */}
-                            {destName && !(context === 'person' && (destName === txn.person_name || destName === txn.destination_name)) && (
-                              <div className="flex items-center gap-1.5 shrink-0 max-w-[120px]">
-                                <ArrowRight className="h-3 w-3 text-slate-400 shrink-0" />
-                                {destIcon}
-                                {txn.destination_account_id || txn.target_account_id ? (
-                                  <Link href={`/accounts/${txn.destination_account_id || txn.target_account_id}`} onClick={e => e.stopPropagation()} className="bg-transparent hover:underline hover:text-blue-600 block truncate">
-                                    <span className="text-sm truncate text-slate-700 block" title={destName}>{destName}</span>
-                                  </Link>
-                                ) : (
-                                  <span className="text-sm truncate text-slate-700 font-medium" title={destName}>{destName}</span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </CustomTooltip>
-                      );
-                    }
-
-                    const accountLine = txn.transaction_lines?.find(l => l.accounts?.name === txn.account_name)
-                    const displayAccountId = accountLine?.account_id
-                    const accountLogo = accountLine?.accounts?.logo_url ?? txn.source_logo
 
                     return (
-                      <div className="flex flex-col gap-0.5 min-w-[150px]">
+                      <div className="flex flex-col gap-1.5 w-full max-w-[200px]">
+                        {/* Row 1: Source */}
                         <div className="flex items-center gap-2">
-                          {txn.source_name ? sourceIcon : (
-                            accountLogo ? (
-                              <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
-                                <img src={accountLogo} alt={txn.account_name ?? ''} className="h-full w-full object-contain" />
-                              </div>
+                          <div className="h-8 w-8 shrink-0">
+                            {sourceIcon}
+                          </div>
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[10px] text-slate-400 leading-none mb-0.5">Source</span>
+                            {txn.source_account_id ? (
+                              <Link
+                                href={`/accounts/${txn.source_account_id}`}
+                                className="text-xs font-medium text-slate-700 hover:text-blue-600 hover:underline truncate"
+                                onClick={(e) => e.stopPropagation()}
+                                title={sourceName}
+                              >
+                                {sourceName}
+                              </Link>
                             ) : (
-                              <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-xs font-bold border border-slate-200 rounded-full">
-                                {(txn.account_name ?? '?').charAt(0).toUpperCase()}
-                              </div>
-                            )
-                          )}
-                          <div className="flex items-center gap-2 min-w-0 w-full">
-                            <CustomTooltip content={txn.account_name}>
-                              {displayAccountId ? (
-                                <Link
-                                  href={`/accounts/${displayAccountId}`}
-                                  onClick={e => e.stopPropagation()}
-                                  className="truncate cursor-pointer font-medium hover:text-blue-600 transition-colors min-w-0 shrink"
-                                >
-                                  {txn.account_name ?? 'Unknown'}
-                                </Link>
-                              ) : (
-                                <span className="truncate cursor-help min-w-0 shrink">
-                                  {txn.account_name ?? 'Unknown'}
-                                </span>
-                              )}
-                            </CustomTooltip>
-
-
-                            {/* Cycle Badge: Adjusted to not push too far right */}
-                            {(visualType === 'expense' || txn.persisted_cycle_tag) && (
-                              <CustomTooltip content={`Cycle: ${displayCycle}`}>
-                                <span className={cn(
-                                  "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold border whitespace-nowrap shrink-0",
-                                  displayCycle === 'None'
-                                    ? "bg-slate-100 text-slate-400 border-slate-200"
-                                    : "bg-blue-50 text-blue-600 border-blue-100"
-                                )}>
-                                  {displayCycle}
-                                </span>
-                              </CustomTooltip>
+                              <span className="text-xs font-medium text-slate-700 truncate" title={sourceName}>{sourceName}</span>
                             )}
                           </div>
-
-
-
                         </div>
+
+                        {/* Row 2: Destination (if exists) */}
+                        {destName && (
+                          <div className="flex items-center gap-2">
+                            <div className="h-8 w-8 shrink-0">
+                              {destIcon}
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-[10px] text-slate-400 leading-none mb-0.5">Destination</span>
+                              {txn.destination_account_id ? (
+                                <Link
+                                  href={`/accounts/${txn.destination_account_id}`}
+                                  className="text-xs font-medium text-slate-700 hover:text-blue-600 hover:underline truncate"
+                                  onClick={(e) => e.stopPropagation()}
+                                  title={destName}
+                                >
+                                  {destName}
+                                </Link>
+                              ) : (
+                                <span className="text-xs font-medium text-slate-700 truncate" title={destName}>{destName}</span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Row 3: Cycle Badge (if exists) */}
+                        {cycleTag && (
+                          <div className="flex mt-0.5">
+                            <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10 shrink-0">
+                              Cycle: {cycleTag}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    );
+                    )
                   }
+
                   case "people": {
                     const personName = (txn as any).person_name ?? txn.person_name ?? null
                     const personAvatar = (txn as any).person_avatar_url ?? txn.person_avatar_url ?? null
                     const personId = (txn as any).person_id ?? txn.person_id ?? null
+                    const debtTag = txn.tag // Debt/Tag info usually goes with Person context if it's a debt tag
 
-                    if (!personName) return <span className="text-slate-400">-</span>
+                    if (!personName) return <span className="text-slate-300">-</span>
 
-                    const content = (
-                      <div className="flex flex-col justify-center min-w-[120px] h-full">
-                        <div className="flex items-center justify-between gap-2 w-full">
-                          <div className="flex items-center gap-2 truncate">
-                            {personAvatar ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={personAvatar}
-                                alt={personName}
-                                className="h-6 w-6 object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-6 w-6 items-center justify-center bg-slate-100 text-[10px] font-bold text-slate-600 rounded-full">
-                                {personName.charAt(0).toUpperCase()}
-                              </div>
-                            )}
-                            <CustomTooltip content={personName}>
-                              <span className="font-medium text-slate-700 hover:text-blue-600 transition-colors truncate cursor-help">{personName}</span>
-                            </CustomTooltip>
-                          </div>
+                    // Fallback avatar if DB is null, but we have a name
+                    const displayAvatar = personAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(personName)}&background=random`
 
-                          {/* Tag Full Badge - Aligned Right */}
-                          {txn.tag && (
-                            <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-bold text-purple-700 border border-purple-100 whitespace-nowrap shrink-0">
-                              {txn.tag}
-                            </span>
+                    return (
+                      <div className="flex items-center gap-3 w-full max-w-[200px]">
+                        {/* Avatar */}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={displayAvatar} alt="" className="h-9 w-9 rounded-full object-cover shrink-0 ring-1 ring-slate-200" />
+
+                        <div className="flex flex-col min-w-0">
+                          {/* Name */}
+                          <Link
+                            href={`/people/${personId}`}
+                            className="text-sm font-semibold text-slate-800 hover:text-blue-600 hover:underline truncate"
+                            onClick={(e) => e.stopPropagation()}
+                            title={personName}
+                          >
+                            {personName}
+                          </Link>
+
+                          {/* Debt Tag Badge */}
+                          {debtTag && (
+                            <div className="flex mt-1">
+                              <span className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10 shrink-0">
+                                {debtTag}
+                              </span>
+                            </div>
                           )}
                         </div>
                       </div>
                     )
-
-                    if (personId) {
-                      return (
-                        <Link
-                          href={`/people/${personId}`}
-                          onClick={e => e.stopPropagation()}
-                        >
-                          {content}
-                        </Link>
-                      )
-                    }
-                    return content
                   }
                   case "tag":
                     return (
@@ -1709,7 +1727,16 @@ export function UnifiedTransactionTable({
                     const displayPercent = percentDisp <= 1 && percentDisp > 0 ? percentDisp * 100 : percentDisp
 
                     return (
-                      <div className="flex flex-col items-end">
+                      <div
+                        className={cn(
+                          "flex flex-col items-end cursor-cell select-none p-1 rounded transition-colors",
+                          amountClass,
+                          isExcelMode && selectedCells.has(txn.id) && selectedColumn === 'amount' && "bg-blue-100 ring-1 ring-blue-300"
+                        )}
+                        onMouseDown={(e) => handleCellMouseDown(txn.id, 'amount', e)}
+                        onMouseEnter={() => handleCellMouseEnter(txn.id, 'amount')}
+                        onMouseUp={handleCellMouseUp}
+                      >
                         <span className={amountClass}>{amountValue}</span>
                         {(displayPercent > 0 || fixedDisp > 0) && (
                           <div className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-600 border border-emerald-100 gap-1 mt-0.5 whitespace-nowrap">
@@ -1800,7 +1827,16 @@ export function UnifiedTransactionTable({
                     const hasBack = Math.abs(Number(originalAmount ?? 0)) > finalDisp
 
                     return (
-                      <div className="flex flex-col items-end">
+                      <div
+                        className={cn(
+                          "flex flex-col items-end cursor-cell select-none p-1 rounded transition-colors",
+                          amountClass,
+                          isExcelMode && selectedCells.has(txn.id) && selectedColumn === 'final_price' && "bg-blue-100 ring-1 ring-blue-300"
+                        )}
+                        onMouseDown={(e) => handleCellMouseDown(txn.id, 'final_price', e)}
+                        onMouseEnter={() => handleCellMouseEnter(txn.id, 'final_price')}
+                        onMouseUp={handleCellMouseUp}
+                      >
                         <span className={cn("font-bold text-lg", amountClass, isVoided && "line-through opacity-50")}>
                           {numberFormatter.format(finalDisp)}
                         </span>
@@ -1872,9 +1908,15 @@ export function UnifiedTransactionTable({
                   key={txn.id}
                   data-state={isSelected ? "selected" : undefined}
                   className={cn(
-                    "hover:bg-slate-50/50 border-b-2 border-slate-300 transition-colors text-base",
-                    isMenuOpen ? "bg-blue-50" : rowBgClass
+                    "border-b-2 border-slate-300 transition-colors text-base",
+                    isMenuOpen ? "bg-blue-50" : rowBgClass,
+                    !isExcelMode && "hover:bg-slate-50/50 cursor-pointer"
                   )}
+                  onClick={() => {
+                    if (!isExcelMode) {
+                      setEditingTxn(txn)
+                    }
+                  }}
                 >
                   {displayedColumns.map(col => {
                     // Sticky Logic for Cells
@@ -1924,7 +1966,7 @@ export function UnifiedTransactionTable({
                 </TableRow>
               )
             })}
-          </TableBody>
+          </TableBody >
           {
             selection.size > 0 && (
               <TableFooter>
@@ -1955,11 +1997,11 @@ export function UnifiedTransactionTable({
               </TableFooter>
             )
           }
-        </Table>
-      </div>
+        </Table >
+      </div >
 
       {/* Sticky Footer */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-2 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] text-sm">
+      < div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-2 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] text-sm" >
         <div className="flex items-center gap-4">
           {/* Pagination */}
           <div className="flex items-center gap-1">
@@ -2018,90 +2060,94 @@ export function UnifiedTransactionTable({
             Showing <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, displayedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, displayedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{displayedTransactions.length}</span> rows
           </p>
         </div>
-      </div>
+      </div >
 
-      {isCustomizerOpen && (
-        <div
-          className="absolute right-2 top-12 z-40 w-80 rounded-lg border border-slate-200 bg-white p-4 shadow-xl"
-          onClick={e => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <p className="text-sm font-semibold text-slate-800">Customize columns</p>
-              <p className="text-xs text-slate-500">Show/hide and resize</p>
-            </div>
-            <button
-              className="text-xs text-blue-600 hover:text-blue-800"
-              onClick={resetColumns}
-            >
-              Reset
-            </button>
-          </div>
-
-          <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-            {defaultColumns.map(col => (
-              <div key={col.key} className="flex items-center justify-between gap-2">
-                <label className="flex items-center gap-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    className="rounded border-gray-300"
-                    checked={visibleColumns[col.key]}
-                    onChange={() => toggleColumnVisibility(col.key)}
-                    disabled={col.key === "task"}
-                  />
-                  <span>{col.key === "task" ? "Task (always on)" : col.label}</span>
-                </label>
-                <input
-                  type="range"
-                  min={col.minWidth ?? 80}
-                  max={360}
-                  value={columnWidths[col.key]}
-                  onChange={e => updateColumnWidth(col.key, Number(e.target.value))}
-                  className="flex-1 accent-blue-500"
-                />
-                <span className="w-12 text-right text-xs text-slate-500">{columnWidths[col.key]}px</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {editingTxn && editingInitialValues && createPortal(
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4 py-4 sm:py-10"
-          onClick={() => setEditingTxn(null)}
-        >
+      {
+        isCustomizerOpen && (
           <div
-            className="flex w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden max-h-[90vh]"
-            onClick={event => event.stopPropagation()}
+            className="absolute right-2 top-12 z-40 w-80 rounded-lg border border-slate-200 bg-white p-4 shadow-xl"
+            onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-white z-20">
-              <h3 className="text-lg font-semibold text-slate-900">Edit Transaction</h3>
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Customize columns</p>
+                <p className="text-xs text-slate-500">Show/hide and resize</p>
+              </div>
               <button
-                className="rounded px-2 py-1 text-slate-500 transition hover:bg-slate-100"
-                onClick={() => setEditingTxn(null)}
-                aria-label="Close"
+                className="text-xs text-blue-600 hover:text-blue-800"
+                onClick={resetColumns}
               >
-                X
+                Reset
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200">
-              <TransactionForm
-                accounts={accounts}
-                categories={categories}
-                people={people}
-                shops={shops}
-                transactionId={editingTxn.id}
-                initialValues={editingInitialValues}
-                mode="edit"
-                onSuccess={handleEditSuccess}
-              />
+            <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+              {defaultColumns.map(col => (
+                <div key={col.key} className="flex items-center justify-between gap-2">
+                  <label className="flex items-center gap-2 text-sm text-slate-700">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300"
+                      checked={visibleColumns[col.key]}
+                      onChange={() => toggleColumnVisibility(col.key)}
+                      disabled={col.key === "task"}
+                    />
+                    <span>{col.key === "task" ? "Task (always on)" : col.label}</span>
+                  </label>
+                  <input
+                    type="range"
+                    min={col.minWidth ?? 80}
+                    max={360}
+                    value={columnWidths[col.key]}
+                    onChange={e => updateColumnWidth(col.key, Number(e.target.value))}
+                    className="flex-1 accent-blue-500"
+                  />
+                  <span className="w-12 text-right text-xs text-slate-500">{columnWidths[col.key]}px</span>
+                </div>
+              ))}
             </div>
           </div>
-        </div>,
-        document.body
-      )}
+        )
+      }
+
+      {
+        editingTxn && editingInitialValues && createPortal(
+          <div
+            className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4 py-4 sm:py-10"
+            onClick={() => setEditingTxn(null)}
+          >
+            <div
+              className="flex w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden max-h-[90vh]"
+              onClick={event => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-white z-20">
+                <h3 className="text-lg font-semibold text-slate-900">Edit Transaction</h3>
+                <button
+                  className="rounded px-2 py-1 text-slate-500 transition hover:bg-slate-100"
+                  onClick={() => setEditingTxn(null)}
+                  aria-label="Close"
+                >
+                  X
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200">
+                <TransactionForm
+                  accounts={accounts}
+                  categories={categories}
+                  people={people}
+                  shops={shops}
+                  transactionId={editingTxn.id}
+                  initialValues={editingInitialValues}
+                  mode="edit"
+                  onSuccess={handleEditSuccess}
+                />
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
+      }
 
       {
         confirmVoidTarget && createPortal(
@@ -2326,20 +2372,29 @@ export function UnifiedTransactionTable({
         isOpen={!!historyTarget}
         onClose={() => setHistoryTarget(null)}
       />
-      {cloningTxn && (
-        <AddTransactionDialog
-          isOpen={!!cloningTxn}
-          onOpenChange={(open) => {
-            if (!open) setCloningTxn(null)
-          }}
-          accounts={accounts}
-          categories={categories}
-          people={people}
-          shops={shops}
-          cloneInitialValues={buildEditInitialValues(cloningTxn)}
-          triggerContent={<span className="hidden"></span>}
-        />
-      )}
-    </div>
+      {
+        cloningTxn && (
+          <AddTransactionDialog
+            isOpen={!!cloningTxn}
+            onOpenChange={(open) => {
+              if (!open) setCloningTxn(null)
+            }}
+            accounts={accounts}
+            categories={categories}
+            people={people}
+            shops={shops}
+            cloneInitialValues={buildEditInitialValues(cloningTxn)}
+            triggerContent={<span className="hidden"></span>}
+          />
+        )
+      }
+      <ExcelStatusBar
+        totalIn={selectedStats.totalIn}
+        totalOut={selectedStats.totalOut}
+        average={selectedStats.average}
+        count={selectedStats.count}
+        isVisible={!!isExcelMode && selectedCells.size > 0}
+      />
+    </div >
   )
 }

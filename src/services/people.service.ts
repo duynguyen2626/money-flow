@@ -560,6 +560,8 @@ export async function updatePerson(
   if (typeof data.is_owner === 'boolean') payload.is_owner = data.is_owner
   if (typeof data.is_archived === 'boolean') payload.is_archived = data.is_archived
 
+  console.log('updatePerson payload:', { id, payload })
+
   if (Object.keys(payload).length > 0) {
     let { error } = await (supabase.from('profiles').update as any)(payload).eq('id', id)
     if (error?.code === '42703') {

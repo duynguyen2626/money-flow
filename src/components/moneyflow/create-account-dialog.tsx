@@ -382,6 +382,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
   const [minSpend, setMinSpend] = useState('')
   const [cycleType, setCycleType] = useState<CashbackCycleType>('calendar_month')
   const [statementDay, setStatementDay] = useState('')
+  const [dueDate, setDueDate] = useState('')
   const [tiers, setTiers] = useState<CashbackTier[]>([])
 
   // Savings fields
@@ -431,6 +432,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
     setMinSpend('')
     setCycleType('calendar_month')
     setStatementDay('')
+    setDueDate('')
     setTiers([])
     setInterestRate('')
     setTermMonths('')
@@ -473,6 +475,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
         minSpend: parseOptionalNumber(minSpend),
         cycleType,
         statementDay: cycleType === 'statement_cycle' ? parseStatementDayValue(statementDay) : null,
+        dueDate: parseStatementDayValue(dueDate),
         parentAccountId: parentAccountId || null,
         hasTiers: tiers.length > 0,
         tiers: tiers.length > 0 ? tiers.map(t => {
@@ -849,19 +852,34 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
                         </div>
 
                         {cycleType === 'statement_cycle' && (
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-600">Statement day</label>
-                            <input
-                              type="number"
-                              min="1"
-                              max="31"
-                              step="1"
-                              value={statementDay}
-                              onChange={event => setStatementDay(event.target.value)}
-                              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                              placeholder="Day of month"
-                            />
-                          </div>
+                          <>
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium text-slate-600">Statement day</label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="31"
+                                step="1"
+                                value={statementDay}
+                                onChange={event => setStatementDay(event.target.value)}
+                                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                placeholder="Day of month"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium text-slate-600">Due Date (Day)</label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="31"
+                                step="1"
+                                value={dueDate} // Added state for dueDate in component logic separately if not exists, but plan implies it exists. Checking file context...
+                                onChange={event => setDueDate(event.target.value)} // Need to ensure setDueDate exists.
+                                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                placeholder="Day of month"
+                              />
+                            </div>
+                          </>
                         )}
                       </div>
                     )}
