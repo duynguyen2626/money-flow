@@ -188,21 +188,26 @@ export function DebtCycleTabs({
                                         <div className="mt-2 pt-2 border-t border-slate-100 space-y-2">
                                             {/* Lend Badge */}
                                             <div className="flex items-center gap-2 text-xs">
-                                                <span className="flex items-center gap-1 text-rose-600 font-semibold min-w-[60px]">
+                                                <span className="flex items-center gap-1 text-rose-600 font-semibold min-w-[70px]">
                                                     <Minus className="h-3.5 w-3.5" /> Lend:
                                                 </span>
                                                 <span className="font-bold text-rose-700 text-sm">{numberFormatter.format(lendAmount)}</span>
                                             </div>
                                             {/* Repay Badge */}
                                             <div className="flex items-center gap-2 text-xs">
-                                                <span className="flex items-center gap-1 text-emerald-600 font-semibold min-w-[60px]">
+                                                <span className="flex items-center gap-1 text-emerald-600 font-semibold min-w-[70px]">
                                                     <Plus className="h-3.5 w-3.5" /> Repay:
                                                 </span>
                                                 <span className="font-bold text-emerald-700 text-sm">{numberFormatter.format(repayAmount)}</span>
                                             </div>
+                                            {/* Sum Back (Total Returned) */}
+                                            <div className="flex items-center gap-2 text-xs">
+                                                <span className="text-blue-600 font-semibold min-w-[70px]">Sum Back:</span>
+                                                <span className="font-bold text-blue-700 text-sm">{numberFormatter.format(repayAmount)}</span>
+                                            </div>
                                             {/* Remaining Badge - Lend minus Repay */}
                                             <div className="flex items-center gap-2 text-xs">
-                                                <span className="text-amber-600 font-semibold min-w-[60px]">Remaining:</span>
+                                                <span className="text-amber-600 font-semibold min-w-[70px]">Remaining:</span>
                                                 <span className="font-bold text-amber-700 text-sm">{numberFormatter.format(remainingAmount)}</span>
                                             </div>
                                             {/* Last Activity */}
