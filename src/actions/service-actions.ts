@@ -29,6 +29,11 @@ export async function upsertServiceAction(serviceData: any) {
 export async function distributeServiceAction(serviceId: string, customDate?: string, customNoteFormat?: string) {
   try {
     const transactions = await distributeService(serviceId, customDate, customNoteFormat)
+
+    // Recalculate balance for DRAFT_FUND as it's the account used
+    const { recalculateBalance } = await import('@/services/account.service')
+    await recalculateBalance(SYSTEM_ACCOUNTS.DRAFT_FUND)
+
     revalidatePath('/services')
     revalidatePath('/')
     revalidatePath('/transactions')
@@ -70,39 +75,41 @@ export async function confirmServicePaymentAction(serviceId: string, accountId: 
   // Check for existing payment
   const { data: existingTx } = await supabase
     .from('transactions')
-    .select('*')
+    .select('id')
     .contains('metadata', metadata)
-    .single()
+    .maybeSingle()
 
   let transactionId = (existingTx as any)?.id
 
+  // Single Table Architecture: Transfer from Bank (accountId) to Draft Fund
+  const payload = {
+    occurred_at: new Date(date).toISOString(),
+    note: `Payment for Service ${monthTag}`,
+    tag: monthTag,
+    type: 'transfer',
+    status: 'posted',
+    account_id: accountId,               // Source: Real Bank
+    target_account_id: SYSTEM_ACCOUNTS.DRAFT_FUND, // Target: Draft Fund
+    amount: -Math.abs(amount),           // Outflow from source
+    category_id: SYSTEM_CATEGORIES.ONLINE_SERVICES,
+    metadata: metadata, // metadata is merged on update, or set on insert
+    person_id: null,
+    shop_id: null
+  }
+
   if (existingTx) {
     // Update existing transaction
-    await (supabase
+    const { error } = await (supabase
       .from('transactions') as any)
-      .update({
-        occurred_at: new Date(date).toISOString(),
-        note: `Payment for Service ${monthTag}`,
-        tag: monthTag
-        // metadata is already there
-      })
+      .update(payload)
       .eq('id', transactionId)
 
-    // Delete existing lines
-    await supabase
-      .from('transaction_lines')
-      .delete()
-      .eq('transaction_id', transactionId)
+    if (error) throw new Error(error.message)
   } else {
     // Create new transaction
     const { data: transaction, error: txError } = await (supabase
       .from('transactions') as any)
-      .insert([{
-        occurred_at: new Date(date).toISOString(),
-        note: `Payment for Service ${monthTag}`,
-        metadata: metadata,
-        tag: monthTag
-      }])
+      .insert([payload])
       .select()
       .single()
 
@@ -110,28 +117,12 @@ export async function confirmServicePaymentAction(serviceId: string, accountId: 
     transactionId = (transaction as any).id
   }
 
-  const lines = [
-    {
-      transaction_id: transactionId,
-      account_id: accountId, // Real Bank
-      amount: -amount,
-      type: 'credit',
-      category_id: SYSTEM_CATEGORIES.ONLINE_SERVICES // Add category to credit line to ensure UI sees it as Expense
-    },
-    {
-      transaction_id: transactionId,
-      account_id: SYSTEM_ACCOUNTS.DRAFT_FUND, // Draft Fund
-      amount: amount,
-      type: 'debit',
-      category_id: SYSTEM_CATEGORIES.ONLINE_SERVICES // Expense Category
-    }
-  ]
-
-  const { error: linesError } = await supabase
-    .from('transaction_lines')
-    .insert(lines as any)
-
-  if (linesError) throw new Error(linesError.message)
+  // Recalculate balances for both accounts
+  const { recalculateBalance } = await import('@/services/account.service')
+  await Promise.all([
+    recalculateBalance(accountId),
+    recalculateBalance(SYSTEM_ACCOUNTS.DRAFT_FUND)
+  ])
 
   revalidatePath(`/services/${serviceId}`)
   revalidatePath('/accounts')
@@ -149,25 +140,17 @@ export async function getServicePaymentStatusAction(serviceId: string, monthTag:
 
   const { data: transaction, error } = await supabase
     .from('transactions')
-    .select(`
-      *,
-      transaction_lines!inner (
-        amount,
-        account_id
-      )
-    `)
+    .select('id, amount, account_id, target_account_id, type')
     .contains('metadata', metadata)
-    .single()
+    .maybeSingle()
 
   if (error || !transaction) {
     return { confirmed: false, amount: 0 }
   }
 
-  // Find the debit line (payment to Draft Fund) to get the positive amount
-  // Or credit line (payment from Bank) which is negative
-  // Let's take the absolute value of the first line for simplicity, or specifically look for the credit line.
-  // The credit line amount is negative.
-  const amount = Math.abs((transaction as any).transaction_lines[0].amount)
+  // In single table, amount is negative for transfer source.
+  // We want to return positive amount paid.
+  const amount = Math.abs((transaction as any).amount)
 
   return { confirmed: true, amount: amount, transactionId: (transaction as any).id }
 }
@@ -176,6 +159,10 @@ export async function getServicePaymentStatusAction(serviceId: string, monthTag:
 export async function runAllServiceDistributionsAction(date?: string) {
   try {
     const result = await distributeAllServices(date)
+
+    // Recalculate DRAFT_FUND balance after mass distribution
+    const { recalculateBalance } = await import('@/services/account.service')
+    await recalculateBalance(SYSTEM_ACCOUNTS.DRAFT_FUND)
 
     // Also run Installment Batch Processing
     try {
