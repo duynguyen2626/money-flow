@@ -42,3 +42,7 @@
 - **Bank Mappings:** Bảng `bank_mappings` để map keywords từ SMS/Bank app sang categories.
 - **Webhook Links:** Bảng `sheet_webhook_links` để sync với Google Sheets.
 
+## 6. Recent Integrity & History Logic (Phase 71)
+- **Transaction History:** Mọi thay đổi trên bảng `transactions` được lưu vào `transaction_history` qua Trigger. UI có nút "View History" để xem diff.
+- **Integrity Rule:** Không được phép Edit giao dịch gốc (Parent) nếu nó đã có giao dịch Void hoặc Refund liên kết. Phải xóa Void/Refund trước.
+- **Single Source of Truth:** Bảng `transactions` là nơi duy nhất lưu trữ thu chi. Bảng `people` chỉ là danh mục, dữ liệu nợ phải được tính toán aggregate từ `transactions` (sum amount where people_id = X).

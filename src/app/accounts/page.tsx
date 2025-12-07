@@ -21,17 +21,15 @@ function calculateDebtSummary(accounts: Account[]): { totalDebt: number; totalLi
   const countedParentIds = new Set<string>()
 
   for (const card of creditCards) {
-    // netBalance = total_in - total_out
-    // For credit cards: when you spend, total_out increases
-    // When you pay, total_in increases  
-    // Debt = negative netBalance (when spending > payments)
-    const totalIn = card.total_in ?? 0
-    const totalOut = card.total_out ?? 0
-    const netBalance = totalIn - totalOut
+    // Credit card balance: positive = available credit, negative = debt owed
+    // But in our system, current_balance for credit cards represents debt (positive = you owe)
+    // Check the actual balance - if it's negative in our accounting, that's debt
+    const balance = card.current_balance ?? 0
 
-    // If netBalance is negative, that's debt
-    if (netBalance < 0) {
-      totalDebt += Math.abs(netBalance)
+    // For credit cards, current_balance > 0 means debt (money you owe)
+    // This is because credit card transactions add to the balance when you spend
+    if (balance > 0) {
+      totalDebt += balance
     }
 
     // Only count limit from parent cards (avoid double-counting shared limits)
@@ -54,6 +52,7 @@ function calculateDebtSummary(accounts: Account[]): { totalDebt: number; totalLi
 
   return { totalDebt, totalLimit }
 }
+
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,

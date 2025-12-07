@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Plus, CheckCheck, Check } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Plus, Minus, Check, ChevronDown, Calendar } from 'lucide-react'
 import { useTagFilter } from '@/context/tag-filter-context'
 import { cn } from '@/lib/utils'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
@@ -16,6 +16,8 @@ interface DebtCycle {
     balance: number
     status: string
     last_activity: string
+    total_debt?: number
+    total_repaid?: number
 }
 
 interface DebtCycleTabsProps {
@@ -36,88 +38,162 @@ export function DebtCycleTabs({
     personId
 }: DebtCycleTabsProps) {
     const { selectedTag, setSelectedTag } = useTagFilter()
-    const [activeTab, setActiveTab] = useState<'all' | 'tagged' | 'untagged'>('all')
+    const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
 
-    // Phân loại debt cycles
-    const taggedCycles = allCycles.filter(cycle => cycle.tag !== 'UNTAGGED')
-    const untaggedCycles = allCycles.filter(cycle => cycle.tag === 'UNTAGGED')
+    // Extract years from tags
+    const years = useMemo(() => {
+        const yearSet = new Set<string>()
+        allCycles.forEach(cycle => {
+            const match = cycle.tag.match(/(\d{2})$/)
+            if (match) {
+                const year = parseInt(match[1])
+                yearSet.add(year >= 90 ? `19${match[1]}` : `20${match[1]}`)
+            }
+        })
+        return Array.from(yearSet).sort().reverse()
+    }, [allCycles])
 
-    // Xác định cycles để hiển thị dựa trên tab đang chọn
-    const displayedCycles =
-        activeTab === 'all' ? allCycles :
-            activeTab === 'tagged' ? taggedCycles :
-                untaggedCycles
+    const [selectedYear, setSelectedYear] = useState<string | null>(null)
+
+    const filteredCycles = useMemo(() => {
+        if (!selectedYear) return allCycles
+        const yearSuffix = selectedYear.slice(-2)
+        return allCycles.filter(cycle => cycle.tag.includes(yearSuffix))
+    }, [allCycles, selectedYear])
+
+    const toggleExpand = (tag: string, e: React.MouseEvent) => {
+        e.stopPropagation()
+        const newSet = new Set(expandedCards)
+        if (newSet.has(tag)) {
+            newSet.delete(tag)
+        } else {
+            newSet.add(tag)
+        }
+        setExpandedCards(newSet)
+    }
 
     return (
         <div className="space-y-4">
-            <div className="flex flex-wrap gap-2">
-                <button
-                    className={cn(
-                        "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                        activeTab === 'all' ? "bg-blue-500 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    )}
-                    onClick={() => setActiveTab('all')}
-                >
-                    All ({allCycles.length})
-                </button>
-                <button
-                    className={cn(
-                        "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                        activeTab === 'tagged' ? "bg-blue-500 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    )}
-                    onClick={() => setActiveTab('tagged')}
-                >
-                    Tagged ({taggedCycles.length})
-                </button>
-                <button
-                    className={cn(
-                        "px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-                        activeTab === 'untagged' ? "bg-blue-500 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    )}
-                    onClick={() => setActiveTab('untagged')}
-                >
-                    Untagged ({untaggedCycles.length})
-                </button>
-            </div>
+            {/* Year Filter */}
+            {years.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        className={cn(
+                            "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                            !selectedYear ? "bg-blue-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                        )}
+                        onClick={() => setSelectedYear(null)}
+                    >
+                        All Years ({allCycles.length})
+                    </button>
+                    {years.map(year => (
+                        <button
+                            key={year}
+                            className={cn(
+                                "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                                selectedYear === year ? "bg-blue-500 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            )}
+                            onClick={() => setSelectedYear(year)}
+                        >
+                            {year}
+                        </button>
+                    ))}
+                </div>
+            )}
 
-            {displayedCycles && displayedCycles.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
-                    {displayedCycles.map((cycle) => {
+            {/* Debt Cycle Cards Grid */}
+            {filteredCycles && filteredCycles.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                    {filteredCycles.map((cycle) => {
                         const isSelected = selectedTag === cycle.tag
+                        const isExpanded = expandedCards.has(cycle.tag)
+                        const isSettled = cycle.status === 'settled'
+                        const lendAmount = cycle.total_debt ?? 0
+                        const repayAmount = cycle.total_repaid ?? 0
+                        // Remaining = Lend - Repay (what's still owed)
+                        const remainingAmount = lendAmount - repayAmount
+
                         return (
                             <div
                                 key={cycle.tag}
-                                onClick={() => setSelectedTag(isSelected ? null : cycle.tag)}
                                 className={cn(
-                                    "group relative flex flex-col justify-between rounded-xl border bg-white transition-all hover:shadow-md cursor-pointer overflow-hidden",
-                                    isSelected ? "ring-2 ring-blue-500 border-blue-500 bg-blue-50/10" : "border-slate-200",
-                                    "p-3 gap-3"
+                                    "relative rounded-lg border bg-white transition-all overflow-hidden",
+                                    isSelected ? "ring-2 ring-blue-500 border-blue-500" : "border-slate-200 hover:shadow-md"
                                 )}
                             >
-                                <div>
-                                    <div className="flex items-start justify-between gap-2">
-                                        <h3 className="font-bold text-slate-900 text-sm truncate leading-tight" title={cycle.tag}>
-                                            {cycle.tag === 'UNTAGGED' ? 'No tag' : cycle.tag}
+                                {/* Card Content */}
+                                <div
+                                    className={cn(
+                                        "p-2.5 cursor-pointer",
+                                        isSettled ? "bg-slate-50" : "bg-gradient-to-br from-amber-50 to-orange-50"
+                                    )}
+                                    onClick={() => setSelectedTag(isSelected ? null : cycle.tag)}
+                                >
+                                    {/* Header: Tag + Expand */}
+                                    <div className="flex items-center justify-between gap-1">
+                                        <h3 className="font-bold text-slate-900 text-xs truncate">
+                                            {cycle.tag === 'UNTAGGED' ? 'N/A' : cycle.tag}
                                         </h3>
-                                        {isSelected && (
-                                            <div className="h-4 w-4 bg-blue-500 rounded-full flex items-center justify-center shadow-sm shrink-0">
-                                                <Check className="h-2.5 w-2.5 text-white" />
-                                            </div>
-                                        )}
+                                        <div className="flex items-center gap-1 shrink-0">
+                                            {isSelected && (
+                                                <div className="h-4 w-4 bg-blue-500 rounded-full flex items-center justify-center">
+                                                    <Check className="h-2.5 w-2.5 text-white" />
+                                                </div>
+                                            )}
+                                            <button
+                                                onClick={(e) => toggleExpand(cycle.tag, e)}
+                                                className={cn(
+                                                    "p-1 rounded transition-all",
+                                                    isExpanded ? "bg-slate-200 rotate-180" : "hover:bg-slate-100"
+                                                )}
+                                            >
+                                                <ChevronDown className="h-4 w-4 text-slate-500" />
+                                            </button>
+                                        </div>
                                     </div>
 
-                                    <div className="mt-2">
-                                        <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Balance</span>
-                                        <p className={cn(
-                                            "text-lg font-bold tracking-tight",
-                                            cycle.status === 'settled' ? "text-slate-400" : (cycle.balance > 0 ? "text-emerald-600" : "text-red-600")
-                                        )}>
-                                            {numberFormatter.format(Math.abs(cycle.balance))}
-                                        </p>
-                                    </div>
+                                    {/* Balance */}
+                                    <p className={cn(
+                                        "text-sm font-bold mt-1",
+                                        isSettled ? "text-emerald-600" : (cycle.balance > 0 ? "text-rose-600" : "text-slate-500")
+                                    )}>
+                                        {isSettled ? "✓ Settled" : numberFormatter.format(Math.abs(cycle.balance))}
+                                    </p>
+
+                                    {/* Expanded: Stats Badges - vertical rows with larger text */}
+                                    {isExpanded && (
+                                        <div className="mt-2 pt-2 border-t border-slate-100 space-y-2">
+                                            {/* Lend Badge */}
+                                            <div className="flex items-center gap-2 text-xs">
+                                                <span className="flex items-center gap-1 text-rose-600 font-semibold min-w-[60px]">
+                                                    <Minus className="h-3.5 w-3.5" /> Lend:
+                                                </span>
+                                                <span className="font-bold text-rose-700 text-sm">{numberFormatter.format(lendAmount)}</span>
+                                            </div>
+                                            {/* Repay Badge */}
+                                            <div className="flex items-center gap-2 text-xs">
+                                                <span className="flex items-center gap-1 text-emerald-600 font-semibold min-w-[60px]">
+                                                    <Plus className="h-3.5 w-3.5" /> Repay:
+                                                </span>
+                                                <span className="font-bold text-emerald-700 text-sm">{numberFormatter.format(repayAmount)}</span>
+                                            </div>
+                                            {/* Remaining Badge - Lend minus Repay */}
+                                            <div className="flex items-center gap-2 text-xs">
+                                                <span className="text-amber-600 font-semibold min-w-[60px]">Remaining:</span>
+                                                <span className="font-bold text-amber-700 text-sm">{numberFormatter.format(remainingAmount)}</span>
+                                            </div>
+                                            {/* Last Activity */}
+                                            {cycle.last_activity && (
+                                                <p className="text-[10px] text-slate-400 pt-1">
+                                                    Last: {new Date(cycle.last_activity).toLocaleDateString('vi-VN')}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-2 mt-auto pt-2 border-t border-slate-100" onClick={e => e.stopPropagation()}>
+                                {/* Action Buttons - Bottom strip with proper colors */}
+                                <div className="flex border-t border-slate-100" onClick={e => e.stopPropagation()}>
                                     <AddTransactionDialog
                                         accounts={accounts}
                                         categories={categories}
@@ -126,11 +202,12 @@ export function DebtCycleTabs({
                                         defaultType="debt"
                                         defaultPersonId={personId}
                                         defaultTag={cycle.tag === 'UNTAGGED' ? undefined : cycle.tag}
-                                        asChild
+                                        buttonClassName="flex-1 flex items-center justify-center gap-1 py-2 bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors text-xs font-semibold border-r border-slate-100"
                                         triggerContent={
-                                            <button className="flex w-full items-center justify-center gap-1 rounded-md bg-red-50 px-2 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 transition-colors">
-                                                <Plus className="h-3 w-3" /> Debt
-                                            </button>
+                                            <>
+                                                <Minus className="h-3.5 w-3.5" />
+                                                Lend
+                                            </>
                                         }
                                     />
                                     <AddTransactionDialog
@@ -142,11 +219,12 @@ export function DebtCycleTabs({
                                         defaultPersonId={personId}
                                         defaultTag={cycle.tag === 'UNTAGGED' ? undefined : cycle.tag}
                                         defaultAmount={Math.abs(cycle.balance)}
-                                        asChild
+                                        buttonClassName="flex-1 flex items-center justify-center gap-1 py-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors text-xs font-semibold"
                                         triggerContent={
-                                            <button className="flex w-full items-center justify-center gap-1 rounded-md bg-emerald-50 px-2 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors">
-                                                <CheckCheck className="h-3 w-3" /> Settle
-                                            </button>
+                                            <>
+                                                <Plus className="h-3.5 w-3.5" />
+                                                Repay
+                                            </>
                                         }
                                     />
                                 </div>
@@ -155,8 +233,9 @@ export function DebtCycleTabs({
                     })}
                 </div>
             ) : (
-                <div className="text-center py-8 px-4 bg-white rounded-lg shadow">
-                    <p className="text-gray-500">No debt cycles recorded.</p>
+                <div className="text-center py-6 px-4 bg-white rounded-lg border border-dashed border-slate-200">
+                    <Calendar className="h-8 w-8 mx-auto text-slate-300 mb-2" />
+                    <p className="text-sm text-slate-500">No debt cycles recorded.</p>
                 </div>
             )}
         </div>
