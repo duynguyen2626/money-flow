@@ -3,14 +3,10 @@
 import { useCallback, useEffect, useMemo, useState, useRef } from "react"
 import {
   ArrowUpDown,
-  Calendar,
   MoreHorizontal,
-  Plus,
-  Search,
   SlidersHorizontal,
   X,
   CreditCard,
-  Check,
   Copy,
   CheckCheck,
   Sigma,
@@ -21,7 +17,6 @@ import {
   ArrowUp,
   ArrowDown,
   Trash2,
-  Tag,
   RotateCcw,
   Pencil,
   Ban,
@@ -29,22 +24,13 @@ import {
   Store,
   CheckCircle2,
   History,
-  ChevronDown,
-  ChevronRight,
-  Download,
-  Edit,
-  ExternalLink,
-  Eye,
-  FileText,
-  Filter,
-  RefreshCw,
   Wallet
 } from 'lucide-react'
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { createPortal } from "react-dom"
 import { toast } from "sonner"
-import { CustomTooltip, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/custom-tooltip'
+import { CustomTooltip } from '@/components/ui/custom-tooltip'
 import { createClient } from '@/lib/supabase/client'
 import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
 import {
@@ -56,7 +42,6 @@ import {
   TableRow,
   TableFooter,
 } from "@/components/ui/table"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TransactionForm, TransactionFormValues } from "./transaction-form"
 import {
   restoreTransaction,
@@ -68,8 +53,7 @@ import {
 import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
 import { cn } from "@/lib/utils"
-import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
-import { RefundNoteDisplay } from './refund-note-display'
+import { parseCashbackConfig, getCashbackCycleRange } from '@/lib/cashback'
 import { ConfirmRefundDialog } from "./confirm-refund-dialog"
 import { TransactionHistoryModal } from './transaction-history-modal'
 import { AddTransactionDialog } from "./add-transaction-dialog"
@@ -257,15 +241,15 @@ export function UnifiedTransactionTable({
     { key: "type", label: "Type", defaultWidth: 130, minWidth: 110 },
     { key: "shop", label: "Note", defaultWidth: 200, minWidth: 150 }, // Renamed to Note, minimized
     { key: "category", label: "Category", defaultWidth: 150 },
-    { key: "people", label: "Person", defaultWidth: 140, minWidth: 120 },
-    { key: "account", label: "Account", defaultWidth: 180, minWidth: 160 },
+    // { key: "people", label: "Person", defaultWidth: 140, minWidth: 120 }, // Merged into Account
+    { key: "account", label: "Account ➜ People", defaultWidth: 280, minWidth: 250 }, // Merged Column
     { key: "amount", label: "Amount", defaultWidth: 100 },
     // { key: "note", label: "Note", defaultWidth: 200, minWidth: 150 }, // Removed from default
     { key: "back_info", label: "Back Info", defaultWidth: 140 },
     { key: "initial_back", label: "Initial Back", defaultWidth: 110 },
     { key: "people_back", label: "People Back", defaultWidth: 110 },
     { key: "final_price", label: "Final Price", defaultWidth: 100 },
-    { key: "tag", label: "Cycle Info", defaultWidth: 200, minWidth: 180 },
+    { key: "tag", label: "Cycle Info", defaultWidth: 200, minWidth: 180 }, // Kept for legacy compatibility if visible
     { key: "status", label: "Status", defaultWidth: 130, minWidth: 120 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
@@ -282,7 +266,7 @@ export function UnifiedTransactionTable({
       shop: true,
       note: false, // Merged into Shop
       category: true,
-      people: true,
+      people: false, // Hidden by default (Merged into Account)
       tag: false, // Hidden by default (Merged into People/Account)
       account: true,
       amount: true,
@@ -313,7 +297,7 @@ export function UnifiedTransactionTable({
 
   useEffect(() => {
     setVisibleColumns(prev => {
-      const next = { ...prev, people: !hidePeopleColumn }
+      const next = { ...prev }
       if (hiddenColumns.length > 0) {
         hiddenColumns.forEach(col => {
           next[col] = false
@@ -326,7 +310,7 @@ export function UnifiedTransactionTable({
       return next
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hidePeopleColumn, JSON.stringify(hiddenColumns)])
+  }, [JSON.stringify(hiddenColumns)])
 
   // Realtime Subscription
   useEffect(() => {
@@ -533,7 +517,7 @@ export function UnifiedTransactionTable({
       shop: true,
       note: true,
       category: true,
-      people: !hidePeopleColumn,
+      people: false,
       tag: true,
       account: true,
       amount: true,
@@ -1439,7 +1423,7 @@ export function UnifiedTransactionTable({
                         {/* Logo */}
                         {shopLogo ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={shopLogo} alt="" className="h-6 w-6 object-contain rounded-full bg-white p-0.5 border border-slate-100 shrink-0" />
+                          <img src={shopLogo} alt="" className="h-6 w-6 object-contain rounded-none bg-white p-0.5 border border-slate-100 shrink-0" />
                         ) : (
                           shopName ? (
                             <Store className="h-4 w-4 text-slate-400 shrink-0" />
@@ -1553,11 +1537,11 @@ export function UnifiedTransactionTable({
                               <img
                                 src={txn.category_logo_url}
                                 alt={txn.category_name ?? 'Category'}
-                                className="h-full w-full object-contain"
+                                className="h-full w-full object-contain rounded-none"
                               />
                             </div>
                           ) : (
-                            <span className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-lg font-semibold text-slate-600 rounded-full border border-slate-200">
+                            <span className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-lg font-semibold text-slate-600 rounded-none border border-slate-200">
                               {txn.category_icon ?? (txn.category_name ? txn.category_name.charAt(0).toUpperCase() : '?')}
                             </span>
                           )}
@@ -1570,93 +1554,116 @@ export function UnifiedTransactionTable({
                   }
                   case "account": {
                     const cycleTag = txn.persisted_cycle_tag
-                    const displayCycle = cycleTag || 'None'
+                    const displayCycle = cycleTag || null
+                    const tag = txn.tag
 
                     // Determine Account Names
                     const sourceName = txn.source_name || txn.account_name || 'Unknown'
                     const destName = txn.destination_name
+                    const sourceIconUrl = txn.source_logo
+                    const destIconUrl = txn.destination_logo
 
-                    const sourceIcon = txn.source_logo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={txn.source_logo as string} alt="" className="h-full w-full object-contain rounded-md" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-slate-100 rounded-md">
-                        <Wallet className="h-4 w-4 text-slate-400" />
-                      </div>
-                    )
+                    // Person Info
+                    const personName = (txn as any).person_name ?? txn.person_name
+                    const personAvatar = (txn as any).person_avatar_url ?? txn.person_avatar_url
+                    const personId = (txn as any).person_id ?? txn.person_id
 
-                    // Destination Icon
-                    const destIcon = txn.destination_logo ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={txn.destination_logo as string} alt="" className="h-full w-full object-contain rounded-md" />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center bg-slate-100 rounded-md text-[10px] font-bold text-slate-600">
-                        {destName?.charAt(0)}
-                      </div>
-                    )
-
+                    // Fallback avatar if DB is null, but we have a name
+                    const displayPersonAvatar = personAvatar || (personName ? `https://ui-avatars.com/api/?name=${encodeURIComponent(personName)}&background=random&square=true` : null)
 
                     return (
-                      <div className="flex flex-col gap-1.5 w-full max-w-[200px]">
-                        {/* Row 1: Source */}
+                      <div className="flex flex-col gap-1 w-full">
+                        {/* Top Line: Money Flow */}
                         <div className="flex items-center gap-2">
-                          <div className="h-8 w-8 shrink-0">
-                            {sourceIcon}
-                          </div>
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-[10px] text-slate-400 leading-none mb-0.5">Source</span>
-                            {txn.source_account_id ? (
-                              <Link
-                                href={`/accounts/${txn.source_account_id}`}
-                                className="text-xs font-medium text-slate-700 hover:text-blue-600 hover:underline truncate"
-                                onClick={(e) => e.stopPropagation()}
-                                title={sourceName}
-                              >
-                                {sourceName}
-                              </Link>
+                          {/* Source Account */}
+                          <div className="flex items-center gap-2 min-w-0 max-w-[50%]">
+                            {sourceIconUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={sourceIconUrl} alt="" className="h-8 w-8 object-contain rounded-none border border-slate-100 bg-white" />
                             ) : (
-                              <span className="text-xs font-medium text-slate-700 truncate" title={sourceName}>{sourceName}</span>
+                              <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-none border border-slate-200">
+                                <Wallet className="h-4 w-4 text-slate-400" />
+                              </div>
                             )}
-                          </div>
-                        </div>
-
-                        {/* Row 2: Destination (if exists) */}
-                        {destName && (
-                          <div className="flex items-center gap-2">
-                            <div className="h-8 w-8 shrink-0">
-                              {destIcon}
-                            </div>
                             <div className="flex flex-col min-w-0">
-                              <span className="text-[10px] text-slate-400 leading-none mb-0.5">Destination</span>
-                              {txn.destination_account_id ? (
-                                <Link
-                                  href={`/accounts/${txn.destination_account_id}`}
-                                  className="text-xs font-medium text-slate-700 hover:text-blue-600 hover:underline truncate"
-                                  onClick={(e) => e.stopPropagation()}
-                                  title={destName}
-                                >
-                                  {destName}
+                              <span className="text-[10px] text-slate-400 leading-none">Account</span>
+                              {txn.source_account_id ? (
+                                <Link href={`/accounts/${txn.source_account_id}`} onClick={e => e.stopPropagation()} className="text-sm font-medium text-slate-700 hover:text-blue-600 hover:underline truncate" title={sourceName}>
+                                  {sourceName}
                                 </Link>
                               ) : (
-                                <span className="text-xs font-medium text-slate-700 truncate" title={destName}>{destName}</span>
+                                <span className="text-sm font-medium text-slate-700 truncate" title={sourceName}>{sourceName}</span>
                               )}
                             </div>
                           </div>
-                        )}
 
-                        {/* Row 3: Cycle Badge (if exists) */}
-                        {cycleTag && (
-                          <div className="flex mt-0.5">
-                            <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10 shrink-0">
-                              Cycle: {cycleTag}
+                          {/* Arrow & (Person OR Dest) */}
+                          {personName ? (
+                            <>
+                              <ArrowRight className="h-4 w-4 text-slate-300 shrink-0" />
+                              <div className="flex items-center gap-2 min-w-0 max-w-[50%]">
+                                {displayPersonAvatar ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={displayPersonAvatar} alt="" className="h-8 w-8 object-cover rounded-none border border-slate-100" />
+                                ) : (
+                                  <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-none border border-slate-200">
+                                    <span className="text-xs font-bold text-slate-500">{personName.charAt(0)}</span>
+                                  </div>
+                                )}
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-[10px] text-slate-400 leading-none">Person</span>
+                                  <Link href={`/people/${personId}`} onClick={e => e.stopPropagation()} className="text-sm font-medium text-slate-700 hover:text-blue-600 hover:underline truncate" title={personName}>
+                                    {personName}
+                                  </Link>
+                                </div>
+                              </div>
+                            </>
+                          ) : destName && (
+                            <>
+                              <ArrowRight className="h-4 w-4 text-slate-300 shrink-0" />
+                              <div className="flex items-center gap-2 min-w-0 max-w-[50%]">
+                                {destIconUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={destIconUrl} alt="" className="h-8 w-8 object-contain rounded-none border border-slate-100 bg-white" />
+                                ) : (
+                                  <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-none border border-slate-200">
+                                    <span className="text-xs font-bold text-slate-500">{destName.charAt(0)}</span>
+                                  </div>
+                                )}
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-[10px] text-slate-400 leading-none">To</span>
+                                  {txn.destination_account_id ? (
+                                    <Link href={`/accounts/${txn.destination_account_id}`} onClick={e => e.stopPropagation()} className="text-sm font-medium text-slate-700 hover:text-blue-600 hover:underline truncate" title={destName}>
+                                      {destName}
+                                    </Link>
+                                  ) : (
+                                    <span className="text-sm font-medium text-slate-700 truncate" title={destName}>{destName}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Bottom Line: Badges */}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {displayCycle && (
+                            <span className="inline-flex items-center rounded-sm bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10 whitespace-nowrap">
+                              {displayCycle}
                             </span>
-                          </div>
-                        )}
+                          )}
+                          {tag && (
+                            <span className="inline-flex items-center rounded-sm bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 ring-1 ring-inset ring-slate-500/10 whitespace-nowrap">
+                              {tag}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     )
                   }
 
                   case "people": {
+                    // LEGACY/HIDDEN
                     const personName = (txn as any).person_name ?? txn.person_name ?? null
                     const personAvatar = (txn as any).person_avatar_url ?? txn.person_avatar_url ?? null
                     const personId = (txn as any).person_id ?? txn.person_id ?? null
@@ -1665,13 +1672,13 @@ export function UnifiedTransactionTable({
                     if (!personName) return <span className="text-slate-300">-</span>
 
                     // Fallback avatar if DB is null, but we have a name
-                    const displayAvatar = personAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(personName)}&background=random`
+                    const displayAvatar = personAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(personName)}&background=random&square=true`
 
                     return (
                       <div className="flex items-center gap-3 w-full max-w-[200px]">
                         {/* Avatar */}
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={displayAvatar} alt="" className="h-9 w-9 rounded-full object-cover shrink-0 ring-1 ring-slate-200" />
+                        <img src={displayAvatar} alt="" className="h-9 w-9 rounded-none object-cover shrink-0 ring-1 ring-slate-200" />
 
                         <div className="flex flex-col min-w-0">
                           {/* Name */}
@@ -1910,11 +1917,12 @@ export function UnifiedTransactionTable({
                   className={cn(
                     "border-b-2 border-slate-300 transition-colors text-base",
                     isMenuOpen ? "bg-blue-50" : rowBgClass,
-                    !isExcelMode && "hover:bg-slate-50/50 cursor-pointer"
+                    !isExcelMode && "hover:bg-slate-50/50" // Removed cursor-pointer
                   )}
                   onClick={() => {
-                    if (!isExcelMode) {
-                      setEditingTxn(txn)
+                    // Plan D: Row click does NOTHING (except excel mode)
+                    if (isExcelMode) {
+                      // Handled by cell events
                     }
                   }}
                 >
