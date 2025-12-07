@@ -122,7 +122,7 @@ async function postToSheet(sheetLink: string, payload: Record<string, unknown>) 
   })
 }
 
-function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete') {
+function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete' | 'update') {
   const { originalAmount, percentRate, fixedBack, totalBack } = calculateTotals(txn)
 
   // If amount is negative, it's a credit to the debt account (Repayment) -> Type "In"
@@ -131,7 +131,7 @@ function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete') {
   const type = txn.type ?? ((txn.amount ?? 0) < 0 ? 'In' : 'Debt');
 
   return {
-    action,
+    action: action === 'update' ? 'edit' : action, // Map 'update' to 'edit' for backend if needed, or keep 'update'
     id: txn.id,
     type: type,
     date: txn.occurred_at ?? txn.date ?? null,
@@ -148,7 +148,7 @@ function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete') {
 export async function syncTransactionToSheet(
   personId: string,
   txn: SheetSyncTransaction,
-  action: 'create' | 'delete'
+  action: 'create' | 'delete' | 'update' = 'create'
 ) {
   try {
     const sheetLink = await getProfileSheetLink(personId)

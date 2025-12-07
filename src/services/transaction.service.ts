@@ -525,7 +525,6 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   await recalcForAccounts(affectedAccounts);
 
   // SHEET SYNC: Auto-sync to Google Sheets when person_id exists
-  // IMPORTANT: Must be sequential - delete must complete before create!
   try {
     const { syncTransactionToSheet } = await import('./sheet.service');
 
@@ -536,30 +535,12 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       id,
       oldPersonId,
       newPersonId,
-      hasChange: oldPersonId !== newPersonId || oldPersonId === newPersonId
+      samePerson: oldPersonId === newPersonId
     });
 
-    // 1. Delete old entry from sheet if had person
-    if (oldPersonId) {
-      console.log('[Sheet Sync] Deleting old entry for person:', oldPersonId);
-      const deletePayload = {
-        id: (existing as any).id,
-        occurred_at: (existing as any).occurred_at,
-        note: (existing as any).note,
-        tag: (existing as any).tag,
-        amount: (existing as any).amount ?? 0,
-      };
-      try {
-        await syncTransactionToSheet(oldPersonId, deletePayload as any, 'delete');
-        console.log('[Sheet Sync] Delete completed');
-      } catch (err) {
-        console.error('[Sheet Sync] Delete old entry failed:', err);
-      }
-    }
-
-    // 2. Create new entry in sheet if has person (AFTER delete completes)
-    if (newPersonId) {
-      console.log('[Sheet Sync] Creating new entry for person:', newPersonId);
+    // OPTIMIZATION: If person is the same, use 'update' action (mapped to 'edit')
+    if (oldPersonId && newPersonId && oldPersonId === newPersonId) {
+      console.log('[Sheet Sync] Updating existing entry for person:', newPersonId);
 
       // Fetch shop name for payload
       let shopName: string | null = null;
@@ -568,14 +549,14 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
         shopName = (shop as any)?.name ?? null;
       }
 
-      // Calculate final amount (for debt: amount - cashback)
+      // Calculate final amount
       const originalAmount = Math.abs(input.amount);
       const percentRate = Math.min(100, Math.max(0, Number(input.cashback_share_percent ?? 0))) / 100;
       const fixedAmount = Math.max(0, Number(input.cashback_share_fixed ?? 0));
       const cashback = (originalAmount * percentRate) + fixedAmount;
       const finalAmount = input.type === 'debt' ? (originalAmount - cashback) : originalAmount;
 
-      const createPayload = {
+      const updatePayload = {
         id,
         occurred_at: input.occurred_at,
         note: input.note,
@@ -588,13 +569,69 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
         type: input.type === 'repayment' ? 'In' : 'Debt',
       };
 
-      console.log('[Sheet Sync] Create payload:', createPayload);
-
       try {
-        await syncTransactionToSheet(newPersonId, createPayload as any, 'create');
-        console.log('[Sheet Sync] Create completed');
+        await syncTransactionToSheet(newPersonId, updatePayload as any, 'update');
+        console.log('[Sheet Sync] Update completed');
       } catch (err) {
-        console.error('[Sheet Sync] Create new entry failed:', err);
+        console.error('[Sheet Sync] Update entry failed:', err);
+      }
+
+    } else {
+      // Logic for DIFFERENT person (or one added/removed): Delete Old -> Create New
+
+      // 1. Delete old entry if existed
+      if (oldPersonId) {
+        console.log('[Sheet Sync] Deleting old entry for person:', oldPersonId);
+        const deletePayload = {
+          id: (existing as any).id,
+          occurred_at: (existing as any).occurred_at,
+          note: (existing as any).note,
+          tag: (existing as any).tag,
+          amount: (existing as any).amount ?? 0,
+        };
+        try {
+          await syncTransactionToSheet(oldPersonId, deletePayload as any, 'delete');
+          console.log('[Sheet Sync] Delete completed');
+        } catch (err) {
+          console.error('[Sheet Sync] Delete old entry failed:', err);
+        }
+      }
+
+      // 2. Create new entry if exists (AFTER delete)
+      if (newPersonId) {
+        console.log('[Sheet Sync] Creating new entry for person:', newPersonId);
+
+        let shopName: string | null = null;
+        if (input.shop_id) {
+          const { data: shop } = await supabase.from('shops').select('name').eq('id', input.shop_id).single();
+          shopName = (shop as any)?.name ?? null;
+        }
+
+        const originalAmount = Math.abs(input.amount);
+        const percentRate = Math.min(100, Math.max(0, Number(input.cashback_share_percent ?? 0))) / 100;
+        const fixedAmount = Math.max(0, Number(input.cashback_share_fixed ?? 0));
+        const cashback = (originalAmount * percentRate) + fixedAmount;
+        const finalAmount = input.type === 'debt' ? (originalAmount - cashback) : originalAmount;
+
+        const createPayload = {
+          id,
+          occurred_at: input.occurred_at,
+          note: input.note,
+          tag: input.tag,
+          shop_name: shopName,
+          amount: finalAmount,
+          original_amount: originalAmount,
+          cashback_share_percent: percentRate,
+          cashback_share_fixed: fixedAmount,
+          type: input.type === 'repayment' ? 'In' : 'Debt',
+        };
+
+        try {
+          await syncTransactionToSheet(newPersonId, createPayload as any, 'create');
+          console.log('[Sheet Sync] Create completed');
+        } catch (err) {
+          console.error('[Sheet Sync] Create new entry failed:', err);
+        }
       }
     }
   } catch (syncError) {
