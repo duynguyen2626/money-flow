@@ -195,6 +195,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
 
     let transactionId = (existingTx as any)?.id;
 
+    let isUpdate = false;
     if (existingTx) {
       console.log('Updating existing transaction:', transactionId);
       const { error: updateError } = await supabase
@@ -203,6 +204,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
         .eq('id', transactionId);
 
       if (updateError) console.error('Error updating transaction:', updateError);
+      isUpdate = true;
 
     } else {
       console.log('Creating new transaction for member:', member.profile_id);
@@ -223,25 +225,25 @@ export async function distributeService(serviceId: string, customDate?: string, 
       createdTransactions.push({ id: transactionId });
 
       // [M2-SP3] Sync to Google Sheet
-      // Warning: Threading/Concurrency might be an issue if distributing many.
       try {
-        const { syncTransactionToSheet } = await import('./sheet.service');
-        const sheetPayload = {
-          id: transactionId,
-          occurred_at: transactionDate,
-          note: note,
-          tag: monthTag,
-          amount: cost, // Sheet likely expects positive for "Amount" column? Or follow transaction? 
-          // Previous code passed 'cost' (positive). Let's keep it positive if that's what sheet expects.
-          // But wait, the transaction amount is negative.
-          // Let's pass the absolute cost for now as per previous logic.
-          type: 'Expense', // It's an expense from my wallet (Draft Fund)
-          shop_name: (service as any).name || 'Service',
-        };
-        // If it's a debt (person_id is set), we might want to label it Debt in sheet?
-        // User said: "Phần của Lâm: person_id = 'ID_Của_Lâm' (Hệ thống tự hiểu đây là Nợ)."
-        // For the Sheet, let's keep it simple.
-        await syncTransactionToSheet(member.profile_id, sheetPayload as any, 'create');
+        // Only sync if there is a person (Debt)
+        if (personId) {
+          const { syncTransactionToSheet } = await import('./sheet.service');
+          const sheetPayload = {
+            id: transactionId,
+            occurred_at: transactionDate,
+            note: note,
+            tag: monthTag,
+            amount: cost, // Sheet expects positive for Debt amount
+            type: 'Debt', // Service cost allocated to member is Debt
+            shop_name: (service as any).name || 'Service',
+          };
+
+          const action = isUpdate ? 'update' : 'create';
+          console.log(`[Sheet Sync] Distribute syncing (${action}) for ${personId}`);
+
+          await syncTransactionToSheet(member.profile_id, sheetPayload as any, action);
+        }
       } catch (syncError) {
         console.error('Error syncing to sheet:', syncError);
       }
