@@ -183,36 +183,34 @@ export function DebtCycleTabs({
                                         {isSettled ? "✓ Settled" : numberFormatter.format(Math.abs(cycle.balance))}
                                     </p>
 
-                                    {/* Expanded: Stats Badges - vertical rows with larger text */}
+                                    {/* Expanded: Stats in 2-column grid with border */}
                                     {isExpanded && (
-                                        <div className="mt-2 pt-2 border-t border-slate-100 space-y-2">
-                                            {/* Lend Badge */}
-                                            <div className="flex items-center gap-2 text-xs">
-                                                <span className="flex items-center gap-1 text-rose-600 font-semibold min-w-[70px]">
-                                                    <Minus className="h-3.5 w-3.5" /> Lend:
-                                                </span>
-                                                <span className="font-bold text-rose-700 text-sm">{numberFormatter.format(lendAmount)}</span>
-                                            </div>
-                                            {/* Repay Badge */}
-                                            <div className="flex items-center gap-2 text-xs">
-                                                <span className="flex items-center gap-1 text-emerald-600 font-semibold min-w-[70px]">
-                                                    <Plus className="h-3.5 w-3.5" /> Repay:
-                                                </span>
-                                                <span className="font-bold text-emerald-700 text-sm">{numberFormatter.format(repayAmount)}</span>
-                                            </div>
-                                            {/* Sum Back (Total Returned) */}
-                                            <div className="flex items-center gap-2 text-xs">
-                                                <span className="text-blue-600 font-semibold min-w-[70px]">Sum Back:</span>
-                                                <span className="font-bold text-blue-700 text-sm">{numberFormatter.format(repayAmount)}</span>
-                                            </div>
-                                            {/* Remaining Badge - Lend minus Repay */}
-                                            <div className="flex items-center gap-2 text-xs">
-                                                <span className="text-amber-600 font-semibold min-w-[70px]">Remaining:</span>
-                                                <span className="font-bold text-amber-700 text-sm">{numberFormatter.format(remainingAmount)}</span>
+                                        <div className="mt-3 pt-3 border-t border-slate-200">
+                                            <div className="grid grid-cols-2 gap-px bg-slate-200 rounded-lg overflow-hidden">
+                                                {/* Lend */}
+                                                <div className="bg-rose-50 p-2 text-center">
+                                                    <p className="text-[10px] text-rose-500 font-medium">Lend</p>
+                                                    <p className="text-base font-bold text-rose-700">{numberFormatter.format(lendAmount)}</p>
+                                                </div>
+                                                {/* Repay */}
+                                                <div className="bg-emerald-50 p-2 text-center">
+                                                    <p className="text-[10px] text-emerald-500 font-medium">Repay</p>
+                                                    <p className="text-base font-bold text-emerald-700">{numberFormatter.format(repayAmount)}</p>
+                                                </div>
+                                                {/* Sum Back (display only) */}
+                                                <div className="bg-blue-50 p-2 text-center">
+                                                    <p className="text-[10px] text-blue-500 font-medium">Sum Back</p>
+                                                    <p className="text-base font-bold text-blue-700">{numberFormatter.format(repayAmount)}</p>
+                                                </div>
+                                                {/* Remaining */}
+                                                <div className="bg-amber-50 p-2 text-center">
+                                                    <p className="text-[10px] text-amber-500 font-medium">Remaining</p>
+                                                    <p className="text-base font-bold text-amber-700">{numberFormatter.format(remainingAmount)}</p>
+                                                </div>
                                             </div>
                                             {/* Last Activity */}
                                             {cycle.last_activity && (
-                                                <p className="text-[10px] text-slate-400 pt-1">
+                                                <p className="text-[10px] text-slate-400 text-center mt-2">
                                                     Last: {new Date(cycle.last_activity).toLocaleDateString('vi-VN')}
                                                 </p>
                                             )}
