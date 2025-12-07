@@ -419,16 +419,57 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       return null;
     }
 
+    const transactionId = (data as { id?: string }).id ?? null;
+
     const affectedAccounts = new Set<string>();
     affectedAccounts.add(normalized.account_id);
     if (normalized.target_account_id) affectedAccounts.add(normalized.target_account_id);
     await recalcForAccounts(affectedAccounts);
 
+    // SHEET SYNC: Auto-sync to Google Sheets when person_id exists
+    if (transactionId && input.person_id) {
+      try {
+        const { syncTransactionToSheet } = await import('./sheet.service');
+
+        // Fetch shop name for payload
+        let shopName: string | null = null;
+        if (input.shop_id) {
+          const { data: shop } = await supabase.from('shops').select('name').eq('id', input.shop_id).single();
+          shopName = (shop as any)?.name ?? null;
+        }
+
+        // Calculate final amount (for debt: amount - cashback)
+        const originalAmount = Math.abs(input.amount);
+        const percentRate = Math.min(100, Math.max(0, Number(input.cashback_share_percent ?? 0))) / 100;
+        const fixedAmount = Math.max(0, Number(input.cashback_share_fixed ?? 0));
+        const cashback = (originalAmount * percentRate) + fixedAmount;
+        const finalAmount = input.type === 'debt' ? (originalAmount - cashback) : originalAmount;
+
+        const syncPayload = {
+          id: transactionId,
+          occurred_at: input.occurred_at,
+          note: input.note,
+          tag: input.tag,
+          shop_name: shopName,
+          amount: finalAmount,
+          original_amount: originalAmount,
+          cashback_share_percent: percentRate,
+          cashback_share_fixed: fixedAmount,
+          type: input.type === 'repayment' ? 'In' : 'Debt',
+        };
+        void syncTransactionToSheet(input.person_id, syncPayload as any, 'create').catch(err => {
+          console.error('[Sheet Sync] Create entry failed:', err);
+        });
+      } catch (syncError) {
+        console.error('[Sheet Sync] Import or sync failed:', syncError);
+      }
+    }
+
     revalidatePath('/transactions');
     revalidatePath('/accounts');
     revalidatePath('/people');
 
-    return (data as { id?: string }).id ?? null;
+    return transactionId;
   } catch (error) {
     console.error('Unhandled error in createTransaction:', error);
     return null;
@@ -437,9 +478,11 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
 
 export async function updateTransaction(id: string, input: CreateTransactionInput): Promise<boolean> {
   const supabase = createClient();
+
+  // Fetch existing transaction INCLUDING person_id for sheet sync
   const { data: existing, error: fetchError } = await supabase
     .from('transactions')
-    .select('account_id, target_account_id')
+    .select('id, occurred_at, note, tag, account_id, target_account_id, person_id, amount, type, shop_id, cashback_share_percent, cashback_share_fixed')
     .eq('id', id)
     .maybeSingle();
 
@@ -480,6 +523,63 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   affectedAccounts.add(normalized.account_id);
   if (normalized.target_account_id) affectedAccounts.add(normalized.target_account_id);
   await recalcForAccounts(affectedAccounts);
+
+  // SHEET SYNC: Auto-sync to Google Sheets when person_id exists
+  try {
+    const { syncTransactionToSheet } = await import('./sheet.service');
+
+    // 1. Delete old entry from sheet if had person
+    const oldPersonId = (existing as any).person_id;
+    if (oldPersonId) {
+      const deletePayload = {
+        id: (existing as any).id,
+        occurred_at: (existing as any).occurred_at,
+        note: (existing as any).note,
+        tag: (existing as any).tag,
+        amount: (existing as any).amount ?? 0,
+      };
+      void syncTransactionToSheet(oldPersonId, deletePayload as any, 'delete').catch(err => {
+        console.error('[Sheet Sync] Delete old entry failed:', err);
+      });
+    }
+
+    // 2. Create new entry in sheet if has person
+    const newPersonId = input.person_id;
+    if (newPersonId) {
+      // Fetch shop name for payload
+      let shopName: string | null = null;
+      if (input.shop_id) {
+        const { data: shop } = await supabase.from('shops').select('name').eq('id', input.shop_id).single();
+        shopName = (shop as any)?.name ?? null;
+      }
+
+      // Calculate final amount (for debt: amount - cashback)
+      const originalAmount = Math.abs(input.amount);
+      const percentRate = Math.min(100, Math.max(0, Number(input.cashback_share_percent ?? 0))) / 100;
+      const fixedAmount = Math.max(0, Number(input.cashback_share_fixed ?? 0));
+      const cashback = (originalAmount * percentRate) + fixedAmount;
+      const finalAmount = input.type === 'debt' ? (originalAmount - cashback) : originalAmount;
+
+      const createPayload = {
+        id,
+        occurred_at: input.occurred_at,
+        note: input.note,
+        tag: input.tag,
+        shop_name: shopName,
+        amount: finalAmount,
+        original_amount: originalAmount,
+        cashback_share_percent: percentRate,
+        cashback_share_fixed: fixedAmount,
+        type: input.type === 'repayment' ? 'In' : 'Debt',
+      };
+      void syncTransactionToSheet(newPersonId, createPayload as any, 'create').catch(err => {
+        console.error('[Sheet Sync] Create new entry failed:', err);
+      });
+    }
+  } catch (syncError) {
+    console.error('[Sheet Sync] Import or sync failed:', syncError);
+    // Don't fail the update if sheet sync fails
+  }
 
   revalidatePath('/transactions');
   revalidatePath('/accounts');
