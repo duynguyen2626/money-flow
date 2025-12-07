@@ -69,10 +69,15 @@ export type DebtAccount = {
 }
 
 export type MonthlyDebtSummary = {
-  tag?: string | null
+  tag?: string
   tagLabel: string
-  amount: number
-  occurred_at?: string | null
+  amount: number // This is BALANCE (Net Debt - Repaid)
+  occurred_at?: string
+  status?: string // 'active' | 'settled'
+  last_activity?: string
+  total_debt?: number // Gross accumulated debt (before cashback)
+  total_repaid?: number // Total amount repaid
+  total_cashback?: number // Total cashback accumulated
 }
 
 export type Person = {
@@ -175,4 +180,7 @@ export type TransactionWithDetails = TransactionRow & {
   people_rate?: number;
   is_installment?: boolean | null;
   installment_plan_id?: string | null;
+  source_account_id?: string | null;
+  destination_account_id?: string | null;
+  target_account_id?: string | null;
 }

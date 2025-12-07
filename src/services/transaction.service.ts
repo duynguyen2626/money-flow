@@ -48,6 +48,7 @@ type FlatTransactionRow = {
   installment_plan_id?: string | null;
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
+  cashback_share_amount?: number | null;
 };
 
 type NormalizedTransaction = Omit<FlatTransactionRow, 'id' | 'created_at'>;
@@ -354,6 +355,9 @@ function mapTransactionRow(
     installment_plan_id: row.installment_plan_id ?? null,
     is_installment: row.is_installment ?? null,
     created_by: row.created_by ?? null,
+    cashback_share_percent: row.cashback_share_percent ?? null,
+    cashback_share_fixed: row.cashback_share_fixed ?? null,
+    cashback_share_amount: row.cashback_share_amount ?? null,
   };
 }
 

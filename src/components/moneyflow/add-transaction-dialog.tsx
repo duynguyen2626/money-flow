@@ -3,7 +3,7 @@
 import { MouseEvent, ReactNode, useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Slot } from '@radix-ui/react-slot'
-import { TransactionForm } from './transaction-form'
+import { TransactionForm, TransactionFormValues } from './transaction-form'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 
@@ -24,6 +24,9 @@ type AddTransactionDialogProps = {
   onOpen?: () => void;
   listenToUrlParams?: boolean;
   asChild?: boolean;
+  cloneInitialValues?: Partial<TransactionFormValues>;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function AddTransactionDialog({
@@ -43,8 +46,20 @@ export function AddTransactionDialog({
   onOpen,
   listenToUrlParams,
   asChild = false,
+  cloneInitialValues,
+  isOpen,
+  onOpenChange,
 }: AddTransactionDialogProps) {
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = isOpen ?? internalOpen
+
+  const handleOpenChange = (newOpen: boolean) => {
+    if (isOpen === undefined) {
+      setInternalOpen(newOpen)
+    }
+    onOpenChange?.(newOpen)
+  }
+
   const router = useRouter()
 
   const searchParams = useSearchParams()
@@ -52,7 +67,7 @@ export function AddTransactionDialog({
 
   useEffect(() => {
     if (listenToUrlParams && searchParams.get('action') === 'new') {
-      setOpen(true)
+      handleOpenChange(true)
 
       const amountParam = searchParams.get('amount')
       const noteParam = searchParams.get('note')
@@ -82,13 +97,13 @@ export function AddTransactionDialog({
   }, [listenToUrlParams, searchParams, shops])
 
   const handleSuccess = () => {
-    setOpen(false)
+    handleOpenChange(false)
     setUrlValues(null) // Reset
     router.refresh()
   }
 
   const closeDialog = () => {
-    setOpen(false)
+    handleOpenChange(false)
     setUrlValues(null)
   }
 
@@ -112,7 +127,7 @@ export function AddTransactionDialog({
         onClick={event => {
           event.stopPropagation()
           onOpen?.()
-          setOpen(true)
+          handleOpenChange(true)
         }}
         aria-label={typeof buttonText === 'string' ? buttonText : 'Add transaction'}
       >
@@ -173,8 +188,9 @@ export function AddTransactionDialog({
                   defaultSourceAccountId={defaultSourceAccountId}
                   defaultDebtAccountId={defaultDebtAccountId}
                   initialValues={{
+                    ...urlValues,
                     ...(defaultAmount ? { amount: defaultAmount } : {}),
-                    ...urlValues
+                    ...(cloneInitialValues || {})
                   }}
                 />
               </div>

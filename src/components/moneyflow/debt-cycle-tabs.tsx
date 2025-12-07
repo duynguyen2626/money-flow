@@ -18,6 +18,7 @@ interface DebtCycle {
     last_activity: string
     total_debt?: number
     total_repaid?: number
+    total_cashback?: number
 }
 
 interface DebtCycleTabsProps {
@@ -200,7 +201,7 @@ export function DebtCycleTabs({
                                                 {/* Sum Back (display only) */}
                                                 <div className="bg-blue-50 p-2 text-center">
                                                     <p className="text-[10px] text-blue-500 font-medium">Sum Back</p>
-                                                    <p className="text-base font-bold text-blue-700">{numberFormatter.format(repayAmount)}</p>
+                                                    <p className="text-base font-bold text-blue-700">{numberFormatter.format(cycle.total_cashback ?? 0)}</p>
                                                 </div>
                                                 {/* Remaining */}
                                                 <div className="bg-amber-50 p-2 text-center">

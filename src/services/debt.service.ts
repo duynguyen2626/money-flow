@@ -23,6 +23,7 @@ export type DebtByTagAggregatedResult = {
   netBalance: number;
   originalPrincipal: number;
   totalBack: number;
+  totalCashback: number;
   status: string;
   last_activity: string;
 }
@@ -190,6 +191,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
     {
       lend: number
       repay: number
+      cashback: number
       last_activity: string
     }
   >()
@@ -202,10 +204,18 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       const occurredAt = row.occurred_at ?? ''
 
       if (!tagMap.has(tag)) {
-        tagMap.set(tag, { lend: 0, repay: 0, last_activity: occurredAt })
+        tagMap.set(tag, { lend: 0, repay: 0, cashback: 0, last_activity: occurredAt })
       }
 
       const current = tagMap.get(tag)!
+
+      const rawAmount = Math.abs(Number(row.amount ?? 0))
+      const percentVal = Number(row.cashback_share_percent ?? 0)
+      const fixedVal = Number(row.cashback_share_fixed ?? 0)
+      const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
+      const cashback = (rawAmount * normalizedPercent) + fixedVal
+
+      current.cashback += cashback
       if (baseType === 'expense') {
         current.lend += finalPrice
       } else if (baseType === 'income') {
@@ -217,13 +227,14 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       }
     })
 
-  return Array.from(tagMap.entries()).map(([tag, { lend, repay, last_activity }]) => {
+  return Array.from(tagMap.entries()).map(([tag, { lend, repay, cashback, last_activity }]) => {
     const netBalance = lend - repay
     return {
       tag,
       netBalance,
       originalPrincipal: lend,
       totalBack: repay,
+      totalCashback: cashback,
       status: Math.abs(netBalance) < 0.01 ? 'settled' : 'active',
       last_activity,
     }

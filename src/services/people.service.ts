@@ -219,11 +219,13 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       .neq('status', 'void')
 
     if (txnsError) {
-      console.error('Error fetching debt transactions:', txnsError)
+      console.error('Error fetching debt transactions:', JSON.stringify(txnsError, null, 2))
+      console.error('Error Details:', (txnsError as any)?.message, (txnsError as any)?.details)
     } else {
       (txns as any[])?.forEach(txn => {
         const txnDate = txn.occurred_at ? new Date(txn.occurred_at) : null
-        const isCurrentMonth = txnDate && txnDate >= currentMonthStart
+        const currentMonthTag = format(new Date(), 'MMMyy').toUpperCase()
+        const isCurrentCycle = (txnDate && txnDate >= currentMonthStart) || (txn.tag === currentMonthTag)
 
         // Determine which person this debt belongs to
         let personId: string | null = null
@@ -250,7 +252,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
           debtBalanceByPerson.set(personId, current + finalPrice)
 
           // Track current cycle debt separately
-          if (isCurrentMonth) {
+          if (isCurrentCycle) {
             const currentCycle = currentCycleDebtByPerson.get(personId) ?? 0
             currentCycleDebtByPerson.set(personId, currentCycle + finalPrice)
           }
@@ -351,14 +353,75 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         const updated: MonthlyDebtSummary = existing
           ? {
             ...existing,
-            amount: existing.amount + finalPrice,
+            amount: existing.amount + finalPrice, // Keep Net Debt Balance
+            total_debt: (existing.total_debt ?? 0) + rawAmount,
+            total_cashback: (existing.total_cashback ?? 0) + cashback,
             occurred_at: existing.occurred_at ?? (validDate ? validDate.toISOString() : occurredAt),
+            last_activity: !existing.last_activity || (occurredAt && occurredAt > existing.last_activity) ? (occurredAt || undefined) : existing.last_activity,
           }
           : {
             tag: tagValue ?? undefined,
             tagLabel: label,
             amount: finalPrice,
+            total_debt: rawAmount,
+            total_cashback: cashback,
+            total_repaid: 0,
+            status: 'active',
             occurred_at: validDate ? validDate.toISOString() : occurredAt ?? undefined,
+            last_activity: occurredAt ?? undefined,
+          }
+
+        personMap.set(groupingKey, updated)
+        monthlyDebtMap.set(ownerId, personMap)
+      })
+    }
+  }
+
+  // 2. Fetch Repayments (to update balance & total_repaid)
+  if (personIds.length > 0) {
+    const { data: repayTxns, error: repayError } = await supabase
+      .from('transactions')
+      .select('person_id, amount, occurred_at, tag, status')
+      .eq('type', 'repayment')
+      .neq('status', 'void')
+
+    if (!repayError && repayTxns) {
+      (repayTxns as any[]).forEach(txn => {
+        if (!txn.person_id || !personIds.includes(txn.person_id)) return
+
+        const ownerId = txn.person_id
+        const amount = Math.abs(txn.amount)
+        const tagValue = txn.tag ?? null
+        const occurredAt = txn.occurred_at ?? null
+        const parsedDate = occurredAt ? new Date(occurredAt) : null
+        const validDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null
+        const fallbackKey = validDate ? format(validDate, 'yyyy-MM') : 'unknown'
+        // Repayments should match the tag of the debt if possible, or fallback to date
+        // Ideally repayments have the SAME TAG as the debt they are repaying.
+        const groupingKey = tagValue ?? fallbackKey
+        const label = tagValue ?? (validDate ? format(validDate, 'MMM yy', { locale: enUS }).toUpperCase() : 'Repayment')
+
+        const personMap = monthlyDebtMap.get(ownerId) ?? new Map<string, MonthlyDebtSummary>()
+        const existing = personMap.get(groupingKey)
+
+        // For repayments, we subtract from balance (amount) and add to total_repaid
+        const updated: MonthlyDebtSummary = existing
+          ? {
+            ...existing,
+            amount: existing.amount - amount,
+            total_repaid: (existing.total_repaid ?? 0) + amount,
+            last_activity: !existing.last_activity || (occurredAt && occurredAt > existing.last_activity) ? (occurredAt || undefined) : existing.last_activity,
+          }
+          : {
+            tag: tagValue ?? undefined,
+            tagLabel: label,
+            amount: -amount, // Negative balance if no debt yet (overpaid?)
+            total_debt: 0,
+            total_cashback: 0,
+            total_repaid: amount,
+            status: 'active',
+            occurred_at: validDate ? validDate.toISOString() : occurredAt ?? undefined,
+            last_activity: occurredAt ?? undefined,
           }
 
         personMap.set(groupingKey, updated)

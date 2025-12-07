@@ -92,6 +92,10 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
   const [isBotLoading, setIsBotLoading] = useState(false)
   const [isBotSaving, setIsBotSaving] = useState(false)
 
+  // Undo/Redo State
+  const [history, setHistory] = useState<string[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
+
   // Payment Status State
   const [paymentStatus, setPaymentStatus] = useState<{ confirmed: boolean, amount: number }>({ confirmed: false, amount: 0 })
   const [checkingPayment, setCheckingPayment] = useState(false)
@@ -111,6 +115,35 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
     checkPaymentStatus()
     fetchShops()
   }, [service.id])
+
+  // History Helper Functions
+  const updateTemplate = (newValue: string) => {
+    setBotNoteTemplate(newValue)
+    const newHistory = [...history.slice(0, historyIndex + 1), newValue]
+    setHistory(newHistory)
+    setHistoryIndex(newHistory.length - 1)
+  }
+
+  const handleTemplateKeyDown = (e: React.KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+      e.preventDefault()
+      // Shift key check for Redo
+      if (e.shiftKey) {
+        if (historyIndex < history.length - 1) {
+          const newIndex = historyIndex + 1
+          setHistoryIndex(newIndex)
+          setBotNoteTemplate(history[newIndex])
+        }
+      } else {
+        // Undo
+        if (historyIndex > 0) {
+          const newIndex = historyIndex - 1
+          setHistoryIndex(newIndex)
+          setBotNoteTemplate(history[newIndex])
+        }
+      }
+    }
+  }
 
   async function fetchShops() {
     const data = await getShopsAction()
@@ -138,12 +171,18 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
         if (config.config) {
           const c = config.config as any
           setBotRunDay(c.runDay || 1)
-          setBotNoteTemplate(c.noteTemplate || '')
+          const tmpl = c.noteTemplate || ''
+          setBotNoteTemplate(tmpl)
+          setHistory([tmpl])
+          setHistoryIndex(0)
           // maxSlots is now in service table
         }
       } else {
         // Default values
-        setBotNoteTemplate(service.note_template || `{service} {date} [{slots} slots] [{price}]`)
+        const defaultTmpl = service.note_template || `{service} {date} [{slots} slots] [{price}]`
+        setBotNoteTemplate(defaultTmpl)
+        setHistory([defaultTmpl])
+        setHistoryIndex(0)
       }
     } catch (error) {
       console.error('Failed to load bot config:', error)
@@ -282,6 +321,7 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
     .replace('{date}', monthTag)
     .replace('{price}', pricePerSlot.toLocaleString())
     .replace('{total_slots}', totalSlots.toString())
+    .replace('{initialPrice}', (price || 0).toLocaleString())
 
   // Payment Status Logic
   const currentTotalCost = price || 0
@@ -470,15 +510,16 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
                     <Label className="text-xs">Note Template</Label>
                     <Input
                       value={botNoteTemplate}
-                      onChange={(e) => setBotNoteTemplate(e.target.value)}
+                      onChange={(e) => updateTemplate(e.target.value)}
+                      onKeyDown={handleTemplateKeyDown}
                       className="h-8 font-mono text-xs"
                       placeholder="{service} {date}..."
                     />
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {['{service}', '{name}', '{date}', '{slots}', '{price}', '{total_slots}'].map(tag => (
+                      {['{service}', '{name}', '{date}', '{slots}', '{price}', '{total_slots}', '{initialPrice}'].map(tag => (
                         <button
                           key={tag}
-                          onClick={() => setBotNoteTemplate(prev => prev + (prev.endsWith(' ') ? '' : ' ') + tag)}
+                          onClick={() => updateTemplate(botNoteTemplate + (botNoteTemplate.endsWith(' ') ? '' : ' ') + tag)}
                           className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 transition-colors"
                         >
                           {tag}

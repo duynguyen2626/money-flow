@@ -28,6 +28,7 @@ type FilterableTransactionsProps = {
     onSearchChange?: (next: string) => void
     shops?: Shop[]
     hidePeopleColumn?: boolean
+    context?: 'person' | 'account' | 'general'
 }
 
 type BulkActionState = {
@@ -56,6 +57,7 @@ export function FilterableTransactions({
     onSearchChange,
     shops = [],
     hidePeopleColumn,
+    context,
 }: FilterableTransactionsProps) {
     const { selectedTag, setSelectedTag } = useTagFilter()
     const [searchTermInternal, setSearchTermInternal] = useState('');
@@ -612,6 +614,7 @@ export function FilterableTransactions({
                     onSelectionChange={setSelectedTxnIds}
                     activeTab={activeTab}
                     hidePeopleColumn={hidePeopleColumn}
+                    context={context}
                     onBulkActionStateChange={handleBulkActionStateChange}
                     sortState={sortState}
                     onSortChange={setSortState}
