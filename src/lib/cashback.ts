@@ -183,7 +183,7 @@ export function getCashbackCycleRange(
   const end =
     day === 1
       ? new Date(endBase.getFullYear(), endBase.getMonth(), 0)
-      : clampToDay(endBase, day - 1)
+      : clampToDay(endBase, day)
 
   start.setHours(0, 0, 0, 0)
   end.setHours(23, 59, 59, 999)

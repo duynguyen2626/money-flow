@@ -273,13 +273,33 @@ export function AccountStatsHeader({
                 </div>
                 <span className="text-[10px]">{Math.round((cashbackStats.rate ?? 0) * 100)}%</span>
               </div>
-              <div className="flex items-end justify-between">
-                <span className="text-lg font-bold tabular-nums text-emerald-700">
-                  {formatCurrency(earned)}
-                </span>
-                {cap && <span className="text-[10px] text-slate-500 mb-1">/ {formatCurrency(cap)}</span>}
-              </div>
-              <Progress value={earned} max={progressMax} className="h-1.5 mt-1" />
+
+              {/* Min Spend Logic */}
+              {minSpend && cashbackStats.currentSpend < minSpend ? (
+                <div className="flex flex-col">
+                  <div className="flex items-end justify-between">
+                    <span className="text-sm font-bold text-slate-400">
+                      {formatCurrency(earned)}
+                    </span>
+                    <span className="text-[10px] text-amber-600 font-bold mb-1">
+                      Locked
+                    </span>
+                  </div>
+                  <div className="mt-1 rounded-md bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-700 text-center">
+                    Spend {formatCurrency(minSpend - cashbackStats.currentSpend)} to unlock
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-end justify-between">
+                    <span className="text-lg font-bold tabular-nums text-emerald-700">
+                      {formatCurrency(earned)}
+                    </span>
+                    {cap && <span className="text-[10px] text-slate-500 mb-1">/ {formatCurrency(cap)}</span>}
+                  </div>
+                  <Progress value={earned} max={progressMax} className="h-1.5 mt-1" />
+                </>
+              )}
             </div>
           ) : isAssetAccount ? (
             <div className="flex flex-col gap-1 h-full justify-center">

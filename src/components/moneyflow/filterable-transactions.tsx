@@ -3,11 +3,12 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { FilterIcon, X, Trash2, Undo } from 'lucide-react'
+import { FilterIcon, X, Trash2, Undo, FileSpreadsheet } from 'lucide-react'
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
 import { Combobox } from '@/components/ui/combobox'
+import { AddTransactionDialog } from './add-transaction-dialog'
 import {
     Popover,
     PopoverContent,
@@ -76,6 +77,7 @@ export function FilterableTransactions({
     const [bulkActions, setBulkActions] = useState<BulkActionState | null>(null)
     const [selectedType, setSelectedType] = useState<'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay'>('all')
     const [sortState, setSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
+    const [isExcelMode, setIsExcelMode] = useState(false)
 
     const handleBulkActionStateChange = useCallback((next: BulkActionState) => {
         setBulkActions(next);
@@ -370,6 +372,19 @@ export function FilterableTransactions({
         <div className="space-y-3">
             {!onSearchChange && (
                 <div className="flex flex-col gap-3 md:flex-row md:items-center">
+                    {!context && (
+                        <div className="order-first md:order-last shrink-0">
+                            {!isExcelMode && (
+                                <AddTransactionDialog
+                                    accounts={accounts}
+                                    categories={categories}
+                                    people={people}
+                                    shops={shops}
+                                    listenToUrlParams={true}
+                                />
+                            )}
+                        </div>
+                    )}
                     <div className="flex flex-1 items-center gap-2">
                         {/* Quick Filters (All/Void/Pending) */}
                         <div className="flex items-center rounded-lg bg-slate-100 p-1 text-xs font-medium text-slate-600 shrink-0">
@@ -581,7 +596,6 @@ export function FilterableTransactions({
                             </PopoverContent>
                         </Popover>
 
-                        {/* Year Select */}
                         <select
                             id="year-filter"
                             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 shrink-0"
@@ -595,6 +609,20 @@ export function FilterableTransactions({
                                 </option>
                             ))}
                         </select>
+
+                        <div className="h-6 w-px bg-slate-300 mx-1" />
+
+                        <button
+                            onClick={() => setIsExcelMode(prev => !prev)}
+                            className={`relative z-20 inline-flex items-center gap-1 rounded-md border px-3 py-2 text-sm font-medium shadow-sm shrink-0 transition-colors ${isExcelMode
+                                    ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                }`}
+                            title={isExcelMode ? "Exit Excel Mode" : "Enter Excel Mode"}
+                        >
+                            <FileSpreadsheet className="h-4 w-4" />
+                            {isExcelMode ? 'Excel Mode' : 'Excel Mode'}
+                        </button>
                     </div>
                 </div>
             )}
@@ -619,6 +647,7 @@ export function FilterableTransactions({
                     sortState={sortState}
                     onSortChange={setSortState}
                     hiddenColumns={['initial_back', 'people_back']}
+                    isExcelMode={isExcelMode}
                 />
             </div>
         </div>

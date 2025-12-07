@@ -392,10 +392,21 @@ function AccountCardComponent({
                 />
               )}
               <div className="flex flex-col px-2 py-1.5">
-                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Remains</span>
-                <span className="text-sm font-bold text-emerald-600">
-                  {remaining !== null ? numberFormatter.format(remaining) : '∞'}
-                </span>
+                {needToSpend > 0 ? (
+                  <>
+                    <span className="text-[10px] uppercase tracking-wider text-amber-600 font-bold">Unlock in</span>
+                    <span className="text-sm font-bold text-amber-600">
+                      {numberFormatter.format(needToSpend)}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Remains</span>
+                    <span className="text-sm font-bold text-emerald-600">
+                      {remaining !== null ? numberFormatter.format(remaining) : '∞'}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 

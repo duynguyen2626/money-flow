@@ -96,6 +96,7 @@ export function EditPersonDialog({ person, subscriptions, initiallyOpen, onClose
                   avatar_url: values.avatar_url,
                   sheet_link: values.sheet_link,
                   subscriptionIds: values.subscriptionIds,
+                  is_archived: values.is_archived,
                 })
                 setOpen(false)
                 onClose?.()

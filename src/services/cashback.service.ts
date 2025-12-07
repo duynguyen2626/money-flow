@@ -86,7 +86,7 @@ async function fetchAccountLines(
       target_account:accounts!target_account_id(name, type)
     `)
     .eq('account_id', accountId)
-    .lt('amount', 0) // Spending is negative in single-table
+    .or('amount.lt.0,type.eq.expense') // Spending is negative OR explicit expense type
     .gte('occurred_at', rangeStart.toISOString())
     .lte('occurred_at', rangeEnd.toISOString())
 
@@ -110,11 +110,12 @@ function toTransaction(
   config: ParsedCashbackConfig,
   totalSpendInCycle: number
 ): CashbackTransaction | null {
-  if (typeof txn.amount !== 'number') {
+  const rawAmount = Number(txn.amount)
+  if (!Number.isFinite(rawAmount)) {
     return null
   }
 
-  const amount = Math.abs(txn.amount)
+  const amount = Math.abs(rawAmount)
   let earnedRate = config.rate // Default rate
 
   const categoryName = txn.categories?.name
