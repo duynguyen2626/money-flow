@@ -96,6 +96,7 @@ export function PersonDetailTabs({
                                 accountId={personId}
                                 accountType="debt"
                                 hidePeopleColumn
+                                context="person"
                             />
                         </div>
                     </div>

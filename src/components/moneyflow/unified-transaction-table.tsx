@@ -17,6 +17,7 @@ import {
   Link2,
   Info,
   ArrowLeft,
+  ArrowRight,
   ArrowUp,
   ArrowDown,
   Trash2,
@@ -61,6 +62,7 @@ import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from
 import { RefundNoteDisplay } from './refund-note-display'
 import { ConfirmRefundDialog } from "./confirm-refund-dialog"
 import { TransactionHistoryModal } from './transaction-history-modal'
+import { AddTransactionDialog } from "./add-transaction-dialog"
 
 type ColumnKey =
   | "date"
@@ -243,7 +245,7 @@ export function UnifiedTransactionTable({
     { key: "shop", label: "Note", defaultWidth: 200, minWidth: 150 }, // Renamed to Note, minimized
     { key: "category", label: "Category", defaultWidth: 150 },
     ...(!hidePeopleColumn ? [{ key: "people", label: "Person", defaultWidth: 110, minWidth: 100 } as ColumnConfig] : []),
-    { key: "account", label: "Account", defaultWidth: 160, minWidth: 140 },
+    { key: "account", label: "Account", defaultWidth: 180, minWidth: 160 },
     { key: "amount", label: "Amount", defaultWidth: 100 },
     // { key: "note", label: "Note", defaultWidth: 200, minWidth: 150 }, // Removed from default
     { key: "back_info", label: "Back Info", defaultWidth: 140 },
@@ -257,6 +259,7 @@ export function UnifiedTransactionTable({
   ]
   const router = useRouter()
   // Internal state removed for activeTab, now using prop with fallback
+  const lastSelectedIdRef = useRef<string | null>(null)
   const [showSelectedOnly, setShowSelectedOnly] = useState(false)
   const [internalSelection, setInternalSelection] = useState<Set<string>>(new Set())
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
@@ -340,6 +343,7 @@ export function UnifiedTransactionTable({
   const [confirmRefundOpen, setConfirmRefundOpen] = useState(false)
   const [confirmRefundTxn, setConfirmRefundTxn] = useState<TransactionWithDetails | null>(null)
   const [historyTarget, setHistoryTarget] = useState<TransactionWithDetails | null>(null)
+  const [cloningTxn, setCloningTxn] = useState<TransactionWithDetails | null>(null)
 
   const handleOpenConfirmRefund = (txn: TransactionWithDetails) => {
     setConfirmRefundTxn(txn)
@@ -721,13 +725,32 @@ export function UnifiedTransactionTable({
     }
   }
 
-  const handleSelectOne = (txnId: string, checked: boolean) => {
+  const handleSelectOne = (txnId: string, checked: boolean, shiftKey: boolean = false) => {
     const newSet = new Set(selection)
-    if (checked) {
-      newSet.add(txnId)
+
+    if (shiftKey && lastSelectedIdRef.current) {
+      const startIdx = displayedTransactions.findIndex(t => t.id === lastSelectedIdRef.current)
+      const endIdx = displayedTransactions.findIndex(t => t.id === txnId)
+
+      if (startIdx !== -1 && endIdx !== -1) {
+        const min = Math.min(startIdx, endIdx)
+        const max = Math.max(startIdx, endIdx)
+        const range = displayedTransactions.slice(min, max + 1)
+
+        range.forEach(t => {
+          if (checked) newSet.add(t.id)
+          else newSet.delete(t.id)
+        })
+      }
     } else {
-      newSet.delete(txnId)
+      if (checked) {
+        newSet.add(txnId)
+      } else {
+        newSet.delete(txnId)
+      }
     }
+
+    lastSelectedIdRef.current = txnId
     updateSelection(newSet)
   }
 
@@ -944,12 +967,23 @@ export function UnifiedTransactionTable({
               let typeBadge = null;
               if (txn.type === 'repayment') {
                 typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800 h-6">REPAY</span>;
+              } else if (txn.type === 'transfer') {
+                if (accountId) {
+                  if (txn.amount >= 0) {
+                    typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800 h-6">TF IN</span>
+                  } else {
+                    typeBadge = <span className="inline-flex items-center rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-800 h-6">TF OUT</span>
+                  }
+                } else {
+                  typeBadge = <span className="inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-xs font-bold text-blue-800 h-6">TF</span>
+                }
               } else if (visualType === 'expense') {
                 typeBadge = <span className="inline-flex items-center rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-800 h-6">OUT</span>
               } else if (visualType === 'income') {
                 typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800 h-6">IN</span>
               } else {
                 if (accountId) {
+                  // Fallback for untyped, though likely covered by Transfer above if type is correct
                   if (txn.amount >= 0) {
                     typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800 h-6">TF IN</span>
                   } else {
@@ -1036,6 +1070,18 @@ export function UnifiedTransactionTable({
                           </>
                         ) : (
                           <>
+                            <button
+                              className="flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
+                              onClick={event => {
+                                event.stopPropagation();
+                                setCloningTxn(txn);
+                                setActionMenuOpen(null);
+                              }}
+                            >
+                              <Copy className="h-4 w-4 text-slate-600" />
+                              <span>Clone</span>
+                            </button>
+
                             <button
                               className="flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
                               onClick={event => {
@@ -1167,7 +1213,7 @@ export function UnifiedTransactionTable({
                           type="checkbox"
                           className="rounded border-gray-300"
                           checked={isSelected}
-                          onChange={e => handleSelectOne(txn.id, e.target.checked)}
+                          onChange={e => handleSelectOne(txn.id, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
                         />
                         <div className="flex flex-col gap-0.5">
                           <span className="font-semibold">{dateFormatter.format(d)}</span>
@@ -1424,9 +1470,21 @@ export function UnifiedTransactionTable({
                             <div className="flex items-center gap-2 min-w-[150px]">
                               <span className="text-lg leading-none">{arrow}</span>
                               {otherAccountIcon}
-                              <span className="truncate max-w-[120px] cursor-help font-medium">
-                                {otherAccountName}
-                              </span>
+                              {/* Use robust ID check: source_account_id ?? account_id, destination_account_id ?? target_account_id */}
+                              {(txn.source_account_id || txn.account_id) && (txn.destination_account_id || txn.target_account_id) ? (
+                                <Link
+                                  href={`/accounts/${isInflow ? (txn.source_account_id || txn.account_id) : (txn.destination_account_id || txn.target_account_id)}`}
+                                  onClick={e => e.stopPropagation()}
+                                  className="truncate max-w-[120px] cursor-pointer font-medium hover:text-blue-600 transition-colors"
+                                >
+                                  {otherAccountName}
+                                </Link>
+                              ) : (
+                                <span className="truncate max-w-[120px] cursor-help font-medium">
+                                  {otherAccountName}
+                                </span>
+                              )
+                              }
                             </div>
                           </CustomTooltip>
                         )
@@ -1481,10 +1539,33 @@ export function UnifiedTransactionTable({
 
                       return (
                         <CustomTooltip content={`${sourceName} ➡️ ${destName}`}>
-                          <div className="flex items-center gap-2 cursor-help min-w-[150px]">
-                            {txn.source_name && sourceIcon}
-                            {txn.source_name && destName && <span className="text-xl">➡️</span>}
-                            {destName && destIcon}
+                          <div className="flex items-center gap-1.5 min-w-[150px]">
+                            {/* Source */}
+                            <div className="flex items-center gap-1.5 shrink-0 max-w-[120px]">
+                              {txn.source_name && sourceIcon}
+                              {(txn.source_account_id || txn.account_id) ? (
+                                <Link href={`/accounts/${txn.source_account_id || txn.account_id}`} onClick={e => e.stopPropagation()} className="bg-transparent hover:underline hover:text-blue-600 block truncate">
+                                  <span className="text-sm truncate text-slate-700 block" title={sourceName}>{sourceName}</span>
+                                </Link>
+                              ) : (
+                                <span className="text-sm truncate text-slate-700 font-medium" title={sourceName}>{sourceName}</span>
+                              )}
+                            </div>
+
+                            {/* Arrow + Dest */}
+                            {destName && !(context === 'person' && (destName === txn.person_name || destName === txn.destination_name)) && (
+                              <div className="flex items-center gap-1.5 shrink-0 max-w-[120px]">
+                                <ArrowRight className="h-3 w-3 text-slate-400 shrink-0" />
+                                {destIcon}
+                                {txn.destination_account_id || txn.target_account_id ? (
+                                  <Link href={`/accounts/${txn.destination_account_id || txn.target_account_id}`} onClick={e => e.stopPropagation()} className="bg-transparent hover:underline hover:text-blue-600 block truncate">
+                                    <span className="text-sm truncate text-slate-700 block" title={destName}>{destName}</span>
+                                  </Link>
+                                ) : (
+                                  <span className="text-sm truncate text-slate-700 font-medium" title={destName}>{destName}</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </CustomTooltip>
                       );
@@ -1508,31 +1589,29 @@ export function UnifiedTransactionTable({
                               </div>
                             )
                           )}
-                          <div className="flex items-center justify-between gap-2 min-w-0 w-full">
+                          <div className="flex items-center gap-2 min-w-0 w-full">
                             <CustomTooltip content={txn.account_name}>
                               {displayAccountId ? (
                                 <Link
                                   href={`/accounts/${displayAccountId}`}
                                   onClick={e => e.stopPropagation()}
-                                  className="truncate cursor-pointer font-medium hover:text-blue-600 transition-colors flex-1 min-w-0"
+                                  className="truncate cursor-pointer font-medium hover:text-blue-600 transition-colors min-w-0 shrink"
                                 >
                                   {txn.account_name ?? 'Unknown'}
                                 </Link>
                               ) : (
-                                <span className="truncate cursor-help flex-1 min-w-0">
+                                <span className="truncate cursor-help min-w-0 shrink">
                                   {txn.account_name ?? 'Unknown'}
                                 </span>
                               )}
                             </CustomTooltip>
 
 
-                            {/* Cycle Badge: Always show for expense transactions to help with cashback tracking.
-                                Show "None" if card has no cycle configured.
-                             */}
+                            {/* Cycle Badge: Adjusted to not push too far right */}
                             {(visualType === 'expense' || txn.persisted_cycle_tag) && (
                               <CustomTooltip content={`Cycle: ${displayCycle}`}>
                                 <span className={cn(
-                                  "inline-flex items-center rounded-md px-2 py-1 text-xs font-bold border whitespace-nowrap w-fit shrink-0",
+                                  "inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-bold border whitespace-nowrap shrink-0",
                                   displayCycle === 'None'
                                     ? "bg-slate-100 text-slate-400 border-slate-200"
                                     : "bg-blue-50 text-blue-600 border-blue-100"
@@ -1572,7 +1651,9 @@ export function UnifiedTransactionTable({
                                 {personName.charAt(0).toUpperCase()}
                               </div>
                             )}
-                            <span className="font-medium text-slate-700 hover:text-blue-600 transition-colors truncate" title={personName}>{personName}</span>
+                            <CustomTooltip content={personName}>
+                              <span className="font-medium text-slate-700 hover:text-blue-600 transition-colors truncate cursor-help">{personName}</span>
+                            </CustomTooltip>
                           </div>
 
                           {/* Tag Full Badge - Aligned Right */}
@@ -2245,6 +2326,20 @@ export function UnifiedTransactionTable({
         isOpen={!!historyTarget}
         onClose={() => setHistoryTarget(null)}
       />
-    </div >
+      {cloningTxn && (
+        <AddTransactionDialog
+          isOpen={!!cloningTxn}
+          onOpenChange={(open) => {
+            if (!open) setCloningTxn(null)
+          }}
+          accounts={accounts}
+          categories={categories}
+          people={people}
+          shops={shops}
+          cloneInitialValues={buildEditInitialValues(cloningTxn)}
+          triggerContent={<span className="hidden"></span>}
+        />
+      )}
+    </div>
   )
 }

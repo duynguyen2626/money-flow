@@ -111,11 +111,18 @@ export async function distributeService(serviceId: string, customDate?: string, 
     throw new Error('Service members not found')
   }
 
-  const totalSlots = members.reduce((sum, member) => sum + member.slots, 0)
+  const initialPrice = (service as any).price || 0
+
+  // Use max_slots if available, otherwise sum of member slots
+  const computedTotalSlots = members.reduce((sum, member) => sum + (Number(member.slots) || 0), 0)
+  const totalSlots = (service as any).max_slots && (service as any).max_slots > 0
+    ? (service as any).max_slots
+    : computedTotalSlots
+
   if (totalSlots === 0) {
     throw new Error('Total slots is zero, cannot distribute.')
   }
-  const unitCost = ((service as any).price || 0) / totalSlots
+  const unitCost = initialPrice / totalSlots
   console.log('Unit cost:', unitCost)
 
   const createdTransactions: any[] = []
@@ -146,6 +153,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
         .replace('{slots}', member.slots.toString())
         .replace('{date}', monthTag)
         .replace('{price}', pricePerSlot.toLocaleString())
+        .replace('{initialPrice}', initialPrice.toLocaleString())
         .replace('{total_slots}', totalSlots.toString());
     } else {
       // Default: MemberName DEC25 Slot: 1 (35,571)/7
@@ -179,7 +187,8 @@ export async function distributeService(serviceId: string, customDate?: string, 
       tag: monthTag,
       shop_id: (service as any).shop_id,
       amount: -cost, // Expense is negative
-      type: 'expense',
+      type: personId ? 'debt' : 'expense',
+      status: 'posted',
       account_id: SYSTEM_ACCOUNTS.DRAFT_FUND,
       category_id: SYSTEM_CATEGORIES.ONLINE_SERVICES,
       person_id: personId,
@@ -375,9 +384,8 @@ export async function saveServiceBotConfig(serviceId: string, config: any) {
       key: key,
       name: `Bot for Service ${serviceId}`,
       is_enabled: config.isEnabled,
-      config: config,
-      updated_at: new Date().toISOString() // Assuming updated_at exists or just rely on created_at/default
-    } as any)
+      config: config
+    } as any, { onConflict: 'key' })
 
   if (error) throw error
   return true

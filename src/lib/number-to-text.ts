@@ -31,7 +31,7 @@ export function readMoney(amount: number): string {
 export function formatVietnameseCurrencyText(amount: number): { value: string; unit: string }[] {
     if (!amount || isNaN(amount)) return [];
 
-    const str = Math.abs(amount).toString();
+    const str = Math.round(Math.abs(amount)).toString();
     const len = str.length;
     const parts: { value: string; unit: string }[] = [];
 

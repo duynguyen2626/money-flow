@@ -73,6 +73,8 @@ export interface Database {
           persisted_cycle_tag: string | null
           is_installment: boolean | null
           installment_plan_id: string | null
+          cashback_share_percent: number | null
+          cashback_share_fixed: number | null
         }
         Insert: {
           id?: string

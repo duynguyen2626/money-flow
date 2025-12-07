@@ -107,42 +107,59 @@ function PersonCardComponent({
                     "border-slate-200 bg-white"
                 )}
             >
-                {/* ROW 1: Header - Avatar + Name */}
-                <div className={cn("flex items-center gap-3 p-3 relative", headerGradient)}>
-                    {/* Square Avatar */}
-                    <div className="h-11 w-11 rounded-lg overflow-hidden bg-white border border-slate-200 shadow-sm flex items-center justify-center flex-shrink-0">
-                        {person.avatar_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                                src={person.avatar_url}
-                                alt={person.name}
-                                className="h-full w-full object-cover"
-                            />
-                        ) : (
-                            <div className={cn(
-                                "h-full w-full flex items-center justify-center",
-                                isSettled ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400"
-                            )}>
-                                <User className="h-6 w-6" />
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Name + Owner Badge */}
-                    <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-bold text-slate-900 truncate" title={person.name}>
-                                {person.name}
-                            </span>
-                            {person.is_owner && (
-                                <span className="text-[9px] bg-blue-500 text-white px-1.5 py-0.5 rounded flex-shrink-0">Owner</span>
+                {/* ROW 1: Header - Avatar + Name + Services */}
+                <div className={cn("flex flex-col gap-3 p-3 relative flex-1", headerGradient)}>
+                    <div className="flex items-start gap-3">
+                        {/* Square Avatar */}
+                        <div className="h-12 w-12 rounded-lg overflow-hidden bg-white border border-slate-200 shadow-sm flex items-center justify-center flex-shrink-0">
+                            {person.avatar_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                    src={person.avatar_url}
+                                    alt={person.name}
+                                    className="h-full w-full object-cover"
+                                />
+                            ) : (
+                                <div className={cn(
+                                    "h-full w-full flex items-center justify-center",
+                                    isSettled ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400"
+                                )}>
+                                    <User className="h-6 w-6" />
+                                </div>
                             )}
+                        </div>
+
+                        {/* Name + Owner Badge */}
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-base font-bold text-slate-900 truncate" title={person.name}>
+                                    {person.name}
+                                </span>
+                                {person.is_owner && (
+                                    <span className="text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded flex-shrink-0">Owner</span>
+                                )}
+                            </div>
+
+                            {/* Service Badges in Header - Right aligned/Flow */}
+                            <div className="mt-1 flex flex-wrap gap-1.5 justify-end">
+                                {services.map(service => (
+                                    <div key={service.id} className="inline-flex items-center gap-1 bg-white/80 border border-slate-200 rounded px-1.5 py-0.5 text-xs shadow-sm" title={service.name}>
+                                        {service.logo_url ? (
+                                            // eslint-disable-next-line @next/next/no-img-element
+                                            <img src={service.logo_url} alt="" className="h-3.5 w-3.5 object-cover rounded-sm" />
+                                        ) : (
+                                            <span className="text-[8px] font-bold text-slate-500 bg-slate-100 px-0.5 rounded">{service.name.substring(0, 1)}</span>
+                                        )}
+                                        <span className="font-medium text-slate-700 max-w-[60px] truncate">{service.name}: {service.slots}</span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
                     </div>
 
                     {/* HOVER OVERLAY - Smaller Buttons */}
                     <div
-                        className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-lg"
                         onClick={stopPropagation}
                     >
                         {/* Edit */}
@@ -172,74 +189,54 @@ function PersonCardComponent({
                     </div>
                 </div>
 
-                {/* ROW 2: Footer - Larger Debt Badge + Count + Services + Detail Arrow */}
-                <div className="flex items-center gap-2 px-3 py-2.5 bg-white border-t border-slate-100">
-                    {/* Debt Badge - Larger and more prominent */}
-                    <div onClick={stopPropagation}>
+                {/* ROW 2: Footer - Larger Debt Badge + Count + Detail Arrow */}
+                <div className="flex items-center justify-between gap-2 px-3 py-3 bg-white border-t border-slate-100">
+                    {/* Debt Badge - Full Amount */}
+                    <div onClick={stopPropagation} className="flex-1">
                         <AddTransactionDialog
                             {...dialogBaseProps}
                             defaultType="repayment"
                             defaultPersonId={person.id}
                             defaultAmount={balance > 0 ? balance : undefined}
                             buttonClassName={cn(
-                                "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-bold cursor-pointer hover:opacity-90 transition-opacity",
+                                "flex items-center justify-between w-full gap-2 rounded-lg px-3 py-2 text-sm font-bold cursor-pointer hover:opacity-90 transition-opacity border shadow-sm",
                                 isSettled
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                                     : hasDebt
-                                        ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                        : "bg-slate-50 text-slate-600 border border-slate-200"
+                                        ? "bg-amber-50 text-amber-900 border-amber-200" // Darker text for readability
+                                        : "bg-slate-50 text-slate-600 border-slate-200"
                             )}
                             triggerContent={
                                 <>
-                                    <span className="opacity-70 text-xs">{cycleLabel}:</span>
-                                    <span>{compactNumberFormatter.format(currentCycleDebt)}</span>
-                                    {isSettled ? <Check className="h-3.5 w-3.5" /> : hasDebt ? <AlertTriangle className="h-3.5 w-3.5" /> : null}
+                                    <div className="flex items-center gap-2">
+                                        <span className="opacity-70 text-xs font-semibold">{cycleLabel}:</span>
+                                        <span className="text-base">{numberFormatter.format(currentCycleDebt)}</span>
+                                    </div>
+                                    {isSettled ? <Check className="h-4 w-4" /> : hasDebt ? <AlertTriangle className="h-4 w-4" /> : null}
                                 </>
                             }
                         />
                     </div>
 
-                    {/* Outstanding debts count badge with tooltip */}
+                    {/* Outstanding debts count badge */}
                     {outstandingDebtsCount > 1 && (
                         <CustomTooltip content={`${outstandingDebtsCount} outstanding debt cycles - Click to view all`}>
                             <button
                                 onClick={(e) => { e.stopPropagation(); setShowDebtsModal(true) }}
-                                className="inline-flex items-center justify-center h-6 px-1.5 rounded-md bg-rose-100 text-rose-600 hover:bg-rose-200 transition-colors text-xs font-bold"
+                                className="inline-flex items-center justify-center h-8 px-2 rounded-md bg-rose-100 text-rose-700 hover:bg-rose-200 transition-colors text-xs font-bold border border-rose-200"
                             >
                                 +{outstandingDebtsCount - 1}
                             </button>
                         </CustomTooltip>
                     )}
 
-                    {/* Spacer */}
-                    <div className="flex-1" />
-
-                    {/* Service badges */}
-                    <div className="flex items-center gap-1">
-                        {visibleServices.map(service => (
-                            <CustomTooltip key={service.id} content={service.name}>
-                                <div className="h-5 w-5 rounded overflow-hidden bg-white border border-slate-200 flex items-center justify-center">
-                                    {service.logo_url ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img src={service.logo_url} alt="" className="h-full w-full object-cover" />
-                                    ) : (
-                                        <span className="text-[7px] font-bold text-slate-400">{service.name.substring(0, 2)}</span>
-                                    )}
-                                </div>
-                            </CustomTooltip>
-                        ))}
-                        {remainingServiceCount > 0 && (
-                            <span className="text-[9px] text-slate-400 font-medium">+{remainingServiceCount}</span>
-                        )}
-                    </div>
-
                     {/* Detail Arrow */}
                     <button
                         onClick={openDetails}
-                        className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        className="p-2 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-100"
                         title="View Details"
                     >
-                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="h-5 w-5" />
                     </button>
                 </div>
             </div>

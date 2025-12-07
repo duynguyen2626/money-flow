@@ -260,9 +260,9 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
     account_name: accountName,
     category_id: categoryId,
     tag: txn.tag ?? null, // Thêm trường tag
-    cashback_share_percent: percentRaw ?? undefined,
-    cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? undefined,
-    cashback_share_amount: cashbackAmount ?? undefined,
+    cashback_share_percent: percentRaw ?? null,
+    cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? null,
+    cashback_share_amount: cashbackAmount ?? null,
     original_amount: typeof accountLine?.original_amount === 'number'
       ? accountLine.original_amount
       : cashbackFromLines.original_amount,
@@ -344,9 +344,9 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
     account_name: accountName,
     category_id: categoryId,
     tag: txn.tag ?? null,
-    cashback_share_percent: rawPercent,
-    cashback_share_fixed: fixedBack,
-    cashback_share_amount: cashbackAmount,
+    cashback_share_percent: rawPercent ?? null,
+    cashback_share_fixed: fixedBack ?? null,
+    cashback_share_amount: cashbackAmount ?? null,
     person_id: personLine?.person_id ?? null,
     person_name: personLine?.profiles?.name ?? null,
     persisted_cycle_tag: (txn as unknown as { persisted_cycle_tag?: string | null })?.persisted_cycle_tag ?? null,

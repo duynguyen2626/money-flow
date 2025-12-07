@@ -173,7 +173,7 @@ export function SmartAmountInput({
                     {mathError && <span className="text-xs text-red-500 font-normal flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {mathError}</span>}
                 </label>
                 {textParts.length > 0 && (
-                    <div className="text-xs text-right">
+                    <div className="text-xs text-right max-w-[200px] truncate" title={textParts.map(p => p.value + ' ' + p.unit).join(' ')}>
                         {textParts.map((part, i) => (
                             <React.Fragment key={i}>
                                 <span className="font-bold text-blue-600">{part.value}</span>

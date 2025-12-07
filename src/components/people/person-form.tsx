@@ -122,71 +122,77 @@ export function PersonForm({
 
   return (
     <form onSubmit={handleSubmit(submission)} className="space-y-6">
-      <div className="grid gap-6 md:grid-cols-2">
-        <div className="space-y-4">
-          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-            Account no se duoc tu dong tao va lien ket sau khi luu nguoi nay.
-          </div>
+      <div className="space-y-6">
+        <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+          Account no se duoc tu dong tao va lien ket sau khi luu nguoi nay.
+        </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Ten</label>
-            <input
-              {...register('name')}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="Vi du: Lam"
-            />
-            {errors.name && <p className="text-sm text-rose-600">{errors.name.message}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Email</label>
-            <input
-              {...register('email')}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="lam@example.com"
-            />
-            {errors.email && <p className="text-sm text-rose-600">{errors.email.message}</p>}
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-gray-700">Avatar URL</label>
-              <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-50">
-                {avatarPreview ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={avatarPreview}
-                    alt="Avatar preview"
-                    className="h-full w-full object-cover"
-                    onError={() => setAvatarPreview(null)}
-                  />
-                ) : (
-                  <span className="text-xs text-slate-400">No</span>
-                )}
-              </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Ten</label>
+              <input
+                {...register('name')}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="Vi du: Lam"
+              />
+              {errors.name && <p className="text-sm text-rose-600">{errors.name.message}</p>}
             </div>
-            <input
-              {...register('avatar_url')}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="https://example.com/avatar.jpg"
-            />
-            {errors.avatar_url && (
-              <p className="text-sm text-rose-600">{errors.avatar_url.message}</p>
-            )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Email</label>
+              <input
+                {...register('email')}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="lam@example.com"
+              />
+              {errors.email && <p className="text-sm text-rose-600">{errors.email.message}</p>}
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">Link Sheet</label>
-            <input
-              {...register('sheet_link')}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="Link Google Sheet theo doi"
-            />
-            {errors.sheet_link && (
-              <p className="text-sm text-rose-600">{errors.sheet_link.message}</p>
-            )}
-          </div>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700">Avatar URL</label>
+                <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-50">
+                  {avatarPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={avatarPreview}
+                      alt="Avatar preview"
+                      className="h-full w-full object-cover"
+                      onError={() => setAvatarPreview(null)}
+                    />
+                  ) : (
+                    <span className="text-xs text-slate-400">No</span>
+                  )}
+                </div>
+              </div>
+              <input
+                {...register('avatar_url')}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="https://example.com/avatar.jpg"
+              />
+              {errors.avatar_url && (
+                <p className="text-sm text-rose-600">{errors.avatar_url.message}</p>
+              )}
+            </div>
 
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">Link Sheet</label>
+              <input
+                {...register('sheet_link')}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="Link Google Sheet theo doi"
+              />
+              {errors.sheet_link && (
+                <p className="text-sm text-rose-600">{errors.sheet_link.message}</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
             <div>
               <p className="text-sm font-semibold text-slate-800">Toi la chu? (Owner)</p>
@@ -221,9 +227,9 @@ export function PersonForm({
             <p className="text-sm font-semibold text-slate-800">Dang ky dich vu</p>
             <span className="text-xs text-slate-500">{watchedSubs?.length ?? 0} da chon</span>
           </div>
-          <div className="space-y-2">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {subscriptionOptions.length === 0 ? (
-              <p className="text-sm text-slate-500">Chua co dich vu nao.</p>
+              <p className="text-sm text-slate-500 col-span-full">Chua co dich vu nao.</p>
             ) : (
               subscriptionOptions.map(item => {
                 const checked = watchedSubs?.includes(item.id) ?? false
@@ -231,22 +237,22 @@ export function PersonForm({
                 return (
                   <label
                     key={item.id}
-                    className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition hover:border-blue-200"
+                    className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition hover:border-blue-200 h-full"
                   >
                     <div
                       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-sm font-semibold ring-2 ${brand.bg} ${brand.text} ${brand.ring}`}
                     >
                       {brand.icon}
                     </div>
-                    <div className="flex flex-1 flex-col">
-                      <span className="font-medium text-slate-900">{item.name}</span>
-                      <span className="text-xs text-slate-500">
-                        {formatMoney(item.price ?? null) || 'No price'} - {formatNextDate(item.next_billing_date)}
+                    <div className="flex flex-1 flex-col min-w-0">
+                      <span className="font-medium text-slate-900 truncate">{item.name}</span>
+                      <span className="text-xs text-slate-500 truncate">
+                        {formatMoney(item.price ?? null) || 'No price'}
                       </span>
                     </div>
                     <input
                       type="checkbox"
-                      className="h-4 w-4 accent-blue-600"
+                      className="h-4 w-4 accent-blue-600 shrink-0"
                       checked={checked}
                       onChange={() => {
                         const next = checked

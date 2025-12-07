@@ -162,8 +162,8 @@ export default function CashbackDetailsPage() {
         if (sharePercent === undefined && shareFixed === undefined) {
           const lineWithShare = lines.find(l => l.cashback_share_percent !== undefined || l.cashback_share_fixed !== undefined)
           if (lineWithShare) {
-            sharePercent = lineWithShare.cashback_share_percent
-            shareFixed = lineWithShare.cashback_share_fixed
+            sharePercent = lineWithShare.cashback_share_percent ?? null
+            shareFixed = lineWithShare.cashback_share_fixed ?? null
           }
         }
 
