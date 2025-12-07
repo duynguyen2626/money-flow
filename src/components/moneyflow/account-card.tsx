@@ -1,9 +1,8 @@
 'use client'
 
-import Link from 'next/link'
+import { memo, MouseEvent, useState } from 'react'
 import {
   CreditCard,
-  MoreVertical,
   Plus,
   Minus,
   ArrowLeftRight,
@@ -16,20 +15,19 @@ import {
   Wallet,
   Landmark,
   PiggyBank,
-  ChevronRight
+  AlertCircle,
+  ChevronRight,
+  CheckCircle,
 } from 'lucide-react'
-import { MouseEvent, ReactNode, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 import {
   computeNextDueDate,
-  getAccountTypeLabel,
   getSharedLimitParentId,
 } from '@/lib/account-utils'
 import { Account, AccountCashbackSnapshot, Category, Person, Shop } from '@/types/moneyflow.types'
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { EditAccountDialog } from './edit-account-dialog'
-import { ConfirmMoneyReceived } from './confirm-money-received'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
 import { cn } from '@/lib/utils'
 import { recalculateAccountBalanceAction } from '@/actions/account-actions'
@@ -42,9 +40,9 @@ type AccountCardProps = {
   collateralAccounts?: Account[]
   allAccounts?: Account[]
   shops: Shop[]
+  hasPendingItems?: boolean
 }
 
-// Formatter without currency symbol
 const numberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 })
@@ -52,39 +50,20 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 function getAccountIcon(type: Account['type']) {
   switch (type) {
     case 'credit_card':
-      return <CreditCard className="h-6 w-6" />
+      return <CreditCard className="h-10 w-10" />
     case 'bank':
     case 'ewallet':
-      return <Landmark className="h-6 w-6" />
+      return <Landmark className="h-10 w-10" />
     case 'cash':
-      return <Wallet className="h-6 w-6" />
+      return <Wallet className="h-10 w-10" />
     case 'savings':
     case 'investment':
     case 'asset':
-      return <PiggyBank className="h-6 w-6" />
+      return <PiggyBank className="h-10 w-10" />
     case 'debt':
-      return <User className="h-6 w-6" />
+      return <User className="h-10 w-10" />
     default:
-      return <Wallet className="h-6 w-6" />
-  }
-}
-
-function getAccountTypeBadgeColor(type: Account['type']) {
-  switch (type) {
-    case 'credit_card':
-      return 'text-amber-700 border-amber-200 bg-amber-50'
-    case 'bank':
-    case 'ewallet':
-    case 'cash':
-      return 'text-blue-700 border-blue-200 bg-blue-50'
-    case 'savings':
-    case 'investment':
-    case 'asset':
-      return 'text-emerald-700 border-emerald-200 bg-emerald-50'
-    case 'debt':
-      return 'text-orange-700 border-orange-200 bg-orange-50'
-    default:
-      return 'text-slate-700 border-slate-200 bg-slate-50'
+      return <Wallet className="h-10 w-10" />
   }
 }
 
@@ -95,29 +74,19 @@ function getDueStatus(dueDate: Date | null) {
   const diffMs = dueDate.getTime() - now.getTime()
   const daysLeft = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
 
+  if (daysLeft <= 0) {
+    return { label: `Overdue!`, tone: 'bg-red-100 text-red-700 border border-red-200', daysLeft }
+  }
   if (daysLeft <= 3) {
-    return { label: `Due in ${daysLeft} days`, tone: 'text-red-700 bg-red-100 border-red-200' }
+    return { label: `Due ${daysLeft}d`, tone: 'bg-orange-100 text-orange-700 border border-orange-200', daysLeft }
   }
-
   if (daysLeft <= 7) {
-    return { label: `Due in ${daysLeft} days`, tone: 'text-amber-700 bg-amber-100 border-amber-200' }
+    return { label: `Due ${daysLeft}d`, tone: 'bg-amber-100 text-amber-700 border border-amber-200', daysLeft }
   }
-
-  return { label: `Due in ${daysLeft} days`, tone: 'text-emerald-700 bg-emerald-100 border-emerald-200' }
+  return { label: `Due ${daysLeft}d`, tone: 'bg-teal-100 text-teal-700 border border-teal-200', daysLeft }
 }
 
-function ActionButton({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <CustomTooltip content={label}>
-      {/* Wrap in div to ensure Tooltip works with Fragment children */}
-      <div className="inline-flex">
-        {children}
-      </div>
-    </CustomTooltip>
-  )
-}
-
-export function AccountCard({
+function AccountCardComponent({
   account,
   cashback,
   categories,
@@ -125,11 +94,11 @@ export function AccountCard({
   collateralAccounts = [],
   allAccounts = [],
   shops,
+  hasPendingItems = false,
 }: AccountCardProps) {
   const router = useRouter()
   const [isRecalculating, setIsRecalculating] = useState(false)
 
-  // Logic for credit card stats
   const isCreditCard = account.type === 'credit_card'
   const dueDate = computeNextDueDate(account.cashback_config ?? null)
   const dueStatus = getDueStatus(dueDate)
@@ -140,58 +109,36 @@ export function AccountCard({
   const isChildCard = !!parentAccount
   const isParentCard = !isChildCard && allAccounts.some(a => getSharedLimitParentId(a.cashback_config) === account.id)
 
-  // Unified Balance Logic: Limit + In - Out
-  // For non-credit accounts, limit is 0, so it's just In - Out (Current Balance)
-  // For credit cards, it's Available Balance
+  // Balance Logic
   const creditLimit = account.credit_limit ?? 0
   const netBalance = (account.total_in ?? 0) - (account.total_out ?? 0)
-
   let displayBalance = creditLimit + netBalance
   let displayLimit = creditLimit
-  let displayLabel = isCreditCard ? 'Available' : 'Current Balance'
-  let isSharedAvailable = false
 
-  // Child Card Logic (Override displayBalance)
   if (isCreditCard && isChildCard && parentAccount) {
     const parentNetBalance = (parentAccount.total_in ?? 0) - (parentAccount.total_out ?? 0)
-
-    // Find all children of this parent
     const siblings = allAccounts.filter(a => getSharedLimitParentId(a.cashback_config) === parentAccount.id)
-
     const totalChildDebt = siblings.reduce((sum, child) => {
       const childNet = (child.total_in ?? 0) - (child.total_out ?? 0)
       return sum + Math.abs(childNet < 0 ? childNet : 0)
     }, 0)
-
     const parentDebt = Math.abs(parentNetBalance < 0 ? parentNetBalance : 0)
-    const totalDebt = parentDebt + totalChildDebt
-
     displayLimit = parentAccount.credit_limit ?? 0
-    displayBalance = displayLimit - totalDebt
-    displayLabel = 'Shared Available'
-    isSharedAvailable = true
+    displayBalance = displayLimit - (parentDebt + totalChildDebt)
   }
 
-  // Parent Card Logic (Override displayBalance)
   if (isCreditCard && isParentCard) {
     const childCards = allAccounts.filter(a => getSharedLimitParentId(a.cashback_config) === account.id)
     const totalChildDebt = childCards.reduce((sum, child) => {
       const childNetBalance = (child.total_in ?? 0) - (child.total_out ?? 0)
       return sum + Math.abs(childNetBalance < 0 ? childNetBalance : 0)
     }, 0)
-
     const currentDebt = Math.abs(netBalance < 0 ? netBalance : 0)
-    const totalDebt = currentDebt + totalChildDebt
-    displayBalance = creditLimit - totalDebt
+    displayBalance = creditLimit - (currentDebt + totalChildDebt)
   }
 
-  const openDetails = () => {
-    router.push(`/accounts/${account.id}`)
-  }
-
-  const stopCardNavigation = (event?: MouseEvent) => {
-    event?.stopPropagation?.()
-  }
+  const openDetails = () => router.push(`/accounts/${account.id}`)
+  const stopCardNavigation = (event?: MouseEvent) => event?.stopPropagation?.()
 
   const handleRecalculate = async (e: MouseEvent) => {
     e.stopPropagation()
@@ -206,153 +153,122 @@ export function AccountCard({
     }
   }
 
-  const dialogBaseProps = {
-    accounts: allAccounts,
-    categories,
-    people,
-    shops,
-  }
+  const dialogBaseProps = { accounts: allAccounts, categories, people, shops }
 
-  // Cashback Logic
   // Cashback Logic
   const earned = cashback?.earnedSoFar ?? 0
   const cap = cashback?.maxCashback
+  const currentSpend = cashback?.currentSpend ?? 0
+  const remaining = cap ? Math.max(0, cap - earned) : null
 
-  let cashbackBadge = null
-  if (isCreditCard) {
-    if (!account.cashback_config) {
-      cashbackBadge = (
-        <span className="inline-flex items-center gap-1 rounded-md border border-slate-100 bg-slate-50 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 whitespace-nowrap">
-          None
-        </span>
-      )
-    } else if (cap && cap > 0) {
-      const remaining = Math.max(0, cap - earned)
-      cashbackBadge = (
-        <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 whitespace-nowrap">
-          <TrendingUp className="h-3 w-3" />
-          <span>{numberFormatter.format(remaining)}</span>
-        </span>
-      )
-    } else {
-      // Unlimited
-      cashbackBadge = (
-        <span className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700 whitespace-nowrap">
-          <InfinityIcon className="h-3 w-3" />
-          <span>Unlimited</span>
-        </span>
-      )
-    }
-  }
+  const cashbackConfig = account.cashback_config as { min_spend?: number } | null
+  const minSpend = cashbackConfig?.min_spend ?? 0
+  const needToSpend = minSpend > 0 ? Math.max(0, minSpend - currentSpend) : 0
+  const cycleLabel = cashback?.cycleLabel ?? ''
 
   return (
     <div
-      className="group relative flex flex-col justify-between rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-md h-full overflow-hidden"
+      className="group relative flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md cursor-pointer"
       onClick={openDetails}
     >
-      <div className="flex flex-col flex-grow p-5">
-        {/* Top Section */}
-        <div className="flex justify-between items-start mb-4">
-          <div className="flex flex-col gap-2 w-full">
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-3 overflow-hidden">
-                {/* Small Logo */}
-                <div onClick={stopCardNavigation} className="flex-shrink-0">
-                  <EditAccountDialog
-                    account={account}
-                    collateralAccounts={collateralAccounts}
-                    triggerContent={
-                      <div className="h-12 w-auto min-w-[3rem] overflow-hidden flex items-center justify-center">
-                        {account.logo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={account.logo_url as string}
-                            alt={account.name}
-                            className="h-full w-auto object-contain"
-                          />
-                        ) : (
-                          <div className="text-slate-400">
-                            {getAccountIcon(account.type)}
-                          </div>
-                        )}
-                      </div>
-                    }
-                    onOpen={stopCardNavigation}
-                  />
-                </div>
-
-                <CustomTooltip content={account.name}>
-                  <h3 className="font-bold text-slate-900 text-lg leading-tight truncate">
-                    {account.name}
-                  </h3>
-                </CustomTooltip>
-                <div onClick={stopCardNavigation}>
-                  <EditAccountDialog
-                    account={account}
-                    collateralAccounts={collateralAccounts}
-                    triggerContent={
-                      <div className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer rounded-full hover:bg-slate-100 transition-colors">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </div>
-                    }
-                    onOpen={stopCardNavigation}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {dueStatus && (
-                <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium ${dueStatus.tone}`}>
-                  <Clock4 className="h-3 w-3" />
-                  {dueStatus.label}
-                </span>
-              )}
-              {cashbackBadge}
-            </div>
+      {/* Image Section */}
+      <div className="relative h-32 w-full bg-slate-100">
+        {account.logo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={account.logo_url as string}
+            alt={account.name}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className={cn(
+            "flex h-full w-full items-center justify-center",
+            isCreditCard ? "bg-gradient-to-br from-amber-100 to-orange-50 text-amber-600" : "bg-gradient-to-br from-blue-100 to-blue-50 text-blue-600"
+          )}>
+            {getAccountIcon(account.type)}
           </div>
+        )}
+
+        {/* Dark overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-black/10" />
+
+        {/* TOP-LEFT: Card Name - Frosted glass background */}
+        <div className="absolute top-2 left-2">
+          <span className="inline-flex items-center rounded-lg bg-white/80 px-3 py-1.5 text-sm font-bold text-slate-900 shadow-md backdrop-blur-sm truncate max-w-[140px]" title={account.name}>
+            {account.name}
+          </span>
         </div>
 
-        {/* Middle Section: Balance */}
-        <div className="mb-6">
-          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
-            Current Balance
-          </p>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleRecalculate}
-              disabled={isRecalculating}
-              className={cn(
-                "p-1.5 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors",
-                isRecalculating && "animate-spin text-blue-600"
-              )}
-              title="Re-sync Balance"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
-            <p className={cn(
-              "text-3xl font-bold tracking-tight",
-              isCreditCard
-                ? (displayBalance < displayLimit * 0.3 ? 'text-amber-600' : 'text-slate-900')
-                : (displayBalance < 0 ? 'text-red-600' : 'text-slate-900')
-            )}>
-              {numberFormatter.format(displayBalance)}
-            </p>
-            <div onClick={stopCardNavigation}>
-              <ConfirmMoneyReceived accountId={account.id} minimal />
-            </div>
-          </div>
-
-          {isCreditCard && (
-            <div className="flex items-center gap-2 mt-1 text-sm text-slate-500">
-              <span>Limit: <span className="font-medium text-slate-600">{numberFormatter.format(displayLimit)}</span></span>
-            </div>
+        {/* TOP-RIGHT: Limit + Cycle */}
+        <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+          {isCreditCard && displayLimit > 0 && (
+            <span className="inline-flex items-center rounded-md bg-slate-800/80 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm backdrop-blur-sm">
+              Limit: {numberFormatter.format(displayLimit)}
+            </span>
+          )}
+          {isCreditCard && cycleLabel && (
+            <span className="inline-flex items-center rounded-md bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 shadow-sm backdrop-blur-sm">
+              {cycleLabel.replace(/-/g, '/').replace(/ \/ /g, ' - ')}
+            </span>
           )}
         </div>
 
-        {/* Bottom Section: Actions & Details */}
-        <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-100" onClick={stopCardNavigation}>
-          <div className="flex items-center gap-3">
+        {/* BOTTOM-LEFT: Due Date - Lighter color, bold text */}
+        {isCreditCard && dueStatus && (
+          <div className="absolute bottom-2 left-2">
+            <span className={cn(
+              "inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-sm",
+              dueStatus.tone
+            )}>
+              <Clock4 className="h-3.5 w-3.5" />
+              {dueStatus.label}
+            </span>
+          </div>
+        )}
+
+        {/* BOTTOM-RIGHT: Max Cashback - Same size as Due badge */}
+        {isCreditCard && (
+          <div className="absolute bottom-2 right-2">
+            {cap ? (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-sm">
+                <TrendingUp className="h-3.5 w-3.5" />
+                Max: {numberFormatter.format(cap)}
+              </span>
+            ) : account.cashback_config ? (
+              <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-sm">
+                <InfinityIcon className="h-3.5 w-3.5" />
+                Unlimited
+              </span>
+            ) : null}
+          </div>
+        )}
+
+        {/* Need to Spend Warning */}
+        {isCreditCard && needToSpend > 0 && (
+          <div className="absolute bottom-12 left-1/2 -translate-x-1/2">
+            <span className="inline-flex items-center gap-1 rounded-md bg-red-500 px-2 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-sm animate-pulse">
+              <AlertCircle className="h-3 w-3" />
+              Need {numberFormatter.format(needToSpend)} more
+            </span>
+          </div>
+        )}
+
+        {/* CENTER: Quick Actions + Edit on Hover - No border on Edit */}
+        <div
+          className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/40"
+          onClick={stopCardNavigation}
+        >
+          <div className="flex items-center gap-2">
+            {/* Edit Button - No border, pure icon */}
+            <EditAccountDialog
+              account={account}
+              collateralAccounts={collateralAccounts}
+              buttonClassName="p-2.5 rounded-full text-slate-600 bg-white hover:bg-slate-50 shadow-md transition-all hover:scale-110 cursor-pointer"
+              triggerContent={<Pencil className="h-4 w-4" />}
+              onOpen={stopCardNavigation}
+            />
+
             {isCreditCard ? (
               <>
                 <CustomTooltip content="Pay Card">
@@ -361,20 +277,8 @@ export function AccountCard({
                       {...dialogBaseProps}
                       defaultType="transfer"
                       defaultDebtAccountId={account.id}
-                      buttonClassName="p-1.5 rounded-md text-orange-600 hover:bg-orange-50 transition-colors"
-                      triggerContent={<CreditCard className="h-5 w-5" />}
-                      onOpen={stopCardNavigation}
-                    />
-                  </div>
-                </CustomTooltip>
-                <CustomTooltip content="Income">
-                  <div>
-                    <AddTransactionDialog
-                      {...dialogBaseProps}
-                      defaultType="income"
-                      defaultSourceAccountId={account.id}
-                      buttonClassName="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors"
-                      triggerContent={<Plus className="h-5 w-5" />}
+                      buttonClassName="p-2.5 rounded-full text-orange-600 bg-white hover:bg-orange-50 shadow-md transition-all hover:scale-110"
+                      triggerContent={<CreditCard className="h-4 w-4" />}
                       onOpen={stopCardNavigation}
                     />
                   </div>
@@ -385,20 +289,20 @@ export function AccountCard({
                       {...dialogBaseProps}
                       defaultType="expense"
                       defaultSourceAccountId={account.id}
-                      buttonClassName="p-1.5 rounded-md text-rose-600 hover:bg-rose-50 transition-colors"
-                      triggerContent={<Minus className="h-5 w-5" />}
+                      buttonClassName="p-2.5 rounded-full text-rose-600 bg-white hover:bg-rose-50 shadow-md transition-all hover:scale-110"
+                      triggerContent={<Minus className="h-4 w-4" />}
                       onOpen={stopCardNavigation}
                     />
                   </div>
                 </CustomTooltip>
-                <CustomTooltip content="Lend / Debt">
+                <CustomTooltip content="Lend">
                   <div>
                     <AddTransactionDialog
                       {...dialogBaseProps}
                       defaultType="debt"
                       defaultSourceAccountId={account.id}
-                      buttonClassName="p-1.5 rounded-md text-purple-600 hover:bg-purple-50 transition-colors"
-                      triggerContent={<User className="h-5 w-5" />}
+                      buttonClassName="p-2.5 rounded-full text-purple-600 bg-white hover:bg-purple-50 shadow-md transition-all hover:scale-110"
+                      triggerContent={<User className="h-4 w-4" />}
                       onOpen={stopCardNavigation}
                     />
                   </div>
@@ -412,8 +316,8 @@ export function AccountCard({
                       {...dialogBaseProps}
                       defaultType="income"
                       defaultSourceAccountId={account.id}
-                      buttonClassName="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors"
-                      triggerContent={<Plus className="h-5 w-5" />}
+                      buttonClassName="p-2.5 rounded-full text-emerald-600 bg-white hover:bg-emerald-50 shadow-md transition-all hover:scale-110"
+                      triggerContent={<Plus className="h-4 w-4" />}
                       onOpen={stopCardNavigation}
                     />
                   </div>
@@ -424,8 +328,8 @@ export function AccountCard({
                       {...dialogBaseProps}
                       defaultType="expense"
                       defaultSourceAccountId={account.id}
-                      buttonClassName="p-1.5 rounded-md text-rose-600 hover:bg-rose-50 transition-colors"
-                      triggerContent={<Minus className="h-5 w-5" />}
+                      buttonClassName="p-2.5 rounded-full text-rose-600 bg-white hover:bg-rose-50 shadow-md transition-all hover:scale-110"
+                      triggerContent={<Minus className="h-4 w-4" />}
                       onOpen={stopCardNavigation}
                     />
                   </div>
@@ -436,46 +340,144 @@ export function AccountCard({
                       {...dialogBaseProps}
                       defaultType="transfer"
                       defaultSourceAccountId={account.id}
-                      buttonClassName="p-1.5 rounded-md text-blue-600 hover:bg-blue-50 transition-colors"
-                      triggerContent={<ArrowLeftRight className="h-5 w-5" />}
+                      buttonClassName="p-2.5 rounded-full text-blue-600 bg-white hover:bg-blue-50 shadow-md transition-all hover:scale-110"
+                      triggerContent={<ArrowLeftRight className="h-4 w-4" />}
                       onOpen={stopCardNavigation}
                     />
                   </div>
                 </CustomTooltip>
-                <CustomTooltip content="Lend / Debt">
+                <CustomTooltip content="Lend">
                   <div>
                     <AddTransactionDialog
                       {...dialogBaseProps}
                       defaultType="debt"
                       defaultSourceAccountId={account.id}
-                      buttonClassName="p-1.5 rounded-md text-purple-600 hover:bg-purple-50 transition-colors"
-                      triggerContent={<User className="h-5 w-5" />}
+                      buttonClassName="p-2.5 rounded-full text-purple-600 bg-white hover:bg-purple-50 shadow-md transition-all hover:scale-110"
+                      triggerContent={<User className="h-4 w-4" />}
                       onOpen={stopCardNavigation}
                     />
                   </div>
                 </CustomTooltip>
               </>
             )}
+            <CustomTooltip content="Re-sync">
+              <button
+                onClick={handleRecalculate}
+                disabled={isRecalculating}
+                className={cn(
+                  "p-2.5 rounded-full text-slate-600 bg-white hover:bg-slate-50 shadow-md transition-all hover:scale-110",
+                  isRecalculating && "animate-spin text-blue-600"
+                )}
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            </CustomTooltip>
           </div>
-
-          {cashback?.maxCashback ? (
-            <div
-              className="text-xs font-medium text-slate-500 cursor-pointer hover:text-slate-700 transition-colors"
-              onClick={openDetails}
-            >
-              🔄💰 Remains <span className="inline-flex items-center justify-center rounded-md bg-slate-100 px-2 py-0.5 text-sm font-bold text-slate-900">{numberFormatter.format(Math.max(0, cashback.maxCashback - (cashback.earnedSoFar ?? 0)))}</span>
-            </div>
-          ) : (
-            <div
-              className="flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-blue-600 transition-colors cursor-pointer"
-              onClick={openDetails}
-            >
-              Details
-              <ChevronRight className="h-4 w-4" />
-            </div>
-          )}
         </div>
+      </div>
+
+      {/* Footer: Thumbnail + Remains / Confirm Icon + Balance + Details */}
+      <div className="flex items-stretch bg-slate-50 border-t border-slate-100">
+        {isCreditCard ? (
+          <>
+            {/* Left: Thumbnail + Remains */}
+            <div className="flex items-center">
+              {account.logo_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={account.logo_url as string}
+                  alt=""
+                  className="h-14 w-16 object-contain p-1"
+                  loading="lazy"
+                />
+              )}
+              <div className="flex flex-col px-2 py-1.5">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Remains</span>
+                <span className="text-sm font-bold text-emerald-600">
+                  {remaining !== null ? numberFormatter.format(remaining) : '∞'}
+                </span>
+              </div>
+            </div>
+
+            {/* Right: Confirm Icon + Balance + Details */}
+            <div className="flex items-center gap-1.5 px-2 py-1.5 ml-auto">
+              {hasPendingItems && (
+                <CustomTooltip content="Pending Confirm">
+                  <div className="p-1 rounded-full bg-emerald-100 text-emerald-600">
+                    <CheckCircle className="h-4 w-4" />
+                  </div>
+                </CustomTooltip>
+              )}
+              <div className="text-right flex flex-col">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Balance</span>
+                <span className={cn(
+                  "text-sm font-bold",
+                  displayBalance < displayLimit * 0.3 ? 'text-amber-600' : 'text-slate-900'
+                )}>
+                  {numberFormatter.format(displayBalance)}
+                </span>
+              </div>
+              <div
+                className="p-1 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                onClick={(e) => { e.stopPropagation(); openDetails(); }}
+                title="View Details"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              {account.logo_url && (
+                // eslint-disable-next-line @next/next/no-img-element  
+                <img
+                  src={account.logo_url as string}
+                  alt=""
+                  className="h-10 w-12 object-contain p-1"
+                  loading="lazy"
+                />
+              )}
+              <div className="flex flex-col">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Balance</span>
+                <span className={cn("text-sm font-bold", displayBalance < 0 ? 'text-red-600' : 'text-slate-900')}>
+                  {numberFormatter.format(displayBalance)}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {hasPendingItems && (
+                <CustomTooltip content="Pending Confirm">
+                  <div className="p-1 rounded-full bg-emerald-100 text-emerald-600">
+                    <CheckCircle className="h-4 w-4" />
+                  </div>
+                </CustomTooltip>
+              )}
+              <button
+                onClick={handleRecalculate}
+                disabled={isRecalculating}
+                className={cn(
+                  "p-1.5 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors",
+                  isRecalculating && "animate-spin text-blue-600"
+                )}
+                title="Re-sync Balance"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </button>
+              <div
+                className="p-1 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                onClick={(e) => { e.stopPropagation(); openDetails(); }}
+                title="View Details"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
 }
+
+// Memoize for performance
+export const AccountCard = memo(AccountCardComponent)

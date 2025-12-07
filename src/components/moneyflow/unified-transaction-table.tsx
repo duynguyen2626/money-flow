@@ -26,7 +26,8 @@ import {
   Ban,
   Loader2,
   Store,
-  CheckCircle2
+  CheckCircle2,
+  History,
 } from 'lucide-react'
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -59,6 +60,7 @@ import { cn } from "@/lib/utils"
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
 import { RefundNoteDisplay } from './refund-note-display'
 import { ConfirmRefundDialog } from "./confirm-refund-dialog"
+import { TransactionHistoryModal } from './transaction-history-modal'
 
 type ColumnKey =
   | "date"
@@ -337,6 +339,7 @@ export function UnifiedTransactionTable({
   const [voidError, setVoidError] = useState<string | null>(null)
   const [confirmRefundOpen, setConfirmRefundOpen] = useState(false)
   const [confirmRefundTxn, setConfirmRefundTxn] = useState<TransactionWithDetails | null>(null)
+  const [historyTarget, setHistoryTarget] = useState<TransactionWithDetails | null>(null)
 
   const handleOpenConfirmRefund = (txn: TransactionWithDetails) => {
     setConfirmRefundTxn(txn)
@@ -1003,17 +1006,33 @@ export function UnifiedTransactionTable({
                         onClick={e => e.stopPropagation()}
                       >
                         {currentTab === 'void' || isVoided ? (
-                          <button
-                            className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
-                            disabled={isRestoring}
-                            onClick={event => {
-                              event.stopPropagation();
-                              handleRestore(txn);
-                            }}
-                          >
-                            <RotateCcw className="h-4 w-4" />
-                            <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
-                          </button>
+                          <>
+                            <button
+                              className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              disabled={isRestoring}
+                              onClick={event => {
+                                event.stopPropagation();
+                                handleRestore(txn);
+                              }}
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                              <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
+                            </button>
+
+                            <hr className="my-1 border-slate-200" />
+
+                            <button
+                              className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-slate-600 hover:bg-slate-50"
+                              onClick={event => {
+                                event.stopPropagation();
+                                setHistoryTarget(txn);
+                                setActionMenuOpen(null);
+                              }}
+                            >
+                              <History className="h-4 w-4" />
+                              <span>View History</span>
+                            </button>
+                          </>
                         ) : (
                           <>
                             <button
@@ -1076,6 +1095,20 @@ export function UnifiedTransactionTable({
                             >
                               <Ban className="h-4 w-4" />
                               <span>Void Transaction</span>
+                            </button>
+
+                            <hr className="my-1 border-slate-200" />
+
+                            <button
+                              className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-slate-600 hover:bg-slate-50"
+                              onClick={event => {
+                                event.stopPropagation();
+                                setHistoryTarget(txn);
+                                setActionMenuOpen(null);
+                              }}
+                            >
+                              <History className="h-4 w-4" />
+                              <span>View History</span>
                             </button>
                           </>
                         )}
@@ -2179,6 +2212,12 @@ export function UnifiedTransactionTable({
         onOpenChange={setConfirmRefundOpen}
         transaction={confirmRefundTxn}
         accounts={accounts}
+      />
+      <TransactionHistoryModal
+        transactionId={historyTarget?.id ?? ''}
+        transactionNote={historyTarget?.note}
+        isOpen={!!historyTarget}
+        onClose={() => setHistoryTarget(null)}
       />
     </div >
   )

@@ -1,77 +1,43 @@
-AGENT TASK: PHASE 70.6 - REFUND SAFETY GUARD & UI FIXES
+# PROJECT CONTEXT: Money Flow 3
 
-Context:
+## 1. Tech Stack
+- **Framework:** Next.js 15 (App Router)
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS, Shadcn UI (Radix Primitive)
+- **Database:** Supabase (PostgreSQL)
+- **State/Data Fetching:** React Server Components (RSC), Server Actions, Hooks.
+- **Icons:** Lucide React, SVG (public folder).
 
-Critical Logic Gap: User can Void a Pending Refund (GD2) even if a Completed Refund (GD3) exists. This leaves orphan records.
+## 2. Directory Structure
+- `src/app`: Page routes, layouts, route handlers (api).
+- `src/actions`: Server Actions (mutations, logic phía server).
+- `src/components`: UI components (chia thành `moneyflow`, `batch`, `people`, `ui`...).
+- `src/lib`: Utilities, helpers, supabase client/server configurations.
+- `src/services`: Business logic layer (tách biệt logic khỏi UI và Actions).
+- `src/types`: TypeScript interfaces/types (database.types.ts generated from Supabase).
+- `supabase/migrations`: SQL migrations history.
 
-UI Bug: "Account" column shows "Card Test ➡️ Unknown" for single-sided transactions.
+## 3. Core Features & Business Logic
+- **Transactions:** Quản lý thu chi, hỗ trợ batch import, duplicate check.
+- **Accounts:** Quản lý tài khoản ngân hàng, ví tiền, tín dụng.
+- **People/Debts:** Quản lý nợ nần, chia tiền nhóm (logic "chia đều", "ai trả").
+- **Services:** Quản lý đăng ký định kỳ (subscriptions) như Netflix, Spotify.
+- **Installments:** Quản lý trả góp (tự động tách giao dịch gốc thành các kỳ hạn).
+- **Cashback:** Theo dõi tiền hoàn lại từ thẻ tín dụng/chi tiêu.
+- **Batch Processing:** Import số lượng lớn từ Excel/CSV, mapping ngân hàng tự động.
 
-UI UX: Copy Icon is hard to click (hover-only) and overlaps with text.
+## 4. Coding Rules & Conventions
+- **Server Actions:** Ưu tiên dùng Server Actions cho các thao tác ghi (POST/PUT/DELETE) thay vì Route Handlers.
+- **Service Layer:** Logic phức tạp phải đặt trong `src/services`, Actions chỉ gọi Services.
+- **Type Safety:** Luôn import types từ `src/types` hoặc `database.types.ts`. Không dùng `any`.
+- **UI Components:** Sử dụng Shadcn UI components có sẵn trong `src/components/ui`.
+- **Database Access:**
+  - Dùng `src/lib/supabase/server.ts` cho Server Components/Actions.
+  - Dùng `src/lib/supabase/client.ts` cho Client Components (hạn chế).
+- **Naming:** Kebab-case cho tên file, PascalCase cho tên Component.
 
-Objective:
-
-Backend: Implement Strict Checks in voidTransaction.
-
-Backend: Fix Account Name mapping in getUnifiedTransactions.
-
-Frontend: Make Copy Icon permanent and fix spacing.
-
-I. BACKEND: REFUND SAFETY (src/services/transaction.service.ts)
-
-Target: voidTransaction(id)
-
-Logic Update:
-
-Fetch the transaction.
-
-Constraint Check (The Guard):
-
-Query: Check if ANY transaction has linked_transaction_id == id AND status != 'void'.
-
-Condition: If found -> THROW ERROR:
-
-"Không thể hủy giao dịch này vì đã có giao dịch liên quan (VD: Đã xác nhận tiền về). Vui lòng hủy giao dịch nối tiếp trước."
-
-Rollback Logic (Existing): Keep the logic that reverts the Parent's status (e.g. Void GD3 -> Set GD2 to 'pending').
-
-II. BACKEND: FIX "UNKNOWN" DISPLAY (src/services/transaction.service.ts)
-
-Target: getUnifiedTransactions
-
-Logic Update:
-
-Current: Likely setting dest_name = 'Unknown' default if type is transfer-like.
-
-Fix:
-
-If target_account_id is NULL AND person_id is NULL:
-
-dest_name = undefined (Do not return "Unknown").
-
-display_type = 'expense' (or income), NOT 'transfer'.
-
-Result: UI should render [Logo] Card Test (No arrow).
-
-III. FRONTEND: UI POLISH (UnifiedTransactionTable)
-
-1. Fix Copy Icon
-
-Action: Remove group-hover:opacity-100 and opacity-0.
-
-Style: flex-shrink-0 ml-2 text-slate-400 hover:text-slate-600 cursor-pointer.
-
-Layout: Ensure parent container is flex items-center justify-between. Text container gets truncate. Icon stays visible on the right.
-
-2. Fix Account Column
-
-Action: Update logic to ONLY show Arrow ➡️ if destination_name is valid.
-
-IV. EXECUTION STEPS
-
-Service: Add the Child-Check query to voidTransaction.
-
-Service: Clean up the "Unknown" fallback logic.
-
-UI: Update CSS for Copy Icon.
-
-Build: Verify.
+## 5. Recent Schema Context (Crucial)
+- **Batches:** Bảng `batches` và `batch_items` dùng cho import giao dịch.
+- **Installments:** Bảng `installments` liên kết với `transaction_lines`.
+- **Bank Mappings:** Bảng `bank_mappings` để map keywords từ SMS/Bank app sang categories.
+- **Webhook Links:** Bảng `sheet_webhook_links` để sync với Google Sheets.

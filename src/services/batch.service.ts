@@ -129,14 +129,18 @@ export async function confirmBatchItem(itemId: string, targetAccountId?: string)
     const finalTargetId = targetAccountId || item.target_account_id;
     if (!finalTargetId) throw new Error('No target account specified');
 
-    // [M2-SP1] Fix: Map Category for Online Services
-    let categoryId = null;
+    // Set category: Default to Credit Payment, override to Online Services if note matches
+    let categoryId = SYSTEM_CATEGORIES.CREDIT_PAYMENT;
     const noteLower = item.note?.toLowerCase() || '';
     if (noteLower.includes('online service')) {
         categoryId = SYSTEM_CATEGORIES.ONLINE_SERVICES;
     }
 
-    // 2. Create Transaction (Draft Fund -> Target)
+    // Get authenticated user
+    const { data: { user } } = await supabase.auth.getUser()
+    const userId = user?.id ?? null // Use null if no user (will rely on RLS default)
+
+    // 2. Create Transaction (Draft Fund -> Target) [Single-Table Schema]
     const { data: txn, error: txnError } = await supabase
         .from('transactions')
         .insert({
@@ -144,41 +148,20 @@ export async function confirmBatchItem(itemId: string, targetAccountId?: string)
             note: item.note,
             status: 'posted',
             tag: 'BATCH_AUTO',
-            created_by: SYSTEM_ACCOUNTS.DEFAULT_USER_ID,
-            category_id: categoryId
+            created_by: userId,
+            category_id: categoryId,
+            // Single-table fields
+            account_id: SYSTEM_ACCOUNTS.DRAFT_FUND,
+            target_account_id: finalTargetId,
+            amount: Math.abs(item.amount),
+            type: 'transfer'
         })
         .select()
         .single()
 
     if (txnError) throw txnError
 
-    // 3. Create Transaction Lines
-    const lines = [
-        {
-            transaction_id: txn.id,
-            account_id: SYSTEM_ACCOUNTS.DRAFT_FUND, // Use Draft Fund
-            amount: -Math.abs(item.amount),
-            type: 'credit'
-        },
-        {
-            transaction_id: txn.id,
-            account_id: finalTargetId,
-            amount: Math.abs(item.amount),
-            type: 'debit',
-            receiver_name: item.receiver_name,
-            bank_name: item.bank_name,
-            bank_number: item.bank_number,
-            card_name: item.card_name
-        }
-    ]
-
-    const { error: linesError } = await supabase
-        .from('transaction_lines')
-        .insert(lines)
-
-    if (linesError) throw linesError
-
-    // 4. Update Item Status
+    // 3. Update Item Status
     const { error: updateError } = await supabase
         .from('batch_items')
         .update({
@@ -191,7 +174,7 @@ export async function confirmBatchItem(itemId: string, targetAccountId?: string)
 
     if (updateError) throw updateError
 
-    // 5. Recalculate Balances
+    // 4. Recalculate Balances
     const { recalculateBalance } = await import('./account.service')
     await recalculateBalance(SYSTEM_ACCOUNTS.DRAFT_FUND)
     await recalculateBalance(finalTargetId)
@@ -396,18 +379,17 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
         // If we want to support multiple, we might need to query transactions by note or tag?
         // For now, let's assume we just want to ADD the difference.
 
-        // Fetch the existing funding transaction to check its amount
+        // [Single-Table Migration] Get amount directly from funding transaction
         let currentFundedAmount = 0;
         if (batch.funding_transaction_id) {
-            const { data: lines } = await supabase
-                .from('transaction_lines')
+            const { data: fundingTxn } = await supabase
+                .from('transactions')
                 .select('amount')
-                .eq('transaction_id', batch.funding_transaction_id)
-                .eq('account_id', batch.source_account_id)
-                .eq('type', 'credit'); // Money leaving source
+                .eq('id', batch.funding_transaction_id)
+                .single();
 
-            if (lines && lines.length > 0) {
-                currentFundedAmount = lines.reduce((sum: number, l: any) => sum + Math.abs(l.amount), 0);
+            if (fundingTxn) {
+                currentFundedAmount = Math.abs(fundingTxn.amount || 0);
             }
         }
 
@@ -424,47 +406,30 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
             }
         }
 
-        const lineMetadata = { batch_id: batch.id, type: 'batch_funding_additional' }
+        const metadata = { batch_id: batch.id, type: 'batch_funding_additional' }
 
         const nameParts = batch.name.split(' ')
         const tag = nameParts[nameParts.length - 1]
 
+        // [Single-Table Schema] Create transfer transaction directly
         const { data: txn, error: txnError } = await supabase
             .from('transactions')
             .insert({
                 occurred_at: new Date().toISOString(),
                 note: `[Waiting] Fund More Batch: ${batch.name} (Additional ${diff})`,
                 status: 'posted',
-                tag: tag, // Use the same tag
-                created_by: userId
+                tag: tag,
+                created_by: userId,
+                account_id: batch.source_account_id,
+                target_account_id: SYSTEM_ACCOUNTS.BATCH_CLEARING,
+                amount: diff,
+                type: 'transfer',
+                metadata: metadata
             })
             .select()
             .single()
 
         if (txnError) throw txnError
-
-        const lines = [
-            {
-                transaction_id: txn.id,
-                account_id: batch.source_account_id,
-                amount: -diff,
-                type: 'credit',
-                metadata: lineMetadata
-            },
-            {
-                transaction_id: txn.id,
-                account_id: SYSTEM_ACCOUNTS.BATCH_CLEARING,
-                amount: diff,
-                type: 'debit',
-                metadata: lineMetadata
-            }
-        ]
-
-        const { error: linesError } = await supabase
-            .from('transaction_lines')
-            .insert(lines)
-
-        if (linesError) throw linesError
 
         if (!batch.funding_transaction_id) {
             await supabase
@@ -493,9 +458,9 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
     // 3. Extract Tag from Name (e.g. "CKL NOV25" -> "NOV25")
     const nameParts = batch.name.split(' ')
     const tag = nameParts[nameParts.length - 1]
-    const lineMetadata = { batch_id: batch.id, type: 'batch_funding' }
+    const metadata = { batch_id: batch.id, type: 'batch_funding' }
 
-    // 4. Create Transaction Header
+    // 4. Create Transaction [Single-Table Schema]
     const { data: txn, error: txnError } = await supabase
         .from('transactions')
         .insert({
@@ -503,40 +468,19 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
             note: `Transfer to Trung gian CKL - ${batch.name}`,
             status: 'posted',
             tag: tag,
-            created_by: userId
+            created_by: userId,
+            account_id: batch.source_account_id,
+            target_account_id: SYSTEM_ACCOUNTS.BATCH_CLEARING,
+            amount: totalAmount,
+            type: 'transfer',
+            metadata: metadata
         })
         .select()
         .single()
 
     if (txnError) throw txnError
 
-    // 5. Create Transaction Lines (Transfer: Source -> Clearing)
-    // Source Account: Credit (Decrease)
-    // Clearing Account: Debit (Increase)
-    const lines = [
-        {
-            transaction_id: txn.id,
-            account_id: batch.source_account_id,
-            amount: -totalAmount, // Credit
-            type: 'credit',
-            metadata: lineMetadata
-        },
-        {
-            transaction_id: txn.id,
-            account_id: SYSTEM_ACCOUNTS.BATCH_CLEARING,
-            amount: totalAmount, // Debit
-            type: 'debit',
-            metadata: lineMetadata
-        }
-    ]
-
-    const { error: linesError } = await supabase
-        .from('transaction_lines')
-        .insert(lines)
-
-    if (linesError) throw linesError
-
-    // 6. Update Batch Status
+    // 5. Update Batch Status
     const { error: updateError } = await supabase
         .from('batches')
         .update({
@@ -547,7 +491,7 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
 
     if (updateError) throw updateError
 
-    // 7. Recalculate Balances
+    // 6. Recalculate Balances
     const { recalculateBalance } = await import('./account.service')
     await recalculateBalance(batch.source_account_id)
     await recalculateBalance(SYSTEM_ACCOUNTS.BATCH_CLEARING)
@@ -676,17 +620,16 @@ export async function confirmBatchSource(batchId: string, realAccountId: string)
         throw new Error('Batch source is not Draft Fund')
     }
 
-    // 2. Calculate Total Amount (from funding transaction)
+    // 2. Calculate Total Amount (from funding transaction) [Single-Table Migration]
     if (!batch.funding_transaction_id) throw new Error('Batch not funded yet')
 
-    const { data: lines } = await supabase
-        .from('transaction_lines')
+    const { data: fundingTxn } = await supabase
+        .from('transactions')
         .select('amount')
-        .eq('transaction_id', batch.funding_transaction_id)
-        .eq('account_id', SYSTEM_ACCOUNTS.DRAFT_FUND)
-        .eq('type', 'credit')
+        .eq('id', batch.funding_transaction_id)
+        .single()
 
-    const amount = lines?.reduce((sum: number, l: any) => sum + Math.abs(l.amount), 0) || 0
+    const amount = Math.abs(fundingTxn?.amount || 0)
 
     if (amount <= 0) throw new Error('No funded amount found')
 
@@ -695,7 +638,7 @@ export async function confirmBatchSource(batchId: string, realAccountId: string)
     } = await supabase.auth.getUser()
     const userId = user?.id ?? SYSTEM_ACCOUNTS.DEFAULT_USER_ID
 
-    // 3. Create Transfer: Real -> Draft
+    // 3. Create Transfer: Real -> Draft [Single-Table Schema]
     const { data: txn, error: txnError } = await supabase
         .from('transactions')
         .insert({
@@ -703,33 +646,16 @@ export async function confirmBatchSource(batchId: string, realAccountId: string)
             note: `Confirm Source for Batch: ${batch.name}`,
             status: 'posted',
             tag: 'BATCH_CONFIRM',
-            created_by: userId
+            created_by: userId,
+            account_id: realAccountId,
+            target_account_id: SYSTEM_ACCOUNTS.DRAFT_FUND,
+            amount: amount,
+            type: 'transfer'
         })
         .select()
         .single()
 
     if (txnError) throw txnError
-
-    const transferLines = [
-        {
-            transaction_id: txn.id,
-            account_id: realAccountId,
-            amount: -amount,
-            type: 'credit'
-        },
-        {
-            transaction_id: txn.id,
-            account_id: SYSTEM_ACCOUNTS.DRAFT_FUND,
-            amount: amount,
-            type: 'debit'
-        }
-    ]
-
-    const { error: linesError } = await supabase
-        .from('transaction_lines')
-        .insert(transferLines)
-
-    if (linesError) throw linesError
 
     // 4. Update Batch Source
     const { error: updateError } = await supabase

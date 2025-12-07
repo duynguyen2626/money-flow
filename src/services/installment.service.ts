@@ -24,12 +24,10 @@ export interface Installment {
     status: InstallmentStatus;
     type: InstallmentType;
     original_transaction?: {
-        transaction_lines?: {
-            account?: {
-                name: string;
-            } | null;
-            type: 'debit' | 'credit';
-        }[] | null;
+        account_id?: string;
+        account?: {
+            name: string;
+        } | null;
     } | null;
 }
 
@@ -37,7 +35,7 @@ export async function getInstallments() {
     const supabase: any = createClient();
     const { data, error } = await supabase
         .from('installments')
-        .select('*, original_transaction:transactions(transaction_lines(type, account:accounts(name)))')
+        .select('*, original_transaction:transactions(account:accounts(name))')
         .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -48,7 +46,7 @@ export async function getActiveInstallments() {
     const supabase: any = createClient();
     const { data, error } = await supabase
         .from('installments')
-        .select('*, original_transaction:transactions(transaction_lines(type, account:accounts(name)))')
+        .select('*, original_transaction:transactions(account:accounts(name))')
         .eq('status', 'active')
         .order('next_due_date', { ascending: true });
 
@@ -58,25 +56,21 @@ export async function getActiveInstallments() {
 
 export async function getAccountsWithActiveInstallments() {
     const supabase: any = createClient();
-    // We need to find which accounts have active installments.
-    // The installment is linked to a transaction, which is linked to an account.
-    // But wait, the installment table has `original_transaction_id`.
-    // We need to join: installments -> transactions -> accounts.
+    // [Single-Table Migration] Get account_id directly from transactions table
+    // instead of the deprecated transaction_lines table.
 
     const { data, error } = await supabase
         .from('installments')
-        .select('original_transaction:transactions(transaction_lines(account_id, type))')
+        .select('original_transaction:transactions(account_id)')
         .eq('status', 'active');
 
     if (error) throw error;
 
     const accountIds = new Set<string>();
     data?.forEach((item: any) => {
-        if (item.original_transaction?.transaction_lines) {
-            const creditLine = item.original_transaction.transaction_lines.find((l: any) => l.type === 'credit');
-            if (creditLine?.account_id) {
-                accountIds.add(creditLine.account_id);
-            }
+        // In single-table design, account_id is directly on transactions
+        if (item.original_transaction?.account_id) {
+            accountIds.add(item.original_transaction.account_id);
         }
     });
 
@@ -87,7 +81,7 @@ export async function getCompletedInstallments() {
     const supabase: any = createClient();
     const { data, error } = await supabase
         .from('installments')
-        .select('*, original_transaction:transactions(transaction_lines(type, account:accounts(name)))')
+        .select('*, original_transaction:transactions(account:accounts(name))')
         .eq('status', 'completed')
         .order('created_at', { ascending: false });
 
@@ -120,26 +114,17 @@ export async function convertTransactionToInstallment(payload: {
     const { data: { user } } = await supabase.auth.getUser();
     const userId = user?.id ?? SYSTEM_ACCOUNTS.DEFAULT_USER_ID;
 
-    // 1. Fetch Original Transaction
+    // 1. Fetch Original Transaction (single-table: amount is directly on transactions)
     const { data: txn, error: txnError } = await supabase
         .from('transactions')
-        .select('*, transaction_lines(*)')
+        .select('*')
         .eq('id', payload.transactionId)
         .single();
 
     if (txnError || !txn) throw new Error('Transaction not found');
 
-    // Calculate Total Amount from lines (assuming simple expense for now)
-    // For credit card expense, it's usually the credit amount on the source account?
-    // Or the debit amount on the category?
-    // Let's assume the user selects a transaction and we take the total amount.
-    // We should probably look at the lines.
-    const lines = txn.transaction_lines || [];
-    // Find the amount. Usually it's the sum of debits (positive) or credits (negative).
-    // Let's take the absolute sum of credits (money leaving).
-    const totalAmount = lines
-        .filter((l: any) => l.type === 'credit')
-        .reduce((sum: number, l: any) => sum + Math.abs(l.amount), 0);
+    // [Single-Table Migration] Amount is now directly on transaction
+    const totalAmount = Math.abs(txn.amount || 0);
 
     if (totalAmount <= 0) throw new Error('Invalid transaction amount');
 
@@ -183,7 +168,7 @@ export async function convertTransactionToInstallment(payload: {
             occurred_at: new Date().toISOString(),
             note: `Conversion Fee: ${name}`,
             type: 'expense',
-            source_account_id: lines[0]?.account_id || SYSTEM_ACCOUNTS.DRAFT_FUND, // Fallback?
+            source_account_id: txn.account_id || SYSTEM_ACCOUNTS.DRAFT_FUND, // Fallback?
             amount: payload.fee,
             category_id: SYSTEM_CATEGORIES.BANK_FEE, // Need to ensure this exists or use fallback
             tag: 'FEE'
