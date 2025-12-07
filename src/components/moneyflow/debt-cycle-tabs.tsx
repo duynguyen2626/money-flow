@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Plus, Minus, Check, ChevronDown, Calendar } from 'lucide-react'
 import { useTagFilter } from '@/context/tag-filter-context'
 import { cn } from '@/lib/utils'
@@ -40,20 +40,43 @@ export function DebtCycleTabs({
     const { selectedTag, setSelectedTag } = useTagFilter()
     const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set())
 
-    // Extract years from tags
-    const years = useMemo(() => {
-        const yearSet = new Set<string>()
+    // Get current year (e.g., "2025")
+    const currentYear = String(new Date().getFullYear())
+
+    // Extract years from tags with outstanding debt count
+    const yearsData = useMemo(() => {
+        const yearMap = new Map<string, { total: number; outstanding: number }>()
         allCycles.forEach(cycle => {
             const match = cycle.tag.match(/(\d{2})$/)
             if (match) {
-                const year = parseInt(match[1])
-                yearSet.add(year >= 90 ? `19${match[1]}` : `20${match[1]}`)
+                const year = parseInt(match[1]) >= 90 ? `19${match[1]}` : `20${match[1]}`
+                const existing = yearMap.get(year) ?? { total: 0, outstanding: 0 }
+                existing.total++
+                if (cycle.status !== 'settled' && Math.abs(cycle.balance) >= 1) {
+                    existing.outstanding++
+                }
+                yearMap.set(year, existing)
             }
         })
-        return Array.from(yearSet).sort().reverse()
+        return Array.from(yearMap.entries())
+            .map(([year, data]) => ({ year, ...data }))
+            .sort((a, b) => b.year.localeCompare(a.year))
     }, [allCycles])
 
-    const [selectedYear, setSelectedYear] = useState<string | null>(null)
+    const years = yearsData.map(d => d.year)
+    const totalOutstanding = allCycles.filter(c => c.status !== 'settled' && Math.abs(c.balance) >= 1).length
+
+    // Default to current year if it exists in data
+    const [selectedYear, setSelectedYear] = useState<string | null>(() =>
+        years.includes(currentYear) ? currentYear : null
+    )
+
+    // Update default when years change
+    useEffect(() => {
+        if (selectedYear === null && years.includes(currentYear)) {
+            setSelectedYear(currentYear)
+        }
+    }, [years, currentYear, selectedYear])
 
     const filteredCycles = useMemo(() => {
         if (!selectedYear) return allCycles
@@ -84,9 +107,9 @@ export function DebtCycleTabs({
                         )}
                         onClick={() => setSelectedYear(null)}
                     >
-                        All Years ({allCycles.length})
+                        All Years {totalOutstanding > 0 && `(${totalOutstanding})`}
                     </button>
-                    {years.map(year => (
+                    {yearsData.map(({ year, outstanding }) => (
                         <button
                             key={year}
                             className={cn(
@@ -95,7 +118,7 @@ export function DebtCycleTabs({
                             )}
                             onClick={() => setSelectedYear(year)}
                         >
-                            {year}
+                            {year} {outstanding > 0 && <span className="text-amber-500 font-bold">({outstanding})</span>}
                         </button>
                     ))}
                 </div>

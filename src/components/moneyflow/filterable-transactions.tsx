@@ -302,30 +302,35 @@ export function FilterableTransactions({
     }, [filteredByType, showSelectedOnly, selectedTxnIds])
 
     const totals = useMemo(() => {
+        // Calculate totals from searchedTransactions (BEFORE type filtering) 
+        // so filter buttons show correct totals regardless of which type is selected
         const source = selectedTxnIds.size > 0
-            ? finalTransactions.filter(txn => selectedTxnIds.has(txn.id))
-            : finalTransactions
+            ? searchedTransactions.filter(txn => selectedTxnIds.has(txn.id))
+            : searchedTransactions
 
+        // Apply activeTab filter for voided vs active transactions
         const effectiveSource = source.filter(txn => {
-            if (activeTab === 'active') return txn.status !== 'void'
-            return txn.status === 'void'
+            if (activeTab === 'void') return txn.status === 'void'
+            if (activeTab === 'pending') return txn.status === 'pending'
+            return txn.status !== 'void' // 'active' shows all non-voided
         })
 
         return effectiveSource.reduce(
             (acc, txn) => {
                 const kind = txn.type ?? (txn as any).displayType ?? 'expense'
                 const value = Math.abs(txn.amount ?? 0)
-                const isPersonTxn = Boolean((txn as any).person_id ?? txn.person_id)
 
-                if (isPersonTxn) {
-                    if (kind === 'income' || kind === 'repayment') { // Consider repayment as collect
-                        acc.collect += value
-                    } else {
-                        acc.lend += value
-                    }
+                // Debt/repayment transactions
+                if (kind === 'debt') {
+                    acc.lend += value
+                    return acc
+                }
+                if (kind === 'repayment') {
+                    acc.collect += value
                     return acc
                 }
 
+                // Regular income/expense
                 if (kind === 'income') {
                     acc.income += value
                 } else if (kind === 'expense') {
@@ -337,7 +342,7 @@ export function FilterableTransactions({
             },
             { income: 0, expense: 0, lend: 0, collect: 0 }
         )
-    }, [finalTransactions, selectedTxnIds])
+    }, [searchedTransactions, selectedTxnIds, activeTab])
 
     const currentBulkTab = bulkActions?.currentTab ?? activeTab
     const bulkActionLabel = currentBulkTab === 'void' ? 'Restore Selected' : 'Void Selected'
