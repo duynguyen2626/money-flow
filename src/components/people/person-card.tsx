@@ -10,7 +10,7 @@ import {
     ArrowDownLeft,
     Check,
     AlertTriangle,
-    MoreHorizontal,
+    ExternalLink,
 } from 'lucide-react'
 
 import { Account, Category, Person, Shop, Subscription } from '@/types/moneyflow.types'
@@ -66,15 +66,20 @@ function PersonCardComponent({
 
     // Monthly debts for display
     const monthlyDebts = person.monthly_debts ?? []
+    // Count of outstanding debts (excluding settled)
+    const outstandingDebtsCount = monthlyDebts.filter(d => Math.abs(d.amount) >= 1).length
 
     const handleArchive = async () => {
         await updatePersonAction(person.id, { is_archived: true })
         setShowArchiveConfirm(false)
     }
 
-    const openDetails = (e?: MouseEvent) => {
+    const openDetails = (e?: MouseEvent, tag?: string) => {
         e?.stopPropagation()
-        router.push(`/people/${person.id}`)
+        const url = tag
+            ? `/people/${person.id}?tag=${encodeURIComponent(tag)}`
+            : `/people/${person.id}`
+        router.push(url)
     }
 
     const stopPropagation = (event: MouseEvent) => event.stopPropagation()
@@ -95,17 +100,17 @@ function PersonCardComponent({
 
     return (
         <>
-            {/* Card */}
+            {/* Card - Wider minimum width */}
             <div
                 className={cn(
-                    "group relative flex flex-col overflow-hidden rounded-lg border shadow-sm transition hover:shadow-md",
+                    "group relative flex flex-col overflow-hidden rounded-lg border shadow-sm transition hover:shadow-md min-w-[200px]",
                     "border-slate-200 bg-white"
                 )}
             >
                 {/* ROW 1: Header - Avatar + Name */}
-                <div className={cn("flex items-center gap-2 p-2.5 relative", headerGradient)}>
+                <div className={cn("flex items-center gap-3 p-3 relative", headerGradient)}>
                     {/* Square Avatar */}
-                    <div className="h-10 w-10 rounded-md overflow-hidden bg-white border border-slate-200 shadow-sm flex items-center justify-center flex-shrink-0">
+                    <div className="h-11 w-11 rounded-lg overflow-hidden bg-white border border-slate-200 shadow-sm flex items-center justify-center flex-shrink-0">
                         {person.avatar_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
@@ -118,7 +123,7 @@ function PersonCardComponent({
                                 "h-full w-full flex items-center justify-center",
                                 isSettled ? "bg-emerald-100 text-emerald-600" : "bg-slate-100 text-slate-400"
                             )}>
-                                <User className="h-5 w-5" />
+                                <User className="h-6 w-6" />
                             </div>
                         )}
                     </div>
@@ -130,46 +135,46 @@ function PersonCardComponent({
                                 {person.name}
                             </span>
                             {person.is_owner && (
-                                <span className="text-[8px] bg-blue-500 text-white px-1.5 py-0.5 rounded flex-shrink-0">Owner</span>
+                                <span className="text-[9px] bg-blue-500 text-white px-1.5 py-0.5 rounded flex-shrink-0">Owner</span>
                             )}
                         </div>
                     </div>
 
-                    {/* HOVER OVERLAY - Centered Large Buttons */}
+                    {/* HOVER OVERLAY - Smaller Buttons */}
                     <div
-                        className="absolute inset-0 flex items-center justify-center gap-3 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={stopPropagation}
                     >
                         {/* Edit */}
                         <button
                             onClick={(e) => { e.stopPropagation(); setShowEditDialog(true) }}
-                            className="p-3 rounded-full bg-white text-slate-600 hover:bg-slate-100 shadow-lg transition-all hover:scale-110"
+                            className="p-2 rounded-full bg-white text-slate-600 hover:bg-slate-100 shadow-lg transition-all hover:scale-110"
                             title="Edit"
                         >
-                            <Pencil className="h-5 w-5" />
+                            <Pencil className="h-4 w-4" />
                         </button>
                         {/* Lend */}
                         <AddTransactionDialog
                             {...dialogBaseProps}
                             defaultType="debt"
                             defaultPersonId={person.id}
-                            buttonClassName="p-3 rounded-full bg-white text-orange-600 hover:bg-orange-50 shadow-lg transition-all hover:scale-110"
-                            triggerContent={<ArrowUpRight className="h-5 w-5" />}
+                            buttonClassName="p-2 rounded-full bg-white text-rose-600 hover:bg-rose-50 shadow-lg transition-all hover:scale-110"
+                            triggerContent={<ArrowUpRight className="h-4 w-4" />}
                         />
                         {/* Repay */}
                         <AddTransactionDialog
                             {...dialogBaseProps}
                             defaultType="repayment"
                             defaultPersonId={person.id}
-                            buttonClassName="p-3 rounded-full bg-white text-emerald-600 hover:bg-emerald-50 shadow-lg transition-all hover:scale-110"
-                            triggerContent={<ArrowDownLeft className="h-5 w-5" />}
+                            buttonClassName="p-2 rounded-full bg-white text-emerald-600 hover:bg-emerald-50 shadow-lg transition-all hover:scale-110"
+                            triggerContent={<ArrowDownLeft className="h-4 w-4" />}
                         />
                     </div>
                 </div>
 
-                {/* ROW 2: Footer - Debt Badge + Services + Detail Arrow */}
-                <div className="flex items-center gap-2 px-2.5 py-2 bg-white border-t border-slate-100">
-                    {/* Debt Badge - Clickable for Repay */}
+                {/* ROW 2: Footer - Larger Debt Badge + Count + Services + Detail Arrow */}
+                <div className="flex items-center gap-2 px-3 py-2.5 bg-white border-t border-slate-100">
+                    {/* Debt Badge - Larger and more prominent */}
                     <div onClick={stopPropagation}>
                         <AddTransactionDialog
                             {...dialogBaseProps}
@@ -177,7 +182,7 @@ function PersonCardComponent({
                             defaultPersonId={person.id}
                             defaultAmount={balance > 0 ? balance : undefined}
                             buttonClassName={cn(
-                                "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-bold cursor-pointer hover:opacity-80 transition-opacity",
+                                "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-bold cursor-pointer hover:opacity-90 transition-opacity",
                                 isSettled
                                     ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                     : hasDebt
@@ -186,29 +191,30 @@ function PersonCardComponent({
                             )}
                             triggerContent={
                                 <>
-                                    <span className="opacity-70">{cycleLabel}:</span>
+                                    <span className="opacity-70 text-xs">{cycleLabel}:</span>
                                     <span>{compactNumberFormatter.format(currentCycleDebt)}</span>
-                                    {isSettled ? <Check className="h-3 w-3" /> : hasDebt ? <AlertTriangle className="h-3 w-3" /> : null}
+                                    {isSettled ? <Check className="h-3.5 w-3.5" /> : hasDebt ? <AlertTriangle className="h-3.5 w-3.5" /> : null}
                                 </>
                             }
                         />
                     </div>
 
-                    {/* More debts */}
-                    {monthlyDebts.length > 1 && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); setShowDebtsModal(true) }}
-                            className="p-1 rounded bg-slate-100 text-slate-500 hover:bg-slate-200"
-                            title="View all debts"
-                        >
-                            <MoreHorizontal className="h-3.5 w-3.5" />
-                        </button>
+                    {/* Outstanding debts count badge with tooltip */}
+                    {outstandingDebtsCount > 1 && (
+                        <CustomTooltip content={`${outstandingDebtsCount} outstanding debt cycles - Click to view all`}>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setShowDebtsModal(true) }}
+                                className="inline-flex items-center justify-center h-6 px-1.5 rounded-md bg-rose-100 text-rose-600 hover:bg-rose-200 transition-colors text-xs font-bold"
+                            >
+                                +{outstandingDebtsCount - 1}
+                            </button>
+                        </CustomTooltip>
                     )}
 
                     {/* Spacer */}
                     <div className="flex-1" />
 
-                    {/* Service badges - Before detail arrow */}
+                    {/* Service badges */}
                     <div className="flex items-center gap-1">
                         {visibleServices.map(service => (
                             <CustomTooltip key={service.id} content={service.name}>
@@ -230,7 +236,7 @@ function PersonCardComponent({
                     {/* Detail Arrow */}
                     <button
                         onClick={openDetails}
-                        className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        className="p-1.5 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                         title="View Details"
                     >
                         <ChevronRight className="h-4 w-4" />
@@ -248,23 +254,56 @@ function PersonCardComponent({
                 />
             )}
 
-            {/* Debts Modal */}
+            {/* Enhanced Debts Modal */}
             <Dialog open={showDebtsModal} onOpenChange={setShowDebtsModal}>
-                <DialogContent className="max-w-sm" onClick={stopPropagation}>
+                <DialogContent className="max-w-md" onClick={stopPropagation}>
                     <DialogHeader>
-                        <DialogTitle className="text-sm">{person.name}&apos;s Debts</DialogTitle>
+                        <DialogTitle className="text-base">{person.name}&apos;s Debts</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                    <div className="space-y-2 max-h-[350px] overflow-y-auto">
                         {monthlyDebts.map((debt, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-2 rounded bg-slate-50 border border-slate-100 text-xs">
-                                <span className="text-slate-600">{debt.tagLabel}</span>
-                                <span className="font-bold text-amber-700">{numberFormatter.format(debt.amount)}</span>
+                            <div
+                                key={idx}
+                                className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-100 hover:bg-slate-100 transition-colors group/row"
+                            >
+                                {/* Tag - Clickable to open details with tag filter */}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        setShowDebtsModal(false)
+                                        openDetails(undefined, debt.tagLabel)
+                                    }}
+                                    className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors"
+                                >
+                                    <span>{debt.tagLabel}</span>
+                                    <ExternalLink className="h-3 w-3 opacity-0 group-hover/row:opacity-100 transition-opacity" />
+                                </button>
+
+                                <div className="flex items-center gap-2">
+                                    {/* Amount */}
+                                    <span className="font-bold text-amber-700 text-sm">
+                                        {numberFormatter.format(debt.amount)}
+                                    </span>
+
+                                    {/* Quick Repay Button */}
+                                    <div onClick={stopPropagation}>
+                                        <AddTransactionDialog
+                                            {...dialogBaseProps}
+                                            defaultType="repayment"
+                                            defaultPersonId={person.id}
+                                            defaultTag={debt.tagLabel}
+                                            defaultAmount={Math.abs(debt.amount)}
+                                            buttonClassName="p-1.5 rounded-md bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-colors"
+                                            triggerContent={<Check className="h-3.5 w-3.5" />}
+                                        />
+                                    </div>
+                                </div>
                             </div>
                         ))}
                     </div>
-                    <div className="flex justify-between items-center pt-2 border-t text-sm">
-                        <span className="text-slate-600">Total:</span>
-                        <span className="font-bold text-amber-700">{numberFormatter.format(balance)}</span>
+                    <div className="flex justify-between items-center pt-3 border-t text-sm">
+                        <span className="text-slate-600 font-medium">Total:</span>
+                        <span className="font-bold text-amber-700 text-base">{numberFormatter.format(balance)}</span>
                     </div>
                 </DialogContent>
             </Dialog>

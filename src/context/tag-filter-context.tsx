@@ -1,6 +1,7 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, ReactNode, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 
 type TagFilterContextType = {
     selectedTag: string | null
@@ -9,9 +10,18 @@ type TagFilterContextType = {
 
 const TagFilterContext = createContext<TagFilterContextType | undefined>(undefined)
 
-export function TagFilterProvider({ children }: { children: ReactNode }) {
-    const [selectedTag, setSelectedTag] = useState<string | null>(null)
-    
+export function TagFilterProvider({ children, initialTag }: { children: ReactNode; initialTag?: string | null }) {
+    const [selectedTag, setSelectedTag] = useState<string | null>(initialTag ?? null)
+    const searchParams = useSearchParams()
+
+    // Sync with URL tag param on mount
+    useEffect(() => {
+        const tagFromUrl = searchParams.get('tag')
+        if (tagFromUrl) {
+            setSelectedTag(tagFromUrl)
+        }
+    }, [searchParams])
+
     return (
         <TagFilterContext.Provider value={{ selectedTag, setSelectedTag }}>
             {children}
