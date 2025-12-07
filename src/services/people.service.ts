@@ -214,7 +214,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   if (personIds.length > 0) {
     const { data: txns, error: txnsError } = await supabase
       .from('transactions')
-      .select('account_id, target_account_id, person_id, amount, status, occurred_at, type, tag')
+      .select('account_id, target_account_id, person_id, amount, status, occurred_at, type, tag, cashback_share_percent, cashback_share_fixed')
       .eq('type', 'debt')
       .neq('status', 'void')
 
@@ -238,14 +238,21 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         }
 
         if (personId) {
-          const amount = Math.abs(txn.amount)
+          // Calculate final price = amount - cashback
+          const rawAmount = Math.abs(txn.amount)
+          const percentVal = Number(txn.cashback_share_percent ?? 0)
+          const fixedVal = Number(txn.cashback_share_fixed ?? 0)
+          const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
+          const cashback = (rawAmount * normalizedPercent) + fixedVal
+          const finalPrice = rawAmount - cashback
+
           const current = debtBalanceByPerson.get(personId) ?? 0
-          debtBalanceByPerson.set(personId, current + amount)
+          debtBalanceByPerson.set(personId, current + finalPrice)
 
           // Track current cycle debt separately
           if (isCurrentMonth) {
             const currentCycle = currentCycleDebtByPerson.get(personId) ?? 0
-            currentCycleDebtByPerson.set(personId, currentCycle + amount)
+            currentCycleDebtByPerson.set(personId, currentCycle + finalPrice)
           }
         }
       })
@@ -256,16 +263,23 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   if (personIds.length > 0) {
     const { data: repayTxns, error: repayError } = await supabase
       .from('transactions')
-      .select('person_id, amount, status')
+      .select('person_id, amount, status, cashback_share_percent, cashback_share_fixed')
       .eq('type', 'repayment')
       .neq('status', 'void')
 
     if (!repayError && repayTxns) {
       (repayTxns as any[]).forEach(txn => {
         if (txn.person_id && personIds.includes(txn.person_id)) {
-          const amount = Math.abs(txn.amount)
+          // Calculate final price = amount - cashback
+          const rawAmount = Math.abs(txn.amount)
+          const percentVal = Number(txn.cashback_share_percent ?? 0)
+          const fixedVal = Number(txn.cashback_share_fixed ?? 0)
+          const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
+          const cashback = (rawAmount * normalizedPercent) + fixedVal
+          const finalPrice = rawAmount - cashback
+
           const current = debtBalanceByPerson.get(txn.person_id) ?? 0
-          debtBalanceByPerson.set(txn.person_id, current - amount)
+          debtBalanceByPerson.set(txn.person_id, current - finalPrice)
         }
       })
     }
@@ -294,7 +308,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   if (personIds.length > 0) {
     const { data: monthlyTxns, error: monthlyTxnsError } = await supabase
       .from('transactions')
-      .select('person_id, target_account_id, amount, occurred_at, tag, status')
+      .select('person_id, target_account_id, amount, occurred_at, tag, status, cashback_share_percent, cashback_share_fixed')
       .eq('type', 'debt')
       .neq('status', 'void')
       .order('occurred_at', { ascending: false })
@@ -323,7 +337,13 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         const label =
           tagValue ?? (validDate ? format(validDate, 'MMM yy', { locale: enUS }).toUpperCase() : 'Debt')
 
-        const amountValue = Math.abs(txn.amount)
+        // Calculate final price = amount - cashback
+        const rawAmount = Math.abs(txn.amount)
+        const percentVal = Number(txn.cashback_share_percent ?? 0)
+        const fixedVal = Number(txn.cashback_share_fixed ?? 0)
+        const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
+        const cashback = (rawAmount * normalizedPercent) + fixedVal
+        const finalPrice = rawAmount - cashback
 
         const personMap = monthlyDebtMap.get(ownerId) ?? new Map<string, MonthlyDebtSummary>()
         const existing = personMap.get(groupingKey)
@@ -331,13 +351,13 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         const updated: MonthlyDebtSummary = existing
           ? {
             ...existing,
-            amount: existing.amount + amountValue,
+            amount: existing.amount + finalPrice,
             occurred_at: existing.occurred_at ?? (validDate ? validDate.toISOString() : occurredAt),
           }
           : {
             tag: tagValue ?? undefined,
             tagLabel: label,
-            amount: amountValue,
+            amount: finalPrice,
             occurred_at: validDate ? validDate.toISOString() : occurredAt ?? undefined,
           }
 
