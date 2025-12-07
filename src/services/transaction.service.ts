@@ -525,12 +525,23 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   await recalcForAccounts(affectedAccounts);
 
   // SHEET SYNC: Auto-sync to Google Sheets when person_id exists
+  // IMPORTANT: Must be sequential - delete must complete before create!
   try {
     const { syncTransactionToSheet } = await import('./sheet.service');
 
-    // 1. Delete old entry from sheet if had person
     const oldPersonId = (existing as any).person_id;
+    const newPersonId = input.person_id;
+
+    console.log('[Sheet Sync] updateTransaction sync triggered', {
+      id,
+      oldPersonId,
+      newPersonId,
+      hasChange: oldPersonId !== newPersonId || oldPersonId === newPersonId
+    });
+
+    // 1. Delete old entry from sheet if had person
     if (oldPersonId) {
+      console.log('[Sheet Sync] Deleting old entry for person:', oldPersonId);
       const deletePayload = {
         id: (existing as any).id,
         occurred_at: (existing as any).occurred_at,
@@ -538,14 +549,18 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
         tag: (existing as any).tag,
         amount: (existing as any).amount ?? 0,
       };
-      void syncTransactionToSheet(oldPersonId, deletePayload as any, 'delete').catch(err => {
+      try {
+        await syncTransactionToSheet(oldPersonId, deletePayload as any, 'delete');
+        console.log('[Sheet Sync] Delete completed');
+      } catch (err) {
         console.error('[Sheet Sync] Delete old entry failed:', err);
-      });
+      }
     }
 
-    // 2. Create new entry in sheet if has person
-    const newPersonId = input.person_id;
+    // 2. Create new entry in sheet if has person (AFTER delete completes)
     if (newPersonId) {
+      console.log('[Sheet Sync] Creating new entry for person:', newPersonId);
+
       // Fetch shop name for payload
       let shopName: string | null = null;
       if (input.shop_id) {
@@ -572,9 +587,15 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
         cashback_share_fixed: fixedAmount,
         type: input.type === 'repayment' ? 'In' : 'Debt',
       };
-      void syncTransactionToSheet(newPersonId, createPayload as any, 'create').catch(err => {
+
+      console.log('[Sheet Sync] Create payload:', createPayload);
+
+      try {
+        await syncTransactionToSheet(newPersonId, createPayload as any, 'create');
+        console.log('[Sheet Sync] Create completed');
+      } catch (err) {
         console.error('[Sheet Sync] Create new entry failed:', err);
-      });
+      }
     }
   } catch (syncError) {
     console.error('[Sheet Sync] Import or sync failed:', syncError);
