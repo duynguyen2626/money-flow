@@ -977,7 +977,8 @@ export function UnifiedTransactionTable({
               // GD1: Has pending refund request (not yet confirmed)
               else if (meta?.has_refund_request && !metaRefundStatus) { statusIndicator = "📝"; statusTooltip = "Refund Requested"; }
 
-              const rowBgClass = isVoided ? "opacity-60 bg-gray-50 scale-[0.99] border-dashed grayscale" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') ? "bg-emerald-50/50" : "";
+              const isInstallmentRow = txn.is_installment || txn.installment_plan_id;
+              const rowBgClass = isVoided ? "opacity-60 bg-gray-50 scale-[0.99] border-dashed grayscale" : isInstallmentRow ? "bg-amber-50/70" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') ? "bg-emerald-50/50" : "";
 
               const taskCell = (
                 <div className="relative flex justify-end">
@@ -1177,6 +1178,17 @@ export function UnifiedTransactionTable({
                                 <span className="text-sm cursor-help" suppressHydrationWarning>{statusIndicator}</span>
                               </CustomTooltip>
                             )}
+                            {(txn.is_installment || txn.installment_plan_id) && (
+                              <CustomTooltip content="Trả góp - Click để xem">
+                                <Link
+                                  href={`/installments?tab=active&highlight=${txn.id}`}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="flex items-center justify-center rounded bg-amber-100 border border-amber-400 px-1 py-0.5 text-amber-700 hover:bg-amber-200 transition-colors"
+                                >
+                                  <Link2 className="h-4 w-4" />
+                                </Link>
+                              </CustomTooltip>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1204,6 +1216,17 @@ export function UnifiedTransactionTable({
                         {statusIndicator && (
                           <CustomTooltip content={effectiveStatus}>
                             <span className="text-sm" suppressHydrationWarning>{statusIndicator}</span>
+                          </CustomTooltip>
+                        )}
+                        {(txn.is_installment || txn.installment_plan_id) && (
+                          <CustomTooltip content="Trả góp - Click để xem chi tiết">
+                            <Link
+                              href={`/installments?tab=active&highlight=${txn.id}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center justify-center rounded-md bg-amber-100 border border-amber-300 p-1 text-amber-700 hover:bg-amber-200 hover:text-amber-800 transition-colors"
+                            >
+                              <Link2 className="h-5 w-5" />
+                            </Link>
                           </CustomTooltip>
                         )}
                       </div>
@@ -1521,13 +1544,7 @@ export function UnifiedTransactionTable({
                           </div>
 
 
-                          {
-                            txn.is_installment && (
-                              <CustomTooltip content="Installment Linked">
-                                <Link2 className="h-3 w-3 text-blue-500 ml-1" />
-                              </CustomTooltip>
-                            )
-                          }
+
                         </div>
                       </div>
                     );
@@ -1783,21 +1800,30 @@ export function UnifiedTransactionTable({
                     let stickyStyle: React.CSSProperties = { width: columnWidths[col.key], maxWidth: columnWidths[col.key], overflow: 'hidden', whiteSpace: 'nowrap' };
                     let stickyClass = "";
 
+                    // Determine sticky cell background color
+                    const getStickyBg = () => {
+                      if (isMenuOpen) return "bg-blue-50";
+                      if (isInstallmentRow && !isVoided) return "bg-amber-50";
+                      if ((effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided) return "bg-emerald-50";
+                      return "bg-white";
+                    };
+                    const stickyBg = getStickyBg();
+
                     if (col.key === 'date') {
-                      stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
+                      stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
                     } else if (col.key === 'type') {
                       if (visibleColumns.date) {
                         stickyStyle.left = columnWidths.date;
-                        stickyClass = cn("sticky z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
+                        stickyClass = cn("sticky z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
                       } else {
-                        stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
+                        stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
                       }
                     } else if (col.key === 'shop') {
                       let left = 0;
                       if (visibleColumns.date) left += columnWidths.date;
                       if (visibleColumns.type) left += visibleColumns.type ? columnWidths.type : 0;
                       stickyStyle.left = left;
-                      stickyClass = cn("sticky z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", isMenuOpen ? "bg-blue-50" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided ? "bg-emerald-50" : "bg-white");
+                      stickyClass = cn("sticky z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
                     }
 
                     return (

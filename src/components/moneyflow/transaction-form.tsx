@@ -1774,7 +1774,12 @@ export function TransactionForm({
     selectedAccount &&
     (selectedAccount.type !== 'credit_card' || !selectedAccount.cashback_config)
 
-  const InstallmentInput = ((transactionType === 'expense' || transactionType === 'debt') && !isRefundMode) ? (
+  const INSTALLMENT_MIN_AMOUNT = 3_000_000; // 3 million VND threshold
+  const showInstallmentToggle = (transactionType === 'expense' || transactionType === 'debt')
+    && !isRefundMode
+    && (watchedAmount ?? 0) >= INSTALLMENT_MIN_AMOUNT;
+
+  const InstallmentInput = showInstallmentToggle ? (
     <div className="rounded-lg border border-slate-200 p-4 space-y-4 bg-slate-50/50">
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">

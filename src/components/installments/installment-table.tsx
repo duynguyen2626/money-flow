@@ -5,7 +5,7 @@ import {
     Copy,
     CheckCheck,
 } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
     Table,
     TableBody,
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/table"
 import { Progress } from "@/components/ui/progress"
 import { Button } from "@/components/ui/button"
-import { formatCurrency } from "@/lib/utils"
+import { formatCurrency, cn } from "@/lib/utils"
 import { format } from "date-fns"
 import { Badge } from "@/components/ui/badge"
 
@@ -24,10 +24,21 @@ import { InstallmentDetailsDialog } from "./installment-details-dialog"
 
 interface InstallmentTableProps {
     installments: Installment[]
+    highlightTxnId?: string | null
 }
 
-export function InstallmentTable({ installments }: InstallmentTableProps) {
+export function InstallmentTable({ installments, highlightTxnId }: InstallmentTableProps) {
     const [copiedId, setCopiedId] = useState<string | null>(null)
+    const [highlightedId, setHighlightedId] = useState<string | null>(highlightTxnId ?? null)
+
+    // Clear highlight after 5 seconds for visual feedback
+    useEffect(() => {
+        if (highlightedId) {
+            const timer = setTimeout(() => setHighlightedId(null), 5000)
+            return () => clearTimeout(timer)
+        }
+    }, [highlightedId])
+
     return (
         <div className="rounded-md border">
             <Table>
@@ -53,8 +64,14 @@ export function InstallmentTable({ installments }: InstallmentTableProps) {
                     ) : (
                         installments.map((inst) => {
                             const progress = ((inst.total_amount - inst.remaining_amount) / inst.total_amount) * 100
+                            const isHighlighted = highlightedId && inst.original_transaction_id === highlightedId
                             return (
-                                <TableRow key={inst.id}>
+                                <TableRow
+                                    key={inst.id}
+                                    className={cn(
+                                        isHighlighted && "bg-amber-100 animate-pulse ring-2 ring-amber-400"
+                                    )}
+                                >
                                     <TableCell>
                                         <div className="flex items-center gap-1">
                                             {inst.original_transaction_id ? (

@@ -652,6 +652,41 @@ export async function restoreTransaction(id: string): Promise<boolean> {
 export async function updateTransaction(id: string, input: CreateTransactionInput): Promise<boolean> {
   const supabase = createClient();
 
+  // GUARD: Block editing if this transaction has linked children (Void/Refund)
+  // 1. Check linked_transaction_id column (GD3 -> GD2 link)
+  const { data: linkedChildren, error: linkedError } = await supabase
+    .from('transactions')
+    .select('id, status')
+    .neq('status', 'void')
+    .eq('linked_transaction_id', id)
+    .limit(1);
+
+  if (linkedError) {
+    console.error('Failed to check linked transactions:', linkedError);
+    return false;
+  }
+
+  if (linkedChildren && linkedChildren.length > 0) {
+    throw new Error('Cannot edit this transaction because it has linked Void/Refund transactions. Please delete the linked transactions first.');
+  }
+
+  // 2. Check metadata fields (original_transaction_id, pending_refund_id)
+  const { data: metaChildren, error: metaError } = await supabase
+    .from('transactions')
+    .select('id, status')
+    .neq('status', 'void')
+    .or(`metadata.cs.{"original_transaction_id":"${id}"},metadata.cs.{"pending_refund_id":"${id}"}`)
+    .limit(1);
+
+  if (metaError) {
+    console.error('Failed to check metadata-linked transactions:', metaError);
+    return false;
+  }
+
+  if (metaChildren && metaChildren.length > 0) {
+    throw new Error('Cannot edit this transaction because it has linked Void/Refund transactions. Please delete the linked transactions first.');
+  }
+
   const { data: existingData, error: existingError } = await supabase
     .from('transactions')
     .select(
