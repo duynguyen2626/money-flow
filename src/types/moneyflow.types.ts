@@ -57,6 +57,12 @@ export type AccountCashbackSnapshot = {
   currentSpend: number
   cycleLabel?: string
   earnedSoFar: number
+  // Expanded for transparent UI
+  min_spend_required?: number | null
+  total_spend_eligible?: number
+  is_min_spend_met?: boolean
+  missing_min_spend?: number | null
+  potential_earned?: number
 }
 
 export type DebtAccount = {

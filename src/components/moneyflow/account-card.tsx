@@ -172,7 +172,7 @@ function AccountCardComponent({
       onClick={openDetails}
     >
       {/* Image Section */}
-      <div className="relative h-32 w-full bg-slate-100">
+      <div className="relative h-40 w-full bg-slate-100">
         {account.logo_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -191,66 +191,80 @@ function AccountCardComponent({
         )}
 
         {/* Dark overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-black/10" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-black/10" />
 
-        {/* TOP-LEFT: Card Name - Frosted glass background */}
+        {/* TOP-LEFT: Card Name */}
         <div className="absolute top-2 left-2">
           <span className="inline-flex items-center rounded-lg bg-white/80 px-3 py-1.5 text-sm font-bold text-slate-900 shadow-md backdrop-blur-sm truncate max-w-[140px]" title={account.name}>
             {account.name}
           </span>
         </div>
 
-        {/* TOP-RIGHT: Limit + Cycle */}
-        <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+        {/* TOP-RIGHT: Limit */}
+        <div className="absolute top-2 right-2">
           {isCreditCard && displayLimit > 0 && (
             <span className="inline-flex items-center rounded-md bg-slate-800/80 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm backdrop-blur-sm">
               Limit: {numberFormatter.format(displayLimit)}
             </span>
           )}
-          {isCreditCard && cycleLabel && (
-            <span className="inline-flex items-center rounded-md bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 shadow-sm backdrop-blur-sm">
-              {cycleLabel.replace(/-/g, '/').replace(/ \/ /g, ' - ')}
-            </span>
-          )}
         </div>
 
-        {/* BOTTOM-LEFT: Due Date - Lighter color, bold text */}
-        {isCreditCard && dueStatus && (
-          <div className="absolute bottom-2 left-2">
-            <span className={cn(
-              "inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-sm",
-              dueStatus.tone
-            )}>
-              <Clock4 className="h-3.5 w-3.5" />
-              {dueStatus.label}
-            </span>
-          </div>
-        )}
-
-        {/* BOTTOM-RIGHT: Max Cashback - Same size as Due badge */}
+        {/* BOTTOM-LEFT STACK: Due Date + Spent Progress */}
         {isCreditCard && (
-          <div className="absolute bottom-2 right-2">
-            {cap ? (
-              <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-sm">
-                <TrendingUp className="h-3.5 w-3.5" />
-                Max: {numberFormatter.format(cap)}
+          <div className="absolute bottom-2 left-2 flex flex-col gap-1 items-start">
+            {/* Due Date */}
+            {dueStatus && (
+              <span className={cn(
+                "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold shadow-md backdrop-blur-sm",
+                dueStatus.tone
+              )}>
+                <Clock4 className="h-3 w-3" />
+                {dueStatus.label}
               </span>
-            ) : account.cashback_config ? (
-              <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-100 text-indigo-700 border border-indigo-200 px-3 py-1.5 text-xs font-bold shadow-md backdrop-blur-sm">
-                <InfinityIcon className="h-3.5 w-3.5" />
-                Unlimited
+            )}
+
+            {/* Spent Progress */}
+            {cashback?.min_spend_required ? (
+              <span className={cn(
+                "inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-bold shadow-md backdrop-blur-sm border",
+                (cashback.total_spend_eligible || 0) >= cashback.min_spend_required
+                  ? "bg-emerald-100 text-emerald-700 border-emerald-200"
+                  : "bg-white/90 text-amber-700 border-amber-200"
+              )}>
+                <TrendingUp className="h-3 w-3" />
+                Spent: {numberFormatter.format(cashback.total_spend_eligible || 0)}
               </span>
             ) : null}
           </div>
         )}
 
-        {/* Need to Spend Warning */}
-        {isCreditCard && needToSpend > 0 && (
-          <div className="absolute bottom-12 left-1/2 -translate-x-1/2">
-            <span className="inline-flex items-center gap-1 rounded-md bg-red-500 px-2 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-sm animate-pulse">
-              <AlertCircle className="h-3 w-3" />
-              Need {numberFormatter.format(needToSpend)} more
+        {/* BOTTOM-RIGHT STACK: Cycle + Max/Need/Unlimited */}
+        {isCreditCard && (
+          <div className="absolute bottom-2 right-2 flex flex-col gap-1 items-end">
+            {/* Cycle Badge (Always show, 'None' if missing) */}
+            <span className="inline-flex items-center rounded-md bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 shadow-sm backdrop-blur-sm">
+              {cycleLabel ? cycleLabel.replace(/-/g, '/').replace(/ \/ /g, ' - ') : 'None'}
             </span>
+
+            {/* Need More / Max / Unlimited */}
+            {needToSpend > 0 ? (
+              // Need More (Leading requirement)
+              <span className="inline-flex items-center gap-1 rounded-md bg-red-500 px-2 py-1 text-[10px] font-bold text-white shadow-sm backdrop-blur-sm animate-pulse">
+                <AlertCircle className="h-3 w-3" />
+                Need {numberFormatter.format(needToSpend)}
+              </span>
+            ) : cap ? (
+              // Max Cashback (If min spend met or no min spend)
+              <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 text-[10px] font-bold shadow-md backdrop-blur-sm">
+                Max: {numberFormatter.format(cap)}
+              </span>
+            ) : account.cashback_config ? (
+              // Unlimited
+              <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-100 text-indigo-700 border border-indigo-200 px-2 py-1 text-[10px] font-bold shadow-md backdrop-blur-sm">
+                <InfinityIcon className="h-3 w-3" />
+                Unlimited
+              </span>
+            ) : null}
           </div>
         )}
 
@@ -380,7 +394,7 @@ function AccountCardComponent({
       <div className="flex items-stretch bg-slate-50 border-t border-slate-100">
         {isCreditCard ? (
           <>
-            {/* Left: Thumbnail + Remains */}
+            {/* Left: Thumbnail + Remains + Need */}
             <div className="flex items-center">
               {account.logo_url && (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -391,21 +405,17 @@ function AccountCardComponent({
                   loading="lazy"
                 />
               )}
-              <div className="flex flex-col px-2 py-1.5">
-                {needToSpend > 0 ? (
-                  <>
-                    <span className="text-[10px] uppercase tracking-wider text-amber-600 font-bold">Unlock in</span>
-                    <span className="text-sm font-bold text-amber-600">
-                      {numberFormatter.format(needToSpend)}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Remains</span>
-                    <span className="text-sm font-bold text-emerald-600">
-                      {remaining !== null ? numberFormatter.format(remaining) : '∞'}
-                    </span>
-                  </>
+              <div className="flex flex-col px-2 py-1.5 items-start">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Remains</span>
+                  <span className="text-sm font-bold text-emerald-600">
+                    {remaining !== null ? numberFormatter.format(remaining) : '∞'}
+                  </span>
+                </div>
+                {needToSpend > 0 && (
+                  <span className="text-[10px] font-bold text-red-500 animate-pulse">
+                    Need {numberFormatter.format(needToSpend)} more
+                  </span>
                 )}
               </div>
             </div>
@@ -419,11 +429,15 @@ function AccountCardComponent({
                   </div>
                 </CustomTooltip>
               )}
-              <div className="text-right flex flex-col">
+              <div className={cn(
+                "text-right flex flex-col px-2 py-1 rounded-md transition-colors",
+                needToSpend > 0 ? "bg-red-50" : ""
+              )}>
                 <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Balance</span>
                 <span className={cn(
                   "text-sm font-bold",
-                  displayBalance < displayLimit * 0.3 ? 'text-amber-600' : 'text-slate-900'
+                  displayBalance < displayLimit * 0.3 ? 'text-amber-600' : 'text-slate-900',
+                  needToSpend > 0 && "text-red-700"
                 )}>
                   {numberFormatter.format(displayBalance)}
                 </span>

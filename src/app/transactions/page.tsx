@@ -21,22 +21,18 @@ export default async function TransactionsPage() {
   return (
     <TagFilterProvider>
       <div className="space-y-6">
-        <section className="bg-white shadow rounded-lg p-6">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 border-b pb-4">
-            <div>
-              <h1 className="text-2xl font-semibold">Transactions</h1>
-              <p className="text-sm text-slate-500">Manage your income and expenses, with real-time synchronization.</p>
-            </div>
-            {/* AddTransactionDialog moved to FilterableTransactions */}
-          </div>
-          <FilterableTransactions
-            transactions={recentTransactions}
-            categories={categories}
-            accounts={accounts}
-            people={people}
-            shops={shops}
-          />
-        </section>
+        <div className="flex flex-col gap-1 mb-6">
+          <h1 className="text-2xl font-semibold text-slate-900">Transactions</h1>
+          <p className="text-sm text-slate-500">Manage your income and expenses, with real-time synchronization.</p>
+        </div>
+
+        <FilterableTransactions
+          transactions={recentTransactions}
+          categories={categories}
+          accounts={accounts}
+          people={people}
+          shops={shops}
+        />
       </div>
     </TagFilterProvider>
   )

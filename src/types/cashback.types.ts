@@ -43,6 +43,12 @@ export type CashbackCard = {
   minSpendRemaining: number | null
   remainingBudget: number | null
   cycleOffset: number
+  // Additional frontend fields
+  min_spend_required: number | null
+  total_spend_eligible: number
+  is_min_spend_met: boolean
+  missing_min_spend: number | null
+  potential_earned: number
 }
 
 export type AccountSpendingStats = {

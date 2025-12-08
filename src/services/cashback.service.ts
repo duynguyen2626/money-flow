@@ -407,6 +407,12 @@ export async function getCashbackProgress(
       minSpendRemaining: safeMinSpendRemaining,
       remainingBudget: safeRemainingBudget,
       cycleOffset: monthOffset,
+      // Additional fields for frontend transparency
+      min_spend_required: minSpend,
+      total_spend_eligible: safeCurrentSpend,
+      is_min_spend_met: meetsMinSpend,
+      missing_min_spend: safeMinSpendRemaining,
+      potential_earned: safeNumber(cappedEarned),
     })
   }
 

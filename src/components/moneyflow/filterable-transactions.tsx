@@ -57,7 +57,6 @@ export function FilterableTransactions({
     searchTerm: externalSearch,
     onSearchChange,
     shops = [],
-    hidePeopleColumn,
     context,
 }: FilterableTransactionsProps) {
     const { selectedTag, setSelectedTag } = useTagFilter()
@@ -236,9 +235,9 @@ export function FilterableTransactions({
         : filteredByYear
 
     const filteredByPerson = useMemo(() => {
-        if (!selectedPersonId || hidePeopleColumn) return filteredByTag
+        if (!selectedPersonId) return filteredByTag
         return filteredByTag.filter(txn => ((txn as any).person_id ?? txn.person_id) === selectedPersonId)
-    }, [filteredByTag, hidePeopleColumn, selectedPersonId])
+    }, [filteredByTag, selectedPersonId])
 
     const filteredByCategory = useMemo(() => {
         if (!selectedCategoryId) {
@@ -564,19 +563,17 @@ export function FilterableTransactions({
                                             />
                                         )}
                                     </div>
-                                    {!hidePeopleColumn && (
-                                        <div className="space-y-2">
-                                            <p className="text-[11px] font-semibold text-slate-700">People</p>
-                                            <Combobox
-                                                items={peopleItems}
-                                                value={selectedPersonId ?? undefined}
-                                                onValueChange={val => setSelectedPersonId(val ?? null)}
-                                                placeholder="All people"
-                                                inputPlaceholder="Search person..."
-                                                emptyState="No people"
-                                            />
-                                        </div>
-                                    )}
+                                    <div className="space-y-2">
+                                        <p className="text-[11px] font-semibold text-slate-700">People</p>
+                                        <Combobox
+                                            items={peopleItems}
+                                            value={selectedPersonId ?? undefined}
+                                            onValueChange={val => setSelectedPersonId(val ?? null)}
+                                            placeholder="All people"
+                                            inputPlaceholder="Search person..."
+                                            emptyState="No people"
+                                        />
+                                    </div>
                                     <div className="flex items-center justify-between gap-2 border-t pt-2">
                                         <button
                                             className="text-xs font-semibold text-blue-600 hover:text-blue-800"
@@ -615,8 +612,8 @@ export function FilterableTransactions({
                         <button
                             onClick={() => setIsExcelMode(prev => !prev)}
                             className={`relative z-20 inline-flex items-center gap-1 rounded-md border px-3 py-2 text-sm font-medium shadow-sm shrink-0 transition-colors ${isExcelMode
-                                    ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
-                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                                 }`}
                             title={isExcelMode ? "Exit Excel Mode" : "Enter Excel Mode"}
                         >
@@ -641,7 +638,6 @@ export function FilterableTransactions({
                     selectedTxnIds={selectedTxnIds}
                     onSelectionChange={setSelectedTxnIds}
                     activeTab={activeTab}
-                    hidePeopleColumn={hidePeopleColumn}
                     context={context}
                     onBulkActionStateChange={handleBulkActionStateChange}
                     sortState={sortState}

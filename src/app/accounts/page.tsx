@@ -80,6 +80,11 @@ export default async function AccountsPage() {
       currentSpend: card.currentSpend,
       cycleLabel: card.cycleLabel,
       earnedSoFar: card.totalEarned,
+      min_spend_required: card.min_spend_required,
+      total_spend_eligible: card.total_spend_eligible,
+      is_min_spend_met: card.is_min_spend_met,
+      missing_min_spend: card.missing_min_spend,
+      potential_earned: card.potential_earned,
     }
   })
 
