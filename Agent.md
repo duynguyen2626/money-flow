@@ -18,31 +18,35 @@
 - `supabase/migrations`: SQL migrations history.
 
 ## 3. Core Features & Business Logic
-- **Transactions:** Quản lý thu chi, hỗ trợ batch import, duplicate check.
-- **Accounts:** Quản lý tài khoản ngân hàng, ví tiền, tín dụng.
-- **People/Debts:** Quản lý nợ nần, chia tiền nhóm (logic "chia đều", "ai trả").
+- **Transactions:** - Quản lý thu chi (Income/Expense/Transfer/Debt).
+  - **Excel Mode:** Chế độ xem phân tích, hỗ trợ Drag-to-Select để tính tổng nhanh.
+  - **Clone:** Tính năng nhân bản giao dịch nhanh.
+- **Accounts:** - Quản lý tài khoản ngân hàng, ví tiền, tín dụng.
+  - **Cashback Logic:** Hiển thị trạng thái "Need to Spend" và "Potential Cashback" nếu chưa đạt min spend.
+- **People/Debts:** - Quản lý nợ nần theo người (`person_id`).
+  - **UI:** Layout dạng Card (Expand/Collapse), Tab phân loại (All/Linked/Unlinked).
 - **Services:** Quản lý đăng ký định kỳ (subscriptions) như Netflix, Spotify.
 - **Installments:** Quản lý trả góp (tự động tách giao dịch gốc thành các kỳ hạn).
-- **Cashback:** Theo dõi tiền hoàn lại từ thẻ tín dụng/chi tiêu.
 - **Batch Processing:** Import số lượng lớn từ Excel/CSV, mapping ngân hàng tự động.
 
 ## 4. Coding Rules & Conventions
-- **Server Actions:** Ưu tiên dùng Server Actions cho các thao tác ghi (POST/PUT/DELETE) thay vì Route Handlers.
-- **Service Layer:** Logic phức tạp phải đặt trong `src/services`, Actions chỉ gọi Services.
-- **Type Safety:** Luôn import types từ `src/types` hoặc `database.types.ts`. Không dùng `any`.
-- **UI Components:** Sử dụng Shadcn UI components có sẵn trong `src/components/ui`.
-- **Database Access:**
-  - Dùng `src/lib/supabase/server.ts` cho Server Components/Actions.
-  - Dùng `src/lib/supabase/client.ts` cho Client Components (hạn chế).
-- **Naming:** Kebab-case cho tên file, PascalCase cho tên Component.
+- **Server Actions:** Ưu tiên dùng Server Actions cho các thao tác ghi (POST/PUT/DELETE).
+- **Service Layer:** Logic phức tạp đặt trong `src/services` (AccountService, TransactionService, CashbackService, etc.).
+- **Type Safety:** Luôn import types từ `src/types`.
+- **UI Components:** Shadcn UI (`src/components/ui`).
 
 ## 5. Recent Schema Context (Crucial)
-- **Batches:** Bảng `batches` và `batch_items` dùng cho import giao dịch.
-- **Installments:** Bảng `installments` liên kết với `transaction_lines`.
-- **Bank Mappings:** Bảng `bank_mappings` để map keywords từ SMS/Bank app sang categories.
-- **Webhook Links:** Bảng `sheet_webhook_links` để sync với Google Sheets.
+- **Transactions (Single Table):** Bảng chính lưu trữ mọi giao dịch. Cột `person_id` dùng để track nợ.
+- **Transaction History:** Bảng `transaction_history` lưu snapshot JSON trước khi edit (Feature: View History).
+- **Installments:** Bảng `installments` quản lý kỳ hạn trả góp.
+- **Batches:** Bảng `batches` và `batch_items` dùng cho import.
+- **Bank Mappings:** Bảng `bank_mappings` map keywords SMS sang category.
+- **Sheet Webhook Links:** Sync data với Google Sheets.
 
-## 6. Recent Integrity & History Logic (Phase 71)
-- **Transaction History:** Mọi thay đổi trên bảng `transactions` được lưu vào `transaction_history` qua Trigger. UI có nút "View History" để xem diff.
-- **Integrity Rule:** Không được phép Edit giao dịch gốc (Parent) nếu nó đã có giao dịch Void hoặc Refund liên kết. Phải xóa Void/Refund trước.
-- **Single Source of Truth:** Bảng `transactions` là nơi duy nhất lưu trữ thu chi. Bảng `people` chỉ là danh mục, dữ liệu nợ phải được tính toán aggregate từ `transactions` (sum amount where people_id = X).
+## 6. Recent Integrity & UI Logic (Phase 71-74)
+- **Integrity Rule:** - Chặn Edit/Void giao dịch Parent nếu đã có Void/Refund linked.
+  - Chặn Edit giao dịch Void/Refund trực tiếp.
+- **UI Standards:**
+  - **Transaction Table:** Gộp cột Accounts & People. Layout: `[Account Img] Name ➜ [Person Img] Name`.
+  - **Visual:** Tất cả Avatar/Thumbnail trong bảng phải là **Square (`rounded-none`)**.
+  - **Interaction:** Row click bị disable. Phải dùng Action Menu (`...`) để sửa.
