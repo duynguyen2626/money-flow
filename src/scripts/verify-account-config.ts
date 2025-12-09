@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 import { Database } from '../types/database.types'
 
 type Account = Database['public']['Tables']['accounts']['Row']
+type AccountUpdate = Database['public']['Tables']['accounts']['Update']
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -53,9 +54,10 @@ async function run() {
 
     // 3. Update Account
     const newFee = 999999
+    const updateData: AccountUpdate = { annual_fee: newFee }
     const { data: updated, error: updateError } = await supabase
         .from('accounts')
-        .update({ annual_fee: newFee })
+        .update(updateData)
         .eq('id', (account as Account).id)
         .select()
         .single()
