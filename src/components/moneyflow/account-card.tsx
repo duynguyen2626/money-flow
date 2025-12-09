@@ -408,6 +408,11 @@ function AccountCardComponent({
               <div className="flex flex-col px-2 py-1.5 items-start">
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Remains</span>
+                  {needToSpend > 0 && (
+                    <CustomTooltip content="Need to spend more to reach cashback target">
+                      <AlertCircle className="h-3 w-3 text-amber-500" />
+                    </CustomTooltip>
+                  )}
                   <span className="text-sm font-bold text-emerald-600">
                     {remaining !== null ? numberFormatter.format(remaining) : '∞'}
                   </span>
@@ -500,7 +505,7 @@ function AccountCardComponent({
           </>
         )}
       </div>
-    </div>
+    </div >
   )
 }
 

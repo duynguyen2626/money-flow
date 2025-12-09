@@ -386,7 +386,7 @@ export function FilterableTransactions({
                     )}
                     <div className="flex flex-1 items-center gap-2">
                         {/* Quick Filters (All/Void/Pending) */}
-                        <div className="flex items-center rounded-lg bg-slate-100 p-1 text-xs font-medium text-slate-600 shrink-0">
+                        <div className="flex items-center rounded-lg bg-slate-100 border border-slate-200 p-1 text-xs font-medium text-slate-600 shrink-0">
                             <button
                                 className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${activeTab === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
                                 onClick={() => setActiveTab('active')}
@@ -468,7 +468,7 @@ export function FilterableTransactions({
                         </div>
 
                         {/* Type Filters */}
-                        <div className="flex items-center rounded-lg bg-slate-100 p-1 text-xs font-medium text-slate-600 shrink-0 overflow-x-auto">
+                        <div className="flex items-center rounded-lg bg-slate-100 border border-slate-300 p-1 text-xs font-medium text-slate-600 shrink-0 overflow-x-auto">
                             <button
                                 className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
                                 onClick={() => setSelectedType('all')}
@@ -486,12 +486,6 @@ export function FilterableTransactions({
                                 onClick={() => setSelectedType('expense')}
                             >
                                 Out: {numberFormatter.format(totals.expense)}
-                            </button>
-                            <button
-                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'transfer' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-blue-700'}`}
-                                onClick={() => setSelectedType('transfer')}
-                            >
-                                Transfer
                             </button>
                             <button
                                 className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'lend' ? 'bg-white text-amber-700 shadow-sm' : 'text-slate-500 hover:text-amber-700'}`}

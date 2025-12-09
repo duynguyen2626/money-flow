@@ -1,0 +1,73 @@
+﻿
+> money-flow-3@0.1.0 build
+> next build
+
+npm :  ΓÜá Warning: Next.js inferred your 
+workspace root, but it may not be correct.
+At line:1 char:1
++ npm run build 2>&1 | Out-File -Encoding 
+utf8 build_log_2.txt
++ ~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecif    
+ied: ( ΓÜá Warning: N...not be corr    
+ect.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCom    
+mandError
+ 
+ We detected multiple lockfiles and 
+selected the directory of C:\Users\nam.than
+hnguyen\Github\package-lock.json as the 
+root directory.
+ To silence this warning, set 
+`turbopack.root` in your Next.js config, 
+or consider removing one of the lockfiles 
+if it's not needed.
+   See https://nextjs.org/docs/app/api-refe
+rence/config/next-config-js/turbopack#root-
+directory for more information.
+ Detected additional lockfiles: 
+   * C:\Users\nam.thanhnguyen\Github\money-
+flow-3\package-lock.json
+
+   Γû▓ Next.js 16.0.7 (Turbopack)
+   - Environments: .env.local
+
+ ΓÜá The "middleware" file convention is 
+deprecated. Please use "proxy" instead. 
+Learn more: https://nextjs.org/docs/message
+s/middleware-to-proxy
+   Creating an optimized production build ...
+ Γ£ô Compiled successfully in 13.1s
+   Running TypeScript ...
+Failed to compile.
+
+./src/components/moneyflow/unified-transact
+ion-table.tsx:1439:28
+Type error: Cannot find name 'Home'.
+
+[0m [90m 1437 |[39m                     
+      [33m<[39m[33mimg[39m 
+src[33m=[39m{shopLogo} 
+alt[33m=[39m[32m""[39m 
+className[33m=[39m[32m"h-6 w-6 
+object-contain rounded-none shrink-0"[39m 
+[33m/[39m[33m>[39m
+ [90m 1438 |[39m                         
+) [33m:[39m (
+[31m[1m>[22m[39m[90m 1439 |[39m      
+                     
+[33m<[39m[33mHome[39m 
+className[33m=[39m[32m"h-4 w-4 
+text-slate-400 shrink-0"[39m 
+[33m/[39m[33m>[39m
+ [90m      |[39m                         
+   [31m[1m^[22m[39m
+ [90m 1440 |[39m                         
+)}
+ [90m 1441 |[39m
+ [90m 1442 |[39m                         
+[33m<[39m[33mdiv[39m 
+className[33m=[39m[32m"flex flex-col 
+min-w-0 flex-1"[39m[33m>[39m[0m
+Next.js build worker exited with code: 1 
+and signal: null
