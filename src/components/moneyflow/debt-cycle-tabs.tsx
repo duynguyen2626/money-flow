@@ -19,6 +19,7 @@ interface DebtCycle {
     total_debt?: number
     total_repaid?: number
     total_cashback?: number
+    totalOriginalDebt?: number
 }
 
 interface DebtCycleTabsProps {
@@ -155,9 +156,16 @@ export function DebtCycleTabs({
                                 >
                                     {/* Header: Tag + Expand */}
                                     <div className="flex items-center justify-between gap-1">
-                                        <h3 className="font-bold text-slate-900 text-xs truncate">
-                                            {cycle.tag === 'UNTAGGED' ? 'N/A' : cycle.tag}
-                                        </h3>
+                                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                                            <h3 className="font-bold text-slate-900 text-xs">
+                                                {cycle.tag === 'UNTAGGED' ? 'N/A' : cycle.tag}
+                                            </h3>
+                                            {!isSettled && (
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap">
+                                                    Initial: {numberFormatter.format(Math.abs(cycle.totalOriginalDebt ?? 0))}
+                                                </span>
+                                            )}
+                                        </div>
                                         <div className="flex items-center gap-1 shrink-0">
                                             {isSelected && (
                                                 <div className="h-4 w-4 bg-blue-500 rounded-full flex items-center justify-center">
@@ -183,6 +191,8 @@ export function DebtCycleTabs({
                                     )}>
                                         {isSettled ? "✓ Settled" : numberFormatter.format(Math.abs(cycle.balance))}
                                     </p>
+
+                                    {/* Initial Amount Badge REMOVED from here */}
 
                                     {/* Expanded: Stats in 2-column grid with border */}
                                     {isExpanded && (

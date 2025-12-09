@@ -16,12 +16,14 @@ type DebtTransactionRow = {
   // Cashback fields for final price calculation
   cashback_share_percent?: string | number | null
   cashback_share_fixed?: string | number | null
+  final_price?: number | null
 }
 
 export type DebtByTagAggregatedResult = {
   tag: string;
   netBalance: number;
   originalPrincipal: number;
+  totalOriginalDebt: number; // New field for raw aggregated debt (before cashback)
   totalBack: number;
   totalCashback: number;
   status: string;
@@ -48,6 +50,10 @@ function resolveBaseType(type: TransactionType | null | undefined): 'income' | '
  * Cashback = (amount * percent/100) + fixed
  */
 function calculateFinalPrice(row: DebtTransactionRow): number {
+  if (typeof row.final_price === 'number') {
+    return Math.abs(row.final_price)
+  }
+
   const rawAmount = Math.abs(Number(row.amount ?? 0))
 
   // Parse cashback values
@@ -86,7 +92,7 @@ export async function getPersonDebt(personId: string): Promise<number> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('transactions')
-    .select('amount, type, person_id, status, cashback_share_percent, cashback_share_fixed')
+    .select('amount, type, person_id, status, cashback_share_percent, cashback_share_fixed, final_price')
     .eq('person_id', personId)
 
   if (error || !data) {
@@ -176,7 +182,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
   const supabase = createClient()
   const { data, error } = await supabase
     .from('transactions')
-    .select('tag, occurred_at, amount, type, person_id, status, cashback_share_percent, cashback_share_fixed')
+    .select('tag, occurred_at, amount, type, person_id, status, cashback_share_percent, cashback_share_fixed, final_price')
     .eq('person_id', personId)
     .neq('status', 'void')
     .order('occurred_at', { ascending: false })
@@ -190,6 +196,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
     string,
     {
       lend: number
+      lendOriginal: number // New accumulator
       repay: number
       cashback: number
       last_activity: string
@@ -204,7 +211,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       const occurredAt = row.occurred_at ?? ''
 
       if (!tagMap.has(tag)) {
-        tagMap.set(tag, { lend: 0, repay: 0, cashback: 0, last_activity: occurredAt })
+        tagMap.set(tag, { lend: 0, lendOriginal: 0, repay: 0, cashback: 0, last_activity: occurredAt })
       }
 
       const current = tagMap.get(tag)!
@@ -218,6 +225,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       current.cashback += cashback
       if (baseType === 'expense') {
         current.lend += finalPrice
+        current.lendOriginal += rawAmount // Aggregate raw amount
       } else if (baseType === 'income') {
         current.repay += finalPrice
       }
@@ -227,12 +235,13 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       }
     })
 
-  return Array.from(tagMap.entries()).map(([tag, { lend, repay, cashback, last_activity }]) => {
+  return Array.from(tagMap.entries()).map(([tag, { lend, lendOriginal, repay, cashback, last_activity }]) => {
     const netBalance = lend - repay
     return {
       tag,
       netBalance,
       originalPrincipal: lend,
+      totalOriginalDebt: lendOriginal, // Expose raw debt sum
       totalBack: repay,
       totalCashback: cashback,
       status: Math.abs(netBalance) < 0.01 ? 'settled' : 'active',

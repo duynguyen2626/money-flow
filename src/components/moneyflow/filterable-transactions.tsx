@@ -290,13 +290,13 @@ export function FilterableTransactions({
         return searchedTransactions.filter(txn => {
             const visualType = (txn as any).displayType ?? txn.type
             if (selectedType === 'transfer') {
-                return visualType === 'transfer'
+                return txn.type === 'transfer' || visualType === 'transfer'
             }
             if (selectedType === 'lend') {
-                return visualType === 'debt'
+                return txn.type === 'debt' || visualType === 'debt'
             }
             if (selectedType === 'repay') {
-                return visualType === 'repayment'
+                return txn.type === 'repayment' || visualType === 'repayment'
             }
             return visualType === selectedType
         })

@@ -95,8 +95,6 @@ function PersonCardComponent({
 
     // Service badges
     const services = person.subscription_details ?? []
-    const visibleServices = services.slice(0, 3)
-    const remainingServiceCount = Math.max(0, services.length - 3)
 
     return (
         <>
@@ -140,8 +138,8 @@ function PersonCardComponent({
                                 )}
                             </div>
 
-                            {/* Service Badges in Header - Right aligned/Flow */}
-                            <div className="mt-1 flex flex-wrap gap-1.5 justify-end">
+                            {/* Service Badges in Header - Right aligned/Vertical */}
+                            <div className="mt-1 flex flex-col items-end gap-1.5">
                                 {services.map(service => (
                                     <div key={service.id} className="inline-flex items-center gap-1 bg-white/80 border border-slate-200 rounded px-1.5 py-0.5 text-xs shadow-sm" title={service.name}>
                                         {service.logo_url ? (
@@ -150,7 +148,7 @@ function PersonCardComponent({
                                         ) : (
                                             <span className="text-[8px] font-bold text-slate-500 bg-slate-100 px-0.5 rounded">{service.name.substring(0, 1)}</span>
                                         )}
-                                        <span className="font-medium text-slate-700 max-w-[60px] truncate">{service.name}: {service.slots}</span>
+                                        <span className="font-medium text-slate-700 whitespace-nowrap">{service.name}: {service.slots}</span>
                                     </div>
                                 ))}
                             </div>

@@ -1381,7 +1381,9 @@ export function UnifiedTransactionTable({
               // Final Price: original - cashback. Use Math.max to prevent negative, but only if cashback is reasonable
               // If cashback > amount, it's likely a configuration error - show the original amount instead
               const baseAmount = Math.abs(Number(originalAmount ?? 0));
-              const finalPrice = cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount);
+              const finalPrice = (typeof txn.final_price === 'number')
+                ? Math.abs(txn.final_price)
+                : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount));
 
               // Cycle Logic - Use account_id directly (single-table mode)
               let cycleLabel = "-"
@@ -1407,25 +1409,19 @@ export function UnifiedTransactionTable({
                       month: '2-digit',
                       timeZone: 'Asia/Ho_Chi_Minh',
                     })
-                    return (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          className="rounded border-gray-300 shrink-0"
-                          checked={isSelected}
-                          onChange={e => handleSelectOne(txn.id, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
-                        />
-                        {/* Type Badge First */}
-                        <div className="shrink-0 scale-90 origin-left">
-                          {typeBadge}
-                        </div>
+                    const dateStr = dateFormatter.format(d)
 
+                    return (
+                      <div className="flex items-center justify-between w-full">
                         <div className="flex flex-col min-w-[50px]">
-                          <span className="font-semibold text-sm whitespace-nowrap leading-none">{dateFormatter.format(d)}</span>
+                          <span className="font-semibold text-sm whitespace-nowrap leading-none">{dateStr}</span>
                           {/* Time Display */}
                           <span className="text-[10px] text-slate-400 font-medium leading-tight">
                             {d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}
                           </span>
+                        </div>
+                        <div className="ml-2 pl-2 border-l border-slate-100 flex items-center shrink-0">
+                          {typeBadge}
                         </div>
                       </div>
                     )
@@ -1817,14 +1813,25 @@ export function UnifiedTransactionTable({
                             {accountId ? (
                               <Link
                                 href={`/accounts/${accountId}`}
-                                className="text-base font-bold text-slate-700 hover:text-blue-600 hover:underline truncate max-w-[120px]"
+                                className={cn(
+                                  "text-base font-bold text-slate-700 hover:text-blue-600 hover:underline truncate",
+                                  rightSide && "max-w-[120px]"
+                                )}
                                 onClick={(e) => e.stopPropagation()}
                                 title={accountName}
                               >
                                 {accountName}
                               </Link>
                             ) : (
-                              <span className="text-base font-bold text-slate-700 truncate max-w-[120px]" title={accountName}>{accountName}</span>
+                              <span
+                                className={cn(
+                                  "text-base font-bold text-slate-700 truncate",
+                                  rightSide && "max-w-[120px]"
+                                )}
+                                title={accountName}
+                              >
+                                {accountName}
+                              </span>
                             )}
                           </div>
 
@@ -1844,7 +1851,7 @@ export function UnifiedTransactionTable({
                             // No person/destination - show cycle on right at same size as account name
                             cycleLabel && cycleLabel !== '-' && (
                               <CustomTooltip content={cycleLabel}>
-                                <span className="text-sm font-bold text-slate-600 shrink-0 border border-slate-200 bg-slate-50 px-1 rounded shadow-sm">
+                                <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10 shrink-0">
                                   {cycleLabel}
                                 </span>
                               </CustomTooltip>
@@ -1862,7 +1869,7 @@ export function UnifiedTransactionTable({
                             <div className="flex items-center">
                               {cycleLabel && cycleLabel !== '-' ? (
                                 <CustomTooltip content={cycleLabel}>
-                                  <span className="inline-flex items-center rounded-none bg-slate-100 text-slate-600 px-1 py-0.5 text-[10px] font-bold ring-1 ring-inset ring-slate-500/10 shrink-0 cursor-help">
+                                  <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10 shrink-0 cursor-help">
                                     {cycleLabel}
                                   </span>
                                 </CustomTooltip>
@@ -1877,9 +1884,9 @@ export function UnifiedTransactionTable({
                             <div className="flex items-center">
                               {/* Show Cycle Tag if defined, or custom Tag */}
                               {(cycleTag || debtTag) && (
-                                <CustomTooltip content={cycleTag || debtTag}>
-                                  <span className="inline-flex items-center rounded-none bg-slate-100 text-slate-600 px-1 py-0.5 text-[10px] font-bold ring-1 ring-inset ring-slate-500/10 shrink-0 cursor-help">
-                                    {cycleTag || debtTag}
+                                <CustomTooltip content={txn.tag}>
+                                  <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 shrink-0 cursor-help">
+                                    {txn.tag}
                                   </span>
                                 </CustomTooltip>
                               )}
@@ -1895,7 +1902,7 @@ export function UnifiedTransactionTable({
                         {/* Removed duplicate cycle label here since it's in Account now */}
                         {txn.tag && (
                           <CustomTooltip content={txn.tag}>
-                            <span className="inline-block items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 border border-slate-200 cursor-help whitespace-normal break-words">
+                            <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 cursor-help whitespace-normal break-words">
                               {txn.tag}
                             </span>
                           </CustomTooltip>
@@ -1930,7 +1937,7 @@ export function UnifiedTransactionTable({
                         onMouseEnter={() => handleCellMouseEnter(txn.id, 'amount')}
                         onMouseUp={handleCellMouseUp}
                       >
-                        <span className={amountClass}>{amountValue}</span>
+                        <span className={cn("font-bold text-lg", amountClass)}>{amountValue}</span>
                         {(displayPercent > 0 || fixedDisp > 0) && (
                           <div className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-600 border border-emerald-100 gap-1 mt-0.5 whitespace-nowrap">
                             {displayPercent > 0 && <span>{Number(displayPercent.toFixed(2))}%</span>}
