@@ -298,10 +298,7 @@ export function UnifiedTransactionTable({
       people_back: false, // Hidden by default
       final_price: true,
       status: false, // Hidden by default (Merged into Type)
-      id: false,
       task: true,
-      initial_back: true,
-      people_back: true,
     }
 
     if (hiddenColumns.length > 0) {
