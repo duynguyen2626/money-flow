@@ -21,14 +21,16 @@ export default async function PeoplePage() {
   ])
 
   return (
-    <div className="space-y-6">
-      <PeopleGrid
-        people={people}
-        subscriptions={subscriptions}
-        shops={shops}
-        accounts={accounts}
-        categories={categories}
-      />
+    <div className="h-full overflow-auto p-6">
+      <div className="space-y-6">
+        <PeopleGrid
+          people={people}
+          subscriptions={subscriptions}
+          shops={shops}
+          accounts={accounts}
+          categories={categories}
+        />
+      </div>
     </div>
   )
 }
