@@ -1,8 +1,9 @@
-
 import dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../types/database.types'
+
+type Account = Database['public']['Tables']['accounts']['Row']
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -41,36 +42,36 @@ async function run() {
         return
     }
 
-    console.log(`✅ Account Created: ${account.id} (Name: ${account.name})`)
+    console.log(`✅ Account Created: ${(account as Account).id} (Name: ${(account as Account).name})`)
 
     // 2. Verify Initial State
-    if (account.annual_fee === initialFee) {
+    if ((account as Account).annual_fee === initialFee) {
         console.log('✅ Annual Fee persisted correctly on creation.')
     } else {
-        console.error(`❌ Annual Fee Mismatch! Expected ${initialFee}, got ${account.annual_fee}`)
+        console.error(`❌ Annual Fee Mismatch! Expected ${initialFee}, got ${(account as Account).annual_fee}`)
     }
 
     // 3. Update Account
     const newFee = 999999
     const { data: updated, error: updateError } = await supabase
         .from('accounts')
-        .update({ annual_fee: newFee } as any)
-        .eq('id', account.id)
+        .update({ annual_fee: newFee })
+        .eq('id', (account as Account).id)
         .select()
         .single()
 
     if (updateError) {
         console.error('❌ Update Failed:', updateError.message)
     } else {
-        if (updated.annual_fee === newFee) {
+        if ((updated as Account).annual_fee === newFee) {
             console.log('✅ Annual Fee updated successfully.')
         } else {
-            console.error(`❌ Annual Fee Update Mismatch! Expected ${newFee}, got ${updated.annual_fee}`)
+            console.error(`❌ Annual Fee Update Mismatch! Expected ${newFee}, got ${(updated as Account).annual_fee}`)
         }
     }
 
     // 4. Cleanup
-    const { error: deleteError } = await supabase.from('accounts').delete().eq('id', account.id)
+    const { error: deleteError } = await supabase.from('accounts').delete().eq('id', (account as Account).id)
     if (deleteError) {
         console.error('⚠️ Cleanup Failed:', deleteError.message)
     } else {

@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react"
 import {
@@ -299,6 +299,7 @@ export function UnifiedTransactionTable({
       final_price: true,
       status: false, // Hidden by default (Merged into Type)
       task: true,
+      id: false, // Hidden by default
     }
 
     if (hiddenColumns.length > 0) {
