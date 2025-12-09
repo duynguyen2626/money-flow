@@ -16,6 +16,7 @@ export async function createAccount(payload: {
   cashbackConfig?: Json | null;
   securedByAccountId?: string | null;
   logoUrl?: string | null;
+  annualFee?: number | null;
 }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -33,6 +34,7 @@ export async function createAccount(payload: {
     cashback_config: payload.cashbackConfig,
     secured_by_account_id: payload.securedByAccountId,
     logo_url: payload.logoUrl,
+    annual_fee: payload.annualFee ?? 0,
   }
 
   const executeInsert = (data: typeof insertPayload) =>
@@ -61,6 +63,7 @@ export type UpdateAccountPayload = {
   securedByAccountId?: string | null
   isActive?: boolean | null
   logoUrl?: string | null
+  annualFee?: number | null
 }
 
 export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
@@ -72,10 +75,14 @@ export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
     secured_by_account_id?: string | null
     is_active?: boolean | null
     logo_url?: string | null
+    annual_fee?: number | null
   } = {}
 
   if (typeof payload.name === 'string') {
     updatePayload.name = payload.name
+  }
+  if (typeof payload.annualFee !== 'undefined') {
+    updatePayload.annual_fee = payload.annualFee
   }
 
   if (typeof payload.creditLimit !== 'undefined') {

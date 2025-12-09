@@ -94,6 +94,7 @@ export function PersonDetailTabs({
                                 people={people}
                                 shops={shops}
                                 accountId={personId}
+                                contextId={personId}
                                 accountType="debt"
                                 hidePeopleColumn
                                 context="person"

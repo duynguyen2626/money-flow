@@ -247,3 +247,14 @@ export function calculateBankCashback(
 
   return { amount: amount * earnedRate, rate: earnedRate }
 }
+
+export function getMinSpendStatus(currentSpend: number, minSpendTarget: number | null) {
+  const target = minSpendTarget || 0
+  const remaining = Math.max(0, target - currentSpend)
+  const isTargetMet = currentSpend >= target
+  return {
+    spent: currentSpend,
+    remaining,
+    isTargetMet
+  }
+}

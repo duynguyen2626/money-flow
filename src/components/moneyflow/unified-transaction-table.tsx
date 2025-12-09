@@ -18,10 +18,8 @@ import {
   Info,
   ArrowLeft,
   ArrowRight,
+  ShoppingBasket,
   Wallet,
-  ArrowRightLeft,
-  Store,
-  Home,
   ArrowUp,
   ArrowDown,
   Trash2,
@@ -30,6 +28,7 @@ import {
   Pencil,
   Ban,
   Loader2,
+  Store,
   CheckCircle2,
   History,
   ChevronDown,
@@ -40,7 +39,16 @@ import {
   Eye,
   FileText,
   Filter,
-  RefreshCw
+  RefreshCw,
+  Clock,
+  AlertCircle,
+  Banknote,
+  Minus,
+  ArrowRightLeft,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Notebook,
+  HelpCircle
 } from 'lucide-react'
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -71,7 +79,6 @@ import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
 import { cn } from "@/lib/utils"
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
-import { formatCycleTag } from '@/lib/cycle-utils'
 import { RefundNoteDisplay } from './refund-note-display'
 import { ConfirmRefundDialog } from "./confirm-refund-dialog"
 import { TransactionHistoryModal } from './transaction-history-modal'
@@ -85,7 +92,7 @@ type ColumnKey =
   | "category"
   | "tag"
   | "note" // Added Note Column
-  | "account" // Merged Account ➜ People
+  | "account" // Merged Account âžœ People
   | "amount"
   | "back_info"
   | "final_price"
@@ -132,14 +139,14 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
   const categoryName = categoryLine?.categories?.name?.toLowerCase() ?? txn.category_name?.toLowerCase() ?? '';
 
   if (personLine?.person_id) {
-    if (categoryName.includes('thu nợ') || categoryName.includes('repayment')) {
+    if (categoryName.includes('thu ná»£') || categoryName.includes('repayment')) {
       derivedType = 'repayment';
     } else {
       derivedType = 'debt';
     }
   } else if (categoryName.includes('cashback') || categoryName.includes('income') || categoryName.includes('refund')) {
     derivedType = 'income';
-  } else if (categoryName.includes('money transfer') || categoryName.includes('chuyển tiền')) {
+  } else if (categoryName.includes('money transfer') || categoryName.includes('chuyá»ƒn tiá»n')) {
     derivedType = 'transfer';
   } else if (!categoryLine && !txn.category_name) {
     derivedType = 'transfer';
@@ -199,6 +206,7 @@ interface UnifiedTransactionTableProps {
   transactions?: TransactionWithDetails[] // Keeping for backward compatibility or alias
   accountType?: Account['type']
   accountId?: string // Specific Account Context
+  contextId?: string // NEW: Context entity ID (account or person) for smart display
   selectedTxnIds?: Set<string>
   onSelectionChange?: (selectedIds: Set<string>) => void
   accounts?: Account[]
@@ -237,6 +245,7 @@ export function UnifiedTransactionTable({
   transactions,
   accountType,
   accountId,
+  contextId,
   selectedTxnIds,
   onSelectionChange,
   accounts = [],
@@ -257,7 +266,7 @@ export function UnifiedTransactionTable({
     { key: "type", label: "Type", defaultWidth: 130, minWidth: 110 },
     { key: "shop", label: "Note", defaultWidth: 200, minWidth: 150 }, // Renamed to Note, minimized
     { key: "category", label: "Category", defaultWidth: 150 },
-    { key: "account", label: "Account ➜ People", defaultWidth: 180, minWidth: 150 },
+    { key: "account", label: "Accounts ➜ People", defaultWidth: 180, minWidth: 180 },
     { key: "amount", label: "Amount", defaultWidth: 100 },
     // { key: "note", label: "Note", defaultWidth: 200, minWidth: 150 }, // Removed from default
     { key: "back_info", label: "Back Info", defaultWidth: 140 },
@@ -285,12 +294,12 @@ export function UnifiedTransactionTable({
       account: true,
       amount: true,
       back_info: false, // Hidden by default
+      initial_back: false, // Hidden by default
+      people_back: false, // Hidden by default
       final_price: true,
       status: false, // Hidden by default (Merged into Type)
-      id: false,
       task: true,
-      initial_back: true,
-      people_back: true,
+      id: false, // Hidden by default
     }
 
     if (hiddenColumns.length > 0) {
@@ -355,7 +364,6 @@ export function UnifiedTransactionTable({
   const [confirmRefundTxn, setConfirmRefundTxn] = useState<TransactionWithDetails | null>(null)
   const [historyTarget, setHistoryTarget] = useState<TransactionWithDetails | null>(null)
   const [cloningTxn, setCloningTxn] = useState<TransactionWithDetails | null>(null)
-  const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const handleOpenConfirmRefund = (txn: TransactionWithDetails) => {
     setConfirmRefundTxn(txn)
@@ -364,6 +372,7 @@ export function UnifiedTransactionTable({
   }
   const [statusOverrides, setStatusOverrides] = useState<Record<string, TransactionWithDetails['status']>>({})
   const [refundFormTxn, setRefundFormTxn] = useState<TransactionWithDetails | null>(null)
+  const [copiedId, setCopiedId] = useState<string | null>(null)
   const [refundFormStage, setRefundFormStage] = useState<'request' | 'confirm'>('request')
   const [internalSortState, setInternalSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
   const [bulkDialog, setBulkDialog] = useState<{ mode: 'void' | 'restore' | 'delete'; open: boolean } | null>(null)
@@ -925,11 +934,11 @@ export function UnifiedTransactionTable({
   return (
     <div className="relative space-y-3">
       <div className={cn(
-        "relative w-full overflow-x-auto border rounded-md bg-white shadow-sm transition-colors duration-300",
+        "relative w-full border rounded-md bg-white shadow-sm transition-colors duration-300 h-[calc(100vh-220px)] overflow-auto",
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )}>
         <Table className="min-w-[1000px]">
-          <TableHeader className="sticky top-0 z-40 bg-white shadow-sm">
+          <TableHeader className="sticky top-0 z-50 bg-white shadow-sm">
             <TableRow className="hover:bg-transparent border-b-2 border-slate-300">
               {displayedColumns.map(col => {
                 if (col.key === "task") {
@@ -1006,7 +1015,7 @@ export function UnifiedTransactionTable({
                       </div>
                     ) : col.key === 'amount' ? (
                       <button
-                        className="flex items-center gap-1 group"
+                        className="flex items-center gap-1 group w-full justify-end"
                         onClick={() => {
                           const nextDir =
                             sortState.key === col.key ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
@@ -1095,31 +1104,31 @@ export function UnifiedTransactionTable({
               // --- Type Logic ---
               let typeBadge = null;
               if (txn.type === 'repayment') {
-                typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800 h-6">REPAY</span>;
+                typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">REPAY</span>;
               } else if (txn.type === 'transfer') {
                 if (accountId) {
                   if (txn.amount >= 0) {
-                    typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800 h-6">TF IN</span>
+                    typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">TF IN</span>
                   } else {
-                    typeBadge = <span className="inline-flex items-center rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-800 h-6">TF OUT</span>
+                    typeBadge = <span className="inline-flex items-center rounded-md bg-red-200 px-2 py-1 text-xs font-bold text-red-900 h-6">TF OUT</span>
                   }
                 } else {
-                  typeBadge = <span className="inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-xs font-bold text-blue-800 h-6">TF</span>
+                  typeBadge = <span className="inline-flex items-center rounded-md bg-blue-200 px-2 py-1 text-xs font-bold text-blue-900 h-6">TF</span>
                 }
               } else if (visualType === 'expense') {
-                typeBadge = <span className="inline-flex items-center rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-800 h-6">OUT</span>
+                typeBadge = <span className="inline-flex items-center rounded-md bg-red-200 px-2 py-1 text-xs font-bold text-red-900 h-6">OUT</span>
               } else if (visualType === 'income') {
-                typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800 h-6">IN</span>
+                typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">IN</span>
               } else {
                 if (accountId) {
                   // Fallback for untyped, though likely covered by Transfer above if type is correct
                   if (txn.amount >= 0) {
-                    typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-100 px-2 py-1 text-xs font-bold text-emerald-800 h-6">TF IN</span>
+                    typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">TF IN</span>
                   } else {
-                    typeBadge = <span className="inline-flex items-center rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-800 h-6">TF OUT</span>
+                    typeBadge = <span className="inline-flex items-center rounded-md bg-red-200 px-2 py-1 text-xs font-bold text-red-900 h-6">TF OUT</span>
                   }
                 } else {
-                  typeBadge = <span className="inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-xs font-bold text-blue-800 h-6">TF</span>
+                  typeBadge = <span className="inline-flex items-center rounded-md bg-blue-200 px-2 py-1 text-xs font-bold text-blue-900 h-6">TF</span>
                 }
               }
 
@@ -1130,18 +1139,65 @@ export function UnifiedTransactionTable({
               const isRefundConfirmation = meta?.is_refund_confirmation === true;
               const metaRefundStatus = meta?.refund_status;
 
-              if (isVoided) { statusIndicator = "🚫"; statusTooltip = "Voided"; }
-              else if (effectiveStatus === 'pending') { statusIndicator = "⏳"; statusTooltip = "Pending Refund"; }
-              else if (effectiveStatus === 'waiting_refund' || metaRefundStatus === 'waiting_refund') { statusIndicator = "⏳"; statusTooltip = "Waiting Refund"; }
-              else if (effectiveStatus === 'completed') { statusIndicator = "✅"; statusTooltip = "Refund Completed"; }
-              else if (effectiveStatus === 'refunded' || metaRefundStatus === 'refunded') { statusIndicator = "💸"; statusTooltip = "Refund Received"; }
+              const statusBadgeStyle = "flex items-center justify-center rounded p-0.5 w-5 h-5 transition-colors border";
+
+              if (isVoided) {
+                statusIndicator = <Ban className="h-4 w-4 text-slate-400" />;
+                statusTooltip = "Voided";
+              }
+              else if (effectiveStatus === 'pending') {
+                statusIndicator = (
+                  <div className={cn(statusBadgeStyle, "bg-amber-100 border-amber-300 text-amber-700")}>
+                    <Clock className="h-3 w-3" />
+                  </div>
+                );
+                statusTooltip = "Pending Refund";
+              }
+              else if (effectiveStatus === 'waiting_refund' || metaRefundStatus === 'waiting_refund') {
+                statusIndicator = (
+                  <div className={cn(statusBadgeStyle, "bg-amber-100 border-amber-300 text-amber-700")}>
+                    <Clock className="h-3 w-3" />
+                  </div>
+                );
+                statusTooltip = "Waiting Refund";
+              }
+              else if (effectiveStatus === 'completed') {
+                statusIndicator = (
+                  <div className={cn(statusBadgeStyle, "bg-emerald-100 border-emerald-300 text-emerald-700")}>
+                    <CheckCircle2 className="h-3 w-3" />
+                  </div>
+                );
+                statusTooltip = "Refund Completed";
+              }
+              else if (effectiveStatus === 'refunded' || metaRefundStatus === 'refunded') {
+                statusIndicator = (
+                  <div className={cn(statusBadgeStyle, "bg-emerald-100 border-emerald-300 text-emerald-700")}>
+                    <CheckCircle2 className="h-3 w-3" />
+                  </div>
+                );
+                statusTooltip = "Refund Received";
+              }
               // GD3: Refund confirmation with posted status
-              else if (isRefundConfirmation && effectiveStatus === 'posted') { statusIndicator = "💰"; statusTooltip = "Money Received"; }
+              else if (isRefundConfirmation && effectiveStatus === 'posted') {
+                statusIndicator = (
+                  <div className={cn(statusBadgeStyle, "bg-emerald-100 border-emerald-300 text-emerald-700")}>
+                    <CheckCircle2 className="h-3 w-3" />
+                  </div>
+                );
+                statusTooltip = "Money Received";
+              }
               // GD1: Has pending refund request (not yet confirmed)
-              else if (meta?.has_refund_request && !metaRefundStatus) { statusIndicator = "📝"; statusTooltip = "Refund Requested"; }
+              else if (meta?.has_refund_request && !metaRefundStatus) {
+                statusIndicator = (
+                  <div className={cn(statusBadgeStyle, "bg-blue-100 border-blue-300 text-blue-700")}>
+                    <FileText className="h-3 w-3" />
+                  </div>
+                );
+                statusTooltip = "Refund Requested";
+              }
 
               const isInstallmentRow = txn.is_installment || txn.installment_plan_id;
-              const rowBgClass = isVoided ? "opacity-60 bg-gray-50 scale-[0.99] border-dashed grayscale" : isInstallmentRow ? "bg-amber-50/70" : (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') ? "bg-emerald-50/50" : "";
+
 
               const taskCell = (
                 <div className="relative flex justify-end">
@@ -1206,24 +1262,24 @@ export function UnifiedTransactionTable({
                               className="flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
                               onClick={event => {
                                 event.stopPropagation();
-                                setCloningTxn(txn);
-                                setActionMenuOpen(null);
-                              }}
-                            >
-                              <Copy className="h-4 w-4 text-slate-600" />
-                              <span>Clone</span>
-                            </button>
-
-                            <button
-                              className="flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
-                              onClick={event => {
-                                event.stopPropagation();
                                 setEditingTxn(txn);
                                 setActionMenuOpen(null);
                               }}
                             >
                               <Pencil className="h-4 w-4 text-slate-600" />
                               <span>Edit</span>
+                            </button>
+
+                            <button
+                              className="flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
+                              onClick={event => {
+                                event.stopPropagation();
+                                setCloningTxn(txn);
+                                setActionMenuOpen(null);
+                              }}
+                            >
+                              <Copy className="h-4 w-4 text-slate-600" />
+                              <span>Clone</span>
                             </button>
 
                             {canRequestRefund && !isPendingRefund && (
@@ -1300,6 +1356,18 @@ export function UnifiedTransactionTable({
 
               const voidedTextClass = ""
 
+              // Row Background Logic (Restored)
+              let rowBgColor = "bg-white"
+              if (isVoided) {
+                rowBgColor = "opacity-60 bg-gray-50 scale-[0.99] border-dashed grayscale"
+              } else {
+                const refundSeqCheck = (txn.metadata as any)?.refund_sequence || 0
+                if (txn.is_installment || txn.installment_plan_id) rowBgColor = "bg-amber-50"
+                else if (refundSeqCheck > 0) rowBgColor = "bg-purple-50" // Refund shading
+                else if (txn.type === 'repayment') rowBgColor = "bg-slate-50"
+                else if (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') rowBgColor = "bg-emerald-50/50"
+              }
+
               // Final Price Logic
               // Rename calculatedSum -> cashbackAmount for clarity
               // If cashback > 0, we subtract it.
@@ -1340,51 +1408,43 @@ export function UnifiedTransactionTable({
                       timeZone: 'Asia/Ho_Chi_Minh',
                     })
                     return (
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         <input
                           type="checkbox"
-                          className="rounded border-gray-300"
+                          className="rounded border-gray-300 shrink-0"
                           checked={isSelected}
                           onChange={e => handleSelectOne(txn.id, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)}
                         />
-                        <div className="flex flex-col gap-0.5">
-                          <span className="font-semibold">{dateFormatter.format(d)}</span>
-                          <div className="flex items-center gap-1">
-                            {typeBadge}
-                            {statusIndicator && (
-                              <CustomTooltip content={statusTooltip}>
-                                <span className="text-sm cursor-help" suppressHydrationWarning>{statusIndicator}</span>
-                              </CustomTooltip>
-                            )}
-                            {(txn.is_installment || txn.installment_plan_id) && (
-                              <CustomTooltip content="Trả góp - Click để xem">
-                                <Link
-                                  href={`/installments?tab=active&highlight=${txn.id}`}
-                                  onClick={(e) => e.stopPropagation()}
-                                  className="flex items-center justify-center rounded bg-amber-100 border border-amber-400 px-1 py-0.5 text-amber-700 hover:bg-amber-200 transition-colors"
-                                >
-                                  <Link2 className="h-4 w-4" />
-                                </Link>
-                              </CustomTooltip>
-                            )}
-                          </div>
+                        {/* Type Badge First */}
+                        <div className="shrink-0 scale-90 origin-left">
+                          {typeBadge}
+                        </div>
+
+                        <div className="flex flex-col min-w-[50px]">
+                          <span className="font-semibold text-sm whitespace-nowrap leading-none">{dateFormatter.format(d)}</span>
+                          {/* Time Display */}
+                          <span className="text-[10px] text-slate-400 font-medium leading-tight">
+                            {d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                          </span>
                         </div>
                       </div>
                     )
                   }
                   case "type":
-                    let icon = "❓";
-                    if (txn.type === 'repayment') icon = "💸";
-                    else if (visualType === 'expense') icon = "➖";
-                    else if (visualType === 'income') icon = "➕";
+                    const iconClass = "h-4 w-4";
+                    let icon: React.ReactNode = <HelpCircle className={iconClass} />;
+
+                    if (txn.type === 'repayment') icon = <Banknote className={cn(iconClass, "text-amber-600")} />;
+                    else if (visualType === 'expense') icon = <ArrowUpRight className={cn(iconClass, "text-red-500")} />;
+                    else if (visualType === 'income') icon = <ArrowDownLeft className={cn(iconClass, "text-emerald-500")} />;
                     else if (visualType === 'transfer') {
                       if (accountId) {
-                        if (txn.amount >= 0) icon = "TF➕";
-                        else icon = "TF➖";
+                        if (txn.amount >= 0) icon = <ArrowDownLeft className={cn(iconClass, "text-emerald-500")} />; // TF IN
+                        else icon = <ArrowUpRight className={cn(iconClass, "text-red-500")} />; // TF OUT
                       } else {
-                        icon = "TF↔️";
+                        icon = <ArrowRightLeft className={cn(iconClass, "text-blue-500")} />;
                       }
-                    } else if (visualType === 'debt') icon = "📒";
+                    } else if (visualType === 'debt') icon = <Notebook className={cn(iconClass, "text-slate-500")} />;
 
                     return (
                       <div className="flex items-center justify-center gap-1 text-xl">
@@ -1426,33 +1486,55 @@ export function UnifiedTransactionTable({
 
                     return (
                       <div className="flex items-center gap-2 w-full overflow-hidden group">
-                        {/* Refund Badge */}
+                        {/* Installment Link - Moved to Start (Before Logo) */}
+                        {(txn.is_installment || txn.installment_plan_id) && (
+                          <CustomTooltip content="Trả góp - Click để xem">
+                            <Link
+                              href={`/installments?tab=active&highlight=${txn.id}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center justify-center rounded bg-amber-100 border border-amber-400 px-1 py-0.5 text-amber-700 hover:bg-amber-200 transition-colors shrink-0"
+                            >
+                              <Link2 className="h-4 w-4" />
+                            </Link>
+                          </CustomTooltip>
+                        )}
+
+                        {/* Logo */}
+                        {shopLogo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={shopLogo} alt="" className="h-6 w-6 object-contain shrink-0" />
+                        ) : (
+                          // Replaced ShoppingBasket with Status/Refund Indicator
+                          // User requested: No border for Refund icon, bigger size. Darker ShoppingBasket.
+                          <div className={cn(
+                            "flex items-center justify-center h-8 w-8 rounded-none bg-slate-50 shrink-0",
+                            !statusIndicator && "border border-slate-200"
+                          )}>
+                            {statusIndicator ? (
+                              <CustomTooltip content={statusTooltip}>
+                                <span className="text-xl cursor-help font-bold text-slate-800" suppressHydrationWarning>{statusIndicator}</span>
+                              </CustomTooltip>
+                            ) : (
+                              <ShoppingBasket className="h-5 w-5 text-slate-500" />
+                            )}
+                          </div>
+                        )}
+
+                        {/* Refund Badge - moved after img */}
                         {refundSeq > 0 && (
                           <span className="inline-flex items-center justify-center rounded-md bg-blue-100 text-blue-700 px-1.5 h-5 text-[10px] font-bold shrink-0 whitespace-nowrap" title={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
                             {refundSeq}. {shortIdBadge}
                           </span>
                         )}
 
-                        {/* Logo */}
-                        {shopLogo ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={shopLogo} alt="" className="h-6 w-6 object-contain rounded-none shrink-0" />
-                        ) : (
-                          <Home className="h-4 w-4 text-slate-400 shrink-0" />
-                        )}
-
                         <div className="flex flex-col min-w-0 flex-1">
                           {/* Name */}
-                          {shopName && (
-                            <div className="flex items-center gap-1.5 mb-0.5">
-                              <span className="text-sm font-semibold text-slate-700 truncate">{shopName}</span>
-                            </div>
-                          )}
+                          {/* Name - Hidden by default as per user request */}
 
                           {/* Note */}
                           {txn.note ? (
                             <CustomTooltip content={txn.note}>
-                              <span className="text-sm text-slate-600 truncate cursor-help block">
+                              <span className="text-sm text-slate-700 font-bold truncate cursor-help block">
                                 {txn.note}
                               </span>
                             </CustomTooltip>
@@ -1461,13 +1543,12 @@ export function UnifiedTransactionTable({
                           )}
                         </div>
 
-                        {/* Copy ID Button */}
+                        {/* Copy ID Button - Always Show */}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             navigator.clipboard.writeText(txn.id);
                             setCopiedId(txn.id);
-                            toast.success('Copied ID');
                             setTimeout(() => setCopiedId(null), 2000);
                           }}
                           className={cn(
@@ -1476,7 +1557,7 @@ export function UnifiedTransactionTable({
                           )}
                           title="Copy ID"
                         >
-                          {copiedId === txn.id ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                          {copiedId === txn.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                         </button>
                       </div>
                     );
@@ -1525,8 +1606,8 @@ export function UnifiedTransactionTable({
                             setTimeout(() => setCopiedId(null), 2000);
                           }}
                           className={cn(
-                            "p-0.5 hover:bg-slate-100 rounded ml-1 transition-colors",
-                            copiedId === txn.id ? "text-emerald-500" : "text-slate-400 hover:text-slate-600"
+                            "p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 ml-1 transition-colors",
+                            copiedId === txn.id && "text-emerald-500"
                           )}
                           title={`Copy Transaction ID: ${txn.id}`}
                         >
@@ -1535,30 +1616,35 @@ export function UnifiedTransactionTable({
                       </div>
                     );
                   case "category": {
+                    // Determine badge color by type
+                    let badgeColors = "bg-red-50 text-red-700 ring-red-600/10"; // Default = expense
+                    if (txn.type === 'income' || visualType === 'income') badgeColors = "bg-emerald-100 text-emerald-700 ring-emerald-600/20";
+                    else if (txn.type === 'transfer') badgeColors = "bg-blue-100 text-blue-700 ring-blue-700/10";
+                    else if (txn.type === 'repayment') badgeColors = "bg-orange-100 text-orange-800 ring-orange-600/20";
+
                     if (!txn.category_name) {
-                      if (txn.type === 'repayment') return <span className="text-slate-500">Repayment</span>;
-                      if (txn.type === 'transfer') return <span className="text-slate-500">Transfer</span>;
-                      return <span className="text-red-500">Uncategorized</span>;
+                      if (txn.type === 'repayment') return <div className="flex items-center gap-2 justify-start"><span className="inline-flex items-center rounded-md bg-orange-100 px-2 py-1 text-sm font-medium text-orange-800 ring-1 ring-inset ring-orange-600/20">Repayment</span></div>;
+                      if (txn.type === 'transfer') return <div className="flex items-center gap-2 justify-start"><span className="inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">Transfer</span></div>;
+                      return <div className="flex items-center gap-2 justify-start"><span className="inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-sm font-medium text-red-700 ring-1 ring-inset ring-red-600/10">Uncategorized</span></div>;
                     }
                     return (
                       <CustomTooltip content={txn.category_name ?? "No Category"}>
-                        <div className="flex items-center gap-2 max-w-[200px]">
+                        <div className="flex items-center gap-2 justify-start">
+                          {/* Category Icon - always show */}
                           {txn.category_logo_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <div className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center">
-                              <img
-                                src={txn.category_logo_url}
-                                alt={txn.category_name ?? 'Category'}
-                                className="h-full w-full object-contain"
-                              />
+                            <div className="flex h-6 w-6 items-center justify-center shrink-0">
+                              <img src={txn.category_logo_url} alt="" className="h-full w-full object-contain" />
                             </div>
+                          ) : txn.category_icon ? (
+                            <span className="text-base shrink-0">{txn.category_icon}</span>
                           ) : (
-                            <span className="flex h-8 w-8 min-w-[32px] min-h-[32px] items-center justify-center bg-slate-100 text-lg font-semibold text-slate-600 rounded-full border border-slate-200">
-                              {txn.category_icon ?? (txn.category_name ? txn.category_name.charAt(0).toUpperCase() : '?')}
+                            <span className="flex h-6 w-6 items-center justify-center bg-slate-100 rounded-full text-xs font-semibold text-slate-600 shrink-0">
+                              {txn.category_name.charAt(0).toUpperCase()}
                             </span>
                           )}
-                          <span className="font-medium text-slate-700 truncate whitespace-nowrap cursor-help">
-                            {txn.category_name || "-"}
+                          {/* Category Badge */}
+                          <span className={cn("inline-flex items-center rounded-md px-2 py-1 text-sm font-medium ring-1 ring-inset truncate", badgeColors)}>
+                            {txn.category_name}
                           </span>
                         </div>
                       </CustomTooltip>
@@ -1568,148 +1654,236 @@ export function UnifiedTransactionTable({
                     const cycleTag = txn.persisted_cycle_tag
                     const debtTag = txn.tag
                     const hasPerson = !!(txn as any).person_id
-                    const isTransfer = (txn.type === 'transfer') || ((txn as any).displayType === 'transfer')
 
                     // 1. Account Info (Left)
                     const accountName = txn.source_name || txn.account_name || 'Unknown'
                     const accountIconUrl = txn.source_logo
                     const accountId = txn.source_account_id || txn.account_id
-                    const accountType = (txn as any).account_type || (accounts.find(a => a.id === accountId))?.type
 
-                    // Clean avatar rendering - no border wrapper, square
+                    // 2. Destination Info
+                    const destAccountId = txn.destination_account_id
+                    const destName = txn.destination_name || 'Unknown'
+                    const destIconUrl = txn.destination_logo
+
+                    // 3. Person Info
+                    const personName = (txn as any).person_name ?? 'Unknown'
+                    const personAvatar = (txn as any).person_avatar_url
+                    const personId = (txn as any).person_id
+
+                    // SMART CONTEXT LOGIC
+                    const isViewingSource = contextId && accountId === contextId
+                    const isViewingDestination = contextId && (destAccountId === contextId || personId === contextId)
+
                     const renderAccountIcon = () => {
-                      if (accountIconUrl) {
+                      const content = accountIconUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        return <img src={accountIconUrl} alt="" className="h-8 w-8 object-contain rounded-none" />
-                      }
-                      return (
+                        <img src={accountIconUrl} alt="" className="h-8 w-8 object-contain rounded-none bg-white" />
+                      ) : (
                         <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-none">
                           <Wallet className="h-4 w-4 text-slate-400" />
                         </div>
                       )
+
+                      if (accountId) {
+                        return (
+                          <CustomTooltip content={accountName}>
+                            <Link href={`/accounts/${accountId}`} onClick={(e) => e.stopPropagation()} className="shrink-0">
+                              {content}
+                            </Link>
+                          </CustomTooltip>
+                        )
+                      }
+                      return content
                     }
 
                     // 2. Right Side Info (Person or Destination Account)
                     let rightSide = null
 
                     if (hasPerson) {
-                      const personName = (txn as any).person_name ?? 'Unknown'
-                      const personAvatar = (txn as any).person_avatar_url
-                      const personId = (txn as any).person_id
                       const displayAvatar = personAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(personName)}&background=random&shape=square`
 
                       rightSide = (
-                        <div className="flex items-center gap-1.5 min-w-0 justify-self-end text-right overflow-hidden w-full justify-end">
-                          <span
-                            className="text-sm font-semibold text-slate-800 truncate order-1"
+                        <div className="flex items-center gap-1.5 min-w-0 justify-end">
+                          <Link
+                            href={`/people/${personId}`}
+                            className="text-base font-semibold text-slate-800 hover:text-blue-600 hover:underline truncate text-right"
+                            onClick={(e) => e.stopPropagation()}
                             title={personName}
                           >
                             {personName}
-                          </span>
+                          </Link>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={displayAvatar} alt="" className="h-8 w-8 rounded-none object-cover shrink-0 order-2" />
+                          <CustomTooltip content={personName}>
+                            <Link href={`/people/${personId}`} onClick={(e) => e.stopPropagation()} className="shrink-0">
+                              <img src={displayAvatar} alt="" className="h-8 w-8 rounded-none object-cover shrink-0" />
+                            </Link>
+                          </CustomTooltip>
                         </div>
                       )
                     } else if (txn.destination_account_id || txn.destination_name) {
-                      const destName = txn.destination_name || 'Unknown'
-                      const destIconUrl = txn.destination_logo
-                      const destId = txn.destination_account_id
+                      const destId = txn.destination_account_id || accounts.find(a => a.name === destName)?.id
 
                       rightSide = (
-                        <div className="flex items-center gap-1.5 min-w-0 justify-self-end text-right overflow-hidden w-full justify-end">
-                          <span className="text-xs font-medium text-slate-700 truncate order-1" title={destName}>
-                            {destName}
-                          </span>
-                          {destIconUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={destIconUrl} alt="" className="h-8 w-8 object-contain rounded-none shrink-0 order-2" />
+                        <div className="flex items-center gap-1.5 min-w-0 justify-end">
+                          {destId ? (
+                            <Link
+                              href={`/accounts/${destId}`}
+                              className="text-base font-bold text-slate-700 hover:text-blue-600 hover:underline truncate text-right"
+                              onClick={(e) => e.stopPropagation()}
+                              title={destName}
+                            >
+                              {destName}
+                            </Link>
                           ) : (
-                            <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-none shrink-0 text-[10px] font-bold text-slate-600 order-2">
-                              {destName.charAt(0)}
-                            </div>
+                            <span className="text-base font-bold text-slate-700 truncate text-right" title={destName}>{destName}</span>
                           )}
+
+                          {(() => {
+                            const content = destIconUrl ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={destIconUrl} alt="" className="h-8 w-8 object-contain rounded-none bg-white shrink-0" />
+                            ) : (
+                              <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-none shrink-0 text-[10px] font-bold text-slate-600">
+                                {destName.charAt(0)}
+                              </div>
+                            )
+
+                            if (destId) {
+                              return (
+                                <CustomTooltip content={destName}>
+                                  <Link href={`/accounts/${destId}`} onClick={(e) => e.stopPropagation()} className="shrink-0">
+                                    {content}
+                                  </Link>
+                                </CustomTooltip>
+                              )
+                            }
+                            return content
+                          })()}
                         </div>
                       )
                     }
 
+                    // SMART CONTEXT: If viewing source, show "To [Destination]"
+                    if (isViewingSource && rightSide) {
+                      return (
+                        <div className="flex items-center gap-2 w-full">
+                          <span className="inline-flex items-center rounded-md bg-emerald-100 text-emerald-700 px-2 py-1 text-xs font-bold shadow-sm shrink-0 border border-emerald-200">
+                            To
+                          </span>
+                          <ArrowRight className="h-4 w-4 text-slate-400" />
+                          {rightSide}
+                        </div>
+                      )
+                    }
+
+                    // SMART CONTEXT: If viewing destination, show "From [Source]"
+                    if (isViewingDestination) {
+                      return (
+                        <div className="flex items-center gap-2 w-full">
+                          <span className="inline-flex items-center rounded-md bg-red-100 text-red-700 px-2 py-1 text-xs font-bold shadow-sm shrink-0 border border-red-200">
+                            From
+                          </span>
+                          <ArrowRight className="h-4 w-4 text-slate-400" />
+                          <div className="flex items-center gap-2 min-w-0">
+                            {renderAccountIcon()}
+                            {accountId ? (
+                              <Link
+                                href={`/accounts/${accountId}`}
+                                className="text-base font-bold text-slate-700 hover:text-blue-600 hover:underline truncate"
+                                onClick={(e) => e.stopPropagation()}
+                                title={accountName}
+                              >
+                                {accountName}
+                              </Link>
+                            ) : (
+                              <span className="text-base font-bold text-slate-700 truncate" title={accountName}>{accountName}</span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    // DEFAULT: Show full Account -> Destination layout
                     return (
                       <div className="flex flex-col w-full">
-                        {/* Top Line: Grid Layout for Strict Alignment and No Overlap */}
-                        {rightSide ? (
-                          <div className="grid grid-cols-[1fr_auto_1fr] w-full items-center h-8 gap-1">
-                            {/* Left Column: Account (Left-aligned) */}
-                            <div className="flex items-center gap-2 min-w-0 justify-self-start overflow-hidden w-full">
-                              {renderAccountIcon()}
-                              {accountId ? (
-                                <Link
-                                  href={`/accounts/${accountId}`}
-                                  className="text-xs font-medium text-slate-700 hover:text-blue-600 hover:underline truncate"
-                                  onClick={(e) => e.stopPropagation()}
-                                  title={accountName}
-                                >
-                                  {accountName}
-                                </Link>
-                              ) : (
-                                <span className="text-xs font-medium text-slate-700 truncate" title={accountName}>{accountName}</span>
-                              )}
-                            </div>
-
-                            {/* Center Column: Arrow (Strictly Centered) */}
-                            <div className="text-muted-foreground font-bold shrink-0">
-                              <ArrowRight className="h-3.5 w-3.5" />
-                            </div>
-
-                            {/* Right Column: Person/Destination (Right-aligned) */}
-                            {rightSide}
+                        {/* Top Line: Money Flow */}
+                        <div className={cn(
+                          "flex items-center w-full h-8",
+                          rightSide ? "grid grid-cols-[1fr_auto_1fr] gap-2" : "flex justify-between" // Use Grid when arrow present, Flex when single
+                        )}>
+                          {/* Left: Account */}
+                          <div className="flex items-center gap-2 min-w-0 shrink-0">
+                            {renderAccountIcon()}
+                            {accountId ? (
+                              <Link
+                                href={`/accounts/${accountId}`}
+                                className="text-base font-bold text-slate-700 hover:text-blue-600 hover:underline truncate max-w-[120px]"
+                                onClick={(e) => e.stopPropagation()}
+                                title={accountName}
+                              >
+                                {accountName}
+                              </Link>
+                            ) : (
+                              <span className="text-base font-bold text-slate-700 truncate max-w-[120px]" title={accountName}>{accountName}</span>
+                            )}
                           </div>
-                        ) : (
-                          /* No Person: Account Left, Right Empty (maintain vertical rhythm) */
-                          <div className="flex w-full items-center justify-start h-8">
-                            <div className="flex items-center gap-2 max-w-[100%]">
-                              {renderAccountIcon()}
-                              {accountId ? (
-                                <Link
-                                  href={`/accounts/${accountId}`}
-                                  className="text-xs font-medium text-slate-700 hover:text-blue-600 hover:underline truncate"
-                                  onClick={(e) => e.stopPropagation()}
-                                  title={accountName}
-                                >
-                                  {accountName}
-                                </Link>
-                              ) : (
-                                <span className="text-xs font-medium text-slate-700 truncate" title={accountName}>{accountName}</span>
-                              )}
-                            </div>
-                          </div>
-                        )}
 
-                        {/* Bottom Line: Badges (Hidden for Transfers) */}
-                        {!isTransfer && (
-                          <div className={cn(
-                            "flex items-center w-full mt-1.5 gap-2",
-                            rightSide ? "justify-between" : "justify-start"
-                          )}>
-                            {/* Left Badge: System or Cycle */}
-                            <div className="flex items-center">
-                              {accountType === 'system' ? (
-                                <span className="inline-flex items-center rounded-md bg-purple-100 text-purple-700 px-2 py-0.5 text-[10px] font-bold shrink-0">
-                                  System
-                                </span>
-                              ) : cycleLabel && cycleLabel !== '-' ? (
-                                <span className="inline-flex items-center rounded-md bg-slate-100 text-slate-600 px-2 py-0.5 text-[10px] font-bold shrink-0">
+                          {/* Center: Arrow - ONLY if rightSide exists */}
+                          {rightSide && (
+                            <div className="flex items-center justify-center">
+                              <div className="flex items-center justify-center bg-blue-500 rounded-[4px] p-1 shadow-sm">
+                                <ArrowRight className="h-3.5 w-3.5 text-white" />
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Right: Person or Destination OR Cycle (when no rightSide) */}
+                          {rightSide ? (
+                            rightSide
+                          ) : (
+                            // No person/destination - show cycle on right at same size as account name
+                            cycleLabel && cycleLabel !== '-' && (
+                              <CustomTooltip content={cycleLabel}>
+                                <span className="text-sm font-bold text-slate-600 shrink-0 border border-slate-200 bg-slate-50 px-1 rounded shadow-sm">
                                   {cycleLabel}
                                 </span>
-                              ) : null}
+                              </CustomTooltip>
+                            )
+                          )}
+                        </div>
+
+                        {/* Bottom Line: Badges - Only show when rightSide exists */}
+                        {rightSide && (
+                          <div className={cn(
+                            "flex items-center w-full mt-1.5",
+                            "justify-between"
+                          )}>
+                            {/* Left: Cycle Badge (Date Range) */}
+                            <div className="flex items-center">
+                              {cycleLabel && cycleLabel !== '-' ? (
+                                <CustomTooltip content={cycleLabel}>
+                                  <span className="inline-flex items-center rounded-none bg-slate-100 text-slate-600 px-1 py-0.5 text-[10px] font-bold ring-1 ring-inset ring-slate-500/10 shrink-0 cursor-help">
+                                    {cycleLabel}
+                                  </span>
+                                </CustomTooltip>
+                              ) : (
+                                <span className="inline-flex items-center rounded-none bg-gray-50 text-gray-400 px-1 py-0.5 text-[10px] font-medium ring-1 ring-inset ring-gray-500/10 shrink-0">
+                                  None
+                                </span>
+                              )}
                             </div>
 
-                            {/* Right Badge: RAW Debt Tag (ONLY IF PERSON EXISTS) */}
-                            {hasPerson && (cycleTag || debtTag) ? (
-                              <div className="flex items-center">
-                                <span className="inline-flex items-center rounded-md bg-blue-50 text-blue-700 px-2 py-0.5 text-[10px] font-bold shrink-0">
-                                  {cycleTag || debtTag}
-                                </span>
-                              </div>
-                            ) : null}
+                            {/* Right: Tag Badge */}
+                            <div className="flex items-center">
+                              {/* Show Cycle Tag if defined, or custom Tag */}
+                              {(cycleTag || debtTag) && (
+                                <CustomTooltip content={cycleTag || debtTag}>
+                                  <span className="inline-flex items-center rounded-none bg-slate-100 text-slate-600 px-1 py-0.5 text-[10px] font-bold ring-1 ring-inset ring-slate-500/10 shrink-0 cursor-help">
+                                    {cycleTag || debtTag}
+                                  </span>
+                                </CustomTooltip>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1796,7 +1970,7 @@ export function UnifiedTransactionTable({
                             <>
                               {cashbackAmount > 0 && <span className="text-slate-300">;</span>}
                               <span className={`font-bold flex items-center gap-1 ${txn.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                🤑 {numberFormatter.format(txn.profit)}
+                                ðŸ¤‘ {numberFormatter.format(txn.profit)}
                               </span>
                             </>
                           )}
@@ -1856,22 +2030,32 @@ export function UnifiedTransactionTable({
                         onMouseEnter={() => handleCellMouseEnter(txn.id, 'final_price')}
                         onMouseUp={handleCellMouseUp}
                       >
-                        <span className={cn("font-bold text-lg", amountClass, isVoided && "line-through opacity-50")}>
-                          {numberFormatter.format(finalDisp)}
-                        </span>
+                        <CustomTooltip content={
+                          <div className="flex flex-col gap-1">
+                            <span className="font-bold underline">Equation</span>
+                            <span>{numberFormatter.format(baseAmount)} (Amount)</span>
+                            <span>- {numberFormatter.format(cashbackAmount)} (Back Info)</span>
+                            <hr className="border-slate-500" />
+                            <span className="font-bold">= {numberFormatter.format(finalDisp)} (Final Price)</span>
+                          </div>
+                        }>
+                          <span className={cn("font-bold text-lg cursor-help", amountClass, isVoided && "line-through opacity-50")}>
+                            {numberFormatter.format(finalDisp)}
+                          </span>
+                        </CustomTooltip>
 
                         {hasBack && (
                           <div className="flex items-center gap-1 mt-0.5">
                             {/* Profit */}
                             {typeof txn.profit === 'number' && txn.profit !== 0 && (
                               <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-600 border border-emerald-100">
-                                🤑 {numberFormatter.format(txn.profit)}
+                                ðŸ¤‘ {numberFormatter.format(txn.profit)}
                               </span>
                             )}
                             {/* Bank Back */}
                             {typeof txn.bank_back === 'number' && txn.bank_back > 0 && (
                               <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-600 border border-blue-100">
-                                🏦 {numberFormatter.format(txn.bank_back)}
+                                ðŸ¦ {numberFormatter.format(txn.bank_back)}
                               </span>
                             )}
                             {/* Cashback Info */}
@@ -1925,10 +2109,9 @@ export function UnifiedTransactionTable({
               return (
                 <TableRow
                   key={txn.id}
-                  data-state={isSelected ? "selected" : undefined}
                   className={cn(
                     "border-b-2 border-slate-300 transition-colors text-base",
-                    isMenuOpen ? "bg-blue-50" : rowBgClass,
+                    isMenuOpen ? "bg-blue-50" : rowBgColor,
                     !isExcelMode && "hover:bg-slate-50/50"
                   )}
                 >

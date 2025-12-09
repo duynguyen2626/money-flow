@@ -48,6 +48,7 @@ export type Account = {
   logo_url?: string | null;
   total_in?: number;
   total_out?: number;
+  annual_fee?: number | null;
 }
 
 export type AccountCashbackSnapshot = {

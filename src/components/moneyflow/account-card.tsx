@@ -19,6 +19,7 @@ import {
   ChevronRight,
   CheckCircle,
 } from 'lucide-react'
+import { parseCashbackConfig } from '@/lib/cashback'
 import { useRouter } from 'next/navigation'
 
 import {
@@ -161,8 +162,8 @@ function AccountCardComponent({
   const currentSpend = cashback?.currentSpend ?? 0
   const remaining = cap ? Math.max(0, cap - earned) : null
 
-  const cashbackConfig = account.cashback_config as { min_spend?: number } | null
-  const minSpend = cashbackConfig?.min_spend ?? 0
+  const cashbackConfig = parseCashbackConfig(account.cashback_config)
+  const minSpend = cashbackConfig?.minSpend ?? 0
   const needToSpend = minSpend > 0 ? Math.max(0, minSpend - currentSpend) : 0
   const cycleLabel = cashback?.cycleLabel ?? ''
 
@@ -417,9 +418,20 @@ function AccountCardComponent({
                     {remaining !== null ? numberFormatter.format(remaining) : '∞'}
                   </span>
                 </div>
-                {needToSpend > 0 && (
-                  <span className="text-[10px] font-bold text-red-500 animate-pulse">
-                    Need {numberFormatter.format(needToSpend)} more
+                {/* Line 2: ALWAYS show - Target Met / Need More / None */}
+                {minSpend > 0 ? (
+                  needToSpend > 0 ? (
+                    <span className="text-[10px] font-bold text-red-500 animate-pulse">
+                      Need {numberFormatter.format(needToSpend)} more
+                    </span>
+                  ) : (
+                    <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-1">
+                      Target Met ✅
+                    </span>
+                  )
+                ) : (
+                  <span className="text-[10px] font-medium text-slate-400">
+                    None
                   </span>
                 )}
               </div>

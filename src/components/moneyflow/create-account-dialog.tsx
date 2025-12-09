@@ -372,6 +372,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
   const [accountType, setAccountType] = useState<Account['type']>('credit_card')
   const [logoUrl, setLogoUrl] = useState('')
   const [creditLimit, setCreditLimit] = useState('')
+  const [annualFee, setAnnualFee] = useState('')
   const [isSecured, setIsSecured] = useState(false)
   const [securedByAccountId, setSecuredByAccountId] = useState('')
   const [parentAccountId, setParentAccountId] = useState('')
@@ -424,6 +425,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
     setAccountType('credit_card')
     setLogoUrl('')
     setCreditLimit('')
+    setAnnualFee('')
     setIsSecured(false)
     setSecuredByAccountId('')
     setParentAccountId('')
@@ -464,6 +466,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
     }
 
     const nextCreditLimit = isCreditCard ? parseOptionalNumber(creditLimit) : null
+    const nextAnnualFee = isCreditCard ? parseOptionalNumber(annualFee) : null
     const cleanedLogoUrl = logoUrl.trim() || null
 
     const rateValue = parseOptionalNumber(rate) ?? 0
@@ -518,7 +521,8 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
         logo_url: cleanedLogoUrl,
         owner_id: user.id,
         current_balance: 0,
-        is_active: true
+        is_active: true,
+        annual_fee: nextAnnualFee
       })
 
       if (error) {
@@ -731,6 +735,16 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
                             onChange={setCreditLimit}
                             className="w-full"
                             placeholder="Credit limit"
+                          />
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-sm font-medium text-slate-600">Annual Fee</label>
+                          <NumberInputWithSuggestions
+                            value={annualFee}
+                            onChange={setAnnualFee}
+                            className="w-full"
+                            placeholder="Annual fee"
                           />
                         </div>
 

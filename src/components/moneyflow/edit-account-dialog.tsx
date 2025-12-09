@@ -442,6 +442,7 @@ export function EditAccountDialog({
   const [securedByAccountId, setSecuredByAccountId] = useState(account.secured_by_account_id ?? '')
   const [isSecured, setIsSecured] = useState(Boolean(account.secured_by_account_id))
   const [creditLimit, setCreditLimit] = useState(formatWithSeparators(toNumericString(account.credit_limit)))
+  const [annualFee, setAnnualFee] = useState(formatWithSeparators(toNumericString(account.annual_fee)))
   const [logoUrl, setLogoUrl] = useState(account.logo_url ?? '')
   const [rate, setRate] = useState(String(parsedCashbackConfig.rate))
   const [maxAmount, setMaxAmount] = useState(formatWithSeparators(toNumericString(parsedCashbackConfig.maxAmount)))
@@ -496,6 +497,7 @@ export function EditAccountDialog({
     setSecuredByAccountId(account.secured_by_account_id ?? '')
     setIsSecured(Boolean(account.secured_by_account_id))
     setCreditLimit(formatWithSeparators(toNumericString(account.credit_limit)))
+    setAnnualFee(formatWithSeparators(toNumericString(account.annual_fee)))
     setRate(String(freshCashback.rate))
     setMaxAmount(formatWithSeparators(toNumericString(freshCashback.maxAmount)))
     setMinSpend(formatWithSeparators(toNumericString(freshCashback.minSpend)))
@@ -560,6 +562,7 @@ export function EditAccountDialog({
     }
 
     const nextCreditLimit = isCreditCard ? parseOptionalNumber(creditLimit) : null
+    const nextAnnualFee = isCreditCard ? parseOptionalNumber(annualFee) : null
     const cleanedLogoUrl = logoUrl.trim() || null
 
     const rateValue = parseOptionalNumber(rate) ?? 0
@@ -602,6 +605,7 @@ export function EditAccountDialog({
         id: account.id,
         name: trimmedName,
         creditLimit: nextCreditLimit,
+        annualFee: nextAnnualFee,
         cashbackConfig: configPayload,
         type: accountType,
         securedByAccountId: securedBy,
@@ -834,6 +838,16 @@ export function EditAccountDialog({
                               onChange={setCreditLimit}
                               className="w-full"
                               placeholder="Credit limit"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <label className="text-sm font-medium text-slate-600">Annual Fee</label>
+                            <NumberInputWithSuggestions
+                              value={annualFee}
+                              onChange={setAnnualFee}
+                              className="w-full"
+                              placeholder="Annual fee"
                             />
                           </div>
 

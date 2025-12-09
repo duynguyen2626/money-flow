@@ -37,13 +37,13 @@ const navItems: NavItem[] = [
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
   const pathname = usePathname()
 
   // Load state from localStorage on mount (Client-side only)
   useEffect(() => {
-    setMounted(true)
-    const savedState = localStorage.getItem("sidebarCollapsed")
+    setIsMounted(true)
+    const savedState = localStorage.getItem("sidebar-collapsed")
     if (savedState) {
       setIsCollapsed(JSON.parse(savedState))
     }
@@ -52,18 +52,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const toggleSidebar = () => {
     const newState = !isCollapsed
     setIsCollapsed(newState)
-    localStorage.setItem("sidebarCollapsed", JSON.stringify(newState))
+    localStorage.setItem("sidebar-collapsed", JSON.stringify(newState))
   }
 
   // Prevent hydration mismatch by using default state until mounted
-  const sidebarCollapsed = mounted ? isCollapsed : false
+  const sidebarCollapsed = isMounted ? isCollapsed : false
 
   return (
-    <div className="min-h-screen bg-slate-100 flex">
-      {/* Hydration Fix: 
-        Use 'sidebarCollapsed' which is always false on server render.
-        After client hydration (mounted=true), it uses the actual isCollapsed state.
-      */}
+    <div className="min-h-screen bg-slate-100 flex" suppressHydrationWarning>
       <aside
         className={cn(
           "sticky top-0 h-screen flex flex-col border-r bg-white py-8 transition-all duration-300 z-20 shadow-sm",

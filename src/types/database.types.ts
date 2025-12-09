@@ -23,6 +23,7 @@ export interface Database {
           created_at: string
           secured_by_account_id: string | null
           logo_url: string | null
+          annual_fee: number | null
         }
         Insert: {
           id?: string
@@ -37,6 +38,7 @@ export interface Database {
           created_at?: string
           secured_by_account_id?: string | null
           logo_url?: string | null
+          annual_fee?: number | null
         }
         Update: {
           id?: string
@@ -51,6 +53,7 @@ export interface Database {
           created_at?: string
           secured_by_account_id?: string | null
           logo_url?: string | null
+          annual_fee?: number | null
         }
       }
       transactions: {

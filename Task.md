@@ -1,61 +1,71 @@
-VIBE CODING: PHASE 74 - UI POLISH & LOGIC FIXES
+PROMPT 2: PLAN B - SMART CONTEXT AWARENESS (ACCOUNTS/PEOPLE)
 
-Pre-requisite:
-Ensure .cursorrules dictates "Square Avatars" and "Row Click Disabled".
+Copy & Paste this into Chat (After Plan A):
 
-PROMPT 1: UI REFINEMENT - UNIFIED TABLE
-
-Copy & Paste this into Chat:
-
-Role: You are a Senior Frontend Developer & UI Perfectionist.
+Role: You are a Senior UX Developer.
 
 Context:
-1.  **Feedback on Transaction Table:**
-    * **Alignment Issue:** The "Accounts ➜ People" column has too much whitespace on the right side of the Person. The Arrow icon is blurry and overlapped.
-    * **Visual Issue:** Shop images are still rounded (should be square). Note Copy icon is not visible or inconsistent.
-    * **Logic Issue ("Ghost Tag"):** Transactions *without* a `person_id` are still showing the Cycle Tag (e.g., "DEC25") on the right side (where the Person should be), causing confusion.
+1.  **Scenario:** When viewing a specific Account Page (`/accounts/[id]`) or Person Page (`/people/[id]`).
+2.  **Problem:** The table currently repeats the context (e.g., inside "Bidv", it shows "Bidv ➡️ Card Test"). This is redundant.
+3.  **Goal:** Implement "Smart Context" rendering.
 
-Task: Polish the `UnifiedTransactionTable` (`src/components/moneyflow/unified-transaction-table.tsx`).
+Task: Update `unified-transaction-table.tsx`.
 
 Requirements:
 
-1.  **Refine "Accounts ➜ People" Column Layout:**
-    * **Container:** Use `flex w-full items-center justify-between relative` (or a strict Grid).
-    * **Left Side (Account):** Flex start. Max-width 45%.
-    * **Right Side (Person):** Flex end. Max-width 45%. Text align Right.
-    * **Center (Arrow):**
-        * Make it prominent: `text-muted-foreground font-bold`.
-        * Ensure z-index is correct so it doesn't get overlapped by long text.
-        * *If no person:* Hide the arrow. Center the Account info? Or keep Account Left and leave Right empty? **Decision:** Keep Account Left to maintain column vertical rhythm.
+1.  **Inputs:**
+    * The table component should accept an optional prop: `contextId` (string) - representing the current page's entity ID.
 
-2.  **Fix "Ghost Tag" Logic:**
-    * **Rule:** The "Debt Tag" (e.g., DEC25) displayed under the Person **MUST ONLY** be visible if `transaction.person_id` is NOT NULL.
-    * If `person_id` is null, the right side of the cell (Avatar, Name, Tag) must be completely empty.
+2.  **Smart Rendering Logic (Account Column):**
+    * **Condition:** If `transaction.account_id === contextId` (We are viewing the Source):
+        * **Display:** Show **"[To] [Avatar] DestinationName"**.
+        * **Style:** "[To]" label in a **Blue/Green** badge.
+        * **Hide:** Do NOT show the Source Account info (since we are already on its page).
+    * **Condition:** If `transaction.target_account_id === contextId` (We are viewing the Destination):
+        * **Display:** Show **"[From] [Avatar] SourceName"**.
+        * **Style:** "[From]" label in a **Red/Orange** badge.
+    * **Same Logic for People:** If viewing `/people/[id]`, and the transaction is linked to this person:
+        * Hide the Person info (Target).
+        * Show **"[From] [Avatar] AccountName"**.
 
-3.  **Strict Visual Rules:**
-    * **Square Images:** Verify `ShopAvatar`, `AccountAvatar`, `PersonAvatar` all use `rounded-none`. Check `src/components/ui/avatar.tsx` or inline classes.
-    * **Copy Icon:** Ensure the Note column uses a `group` class, and the Copy button has `opacity-0 group-hover:opacity-100 transition-opacity`.
+3.  **Iconography:**
+    * Replace the arrow text/icon with a **Large Emoji Arrow**: ➡️ (Make it strictly larger, e.g., `text-lg`).
 
-4.  **Handling "Refund" Transactions (No Person):**
-    * For transactions like "Refund Received" (where `person_id` is null but `tag` exists), do NOT show the tag in the People column. (The tag exists in DB for tracking, but irrelevant for UI connection here).
-
-Deliverable: A crisp, pixel-perfect table component.
+Deliverable: Context-aware columns that reduce cognitive load.
 
 
-PROMPT 2: HYDRATION & LAYOUT FIX
+PROMPT 3: PLAN C - CASHBACK LOGIC & FORM FIXES (PHASE 76 PREP)
 
-Copy & Paste this into Chat (To fix the Log file issues):
+Copy & Paste this into Chat (Logic & Data Integrity):
 
-Role: You are a Next.js Expert.
+Role: You are a Senior Fullstack Developer.
 
 Context:
-1.  **Error Log:** User reported `Hydration failed` errors referencing `id="definer-bubble-host"`. This is caused by browser extensions injecting elements into the DOM, causing a mismatch with SSR HTML.
-2.  **Target:** `src/app/layout.tsx`.
+1.  **Bug 1 (Cashback Status):** Accounts with `minSpend` (e.g., 3M) are showing "Remains" but NOT the "Need to Spend" warning when the target isn't met.
+2.  **Bug 2 (Data Loss):** "Due Date" and "Annual Fee" are not persisting or showing correctly in the Edit Modal.
+3.  **Schema Check:** `cashback_config` is a JSONB string in DB. `annual_fee` is a column.
 
-Task: Harden the Layout against Hydration errors.
+Task: Fix the Account Card logic and Edit/Create Forms.
 
 Requirements:
-1.  Add `suppressHydrationWarning` to the `<html>` and `<body>` tags in `src/app/layout.tsx`.
-2.  This tells React to ignore attribute mismatches caused by extensions, clearing the console noise.
 
-Deliverable: Updated `layout.tsx`.
+1.  **Redesign `AccountCard` (Cashback Section):**
+    * **Logic:** Calculate `missing_spend = minSpend - current_spend`.
+    * **UI Layout (2 Lines):**
+        * **Line 1:** "Remains: {formatted_remains}" (Potential cashback left).
+        * **Line 2 (Condition - Target NOT Met):**
+            * Show **"Need spend more: {formatted_missing}"**.
+            * Icon: ⚠️ (Warning).
+        * **Line 2 (Condition - Target Met):**
+            * Show "Target Met ✅".
+    * **Data Source:** Ensure `account.service.ts` is returning the correct aggregation for `current_spend` (check `total_out` or sum of transactions in cycle).
+
+2.  **Fix "Due Date" Field:**
+    * **Root Cause Investigation:** The DB stores `cashback_config` as a stringified JSON (e.g., `"{\"dueDate\": 10...}"`). The Form might be trying to access `account.due_date` (which doesn't exist) or failing to parse the JSON string.
+    * **Fix:** In `EditAccountDialog` (and Create), ensure `cashback_config` is parsed, and the `dueDate` value is correctly set into the form's `defaultValues`.
+
+3.  **Implement "Annual Fee":**
+    * Add a Number Input for `Annual Fee` in the Account Forms.
+    * Bind it to the `annual_fee` column (ensure `account-actions.ts` handles this field update).
+
+Deliverable: Accurate financial forms and a helpful "Spend More" tracker.
