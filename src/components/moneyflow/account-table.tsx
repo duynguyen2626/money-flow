@@ -63,7 +63,7 @@ export function AccountTable({
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50">
-              <TableHead>Account</TableHead>
+              <TableHead>Accounts and Debt Managements</TableHead>
               <TableHead>Type</TableHead>
               <TableHead className="text-right">Balance</TableHead>
               <TableHead>Details</TableHead>

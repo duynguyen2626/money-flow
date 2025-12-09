@@ -21,10 +21,7 @@ export default async function TransactionsPage() {
   return (
     <TagFilterProvider>
       <div className="space-y-6">
-        <div className="flex flex-col gap-1 mb-6">
-          <h1 className="text-2xl font-semibold text-slate-900">Transactions</h1>
-          <p className="text-sm text-slate-500">Manage your income and expenses, with real-time synchronization.</p>
-        </div>
+
 
         <FilterableTransactions
           transactions={recentTransactions}

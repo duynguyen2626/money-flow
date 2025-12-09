@@ -607,21 +607,21 @@ export function AccountDetailsView({
                     {/* Top Row (Mobile) / Left Side (Desktop): Search & Quick Filters */}
                     <div className="flex flex-1 flex-col md:flex-row gap-3">
                         {/* Quick Filters (All/Void/Pending) */}
-                        <div className="flex items-center rounded-lg bg-slate-100 p-1 text-xs font-medium text-slate-600 shrink-0 overflow-x-auto">
+                        <div className="flex items-center gap-2 shrink-0 overflow-x-auto">
                             <button
-                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${activeTab === 'active' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'active' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
                                 onClick={() => setActiveTab('active')}
                             >
                                 All
                             </button>
                             <button
-                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${activeTab === 'void' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'void' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
                                 onClick={() => setActiveTab('void')}
                             >
                                 Void
                             </button>
                             <button
-                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
                                 onClick={() => setActiveTab('pending')}
                             >
                                 Pending
@@ -649,27 +649,27 @@ export function AccountDetailsView({
                         </div>
 
                         {/* Type Filters */}
-                        <div className="flex items-center rounded-lg bg-slate-100 p-1 text-xs font-medium text-slate-600 shrink-0 overflow-x-auto">
+                        <div className="flex items-center gap-2 shrink-0 overflow-x-auto">
                             <button
-                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${selectedType === 'all' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
                                 onClick={() => setSelectedType('all')}
                             >
-                                All Types
+                                All Type
                             </button>
                             <button
-                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'income' ? 'bg-white text-emerald-700 shadow-sm' : 'text-slate-500 hover:text-emerald-700'}`}
+                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${selectedType === 'income' ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700'}`}
                                 onClick={() => setSelectedType('income')}
                             >
                                 In
                             </button>
                             <button
-                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'expense' ? 'bg-white text-rose-700 shadow-sm' : 'text-slate-500 hover:text-rose-700'}`}
+                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${selectedType === 'expense' ? 'bg-rose-50 border-rose-200 text-rose-700 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-rose-50 hover:text-rose-700'}`}
                                 onClick={() => setSelectedType('expense')}
                             >
                                 Out
                             </button>
                             <button
-                                className={`rounded-md px-3 py-1.5 transition-all whitespace-nowrap ${selectedType === 'transfer' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-blue-700'}`}
+                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${selectedType === 'transfer' ? 'bg-blue-50 border-blue-200 text-blue-700 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-blue-50 hover:text-blue-700'}`}
                                 onClick={() => setSelectedType('transfer')}
                             >
                                 Transfer
@@ -856,6 +856,7 @@ export function AccountDetailsView({
                         transactions={finalTransactions}
                         accountType={account.type}
                         accountId={account.id}
+                        contextId={account.id}
                         accounts={accounts}
                         categories={categories}
                         people={people}
@@ -866,7 +867,7 @@ export function AccountDetailsView({
                         onBulkActionStateChange={handleBulkActionStateChange}
                         sortState={sortState}
                         onSortChange={setSortState}
-                        hiddenColumns={['initial_back', 'people_back', 'final_price', 'id', 'back_info']}
+                        hiddenColumns={['initial_back', 'people_back']}
                         context="account"
                     />
                 </div>

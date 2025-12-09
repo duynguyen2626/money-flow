@@ -103,13 +103,21 @@ export function CashbackCard({ card }: CashbackCardProps) {
                     </div>
                     <div className="flex flex-col gap-0.5 text-center border-l border-slate-100">
                         <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
-                            Remaining
+                            Remains
                         </span>
                         <span className="text-base font-bold text-slate-700">
                             {remainingDisplay}
                         </span>
-                        <div className="flex items-center justify-center gap-1 text-[10px] text-slate-400 mt-1">
-                            <span>S: {currencyFormatter.format(sharedAmount)}</span>
+                        <div className="flex flex-col items-center justify-center text-[10px] mt-1">
+                            {typeof limit === 'number' && typeof rate === 'number' && rate > 0 && limit > earned ? (
+                                <span className="text-amber-600 font-medium whitespace-nowrap">
+                                    Need {currencyFormatter.format((limit - earned) / rate)}
+                                </span>
+                            ) : (
+                                <span className="text-emerald-600 font-medium whitespace-nowrap">
+                                    Spent: {currencyFormatter.format(currentSpend)}
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>

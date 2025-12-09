@@ -208,28 +208,7 @@ export function DashboardContent({
 
   return (
     <div className="max-w-screen-2xl mx-auto space-y-5 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Dashboard</h1>
-          <p className="text-xs text-slate-500">Financial control center</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <AddTransactionDialog
-            accounts={accounts}
-            categories={categories}
-            people={people}
-            shops={shops}
-            defaultType="expense"
-            buttonClassName="flex items-center gap-2 rounded-2xl border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-600 shadow-sm transition hover:border-blue-300 hover:bg-blue-50"
-            triggerContent={
-              <>
-                <Plus className="h-3.5 w-3.5" />
-                Add Transaction
-              </>
-            }
-          />
-        </div>
-      </div>
+
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {metricCards.map(card => (
