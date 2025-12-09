@@ -20,7 +20,7 @@ type AccountListProps = {
 }
 
 type ViewMode = 'grid' | 'table'
-type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt' | 'waiting_confirm'
+type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt' | 'waiting_confirm' | 'need_to_spend'
 type SortKey = 'due_date' | 'balance' | 'limit'
 type SortOrder = 'asc' | 'desc'
 
@@ -31,6 +31,7 @@ const FILTERS: { key: FilterKey; label: string; match: (account: Account) => boo
   { key: 'savings', label: 'Savings', match: account => ['savings', 'investment', 'asset'].includes(account.type) },
   { key: 'debt', label: 'Debt', match: account => account.type === 'debt' },
   { key: 'waiting_confirm', label: 'Waiting Confirm', match: () => true },
+  { key: 'need_to_spend', label: 'Need To Spend', match: () => true },
 ]
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
@@ -125,6 +126,8 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
 
     if (activeFilter === 'waiting_confirm') {
       filtered = filtered.filter(acc => pendingBatchAccountIds.includes(acc.id))
+    } else if (activeFilter === 'need_to_spend') {
+      filtered = filtered.filter(acc => (cashbackById[acc.id]?.missing_min_spend ?? 0) > 0)
     } else {
       filtered = filtered.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc))
     }
@@ -339,8 +342,8 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
                 </span>
               </div>
               <div className={`grid gap-4 grid-cols-1 md:grid-cols-2 ${section.key === 'credit'
-                  ? 'lg:grid-cols-4'
-                  : 'lg:grid-cols-5'
+                ? 'lg:grid-cols-4'
+                : 'lg:grid-cols-5'
                 }`}>
                 {section.accounts.map(account => (
                   <AccountCard

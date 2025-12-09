@@ -2,6 +2,7 @@
 
 import { memo, useState, MouseEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
     User,
     Pencil,
@@ -229,13 +230,14 @@ function PersonCardComponent({
                     )}
 
                     {/* Detail Arrow */}
-                    <button
-                        onClick={openDetails}
+                    <Link
+                        href={`/people/${person.id}`}
+                        onClick={stopPropagation}
                         className="p-2 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-100"
                         title="View Details"
                     >
                         <ChevronRight className="h-5 w-5" />
-                    </button>
+                    </Link>
                 </div>
             </div>
 
