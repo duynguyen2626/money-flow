@@ -54,9 +54,9 @@ async function run() {
 
     // 3. Update Account
     const newFee = 999999
-    const updateData: AccountUpdate = { annual_fee: newFee }
-    const { data: updated, error: updateError } = await supabase
-        .from('accounts')
+    const updateData = { annual_fee: newFee }
+    const { data: updated, error: updateError } = await (supabase
+        .from('accounts') as any)
         .update(updateData)
         .eq('id', (account as Account).id)
         .select()
