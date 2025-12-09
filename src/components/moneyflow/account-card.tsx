@@ -1,6 +1,8 @@
 'use client'
 
+
 import { memo, MouseEvent, useState } from 'react'
+import Link from 'next/link'
 import {
   CreditCard,
   Plus,
@@ -139,6 +141,7 @@ function AccountCardComponent({
   }
 
   const openDetails = () => router.push(`/accounts/${account.id}`)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const stopCardNavigation = (event?: MouseEvent) => event?.stopPropagation?.()
 
   const handleRecalculate = async (e: MouseEvent) => {
@@ -452,20 +455,21 @@ function AccountCardComponent({
               )}>
                 <span className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">Balance</span>
                 <span className={cn(
-                  "text-sm font-bold",
+                  "text-xl font-bold", // Reduced from text-2xl
                   displayBalance < displayLimit * 0.3 ? 'text-amber-600' : 'text-slate-900',
                   needToSpend > 0 && "text-red-700"
                 )}>
                   {numberFormatter.format(displayBalance)}
                 </span>
               </div>
-              <div
+              <Link
+                href={`/accounts/${account.id}`}
                 className="p-1 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-                onClick={(e) => { e.stopPropagation(); openDetails(); }}
+                onClick={(e) => { e.stopPropagation(); }}
                 title="View Details"
               >
                 <ChevronRight className="h-4 w-4" />
-              </div>
+              </Link>
             </div>
           </>
         ) : (
@@ -506,13 +510,14 @@ function AccountCardComponent({
               >
                 <RefreshCw className="h-3.5 w-3.5" />
               </button>
-              <div
+              <Link
+                href={`/accounts/${account.id}`}
                 className="p-1 rounded-full text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-                onClick={(e) => { e.stopPropagation(); openDetails(); }}
+                onClick={(e) => { e.stopPropagation(); }}
                 title="View Details"
               >
                 <ChevronRight className="h-4 w-4" />
-              </div>
+              </Link>
             </div>
           </>
         )}

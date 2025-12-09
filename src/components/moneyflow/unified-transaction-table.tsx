@@ -932,9 +932,9 @@ export function UnifiedTransactionTable({
   const displayedColumns = defaultColumns.filter(col => visibleColumns[col.key])
 
   return (
-    <div className="relative space-y-3">
+    <div className="relative flex flex-col flex-1 h-full min-h-0">
       <div className={cn(
-        "relative w-full border rounded-md bg-white shadow-sm transition-colors duration-300 h-[calc(100vh-220px)] overflow-auto",
+        "relative w-full border rounded-md bg-white shadow-sm transition-colors duration-300 flex-1 overflow-auto",
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )}>
         <Table className="min-w-[1000px]">
@@ -1052,6 +1052,12 @@ export function UnifiedTransactionTable({
                   : visualType === "expense"
                     ? "text-red-500"
                     : "text-slate-600"
+
+              // Shared ID Resolution for Smart Context (Type Badge + Account Column)
+              const txnSourceId = txn.source_account_id || txn.account_id
+              const destNameRaw = txn.destination_name || 'Unknown'
+              const txnDestId = txn.destination_account_id || ((txn as any).target_account_id) || (destNameRaw !== 'Unknown' ? accounts.find(a => a.name === destNameRaw)?.id : undefined)
+              const txnPersonId = (txn as any).person_id
               const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount
               const amountValue = numberFormatter.format(Math.abs(originalAmount ?? 0))
 
@@ -1104,33 +1110,42 @@ export function UnifiedTransactionTable({
               // --- Type Logic ---
               let typeBadge = null;
               if (txn.type === 'repayment') {
-                typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">REPAY</span>;
+                typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">REPAY</span>;
               } else if (txn.type === 'transfer') {
-                if (accountId) {
-                  if (txn.amount >= 0) {
-                    typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">TF IN</span>
+                if (contextId) {
+                  // Smart Context Type Logic
+                  if (contextId == txnSourceId) {
+                    typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-blue-100 px-2 py-1 text-xs font-bold text-blue-700 h-6">TF OUT</span>
+                  } else if (contextId == txnDestId || contextId == txnPersonId) {
+                    typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">TF IN</span>
                   } else {
-                    typeBadge = <span className="inline-flex items-center rounded-md bg-red-200 px-2 py-1 text-xs font-bold text-red-900 h-6">TF OUT</span>
+                    // Context exists but doesn't match source/dest (e.g. searching global table with filter?)
+                    // Fallback to amount logic
+                    if (txn.amount >= 0) {
+                      typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">TF IN</span>
+                    } else {
+
+                      typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-blue-100 px-2 py-1 text-xs font-bold text-blue-700 h-6">TF OUT</span>
+                    }
+                  }
+                } else if (accountId) {
+                  if (txn.amount >= 0) {
+                    typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">TF IN</span>
+                  } else {
+                    typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-blue-100 px-2 py-1 text-xs font-bold text-blue-700 h-6">TF OUT</span>
                   }
                 } else {
-                  typeBadge = <span className="inline-flex items-center rounded-md bg-blue-200 px-2 py-1 text-xs font-bold text-blue-900 h-6">TF</span>
+                  // Standard Transfer -> Blue
+                  typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-blue-100 px-2 py-1 text-xs font-bold text-blue-700 h-6">TF</span>
                 }
               } else if (visualType === 'expense') {
-                typeBadge = <span className="inline-flex items-center rounded-md bg-red-200 px-2 py-1 text-xs font-bold text-red-900 h-6">OUT</span>
+                typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-700 h-6">OUT</span>
               } else if (visualType === 'income') {
-                typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">IN</span>
+                typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">IN</span>
               } else {
-                if (accountId) {
-                  // Fallback for untyped, though likely covered by Transfer above if type is correct
-                  if (txn.amount >= 0) {
-                    typeBadge = <span className="inline-flex items-center rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">TF IN</span>
-                  } else {
-                    typeBadge = <span className="inline-flex items-center rounded-md bg-red-200 px-2 py-1 text-xs font-bold text-red-900 h-6">TF OUT</span>
-                  }
-                } else {
-                  typeBadge = <span className="inline-flex items-center rounded-md bg-blue-200 px-2 py-1 text-xs font-bold text-blue-900 h-6">TF</span>
-                }
+                typeBadge = <span className="inline-flex items-center rounded-md bg-blue-200 px-2 py-1 text-xs font-bold text-blue-900 h-6">TF</span>
               }
+
 
               // --- Status Logic ---
               let statusIndicator = null;
@@ -1613,15 +1628,15 @@ export function UnifiedTransactionTable({
                     );
                   case "category": {
                     // Determine badge color by type
-                    let badgeColors = "bg-red-50 text-red-700 ring-red-600/10"; // Default = expense
-                    if (txn.type === 'income' || visualType === 'income') badgeColors = "bg-emerald-100 text-emerald-700 ring-emerald-600/20";
-                    else if (txn.type === 'transfer') badgeColors = "bg-blue-100 text-blue-700 ring-blue-700/10";
+                    let badgeColors = "bg-red-100 text-red-700 ring-red-600/10"; // Default = expense
+                    if (txn.type === 'transfer') badgeColors = "bg-sky-100 text-sky-700 ring-sky-700/10";
+                    else if (txn.type === 'income' || visualType === 'income') badgeColors = "bg-emerald-100 text-emerald-700 ring-emerald-600/20";
                     else if (txn.type === 'repayment') badgeColors = "bg-orange-100 text-orange-800 ring-orange-600/20";
 
                     if (!txn.category_name) {
-                      if (txn.type === 'repayment') return <div className="flex items-center gap-2 justify-start"><span className="inline-flex items-center rounded-md bg-orange-100 px-2 py-1 text-sm font-medium text-orange-800 ring-1 ring-inset ring-orange-600/20">Repayment</span></div>;
-                      if (txn.type === 'transfer') return <div className="flex items-center gap-2 justify-start"><span className="inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">Transfer</span></div>;
-                      return <div className="flex items-center gap-2 justify-start"><span className="inline-flex items-center rounded-md bg-red-50 px-2 py-1 text-sm font-medium text-red-700 ring-1 ring-inset ring-red-600/10">Uncategorized</span></div>;
+                      if (txn.type === 'repayment') return <div className="flex items-center gap-2 justify-start"><span className="inline-flex items-center justify-center rounded-md bg-orange-100 px-2 py-1 text-sm font-medium text-orange-800 ring-1 ring-inset ring-orange-600/20 w-[120px]">Repayment</span></div>;
+                      if (txn.type === 'transfer') return <div className="flex items-center gap-2 justify-start"><span className="inline-flex items-center justify-center rounded-md bg-blue-100 px-2 py-1 text-sm font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10 w-[120px]">Transfer</span></div>;
+                      return <div className="flex items-center gap-2 justify-start"><span className="inline-flex items-center justify-center rounded-md bg-red-50 px-2 py-1 text-sm font-medium text-red-700 ring-1 ring-inset ring-red-600/10 w-[120px]">Uncategorized</span></div>;
                     }
                     return (
                       <CustomTooltip content={txn.category_name ?? "No Category"}>
@@ -1639,7 +1654,7 @@ export function UnifiedTransactionTable({
                             </span>
                           )}
                           {/* Category Badge */}
-                          <span className={cn("inline-flex items-center rounded-md px-2 py-1 text-sm font-medium ring-1 ring-inset truncate", badgeColors)}>
+                          <span className={cn("inline-flex items-center justify-center rounded-md px-2 py-1 text-sm font-medium ring-1 ring-inset truncate w-[120px]", badgeColors)}>
                             {txn.category_name}
                           </span>
                         </div>
@@ -1647,28 +1662,30 @@ export function UnifiedTransactionTable({
                     )
                   }
                   case "account": {
-                    const cycleTag = txn.persisted_cycle_tag
-                    const debtTag = txn.tag
-                    const hasPerson = !!(txn as any).person_id
 
                     // 1. Account Info (Left)
                     const accountName = txn.source_name || txn.account_name || 'Unknown'
                     const accountIconUrl = txn.source_logo
-                    const accountId = txn.source_account_id || txn.account_id
 
-                    // 2. Destination Info
-                    const destAccountId = txn.destination_account_id
-                    const destName = txn.destination_name || 'Unknown'
+                    // 2. Destination Info (Restored)
+                    const destName = destNameRaw
                     const destIconUrl = txn.destination_logo
 
                     // 3. Person Info
                     const personName = (txn as any).person_name ?? 'Unknown'
                     const personAvatar = (txn as any).person_avatar_url
                     const personId = (txn as any).person_id
+                    const hasPerson = !!personId
+
+                    // LOGIC FIX:
+                    // 1. Cycle Tag: Always show if exists (e.g. Credit Card Cycle).
+                    // 2. Debt Tag: Only show if Person exists (Debt tracking).
+                    const cycleTag = txn.persisted_cycle_tag
+                    const debtTag = hasPerson ? txn.tag : null
+
 
                     // SMART CONTEXT LOGIC
-                    const isViewingSource = contextId && accountId === contextId
-                    const isViewingDestination = contextId && (destAccountId === contextId || personId === contextId)
+
 
                     const renderAccountIcon = () => {
                       const content = accountIconUrl ? (
@@ -1680,10 +1697,10 @@ export function UnifiedTransactionTable({
                         </div>
                       )
 
-                      if (accountId) {
+                      if (txnSourceId) {
                         return (
                           <CustomTooltip content={accountName}>
-                            <Link href={`/accounts/${accountId}`} onClick={(e) => e.stopPropagation()} className="shrink-0">
+                            <Link href={`/accounts/${txnSourceId}`} onClick={(e) => e.stopPropagation()} className="shrink-0">
                               {content}
                             </Link>
                           </CustomTooltip>
@@ -1691,6 +1708,10 @@ export function UnifiedTransactionTable({
                       }
                       return content
                     }
+
+                    const isViewingSource = contextId && (txnSourceId == contextId)
+                    const isViewingDestination = contextId && (txnDestId == contextId || txnPersonId == contextId)
+
 
                     // 2. Right Side Info (Person or Destination Account)
                     let rightSide = null
@@ -1700,14 +1721,16 @@ export function UnifiedTransactionTable({
 
                       rightSide = (
                         <div className="flex items-center gap-1.5 min-w-0 justify-end">
-                          <Link
-                            href={`/people/${personId}`}
-                            className="text-base font-semibold text-slate-800 hover:text-blue-600 hover:underline truncate text-right"
-                            onClick={(e) => e.stopPropagation()}
-                            title={personName}
-                          >
-                            {personName}
-                          </Link>
+                          <CustomTooltip content={personName}>
+                            <Link
+                              href={`/people/${personId}`}
+                              className="inline-flex items-center justify-start rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200 whitespace-nowrap w-[150px] truncate max-w-[150px]"
+                              onClick={(e) => e.stopPropagation()}
+                              title={personName}
+                            >
+                              {personName}
+                            </Link>
+                          </CustomTooltip>
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <CustomTooltip content={personName}>
                             <Link href={`/people/${personId}`} onClick={(e) => e.stopPropagation()} className="shrink-0">
@@ -1718,82 +1741,155 @@ export function UnifiedTransactionTable({
                       )
                     } else if (txn.destination_account_id || txn.destination_name) {
                       const destId = txn.destination_account_id || accounts.find(a => a.name === destName)?.id
+                      const destContent = destIconUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={destIconUrl} alt="" className="h-8 w-8 object-contain rounded-none bg-white shrink-0" />
+                      ) : (
+                        <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-none shrink-0 text-[10px] font-bold text-slate-600">
+                          {destName.charAt(0)}
+                        </div>
+                      )
 
                       rightSide = (
                         <div className="flex items-center gap-1.5 min-w-0 justify-end">
-                          {destId ? (
-                            <Link
-                              href={`/accounts/${destId}`}
-                              className="text-base font-bold text-slate-700 hover:text-blue-600 hover:underline truncate text-right"
-                              onClick={(e) => e.stopPropagation()}
-                              title={destName}
-                            >
-                              {destName}
-                            </Link>
-                          ) : (
-                            <span className="text-base font-bold text-slate-700 truncate text-right" title={destName}>{destName}</span>
-                          )}
-
-                          {(() => {
-                            const content = destIconUrl ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={destIconUrl} alt="" className="h-8 w-8 object-contain rounded-none bg-white shrink-0" />
-                            ) : (
-                              <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-none shrink-0 text-[10px] font-bold text-slate-600">
-                                {destName.charAt(0)}
-                              </div>
-                            )
-
-                            if (destId) {
-                              return (
-                                <CustomTooltip content={destName}>
-                                  <Link href={`/accounts/${destId}`} onClick={(e) => e.stopPropagation()} className="shrink-0">
-                                    {content}
-                                  </Link>
-                                </CustomTooltip>
-                              )
-                            }
-                            return content
-                          })()}
-                        </div>
-                      )
-                    }
-
-                    // SMART CONTEXT: If viewing source, show "To [Destination]"
-                    if (isViewingSource && rightSide) {
-                      return (
-                        <div className="flex items-center gap-2 w-full">
-                          <span className="inline-flex items-center rounded-md bg-emerald-100 text-emerald-700 px-2 py-1 text-xs font-bold shadow-sm shrink-0 border border-emerald-200">
-                            To
-                          </span>
-                          <ArrowRight className="h-4 w-4 text-slate-400" />
-                          {rightSide}
-                        </div>
-                      )
-                    }
-
-                    // SMART CONTEXT: If viewing destination, show "From [Source]"
-                    if (isViewingDestination) {
-                      return (
-                        <div className="flex items-center gap-2 w-full">
-                          <span className="inline-flex items-center rounded-md bg-red-100 text-red-700 px-2 py-1 text-xs font-bold shadow-sm shrink-0 border border-red-200">
-                            From
-                          </span>
-                          <ArrowRight className="h-4 w-4 text-slate-400" />
-                          <div className="flex items-center gap-2 min-w-0">
-                            {renderAccountIcon()}
-                            {accountId ? (
+                          <CustomTooltip content={destName}>
+                            {destId ? (
                               <Link
-                                href={`/accounts/${accountId}`}
-                                className="text-base font-bold text-slate-700 hover:text-blue-600 hover:underline truncate"
+                                href={`/accounts/${destId}`}
+                                className="inline-flex items-center justify-start rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200 whitespace-nowrap w-[150px] truncate max-w-[150px]"
+                                onClick={(e) => e.stopPropagation()}
+                                title={destName}
+                              >
+                                {destName}
+                              </Link>
+                            ) : (
+                              <span className="inline-flex items-center justify-start rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 whitespace-nowrap w-[150px] truncate max-w-[150px]" title={destName}>
+                                {destName}
+                              </span>
+                            )}
+                          </CustomTooltip>
+                          {destId ? (
+                            <CustomTooltip content={destName}>
+                              <Link href={`/accounts/${destId}`} onClick={(e) => e.stopPropagation()} className="shrink-0">
+                                {destContent}
+                              </Link>
+                            </CustomTooltip>
+                          ) : destContent}
+                        </div>
+                      )
+                    }
+
+                    // SMART CONTEXT: If viewing source (Outgoing flow), show "TF To [Destination]"
+                    if (isViewingSource && rightSide) {
+                      const isTransfer = txn.type === 'transfer'
+                      const badgeText = isTransfer ? 'TF To' : 'To'
+                      // Red for Outgoing (Source perspective)
+                      const badgeClass = "inline-flex items-center justify-center rounded-sm bg-red-100 text-red-700 px-2 py-1 text-xs font-bold shrink-0 whitespace-nowrap w-full"
+
+                      return (
+                        <div className="flex items-center justify-between w-full h-full gap-2">
+                          {/* 1. Left: TF Badge (Fixed 100px) */}
+                          <div className="w-[100px] shrink-0 flex items-center justify-center"> {/* Hydration Fix */}
+                            <span className={badgeClass}>
+                              {badgeText}
+                            </span>
+                          </div>
+
+                          {/* 2. Center: Badges Stack (Centered) */}
+                          <div className="flex-1 flex items-center justify-center min-w-0">
+                            <div className="flex flex-col gap-0.5 items-stretch min-w-[60px] max-w-[120px]">
+                              {(cycleTag || debtTag) && (
+                                <CustomTooltip content={cycleTag || debtTag || ''}>
+                                  <span className="flex items-center justify-center rounded-sm bg-teal-100 px-1 py-0.5 text-[10px] font-bold text-teal-800 whitespace-nowrap overflow-hidden text-ellipsis w-full">
+                                    {cycleTag || debtTag}
+                                  </span>
+                                </CustomTooltip>
+                              )}
+                              {hasPerson && cycleLabel && cycleLabel !== '-' && (
+                                <CustomTooltip content={cycleLabel}>
+                                  <span className="flex items-center justify-center rounded-sm bg-purple-100 px-1 py-0.5 text-[10px] font-bold text-purple-700 whitespace-nowrap overflow-hidden text-ellipsis w-full">
+                                    {cycleLabel}
+                                  </span>
+                                </CustomTooltip>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 3. Right: Account Name + Icon (Aligned Right, Text Left) */}
+                          <div className="flex items-center gap-1.5 shrink-0 justify-end w-[150px]">
+                            {txnSourceId ? (
+                              <Link
+                                href={`/accounts/${txnSourceId}`}
+                                className="inline-flex items-center justify-start rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200 whitespace-nowrap w-[110px] truncate cursor-pointer relative z-50 pointer-events-auto text-left"
                                 onClick={(e) => e.stopPropagation()}
                                 title={accountName}
                               >
                                 {accountName}
                               </Link>
                             ) : (
-                              <span className="text-base font-bold text-slate-700 truncate" title={accountName}>{accountName}</span>
+                              <span className="inline-flex items-center justify-start rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 whitespace-nowrap w-[110px] truncate text-left" title={accountName}>
+                                {accountName}
+                              </span>
                             )}
+                            {renderAccountIcon()}
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    // SMART CONTEXT: If viewing destination (Incoming flow), show "TF From [Source]"
+                    if (isViewingDestination) {
+                      const isTransfer = txn.type === 'transfer'
+                      const badgeText = isTransfer ? 'TF From' : 'From'
+                      // Green for Incoming (Destination perspective)
+                      const badgeClass = "inline-flex items-center justify-center rounded-sm bg-emerald-100 text-emerald-700 px-2 py-1 text-xs font-bold shrink-0 whitespace-nowrap w-full"
+
+                      return (
+                        <div className="flex items-center justify-between w-full h-full gap-2">
+                          {/* 1. Left: TF Badge (Fixed 100px) */}
+                          <div className="w-[100px] shrink-0 flex items-center justify-center">
+                            <span className={badgeClass}>
+                              {badgeText}
+                            </span>
+                          </div>
+
+                          {/* 2. Center: Badges Stack (Centered) */}
+                          <div className="flex-1 flex items-center justify-center min-w-0">
+                            <div className="flex flex-col gap-0.5 items-stretch min-w-[60px] max-w-[120px]">
+                              {cycleTag && (
+                                <CustomTooltip content={cycleTag}>
+                                  <span className="flex items-center justify-center rounded-sm bg-amber-100 px-1 py-0.5 text-[10px] font-bold text-amber-800 whitespace-nowrap overflow-hidden text-ellipsis w-full">
+                                    {cycleTag}
+                                  </span>
+                                </CustomTooltip>
+                              )}
+                              {!cycleTag && cycleLabel && cycleLabel !== '-' && (
+                                <CustomTooltip content={cycleLabel}>
+                                  <span className="flex items-center justify-center rounded-sm bg-purple-100 px-1 py-0.5 text-[10px] font-bold text-purple-700 whitespace-nowrap overflow-hidden text-ellipsis w-full">
+                                    {cycleLabel}
+                                  </span>
+                                </CustomTooltip>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* 3. Right: Account Name + Icon (Aligned Right, Text Left) */}
+                          <div className="flex items-center gap-1.5 shrink-0 justify-end w-[150px]">
+                            {txnSourceId ? (
+                              <Link
+                                href={`/accounts/${txnSourceId}`}
+                                className="inline-flex items-center justify-start rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200 whitespace-nowrap w-[110px] truncate cursor-pointer relative z-50 pointer-events-auto text-left"
+                                onClick={(e) => e.stopPropagation()}
+                                title={accountName}
+                              >
+                                {accountName}
+                              </Link>
+                            ) : (
+                              <span className="inline-flex items-center justify-start rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 whitespace-nowrap w-[110px] truncate text-left" title={accountName}>
+                                {accountName}
+                              </span>
+                            )}
+                            {renderAccountIcon()}
                           </div>
                         </div>
                       )
@@ -1807,90 +1903,196 @@ export function UnifiedTransactionTable({
                           "flex items-center w-full h-8",
                           rightSide ? "grid grid-cols-[1fr_auto_1fr] gap-2" : "flex justify-between" // Use Grid when arrow present, Flex when single
                         )}>
-                          {/* Left: Account */}
-                          <div className="flex items-center gap-2 min-w-0 shrink-0">
-                            {renderAccountIcon()}
-                            {accountId ? (
-                              <Link
-                                href={`/accounts/${accountId}`}
-                                className={cn(
-                                  "text-base font-bold text-slate-700 hover:text-blue-600 hover:underline truncate",
-                                  rightSide && "max-w-[120px]"
-                                )}
-                                onClick={(e) => e.stopPropagation()}
-                                title={accountName}
-                              >
-                                {accountName}
-                              </Link>
-                            ) : (
-                              <span
-                                className={cn(
-                                  "text-base font-bold text-slate-700 truncate",
-                                  rightSide && "max-w-[120px]"
-                                )}
-                                title={accountName}
-                              >
-                                {accountName}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Center: Arrow - ONLY if rightSide exists */}
-                          {rightSide && (
-                            <div className="flex items-center justify-center">
-                              <div className="flex items-center justify-center bg-blue-500 rounded-[4px] p-1 shadow-sm">
-                                <ArrowRight className="h-3.5 w-3.5 text-white" />
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Right: Person or Destination OR Cycle (when no rightSide) */}
                           {rightSide ? (
-                            rightSide
+                            // TRANSFER DISPLAY: Account Left -> Arrow -> Person Right
+                            <>
+                              {/* Left: Account */}
+                              <div className="flex items-center gap-2 min-w-0 shrink-0">
+                                {renderAccountIcon()}
+                                {accountId ? (
+                                  <Link
+                                    href={`/accounts/${accountId}`}
+                                    className="inline-flex items-center justify-start rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200 whitespace-nowrap w-[150px] truncate max-w-[150px] cursor-pointer relative z-50 pointer-events-auto"
+                                    onClick={(e) => e.stopPropagation()}
+                                    title={accountName}
+                                  >
+                                    {accountName}
+                                  </Link>
+                                ) : (
+                                  <span
+                                    className="inline-flex items-center justify-start rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 whitespace-nowrap w-[150px] truncate max-w-[150px]"
+                                    title={accountName}
+                                  >
+                                    {accountName}
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Center: Arrow */}
+                              <div className="flex items-center justify-center">
+                                <div className="flex items-center justify-center bg-blue-500 rounded-[4px] p-1 shadow-sm">
+                                  <ArrowRight className="h-3.5 w-3.5 text-white" />
+                                </div>
+                              </div>
+
+                              {/* Right: Person or Destination with Cycle */}
+                              <div className="flex items-center gap-1.5">
+                                {rightSide}
+                                {cycleTag && (
+                                  <CustomTooltip content={cycleTag}>
+                                    <span className="inline-flex items-center justify-center rounded-sm bg-amber-100 px-1 py-0.5 text-[10px] font-bold text-amber-800 whitespace-nowrap max-w-[100px] w-auto overflow-hidden text-ellipsis shrink-0">
+                                      {cycleTag}
+                                    </span>
+                                  </CustomTooltip>
+                                )}
+                              </div>
+                            </>
                           ) : (
-                            // No person/destination - show cycle on right at same size as account name
-                            cycleLabel && cycleLabel !== '-' && (
-                              <CustomTooltip content={cycleLabel}>
-                                <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10 shrink-0">
-                                  {cycleLabel}
-                                </span>
-                              </CustomTooltip>
-                            )
+                            // SINGLE ACCOUNT DISPLAY (Default View)
+                            // Refined Logic (Phase 76.30):
+                            // 1. If viewing Source Account, show TARGET Name (Person/Dest) instead of Self.
+                            // 2. If Expense (No Target), show "Expense" or nothing? -> "Expense" to be clear.
+                            // 3. Align Stacks to Left if no TF Badge.
+
+                            (() => {
+                              // Determine Display Name & Link
+                              let displayName = accountName;
+                              let displayLink = accountId ? `/accounts/${accountId}` : null;
+                              let displayIcon = renderAccountIcon();
+
+                              // FORCE TARGET LOGIC if we are in Account Detail View (Context ID matches Source)
+                              // Handle string/number mismatch with loose comparison
+                              const isSourceContext = contextId && (txnSourceId == contextId);
+
+                              if (isSourceContext) {
+                                if (hasPerson) {
+                                  displayName = personName;
+                                  displayLink = `/people/${personId}`;
+                                  displayIcon = (
+                                    <CustomTooltip content={personName}>
+                                      <Link href={`/people/${personId}`} onClick={(e) => e.stopPropagation()} className="shrink-0 pointer-events-auto relative z-50">
+                                        {personAvatar ? (
+                                          <img src={personAvatar} alt="" className="h-8 w-8 rounded-none object-cover shrink-0" />
+                                        ) : (
+                                          <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-none text-[10px] font-bold text-slate-600">
+                                            {personName.charAt(0)}
+                                          </div>
+                                        )}
+                                      </Link>
+                                    </CustomTooltip>
+                                  );
+                                } else if (txn.destination_account_id || txn.destination_name) {
+                                  // ... same dest logic ...
+                                  displayName = destName;
+                                  displayLink = txn.destination_account_id ? `/accounts/${txn.destination_account_id}` : null;
+                                  const destContent = destIconUrl ? (
+                                    <img src={destIconUrl} alt="" className="h-8 w-8 object-contain rounded-none bg-white shrink-0" />
+                                  ) : (
+                                    <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-none shrink-0 text-[10px] font-bold text-slate-600">
+                                      {destName.charAt(0)}
+                                    </div>
+                                  );
+                                  displayIcon = txn.destination_account_id ? (
+                                    <CustomTooltip content={destName}>
+                                      <Link href={`/accounts/${txn.destination_account_id}`} onClick={(e) => e.stopPropagation()} className="shrink-0 pointer-events-auto relative z-50">
+                                        {destContent}
+                                      </Link>
+                                    </CustomTooltip>
+                                  ) : destContent;
+                                } else {
+                                  // Pure Expense (No Person, No Dest).
+                                  // User sees "Source Name" if we fallback to default.
+                                  // We should showing NOTHING in the name slot? Or "Expense"?
+                                  // Let's explicitly set it.
+                                  displayName = '';
+                                  displayLink = null;
+                                  displayIcon = null;
+                                }
+                              }
+
+                              const hasStack = (cycleTag || debtTag) && (cycleLabel && cycleLabel !== '-');
+                              const hasSingleCycle = !hasStack && (cycleLabel && cycleLabel !== '-');
+
+                              return (
+                                <>
+                                  {/* Left Column (100px) */}
+                                  {/* If Single Cycle: Show Here. If Stack: Show here? User said "Align left". */}
+                                  <div className="w-[100px] shrink-0 flex items-center justify-center">
+                                    {hasSingleCycle && (
+                                      <CustomTooltip content={cycleLabel}>
+                                        <span className="flex items-center justify-center rounded-sm bg-purple-100 px-2 py-1 text-xs font-bold text-purple-700 whitespace-nowrap overflow-hidden text-ellipsis w-full">
+                                          {cycleLabel}
+                                        </span>
+                                      </CustomTooltip>
+                                    )}
+
+                                    {/* New Logic: Put Stack here too if it fits? Or use Left-Align for Stack? */}
+                                    {/* User: "Nếu không có gì bên trái, align về bên trái". */}
+                                    {/* If we put Stack here, it's 100px. Badges might overflow. */}
+                                  </div>
+
+                                  {/* Center Column: Badges Stack */}
+                                  <div className="flex-1 flex items-center justify-start min-w-0 pl-2">
+                                    {/* Changed justify-center to justify-start (Left Align) as requested */}
+                                    <div className="flex flex-col gap-0.5 items-stretch min-w-[60px] max-w-[120px]">
+                                      {(cycleTag || debtTag) && (
+                                        <>
+                                          <CustomTooltip content={cycleTag || debtTag || ''}>
+                                            <span className="flex items-center justify-center rounded-sm bg-teal-100 px-1 py-0.5 text-[10px] font-bold text-teal-800 whitespace-nowrap overflow-hidden text-ellipsis w-full">
+                                              {cycleTag || debtTag}
+                                            </span>
+                                          </CustomTooltip>
+                                          {/* Cycle Label in Stack */}
+                                          {(cycleLabel && cycleLabel !== '-') && (
+                                            <CustomTooltip content={cycleLabel}>
+                                              <span className="flex items-center justify-center rounded-sm bg-purple-100 px-1 py-0.5 text-[10px] font-bold text-purple-700 whitespace-nowrap overflow-hidden text-ellipsis w-full">
+                                                {cycleLabel}
+                                              </span>
+                                            </CustomTooltip>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Right: Account Name + Icon */}
+                                  <div className="flex items-center justify-end gap-1.5 shrink-0 w-[150px]">
+                                    {displayName && (
+                                      displayLink ? (
+                                        <Link
+                                          href={displayLink}
+                                          className="inline-flex items-center justify-start rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-200 whitespace-nowrap w-[110px] truncate cursor-pointer relative z-50 pointer-events-auto text-left"
+                                          onClick={(e) => e.stopPropagation()}
+                                          title={displayName}
+                                        >
+                                          {displayName}
+                                        </Link>
+                                      ) : (
+                                        <span
+                                          className="inline-flex items-center justify-start rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-700 whitespace-nowrap w-[110px] truncate text-left"
+                                          title={displayName}
+                                        >
+                                          {displayName}
+                                        </span>
+                                      )
+                                    )}
+                                    {displayIcon}
+                                  </div>
+                                </>
+                              );
+                            })()
                           )}
                         </div>
 
-                        {/* Bottom Line: Badges - Only show when rightSide exists */}
-                        {rightSide && (
-                          <div className={cn(
-                            "flex items-center w-full mt-1.5",
-                            "justify-between"
-                          )}>
-                            {/* Left: Cycle Badge (Date Range) */}
-                            <div className="flex items-center">
-                              {cycleLabel && cycleLabel !== '-' ? (
-                                <CustomTooltip content={cycleLabel}>
-                                  <span className="inline-flex items-center rounded-md bg-purple-50 px-2 py-1 text-xs font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10 shrink-0 cursor-help">
-                                    {cycleLabel}
-                                  </span>
-                                </CustomTooltip>
-                              ) : (
-                                <span className="inline-flex items-center rounded-none bg-gray-50 text-gray-400 px-1 py-0.5 text-[10px] font-medium ring-1 ring-inset ring-gray-500/10 shrink-0">
-                                  None
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Right: Tag Badge */}
-                            <div className="flex items-center">
-                              {/* Show Cycle Tag if defined, or custom Tag */}
-                              {(cycleTag || debtTag) && (
-                                <CustomTooltip content={txn.tag}>
-                                  <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 shrink-0 cursor-help">
-                                    {txn.tag}
-                                  </span>
-                                </CustomTooltip>
-                              )}
-                            </div>
+                        {/* Bottom Line: Tag Badge - Only show when rightSide exists */}
+                        {rightSide && (cycleTag || debtTag) && (
+                          <div className="flex items-center w-full mt-0.5 justify-end">
+                            {/* Right: Single Tag Badge below avatar */}
+                            <CustomTooltip content={debtTag || cycleTag || ''}>
+                              <span className="inline-flex items-center justify-start rounded-sm bg-teal-100 px-2 py-1 text-xs font-bold text-teal-800 whitespace-nowrap max-w-[100px] w-auto overflow-hidden text-ellipsis">
+                                {debtTag || cycleTag}
+                              </span>
+                            </CustomTooltip>
                           </div>
                         )}
                       </div>
@@ -2051,7 +2253,8 @@ export function UnifiedTransactionTable({
                           </span>
                         </CustomTooltip>
 
-                        {hasBack && (
+                        {/* Show badges if any logic exists (Percent, Fixed, Profit, BankBack) */}
+                        {true && (
                           <div className="flex items-center gap-1 mt-0.5">
                             {/* Profit */}
                             {typeof txn.profit === 'number' && txn.profit !== 0 && (
@@ -2062,16 +2265,16 @@ export function UnifiedTransactionTable({
                             {/* Bank Back */}
                             {typeof txn.bank_back === 'number' && txn.bank_back > 0 && (
                               <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-600 border border-blue-100">
-                                ðŸ¦ {numberFormatter.format(txn.bank_back)}
+                                ðŸ ¦ {numberFormatter.format(txn.bank_back)}
                               </span>
                             )}
                             {/* Cashback Info */}
                             {(displayPercent > 0 || fixedDisp > 0) && (
-                              <div className="inline-flex items-center rounded-md bg-slate-100 px-2 py-1 text-xs font-bold text-slate-600 border border-slate-200 whitespace-nowrap">
+                              <div className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-xs font-bold text-emerald-600 border border-emerald-100 whitespace-nowrap">
                                 {displayPercent > 0 && fixedDisp > 0 ? (
                                   <span>{numberFormatter.format(percentAmount)} + {numberFormatter.format(fixedDisp)}</span>
                                 ) : displayPercent > 0 ? (
-                                  <span>{numberFormatter.format(percentAmount)} ({displayPercent}%)</span>
+                                  <span>{displayPercent}% Back</span>
                                 ) : (
                                   <span>Fix {numberFormatter.format(fixedDisp)}</span>
                                 )}
@@ -2202,67 +2405,66 @@ export function UnifiedTransactionTable({
             )
           }
         </Table >
-      </div >
-
-      {/* Sticky Footer */}
-      < div className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-between border-t border-slate-200 bg-white px-4 py-2 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] text-sm" >
-        <div className="flex items-center gap-4">
-          {/* Pagination */}
-          <div className="flex items-center gap-1">
-            <button
-              className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-              disabled={currentPage <= 1}
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              title="Previous Page"
-            >
-              <ArrowLeft className="h-4 w-4 text-slate-600" />
-            </button>
+        {/* Sticky Footer */}
+        <div className="sticky bottom-0 left-0 right-0 z-[60] flex items-center justify-between border-t border-slate-200 bg-white px-4 py-2 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] text-sm mt-auto" >
+          <div className="flex items-center gap-4">
+            {/* Pagination */}
             <div className="flex items-center gap-1">
-              <span className="rounded px-2 py-1 text-xs font-semibold bg-blue-600 text-white">{currentPage}</span>
-              <span className="text-xs text-slate-500">/ {Math.max(1, Math.ceil(displayedTransactions.length / pageSize))}</span>
+              <button
+                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                title="Previous Page"
+              >
+                <ArrowLeft className="h-4 w-4 text-slate-600" />
+              </button>
+              <div className="flex items-center gap-1">
+                <span className="rounded px-2 py-1 text-xs font-semibold bg-blue-600 text-white">{currentPage}</span>
+                <span className="text-xs text-slate-500">/ {Math.max(1, Math.ceil(displayedTransactions.length / pageSize))}</span>
+              </div>
+              <button
+                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+                disabled={currentPage >= Math.ceil(displayedTransactions.length / pageSize)}
+                onClick={() => setCurrentPage(prev => prev + 1)}
+                title="Next Page"
+              >
+                <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
+              </button>
             </div>
-            <button
-              className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-              disabled={currentPage >= Math.ceil(displayedTransactions.length / pageSize)}
-              onClick={() => setCurrentPage(prev => prev + 1)}
-              title="Next Page"
+            <div className="h-4 w-px bg-slate-200" />
+            {/* Page Size Selector */}
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
             >
-              <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
+              <option value={10}>10 / p</option>
+              <option value={20}>20 / p</option>
+              <option value={50}>50 / p</option>
+              <option value={100}>100 / p</option>
+            </select>
+            <div className="h-4 w-px bg-slate-200" />
+            <button
+              onClick={() => {
+                setSortState({ key: 'date', dir: 'desc' });
+                updateSelection(new Set());
+                resetColumns();
+                setCurrentPage(1);
+              }}
+              className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">Reset</span>
             </button>
           </div>
-          <div className="h-4 w-px bg-slate-200" />
-          {/* Page Size Selector */}
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setCurrentPage(1);
-            }}
-            className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
-          >
-            <option value={10}>10 / p</option>
-            <option value={20}>20 / p</option>
-            <option value={50}>50 / p</option>
-            <option value={100}>100 / p</option>
-          </select>
-          <div className="h-4 w-px bg-slate-200" />
-          <button
-            onClick={() => {
-              setSortState({ key: 'date', dir: 'desc' });
-              updateSelection(new Set());
-              resetColumns();
-              setCurrentPage(1);
-            }}
-            className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            <span className="text-xs font-medium">Reset</span>
-          </button>
-        </div>
-        <div className="flex items-center gap-4">
-          <p className="text-slate-500 font-medium text-xs">
-            Showing <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, displayedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, displayedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{displayedTransactions.length}</span> rows
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="text-slate-500 font-medium text-xs">
+              Showing <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, displayedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, displayedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{displayedTransactions.length}</span> rows
+            </p>
+          </div>
         </div>
       </div >
 

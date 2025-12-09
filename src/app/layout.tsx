@@ -33,10 +33,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning>
-        <TooltipProvider>
-          <AppLayout>{children}</AppLayout>
-          <Toaster />
-        </TooltipProvider>
+        <div id="root" suppressHydrationWarning>
+          <TooltipProvider>
+            <AppLayout>{children}</AppLayout>
+            <Toaster />
+          </TooltipProvider>
+        </div>
       </body>
     </html>
   )

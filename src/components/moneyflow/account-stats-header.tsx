@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 import { ConfirmMoneyReceived } from './confirm-money-received'
 import { createClient } from '@/lib/supabase/client'
+import { CashbackStatusDisplay } from './cashback-status-display'
 
 type AssetConfig = {
   interestRate: number | null
@@ -239,92 +240,116 @@ export function AccountStatsHeader({
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3">
-        {/* Pending & Confirmed */}
+      {/* 4 Cards Grid Layout - Updated Split Cashback View */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         {/* Pending & Confirmed */}
         {statItems.map(item => (
-          <div key={item.label} className={`flex flex-col gap-1 rounded-lg ${item.label === 'Confirmed' ? 'bg-white border border-slate-200' : item.bg} px-3 py-2 shadow-sm relative`}>
+          <div key={item.label} className={`flex flex-col gap-1 rounded-lg ${item.label === 'Confirmed' ? 'bg-white border border-slate-200' : item.bg} px-3 py-2 shadow-sm relative h-24 justify-between`}>
             <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
               <span>{item.label}</span>
               {item.icon}
             </div>
-            <div className="flex items-center justify-between">
-              <span className={`text-lg font-bold tabular-nums ${item.tone}`}>
+            <div className="flex flex-col">
+              <span className={`text-xl font-bold tabular-nums ${item.tone}`}>
                 {formatCurrency(item.value)}
               </span>
-              {item.label === 'Pending' && item.value > 0 && (
-                <div className="absolute right-2 bottom-2">
-                  <ConfirmMoneyReceived accountId={account.id} minimal />
-                </div>
-              )}
+              <span className="text-[10px] text-slate-400 font-medium truncate">
+                {item.subtext || '\u00A0'}
+              </span>
             </div>
-            {item.subtext && <p className="text-[10px] text-slate-500">{item.subtext}</p>}
+            {item.label === 'Pending' && item.value > 0 && (
+              <div className="absolute right-2 bottom-2">
+                <ConfirmMoneyReceived accountId={account.id} minimal />
+              </div>
+            )}
           </div>
         ))}
 
-        {/* Cashback / Asset / Info Block */}
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 shadow-sm flex flex-col justify-between">
-          {account.type === 'credit_card' && cashbackStats ? (
-            <div className="flex flex-col gap-1 h-full justify-center">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
-                <div className="flex items-center gap-1">
-                  <TrendingUp className="h-4 w-4 text-emerald-600" />
-                  <span>Cashback</span>
-                </div>
-                <span className="text-[10px]">{Math.round((cashbackStats.rate ?? 0) * 100)}%</span>
-              </div>
-
-              {/* Min Spend Logic */}
-              {minSpend && cashbackStats.currentSpend < minSpend ? (
-                <div className="flex flex-col">
-                  <div className="flex items-end justify-between">
-                    <span className="text-sm font-bold text-slate-400">
-                      {formatCurrency(earned)}
-                    </span>
-                    <span className="text-[10px] text-amber-600 font-bold mb-1">
-                      Locked
-                    </span>
-                  </div>
-                  <div className="mt-1 rounded-md bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-700 text-center">
-                    Spend {formatCurrency(minSpend - cashbackStats.currentSpend)} to unlock
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-end justify-between">
-                    <span className="text-lg font-bold tabular-nums text-emerald-700">
-                      {formatCurrency(earned)}
-                    </span>
-                    {cap && <span className="text-[10px] text-slate-500 mb-1">/ {formatCurrency(cap)}</span>}
-                  </div>
-                  <Progress value={earned} max={progressMax} className="h-1.5 mt-1" />
-                </>
+        {/* Card 3: Spending Progress */}
+        {account.type === 'credit_card' && cashbackStats ? (
+          <div className={`flex flex-col gap-1 rounded-lg px-3 py-2 shadow-sm h-24 justify-between border ${minSpend && cashbackStats.currentSpend < minSpend ? 'bg-amber-50 border-amber-100' : 'bg-white border-slate-200'
+            }`}>
+            <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+              <span className="flex items-center gap-1">
+                <TrendingUp className="h-3.5 w-3.5 text-slate-500" />
+                Spending
+              </span>
+              {minSpend && minSpend > 0 && (
+                <span className="text-[10px] text-slate-400">
+                  Target: {formatCurrency(minSpend)}
+                </span>
               )}
             </div>
-          ) : isAssetAccount ? (
-            <div className="flex flex-col gap-1 h-full justify-center">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
-                <div className="flex items-center gap-1">
-                  <CreditCard className="h-4 w-4 text-slate-500" />
-                  <span>Interest</span>
-                </div>
-                <span className="text-[10px]">{assetConfig?.interestRate ? `${assetConfig.interestRate}%` : 'N/A'}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-medium text-slate-700">
-                  {assetConfig?.termMonths ? `${assetConfig.termMonths} mo` : 'No term'}
+
+            <div className="flex flex-col">
+              <span className={`text-xl font-bold tabular-nums ${minSpend && cashbackStats.currentSpend < minSpend ? 'text-amber-700' : 'text-slate-900'
+                }`}>
+                {formatCurrency(cashbackStats.currentSpend)}
+              </span>
+              {minSpend && cashbackStats.currentSpend < minSpend ? (
+                <span className="text-[10px] font-bold text-red-600 animate-pulse truncate flex items-center gap-1">
+                  Need {formatCurrency(minSpend - cashbackStats.currentSpend)} more
                 </span>
-                <span className="text-[10px] text-slate-500">
-                  {assetConfig?.maturityDate ? `Matures ${assetConfig.maturityDate}` : ''}
+              ) : (
+                <span className="text-[10px] font-bold text-emerald-600 truncate flex items-center gap-1">
+                  Target Met <CheckCircle2 className="h-3 w-3" />
                 </span>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Placeholder/Empty slot if not credit card */
+          null
+        )}
+
+        {/* Card 4: Earnings / Profit */}
+        {account.type === 'credit_card' && cashbackStats ? (
+          <div className="flex flex-col gap-1 rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 shadow-sm h-24 justify-between">
+            <div className="flex items-center justify-between text-xs font-bold text-emerald-700">
+              <span className="flex items-center gap-1">
+                <Wallet className="h-3.5 w-3.5" />
+                Cashback
+              </span>
+              <span className="px-1.5 py-0.5 rounded-sm bg-white text-[10px] shadow-sm">
+                {Math.round((cashbackStats.rate ?? 0) * 100)}%
+              </span>
+            </div>
+
+            <div className="flex flex-col">
+              <span className="text-xl font-bold tabular-nums text-emerald-800">
+                {formatCurrency(earned)}
+              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-medium text-emerald-600 truncate">
+                  Earned so far
+                </span>
+                {cap && (
+                  <span className="text-[10px] text-emerald-600/70">
+                    Max: {formatCurrency(cap)}
+                  </span>
+                )}
               </div>
             </div>
-          ) : (
-            <div className="flex flex-col gap-1 h-full justify-center items-center text-slate-400">
-              <span className="text-xs">No extra info</span>
+          </div>
+        ) : isAssetAccount ? (
+          // Asset Account Logic reused for Slot 4
+          <div className="flex flex-col gap-1 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 shadow-sm h-24 justify-between">
+            <div className="flex items-center justify-between text-xs font-bold text-blue-700">
+              <div className="flex items-center gap-1">
+                <CreditCard className="h-3.5 w-3.5" />
+                <span>Interest: {assetConfig?.interestRate ? `${assetConfig.interestRate}%` : 'N/A'}</span>
+              </div>
             </div>
-          )}
-        </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-medium text-slate-700">
+                {assetConfig?.termMonths ? `${assetConfig.termMonths} mo` : 'No term'}
+              </span>
+              <span className="text-[10px] text-slate-500">
+                {assetConfig?.maturityDate ? `Matures ${assetConfig.maturityDate}` : ''}
+              </span>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   )

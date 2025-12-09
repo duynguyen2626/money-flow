@@ -58,9 +58,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // Prevent hydration mismatch by using default state until mounted
   const sidebarCollapsed = isMounted ? isCollapsed : false
 
+  // Render minimal placeholder during SSR/initial hydration to avoid extension conflicts
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex" suppressHydrationWarning>
+        <div className="w-64" suppressHydrationWarning />
+        <main className="flex-1" suppressHydrationWarning>
+          {children}
+        </main>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-slate-100 flex" suppressHydrationWarning>
       <aside
+        suppressHydrationWarning
         className={cn(
           "sticky top-0 h-screen flex flex-col border-r bg-white py-8 transition-all duration-300 z-20 shadow-sm",
           sidebarCollapsed ? "w-16 px-2" : "w-64 px-6"
@@ -130,7 +143,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {children}
       </main>
     </div>
