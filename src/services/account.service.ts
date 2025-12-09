@@ -146,6 +146,7 @@ type TransactionRow = {
     }
     metadata?: Json | null
   }[]
+  final_price?: number | null
 }
 
 
@@ -250,6 +251,7 @@ function mapTransactionRow(txn: TransactionRow, accountId?: string): Transaction
 
   return {
     id: txn.id,
+    final_price: txn.final_price ?? null,
     occurred_at: txn.occurred_at,
     note: txn.note ?? '',
     status: txn.status ?? 'posted',
@@ -333,6 +335,7 @@ function mapDebtTransactionRow(txn: TransactionRow, debtAccountId: string): Tran
 
   return {
     id: txn.id,
+    final_price: txn.final_price ?? null,
     occurred_at: txn.occurred_at,
     note: txn.note ?? '',
     status: (txn as { status?: 'posted' | 'pending' | 'void' }).status ?? 'posted',

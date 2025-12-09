@@ -18,6 +18,7 @@ export type TransactionRow = {
     cashback_share_percent?: number | null
     cashback_share_fixed?: number | null
     cashback_share_amount?: number | null
+    final_price?: number | null
     shop_id?: string | null
     shops?: ShopRow | null
     transaction_lines: Array<{
@@ -445,6 +446,7 @@ export function mapTransactionRow(
 
     return {
         id: txn.id,
+        final_price: txn.final_price ?? null,
         occurred_at: txn.occurred_at,
         note: txn.note || null,
         status: txn.status,
