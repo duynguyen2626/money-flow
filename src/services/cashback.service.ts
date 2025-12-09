@@ -454,6 +454,13 @@ export async function getAccountSpendingStats(
     return sum + Math.abs(txn.amount)
   }, 0)
 
+  // Calculate transactions with tiered logic to get peopleBack
+  const transactions = lines
+    .map(txn => toTransaction(txn, config, currentSpend))
+    .filter(Boolean) as CashbackTransaction[]
+
+  const totalPeopleBack = transactions.reduce((sum, txn) => sum + txn.peopleBack, 0)
+
   const rawEarned = currentSpend * config.rate
   const maxCashback = config.maxAmount
   const cappedEarned =
@@ -461,6 +468,10 @@ export async function getAccountSpendingStats(
   const minSpend = config.minSpend
   const meetsMinSpend = minSpend === null || currentSpend >= minSpend
   const earnedSoFar = meetsMinSpend ? cappedEarned : 0
+
+  // Calculate shared amount and net profit
+  const sharedAmount = safeNumber(totalPeopleBack)
+  const netProfit = safeNumber(earnedSoFar - sharedAmount)
 
   // --- Smart Hint Logic ---
   let potentialRate = config.rate
@@ -536,8 +547,11 @@ export async function getAccountSpendingStats(
     maxCashback,
     rate: config.rate,
     earnedSoFar,
+    sharedAmount,
+    netProfit,
     potentialRate,
     matchReason,
     maxReward,
   }
 }
+

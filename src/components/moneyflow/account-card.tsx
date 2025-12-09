@@ -182,7 +182,7 @@ function AccountCardComponent({
           <img
             src={account.logo_url as string}
             alt={account.name}
-            className="h-full w-full object-cover"
+            className="h-full w-full object-cover !rounded-none !border-none ring-0 outline-none"
             loading="lazy"
           />
         ) : (
@@ -405,7 +405,7 @@ function AccountCardComponent({
                 <img
                   src={account.logo_url as string}
                   alt=""
-                  className="h-14 w-16 object-contain p-1"
+                  className="h-14 w-16 object-contain p-1 !rounded-none !border-none ring-0 outline-none"
                   loading="lazy"
                 />
               )}
@@ -480,7 +480,7 @@ function AccountCardComponent({
                 <img
                   src={account.logo_url as string}
                   alt=""
-                  className="h-10 w-12 object-contain p-1"
+                  className="h-10 w-12 object-contain p-1 !rounded-none !border-none ring-0 outline-none"
                   loading="lazy"
                 />
               )}

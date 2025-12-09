@@ -21,61 +21,63 @@ export default async function InstallmentsPage({ searchParams }: PageProps) {
     ])
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Installment Plans</h2>
-                    <p className="text-muted-foreground">
-                        Manage your active installment plans and track progress.
-                    </p>
-                </div>
-                <CreateInstallmentDialog />
-            </div>
-
-            <InstallmentStats installments={activeInstallments} />
-
-            <Tabs defaultValue="active" className="space-y-4">
-                <TabsList>
-                    <TabsTrigger value="pending" className="gap-2">
-                        <AlertCircle className="h-4 w-4" />
-                        Pending Setup
-                        {pendingTransactions && pendingTransactions.length > 0 && (
-                            <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                                {pendingTransactions.length}
-                            </span>
-                        )}
-                    </TabsTrigger>
-                    <TabsTrigger value="active" className="gap-2">
-                        <Clock className="h-4 w-4" />
-                        Active Plans
-                        {activeInstallments && activeInstallments.length > 0 && (
-                            <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
-                                {activeInstallments.length}
-                            </span>
-                        )}
-                    </TabsTrigger>
-                    <TabsTrigger value="done" className="gap-2">
-                        <CheckCircle className="h-4 w-4" />
-                        Completed
-                    </TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="pending" className="space-y-4">
-                    <div className="rounded-md border bg-amber-50/50 p-4 text-sm text-amber-800">
-                        <p className="font-medium">Pending Setup</p>
-                        <p>These transactions were marked as installments but haven't been set up yet. Click "Setup Plan" to configure terms.</p>
+        <div className="h-full overflow-auto p-6">
+            <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h2 className="text-2xl font-bold tracking-tight">Installment Plans</h2>
+                        <p className="text-muted-foreground">
+                            Manage your active installment plans and track progress.
+                        </p>
                     </div>
-                    <PendingInstallmentTable transactions={pendingTransactions as any[]} />
-                </TabsContent>
+                    <CreateInstallmentDialog />
+                </div>
 
-                <TabsContent value="active" className="space-y-4">
-                    <InstallmentTable installments={activeInstallments} highlightTxnId={highlightTxnId} />
-                </TabsContent>
+                <InstallmentStats installments={activeInstallments} />
 
-                <TabsContent value="done" className="space-y-4">
-                    <InstallmentTable installments={completedInstallments} highlightTxnId={highlightTxnId} />
-                </TabsContent>
-            </Tabs>
+                <Tabs defaultValue="active" className="space-y-4">
+                    <TabsList>
+                        <TabsTrigger value="pending" className="gap-2">
+                            <AlertCircle className="h-4 w-4" />
+                            Pending Setup
+                            {pendingTransactions && pendingTransactions.length > 0 && (
+                                <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                                    {pendingTransactions.length}
+                                </span>
+                            )}
+                        </TabsTrigger>
+                        <TabsTrigger value="active" className="gap-2">
+                            <Clock className="h-4 w-4" />
+                            Active Plans
+                            {activeInstallments && activeInstallments.length > 0 && (
+                                <span className="ml-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
+                                    {activeInstallments.length}
+                                </span>
+                            )}
+                        </TabsTrigger>
+                        <TabsTrigger value="done" className="gap-2">
+                            <CheckCircle className="h-4 w-4" />
+                            Completed
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="pending" className="space-y-4">
+                        <div className="rounded-md border bg-amber-50/50 p-4 text-sm text-amber-800">
+                            <p className="font-medium">Pending Setup</p>
+                            <p>These transactions were marked as installments but haven't been set up yet. Click "Setup Plan" to configure terms.</p>
+                        </div>
+                        <PendingInstallmentTable transactions={pendingTransactions as any[]} />
+                    </TabsContent>
+
+                    <TabsContent value="active" className="space-y-4">
+                        <InstallmentTable installments={activeInstallments} highlightTxnId={highlightTxnId} />
+                    </TabsContent>
+
+                    <TabsContent value="done" className="space-y-4">
+                        <InstallmentTable installments={completedInstallments} highlightTxnId={highlightTxnId} />
+                    </TabsContent>
+                </Tabs>
+            </div>
         </div>
     )
 }

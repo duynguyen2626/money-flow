@@ -20,8 +20,8 @@ export default async function RefundsPage() {
   ])
 
   return (
-    <section className="space-y-6">
-      <header className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white px-6 py-5 shadow-sm">
+    <div className="flex flex-col h-full overflow-hidden">
+      <header className="flex-none flex items-center gap-4 rounded-lg border border-slate-200 bg-white px-6 py-5 shadow-sm mx-6 mt-6">
         <Link
           href="/transactions"
           className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-600 transition hover:bg-slate-200"
@@ -35,7 +35,7 @@ export default async function RefundsPage() {
         </div>
       </header>
 
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex-1 overflow-hidden mx-6 my-6">
         <UnifiedTransactionTable
           transactions={transactions}
           accounts={accounts}
@@ -45,6 +45,6 @@ export default async function RefundsPage() {
           accountId={REFUND_PENDING_ACCOUNT_ID}
         />
       </div>
-    </section>
+    </div>
   )
 }

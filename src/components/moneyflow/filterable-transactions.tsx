@@ -373,9 +373,9 @@ export function FilterableTransactions({
     const isSortActive = sortState.key !== 'date' || sortState.dir !== 'desc'
 
     return (
-        <div className="space-y-3">
+        <div className="flex flex-col h-full overflow-hidden space-y-0">
             {!onSearchChange && (
-                <div className="sticky top-0 z-40 flex flex-col gap-3 md:flex-row md:items-center bg-slate-100 py-3 -mx-4 px-4 shadow-sm">
+                <div className="flex-none flex flex-col gap-3 md:flex-row md:items-center bg-slate-100 py-3 px-1 z-10 border-b shadow-sm">
                     {!context && (
                         <div className="order-first md:order-last shrink-0">
                             {!isExcelMode && (
@@ -623,7 +623,7 @@ export function FilterableTransactions({
 
 
 
-            <div className="mt-2">
+            <div className="flex-1 overflow-hidden bg-white border-t relative">
                 <UnifiedTransactionTable
                     transactions={finalTransactions}
                     accountType={accountType}
@@ -640,7 +640,7 @@ export function FilterableTransactions({
                     onBulkActionStateChange={handleBulkActionStateChange}
                     sortState={sortState}
                     onSortChange={setSortState}
-                    hiddenColumns={['initial_back', 'people_back']}
+                    hiddenColumns={[]}
                     isExcelMode={isExcelMode}
                 />
             </div>

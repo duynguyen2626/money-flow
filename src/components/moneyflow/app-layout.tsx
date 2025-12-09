@@ -13,10 +13,15 @@ import {
   ChevronLeft,
   ArrowRightLeft,
   ShoppingBag,
-  Layers
+  Layers,
+  Calendar,
+  Wrench,
+  BookOpen,
+  RefreshCw
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { CustomTooltip } from "@/components/ui/custom-tooltip"
 
 interface NavItem {
   title: string
@@ -29,10 +34,11 @@ const navItems: NavItem[] = [
   { title: "Transactions", href: "/transactions", icon: <ArrowRightLeft className="h-5 w-5" /> },
   { title: "Accounts", href: "/accounts", icon: <CreditCard className="h-5 w-5" /> },
   { title: "People & Debt", href: "/people", icon: <Users className="h-5 w-5" /> },
-  { title: "Installments", href: "/installments", icon: <Receipt className="h-5 w-5" /> },
+  { title: "Installments", href: "/installments", icon: <Calendar className="h-5 w-5" /> },
   { title: "Shops", href: "/shops", icon: <ShoppingBag className="h-5 w-5" /> },
-  { title: "Services", href: "/services", icon: <Layers className="h-5 w-5" /> },
-  { title: "Batches", href: "/batch", icon: <LayoutDashboard className="h-5 w-5" /> }, // Icon placeholder
+  { title: "Services", href: "/services", icon: <Wrench className="h-5 w-5" /> },
+  { title: "Batches", href: "/batch", icon: <BookOpen className="h-5 w-5" /> },
+  { title: "Refunds", href: "/refunds", icon: <RefreshCw className="h-5 w-5" /> },
 ]
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -58,29 +64,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // Prevent hydration mismatch by using default state until mounted
   const sidebarCollapsed = isMounted ? isCollapsed : false
 
-  // Render minimal placeholder during SSR/initial hydration to avoid extension conflicts
-  if (!isMounted) {
-    return (
-      <div className="min-h-screen bg-slate-100 flex" suppressHydrationWarning>
-        <div className="w-64" suppressHydrationWarning />
-        <main className="flex-1" suppressHydrationWarning>
-          {children}
-        </main>
-      </div>
-    )
-  }
+  // SSR/Hydration mismatch fix:
+  // We explicitly removed the !isMounted placeholder because it causes a mismatch
+  // with the server-rendered content (which includes the full sidebar).
+  // The client must render the same structure initially.
 
   return (
-    <div className="min-h-screen bg-slate-100 flex" suppressHydrationWarning>
+    <div className="flex h-full w-full overflow-hidden" suppressHydrationWarning>
       <aside
         suppressHydrationWarning
         className={cn(
-          "sticky top-0 h-screen flex flex-col border-r bg-white py-8 transition-all duration-300 z-20 shadow-sm",
+          "flex-none h-full flex flex-col border-r bg-card py-8 transition-all duration-300 z-20 shadow-sm overflow-y-auto hidden md:block",
           sidebarCollapsed ? "w-16 px-2" : "w-64 px-6"
         )}
       >
         {/* Header / Logo Area */}
-        <div className={cn("flex items-center mb-8", sidebarCollapsed ? "justify-center" : "justify-between")}>
+        <div suppressHydrationWarning className={cn("flex items-center mb-8", sidebarCollapsed ? "justify-center" : "justify-between")}>
           {!sidebarCollapsed && (
             <span className="text-xl font-bold text-slate-800 tracking-tight">
               Money Flow <span className="text-blue-600">3</span>
@@ -97,10 +96,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 space-y-2">
+        <nav className="flex-1 space-y-2" suppressHydrationWarning>
           {navItems.map((item) => {
             const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
-            return (
+            const linkContent = (
               <Link
                 key={item.href}
                 href={item.href}
@@ -111,17 +110,22 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                     : "text-slate-600 hover:bg-slate-50 hover:text-slate-900",
                   sidebarCollapsed && "justify-center px-2"
                 )}
-                title={sidebarCollapsed ? item.title : undefined}
               >
                 {item.icon}
                 {!sidebarCollapsed && <span>{item.title}</span>}
               </Link>
             )
+
+            return sidebarCollapsed ? (
+              <CustomTooltip key={item.href} content={item.title} side="right">
+                <div>{linkContent}</div>
+              </CustomTooltip>
+            ) : linkContent
           })}
         </nav>
 
         {/* Footer / User Area */}
-        <div className="mt-auto pt-8 border-t">
+        <div className="mt-auto pt-8 border-t" suppressHydrationWarning>
           {!sidebarCollapsed ? (
             <div className="flex items-center gap-3 px-2">
               <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
@@ -143,7 +147,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0">
         {children}
       </main>
     </div>

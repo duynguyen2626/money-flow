@@ -265,34 +265,35 @@ export function AccountStatsHeader({
           </div>
         ))}
 
-        {/* Card 3: Spending Progress */}
+        {/* Card 3: Qualifying Progress */}
         {account.type === 'credit_card' && cashbackStats ? (
-          <div className={`flex flex-col gap-1 rounded-lg px-3 py-2 shadow-sm h-24 justify-between border ${minSpend && cashbackStats.currentSpend < minSpend ? 'bg-amber-50 border-amber-100' : 'bg-white border-slate-200'
+          <div className={`flex flex-col gap-1 rounded-lg px-3 py-2 shadow-sm h-24 justify-between border ${minSpend && cashbackStats.currentSpend < minSpend
+              ? 'bg-amber-50 border-amber-100'
+              : 'bg-emerald-50 border-emerald-100'
             }`}>
             <div className="flex items-center justify-between text-xs font-bold text-slate-600">
-              <span className="flex items-center gap-1">
-                <TrendingUp className="h-3.5 w-3.5 text-slate-500" />
-                Spending
-              </span>
-              {minSpend && minSpend > 0 && (
-                <span className="text-[10px] text-slate-400">
-                  Target: {formatCurrency(minSpend)}
-                </span>
-              )}
+              <span>Qualifying Status</span>
             </div>
 
-            <div className="flex flex-col">
-              <span className={`text-xl font-bold tabular-nums ${minSpend && cashbackStats.currentSpend < minSpend ? 'text-amber-700' : 'text-slate-900'
-                }`}>
-                {formatCurrency(cashbackStats.currentSpend)}
-              </span>
+            <div className="flex flex-col gap-1">
+              <div className="text-[10px] text-slate-500 space-y-0.5">
+                <div>Min Spend: {formatCurrency(minSpend ?? 0)}</div>
+                <div>Current: {formatCurrency(cashbackStats.currentSpend)}</div>
+              </div>
+
               {minSpend && cashbackStats.currentSpend < minSpend ? (
-                <span className="text-[10px] font-bold text-red-600 animate-pulse truncate flex items-center gap-1">
-                  Need {formatCurrency(minSpend - cashbackStats.currentSpend)} more
-                </span>
+                <>
+                  <Progress
+                    value={(cashbackStats.currentSpend / minSpend) * 100}
+                    className="h-1.5"
+                  />
+                  <span className="text-xs font-bold text-amber-700 flex items-center gap-1">
+                    ⚠️ Need {formatCurrency(minSpend - cashbackStats.currentSpend)} more
+                  </span>
+                </>
               ) : (
-                <span className="text-[10px] font-bold text-emerald-600 truncate flex items-center gap-1">
-                  Target Met <CheckCircle2 className="h-3 w-3" />
+                <span className="text-sm font-bold text-emerald-700 flex items-center gap-1">
+                  ✅ Qualified
                 </span>
               )}
             </div>
@@ -302,33 +303,21 @@ export function AccountStatsHeader({
           null
         )}
 
-        {/* Card 4: Earnings / Profit */}
+        {/* Card 4: Rewards Breakdown */}
         {account.type === 'credit_card' && cashbackStats ? (
           <div className="flex flex-col gap-1 rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 shadow-sm h-24 justify-between">
             <div className="flex items-center justify-between text-xs font-bold text-emerald-700">
-              <span className="flex items-center gap-1">
-                <Wallet className="h-3.5 w-3.5" />
-                Cashback
-              </span>
-              <span className="px-1.5 py-0.5 rounded-sm bg-white text-[10px] shadow-sm">
-                {Math.round((cashbackStats.rate ?? 0) * 100)}%
-              </span>
+              <span>Reward Value</span>
             </div>
 
             <div className="flex flex-col">
-              <span className="text-xl font-bold tabular-nums text-emerald-800">
-                {formatCurrency(earned)}
-              </span>
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-medium text-emerald-600 truncate">
-                  Earned so far
-                </span>
-                {cap && (
-                  <span className="text-[10px] text-emerald-600/70">
-                    Max: {formatCurrency(cap)}
-                  </span>
-                )}
+              <div className="text-[10px] text-slate-600 space-y-0.5">
+                <div>Total Generated: {formatCurrency(cashbackStats.earnedSoFar)}</div>
+                <div>Shared w/ Others: {formatCurrency(cashbackStats.sharedAmount)}</div>
               </div>
+              <span className="text-xl font-bold tabular-nums text-emerald-700 mt-1">
+                Net: {formatCurrency(cashbackStats.netProfit)}
+              </span>
             </div>
           </div>
         ) : isAssetAccount ? (
