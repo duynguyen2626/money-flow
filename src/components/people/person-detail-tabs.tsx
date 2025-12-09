@@ -15,6 +15,7 @@ interface DebtCycle {
     last_activity: string
     total_debt?: number
     total_repaid?: number
+    totalOriginalDebt?: number
 }
 
 interface PersonDetailTabsProps {

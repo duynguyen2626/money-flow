@@ -168,6 +168,7 @@ export type TransactionWithDetails = TransactionRow & {
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
   cashback_share_amount?: number | null;
+  final_price?: number | null;
   original_amount?: number | null;
   type?: 'income' | 'expense' | 'transfer' | 'debt' | 'repayment';
   person_id?: string | null;

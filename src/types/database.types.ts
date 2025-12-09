@@ -78,6 +78,7 @@ export interface Database {
           installment_plan_id: string | null
           cashback_share_percent: number | null
           cashback_share_fixed: number | null
+          final_price: number | null
         }
         Insert: {
           id?: string

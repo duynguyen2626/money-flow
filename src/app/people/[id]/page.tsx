@@ -54,6 +54,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
     total_debt: c.originalPrincipal,
     total_repaid: c.totalBack,
     total_cashback: c.totalCashback,
+    totalOriginalDebt: c.totalOriginalDebt,
   }))
 
   const dialogBaseProps = { accounts, categories, people, shops }

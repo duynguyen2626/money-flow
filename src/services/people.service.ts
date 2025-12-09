@@ -214,7 +214,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   if (personIds.length > 0) {
     const { data: txns, error: txnsError } = await supabase
       .from('transactions')
-      .select('account_id, target_account_id, person_id, amount, status, occurred_at, type, tag, cashback_share_percent, cashback_share_fixed')
+      .select('account_id, target_account_id, person_id, amount, status, occurred_at, type, tag, cashback_share_percent, cashback_share_fixed, final_price')
       .eq('type', 'debt')
       .neq('status', 'void')
 
@@ -240,13 +240,18 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         }
 
         if (personId) {
-          // Calculate final price = amount - cashback
-          const rawAmount = Math.abs(txn.amount)
-          const percentVal = Number(txn.cashback_share_percent ?? 0)
-          const fixedVal = Number(txn.cashback_share_fixed ?? 0)
-          const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
-          const cashback = (rawAmount * normalizedPercent) + fixedVal
-          const finalPrice = rawAmount - cashback
+          // Calculate final price (Prefer DB final_price > Calc)
+          let finalPrice = 0
+          if (typeof (txn as any).final_price === 'number') {
+            finalPrice = Math.abs((txn as any).final_price)
+          } else {
+            const rawAmount = Math.abs(txn.amount)
+            const percentVal = Number(txn.cashback_share_percent ?? 0)
+            const fixedVal = Number(txn.cashback_share_fixed ?? 0)
+            const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
+            const cashback = (rawAmount * normalizedPercent) + fixedVal
+            finalPrice = rawAmount - cashback
+          }
 
           const current = debtBalanceByPerson.get(personId) ?? 0
           debtBalanceByPerson.set(personId, current + finalPrice)
@@ -265,20 +270,25 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   if (personIds.length > 0) {
     const { data: repayTxns, error: repayError } = await supabase
       .from('transactions')
-      .select('person_id, amount, status, cashback_share_percent, cashback_share_fixed')
+      .select('person_id, amount, status, cashback_share_percent, cashback_share_fixed, final_price')
       .eq('type', 'repayment')
       .neq('status', 'void')
 
     if (!repayError && repayTxns) {
       (repayTxns as any[]).forEach(txn => {
         if (txn.person_id && personIds.includes(txn.person_id)) {
-          // Calculate final price = amount - cashback
-          const rawAmount = Math.abs(txn.amount)
-          const percentVal = Number(txn.cashback_share_percent ?? 0)
-          const fixedVal = Number(txn.cashback_share_fixed ?? 0)
-          const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
-          const cashback = (rawAmount * normalizedPercent) + fixedVal
-          const finalPrice = rawAmount - cashback
+          // Calculate final price (Prefer DB final_price > Calc)
+          let finalPrice = 0
+          if (typeof (txn as any).final_price === 'number') {
+            finalPrice = Math.abs((txn as any).final_price)
+          } else {
+            const rawAmount = Math.abs(txn.amount)
+            const percentVal = Number(txn.cashback_share_percent ?? 0)
+            const fixedVal = Number(txn.cashback_share_fixed ?? 0)
+            const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
+            const cashback = (rawAmount * normalizedPercent) + fixedVal
+            finalPrice = rawAmount - cashback
+          }
 
           const current = debtBalanceByPerson.get(txn.person_id) ?? 0
           debtBalanceByPerson.set(txn.person_id, current - finalPrice)
@@ -310,7 +320,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   if (personIds.length > 0) {
     const { data: monthlyTxns, error: monthlyTxnsError } = await supabase
       .from('transactions')
-      .select('person_id, target_account_id, amount, occurred_at, tag, status, cashback_share_percent, cashback_share_fixed')
+      .select('person_id, target_account_id, amount, occurred_at, tag, status, cashback_share_percent, cashback_share_fixed, final_price')
       .eq('type', 'debt')
       .neq('status', 'void')
       .order('occurred_at', { ascending: false })
@@ -339,13 +349,19 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         const label =
           tagValue ?? (validDate ? format(validDate, 'MMM yy', { locale: enUS }).toUpperCase() : 'Debt')
 
-        // Calculate final price = amount - cashback
+        // Calculate final price using DB column if available
+        let finalPrice = 0
         const rawAmount = Math.abs(txn.amount)
         const percentVal = Number(txn.cashback_share_percent ?? 0)
         const fixedVal = Number(txn.cashback_share_fixed ?? 0)
         const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
         const cashback = (rawAmount * normalizedPercent) + fixedVal
-        const finalPrice = rawAmount - cashback
+
+        if (typeof (txn as any).final_price === 'number') {
+          finalPrice = Math.abs((txn as any).final_price)
+        } else {
+          finalPrice = rawAmount - cashback
+        }
 
         const personMap = monthlyDebtMap.get(ownerId) ?? new Map<string, MonthlyDebtSummary>()
         const existing = personMap.get(groupingKey)
@@ -648,17 +664,18 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
   if (debt_account_id) {
     const { data: txns } = await supabase
       .from('transactions')
-      .select('account_id, target_account_id, amount, status')
+      .select('account_id, target_account_id, amount, status, final_price')
       .or(`account_id.eq.${debt_account_id},target_account_id.eq.${debt_account_id}`)
       .neq('status', 'void');
 
     if (txns) {
       (txns as any[]).forEach((txn: any) => {
+        const amount = typeof txn.final_price === 'number' ? txn.final_price : txn.amount;
         if (txn.account_id === debt_account_id) {
-          balance += txn.amount; // Outflow decreases balance
+          balance += amount; // Outflow decreases balance
         }
         if (txn.target_account_id === debt_account_id) {
-          balance += Math.abs(txn.amount); // Inflow increases balance
+          balance += Math.abs(amount); // Inflow increases balance
         }
       });
     }
