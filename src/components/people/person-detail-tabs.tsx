@@ -49,9 +49,9 @@ export function PersonDetailTabs({
     ]
 
     return (
-        <div className="mt-4">
+        <div className="flex flex-col flex-1 overflow-hidden">
             {/* Tab Headers */}
-            <div className="flex border-b border-slate-200">
+            <div className="flex-none flex border-b border-slate-200">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
@@ -70,11 +70,11 @@ export function PersonDetailTabs({
             </div>
 
             {/* Tab Content */}
-            <div className="py-4">
+            <div className="flex-1 overflow-hidden py-4">
                 {activeTab === 'details' && (
-                    <div className="space-y-6">
+                    <div className="flex flex-col h-full overflow-hidden space-y-6">
                         {/* Debt Cycles */}
-                        <div>
+                        <div className="flex-none">
                             <h3 className="text-sm font-semibold text-slate-700 mb-3">Debt Cycles</h3>
                             <DebtCycleTabs
                                 allCycles={debtCycles}
@@ -87,7 +87,7 @@ export function PersonDetailTabs({
                         </div>
 
                         {/* Transactions */}
-                        <div>
+                        <div className="flex-1 overflow-hidden">
                             <FilterableTransactions
                                 transactions={transactions}
                                 categories={categories}

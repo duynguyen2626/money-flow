@@ -42,15 +42,21 @@ export function CustomTooltip({
   side,
   delayDuration = 200,
 }: CustomTooltipProps) {
+  const [isMounted, setIsMounted] = React.useState(false)
+
+  React.useEffect(() => {
+    setIsMounted(true)
+  }, [])
+
   return (
-    <TooltipProvider>
-      <Tooltip delayDuration={delayDuration}>
-        <TooltipTrigger asChild>{children}</TooltipTrigger>
+    <Tooltip delayDuration={delayDuration}>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      {isMounted && (
         <TooltipContent side={side}>
           {content}
         </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
+      )}
+    </Tooltip>
   )
 }
 

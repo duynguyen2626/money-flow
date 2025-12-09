@@ -377,9 +377,9 @@ export function AccountDetailsView({
     }
 
     return (
-        <div className="w-full h-[calc(100vh-64px)] flex flex-col space-y-4 p-6">
+        <div className="flex flex-col h-full overflow-hidden">
             {/* Header */}
-            <div className="flex flex-col lg:flex-row items-center justify-between bg-white p-4 rounded-lg border border-slate-200 shadow-sm shrink-0 gap-4">
+            <div className="flex-none flex flex-col lg:flex-row items-center justify-between bg-white p-4 mx-6 mt-6 rounded-lg border border-slate-200 shadow-sm gap-4">
                 {/* Left: Account Info & Stats */}
                 <div className="flex flex-1 items-center gap-6 w-full overflow-x-auto">
                     {/* Logo & Back */}
@@ -602,7 +602,7 @@ export function AccountDetailsView({
             </div>
 
             {/* Filters */}
-            <div className="bg-white p-3 rounded-lg border border-slate-200 shadow-sm shrink-0">
+            <div className="flex-none bg-white p-3 mx-6 rounded-lg border border-slate-200 shadow-sm">
                 <div className="flex flex-col xl:flex-row xl:items-center gap-3">
                     {/* Top Row (Mobile) / Left Side (Desktop): Search & Quick Filters */}
                     <div className="flex flex-1 flex-col md:flex-row gap-3">
@@ -797,7 +797,7 @@ export function AccountDetailsView({
 
             {/* Bulk Actions & Totals */}
             {selectedTxnIds.size > 0 && (
-                <div className="flex flex-wrap items-center justify-between gap-3 border rounded-md border-slate-200 bg-slate-50 px-3 py-2 shrink-0">
+                <div className="flex-none flex flex-wrap items-center justify-between gap-3 border rounded-md border-slate-200 bg-slate-50 px-3 py-2 mx-6">
                     <div className="flex flex-wrap items-center gap-2">
                         <button
                             className="px-3 py-1 rounded-full text-sm font-medium bg-gray-200 text-gray-800 hover:bg-gray-300"
@@ -850,27 +850,25 @@ export function AccountDetailsView({
             )}
 
             {/* Table Container */}
-            <div className="flex-1 border rounded-lg overflow-hidden bg-background shadow-sm">
-                <div className="h-full overflow-x-auto">
-                    <UnifiedTransactionTable
-                        transactions={finalTransactions}
-                        accountType={account.type}
-                        accountId={account.id}
-                        contextId={account.id}
-                        accounts={accounts}
-                        categories={categories}
-                        people={people}
-                        shops={shops}
-                        selectedTxnIds={selectedTxnIds}
-                        onSelectionChange={setSelectedTxnIds}
-                        activeTab={activeTab}
-                        onBulkActionStateChange={handleBulkActionStateChange}
-                        sortState={sortState}
-                        onSortChange={setSortState}
-                        hiddenColumns={['initial_back', 'people_back']}
-                        context="account"
-                    />
-                </div>
+            <div className="flex-1 overflow-hidden mx-6 mb-6">
+                <UnifiedTransactionTable
+                    transactions={finalTransactions}
+                    accountType={account.type}
+                    accountId={account.id}
+                    contextId={account.id}
+                    accounts={accounts}
+                    categories={categories}
+                    people={people}
+                    shops={shops}
+                    selectedTxnIds={selectedTxnIds}
+                    onSelectionChange={setSelectedTxnIds}
+                    activeTab={activeTab}
+                    onBulkActionStateChange={handleBulkActionStateChange}
+                    sortState={sortState}
+                    onSortChange={setSortState}
+                    hiddenColumns={[]}
+                    context="account"
+                />
             </div>
         </div>
     )

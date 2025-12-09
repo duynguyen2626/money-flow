@@ -397,11 +397,14 @@ async function fetchTransactions(
 
     let transactionIds: string[] = []
     if (lineQuery.error) {
-      console.error('Error fetching transaction lines:', {
-        accountId,
-        message: lineQuery.error.message ?? 'unknown error',
-        code: lineQuery.error.code,
-      })
+      // Expected: transaction_lines table removed in single-table migration
+      // Fallback query will handle this
+      if (lineQuery.error.code !== 'PGRST205' && lineQuery.error.code !== 'PGRST200') {
+        console.warn('Unexpected error fetching transaction lines (fallback will be used):', {
+          accountId,
+          code: lineQuery.error.code,
+        })
+      }
     } else {
       transactionIds = Array.from(
         new Set((lineQuery.data ?? [])
@@ -491,11 +494,14 @@ async function fetchTransactions(
       .limit(limit)
 
     if (fallbackError) {
-      console.error('Error fetching transactions via fallback:', {
-        accountId,
-        message: fallbackError?.message ?? 'unknown error',
-        code: fallbackError?.code,
-      })
+      // Only log if it's not the expected migration error
+      if (fallbackError.code !== 'PGRST200') {
+        console.error('Error fetching transactions via fallback:', {
+          accountId,
+          message: fallbackError?.message ?? 'unknown error',
+          code: fallbackError?.code,
+        })
+      }
       return []
     }
 

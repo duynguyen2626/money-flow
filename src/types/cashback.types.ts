@@ -57,6 +57,8 @@ export type AccountSpendingStats = {
   maxCashback: number | null
   rate: number
   earnedSoFar: number
+  sharedAmount: number // Total cashback shared with others
+  netProfit: number // earnedSoFar - sharedAmount
   // Smart Hint fields
   potentialRate?: number
   matchReason?: string

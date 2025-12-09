@@ -31,14 +31,12 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} suppressHydrationWarning>
-        <div id="root" suppressHydrationWarning>
-          <TooltipProvider>
-            <AppLayout>{children}</AppLayout>
-            <Toaster />
-          </TooltipProvider>
-        </div>
+    <html lang="en" suppressHydrationWarning className="h-full w-full overflow-hidden">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-full w-full overflow-hidden flex flex-col bg-background font-sans`} suppressHydrationWarning>
+        <TooltipProvider>
+          <AppLayout>{children}</AppLayout>
+          <Toaster />
+        </TooltipProvider>
       </body>
     </html>
   )
