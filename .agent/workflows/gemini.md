@@ -99,3 +99,37 @@ Badges: Màu tương phản cao (High Contrast).
 Interaction:
 
 Disable click vào dòng (Row). Phải dùng menu ... để Edit/Clone.
+// ... giữ nguyên phần đầu ...
+
+6. Recent Logic & UI System (Phase 77 - Cashback & Layout)
+
+A. Cashback Logic (New Architecture)
+
+Concept: Tách biệt giữa "Progress" (Đủ điều kiện chưa?) và "Economics" (Lời bao nhiêu?).
+
+Volunteer Mode:
+
+Một số Account (ví dụ thẻ phụ) chấp nhận "Lỗ" (Net Profit < 0) để tích điểm cho thẻ chính hoặc hội nhóm.
+
+UI phải hiển thị trạng thái này là "Contribution 💖" thay vì báo lỗi.
+
+Formulas:
+
+Missing Spend = Min Spend - Eligible Spend.
+
+Potential Profit (Temp) = Tiền hoàn dự kiến NHƯNG chưa đủ Min Spend (Màu: Amber/Gray).
+
+Net Profit (Real) = Total Generated - Shared Amount. (Chỉ tính khi đã Qualified).
+
+B. UI Guidelines (Strict Updates)
+
+Action Bar: KHÔNG dùng Grid Button cũ. Sử dụng "Horizontal Icon Bar" (1 hàng ngang, nút ghost/outline nhỏ gọn) nằm dưới cùng của Header.
+
+Account Cards (List):
+
+Tối ưu Performance: Không tính toán trong render.
+
+KPI Focus: Show rõ Min vs Spent vs Need.
+
+Images: BẮT BUỘC rounded-none (Square), border-none.
+

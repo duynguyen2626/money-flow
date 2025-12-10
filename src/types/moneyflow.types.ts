@@ -41,6 +41,7 @@ export type Account = {
   currency: string;
   current_balance: number;
   credit_limit?: number;
+  account_number?: string | null;
   owner_id: string;
   cashback_config?: Json | null;
   secured_by_account_id?: string | null;

@@ -625,8 +625,9 @@ export function EditAccountDialog({
   return (
     <>
       {!isControllable && (
-        <button
-          type="button"
+        <span
+          role="button"
+          tabIndex={0}
           className={
             buttonClassName ??
             (triggerContent
@@ -638,9 +639,16 @@ export function EditAccountDialog({
             onOpen?.()
             openDialog()
           }}
+          onKeyDown={event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              onOpen?.()
+              openDialog()
+            }
+          }}
         >
           {triggerContent ?? 'Settings'}
-        </button>
+        </span>
       )}
 
       {open &&

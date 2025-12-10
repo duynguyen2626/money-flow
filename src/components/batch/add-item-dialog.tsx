@@ -21,7 +21,6 @@ import {
     FormMessage,
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select' // Keep Select if used elsewhere, or remove if not
 import { Combobox } from '@/components/ui/combobox'
 import { addBatchItemAction } from '@/actions/batch.actions'
 import { toast } from 'sonner'
@@ -49,6 +48,7 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
     const [showDuplicateDialog, setShowDuplicateDialog] = useState(false)
     const [duplicateInfo, setDuplicateInfo] = useState<any>(null)
     const [recentBanks, setRecentBanks] = useState<string[]>([])
+    const [managedAccounts, setManagedAccounts] = useState<{ name: string; receiverName: string; bankNumber: string }[]>([])
 
     useEffect(() => {
         const stored = localStorage.getItem('recent_bank_codes')
@@ -57,6 +57,19 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
                 setRecentBanks(JSON.parse(stored))
             } catch (e) {
                 console.error('Failed to parse recent banks', e)
+            }
+        }
+        const managedStored = localStorage.getItem('batch_managed_accounts')
+        if (managedStored) {
+            try {
+                const parsed = JSON.parse(managedStored)
+                setManagedAccounts(Array.isArray(parsed) ? parsed.map((m: any) => ({
+                    name: m.name,
+                    receiverName: m.receiverName ?? m.name,
+                    bankNumber: m.bankNumber ?? '',
+                })) : [])
+            } catch (error) {
+                console.error('Failed to parse managed accounts', error)
             }
         }
     }, [])
@@ -72,8 +85,8 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
     const form = useForm<FormValues>({
         resolver: zodResolver(formSchema),
         defaultValues: {
-            receiver_name: 'NGUYEN THANH NAM',
-            target_account_id: '',
+            receiver_name: '',
+            target_account_id: 'none',
             amount: 0,
             note: '',
             bank_code: '',
@@ -104,6 +117,30 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
     const cardName = form.watch('card_name')
     const targetAccountId = form.watch('target_account_id')
     const bankNumber = form.watch('bank_number')
+    const accountItems = [
+        { value: 'none', label: 'None', description: 'Manual entry' },
+        ...accounts.map((a: any) => ({
+            value: a.id,
+            label: a.name,
+            description: a.account_number || 'No account number',
+            icon: a.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={a.logo_url} alt="" className="h-6 w-6 rounded-none object-contain" />
+            ) : (
+                <div className="flex h-6 w-6 items-center justify-center rounded-none bg-slate-200 text-[10px] font-semibold text-slate-700">
+                    {a.name?.[0]?.toUpperCase() ?? '?'}
+                </div>
+            ),
+        }))
+    ]
+
+    const bankNumberOptions = managedAccounts
+            .filter(acc => acc.bankNumber)
+            .map(acc => ({
+                value: acc.bankNumber,
+                label: acc.bankNumber,
+                description: acc.receiverName || acc.name,
+            }))
 
     // Auto-fill card name from target account (take everything after the first token)
     useEffect(() => {
@@ -131,33 +168,54 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
         }
     }, [bankCode, bankMappings, form])
 
-    // Smart Note Logic
+    // Sync receiver name / bank number from selected account
     useEffect(() => {
-        if (bankName) {
-            const parts = bankName.split('-')
-            // Take the part BEFORE the dash (e.g., "VCB" from "VCB - Ngoại Thương")
-            const shortBank = parts[0].trim()
-
-            // Extract Tag from Batch Name (assuming format "CKL TAG")
-            const batchParts = batchName.split(' ')
-            const tag = batchParts.length > 1 ? batchParts[batchParts.length - 1] : ''
-
-            // Construct note: BankName [CardName] MMMYY
-            let noteValue = shortBank
-            if (cardName && cardName.trim()) {
-                noteValue += ` ${cardName.trim()}`
+        if (!targetAccountId || targetAccountId === 'none') {
+            return
+        }
+        const target = accounts.find(a => a.id === targetAccountId)
+        if (target) {
+            if (target.name) {
+                form.setValue('receiver_name', target.name)
             }
-            if (tag) {
-                noteValue += ` ${tag}`
-            }
-
-            if (noteValue.trim()) {
-                form.setValue('note', noteValue)
+            if (target.account_number) {
+                form.setValue('bank_number', target.account_number)
             }
         }
-    }, [bankName, cardName, batchName, form])
+    }, [accounts, form, targetAccountId])
 
-    // Note: Receiver name is kept as default "NGUYEN THANH NAM" and not auto-filled from account
+    // Sync receiver/bank number from managed accounts dropdown
+    useEffect(() => {
+        if (!bankNumber) return
+        const managed = managedAccounts.find(acc => acc.bankNumber === bankNumber)
+        if (managed) {
+            form.setValue('receiver_name', managed.receiverName || managed.name)
+        }
+    }, [bankNumber, managedAccounts, form])
+
+    // Smart Note Logic
+    useEffect(() => {
+        const shortBank = bankName ? bankName.split('-')[0].trim() : ''
+        const batchParts = batchName.split(' ')
+        const tag = batchParts.length > 1 ? batchParts[batchParts.length - 1] : ''
+
+        let noteValue = shortBank
+        if (cardName && cardName.trim()) {
+            noteValue += ` ${cardName.trim()}`
+        }
+        if (tag) {
+            noteValue += ` ${tag}`
+        }
+        const managed = managedAccounts.find(acc => acc.bankNumber === bankNumber)
+        const receiver = managed?.receiverName || managed?.name
+        if (receiver) {
+            noteValue = noteValue ? `${noteValue} ${receiver}` : receiver
+        }
+
+        if (noteValue.trim()) {
+            form.setValue('note', noteValue.trim())
+        }
+    }, [bankName, cardName, batchName, form, managedAccounts, bankNumber])
 
     async function onSubmit(values: FormValues) {
         try {
@@ -205,8 +263,8 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
         })
         setOpen(false)
         form.reset({
-            receiver_name: 'NGUYEN THANH NAM',
-            target_account_id: '',
+            receiver_name: '',
+            target_account_id: 'none',
             amount: 0,
             note: '',
             bank_code: '',
@@ -303,27 +361,16 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
                                     <FormItem>
                                         <FormLabel>Bank Number</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="e.g., 123456" {...field} />
-                                        </FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="target_account_id"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Target Account (Optional)</FormLabel>
-                                        <FormControl>
-                                            <Select
-                                                items={[
-                                                    { value: 'none', label: 'None' },
-                                                    ...accounts.map(a => ({ value: a.id, label: a.name }))
-                                                ]}
-                                                value={field.value}
-                                                onValueChange={field.onChange}
-                                                placeholder="Select account"
+                                            <Combobox
+                                                items={bankNumberOptions}
+                                                value={field.value || 'none'}
+                                                onValueChange={(val) => {
+                                                    if (!val) return
+                                                    field.onChange(val)
+                                                }}
+                                                placeholder="Select bank number"
+                                                inputPlaceholder="Search bank number..."
+                                                emptyState="No bank number found. Add in Accounts Manage tab."
                                             />
                                         </FormControl>
                                         <FormMessage />
@@ -337,7 +384,32 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
                                     <FormItem>
                                         <FormLabel>Receiver Name</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="e.g., John Doe" {...field} />
+                                            <Input
+                                                placeholder="Receiver"
+                                                {...field}
+                                                disabled
+                                                className="bg-gray-100"
+                                            />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="target_account_id"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <FormLabel>Target Account (Optional)</FormLabel>
+                                        <FormControl>
+                                            <Combobox
+                                                items={accountItems}
+                                                value={field.value || 'none'}
+                                                onValueChange={(val) => field.onChange(val ?? 'none')}
+                                                placeholder="Select account"
+                                                inputPlaceholder="Search accounts..."
+                                                emptyState="No account found"
+                                            />
                                         </FormControl>
                                         <FormMessage />
                                     </FormItem>

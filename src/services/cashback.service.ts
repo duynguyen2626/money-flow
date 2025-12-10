@@ -471,7 +471,8 @@ export async function getAccountSpendingStats(
 
   // Calculate shared amount and net profit
   const sharedAmount = safeNumber(totalPeopleBack)
-  const netProfit = safeNumber(earnedSoFar - sharedAmount)
+  const potentialProfit = safeNumber(cappedEarned - sharedAmount)
+  const netProfit = meetsMinSpend ? safeNumber(earnedSoFar - sharedAmount) : 0
 
   // --- Smart Hint Logic ---
   let potentialRate = config.rate
@@ -548,6 +549,7 @@ export async function getAccountSpendingStats(
     rate: config.rate,
     earnedSoFar,
     sharedAmount,
+    potentialProfit,
     netProfit,
     potentialRate,
     matchReason,

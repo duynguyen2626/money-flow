@@ -18,6 +18,22 @@ const numberFormatter = new Intl.NumberFormat('vi-VN', {
   maximumFractionDigits: 0,
 })
 
+const recentTxTimeFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+  timeZone: 'UTC',
+})
+
+const refundDateFormatter = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  timeZone: 'UTC',
+})
+
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => ({
   value: (i + 1).toString(),
   label: format(new Date(2024, i, 1), 'MMMM'),
@@ -398,7 +414,7 @@ export function DashboardContent({
                             {tx.description || tx.category_name}
                           </p>
                           <p className="text-[10px] text-slate-400">
-                            {format(new Date(tx.occurred_at), 'MMM d • HH:mm')}
+                            {recentTxTimeFormatter.format(new Date(tx.occurred_at))}
                           </p>
                         </div>
                       </div>
@@ -442,7 +458,7 @@ export function DashboardContent({
                         <div className="flex-1 min-w-0">
                           <p className="font-semibold truncate">{tx.note || 'Pending refund'}</p>
                           <p className="text-[10px] text-purple-500">
-                            {format(new Date(tx.occurred_at), 'MMM d, yyyy')}
+                            {refundDateFormatter.format(new Date(tx.occurred_at))}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
