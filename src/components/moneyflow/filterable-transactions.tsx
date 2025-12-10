@@ -289,25 +289,27 @@ export function FilterableTransactions({
         if (selectedType === 'all') return searchedTransactions
         return searchedTransactions.filter(txn => {
             const visualType = (txn as any).displayType ?? txn.type
-            if (selectedType === 'transfer') {
-                return txn.type === 'transfer' || visualType === 'transfer'
-            }
-            if (selectedType === 'lend') {
-                return txn.type === 'debt' || visualType === 'debt'
-            }
-            if (selectedType === 'repay') {
-                return txn.type === 'repayment' || visualType === 'repayment'
-            }
+            const hasPerson = Boolean((txn as any).person_id)
+            if (selectedType === 'lend') return visualType === 'debt' || (visualType === 'expense' && hasPerson)
+            if (selectedType === 'repay') return visualType === 'repayment' || (visualType === 'income' && hasPerson)
+            if (selectedType === 'expense') return visualType === 'expense' && !hasPerson
             return visualType === selectedType
         })
     }, [searchedTransactions, selectedType])
 
     const finalTransactions = useMemo(() => {
-        if (showSelectedOnly && selectedTxnIds.size > 0) {
-            return filteredByType.filter(txn => selectedTxnIds.has(txn.id))
+        const applyTab = (list: TransactionWithDetails[]) => {
+            if (activeTab === 'void') return list.filter(txn => txn.status === 'void')
+            if (activeTab === 'pending') return list.filter(txn => txn.status === 'pending' || txn.status === 'waiting_refund')
+            return list.filter(txn => txn.status !== 'void')
         }
-        return filteredByType
-    }, [filteredByType, showSelectedOnly, selectedTxnIds])
+
+        const base = applyTab(filteredByType)
+        if (showSelectedOnly && selectedTxnIds.size > 0) {
+            return base.filter(txn => selectedTxnIds.has(txn.id))
+        }
+        return base
+    }, [filteredByType, showSelectedOnly, selectedTxnIds, activeTab])
 
     const totals = useMemo(() => {
         // Calculate totals from searchedTransactions (BEFORE type filtering) 
@@ -319,7 +321,7 @@ export function FilterableTransactions({
         // Apply activeTab filter for voided vs active transactions
         const effectiveSource = source.filter(txn => {
             if (activeTab === 'void') return txn.status === 'void'
-            if (activeTab === 'pending') return txn.status === 'pending'
+            if (activeTab === 'pending') return txn.status === 'pending' || txn.status === 'waiting_refund'
             return txn.status !== 'void' // 'active' shows all non-voided
         })
 
@@ -391,7 +393,7 @@ export function FilterableTransactions({
                     )}
                     <div className="flex flex-1 items-center gap-2">
                         {/* Quick Filters (All/Void/Pending) */}
-                        <div className="flex items-center gap-2 shrink-0 overflow-x-auto">
+                        <div className="flex items-center gap-2 shrink-0 overflow-visible">
                             <button
                                 className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'active' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
                                 onClick={() => setActiveTab('active')}
@@ -473,7 +475,7 @@ export function FilterableTransactions({
                         </div>
 
                         {/* Type Filters */}
-                        <div className="flex items-center gap-2 shrink-0 overflow-x-auto">
+                        <div className="flex items-center gap-2 shrink-0 overflow-visible">
                             <button
                                 className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${selectedType === 'all' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
                                 onClick={() => setSelectedType('all')}
@@ -508,7 +510,7 @@ export function FilterableTransactions({
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 overflow-x-auto">
+                    <div className="flex items-center gap-2 overflow-visible">
                         <Popover>
                             <PopoverTrigger asChild>
                                 <button

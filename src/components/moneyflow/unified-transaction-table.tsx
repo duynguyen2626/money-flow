@@ -1197,7 +1197,7 @@ export function UnifiedTransactionTable({
                   >
                     <MoreHorizontal className="h-4 w-4" />
                   </button>
-                  {isMenuOpen && createPortal(
+                  {isMenuOpen && typeof document !== 'undefined' && createPortal(
                     <>
                       <div
                         className="fixed inset-0 z-[60] bg-transparent"

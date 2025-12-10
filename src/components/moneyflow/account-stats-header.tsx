@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowDownRight, ArrowUpRight, CreditCard, TrendingUp, Wallet, Link2, Archive, RotateCcw, Clock4, CheckCircle2 } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, CreditCard, TrendingUp, Wallet, Link2, Archive, RotateCcw, Clock4, CheckCircle2, RefreshCw, Settings } from 'lucide-react'
 
 import { formatCurrency, getAccountTypeLabel } from '@/lib/account-utils'
 import { Account } from '@/types/moneyflow.types'
@@ -240,105 +240,151 @@ export function AccountStatsHeader({
         </div>
       </div>
 
-      {/* 4 Cards Grid Layout - Updated Split Cashback View */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
-        {/* Pending & Confirmed */}
-        {statItems.map(item => (
-          <div key={item.label} className={`flex flex-col gap-1 rounded-lg ${item.label === 'Confirmed' ? 'bg-white border border-slate-200' : item.bg} px-3 py-2 shadow-sm relative h-24 justify-between`}>
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
-              <span>{item.label}</span>
-              {item.icon}
-            </div>
-            <div className="flex flex-col">
-              <span className={`text-xl font-bold tabular-nums ${item.tone}`}>
-                {formatCurrency(item.value)}
-              </span>
-              <span className="text-[10px] text-slate-400 font-medium truncate">
-                {item.subtext || '\u00A0'}
-              </span>
-            </div>
-            {item.label === 'Pending' && item.value > 0 && (
-              <div className="absolute right-2 bottom-2">
-                <ConfirmMoneyReceived accountId={account.id} minimal />
-              </div>
-            )}
-          </div>
-        ))}
-
-        {/* Card 3: Qualifying Progress */}
-        {account.type === 'credit_card' && cashbackStats ? (
-          <div className={`flex flex-col gap-1 rounded-lg px-3 py-2 shadow-sm h-24 justify-between border ${minSpend && cashbackStats.currentSpend < minSpend
+      {/* Layer 2: Cashback Stats - 2 Card Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-3">
+        {/* Card 1: Qualifying Status - Only show if cashback config exists with minSpend */}
+        {account.type === 'credit_card' && cashbackStats && minSpend !== null && minSpend !== undefined && (() => {
+          const safeMinSpend = minSpend // Type narrowed here
+          return (
+            <div className={`flex flex-col gap-2 rounded-lg px-3 py-3 shadow-sm border ${cashbackStats.currentSpend < safeMinSpend
               ? 'bg-amber-50 border-amber-100'
               : 'bg-emerald-50 border-emerald-100'
-            }`}>
-            <div className="flex items-center justify-between text-xs font-bold text-slate-600">
-              <span>Qualifying Status</span>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <div className="text-[10px] text-slate-500 space-y-0.5">
-                <div>Min Spend: {formatCurrency(minSpend ?? 0)}</div>
-                <div>Current: {formatCurrency(cashbackStats.currentSpend)}</div>
+              }`}>
+              <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+                <span>Qualifying Status</span>
               </div>
 
-              {minSpend && cashbackStats.currentSpend < minSpend ? (
-                <>
-                  <Progress
-                    value={(cashbackStats.currentSpend / minSpend) * 100}
-                    className="h-1.5"
-                  />
+              <div className="flex flex-col gap-1.5">
+                {/* Row 1: Min vs Current */}
+                <div className="flex items-center justify-between text-[10px] text-slate-600">
+                  <span>Min: {formatCurrency(safeMinSpend)}</span>
+                  <span>Current: {formatCurrency(cashbackStats.currentSpend)}</span>
+                </div>
+
+                {/* Row 2: Progress Bar */}
+                <Progress
+                  value={Math.min(100, (cashbackStats.currentSpend / safeMinSpend) * 100)}
+                  className="h-1.5"
+                />
+
+                {/* Row 3: Status Message */}
+                {cashbackStats.currentSpend < safeMinSpend ? (
                   <span className="text-xs font-bold text-amber-700 flex items-center gap-1">
-                    ⚠️ Need {formatCurrency(minSpend - cashbackStats.currentSpend)} more
+                    ⚠️ Need {formatCurrency(safeMinSpend - cashbackStats.currentSpend)} more
                   </span>
-                </>
-              ) : (
-                <span className="text-sm font-bold text-emerald-700 flex items-center gap-1">
-                  ✅ Qualified
-                </span>
-              )}
+                ) : (
+                  <span className="text-sm font-bold text-emerald-700 flex items-center gap-1">
+                    ✅ Qualified
+                  </span>
+                )}
+              </div>
             </div>
+          )
+        })()}
+
+        {/* Card 2: Reward Economics - Smart Logic */}
+        {account.type === 'credit_card' && cashbackStats && (() => {
+          const isQualified = minSpend === null || minSpend === undefined || cashbackStats.currentSpend >= minSpend
+          const netProfit = cashbackStats.netProfit
+
+          // Determine display mode
+          let displayMode: 'potential' | 'profit' | 'contribution'
+          let displayValue: number
+          let displayLabel: string
+          let displayColor: string
+          let displayBg: string
+          let displayBorder: string
+
+          if (!isQualified) {
+            // Not qualified - show potential (locked)
+            displayMode = 'potential'
+            displayValue = cashbackStats.earnedSoFar
+            displayLabel = 'Potential Profit'
+            displayColor = 'text-slate-500'
+            displayBg = 'bg-slate-50'
+            displayBorder = 'border-slate-200'
+          } else if (netProfit >= 0) {
+            // Qualified with positive profit
+            displayMode = 'profit'
+            displayValue = netProfit
+            displayLabel = 'Net Profit'
+            displayColor = 'text-emerald-700 font-bold'
+            displayBg = 'bg-emerald-50'
+            displayBorder = 'border-emerald-100'
+          } else {
+            // Qualified with negative profit (Volunteer Mode)
+            displayMode = 'contribution'
+            displayValue = Math.abs(netProfit)
+            displayLabel = 'Contribution 💖'
+            displayColor = 'text-pink-600 font-bold'
+            displayBg = 'bg-pink-50'
+            displayBorder = 'border-pink-100'
+          }
+
+          return (
+            <div className={`flex flex-col gap-2 rounded-lg px-3 py-3 shadow-sm border ${displayBg} ${displayBorder}`}>
+              <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+                <span>{displayLabel}</span>
+                {displayMode === 'potential' && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600">🔒 Locked</span>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1">
+                {/* Main Value */}
+                <span className={`text-2xl font-bold tabular-nums ${displayColor}`}>
+                  {formatCurrency(displayValue)}
+                </span>
+
+                {/* Additional Info */}
+                <div className="text-[10px] text-slate-500 space-y-0.5">
+                  <div>Generated: {formatCurrency(cashbackStats.earnedSoFar)}</div>
+                  <div>Shared: {formatCurrency(cashbackStats.sharedAmount)}</div>
+                </div>
+
+                {/* Subtext for contribution mode */}
+                {displayMode === 'contribution' && (
+                  <span className="text-[10px] text-pink-500 italic">Supporting the group</span>
+                )}
+              </div>
+            </div>
+          )
+        })()}
+      </div>
+
+      {/* Layer 3: Action Toolbar */}
+      <div className="flex flex-wrap gap-2 items-center mt-3 pt-3 border-t border-slate-200">
+        {/* Pending Button - Only show if count > 0 */}
+        {resolvedStats && resolvedStats.waiting > 0 && (
+          <div className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-md border border-amber-200 bg-amber-50 text-amber-700">
+            <Clock4 className="h-3.5 w-3.5" />
+            Pending ({resolvedStats.waiting})
+            <ConfirmMoneyReceived accountId={account.id} minimal />
           </div>
-        ) : (
-          /* Placeholder/Empty slot if not credit card */
-          null
         )}
 
-        {/* Card 4: Rewards Breakdown */}
-        {account.type === 'credit_card' && cashbackStats ? (
-          <div className="flex flex-col gap-1 rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2 shadow-sm h-24 justify-between">
-            <div className="flex items-center justify-between text-xs font-bold text-emerald-700">
-              <span>Reward Value</span>
-            </div>
+        {/* Confirmed Info - Only show if count > 0 */}
+        {resolvedStats && resolvedStats.confirmed > 0 && (
+          <div className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-md border border-blue-200 bg-blue-50 text-blue-700">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Confirmed ({resolvedStats.confirmed})
+          </div>
+        )}
 
-            <div className="flex flex-col">
-              <div className="text-[10px] text-slate-600 space-y-0.5">
-                <div>Total Generated: {formatCurrency(cashbackStats.earnedSoFar)}</div>
-                <div>Shared w/ Others: {formatCurrency(cashbackStats.sharedAmount)}</div>
-              </div>
-              <span className="text-xl font-bold tabular-nums text-emerald-700 mt-1">
-                Net: {formatCurrency(cashbackStats.netProfit)}
-              </span>
-            </div>
-          </div>
-        ) : isAssetAccount ? (
-          // Asset Account Logic reused for Slot 4
-          <div className="flex flex-col gap-1 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 shadow-sm h-24 justify-between">
-            <div className="flex items-center justify-between text-xs font-bold text-blue-700">
-              <div className="flex items-center gap-1">
-                <CreditCard className="h-3.5 w-3.5" />
-                <span>Interest: {assetConfig?.interestRate ? `${assetConfig.interestRate}%` : 'N/A'}</span>
-              </div>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-slate-700">
-                {assetConfig?.termMonths ? `${assetConfig.termMonths} mo` : 'No term'}
-              </span>
-              <span className="text-[10px] text-slate-500">
-                {assetConfig?.maturityDate ? `Matures ${assetConfig.maturityDate}` : ''}
-              </span>
-            </div>
-          </div>
-        ) : null}
+        {/* Sync Button - Always show */}
+        <button
+          onClick={() => router.refresh()}
+          className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          Sync
+        </button>
+
+        {/* Settings Button - Always show */}
+        <button className="inline-flex items-center gap-1.5 h-8 px-3 text-xs font-semibold rounded-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+          <Settings className="h-3.5 w-3.5" />
+          Config
+        </button>
       </div>
     </div>
   )

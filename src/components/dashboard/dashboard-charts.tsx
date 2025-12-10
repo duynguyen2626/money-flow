@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 
 type SpendingData = {
@@ -31,6 +32,12 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 })
 
 export function DashboardCharts({ spendingByCategory }: DashboardChartsProps) {
+    const [isMounted, setIsMounted] = useState(false)
+
+    useEffect(() => {
+        setIsMounted(true)
+    }, [])
+
     if (!spendingByCategory || spendingByCategory.length === 0) {
         return (
             <div className="flex items-center justify-center h-64 text-slate-400">
@@ -106,27 +113,33 @@ export function DashboardCharts({ spendingByCategory }: DashboardChartsProps) {
     }
 
     return (
-        <div className="w-full">
-            <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                    <Pie
-                        data={data}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        label={({ name, percent }) => `${name}: ${percent ? (percent * 100).toFixed(0) : 0}%`}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                    >
-                        {data.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))}
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend content={<CustomLegend />} />
-                </PieChart>
-            </ResponsiveContainer>
+        <div className="w-full min-h-[300px]">
+            {!isMounted ? (
+                <div className="flex h-[300px] items-center justify-center text-xs text-slate-400">
+                    Loading chart...
+                </div>
+            ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                        <Pie
+                            data={data}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            label={({ name, percent }) => `${name}: ${percent ? (percent * 100).toFixed(0) : 0}%`}
+                            outerRadius={80}
+                            fill="#8884d8"
+                            dataKey="value"
+                        >
+                            {data.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                        </Pie>
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend content={<CustomLegend />} />
+                    </PieChart>
+                </ResponsiveContainer>
+            )}
         </div>
     )
 }

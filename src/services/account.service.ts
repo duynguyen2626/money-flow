@@ -12,6 +12,7 @@ type AccountRow = {
   current_balance: number | null
   credit_limit: number | null
   owner_id: string | null
+  account_number: string | null
   cashback_config: Json | null
   secured_by_account_id: string | null
   is_active: boolean | null
@@ -58,6 +59,7 @@ export async function getAccounts(): Promise<Account[]> {
     current_balance: item.current_balance ?? 0,
     credit_limit: item.credit_limit ?? 0,
     owner_id: item.owner_id ?? '',
+    account_number: item.account_number ?? null,
     secured_by_account_id: item.secured_by_account_id ?? null,
     cashback_config: normalizeCashbackConfig(item.cashback_config),
     is_active: typeof item.is_active === 'boolean' ? item.is_active : null,
@@ -102,6 +104,7 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
     current_balance: row.current_balance ?? 0,
     credit_limit: row.credit_limit ?? 0,
     owner_id: row.owner_id ?? '',
+    account_number: row.account_number ?? null,
     secured_by_account_id: row.secured_by_account_id ?? null,
     cashback_config: normalizeCashbackConfig(row.cashback_config),
     is_active: typeof row.is_active === 'boolean' ? row.is_active : null,
@@ -588,7 +591,26 @@ export async function updateAccountConfig(
 export async function getAccountStats(accountId: string) {
   const { getAccountSpendingStats } = await import('@/services/cashback.service')
   const stats = await getAccountSpendingStats(accountId, new Date())
-  return stats
+
+  if (!stats) {
+    return null
+  }
+
+  const rawPotential = stats.currentSpend * stats.rate
+  const cappedPotential =
+    typeof stats.maxCashback === 'number'
+      ? Math.min(rawPotential, stats.maxCashback)
+      : rawPotential
+
+  const potentialProfit =
+    typeof stats.potentialProfit === 'number' && Number.isFinite(stats.potentialProfit)
+      ? stats.potentialProfit
+      : cappedPotential - stats.sharedAmount
+
+  return {
+    ...stats,
+    potentialProfit,
+  }
 }
 
 export async function getAccountTransactionDetails(

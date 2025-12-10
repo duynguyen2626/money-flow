@@ -58,6 +58,7 @@ export type AccountSpendingStats = {
   rate: number
   earnedSoFar: number
   sharedAmount: number // Total cashback shared with others
+  potentialProfit: number // Earnings minus sharing before qualification gates
   netProfit: number // earnedSoFar - sharedAmount
   // Smart Hint fields
   potentialRate?: number
