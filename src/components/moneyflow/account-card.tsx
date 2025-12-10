@@ -114,15 +114,21 @@ function AccountCardComponent({
 
   // Balance Logic
   const creditLimit = account.credit_limit ?? 0
-  const netBalance = (account.total_in ?? 0) - (account.total_out ?? 0)
-  let displayBalance = creditLimit + netBalance
+  // Fix: total_out is negative, so we ADD it, not subtract
+  const netBalance = (account.total_in ?? 0) + (account.total_out ?? 0)
+
+  // For non-credit cards, we must include initial_balance
+  let displayBalance = isCreditCard
+    ? creditLimit + netBalance
+    : (0) + netBalance
+
   let displayLimit = creditLimit
 
   if (isCreditCard && isChildCard && parentAccount) {
-    const parentNetBalance = (parentAccount.total_in ?? 0) - (parentAccount.total_out ?? 0)
+    const parentNetBalance = (parentAccount.total_in ?? 0) + (parentAccount.total_out ?? 0)
     const siblings = allAccounts.filter(a => getSharedLimitParentId(a.cashback_config) === parentAccount.id)
     const totalChildDebt = siblings.reduce((sum, child) => {
-      const childNet = (child.total_in ?? 0) - (child.total_out ?? 0)
+      const childNet = (child.total_in ?? 0) + (child.total_out ?? 0)
       return sum + Math.abs(childNet < 0 ? childNet : 0)
     }, 0)
     const parentDebt = Math.abs(parentNetBalance < 0 ? parentNetBalance : 0)
@@ -133,7 +139,7 @@ function AccountCardComponent({
   if (isCreditCard && isParentCard) {
     const childCards = allAccounts.filter(a => getSharedLimitParentId(a.cashback_config) === account.id)
     const totalChildDebt = childCards.reduce((sum, child) => {
-      const childNetBalance = (child.total_in ?? 0) - (child.total_out ?? 0)
+      const childNetBalance = (child.total_in ?? 0) + (child.total_out ?? 0)
       return sum + Math.abs(childNetBalance < 0 ? childNetBalance : 0)
     }, 0)
     const currentDebt = Math.abs(netBalance < 0 ? netBalance : 0)

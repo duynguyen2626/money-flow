@@ -49,7 +49,7 @@ function getDaysUntilDue(account: Account): number {
 
 function getAccountBalance(account: Account, allAccounts: Account[]): number {
   const creditLimit = account.credit_limit ?? 0
-  const netBalance = (account.total_in ?? 0) - (account.total_out ?? 0)
+  const netBalance = (account.total_in ?? 0) + (account.total_out ?? 0)
 
   if (account.type !== 'credit_card') return netBalance
 
@@ -57,10 +57,10 @@ function getAccountBalance(account: Account, allAccounts: Account[]): number {
   if (sharedLimitParentId) {
     const parent = allAccounts.find(a => a.id === sharedLimitParentId)
     if (parent) {
-      const parentNetBalance = (parent.total_in ?? 0) - (parent.total_out ?? 0)
+      const parentNetBalance = (parent.total_in ?? 0) + (parent.total_out ?? 0)
       const siblings = allAccounts.filter(a => getSharedLimitParentId(a.cashback_config) === parent.id)
       const totalChildDebt = siblings.reduce((sum, child) => {
-        const childNet = (child.total_in ?? 0) - (child.total_out ?? 0)
+        const childNet = (child.total_in ?? 0) + (child.total_out ?? 0)
         return sum + Math.abs(childNet < 0 ? childNet : 0)
       }, 0)
       const parentDebt = Math.abs(parentNetBalance < 0 ? parentNetBalance : 0)
