@@ -34,6 +34,25 @@ export type Shop = {
   default_category_id?: string | null
 }
 
+export type AccountStats = {
+  usage_percent: number // Credit Utilization Ratio
+  remaining_limit: number // Available to spend
+  spent_this_cycle: number
+  min_spend: number | null
+  missing_for_min: number | null
+  is_qualified: boolean
+  cycle_range: string
+  due_date_display: string | null
+  remains_cap: number | null
+}
+
+export type AccountRelationships = {
+  is_parent: boolean
+  child_count: number
+  child_accounts: { id: string; name: string; avatar_url: string | null }[]
+  parent_info: { id: string; name: string; type: Account['type']; avatar_url: string | null } | null
+}
+
 export type Account = {
   id: string;
   name: string;
@@ -41,6 +60,7 @@ export type Account = {
   currency: string;
   current_balance: number;
   credit_limit?: number;
+  parent_account_id?: string | null;
   account_number?: string | null;
   owner_id: string;
   cashback_config?: Json | null;
@@ -50,6 +70,8 @@ export type Account = {
   total_in?: number;
   total_out?: number;
   annual_fee?: number | null;
+  stats?: AccountStats | null;
+  relationships?: AccountRelationships | null;
 }
 
 export type AccountCashbackSnapshot = {

@@ -3,7 +3,7 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { FilterIcon, X, Trash2, Undo, FileSpreadsheet } from 'lucide-react'
+import { ListFilter, X, Trash2, Undo, FileSpreadsheet, ArrowLeft, RotateCcw } from 'lucide-react'
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
@@ -34,6 +34,9 @@ type FilterableTransactionsProps = {
     shops?: Shop[]
     hidePeopleColumn?: boolean
     context?: 'person' | 'account' | 'general'
+    // Controlled Props Support
+    selectedType?: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay'
+    onTypeChange?: (type: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay') => void
 }
 
 type BulkActionState = {
@@ -63,11 +66,19 @@ export function FilterableTransactions({
     onSearchChange,
     shops = [],
     context,
+    selectedType: externalType,
+    onTypeChange,
 }: FilterableTransactionsProps) {
     const { selectedTag, setSelectedTag } = useTagFilter()
     const [searchTermInternal, setSearchTermInternal] = useState('');
     const searchTerm = externalSearch ?? searchTermInternal
     const setSearchTerm = onSearchChange ?? setSearchTermInternal
+
+    // Controlled Type State
+    const [selectedTypeInternal, setSelectedTypeInternal] = useState<'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay'>('all')
+    const selectedType = externalType ?? selectedTypeInternal
+    const setSelectedType = onTypeChange ?? setSelectedTypeInternal
+
     const [selectedTxnIds, setSelectedTxnIds] = useState(new Set<string>());
     const [showSelectedOnly, setShowSelectedOnly] = useState(false)
     const currentYear = String(new Date().getFullYear())
@@ -79,7 +90,7 @@ export function FilterableTransactions({
     const [activeTab, setActiveTab] = useState<'active' | 'void' | 'pending'>('active')
     const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null)
     const [bulkActions, setBulkActions] = useState<BulkActionState | null>(null)
-    const [selectedType, setSelectedType] = useState<'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay'>('all')
+    // removed local selectedType state definition as it's now handled above
     const [sortState, setSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
     const [isExcelMode, setIsExcelMode] = useState(false)
 
@@ -290,9 +301,28 @@ export function FilterableTransactions({
         return searchedTransactions.filter(txn => {
             const visualType = (txn as any).displayType ?? txn.type
             const hasPerson = Boolean((txn as any).person_id)
-            if (selectedType === 'lend') return visualType === 'debt' || (visualType === 'expense' && hasPerson)
-            if (selectedType === 'repay') return visualType === 'repayment' || (visualType === 'income' && hasPerson)
-            if (selectedType === 'expense') return visualType === 'expense' && !hasPerson
+
+            // Unified Logic (User Defined):
+            // Lend = Debt (negative) OR Expense with Person (if not purely classified as Expense)
+            // But since 'Out' is 'My Expenses' (without person), and Lend implies Person/Debt...
+
+            // LEND: Matches Type Debt OR (Expense + Person)
+            if (selectedType === 'lend') {
+                return (txn.type === 'debt' && (txn.amount ?? 0) < 0) || (visualType === 'expense' && hasPerson)
+            }
+            // REPAY: Matches Type Repayment OR (Debt + Positive) OR (Income + Person)
+            if (selectedType === 'repay') {
+                return txn.type === 'repayment' || (txn.type === 'debt' && (txn.amount ?? 0) > 0) || (visualType === 'income' && hasPerson)
+            }
+            // MY EXPENSES (Out): Matches pure Expense (no person)
+            if (selectedType === 'expense') {
+                return visualType === 'expense' && !hasPerson && txn.type !== 'debt'
+            }
+            // MY INCOME (In): Matches pure Income (no person)
+            if (selectedType === 'income') {
+                return visualType === 'income' && !hasPerson && txn.type !== 'repayment'
+            }
+
             return visualType === selectedType
         })
     }, [searchedTransactions, selectedType])
@@ -329,19 +359,14 @@ export function FilterableTransactions({
             (acc, txn) => {
                 const kind = txn.type ?? (txn as any).displayType ?? 'expense'
                 const value = Math.abs(txn.amount ?? 0)
+                const hasPerson = Boolean((txn as any).person_id)
 
                 // Debt/repayment transactions
-                if (kind === 'debt') {
+                if (kind === 'debt' || (kind === 'expense' && hasPerson)) {
                     acc.lend += value
-                    return acc
-                }
-                if (kind === 'repayment') {
+                } else if (kind === 'repayment' || (kind === 'income' && hasPerson)) {
                     acc.collect += value
-                    return acc
-                }
-
-                // Regular income/expense
-                if (kind === 'income') {
+                } else if (kind === 'income') {
                     acc.income += value
                 } else if (kind === 'expense') {
                     acc.expense += value
@@ -374,10 +399,50 @@ export function FilterableTransactions({
 
     const isSortActive = sortState.key !== 'date' || sortState.dir !== 'desc'
 
+    // Sort Logic
+    const sortedTransactions = useMemo(() => {
+        const data = [...finalTransactions]
+        return data.sort((a, b) => {
+            const dateA = new Date(a.occurred_at ?? a.created_at ?? 0).getTime()
+            const dateB = new Date(b.occurred_at ?? b.created_at ?? 0).getTime()
+
+            if (sortState.key === 'date') {
+                return sortState.dir === 'asc' ? dateA - dateB : dateB - dateA
+            } else if (sortState.key === 'amount') {
+                const amtA = Math.abs(a.amount ?? 0)
+                const amtB = Math.abs(b.amount ?? 0)
+                return sortState.dir === 'asc' ? amtA - amtB : amtB - amtA
+            }
+            return 0
+        })
+    }, [finalTransactions, sortState])
+
+    // Pagination Logic
+    const [pageSize, setPageSize] = useState(20)
+    const [currentPage, setCurrentPage] = useState(1)
+    const [fontSize, setFontSize] = useState(14)
+
+    // Reset to page 1 when filters change
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [
+        contextId, searchTerm, selectedType, selectedTag,
+        selectedCategoryId, selectedSubcategoryId,
+        selectedPersonId, selectedTxnIds.size, activeTab,
+        selectedYear, sortState
+    ])
+
+    const totalPages = Math.ceil(sortedTransactions.length / pageSize)
+    const paginatedTransactions = useMemo(() => {
+        const start = (currentPage - 1) * pageSize
+        return sortedTransactions.slice(start, start + pageSize)
+    }, [sortedTransactions, currentPage, pageSize])
+
     return (
         <div className="flex flex-col h-full overflow-hidden space-y-0">
+            {/* 1. Header Toolbar - Static */}
             {!onSearchChange && (
-                <div className="flex-none flex flex-col gap-3 md:flex-row md:items-center bg-slate-100 py-3 px-1 z-10 border-b shadow-sm">
+                <div className="flex-none flex flex-col gap-3 md:flex-row md:items-center bg-slate-100 py-3 px-1 z-10 border-b shadow-sm transition-all duration-200">
                     {!context && (
                         <div className="order-first md:order-last shrink-0">
                             {!isExcelMode && (
@@ -486,13 +551,13 @@ export function FilterableTransactions({
                                 className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${selectedType === 'income' ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700'}`}
                                 onClick={() => setSelectedType('income')}
                             >
-                                In: {numberFormatter.format(totals.income)}
+                                My Income: {numberFormatter.format(totals.income)}
                             </button>
                             <button
                                 className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${selectedType === 'expense' ? 'bg-rose-50 border-rose-200 text-rose-700 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-rose-50 hover:text-rose-700'}`}
                                 onClick={() => setSelectedType('expense')}
                             >
-                                Out: {numberFormatter.format(totals.expense)}
+                                My Expenses: {numberFormatter.format(totals.expense)}
                             </button>
 
                             <button
@@ -517,11 +582,11 @@ export function FilterableTransactions({
                                     className="relative z-20 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 shrink-0"
                                     title="Filter options"
                                 >
-                                    <FilterIcon className="h-4 w-4" />
+                                    <ListFilter className="h-4 w-4" />
                                     Filters
                                 </button>
                             </PopoverTrigger>
-                            <PopoverContent align="end" className="w-72 p-3">
+                            <PopoverContent align="end" className="w-72 p-3 z-50 shadow-xl">
                                 <div className="space-y-3">
                                     <div className="space-y-2">
                                         <p className="text-[11px] font-semibold text-slate-700">Tag / Cycle</p>
@@ -624,10 +689,10 @@ export function FilterableTransactions({
             )}
 
 
-
+            {/* 2. Table Container - Flexible & Scrollable */}
             <div className="flex-1 overflow-hidden bg-white border-t relative">
                 <UnifiedTransactionTable
-                    transactions={finalTransactions}
+                    transactions={paginatedTransactions}
                     accountType={accountType}
                     accountId={accountId}
                     contextId={contextId ?? accountId}
@@ -644,7 +709,72 @@ export function FilterableTransactions({
                     onSortChange={setSortState}
                     hiddenColumns={[]}
                     isExcelMode={isExcelMode}
+                    showPagination={false}
+                    currentPage={currentPage}
+                    pageSize={pageSize}
+                    onPageChange={setCurrentPage}
+                    onPageSizeChange={setPageSize}
                 />
+            </div>
+
+            {/* 3. Footer Pagination - Static */}
+            <div className="flex-none p-4 bg-background z-10 border-t sticky bottom-0">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-1">
+                            <button
+                                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+                                disabled={currentPage <= 1}
+                                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                            >
+                                <ArrowLeft className="h-4 w-4 text-slate-600" />
+                            </button>
+                            <div className="flex items-center gap-1">
+                                <span className="rounded px-2 py-1 text-xs font-semibold bg-blue-600 text-white">{currentPage}</span>
+                                <span className="text-xs text-slate-500">/ {Math.max(1, totalPages)}</span>
+                            </div>
+                            <button
+                                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+                                disabled={currentPage >= totalPages}
+                                onClick={() => setCurrentPage(currentPage + 1)}
+                            >
+                                <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
+                            </button>
+                        </div>
+                        <div className="h-4 w-px bg-slate-200" />
+                        <select
+                            value={pageSize}
+                            onChange={(e) => {
+                                setPageSize(Number(e.target.value));
+                                setCurrentPage(1);
+                            }}
+                            className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
+                        >
+                            <option value={10}>10 / p</option>
+                            <option value={20}>20 / p</option>
+                            <option value={50}>50 / p</option>
+                            <option value={100}>100 / p</option>
+                        </select>
+                        <div className="h-4 w-px bg-slate-200" />
+                        <button
+                            onClick={() => {
+                                setSortState({ key: 'date', dir: 'desc' });
+                                setSelectedTxnIds(new Set());
+                                setCurrentPage(1);
+                            }}
+                            className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
+                        >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            <span className="text-xs font-medium">Reset</span>
+                        </button>
+                    </div>
+
+                    <div className="flex items-center gap-4">
+                        <p className="text-slate-500 font-medium text-xs">
+                            Showing <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, sortedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, sortedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{sortedTransactions.length}</span> rows
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
     )

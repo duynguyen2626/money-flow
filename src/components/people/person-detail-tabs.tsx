@@ -1,25 +1,14 @@
 'use client'
 
-import { useState } from 'react'
-import { LayoutDashboard, Link as LinkIcon } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { LayoutDashboard, Link as LinkIcon, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
-import { DebtCycleTabs } from '@/components/moneyflow/debt-cycle-tabs'
+import { SmartFilterBar } from '@/components/moneyflow/smart-filter-bar'
+import { DebtCycleList } from '@/components/moneyflow/debt-cycle-list'
 import { SheetSyncControls } from '@/components/people/sheet-sync-controls'
-import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
-
-interface DebtCycle {
-    tag: string
-    balance: number
-    status: string
-    last_activity: string
-    total_debt?: number
-    total_repaid?: number
-    totalOriginalDebt?: number
-}
 
 interface PersonDetailTabsProps {
-    debtCycles: DebtCycle[]
     accounts: Account[]
     categories: Category[]
     people: Person[]
@@ -31,7 +20,6 @@ interface PersonDetailTabsProps {
 }
 
 export function PersonDetailTabs({
-    debtCycles,
     accounts,
     categories,
     people,
@@ -42,6 +30,8 @@ export function PersonDetailTabs({
     transactions,
 }: PersonDetailTabsProps) {
     const [activeTab, setActiveTab] = useState<'details' | 'sheet'>('details')
+    const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'lend' | 'repay'>('all')
+    const [searchTerm, setSearchTerm] = useState('')
 
     const tabs = [
         { id: 'details' as const, label: 'Details', icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -49,7 +39,7 @@ export function PersonDetailTabs({
     ]
 
     return (
-        <div className="flex flex-col flex-1 overflow-hidden">
+        <div className="flex flex-col w-full">
             {/* Tab Headers */}
             <div className="flex-none flex border-b border-slate-200">
                 {tabs.map(tab => (
@@ -70,35 +60,50 @@ export function PersonDetailTabs({
             </div>
 
             {/* Tab Content */}
-            <div className="flex-1 overflow-hidden py-4">
+            <div className="py-4">
                 {activeTab === 'details' && (
-                    <div className="flex flex-col h-full overflow-hidden space-y-6">
-                        {/* Debt Cycles */}
-                        <div className="flex-none">
-                            <h3 className="text-sm font-semibold text-slate-700 mb-3">Debt Cycles</h3>
-                            <DebtCycleTabs
-                                allCycles={debtCycles}
+                    <div className="flex flex-col space-y-4">
+                        {/* Header Area: Search + Smart Filters */}
+                        <div className="flex flex-col md:flex-row gap-3 items-start md:items-center px-1">
+                            <div className="relative w-full md:w-64 shrink-0">
+                                <input
+                                    type="text"
+                                    placeholder="Search..."
+                                    className="w-full rounded-md border border-slate-300 pl-3 pr-8 py-1.5 text-sm"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                                {searchTerm && (
+                                    <button
+                                        onClick={() => setSearchTerm('')}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                    >
+                                        <span className="sr-only">Clear</span>
+                                        &times;
+                                    </button>
+                                )}
+                            </div>
+                            <div className="flex-1 min-w-0 overflow-hidden">
+                                <SmartFilterBar
+                                    transactions={transactions}
+                                    selectedType={filterType}
+                                    onSelectType={setFilterType}
+                                    className="w-full"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Accordion View (Multiple Tables) */}
+                        <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+                            <DebtCycleList
+                                transactions={transactions}
                                 accounts={accounts}
                                 categories={categories}
                                 people={people}
                                 shops={shops}
                                 personId={personId}
-                            />
-                        </div>
-
-                        {/* Transactions */}
-                        <div className="flex-1 overflow-hidden">
-                            <FilterableTransactions
-                                transactions={transactions}
-                                categories={categories}
-                                accounts={accounts}
-                                people={people}
-                                shops={shops}
-                                accountId={personId}
-                                contextId={personId}
-                                accountType="debt"
-                                hidePeopleColumn
-                                context="person"
+                                filterType={filterType}
+                                searchTerm={searchTerm}
                             />
                         </div>
                     </div>
@@ -113,3 +118,4 @@ export function PersonDetailTabs({
         </div>
     )
 }
+

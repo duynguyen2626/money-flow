@@ -278,7 +278,7 @@ export function DashboardContent({
                 />
               </div>
             </div>
-            <div className="mt-4 h-[300px] w-full min-w-0">
+            <div className="mt-4 h-[300px] w-full min-w-0" style={{ height: 300, width: '100%' }}>
               {!isMounted ? (
                 <div className="flex h-full items-center justify-center text-xs text-slate-400">
                   Loading chart...
