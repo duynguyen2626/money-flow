@@ -68,13 +68,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // We explicitly removed the !isMounted placeholder because it causes a mismatch
   // with the server-rendered content (which includes the full sidebar).
   // The client must render the same structure initially.
+  if (!isMounted) {
+    return <div className="flex h-full w-full overflow-hidden" suppressHydrationWarning />
+  }
 
   return (
     <div className="flex h-full w-full overflow-hidden" suppressHydrationWarning>
       <aside
         suppressHydrationWarning
         className={cn(
-          "flex-none h-full flex flex-col border-r bg-card py-8 transition-all duration-300 z-20 shadow-sm overflow-y-auto hidden md:block",
+          "flex-none h-full flex-col border-r bg-card py-8 transition-all duration-300 z-20 shadow-sm overflow-y-auto hidden md:flex",
           sidebarCollapsed ? "w-16 px-2" : "w-64 px-6"
         )}
       >

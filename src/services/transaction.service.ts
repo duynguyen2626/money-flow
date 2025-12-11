@@ -365,7 +365,7 @@ function mapTransactionRow(
   };
 }
 
-async function loadTransactions(options: {
+export async function loadTransactions(options: {
   accountId?: string;
   personId?: string;
   shopId?: string;
@@ -476,6 +476,9 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     revalidatePath('/transactions');
     revalidatePath('/accounts');
     revalidatePath('/people');
+    if (input.person_id) {
+      revalidatePath(`/people/${input.person_id}`);
+    }
 
     return transactionId;
   } catch (error) {
@@ -532,12 +535,12 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   if (normalized.target_account_id) affectedAccounts.add(normalized.target_account_id);
   await recalcForAccounts(affectedAccounts);
 
+  const oldPersonId = (existing as any).person_id;
+  const newPersonId = input.person_id;
+
   // SHEET SYNC: Auto-sync to Google Sheets when person_id exists
   try {
     const { syncTransactionToSheet } = await import('./sheet.service');
-
-    const oldPersonId = (existing as any).person_id;
-    const newPersonId = input.person_id;
 
     console.log('[Sheet Sync] updateTransaction sync triggered', {
       id,
@@ -650,6 +653,8 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   revalidatePath('/transactions');
   revalidatePath('/accounts');
   revalidatePath('/people');
+  if (oldPersonId) revalidatePath(`/people/${oldPersonId}`);
+  if (newPersonId && newPersonId !== oldPersonId) revalidatePath(`/people/${newPersonId}`);
   return true;
 }
 
@@ -657,7 +662,7 @@ export async function deleteTransaction(id: string): Promise<boolean> {
   const supabase = createClient();
   const { data: existing } = await supabase
     .from('transactions')
-    .select('account_id, target_account_id')
+    .select('account_id, target_account_id, person_id')
     .eq('id', id)
     .maybeSingle();
 
@@ -675,6 +680,9 @@ export async function deleteTransaction(id: string): Promise<boolean> {
   revalidatePath('/transactions');
   revalidatePath('/accounts');
   revalidatePath('/people');
+  if ((existing as any)?.person_id) {
+    revalidatePath(`/people/${(existing as any).person_id}`);
+  }
   return true;
 }
 
@@ -682,7 +690,7 @@ export async function voidTransaction(id: string): Promise<boolean> {
   const supabase = createClient();
   const { data: existing } = await supabase
     .from('transactions')
-    .select('account_id, target_account_id, metadata, status')
+    .select('account_id, target_account_id, metadata, status, person_id')
     .eq('id', id)
     .maybeSingle();
 
@@ -768,6 +776,9 @@ export async function voidTransaction(id: string): Promise<boolean> {
   revalidatePath('/transactions');
   revalidatePath('/accounts');
   revalidatePath('/people');
+  if ((existing as any)?.person_id) {
+    revalidatePath(`/people/${(existing as any).person_id}`);
+  }
   return true;
 }
 
@@ -775,7 +786,7 @@ export async function restoreTransaction(id: string): Promise<boolean> {
   const supabase = createClient();
   const { data: existing } = await supabase
     .from('transactions')
-    .select('account_id, target_account_id')
+    .select('account_id, target_account_id, person_id')
     .eq('id', id)
     .maybeSingle();
 
@@ -797,6 +808,9 @@ export async function restoreTransaction(id: string): Promise<boolean> {
   revalidatePath('/transactions');
   revalidatePath('/accounts');
   revalidatePath('/people');
+  if ((existing as any)?.person_id) {
+    revalidatePath(`/people/${(existing as any).person_id}`);
+  }
   return true;
 }
 

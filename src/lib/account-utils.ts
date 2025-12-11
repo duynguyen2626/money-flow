@@ -19,15 +19,40 @@ export function computeNextDueDate(
   referenceDate = new Date()
 ): Date | null {
   const config = parseCashbackConfig(rawConfig ?? null)
-  const statementDay = config.statementDay
-
-  if (!statementDay) {
-    return null
-  }
 
   const clampDay = (year: number, month: number, day: number) => {
     const endOfMonth = new Date(year, month + 1, 0).getDate()
     return Math.min(day, endOfMonth)
+  }
+
+  const now = new Date(referenceDate)
+  now.setHours(0, 0, 0, 0) // Compare dates only
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth()
+
+  // Priority 1: Explicit Due Date
+  if (config.dueDate) {
+    const dueDay = config.dueDate
+
+    // Check "This Month" instance
+    const thisMonthDay = clampDay(currentYear, currentMonth, dueDay)
+    const thisMonthDate = new Date(currentYear, currentMonth, thisMonthDay)
+    thisMonthDate.setHours(23, 59, 59, 999) // End of day for comparison
+
+    if (now <= thisMonthDate) {
+      return thisMonthDate
+    }
+
+    // Else Next Month instance
+    const nextMonthDay = clampDay(currentYear, currentMonth + 1, dueDay)
+    return new Date(currentYear, currentMonth + 1, nextMonthDay)
+  }
+
+  // Priority 2: Statement Day + 15 days
+  const statementDay = config.statementDay
+
+  if (!statementDay) {
+    return null
   }
 
   const addDays = (date: Date, days: number) => {
@@ -36,34 +61,30 @@ export function computeNextDueDate(
     return copy
   }
 
-  const now = new Date(referenceDate)
-  const currentStatement = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    clampDay(now.getFullYear(), now.getMonth(), statementDay)
+  // Calculate this month's statement date
+  const thisMonthStatement = new Date(
+    currentYear,
+    currentMonth,
+    clampDay(currentYear, currentMonth, statementDay)
   )
-  const previousStatement =
-    now >= currentStatement
-      ? currentStatement
-      : new Date(
-          now.getFullYear(),
-          now.getMonth() - 1,
-          clampDay(now.getFullYear(), now.getMonth() - 1, statementDay)
-        )
 
-  const initialDue = addDays(previousStatement, 15)
+  // Calculate this month's due date (statement + 15 days)
+  const thisMonthDue = addDays(thisMonthStatement, 15)
+  thisMonthDue.setHours(23, 59, 59, 999)
 
-  if (initialDue > now) {
-    return initialDue
+  // If today is before this month's due date, return it
+  if (now <= thisMonthDue) {
+    return thisMonthDue
   }
 
-  const nextStatement = new Date(
-    previousStatement.getFullYear(),
-    previousStatement.getMonth() + 1,
-    clampDay(previousStatement.getFullYear(), previousStatement.getMonth() + 1, statementDay)
+  // Otherwise, calculate next month's statement and due date
+  const nextMonthStatement = new Date(
+    currentYear,
+    currentMonth + 1,
+    clampDay(currentYear, currentMonth + 1, statementDay)
   )
 
-  return addDays(nextStatement, 15)
+  return addDays(nextMonthStatement, 15)
 }
 
 export function parseSavingsConfig(raw: Json | null | undefined) {

@@ -4,6 +4,7 @@ import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
 import { getAccountsWithPendingBatchItems } from '@/services/batch.service'
+import { getUsageStats } from '@/services/settings.service'
 import { AccountList } from '@/components/moneyflow/account-list'
 import { FixDataButton } from '@/components/moneyflow/fix-data-button'
 import { AccountCashbackSnapshot, Account } from '@/types/moneyflow.types'
@@ -59,12 +60,13 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 })
 
 export default async function AccountsPage() {
-  const [accounts, categories, people, shops, pendingBatchAccountIds] = await Promise.all([
+  const [accounts, categories, people, shops, pendingBatchAccountIds, usageStats] = await Promise.all([
     getAccounts(),
     getCategories(),
     getPeople(),
     getShops(),
     getAccountsWithPendingBatchItems(),
+    getUsageStats(),
   ])
 
   const creditAccountIds = accounts.filter(acc => acc.type === 'credit_card').map(acc => acc.id)
@@ -151,6 +153,7 @@ export default async function AccountsPage() {
           people={people}
           shops={shops}
           pendingBatchAccountIds={pendingBatchAccountIds}
+          usageStats={usageStats}
         />
       </section>
     </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, memo } from 'react'
 import { LayoutGrid, List, Search, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Check } from 'lucide-react'
+import { CreateAccountDialog } from './create-account-dialog'
 import { AccountCard } from './account-card'
 import { AccountTable } from './account-table'
 import { Account, AccountCashbackSnapshot, Category, Person, Shop } from '@/types/moneyflow.types'
@@ -9,6 +10,7 @@ import { updateAccountConfigAction } from '@/actions/account-actions'
 import { computeNextDueDate, getSharedLimitParentId } from '@/lib/account-utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
+import { UsageStats } from '@/types/settings.types'
 
 type AccountListProps = {
   accounts: Account[]
@@ -17,10 +19,11 @@ type AccountListProps = {
   people: Person[]
   shops: Shop[]
   pendingBatchAccountIds?: string[]
+  usageStats?: UsageStats // Proper type
 }
 
 type ViewMode = 'grid' | 'table'
-type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt' | 'waiting_confirm' | 'need_to_spend'
+type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt' | 'waiting_confirm' | 'need_to_spend' | 'secured'
 type SortKey = 'due_date' | 'balance' | 'limit'
 type SortOrder = 'asc' | 'desc'
 
@@ -30,6 +33,7 @@ const FILTERS: { key: FilterKey; label: string; match: (account: Account) => boo
   { key: 'credit', label: 'Credit', match: account => account.type === 'credit_card' },
   { key: 'savings', label: 'Savings', match: account => ['savings', 'investment', 'asset'].includes(account.type) },
   { key: 'debt', label: 'Debt', match: account => account.type === 'debt' },
+  { key: 'secured', label: 'Secured Cards', match: account => !!account.secured_by_account_id },
   { key: 'waiting_confirm', label: 'Waiting Confirm', match: () => true },
   { key: 'need_to_spend', label: 'Need To Spend', match: () => true },
 ]
@@ -91,7 +95,7 @@ const FilterButton = memo(({ filter, isActive, onClick }: {
 ))
 FilterButton.displayName = 'FilterButton'
 
-export function AccountList({ accounts, cashbackById = {}, categories, people, shops, pendingBatchAccountIds = [] }: AccountListProps) {
+export function AccountList({ accounts, cashbackById = {}, categories, people, shops, pendingBatchAccountIds = [], usageStats }: AccountListProps) {
   const [view, setView] = useState<ViewMode>('grid')
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -108,6 +112,11 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
 
   const collateralAccounts = useMemo(
     () => items.filter(acc => ['savings', 'investment', 'asset'].includes(acc.type)),
+    [items]
+  )
+
+  const creditCardAccounts = useMemo(
+    () => items.filter(acc => acc.type === 'credit_card'),
     [items]
   )
 
@@ -165,34 +174,173 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
   }, [filteredItems, sortKey, sortOrder, items])
 
   const grouped = useMemo(() => {
-    const sections: { key: FilterKey; title: string; helper: string; accounts: Account[] }[] = [
-      {
-        key: 'credit',
-        title: '💳 Credit Cards',
-        helper: 'Statement cycles & repayments',
-        accounts: sortedItems.filter(acc => acc.type === 'credit_card'),
-      },
-      {
-        key: 'bank',
+    // Grouping Logic:
+    // 1. Need to spend (Target > 0)
+    // 2. Credit Cards (Rest of CC)
+    // 3. Payment (Bank, Wallet, Cash)
+    // 4. Savings (Savings, Investment, Asset)
+    // 5. Debt
+
+    const actionRequired: Account[] = []
+    const upcomingCC: Account[] = []
+    const payment: Account[] = []
+    const securedSavings: Account[] = []
+    const normalSavings: Account[] = []
+    const debt: Account[] = []
+
+    sortedItems.forEach(acc => {
+      const stats = cashbackById[acc.id] as any
+      const hasSpendingTarget = stats?.min_spend && stats.min_spend > 0
+      const missing = stats?.missing_for_min ?? 0
+      const needsSpendMore = hasSpendingTarget && missing > 0
+
+      // Case 1: Credit Card
+      if (acc.type === 'credit_card') {
+        const days = getDaysUntilDue(acc)
+
+        // Calculate Debt amount
+        // If Limit > 0: Debt = Limit - Balance (Available).
+        // If Limit == 0: Assume 0 debt (unless Balance is negative? User feedback implies excluding Limit 0 from Due Soon).
+        const limit = acc.credit_limit ?? 0
+        const balance = acc.current_balance ?? 0
+        let debt = 0
+
+        if (limit > 0) {
+          debt = Math.max(0, limit - balance)
+        }
+
+        const isDueSoon = days !== null && days <= 10 && debt > 1000 // Tolerance 1000vnd
+
+        // Priority: Due Soon OR Need Spend More goes to Action Required
+        if (isDueSoon || needsSpendMore) {
+          actionRequired.push(acc)
+        } else {
+          upcomingCC.push(acc)
+        }
+        return
+      }
+
+      // Case 2: Payment
+      if (['bank', 'ewallet', 'cash'].includes(acc.type)) {
+        payment.push(acc)
+        return
+      }
+
+      // Case 3: Savings
+      if (['savings', 'investment', 'asset'].includes(acc.type)) {
+        const isSecuring = sortedItems.some(item => item.secured_by_account_id === acc.id)
+        if (isSecuring) {
+          securedSavings.push(acc)
+        } else {
+          normalSavings.push(acc)
+        }
+        return
+      }
+
+      // Case 4: Debt
+      if (acc.type === 'debt') {
+        debt.push(acc)
+        return
+      }
+    })
+
+    // Sort Action Required: Due Soon first, then Need Spend More
+    // Sort Action Required: Due Soon first, then Need Spend More
+    actionRequired.sort((a, b) => {
+      const daysA = getDaysUntilDue(a)
+      const daysB = getDaysUntilDue(b)
+
+      // Debt Logic matching grouping
+      const limitA = a.credit_limit ?? 0; const balanceA = a.current_balance ?? 0
+      const debtA = limitA > 0 ? Math.max(0, limitA - balanceA) : 0
+
+      const limitB = b.credit_limit ?? 0; const balanceB = b.current_balance ?? 0
+      const debtB = limitB > 0 ? Math.max(0, limitB - balanceB) : 0
+
+      const isDueSoonA = daysA !== null && daysA <= 10 && debtA > 1000
+      const isDueSoonB = daysB !== null && daysB <= 10 && debtB > 1000
+
+      // Due Soon cards come first
+      if (isDueSoonA && !isDueSoonB) return -1
+      if (!isDueSoonA && isDueSoonB) return 1
+
+      // Within Due Soon: sort by days (closer first)
+      if (isDueSoonA && isDueSoonB) {
+        return (daysA ?? 999) - (daysB ?? 999)
+      }
+
+      // Within Need Spend More: Sort by missing amount
+      const statsA = cashbackById[a.id] as any
+      const statsB = cashbackById[b.id] as any
+      const missingA = statsA?.missing_for_min ?? 0
+      const missingB = statsB?.missing_for_min ?? 0
+      return missingB - missingA
+    })
+
+    const sections: { key: string; title: string; helper: string; accounts: Account[], gridCols: string }[] = []
+
+    if (actionRequired.length > 0) {
+      sections.push({
+        key: 'action-required',
+        title: '⚠️ Action Required',
+        helper: 'Cards due soon or need more spending',
+        accounts: actionRequired,
+        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
+      })
+    }
+
+    if (upcomingCC.length > 0) {
+      sections.push({
+        key: 'upcoming-cc',
+        title: '📅 Credit Cards',
+        helper: 'Cards without immediate due dates',
+        accounts: upcomingCC,
+        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
+      })
+    }
+
+    if (payment.length > 0) {
+      sections.push({
+        key: 'payment',
         title: '🏦 Payment Accounts',
         helper: 'Banks · E-wallets · Cash',
-        accounts: sortedItems.filter(acc => ['bank', 'cash', 'ewallet'].includes(acc.type)),
-      },
-      {
+        accounts: payment,
+        gridCols: 'lg:grid-cols-5 md:grid-cols-3'
+      })
+    }
+
+    // Split Savings
+    if (securedSavings.length > 0) {
+      sections.push({
+        key: 'secured-savings',
+        title: '🔒 Secured Assets',
+        helper: 'Deposits linking to credit cards',
+        accounts: securedSavings,
+        gridCols: 'lg:grid-cols-5 md:grid-cols-3'
+      })
+    }
+    if (normalSavings.length > 0) {
+      sections.push({
         key: 'savings',
         title: '💰 Savings & Assets',
         helper: 'Term deposits · Investments',
-        accounts: sortedItems.filter(acc => ['savings', 'investment', 'asset'].includes(acc.type)),
-      },
-      {
+        accounts: normalSavings,
+        gridCols: 'lg:grid-cols-5 md:grid-cols-3'
+      })
+    }
+
+    if (debt.length > 0) {
+      sections.push({
         key: 'debt',
         title: '👥 Debt Accounts',
         helper: 'People & loans',
-        accounts: sortedItems.filter(acc => acc.type === 'debt'),
-      },
-    ]
-    return sections.filter(section => section.accounts.length > 0)
-  }, [sortedItems])
+        accounts: debt,
+        gridCols: 'lg:grid-cols-5 md:grid-cols-3'
+      })
+    }
+
+    return sections
+  }, [sortedItems, cashbackById])
 
   const handleToggleStatus = async (accountId: string, nextValue: boolean) => {
     setPendingId(accountId)
@@ -291,14 +439,14 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
         </div>
 
         <div className="flex items-center gap-2 flex-1 justify-end">
-          <div className="relative w-full max-w-xs">
+          <div className="relative w-full flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search accounts..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-full border border-slate-200 bg-white pl-9 pr-4 py-1 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition"
+              className="w-full rounded-full border border-slate-200 bg-white pl-9 pr-4 py-1.5 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-sm"
             />
           </div>
           <div className="flex rounded-full border border-slate-200 bg-slate-50 p-1">
@@ -321,6 +469,10 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
               Table
             </button>
           </div>
+          <CreateAccountDialog
+            collateralAccounts={collateralAccounts}
+            creditCardAccounts={creditCardAccounts}
+          />
         </div>
       </div>
 
@@ -332,30 +484,28 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
         <div className="space-y-6">
           {grouped.map(section => (
             <div key={section.key} className="space-y-3">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center justify-between gap-3 bg-slate-50/50 p-2 rounded-lg border border-slate-100/50">
                 <div>
-                  <p className="text-sm font-semibold text-slate-800">{section.title}</p>
-                  <p className="text-xs text-slate-500">{section.helper}</p>
+                  <p className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    {section.title}
+                  </p>
+                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wide opacity-80 pl-6 -mt-0.5">{section.helper}</p>
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                  {section.accounts.length} accounts
+                <span className="rounded-full bg-slate-200/50 px-2 py-0.5 text-[10px] font-bold text-slate-600 border border-slate-200">
+                  {section.accounts.length}
                 </span>
               </div>
-              <div className={`grid gap-4 grid-cols-1 md:grid-cols-2 ${section.key === 'credit'
-                ? 'lg:grid-cols-4'
-                : 'lg:grid-cols-5'
-                }`}>
+              <div className={`grid gap-4 grid-cols-1 ${section.gridCols}`}>
                 {section.accounts.map(account => (
                   <AccountCard
                     key={account.id}
                     account={account}
-                    cashback={cashbackById[account.id]}
+                    accounts={items}
                     categories={categories}
                     people={people}
-                    allAccounts={items}
                     shops={shops}
                     collateralAccounts={collateralAccounts}
-                    hasPendingItems={pendingBatchAccountIds.includes(account.id)}
+                    usageStats={usageStats}
                   />
                 ))}
               </div>
@@ -382,13 +532,12 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
                   <AccountCard
                     key={account.id}
                     account={account}
-                    cashback={cashbackById[account.id]}
+                    accounts={items}
                     categories={categories}
                     people={people}
-                    allAccounts={items}
                     shops={shops}
                     collateralAccounts={collateralAccounts}
-                    hasPendingItems={pendingBatchAccountIds.includes(account.id)}
+                    usageStats={usageStats}
                   />
                 ))}
               </div>

@@ -323,7 +323,6 @@ export function AccountDetailHeader({
                   {isQualified ? 'Qualified' : `Need ${formatPlain(needAmount)}`}
                 </span>
               )}
-              {/* Mini status buttons always visible in collapsed row */}
               <button
                 type="button"
                 onClick={handleConfirmPending}
@@ -348,7 +347,7 @@ export function AccountDetailHeader({
                   defaultType="transfer"
                   defaultDebtAccountId={account.id}
                   triggerContent={
-                    <span className="inline-flex items-center gap-1 rounded-md border border-orange-100 bg-white px-3 py-1.5 text-xs font-semibold text-orange-700 shadow-sm hover:border-orange-200 hover:bg-orange-50">
+                    <span className="inline-flex items-center gap-1 rounded-md border border-orange-100 bg-white px-3 py-1.5 text-xs font-semibold text-orange-700 shadow-sm hover:border-orange-200 hover:bg-orange-50 cursor-pointer">
                       <CreditCard className="h-3.5 w-3.5" />
                       Pay
                     </span>
@@ -360,7 +359,7 @@ export function AccountDetailHeader({
                   defaultType="transfer"
                   defaultSourceAccountId={account.id}
                   triggerContent={
-                    <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50">
+                    <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 cursor-pointer">
                       <ArrowLeftRight className="h-3.5 w-3.5" />
                       Transfer
                     </span>
@@ -372,7 +371,7 @@ export function AccountDetailHeader({
                 defaultType="income"
                 defaultSourceAccountId={account.id}
                 triggerContent={
-                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm hover:border-emerald-300 hover:bg-emerald-50">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm hover:border-emerald-300 hover:bg-emerald-50 cursor-pointer">
                     <Plus className="h-3.5 w-3.5" />
                     Income
                   </span>
@@ -383,7 +382,7 @@ export function AccountDetailHeader({
                 defaultType="expense"
                 defaultSourceAccountId={account.id}
                 triggerContent={
-                  <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-sm hover:border-rose-300 hover:bg-rose-50">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-sm hover:border-rose-300 hover:bg-rose-50 cursor-pointer">
                     <Minus className="h-3.5 w-3.5" />
                     Expense
                   </span>
@@ -395,7 +394,7 @@ export function AccountDetailHeader({
                 defaultDebtAccountId={account.id}
                 defaultSourceAccountId={account.id}
                 triggerContent={
-                  <span className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-white px-3 py-1.5 text-xs font-semibold text-purple-700 shadow-sm hover:border-purple-300 hover:bg-purple-50">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-white px-3 py-1.5 text-xs font-semibold text-purple-700 shadow-sm hover:border-purple-300 hover:bg-purple-50 cursor-pointer">
                     <User className="h-3.5 w-3.5" />
                     Lend
                   </span>
@@ -406,12 +405,13 @@ export function AccountDetailHeader({
                 defaultType="repayment"
                 defaultDebtAccountId={account.id}
                 triggerContent={
-                  <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 cursor-pointer">
                     <RotateCcw className="h-3.5 w-3.5" />
                     Repay
                   </span>
                 }
               />
+              <div className="h-4 w-px bg-slate-200 mx-1" />
               <button
                 type="button"
                 onClick={handleRecalculateBalance}
@@ -426,7 +426,7 @@ export function AccountDetailHeader({
                 collateralAccounts={savingsAccounts}
                 accounts={allAccounts}
                 triggerContent={
-                  <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 cursor-pointer">
                     <Settings className="h-3.5 w-3.5" />
                     Config
                   </span>
@@ -472,11 +472,11 @@ export function AccountDetailHeader({
             >
               {collapsed ? (
                 <>
-                  Expand <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-4 w-4" />
                 </>
               ) : (
                 <>
-                  Collapse <ChevronUp className="h-4 w-4" />
+                  <ChevronUp className="h-4 w-4" />
                 </>
               )}
             </Button>
@@ -501,125 +501,126 @@ export function AccountDetailHeader({
 
       {collapsed ? null : (
         <>
-      {/* Layer 2: Cashback Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 my-3">
-        {showQualifyingCard && (
-          <div className="flex flex-col gap-2 rounded-lg px-3 py-3 shadow-sm border bg-white">
-            <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
-              <span className="uppercase tracking-wide text-[10px] text-slate-500">Qualifying Status</span>
-              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${isQualified ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
-                {isQualified ? 'Qualified' : 'In progress'}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-700">
-              <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1">Min: <span className="font-bold">{formatPlain(minSpend ?? 0)}</span></span>
-              <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1">Current: <span className="font-bold">{formatPlain(currentSpend)}</span></span>
-              {!isQualified && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-amber-700 border border-amber-200">
-                  <AlertTriangle className="h-3.5 w-3.5" />
-                  Need {formatPlain(needAmount)}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Progress value={progressValue} className="h-2" />
-            </div>
-          </div>
-        )}
 
-        {hasCashbackConfig && (
-          <div className={`flex flex-col gap-2 rounded-lg px-3 py-3 shadow-sm border ${rewardBg}`}>
-            <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
-              <span className="uppercase tracking-wide text-[10px] text-slate-500">{rewardLabel}</span>
-              {rewardBadge && (
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
-                  {rewardBadge}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className={`text-3xl font-extrabold tabular-nums ${rewardTone}`}>
-                {formatPlain(rewardValue)}
+          {/* Layer 2: Cashback Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {showQualifyingCard && (
+              <div className="flex flex-col gap-2 rounded-lg px-3 py-3 shadow-sm border bg-white">
+                <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                  <span className="uppercase tracking-wide text-[10px] text-slate-500">Qualifying Status</span>
+                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${isQualified ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                    {isQualified ? 'Qualified' : 'In progress'}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-700">
+                  <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1">Min: <span className="font-bold">{formatPlain(minSpend ?? 0)}</span></span>
+                  <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1">Current: <span className="font-bold">{formatPlain(currentSpend)}</span></span>
+                  {!isQualified && (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-amber-700 border border-amber-200">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Need {formatPlain(needAmount)}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Progress value={progressValue} className="h-2" />
+                </div>
               </div>
-              {!isQualified && (
-                <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 border border-amber-200">
-                  Need {formatPlain(needAmount)}
-                </span>
-              )}
-            </div>
-            <div className="grid grid-cols-1 gap-2 text-[11px] text-slate-600 md:grid-cols-2">
-              <div className="space-y-1">
-                <div className="font-semibold text-slate-700">Generated: <span className="font-bold">{formatPlain(earnedSoFar)}</span></div>
-                <div className="font-semibold text-slate-700">{isQualified ? 'Shared' : 'Temp share'}: <span className="font-bold">{formatPlain(sharedDisplay)}</span></div>
-              </div>
-              <div className="space-y-1">
-                {hasMinRequirement && (
-                  <div className="text-slate-600">
-                    Target: <span className="font-bold">{formatPlain(minSpend ?? 0)}</span> | Current: <span className="font-bold">{formatPlain(currentSpend)}</span>
+            )}
+
+            {hasCashbackConfig && (
+              <div className={`flex flex-col gap-2 rounded-lg px-3 py-3 shadow-sm border ${rewardBg}`}>
+                <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                  <span className="uppercase tracking-wide text-[10px] text-slate-500">{rewardLabel}</span>
+                  {rewardBadge && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                      {rewardBadge}
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className={`text-3xl font-extrabold tabular-nums ${rewardTone}`}>
+                    {formatPlain(rewardValue)}
                   </div>
-                )}
+                  {!isQualified && (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 border border-amber-200">
+                      Need {formatPlain(needAmount)}
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 gap-2 text-[11px] text-slate-600 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <div className="font-semibold text-slate-700">Generated: <span className="font-bold">{formatPlain(earnedSoFar)}</span></div>
+                    <div className="font-semibold text-slate-700">{isQualified ? 'Shared' : 'Temp share'}: <span className="font-bold">{formatPlain(sharedDisplay)}</span></div>
+                  </div>
+                  <div className="space-y-1">
+                    {hasMinRequirement && (
+                      <div className="text-slate-600">
+                        Target: <span className="font-bold">{formatPlain(minSpend ?? 0)}</span> | Current: <span className="font-bold">{formatPlain(currentSpend)}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* Combined legacy info card */}
-        <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-700">Batch Status</span>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="h-8 px-2 text-[11px] font-semibold"
-                onClick={handleConfirmPending}
-                disabled={isConfirmingPending || isPendingLoading || !hasPending}
-              >
-                {isConfirmingPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <BookOpen className="mr-1.5 h-4 w-4" />}
-                Confirm batch pending
-              </Button>
-              {pendingRefundAmount > 0 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-8 px-2 text-[11px] font-semibold"
-                  onClick={() => router.push('/refunds')}
-                >
-                  <Hourglass className="mr-1.5 h-4 w-4" />
-                  Confirm pending refund
-                </Button>
-              )}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            <div className="flex flex-col gap-1 rounded-md bg-amber-50 border border-amber-100 px-2.5 py-2">
-              <div className="flex items-center justify-between text-[11px] font-semibold text-amber-700">
-                <span>Pending</span>
-                <Clock4 className="h-3.5 w-3.5" />
-              </div>
-              <div className="text-2xl font-extrabold text-amber-700 tabular-nums">{formatPlain(pendingTotal)}</div>
-              <div className="text-[11px] text-amber-700/90 space-y-0.5">
-                <div className="inline-flex items-center gap-1 rounded-md bg-white/60 px-2 py-1 font-semibold text-amber-700 border border-amber-100">
-                  Pending Paid: {formatPlain(waitingAmount)}
-                </div>
-                <div className="inline-flex items-center gap-1 rounded-md bg-white/60 px-2 py-1 font-semibold text-amber-700 border border-amber-100">
-                  Pending Refund: {formatPlain(pendingRefundAmount)}
+            {/* Combined legacy info card */}
+            <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-700">Batch Status</span>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 px-2 text-[11px] font-semibold"
+                    onClick={handleConfirmPending}
+                    disabled={isConfirmingPending || isPendingLoading || !hasPending}
+                  >
+                    {isConfirmingPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <BookOpen className="mr-1.5 h-4 w-4" />}
+                    Confirm batch pending
+                  </Button>
+                  {pendingRefundAmount > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 px-2 text-[11px] font-semibold"
+                      onClick={() => router.push('/refunds')}
+                    >
+                      <Hourglass className="mr-1.5 h-4 w-4" />
+                      Confirm pending refund
+                    </Button>
+                  )}
                 </div>
               </div>
-            </div>
-            <div className="flex flex-col gap-1 rounded-md bg-blue-50 border border-blue-100 px-2.5 py-2">
-              <div className="flex items-center justify-between text-[11px] font-semibold text-blue-700">
-                <span>Confirmed</span>
-                <CheckCircle2 className="h-3.5 w-3.5" />
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                <div className="flex flex-col gap-1 rounded-md bg-amber-50 border border-amber-100 px-2.5 py-2">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-amber-700">
+                    <span>Pending</span>
+                    <Clock4 className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="text-2xl font-extrabold text-amber-700 tabular-nums">{formatPlain(pendingTotal)}</div>
+                  <div className="text-[11px] text-amber-700/90 space-y-0.5">
+                    <div className="inline-flex items-center gap-1 rounded-md bg-white/60 px-2 py-1 font-semibold text-amber-700 border border-amber-100">
+                      Pending Paid: {formatPlain(waitingAmount)}
+                    </div>
+                    <div className="inline-flex items-center gap-1 rounded-md bg-white/60 px-2 py-1 font-semibold text-amber-700 border border-amber-100">
+                      Pending Refund: {formatPlain(pendingRefundAmount)}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1 rounded-md bg-blue-50 border border-blue-100 px-2.5 py-2">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-blue-700">
+                    <span>Confirmed</span>
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  </div>
+                  <div className="text-lg font-bold text-blue-700 tabular-nums">{formatPlain(confirmedAmount)}</div>
+                  <span className="text-[11px] text-blue-700/80">Funded from batch</span>
+                </div>
               </div>
-              <div className="text-lg font-bold text-blue-700 tabular-nums">{formatPlain(confirmedAmount)}</div>
-              <span className="text-[11px] text-blue-700/80">Funded from batch</span>
             </div>
           </div>
-        </div>
-      </div>
 
 
         </>

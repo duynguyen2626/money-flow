@@ -5,7 +5,7 @@ import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
 import { getServices } from '@/services/service-manager'
-import { getPersonDetails, getDebtByTags } from '@/services/debt.service'
+import { getPersonDetails } from '@/services/debt.service'
 import { getUnifiedTransactions } from '@/services/transaction.service'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 import { TagFilterProvider } from '@/context/tag-filter-context'
@@ -30,13 +30,12 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
   // This ensures we get the correct data regardless of whether the URL has Profile ID or Account ID
   const actualAccountId = person.id
 
-  const [accounts, categories, people, shops, transactions, debtCycles, subscriptions] = await Promise.all([
+  const [accounts, categories, people, shops, transactions, subscriptions] = await Promise.all([
     getAccounts(),
     getCategories(),
     getPeople(),
     getShops(),
-    getUnifiedTransactions({ accountId: actualAccountId, personId: person.owner_id ?? undefined, limit: 200, context: 'person' }),
-    getDebtByTags(actualAccountId),
+    getUnifiedTransactions({ accountId: actualAccountId, personId: person.owner_id ?? undefined, limit: 1000, context: 'person' }),
     getServices(),
   ])
 
@@ -45,26 +44,14 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
   const balanceLabel = balance > 0 ? 'They owe you' : balance < 0 ? 'You owe them' : 'Settled'
   const balanceClass = balance > 0 ? 'text-rose-600' : balance < 0 ? 'text-emerald-600' : 'text-slate-600'
 
-  // Map service result to component props
-  const mappedCycles = debtCycles.map(c => ({
-    tag: c.tag,
-    balance: c.netBalance,
-    status: c.status,
-    last_activity: c.last_activity,
-    total_debt: c.originalPrincipal,
-    total_repaid: c.totalBack,
-    total_cashback: c.totalCashback,
-    totalOriginalDebt: c.totalOriginalDebt,
-  }))
-
   const dialogBaseProps = { accounts, categories, people, shops }
 
   return (
     <TagFilterProvider>
-      <div className="flex flex-col h-full overflow-hidden">
-        <section className="flex-none bg-white shadow rounded-lg p-6 mx-6 mt-6">
-          {/* Header */}
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b pb-4">
+      <div className="flex flex-col h-[calc(100vh-theme(spacing.header))] overflow-hidden">
+        {/* Section 1: Header/Filters */}
+        <div className="flex-none z-10 bg-white border-b px-6 py-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div className="flex items-center gap-4">
               {/* Back Button */}
               <Link
@@ -77,16 +64,19 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
 
               {person.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={person.avatar_url} alt={person.name} className="h-14 w-14 rounded-lg object-cover" />
+                <img src={person.avatar_url} alt={person.name} className="h-14 w-14 rounded-none object-cover" />
               ) : (
-                <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-slate-100 text-lg font-bold text-slate-600">
+                <div className="flex h-14 w-14 items-center justify-center rounded-none bg-slate-100 text-lg font-bold text-slate-600">
                   {person.name.charAt(0).toUpperCase()}
                 </div>
               )}
               <div>
                 <h1 className="text-2xl font-semibold text-slate-900">{person.name}</h1>
-                <p className="text-sm text-slate-500">{balanceLabel}</p>
-                <p className={`text-xl font-bold ${balanceClass}`}>{balance.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-sm text-slate-500">{balanceLabel}</p>
+                  <span className="text-slate-300">|</span>
+                  <p className={`text-xl font-bold ${balanceClass}`}>{balance.toLocaleString('en-US', { maximumFractionDigits: 0 })}</p>
+                </div>
               </div>
             </div>
 
@@ -107,7 +97,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                 triggerContent={
                   <>
                     <CheckCheck className="h-4 w-4" />
-                    <span>Settle</span>
+                    <span className="hidden sm:inline">Settle</span>
                   </>
                 }
               />
@@ -120,16 +110,17 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                 triggerContent={
                   <>
                     <Plus className="h-4 w-4" />
-                    <span>Add Debt</span>
+                    <span className="hidden sm:inline">Add Debt</span>
                   </>
                 }
               />
             </div>
           </div>
+        </div>
 
-          {/* Tabbed Content */}
+        {/* Section 2: Content - The Cycle List */}
+        <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-4 bg-slate-50/50">
           <PersonDetailTabs
-            debtCycles={mappedCycles}
             accounts={accounts}
             categories={categories}
             people={people}
@@ -139,7 +130,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
             sheetLink={person.sheet_link}
             transactions={transactions}
           />
-        </section>
+        </div>
       </div>
     </TagFilterProvider>
   )

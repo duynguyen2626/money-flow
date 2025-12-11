@@ -23,7 +23,9 @@ import { SmartAmountInput } from '@/components/ui/smart-amount-input'
 import { CategoryDialog } from '@/components/moneyflow/category-dialog'
 import { AddShopDialog } from '@/components/moneyflow/add-shop-dialog'
 import { CreatePersonDialog } from '@/components/people/create-person-dialog'
+
 import { EditAccountDialog } from './edit-account-dialog'
+import { QuickPeopleSettings } from './quick-people-settings'
 
 
 
@@ -222,7 +224,7 @@ export function TransactionForm({
   const [progressLoading, setProgressLoading] = useState(false)
   const [progressError, setProgressError] = useState<string | null>(null)
   const [spendingStats, setSpendingStats] = useState<AccountSpendingStats | null>(null)
-  const [transactionType, setTransactionType] = useState<'expense' | 'income' | 'debt' | 'transfer' | 'repayment'>(defaultType || 'expense')
+  const [transactionType, setTransactionType] = useState<'expense' | 'income' | 'debt' | 'transfer' | 'repayment' | 'quick-people'>(defaultType || 'expense')
   const [accountFilter, setAccountFilter] = useState<'all' | 'bank' | 'credit' | 'other'>('all')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [payerName, setPayerName] = useState<string>('')
@@ -270,6 +272,9 @@ export function TransactionForm({
       ...baseDefaults,
       ...initialValues,
       amount: initialValues?.amount ? Math.abs(initialValues.amount) : 0,
+      cashback_share_percent: (initialValues?.cashback_share_percent && initialValues.cashback_share_percent < 1)
+        ? initialValues.cashback_share_percent * 100
+        : initialValues?.cashback_share_percent,
     },
   })
 
@@ -300,7 +305,11 @@ export function TransactionForm({
     const newValues = {
       ...baseDefaults,
       ...initialValues,
-      amount: initialValues.amount ? Math.abs(initialValues.amount) : 0
+      ...initialValues,
+      amount: initialValues.amount ? Math.abs(initialValues.amount) : 0,
+      cashback_share_percent: (initialValues?.cashback_share_percent && initialValues.cashback_share_percent < 1)
+        ? initialValues.cashback_share_percent * 100
+        : initialValues?.cashback_share_percent,
     };
 
     const isRepayment = initialValues.category_name?.toLowerCase().includes('thu nợ')
@@ -461,6 +470,7 @@ export function TransactionForm({
         note: finalNote,
         destination_account_id: values.type === 'income' ? values.source_account_id : undefined,
         is_installment: isInstallment,
+        cashback_share_percent: rawPercent >= 100 ? rawPercent : rawPercent / 100,
       }
 
       console.log('[TransactionForm] Submitting payload:', {
@@ -1138,8 +1148,16 @@ export function TransactionForm({
         control={control}
         name="type"
         render={({ field }) => (
-          <Tabs value={field.value} onValueChange={(value) => { field.onChange(value); setTransactionType(value as 'expense' | 'income' | 'debt' | 'transfer' | 'repayment') }} className="w-full">
-            <TabsList className="grid w-full grid-cols-5 gap-1 p-1.5 bg-slate-100/80 rounded-xl">
+          <Tabs value={field.value} onValueChange={(value) => {
+            if (value === 'quick-people') {
+              setTransactionType('quick-people');
+              // Don't update form value for type, just keep previous or ignore
+            } else {
+              field.onChange(value);
+              setTransactionType(value as any)
+            }
+          }} className="w-full">
+            <TabsList className="grid w-full grid-cols-6 gap-1 p-1.5 bg-slate-100/80 rounded-xl">
               <TabsTrigger value="expense" className="data-[state=active]:bg-white data-[state=active]:text-rose-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all">
                 <ArrowUpRight className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Expense</span>
@@ -1159,6 +1177,13 @@ export function TransactionForm({
               <TabsTrigger value="repayment" className="data-[state=active]:bg-white data-[state=active]:text-lime-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all">
                 <RotateCcw className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Repay</span>
+              </TabsTrigger>
+              <TabsTrigger value="quick-people" className={cn(
+                "data-[state=active]:bg-white data-[state=active]:text-violet-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all",
+                transactionType === 'quick-people' ? "bg-white text-violet-600 shadow-sm" : ""
+              )}>
+                <User className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">People</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -1831,138 +1856,149 @@ export function TransactionForm({
 
   return (
     <>
-      <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
-        {/* Refund Status (Full Width) */}
-        {RefundStatusInput}
-
-        {/* Type Selection (Full Width) - Sticky */}
-        <div className="sticky top-0 z-10 bg-white border-b border-slate-100 px-6 py-3 shadow-sm">
-          {TypeInput}
+      {transactionType === 'quick-people' ? (
+        <div className="h-full flex flex-col">
+          <div className="sticky top-0 z-10 bg-white border-b border-slate-100 px-6 py-3 shadow-sm">
+            {TypeInput}
+          </div>
+          <div className="flex-1 overflow-auto px-6 py-6">
+            <QuickPeopleSettings people={people} />
+          </div>
         </div>
+      ) : (
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
+          {/* Refund Status (Full Width) */}
+          {RefundStatusInput}
 
-        {/* Scrollable Content Area with Padding */}
-        <div className="flex-1 px-6 py-6 space-y-6">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-            {(transactionType === 'debt' || transactionType === 'repayment') ? (
-              <>
-                {/* LENDING MODE: Person First */}
-                <div className="col-span-2">
-                  {PersonInput}
-                </div>
+          {/* Type Selection (Full Width) - Sticky */}
+          <div className="sticky top-0 z-10 bg-white border-b border-slate-100 px-6 py-3 shadow-sm">
+            {TypeInput}
+          </div>
 
-                {/* Date & Tag */}
-                <div className="col-span-1">
-                  {DateInput}
-                </div>
-                <div className="col-span-1">
-                  {TagInput}
-                </div>
-
-                {/* From Account & Amount (Side-by-Side) */}
-                <div className="col-span-1">
-                  {SourceAccountInput}
-                </div>
-                <div className="col-span-1">
-                  {AmountInput}
-                </div>
-
-                {/* Category & Shop */}
-                {transactionType !== 'repayment' && (
-                  <div className="col-span-1">
-                    {CategoryInput}
+          {/* Scrollable Content Area with Padding */}
+          <div className="flex-1 px-6 py-6 space-y-6">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+              {(transactionType === 'debt' || transactionType === 'repayment') ? (
+                <>
+                  {/* LENDING MODE: Person First */}
+                  <div className="col-span-2">
+                    {PersonInput}
                   </div>
-                )}
-                <div className={transactionType === 'repayment' ? "col-span-2" : "col-span-1"}>
-                  {ShopInput}
-                </div>
-              </>
-            ) : (
-              <>
-                {/* OTHER MODES */}
-                <div className="col-span-2">
-                  {DateInput}
-                </div>
 
-                {transactionType === 'transfer' ? (
-                  <>
-                    <div className="col-span-1">
-                      {SourceAccountInput}
-                    </div>
-                    <div className="col-span-1">
-                      {DestinationAccountInput}
-                    </div>
-                    <div className="col-span-1">
-                      {CategoryInput}
-                    </div>
-                    <div className="col-span-1">
-                      {AmountInput}
-                    </div>
-                  </>
-                ) : transactionType === 'income' ? (
-                  <>
-                    <div className="col-span-1">
-                      {CategoryInput}
-                    </div>
-                    <div className="col-span-1">
-                      {SourceAccountInput}
-                    </div>
-                    <div className="col-span-1">
-                      {AmountInput}
-                    </div>
-                    <div className="col-span-1">
-                      {PersonInput}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="col-span-1">
-                      {CategoryInput}
-                    </div>
-                    <div className="col-span-1">
-                      {ShopInput}
-                    </div>
-                    <div className="col-span-1">
-                      {SourceAccountInput}
-                    </div>
-                    <div className="col-span-1">
-                      {AmountInput}
-                    </div>
-                    <div className="col-span-2">
-                      {PersonInput}
-                    </div>
-                  </>
-                )}
-              </>
-            )}
+                  {/* Date & Tag */}
+                  <div className="col-span-1">
+                    {DateInput}
+                  </div>
+                  <div className="col-span-1">
+                    {TagInput}
+                  </div>
 
-            {/* Common Bottom Section */}
-            <div className="col-span-2 space-y-4 pt-2 border-t border-slate-100">
-              {InstallmentInput}
-              {VoluntaryCashbackInput}
-              {CashbackInputs}
-              {NoteInput}
+                  {/* From Account & Amount (Side-by-Side) */}
+                  <div className="col-span-1">
+                    {SourceAccountInput}
+                  </div>
+                  <div className="col-span-1">
+                    {AmountInput}
+                  </div>
+
+                  {/* Category & Shop */}
+                  {transactionType !== 'repayment' && (
+                    <div className="col-span-1">
+                      {CategoryInput}
+                    </div>
+                  )}
+                  <div className={transactionType === 'repayment' ? "col-span-2" : "col-span-1"}>
+                    {ShopInput}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* OTHER MODES */}
+                  <div className="col-span-2">
+                    {DateInput}
+                  </div>
+
+                  {transactionType === 'transfer' ? (
+                    <>
+                      <div className="col-span-1">
+                        {SourceAccountInput}
+                      </div>
+                      <div className="col-span-1">
+                        {DestinationAccountInput}
+                      </div>
+                      <div className="col-span-1">
+                        {CategoryInput}
+                      </div>
+                      <div className="col-span-1">
+                        {AmountInput}
+                      </div>
+                    </>
+                  ) : transactionType === 'income' ? (
+                    <>
+                      <div className="col-span-1">
+                        {CategoryInput}
+                      </div>
+                      <div className="col-span-1">
+                        {SourceAccountInput}
+                      </div>
+                      <div className="col-span-1">
+                        {AmountInput}
+                      </div>
+                      <div className="col-span-1">
+                        {PersonInput}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="col-span-1">
+                        {CategoryInput}
+                      </div>
+                      <div className="col-span-1">
+                        {ShopInput}
+                      </div>
+                      <div className="col-span-1">
+                        {SourceAccountInput}
+                      </div>
+                      <div className="col-span-1">
+                        {AmountInput}
+                      </div>
+                      <div className="col-span-2">
+                        {PersonInput}
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+
+              {/* Common Bottom Section */}
+              <div className="col-span-2 space-y-4 pt-2 border-t border-slate-100">
+                {InstallmentInput}
+                {VoluntaryCashbackInput}
+                {CashbackInputs}
+                {NoteInput}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))}
+                className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting || cashbackExceedsAmount}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={cashbackExceedsAmount ? "Cashback must be less than amount" : undefined}
+              >
+                {submitLabel}
+              </button>
             </div>
           </div>
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))}
-              className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting || cashbackExceedsAmount}
-              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              title={cashbackExceedsAmount ? "Cashback must be less than amount" : undefined}
-            >
-              {submitLabel}
-            </button>
-          </div>
-        </div>
-      </form>
+        </form>
+      )}
 
 
       <CategoryDialog

@@ -50,8 +50,12 @@ function resolveBaseType(type: TransactionType | null | undefined): 'income' | '
  * Cashback = (amount * percent/100) + fixed
  */
 function calculateFinalPrice(row: DebtTransactionRow): number {
-  if (typeof row.final_price === 'number') {
-    return Math.abs(row.final_price)
+  // Safe parsing for final_price
+  if (row.final_price !== undefined && row.final_price !== null) {
+    const parsed = Number(row.final_price)
+    if (!isNaN(parsed)) {
+      return Math.abs(parsed)
+    }
   }
 
   const rawAmount = Math.abs(Number(row.amount ?? 0))
@@ -61,10 +65,11 @@ function calculateFinalPrice(row: DebtTransactionRow): number {
   const fixedVal = Number(row.cashback_share_fixed ?? 0)
 
   // Normalize percent (could be stored as 2 for 2% or 0.02 for 2%)
-  const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
+  const normalizedPercent = (percentVal > 1 ? percentVal / 100 : percentVal)
 
-  // Calculate total cashback
-  const cashbackFromPercent = rawAmount * normalizedPercent
+  // Safe cashback calc
+  const safePercent = isNaN(normalizedPercent) ? 0 : normalizedPercent
+  const cashbackFromPercent = rawAmount * safePercent
   const totalCashback = cashbackFromPercent + fixedVal
 
   // Final price = amount - cashback
@@ -222,12 +227,21 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
       const cashback = (rawAmount * normalizedPercent) + fixedVal
 
-      current.cashback += cashback
       if (baseType === 'expense') {
-        current.lend += finalPrice
-        current.lendOriginal += rawAmount // Aggregate raw amount
+        if (!isNaN(finalPrice)) {
+          current.lend += finalPrice
+        }
+        if (!isNaN(rawAmount)) {
+          current.lendOriginal += rawAmount // Aggregate raw amount
+        }
       } else if (baseType === 'income') {
-        current.repay += finalPrice
+        if (!isNaN(finalPrice)) {
+          current.repay += finalPrice
+        }
+      }
+
+      if (!isNaN(cashback)) {
+        current.cashback += cashback
       }
 
       if (occurredAt && occurredAt > current.last_activity) {

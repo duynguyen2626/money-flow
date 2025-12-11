@@ -217,6 +217,14 @@ interface UnifiedTransactionTableProps {
   onSortChange?: (state: { key: SortKey; dir: SortDir }) => void
   context?: 'account' | 'person' | 'general'
   isExcelMode?: boolean
+  // Pagination Props
+  showPagination?: boolean
+  currentPage?: number
+  pageSize?: number
+  onPageChange?: (page: number) => void
+  onPageSizeChange?: (size: number) => void
+  fontSize?: number
+  onFontSizeChange?: (size: number) => void
 }
 
 
@@ -256,6 +264,13 @@ export function UnifiedTransactionTable({
   onSortChange,
   context,
   isExcelMode = false,
+  showPagination = true,
+  currentPage: externalPage,
+  pageSize: externalPageSize,
+  onPageChange,
+  onPageSizeChange,
+  fontSize: externalFontSize,
+  onFontSizeChange,
 }: UnifiedTransactionTableProps) {
   const tableData = data ?? transactions ?? []
   const defaultColumns: ColumnConfig[] = [
@@ -272,6 +287,9 @@ export function UnifiedTransactionTable({
   // Internal state removed for activeTab, now using prop with fallback
   const lastSelectedIdRef = useRef<string | null>(null)
   const [showSelectedOnly, setShowSelectedOnly] = useState(false)
+
+
+
   const [internalSelection, setInternalSelection] = useState<Set<string>>(new Set())
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
     const initial: Record<ColumnKey, boolean> = {
@@ -338,7 +356,7 @@ export function UnifiedTransactionTable({
 
   // State for actions
   const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
-  const [fontSize, setFontSize] = useState<number>(14) // Font size for table text (10-20px)
+  // fontSize state moved up
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null)
   const [editingTxn, setEditingTxn] = useState<TransactionWithDetails | null>(null)
   const [confirmVoidTarget, setConfirmVoidTarget] = useState<TransactionWithDetails | null>(null)
@@ -364,14 +382,37 @@ export function UnifiedTransactionTable({
   const [internalSortState, setInternalSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
   const [bulkDialog, setBulkDialog] = useState<{ mode: 'void' | 'restore' | 'delete'; open: boolean } | null>(null)
   const stopBulk = useRef(false)
-  const [pageSize, setPageSize] = useState(20)
-  const [currentPage, setCurrentPage] = useState(1)
+
+  // Font Size Logic
+  const [internalFontSize, setInternalFontSize] = useState(14)
+  const fontSize = externalFontSize ?? internalFontSize
+  const setFontSize = onFontSizeChange ?? setInternalFontSize
+
+  // Pagination State Logic
+  const [internalPageSize, setInternalPageSize] = useState(20)
+  const [internalCurrentPage, setInternalCurrentPage] = useState(1)
+
+  const pageSize = externalPageSize ?? internalPageSize
+  const currentPage = externalPage ?? internalCurrentPage
+
+  const setPageSize = (size: number) => {
+    setInternalPageSize(size)
+    onPageSizeChange?.(size)
+  }
+
+  const setCurrentPage = (page: number) => {
+    setInternalCurrentPage(page)
+    onPageChange?.(page)
+  }
 
   const sortState = externalSortState ?? internalSortState
   const setSortState = onSortChange ?? setInternalSortState
 
   useEffect(() => {
-    setCurrentPage(1)
+    if (!externalPage) {
+      setCurrentPage(1)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, transactions, accountType, accountId, sortState, context])
 
   // --- Excel Mode Logic ---
@@ -505,6 +546,13 @@ export function UnifiedTransactionTable({
     }
     setInternalSelection(next)
   }, [onSelectionChange])
+
+  // Auto-disable Show Selected Only when selection is cleared
+  useEffect(() => {
+    if (selection.size === 0 && showSelectedOnly) {
+      setShowSelectedOnly(false)
+    }
+  }, [selection.size, showSelectedOnly])
 
   const toggleColumnVisibility = (key: ColumnKey) => {
     setVisibleColumns(prev => ({ ...prev, [key]: !prev[key] }))
@@ -912,7 +960,7 @@ export function UnifiedTransactionTable({
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )} style={{ ['--table-font-size' as string]: `${fontSize}px` } as React.CSSProperties}>
         <Table className="min-w-[1000px] [&_td]:text-[length:var(--table-font-size)] [&_th]:text-[length:var(--table-font-size)]" wrapperClassName="overflow-visible" style={{ fontSize: `${fontSize}px` }}>
-          <TableHeader className="sticky top-0 z-40 bg-slate-200 shadow-sm">
+          <TableHeader className="sticky top-0 z-10 bg-slate-100 backdrop-blur text-foreground font-bold shadow-sm">
             <TableRow className="hover:bg-transparent border-b-2 border-slate-300">
               {displayedColumns.map(col => {
                 if (col.key === "task") {
@@ -1881,13 +1929,14 @@ export function UnifiedTransactionTable({
                   case "amount": {
                     const percentDisp = Number(txn.cashback_share_percent ?? 0)
                     const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
-                    const displayPercent = percentDisp <= 1 && percentDisp > 0 ? percentDisp * 100 : percentDisp
+                    const displayPercent = percentDisp < 1 && percentDisp > 0 ? percentDisp * 100 : percentDisp
 
                     return (
                       <div
                         className={cn(
-                          "flex flex-col items-end cursor-cell select-none p-1 rounded transition-colors",
+                          "flex flex-col items-end p-1 rounded transition-colors",
                           amountClass,
+                          isExcelMode ? "cursor-cell select-none" : "",
                           isExcelMode && selectedCells.has(txn.id) && selectedColumn === 'amount' && "bg-blue-100 ring-1 ring-blue-300"
                         )}
                         onMouseDown={(e) => handleCellMouseDown(txn.id, 'amount', e)}
@@ -1947,8 +1996,8 @@ export function UnifiedTransactionTable({
                     const percentDisp = Number(txn.cashback_share_percent ?? 0)
                     const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
                     // Display Percent: if rate 0.02 -> 2. If > 1 -> keep as is.
-                    const displayPercent = percentDisp <= 1 && percentDisp > 0 ? percentDisp * 100 : percentDisp
-                    const rate = percentDisp <= 1 && percentDisp > 0 ? percentDisp : percentDisp / 100
+                    const displayPercent = percentDisp < 1 && percentDisp > 0 ? percentDisp * 100 : percentDisp
+                    const rate = percentDisp < 1 && percentDisp > 0 ? percentDisp : percentDisp / 100
                     const percentAmount = Math.abs(Number(originalAmount ?? 0)) * rate
 
                     const finalDisp = Math.round(finalPrice);
@@ -1957,8 +2006,9 @@ export function UnifiedTransactionTable({
                     return (
                       <div
                         className={cn(
-                          "flex flex-col items-end cursor-cell select-none p-1 rounded transition-colors",
+                          "flex flex-col items-end p-1 rounded transition-colors",
                           amountClass,
+                          isExcelMode ? "cursor-cell select-none" : "",
                           isExcelMode && selectedCells.has(txn.id) && selectedColumn === 'final_price' && "bg-blue-100 ring-1 ring-blue-300"
                         )}
                         onMouseDown={(e) => handleCellMouseDown(txn.id, 'final_price', e)}
@@ -1969,7 +2019,7 @@ export function UnifiedTransactionTable({
                           <div className="flex flex-col gap-1">
                             <span className="font-bold underline">Equation</span>
                             <span>{numberFormatter.format(baseAmount)} (Amount)</span>
-                            <span>- {numberFormatter.format(cashbackAmount)} (Back Info)</span>
+                            <span>- {numberFormatter.format(cashbackAmount)} (Cashback)</span>
                             <hr className="border-slate-500" />
                             <span className="font-bold">= {numberFormatter.format(finalDisp)} (Final Price)</span>
                           </div>
@@ -2128,90 +2178,92 @@ export function UnifiedTransactionTable({
       </div>
 
       {/* Footer - Outside scroll container */}
-      <div className="flex-none flex items-center justify-between border-t border-slate-200 bg-white px-4 py-2 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] text-sm">
-        <div className="flex items-center gap-4">
-          {/* Pagination */}
-          <div className="flex items-center gap-1">
-            <button
-              className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-              disabled={currentPage <= 1}
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              title="Previous Page"
-            >
-              <ArrowLeft className="h-4 w-4 text-slate-600" />
-            </button>
+      {showPagination && (
+        <div className="sticky bottom-0 z-20 flex-none flex items-center justify-between border-t border-slate-200 bg-white px-4 py-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] text-sm">
+          <div className="flex items-center gap-4">
+            {/* Pagination */}
             <div className="flex items-center gap-1">
-              <span className="rounded px-2 py-1 text-xs font-semibold bg-blue-600 text-white">{currentPage}</span>
-              <span className="text-xs text-slate-500">/ {Math.max(1, Math.ceil(displayedTransactions.length / pageSize))}</span>
+              <button
+                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+                disabled={currentPage <= 1}
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                title="Previous Page"
+              >
+                <ArrowLeft className="h-4 w-4 text-slate-600" />
+              </button>
+              <div className="flex items-center gap-1">
+                <span className="rounded px-2 py-1 text-xs font-semibold bg-blue-600 text-white">{currentPage}</span>
+                <span className="text-xs text-slate-500">/ {Math.max(1, Math.ceil(displayedTransactions.length / pageSize))}</span>
+              </div>
+              <button
+                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+                disabled={currentPage >= Math.ceil(displayedTransactions.length / pageSize)}
+                onClick={() => setCurrentPage(currentPage + 1)}
+                title="Next Page"
+              >
+                <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
+              </button>
             </div>
-            <button
-              className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-              disabled={currentPage >= Math.ceil(displayedTransactions.length / pageSize)}
-              onClick={() => setCurrentPage(prev => prev + 1)}
-              title="Next Page"
+            <div className="h-4 w-px bg-slate-200" />
+            {/* Page Size Selector */}
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
             >
-              <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
+              <option value={10}>10 / p</option>
+              <option value={20}>20 / p</option>
+              <option value={50}>50 / p</option>
+              <option value={100}>100 / p</option>
+            </select>
+            <div className="h-4 w-px bg-slate-200" />
+
+            {/* Font Size Controls */}
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-slate-500 mr-1">Text:</span>
+              <button
+                onClick={() => setFontSize(Math.max(10, fontSize - 1))}
+                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+                title="Decrease font size"
+                disabled={fontSize <= 10}
+              >
+                <Minus className="h-3.5 w-3.5 text-slate-600" />
+              </button>
+              <span className="text-xs font-semibold w-10 text-center tabular-nums">{fontSize}px</span>
+              <button
+                onClick={() => setFontSize(Math.min(20, fontSize + 1))}
+                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+                title="Increase font size"
+                disabled={fontSize >= 20}
+              >
+                <Plus className="h-3.5 w-3.5 text-slate-600" />
+              </button>
+            </div>
+            <div className="h-4 w-px bg-slate-200" />
+
+            <button
+              onClick={() => {
+                setSortState({ key: 'date', dir: 'desc' });
+                updateSelection(new Set());
+                resetColumns();
+                setCurrentPage(1);
+              }}
+              className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">Reset</span>
             </button>
           </div>
-          <div className="h-4 w-px bg-slate-200" />
-          {/* Page Size Selector */}
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setCurrentPage(1);
-            }}
-            className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
-          >
-            <option value={10}>10 / p</option>
-            <option value={20}>20 / p</option>
-            <option value={50}>50 / p</option>
-            <option value={100}>100 / p</option>
-          </select>
-          <div className="h-4 w-px bg-slate-200" />
-
-          {/* Font Size Controls */}
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-slate-500 mr-1">Text:</span>
-            <button
-              onClick={() => setFontSize(prev => Math.max(10, prev - 1))}
-              className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-              title="Decrease font size"
-              disabled={fontSize <= 10}
-            >
-              <Minus className="h-3.5 w-3.5 text-slate-600" />
-            </button>
-            <span className="text-xs font-semibold w-10 text-center tabular-nums">{fontSize}px</span>
-            <button
-              onClick={() => setFontSize(prev => Math.min(20, prev + 1))}
-              className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-              title="Increase font size"
-              disabled={fontSize >= 20}
-            >
-              <Plus className="h-3.5 w-3.5 text-slate-600" />
-            </button>
+          <div className="flex items-center gap-4">
+            <p className="text-slate-500 font-medium text-xs">
+              Showing <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, displayedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, displayedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{displayedTransactions.length}</span> rows
+            </p>
           </div>
-          <div className="h-4 w-px bg-slate-200" />
-
-          <button
-            onClick={() => {
-              setSortState({ key: 'date', dir: 'desc' });
-              updateSelection(new Set());
-              resetColumns();
-              setCurrentPage(1);
-            }}
-            className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            <span className="text-xs font-medium">Reset</span>
-          </button>
         </div>
-        <div className="flex items-center gap-4">
-          <p className="text-slate-500 font-medium text-xs">
-            Showing <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, displayedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, displayedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{displayedTransactions.length}</span> rows
-          </p>
-        </div>
-      </div>
+      )}
 
 
       {

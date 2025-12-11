@@ -1,7 +1,12 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { Account, TransactionLine, TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types'
+import { Account, AccountRelationships, AccountStats, TransactionLine, TransactionWithDetails, TransactionWithLineRelations } from '@/types/moneyflow.types'
+import {
+  parseCashbackConfig,
+  getCashbackCycleRange,
+  calculateBankCashback
+} from '@/lib/cashback'
 import { Database, Json } from '@/types/database.types'
 
 type AccountRow = {
@@ -19,6 +24,7 @@ type AccountRow = {
   logo_url: string | null
   total_in: number | null
   total_out: number | null
+  parent_account_id: string | null
 }
 
 function normalizeCashbackConfig(value: Json | null): Json | null {
@@ -34,13 +40,128 @@ function normalizeCashbackConfig(value: Json | null): Json | null {
   return value
 }
 
+
+
+const fmtDate = (d: Date) => {
+  return new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit' }).format(d)
+}
+
+async function getStatsForAccount(supabase: ReturnType<typeof createClient>, account: AccountRow): Promise<AccountStats | null> {
+  const creditLimit = account.credit_limit ?? 0
+  const currentBalance = account.current_balance ?? 0
+
+  // 0. Base Stats (Usage)
+  // Logic: Usage = ABS(Balance) / Limit
+  // Remaining = Limit - Usage (or Limit + Balance if Balance is negative)
+  const usage_percent = creditLimit > 0
+    ? (Math.abs(currentBalance) / creditLimit) * 100
+    : 0
+
+  const remaining_limit = creditLimit + currentBalance
+
+  // Default values
+  const baseStats: AccountStats = {
+    usage_percent,
+    remaining_limit,
+    spent_this_cycle: 0,
+    min_spend: null,
+    missing_for_min: null,
+    is_qualified: false,
+    cycle_range: "",
+    due_date_display: null,
+    remains_cap: null
+  }
+
+  // Only calculate full stats for accounts with cashback config
+  if (!account.cashback_config) return baseStats
+
+  const config = parseCashbackConfig(account.cashback_config)
+  if (!config) return baseStats
+
+  const now = new Date()
+  const { start, end } = getCashbackCycleRange(config, now)
+
+  // Fetch transactions for stats
+  // We need amount, category (for tiered), and metadata (for overrides)
+  // We filter by account_id and "outflow" (expense or negative amount)
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(`
+      amount,
+      type,
+      categories (name),
+      metadata
+    `)
+    .eq('account_id', account.id)
+    .or('amount.lt.0,type.eq.expense')
+    .gte('occurred_at', start.toISOString())
+    .lte('occurred_at', end.toISOString())
+
+  if (error) {
+    console.error('Error calculating account stats:', error)
+    return baseStats
+  }
+
+  const txns: any[] = data || []
+
+  // 1. Calculate Total Eligible Spend
+  const spent_this_cycle = txns.reduce((sum, t) => sum + Math.abs(t.amount), 0)
+
+  // 2. Calculate Earned (for Remains Cap)
+  let total_earned = 0
+  if (config.maxAmount) {
+    // Only pay cost of calculation if maxAmount is set (needed for remains_cap)
+    for (const t of txns) {
+      // Safe access to category name
+      const catName = t.categories && !Array.isArray(t.categories) ? t.categories.name : undefined
+      // Calculate
+      const res = calculateBankCashback(config, Math.abs(t.amount), catName, spent_this_cycle)
+      total_earned += res.amount
+    }
+
+    if (config.maxAmount) {
+      total_earned = Math.min(total_earned, config.maxAmount)
+    }
+  }
+
+  // 3. Stats
+  const min_spend = config.minSpend || 0
+  const missing_for_min = Math.max(0, min_spend - spent_this_cycle)
+  const is_qualified = spent_this_cycle >= min_spend
+  const cycle_range = `${fmtDate(start)} - ${fmtDate(end)}`
+
+  // 4. Due Date Display
+  let due_date_display: string | null = null
+  if (config.dueDate) {
+    const due = new Date(end)
+    due.setDate(config.dueDate)
+    // If due date is earlier than end date (e.g. cycle ends 25th, due 10th), likely next month
+    // Generally due date is after cycle end.
+    if (due <= end) {
+      due.setMonth(due.getMonth() + 1)
+    }
+    due_date_display = fmtDate(due)
+  }
+
+  return {
+    ...baseStats,
+    spent_this_cycle,
+    min_spend: config.minSpend,
+    missing_for_min,
+    is_qualified,
+    cycle_range,
+    due_date_display,
+    remains_cap: config.maxAmount ? Math.max(0, config.maxAmount - total_earned) : null
+  }
+}
+
 export async function getAccounts(): Promise<Account[]> {
   const supabase = createClient()
 
   const { data, error } = await supabase
     .from('accounts')
     .select('*')
-    .order('name', { ascending: true })
+  // Remove default sorting to handle custom sort logic
 
   if (error) {
     console.error('Error fetching accounts:', error)
@@ -51,22 +172,104 @@ export async function getAccounts(): Promise<Account[]> {
 
   const rows = (data ?? []) as AccountRow[]
 
-  return rows.map(item => ({
-    id: item.id,
-    name: item.name,
-    type: item.type,
-    currency: item.currency ?? 'VND',
-    current_balance: item.current_balance ?? 0,
-    credit_limit: item.credit_limit ?? 0,
-    owner_id: item.owner_id ?? '',
-    account_number: item.account_number ?? null,
-    secured_by_account_id: item.secured_by_account_id ?? null,
-    cashback_config: normalizeCashbackConfig(item.cashback_config),
-    is_active: typeof item.is_active === 'boolean' ? item.is_active : null,
-    logo_url: typeof item.logo_url === 'string' ? item.logo_url : null,
-    total_in: item.total_in ?? 0,
-    total_out: item.total_out ?? 0,
+  // 1. Pre-process Relationships
+  const childrenMap = new Map<string, AccountRow[]>()
+  const accountMap = new Map<string, AccountRow>()
+
+  rows.forEach(row => {
+    accountMap.set(row.id, row)
+    // Map Children by Parent Account ID (Shared Limit)
+    if (row.parent_account_id) {
+      if (!childrenMap.has(row.parent_account_id)) {
+        childrenMap.set(row.parent_account_id, [])
+      }
+      childrenMap.get(row.parent_account_id)!.push(row)
+    }
+  })
+
+  // 2. Parallel fetch stats and build Account objects
+  const accounts = await Promise.all(rows.map(async (item) => {
+    const stats = await getStatsForAccount(supabase, item)
+
+    // Relationship Logic (Shared Limit Family)
+    const childRows = childrenMap.get(item.id) || []
+    const parentRow = item.parent_account_id ? accountMap.get(item.parent_account_id) : null
+
+    const relationships: AccountRelationships = {
+      is_parent: childRows.length > 0,
+      child_count: childRows.length,
+      child_accounts: childRows.map(c => ({
+        id: c.id,
+        name: c.name,
+        avatar_url: c.logo_url
+      })),
+      parent_info: parentRow ? {
+        id: parentRow.id,
+        name: parentRow.name,
+        type: parentRow.type,
+        avatar_url: parentRow.logo_url
+      } : null
+    }
+
+    return {
+      id: item.id,
+      name: item.name,
+      type: item.type,
+      currency: item.currency ?? 'VND',
+      current_balance: item.current_balance ?? 0,
+      credit_limit: item.credit_limit ?? 0,
+      owner_id: item.owner_id ?? '',
+      account_number: item.account_number ?? null,
+      secured_by_account_id: item.secured_by_account_id ?? null,
+      cashback_config: normalizeCashbackConfig(item.cashback_config),
+      is_active: typeof item.is_active === 'boolean' ? item.is_active : null,
+      logo_url: typeof item.logo_url === 'string' ? item.logo_url : null,
+      total_in: item.total_in ?? 0,
+      total_out: item.total_out ?? 0,
+      stats,
+      relationships, // Added field
+    }
   }))
+
+  // 3. Sorting Logic
+  // Priority: 
+  // 1. Due Date (ASC) - Nearest first
+  // 2. Cashback Need (DESC) - Highest missing_for_min first
+  // 3. Name (ASC)
+
+  return accounts.sort((a, b) => {
+    // Helper to get sortable date timestamp
+    const getDueDateTs = (acc: Account) => {
+      if (!acc.stats?.due_date_display) return 9999999999999 // Far future
+
+      const [day, month] = acc.stats.due_date_display.split('/').map(Number)
+      const now = new Date()
+      const currentYear = now.getFullYear()
+      const date = new Date(currentYear, month - 1, day)
+
+      // If date is in the past (e.g. today is Dec 15, due date Dec 10), assume next year?
+      // Actually due date usually means upcoming due date. 
+      // If getStats calculated it, it's relative to current cycle end.
+      // Let's assume the year is current year, or next year if month < current month?
+      // Simple heuristic: if month < now.month - 1, it's next year.
+      if (date.getTime() < now.getTime() - 30 * 24 * 60 * 60 * 1000) {
+        date.setFullYear(currentYear + 1)
+      }
+      return date.getTime()
+    }
+
+    const dueA = getDueDateTs(a)
+    const dueB = getDueDateTs(b)
+    if (dueA !== dueB) return dueA - dueB
+
+    // Cashback Need (DESC)
+    const missA = a.stats?.missing_for_min ?? 0
+    const missB = b.stats?.missing_for_min ?? 0
+    if (missA !== missB) return missB - missA // Highest missing first
+
+    // Name (ASC)
+    return a.name.localeCompare(b.name)
+  })
 }
 
 export async function getAccountDetails(id: string): Promise<Account | null> {
