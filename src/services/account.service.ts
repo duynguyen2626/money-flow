@@ -69,7 +69,8 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
     is_qualified: false,
     cycle_range: "",
     due_date_display: null,
-    remains_cap: null
+    remains_cap: null,
+    shared_cashback: null
   }
 
   // Only calculate full stats for accounts with cashback config
@@ -125,22 +126,44 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
   }
 
   // 3. Stats
+  // 3. Stats
   const min_spend = config.minSpend || 0
   const missing_for_min = Math.max(0, min_spend - spent_this_cycle)
   const is_qualified = spent_this_cycle >= min_spend
-  const cycle_range = `${fmtDate(start)} - ${fmtDate(end)}`
+
+  let cycle_range = `${fmtDate(start)} - ${fmtDate(end)}`
+
+  // Smart Cycle Detection
+  const isFullMonth = start.getDate() === 1 &&
+    (new Date(end.getTime() + 86400000).getDate() === 1) // Next day of end is 1st
+
+  if (config.cycleType === 'calendar_month' || isFullMonth) {
+    cycle_range = "Month Cycle"
+  } else {
+    // Format: "Dec 25 - Jan 24"
+    cycle_range = `${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(start)} - ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(end)}`
+  }
 
   // 4. Due Date Display
   let due_date_display: string | null = null
   if (config.dueDate) {
-    const due = new Date(end)
-    due.setDate(config.dueDate)
-    // If due date is earlier than end date (e.g. cycle ends 25th, due 10th), likely next month
-    // Generally due date is after cycle end.
-    if (due <= end) {
-      due.setMonth(due.getMonth() + 1)
+    const now = new Date()
+    const currentDay = now.getDate()
+
+    // Logic: If today.day <= dueDay, use CurrentMonth. Else use NextMonth.
+    // Example: Today Dec 12, Due 15. 12 <= 15 -> Dec 15.
+    let targetMonth = now.getMonth()
+    let targetYear = now.getFullYear()
+
+    if (currentDay > config.dueDate) {
+      targetMonth += 1
     }
-    due_date_display = fmtDate(due)
+
+    // Create date with safe overflow handling
+    const targetDate = new Date(targetYear, targetMonth, config.dueDate)
+
+    // Format: MMM dd (e.g., Dec 15)
+    due_date_display = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(targetDate)
   }
 
   return {
@@ -151,7 +174,8 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
     is_qualified,
     cycle_range,
     due_date_display,
-    remains_cap: config.maxAmount ? Math.max(0, config.maxAmount - total_earned) : null
+    remains_cap: config.maxAmount ? Math.max(0, config.maxAmount - total_earned) : null,
+    shared_cashback: total_earned
   }
 }
 
@@ -176,14 +200,21 @@ export async function getAccounts(): Promise<Account[]> {
   const childrenMap = new Map<string, AccountRow[]>()
   const accountMap = new Map<string, AccountRow>()
 
+  // First: Build Account Map
   rows.forEach(row => {
     accountMap.set(row.id, row)
-    // Map Children by Parent Account ID (Shared Limit)
+  })
+
+  // Second: Build Children Map
+  rows.forEach(row => {
     if (row.parent_account_id) {
       if (!childrenMap.has(row.parent_account_id)) {
         childrenMap.set(row.parent_account_id, [])
       }
-      childrenMap.get(row.parent_account_id)!.push(row)
+      // Only add if parent actually exists in current dataset to avoid orphans
+      if (accountMap.has(row.parent_account_id)) {
+        childrenMap.get(row.parent_account_id)!.push(row)
+      }
     }
   })
 

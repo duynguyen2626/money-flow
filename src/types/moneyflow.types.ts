@@ -44,6 +44,7 @@ export type AccountStats = {
   cycle_range: string
   due_date_display: string | null
   remains_cap: number | null
+  shared_cashback: number | null
 }
 
 export type AccountRelationships = {
