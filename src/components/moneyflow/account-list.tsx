@@ -11,6 +11,7 @@ import { computeNextDueDate, getSharedLimitParentId } from '@/lib/account-utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { UsageStats } from '@/types/settings.types'
+import { getCardActionState } from '@/lib/card-utils'
 
 type AccountListProps = {
   accounts: Account[]
@@ -174,14 +175,8 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
   }, [filteredItems, sortKey, sortOrder, items])
 
   const grouped = useMemo(() => {
-    // Grouping Logic:
-    // 1. Need to spend (Target > 0)
-    // 2. Credit Cards (Rest of CC)
-    // 3. Payment (Bank, Wallet, Cash)
-    // 4. Savings (Savings, Investment, Asset)
-    // 5. Debt
-
-    const actionRequired: Account[] = []
+    // Grouping Logic using unified getCardActionState
+    const actionRequired: { account: Account, sortOrder: number }[] = []
     const upcomingCC: Account[] = []
     const payment: Account[] = []
     const securedSavings: Account[] = []
@@ -189,99 +184,35 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
     const debt: Account[] = []
 
     sortedItems.forEach(acc => {
-      const stats = cashbackById[acc.id] as any
-      const hasSpendingTarget = stats?.min_spend && stats.min_spend > 0
-      const missing = stats?.missing_for_min ?? 0
-      const needsSpendMore = hasSpendingTarget && missing > 0
+      const state = getCardActionState(acc)
 
-      // Case 1: Credit Card
-      if (acc.type === 'credit_card') {
-        const days = getDaysUntilDue(acc)
-
-        // Calculate Debt amount
-        // If Limit > 0: Debt = Limit - Balance (Available).
-        // If Limit == 0: Assume 0 debt (unless Balance is negative? User feedback implies excluding Limit 0 from Due Soon).
-        const limit = acc.credit_limit ?? 0
-        const balance = acc.current_balance ?? 0
-        let debt = 0
-
-        if (limit > 0) {
-          debt = Math.max(0, limit - balance)
-        }
-
-        const isDueSoon = days !== null && days <= 10 && debt > 1000 // Tolerance 1000vnd
-
-        // Priority: Due Soon OR Need Spend More goes to Action Required
-        if (isDueSoon || needsSpendMore) {
-          actionRequired.push(acc)
-        } else {
-          upcomingCC.push(acc)
-        }
+      if (state.section === 'action_required') {
+        actionRequired.push({ account: acc, sortOrder: state.priorities.sortOrder })
         return
       }
 
-      // Case 2: Payment
+      if (state.section === 'credit_card') {
+        upcomingCC.push(acc)
+        return
+      }
+
+      // Fallback for non-credit cards (section 'other')
       if (['bank', 'ewallet', 'cash'].includes(acc.type)) {
         payment.push(acc)
-        return
-      }
-
-      // Case 3: Savings
-      if (['savings', 'investment', 'asset'].includes(acc.type)) {
+      } else if (['savings', 'investment', 'asset'].includes(acc.type)) {
         const isSecuring = sortedItems.some(item => item.secured_by_account_id === acc.id)
         if (isSecuring) {
           securedSavings.push(acc)
         } else {
           normalSavings.push(acc)
         }
-        return
-      }
-
-      // Case 4: Debt
-      if (acc.type === 'debt') {
+      } else if (acc.type === 'debt') {
         debt.push(acc)
-        return
       }
     })
 
-    // Sort Action Required: Due Soon first, then Need Spend More
-    // Sort Action Required: Due Soon first (Left->Right), then Need Spend More (Highest->Lowest)
-    // "thứ tự là sắp xếp các thẻ có due gần nhất (từ trái qua phải) sau đó tới các thẻ có yêu cầu spend more nhiều nhất"
-    actionRequired.sort((a, b) => {
-      // 1. Check Due Soon Status (Priority Tier 1)
-      const daysA = getDaysUntilDue(a)
-      const daysB = getDaysUntilDue(b)
-
-      // Debt Check for Due Soon validity
-      const limitA = a.credit_limit ?? 0; const balanceA = a.current_balance ?? 0
-      const debtA = limitA > 0 ? Math.max(0, limitA - balanceA) : 0 // Assumption: Positive Balance = Available, so Used = Limit - Balance
-
-      const limitB = b.credit_limit ?? 0; const balanceB = b.current_balance ?? 0
-      const debtB = limitB > 0 ? Math.max(0, limitB - balanceB) : 0
-
-      // Is Due Soon? (<= 10 days)
-      const isDueSoonA = daysA !== null && daysA <= 10 && debtA > 1000
-      const isDueSoonB = daysB !== null && daysB <= 10 && debtB > 1000
-
-      // Tier 1: Due Soon vs Not Due Soon
-      if (isDueSoonA && !isDueSoonB) return -1 // A comes first
-      if (!isDueSoonA && isDueSoonB) return 1  // B comes first
-
-      // Tier 2: Inside Due Soon -> Sort by Days (Nearest first)
-      if (isDueSoonA && isDueSoonB) {
-        return (daysA ?? 999) - (daysB ?? 999)
-      }
-
-      // Tier 3: Inside Need Spend -> Sort by Missing Amount (Highest first)
-      // "thẻ có yêu cầu spend more nhiều nhất"
-      const statsA = cashbackById[a.id] as any
-      const statsB = cashbackById[b.id] as any
-      const missingA = statsA?.missing_for_min ?? 0
-      const missingB = statsB?.missing_for_min ?? 0
-
-      // If missing amount differs, higher missing comes first
-      return missingB - missingA
-    })
+    // Sort Action Required by collected sortOrder
+    actionRequired.sort((a, b) => a.sortOrder - b.sortOrder)
 
     const sections: { key: string; title: string; helper: string; accounts: Account[], gridCols: string }[] = []
 
@@ -290,7 +221,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
         key: 'action-required',
         title: '⚠️ Action Required',
         helper: 'Cards due soon or need more spending',
-        accounts: actionRequired,
+        accounts: actionRequired.map(x => x.account),
         gridCols: 'lg:grid-cols-4 md:grid-cols-2'
       })
     }
@@ -315,7 +246,6 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
       })
     }
 
-    // Split Savings
     if (securedSavings.length > 0) {
       sections.push({
         key: 'secured-savings',
@@ -346,7 +276,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
     }
 
     return sections
-  }, [sortedItems, cashbackById])
+  }, [sortedItems])
 
   const handleToggleStatus = async (accountId: string, nextValue: boolean) => {
     setPendingId(accountId)

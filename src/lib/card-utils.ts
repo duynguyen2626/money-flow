@@ -1,0 +1,170 @@
+import { Account } from "@/types/moneyflow.types"
+
+// Helper types for the state
+export type CardActionState = {
+    section: 'action_required' | 'credit_card' | 'other'
+    badges: {
+        due: boolean
+        spend: boolean
+        standalone: boolean
+    }
+    priorities: {
+        daysUntilDue: number
+        missingSpend: number
+        sortOrder: number // Derived sort score for consistent ordering
+    }
+    dueText: string | null
+    spendText: string | null
+}
+
+const numberFormatter = new Intl.NumberFormat('en-US', {
+    maximumFractionDigits: 0,
+})
+
+export function getCardActionState(account: Account): CardActionState {
+    // Defaults
+    const result: CardActionState = {
+        section: 'other',
+        badges: { due: false, spend: false, standalone: false },
+        priorities: { daysUntilDue: 999, missingSpend: 0, sortOrder: 0 },
+        dueText: null,
+        spendText: null,
+    }
+
+    // 1. Identify Account Type
+    if (['bank', 'ewallet', 'cash'].includes(account.type)) {
+        result.section = 'other' // Payment
+        return result
+    }
+    if (['savings', 'investment', 'asset'].includes(account.type)) {
+        result.section = 'other' // Savings
+        return result
+    }
+    if (account.type === 'debt') {
+        result.section = 'other' // Debt
+        return result
+    }
+
+    // 2. Logic for Credit Cards
+    if (account.type === 'credit_card') {
+        const stats = account.stats
+        const limit = account.credit_limit ?? 0
+        const balance = account.current_balance ?? 0
+
+        // Calculate Debt (Amount Used)
+        // If Limit > 0: Debt = Limit - Balance (Available).
+        // If Limit == 0: Assume 0 debt unless balance is negative.
+        // NOTE: In this app, positive balance usually means available credit? 
+        // Let's stick to the previous implementation: 
+        // "Used = Limit - Balance" if Limit > 0.
+        const debt = limit > 0 ? Math.max(0, limit - balance) : 0
+
+        // --- Time State ---
+        const daysUntilDue = getDaysUntilDueFromStats(stats)
+        result.priorities.daysUntilDue = daysUntilDue
+
+        const isDueSoon = daysUntilDue <= 10 && debt > 1000 // Tolerance 1k
+        result.dueText = isDueSoon && stats?.due_date_display ? `Due: ${stats.due_date_display}` : null
+        result.badges.due = isDueSoon
+
+        // --- Spend State ---
+        const minSpend = stats?.min_spend ?? 0
+        const missing = stats?.missing_for_min ?? 0
+        const needsSpendMore = minSpend > 0 && missing > 0
+
+        result.priorities.missingSpend = missing
+        result.spendText = needsSpendMore ? `Need: ${numberFormatter.format(missing)}` : null
+        result.badges.spend = needsSpendMore
+
+        // --- Sectioning Decision ---
+        // Rule: Action Required if (Due Soon) OR (Needs Spend More)
+        if (isDueSoon || needsSpendMore) {
+            result.section = 'action_required'
+
+            // Calculate Sort Order for Action Required
+            // Logic: Due Soon cards first (Tier 1), then Need Spend (Tier 2)
+            // We invert the score so larger is better, or use small for top
+            // Let's use a "Sort Score" where smaller is better (appearing first)
+
+            let score = 0
+
+            if (isDueSoon) {
+                // Range 0 - 1000: Due soon priority
+                // Days 0 -> Score 0
+                // Days 10 -> Score 10 
+                score = Math.max(0, daysUntilDue)
+            } else {
+                // Range 2000+: Spend priority
+                // We want Higher Missing Spend to appear first.
+                // Let's map Missing Spend inversely.
+                // missing 10M -> score 2000
+                // missing 1M -> score 3000
+                // Max missing reasonable ~ 100M
+                score = 10000 - Math.min(8000, (missing / 1000))
+            }
+
+            result.priorities.sortOrder = score
+
+        } else {
+            result.section = 'credit_card'
+            result.priorities.sortOrder = daysUntilDue // Standard sort by due date
+        }
+
+        // --- Standalone Badge Logic ---
+        // Show if NOT Action Required (implicit, but sometimes nice to show explicit card type?)
+        // Actually the requirement is "Fix the Standalone badge: Show only for Credit Card types".
+        // Previously logic was "!showParentBadge && !showChildBadge && isCreditCard"
+        // We assume the caller handles parent/child checks, but for 'standalone' specifically:
+        // It implies it's a credit card that is NOT Action Required? Or just a credit card? 
+        // The previous code showed it for ALL credit cards that weren't parent/child.
+        // Let's keep that logic in the view, here we just flag it as appropriate.
+        // But since this function doesn't know about parent/child (those are on account.relationships), we might leave strict logic to component.
+        // However, we can prep the flag.
+        const isParent = (account.relationships?.child_count ?? 0) > 0 || account.relationships?.is_parent
+        const isChild = !!account.parent_account_id
+
+        result.badges.standalone = !isParent && !isChild
+    }
+
+    return result
+}
+
+function getDaysUntilDueFromStats(stats: any): number {
+    if (!stats?.due_date_display) return 999
+
+    const now = new Date()
+    const currentYear = now.getFullYear()
+    let dueDate: Date | null = null
+
+    // Try parsing "MMM DD" format (e.g., "Dec 15")
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const mmmDdMatch = stats.due_date_display.match(/^([A-Za-z]{3})\s+(\d{1,2})$/)
+
+    if (mmmDdMatch) {
+        const monthName = mmmDdMatch[1]
+        const day = parseInt(mmmDdMatch[2])
+        const monthIndex = monthNames.indexOf(monthName)
+
+        if (monthIndex !== -1) {
+            dueDate = new Date(currentYear, monthIndex, day)
+        }
+    } else {
+        // Try parsing "DD-MM" format (e.g., "15-12")
+        const parts = stats.due_date_display.split('-')
+        if (parts.length === 2) {
+            const day = parseInt(parts[0])
+            const month = parseInt(parts[1])
+            dueDate = new Date(currentYear, month - 1, day)
+        }
+    }
+
+    if (!dueDate) return 999
+
+    // If due date is in the past (more than 1 day ago), assume it's next year's cycle
+    if (dueDate.getTime() < now.getTime() - 24 * 60 * 60 * 1000) {
+        dueDate.setFullYear(currentYear + 1)
+    }
+
+    const diffTime = dueDate.getTime() - now.getTime()
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+}

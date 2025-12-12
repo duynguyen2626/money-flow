@@ -45,6 +45,7 @@ import { updateQuickPeopleUsageAction } from '@/actions/settings-actions'
 import { QuickPeopleSettingsDialog } from './quick-people-settings-dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
+import { getCardActionState } from '@/lib/card-utils'
 
 type AccountCardProps = {
   account: Account
@@ -110,35 +111,17 @@ function AccountCardComponent({
   const showChildBadge = !isParent && isChild
   const detailsHref = `/accounts/${account.id}`
 
-  // Determine card urgency for background color
-  const missing = stats?.missing_for_min ?? 0
-  const hasSpendingTarget = stats?.min_spend && stats.min_spend > 0
-  const daysUntilDue = stats?.due_date_display ? getDaysUntilDueFromStats(stats) : 999
-  const isDueSoon = daysUntilDue <= 10 && Math.abs(account.current_balance ?? 0) > 0
-  const needsSpendMore = hasSpendingTarget && missing > 0
+  // State from unified helper
+  const cardState = useMemo(() => getCardActionState(account), [account])
+  const { isDueSoon, needsSpendMore } = useMemo(() => ({
+    isDueSoon: cardState.badges.due,
+    needsSpendMore: cardState.badges.spend
+  }), [cardState])
+
 
   // Format Helpers
   const formatCurrency = (val: number | null | undefined) => {
     return val !== null && val !== undefined ? numberFormatter.format(val) : '0'
-  }
-
-  // Helper to calculate days until due from stats
-  function getDaysUntilDueFromStats(stats: any): number {
-    if (!stats?.due_date_display) return 999
-    // Parse the due date display (format: "DD-MM")
-    const parts = stats.due_date_display.split('-')
-    if (parts.length !== 2) return 999
-    const day = parseInt(parts[0])
-    const month = parseInt(parts[1])
-    const now = new Date()
-    const currentYear = now.getFullYear()
-    const dueDate = new Date(currentYear, month - 1, day)
-    if (dueDate < now) {
-      dueDate.setFullYear(currentYear + 1)
-    }
-    const diffTime = dueDate.getTime() - now.getTime()
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    return diffDays
   }
 
   // Handle Parent Link Click (Stop Propagation to prevent Card Link)
@@ -196,110 +179,113 @@ function AccountCardComponent({
 
   // --- Render Sections ---
 
-  // 1. Left Section (Visual) - Responsive Landscape Media
-  const renderVisualSection = () => (
-    <div className="relative h-full min-h-[140px] bg-muted/5 overflow-hidden flex flex-col justify-center items-center group-hover/card:bg-muted/10 transition-colors">
-      <div className="absolute inset-0 w-full h-full flex items-center justify-center overflow-hidden">
-        {account.logo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={account.logo_url}
-            alt={account.name}
-            onLoad={handleImageLoad}
-            className={cn(
-              "absolute transition-transform duration-500",
-              // Rotate 90deg if it's Credit Card & Landscape/Square
-              // Scale up to cover the container
-              isCreditCard && isLandscape
-                ? "rotate-90 w-[170%] h-[170%] object-cover origin-center"
-                : "w-full h-full object-cover",
-              "!rounded-none !border-none"
+  // 1. Left Section (Visual) - Portrait Strip (NO SQUARE CROP)
+  const renderVisualSection = () => {
+    return (
+      <div className="relative h-full w-[120px] sm:w-[132px] bg-muted/5 overflow-hidden group-hover/card:bg-muted/10 transition-colors border-r border-slate-100">
+        {/* Image Container - Fills entire portrait strip */}
+        <div className="absolute inset-0 w-full h-full overflow-hidden bg-slate-100">
+          {account.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={account.logo_url}
+              alt={account.name}
+              onLoad={handleImageLoad}
+              className={cn(
+                "absolute opacity-100 transition-opacity duration-300",
+                "!rounded-none !border-none",
+                // Landscape/Square images: Rotate 90° and show 100% of image (object-contain)
+                // Portrait images: Fill container (object-cover)
+                isCreditCard && isLandscape
+                  ? "rotate-90 w-full h-full object-contain"
+                  : "w-full h-full object-cover object-center"
+              )}
+              loading="lazy"
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-muted-foreground/40">
+              {getAccountIcon(account.type)}
+            </div>
+          )}
+
+          {/* Overlay Badges - Top Left */}
+          <div className="absolute top-2 left-2 flex flex-col gap-1.5 z-10 pointer-events-none">
+            {cardState.badges.due && cardState.dueText && (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold bg-red-100 text-red-700 shadow-sm border border-red-200 backdrop-blur-md">
+                {cardState.dueText}
+              </span>
             )}
-            loading="lazy"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-muted-foreground/40">
-            {getAccountIcon(account.type)}
           </div>
-        )}
 
-        {/* Overlay Badges - Top Left */}
-        <div className="absolute top-2 left-2 flex flex-col gap-1.5 z-10 pointer-events-none">
-          {isDueSoon && (stats?.due_date_display) && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-bold bg-red-100 text-red-700 shadow-sm border border-red-200 backdrop-blur-md">
-              Due: {stats.due_date_display}
-            </span>
-          )}
-        </div>
+          {/* Overlay Badges - Bottom Left */}
+          <div className="absolute bottom-2 left-2 flex flex-col gap-1.5 z-10 w-full px-2 items-start">
+            {showParentBadge && (
+              <TooltipProvider>
+                <Tooltip delayDuration={100}>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-indigo-200 pointer-events-auto cursor-help backdrop-blur-sm"
+                      onClick={handleFamilyBadgeClick}
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      Parent {childCount > 1 ? `+${childCount}` : ''}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="text-xs">
+                    <p className="font-semibold mb-1">Linked Accounts:</p>
+                    <ul className="list-disc pl-3 space-y-0.5">
+                      {childAccounts.map(c => (
+                        <li key={c.id}>{c.name}</li>
+                      ))}
+                      {childAccounts.length === 0 && <li>No specific selection</li>}
+                    </ul>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
 
-        {/* Overlay Badges - Bottom Left */}
-        <div className="absolute bottom-2 left-2 flex flex-col gap-1.5 z-10 w-full px-2 items-start">
-          {showParentBadge && (
-            <TooltipProvider>
-              <Tooltip delayDuration={100}>
-                <TooltipTrigger asChild>
-                  <div
-                    className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-indigo-200 pointer-events-auto cursor-help backdrop-blur-sm"
-                    onClick={handleFamilyBadgeClick}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    Parent {childCount > 1 ? `+${childCount}` : ''}
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="text-xs">
-                  <p className="font-semibold mb-1">Linked Accounts:</p>
-                  <ul className="list-disc pl-3 space-y-0.5">
-                    {childAccounts.map(c => (
-                      <li key={c.id}>{c.name}</li>
-                    ))}
-                    {childAccounts.length === 0 && <li>No specific selection</li>}
-                  </ul>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
+            {showChildBadge && (
+              <TooltipProvider>
+                <Tooltip delayDuration={100}>
+                  <TooltipTrigger asChild>
+                    <div
+                      className="flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-purple-200 pointer-events-auto cursor-help backdrop-blur-sm"
+                      onClick={handleFamilyBadgeClick}
+                    >
+                      <Baby className="w-3.5 h-3.5" />
+                      Child
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" className="text-xs">
+                    Linked to {parentInfo?.name || "Parent Account"}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
 
-          {showChildBadge && (
-            <TooltipProvider>
-              <Tooltip delayDuration={100}>
-                <TooltipTrigger asChild>
-                  <div
-                    className="flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-purple-200 pointer-events-auto cursor-help backdrop-blur-sm"
-                    onClick={handleFamilyBadgeClick}
-                  >
-                    <Baby className="w-3.5 h-3.5" />
-                    Child
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="text-xs">
-                  Linked to {parentInfo?.name || "Parent Account"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
+            {/* Standalone badge */}
+            {cardState.badges.standalone && (
+              <span className="flex items-center gap-1 text-[10px] font-bold text-white bg-slate-800/90 backdrop-blur-md px-1.5 py-0.5 rounded-sm shadow-sm border border-white/10">
+                Standalone
+              </span>
+            )}
 
-          {/* Standalone badge */}
-          {!showParentBadge && !showChildBadge && isCreditCard && (
-            <span className="flex items-center gap-1 text-xs font-bold text-white bg-black/40 backdrop-blur-md px-2 py-0.5 rounded-sm shadow-sm border border-white/20">
-              Standalone
-            </span>
-          )}
-
-          {/* Timeline Badge */}
-          {stats?.cycle_range && (
-            <span className={cn(
-              "inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold shadow-sm backdrop-blur-sm max-w-full truncate",
-              stats.cycle_range === "Month Cycle"
-                ? "bg-teal-100/90 text-teal-800 border border-teal-200"
-                : "bg-slate-800/80 text-white border border-slate-600"
-            )}>
-              {stats.cycle_range === "Month Cycle" ? "Month Cycle" : stats?.cycle_range}
-            </span>
-          )}
+            {/* Timeline Badge */}
+            {stats?.cycle_range && (
+              <span className={cn(
+                "inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold shadow-sm backdrop-blur-sm max-w-full truncate",
+                stats.cycle_range === "Month Cycle"
+                  ? "bg-teal-100/90 text-teal-800 border border-teal-200"
+                  : "bg-slate-800/80 text-white border border-slate-600"
+              )}>
+                {stats.cycle_range === "Month Cycle" ? "Month Cycle" : stats?.cycle_range}
+              </span>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   // 2. Right Section (Data)
   const renderDataSection = () => {
@@ -543,8 +529,8 @@ function AccountCardComponent({
               : "bg-white border-slate-200"
         )}
       >
-        {/* Fluid Responsive Grid: 35%/65% on small, fixed 140px/auto on md+ */}
-        <div className="grid grid-cols-[35%_65%] md:grid-cols-[140px_1fr] h-full min-h-[140px]">
+        {/* Portrait Strip Layout: Fixed width left (120px/132px), flexible right */}
+        <div className="grid grid-cols-[auto_1fr] h-full min-h-[140px]">
           {renderVisualSection()}
           {renderDataSection()}
         </div>
