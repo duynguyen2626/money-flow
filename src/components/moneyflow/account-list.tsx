@@ -245,35 +245,41 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
     })
 
     // Sort Action Required: Due Soon first, then Need Spend More
-    // Sort Action Required: Due Soon first, then Need Spend More
+    // Sort Action Required: Due Soon first (Left->Right), then Need Spend More (Highest->Lowest)
+    // "thứ tự là sắp xếp các thẻ có due gần nhất (từ trái qua phải) sau đó tới các thẻ có yêu cầu spend more nhiều nhất"
     actionRequired.sort((a, b) => {
+      // 1. Check Due Soon Status (Priority Tier 1)
       const daysA = getDaysUntilDue(a)
       const daysB = getDaysUntilDue(b)
 
-      // Debt Logic matching grouping
+      // Debt Check for Due Soon validity
       const limitA = a.credit_limit ?? 0; const balanceA = a.current_balance ?? 0
-      const debtA = limitA > 0 ? Math.max(0, limitA - balanceA) : 0
+      const debtA = limitA > 0 ? Math.max(0, limitA - balanceA) : 0 // Assumption: Positive Balance = Available, so Used = Limit - Balance
 
       const limitB = b.credit_limit ?? 0; const balanceB = b.current_balance ?? 0
       const debtB = limitB > 0 ? Math.max(0, limitB - balanceB) : 0
 
+      // Is Due Soon? (<= 10 days)
       const isDueSoonA = daysA !== null && daysA <= 10 && debtA > 1000
       const isDueSoonB = daysB !== null && daysB <= 10 && debtB > 1000
 
-      // Due Soon cards come first
-      if (isDueSoonA && !isDueSoonB) return -1
-      if (!isDueSoonA && isDueSoonB) return 1
+      // Tier 1: Due Soon vs Not Due Soon
+      if (isDueSoonA && !isDueSoonB) return -1 // A comes first
+      if (!isDueSoonA && isDueSoonB) return 1  // B comes first
 
-      // Within Due Soon: sort by days (closer first)
+      // Tier 2: Inside Due Soon -> Sort by Days (Nearest first)
       if (isDueSoonA && isDueSoonB) {
         return (daysA ?? 999) - (daysB ?? 999)
       }
 
-      // Within Need Spend More: Sort by missing amount
+      // Tier 3: Inside Need Spend -> Sort by Missing Amount (Highest first)
+      // "thẻ có yêu cầu spend more nhiều nhất"
       const statsA = cashbackById[a.id] as any
       const statsB = cashbackById[b.id] as any
       const missingA = statsA?.missing_for_min ?? 0
       const missingB = statsB?.missing_for_min ?? 0
+
+      // If missing amount differs, higher missing comes first
       return missingB - missingA
     })
 
@@ -305,7 +311,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
         title: '🏦 Payment Accounts',
         helper: 'Banks · E-wallets · Cash',
         accounts: payment,
-        gridCols: 'lg:grid-cols-5 md:grid-cols-3'
+        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
       })
     }
 
@@ -316,7 +322,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
         title: '🔒 Secured Assets',
         helper: 'Deposits linking to credit cards',
         accounts: securedSavings,
-        gridCols: 'lg:grid-cols-5 md:grid-cols-3'
+        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
       })
     }
     if (normalSavings.length > 0) {
@@ -325,7 +331,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
         title: '💰 Savings & Assets',
         helper: 'Term deposits · Investments',
         accounts: normalSavings,
-        gridCols: 'lg:grid-cols-5 md:grid-cols-3'
+        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
       })
     }
 
@@ -335,7 +341,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
         title: '👥 Debt Accounts',
         helper: 'People & loans',
         accounts: debt,
-        gridCols: 'lg:grid-cols-5 md:grid-cols-3'
+        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
       })
     }
 
@@ -495,7 +501,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
                   {section.accounts.length}
                 </span>
               </div>
-              <div className={`grid gap-4 grid-cols-1 ${section.gridCols}`}>
+              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
                 {section.accounts.map(account => (
                   <AccountCard
                     key={account.id}
