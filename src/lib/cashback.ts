@@ -179,11 +179,11 @@ export function getCashbackCycleRange(
   const startBase = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + startOffset, 1)
   const start = clampToDay(startBase, day)
 
+  // End date is 1 day BEFORE the next statement day
+  // Example: statement_day = 25 → cycle is Nov 25 - Dec 24
   const endBase = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + endOffset, 1)
-  const end =
-    day === 1
-      ? new Date(endBase.getFullYear(), endBase.getMonth(), 0)
-      : clampToDay(endBase, day)
+  const nextStatementDay = clampToDay(endBase, day)
+  const end = new Date(nextStatementDay.getTime() - 24 * 60 * 60 * 1000) // Subtract 1 day
 
   start.setHours(0, 0, 0, 0)
   end.setHours(23, 59, 59, 999)

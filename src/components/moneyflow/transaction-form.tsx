@@ -642,8 +642,13 @@ export function TransactionForm({
       if (targetType !== 'expense' && targetType !== 'income' && targetType !== 'transfer' && targetType !== 'repayment') {
         return []
       }
+
       return categories
-        .filter(cat => cat.type === targetType)
+        .filter(cat => {
+          // Always include the currently selected category (e.g. Credit Payment, which might be 'expense' but used in 'transfer')
+          if (cat.id === watchedCategoryId) return true
+          return cat.type === targetType
+        })
         .map(cat => ({
           value: cat.id,
           label: cat.name,
