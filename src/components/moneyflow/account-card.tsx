@@ -2,6 +2,7 @@
 
 import { memo, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   CreditCard,
   Landmark,
@@ -29,6 +30,7 @@ import {
   Copy,
   Eye,
   ShoppingBag,
+  ShieldCheck,
 } from 'lucide-react'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { cn } from '@/lib/utils'
@@ -46,6 +48,7 @@ import { QuickPeopleSettingsDialog } from './quick-people-settings-dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { getCardActionState } from '@/lib/card-utils'
+import { SYSTEM_CATEGORIES } from '@/lib/constants'
 
 type AccountCardProps = {
   account: Account
@@ -55,6 +58,8 @@ type AccountCardProps = {
   shops?: Shop[]
   collateralAccounts?: Account[]
   usageStats?: any // UsageStats from settings.service
+  pendingBatchAccountIds?: string[]
+  className?: string
 }
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -89,7 +94,10 @@ function AccountCardComponent({
   shops = [],
   collateralAccounts = [],
   usageStats = {},
+  pendingBatchAccountIds = [],
+  className,
 }: AccountCardProps) {
+  const router = useRouter()
   const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false)
   // Dialog States
   const [activeDialog, setActiveDialog] = useState<'income' | 'expense' | 'transfer' | 'debt' | 'repayment' | 'paid' | 'shopping' | 'people-settings' | null>(null)
@@ -110,9 +118,10 @@ function AccountCardComponent({
   const showParentBadge = isParent
   const showChildBadge = !isParent && isChild
   const detailsHref = `/accounts/${account.id}`
+  const hasPendingBatch = pendingBatchAccountIds.includes(account.id)
 
   // State from unified helper
-  const cardState = useMemo(() => getCardActionState(account), [account])
+  const cardState = useMemo(() => getCardActionState(account, hasPendingBatch), [account, hasPendingBatch])
   const { isDueSoon, needsSpendMore } = useMemo(() => ({
     isDueSoon: cardState.badges.due,
     needsSpendMore: cardState.badges.spend
@@ -136,6 +145,10 @@ function AccountCardComponent({
   // Prevent bubble for direct links
   const handleLinkClick = (e: React.MouseEvent) => {
     e.stopPropagation()
+  }
+
+  const handleCardClick = () => {
+    router.push(detailsHref)
   }
 
   const usageData = useMemo(() => {
@@ -182,7 +195,7 @@ function AccountCardComponent({
   // 1. Left Section (Visual) - Portrait Strip (NO SQUARE CROP)
   const renderVisualSection = () => {
     return (
-      <div className="relative h-full w-[120px] sm:w-[132px] bg-muted/5 overflow-hidden group-hover/card:bg-muted/10 transition-colors border-r border-slate-100">
+      <div className="relative h-full w-[148px] sm:w-[160px] bg-muted/5 overflow-hidden group-hover/card:bg-muted/10 transition-colors border-r border-slate-100">
         {/* Image Container - Fills entire portrait strip */}
         <div className="absolute inset-0 w-full h-full overflow-hidden bg-slate-100">
           {account.logo_url ? (
@@ -210,11 +223,7 @@ function AccountCardComponent({
 
           {/* Overlay Badges - Top Left */}
           <div className="absolute top-2 left-2 flex flex-col gap-1.5 z-10 pointer-events-none">
-            {cardState.badges.due && cardState.dueText && (
-              <span className="inline-flex items-center px-1.5 py-0.5 rounded-sm text-[10px] font-bold bg-red-100 text-red-700 shadow-sm border border-red-200 backdrop-blur-md">
-                {cardState.dueText}
-              </span>
-            )}
+            {/* Removed Confirm Paid from here - moved to header */}
           </div>
 
           {/* Overlay Badges - Bottom Left */}
@@ -224,7 +233,7 @@ function AccountCardComponent({
                 <Tooltip delayDuration={100}>
                   <TooltipTrigger asChild>
                     <div
-                      className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-indigo-200 pointer-events-auto cursor-help backdrop-blur-sm"
+                      className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-indigo-200 pointer-events-auto cursor-help backdrop-blur-sm w-[106px] justify-center"
                       onClick={handleFamilyBadgeClick}
                     >
                       <Users className="w-3.5 h-3.5" />
@@ -249,7 +258,7 @@ function AccountCardComponent({
                 <Tooltip delayDuration={100}>
                   <TooltipTrigger asChild>
                     <div
-                      className="flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-purple-200 pointer-events-auto cursor-help backdrop-blur-sm"
+                      className="flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-purple-200 pointer-events-auto cursor-help backdrop-blur-sm w-[106px] justify-center"
                       onClick={handleFamilyBadgeClick}
                     >
                       <Baby className="w-3.5 h-3.5" />
@@ -263,9 +272,9 @@ function AccountCardComponent({
               </TooltipProvider>
             )}
 
-            {/* Standalone badge */}
-            {cardState.badges.standalone && (
-              <span className="flex items-center gap-1 text-[10px] font-bold text-white bg-slate-800/90 backdrop-blur-md px-1.5 py-0.5 rounded-sm shadow-sm border border-white/10">
+            {/* Standalone Badge */}
+            {cardState.badges.standalone && isCreditCard && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-bold bg-slate-800/80 text-white shadow-sm border border-slate-600 backdrop-blur-md w-[106px] justify-center">
                 Standalone
               </span>
             )}
@@ -273,7 +282,7 @@ function AccountCardComponent({
             {/* Timeline Badge */}
             {stats?.cycle_range && (
               <span className={cn(
-                "inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold shadow-sm backdrop-blur-sm max-w-full truncate",
+                "inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold shadow-sm backdrop-blur-sm w-[106px] justify-center truncate",
                 stats.cycle_range === "Month Cycle"
                   ? "bg-teal-100/90 text-teal-800 border border-teal-200"
                   : "bg-slate-800/80 text-white border border-slate-600"
@@ -281,6 +290,8 @@ function AccountCardComponent({
                 {stats.cycle_range === "Month Cycle" ? "Month Cycle" : stats?.cycle_range}
               </span>
             )}
+
+            {/* Unsecured Badge - REMOVED (Moved to Data Section) */}
           </div>
         </div>
       </div>
@@ -303,7 +314,7 @@ function AccountCardComponent({
     const hasCashbackConfig = stats?.remains_cap !== undefined
 
     return (
-      <div className="flex flex-col h-full p-3 min-h-[140px] min-w-0 relative">
+      <div className="flex flex-col h-full p-2.5 min-w-0 relative">
         {/* 1. TOP ROW: Name + Action Buttons */}
         <div className="flex justify-between items-start gap-1 mb-1">
           {/* Account Name */}
@@ -319,48 +330,98 @@ function AccountCardComponent({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          {/* Right: Always-visible Edit/Details */}
-          <div className="flex items-center gap-1 shrink-0">
-            <Link
-              href={detailsHref}
-              onClick={handleLinkClick}
-              className="flex items-center gap-0.5 rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-blue-700 hover:bg-blue-200 hover:text-blue-800 hover:border-blue-300 active:scale-95 active:bg-blue-300 transition-all"
-            >
-              <Eye className="w-3 h-3" />
-              Details
-            </Link>
-            <EditAccountDialog
-              account={account}
-              accounts={accounts}
-              collateralAccounts={collateralAccounts}
-              buttonClassName="flex items-center gap-0.5 rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700 hover:bg-slate-200 hover:text-slate-900 hover:border-slate-300 active:scale-95 active:bg-slate-300 transition-all"
-              triggerContent={<><Edit className="w-3 h-3" />Edit</>}
-            />
+
+          {/* Right: Action Buttons */}
+          <div className="flex flex-col gap-1 shrink-0 items-end">
+            {/* Row 1: Edit + Details (Icon Only, Circular) */}
+            <div className="flex items-center gap-1.5">
+              <TooltipProvider>
+                <Tooltip delayDuration={100}>
+                  <TooltipTrigger asChild>
+                    <div>
+                      <EditAccountDialog
+                        account={account}
+                        accounts={accounts}
+                        collateralAccounts={collateralAccounts}
+                        buttonClassName="flex items-center justify-center rounded-full bg-slate-100 border border-slate-200 w-7 h-7 text-slate-700 hover:bg-slate-200 hover:text-slate-900 hover:border-slate-300 active:scale-95 active:bg-slate-300 transition-all shadow-sm"
+                        triggerContent={<Edit className="w-3.5 h-3.5" />}
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs font-semibold">
+                    Edit Account
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <TooltipProvider>
+                <Tooltip delayDuration={100}>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={detailsHref}
+                      onClick={handleLinkClick}
+                      className="flex items-center justify-center rounded-full bg-blue-50 border border-blue-200 w-7 h-7 text-blue-600 hover:bg-blue-100 hover:text-blue-800 hover:border-blue-300 active:scale-95 active:bg-blue-200 transition-all shadow-sm"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs font-semibold">
+                    View Details
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+
+            {/* Row 2: Confirm Paid (Moved to Balance Row) */}
           </div>
         </div>
 
-        {/* 2. SECOND ROW: Balance */}
-        <div className={cn(
-          "text-2xl font-bold tracking-tight mb-2",
-          balance < 0 ? "text-red-600" : "text-slate-900"
-        )}>
-          {formatCurrency(balance)}
+        {/* 2. SECOND ROW: Balance + Confirm Button (Inline) */}
+        <div className="flex items-center justify-between gap-2 mb-1.5 min-h-[28px]">
+          <TooltipProvider>
+            <Tooltip delayDuration={300}>
+              <TooltipTrigger asChild>
+                <div className={cn(
+                  "text-xl font-bold tracking-tight truncate flex-1 min-w-0",
+                  balance < 0 ? "text-red-600" : "text-slate-900"
+                )}>
+                  {formatCurrency(balance)}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs font-semibold">
+                {formatCurrency(balance)}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+
+          {/* Confirm Button (Inline with Balance) */}
+          {cardState.badges.pendingBatch && (
+            <button
+              onClick={(e) => { e.stopPropagation(); /* TODO: Open confirm dialog */ }}
+              className="flex items-center justify-center gap-1 rounded-md bg-green-100 border border-green-200 px-2 py-1 text-[10px] font-bold text-green-700 hover:bg-green-200 hover:border-green-300 active:scale-95 transition-all text-sm shrink-0 shadow-sm"
+            >
+              <CheckCircle className="w-3.5 h-3.5" />
+              Confirm
+            </button>
+          )}
         </div>
 
         {/* 3. MIDDLE: Smart KPI Display */}
 
         {/* PRIORITY 1: Has Spending Target AND Not Met Yet */}
         {showKPI && !isMet && (
-          <div className="flex flex-col gap-1 mb-2">
-            <div className="flex justify-between items-center text-xs">
-              <span className="font-bold text-amber-600">Need to spend</span>
-              <span className="font-medium text-slate-500">{formatCurrency(missing)}</span>
-            </div>
-            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-amber-500 rounded-full"
-                style={{ width: `${Math.min(((stats?.spent_this_cycle || 0) / (stats?.min_spend || 1)) * 100, 100)}%` }}
-              />
+          <div className="flex items-center gap-2 bg-gradient-to-r from-amber-50 to-orange-50 p-2 rounded-md text-xs border border-amber-100 mb-2 shadow-sm">
+            <span className="text-xl shrink-0">⚠️</span>
+            <div className="flex items-center gap-3 w-full">
+              <div className="flex flex-col leading-none gap-0.5">
+                <span className="text-[10px] text-amber-600/80 uppercase font-bold">NEED</span>
+                <span className="font-bold text-amber-800 text-sm">{formatCurrency(missing)}</span>
+              </div>
+              <div className="w-[1px] h-6 bg-amber-200/50" />
+              <div className="flex flex-col leading-none gap-0.5">
+                <span className="text-[10px] text-amber-600/80 uppercase font-bold">SPENT</span>
+                <span className="font-bold text-amber-800 text-sm">{formatCurrency(stats?.spent_this_cycle ?? 0)}</span>
+              </div>
             </div>
           </div>
         )}
@@ -395,7 +456,37 @@ function AccountCardComponent({
           </div>
         )}
 
-        {/* 4. Credit Card Progress Bar */}
+        {/* 4. Secured By OR Unsecured Badge (MUST be BEFORE Limit bar) */}
+        {isCreditCard && (
+          <div className="mb-2 text-center">
+            {isSecuredAsset && securedByAccountId ? (
+              <TooltipProvider>
+                <Tooltip delayDuration={100}>
+                  <TooltipTrigger asChild>
+                    <Link
+                      href={`/accounts/${securedByAccountId}`}
+                      onClick={handleLinkClick}
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
+                    >
+                      <PiggyBank className="w-3 h-3" />
+                      Secured by Savings
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" className="text-xs">
+                    Linked to {parentInfo?.name || 'Savings Account'}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                <ShieldCheck className="w-3 h-3" />
+                Unsecured
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* 5. Credit Card Progress Bar (MUST be AFTER Secured by) */}
         {isCreditCard && (
           <div className="mb-2">
             <div className="flex justify-between items-end mb-1">
@@ -425,7 +516,7 @@ function AccountCardComponent({
           </div>
         )}
 
-        {/* 5. BOTTOM: Quick Add Buttons */}
+        {/* 6. BOTTOM: Quick Add Buttons (ALWAYS LAST) */}
         <div className="mt-auto grid grid-cols-5 gap-1 pt-1.5 border-t border-slate-50">
           {/* Income */}
           <button
@@ -499,40 +590,55 @@ function AccountCardComponent({
             Repay
           </button>
         </div>
-
-        {/* Footer: Secured By */}
-        {(isSecuredAsset && securedByAccountId) && (
-          <div className="mt-2 text-center">
-            <Link
-              href={`/accounts/${securedByAccountId}`}
-              onClick={handleLinkClick}
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
-            >
-              <PiggyBank className="w-3 h-3" />
-              Secured by {parentInfo?.name || 'Savings'}
-            </Link>
-          </div>
-        )}
       </div>
     )
   }
 
   return (
     <>
-      <div
-        className={cn(
-          "group/card relative block w-full rounded-xl border-2 text-card-foreground shadow-sm transition-all overflow-hidden",
-          isDueSoon
-            ? "bg-red-50/50 border-red-500 shadow-md"
-            : needsSpendMore
-              ? "bg-amber-50/30 border-amber-200"
-              : "bg-white border-slate-200"
+      <div className="relative">
+        {/* Due Banner - At top of left section with rounded top-left corner */}
+        {/* Show for ALL Credit Cards with a due date */}
+        {isCreditCard && stats?.due_date_display && (
+          <div className="absolute top-[2px] left-[2px] z-20 w-[148px] sm:w-[160px]">
+            <div className={cn(
+              "px-2 py-0.5 rounded-tl-[9px] rounded-br-lg shadow-sm text-[10px] text-center leading-tight transition-colors border-b border-r",
+              cardState.badges.due
+                ? "bg-red-50 border-red-200 text-red-800" // Urgent
+                : "bg-amber-50 border-amber-200 text-amber-800" // Not Urgent
+            )}>
+              {/* Days Left - First */}
+              <div className="text-[9px] uppercase tracking-tight opacity-90 mb-px">
+                <span className="font-bold text-[10px] mr-1">{cardState.priorities.daysUntilDue}</span>
+                days left
+              </div>
+
+              {/* Date Display - Second */}
+              <div className="font-medium text-xs">
+                {stats.due_date_display.split(' ')[0]} <span className="font-bold">{stats.due_date_display.split(' ')[1]}</span>
+              </div>
+            </div>
+          </div>
         )}
-      >
-        {/* Portrait Strip Layout: Fixed width left (120px/132px), flexible right */}
-        <div className="grid grid-cols-[auto_1fr] h-full min-h-[140px]">
-          {renderVisualSection()}
-          {renderDataSection()}
+
+        <div
+          onClick={handleCardClick}
+          className={cn(
+            "group/card relative block w-full rounded-xl border-2 shadow-sm transition-all overflow-hidden h-full",
+            // Border Color Logic
+            cardState.badges.due
+              ? "bg-red-50/50 border-red-500 shadow-md" // Urgent
+              : needsSpendMore
+                ? "bg-amber-50/50 border-amber-400" // Needs Spend
+                : "bg-white border-slate-300", // Default
+            className
+          )}
+        >
+          {/* Portrait Strip Layout: Fixed width left (120px/132px), flexible right */}
+          <div className="grid grid-cols-[auto_1fr] h-full">
+            {renderVisualSection()}
+            {renderDataSection()}
+          </div>
         </div>
       </div>
 
@@ -569,6 +675,9 @@ function AccountCardComponent({
         shops={shops}
         defaultType="transfer"
         defaultSourceAccountId={account.id}
+        cloneInitialValues={{
+          category_id: SYSTEM_CATEGORIES.MONEY_TRANSFER
+        }}
         isOpen={activeDialog === 'transfer'}
         onOpenChange={(open) => !open && setActiveDialog(null)}
         buttonClassName="hidden"
