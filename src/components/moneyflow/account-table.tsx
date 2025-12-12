@@ -1,5 +1,6 @@
 'use client'
 
+import React from 'react'
 import Link from 'next/link'
 import {
   Loader2,
@@ -14,7 +15,8 @@ import {
   Users,
   AlertCircle,
   CheckCircle,
-  ArrowRight
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react'
 
 import {
@@ -60,6 +62,18 @@ export function AccountTable({
   allAccounts = [],
 }: AccountTableProps) {
 
+  // Track which sections are expanded (only credit expanded by default)
+  const [expandedSections, setExpandedSections] = React.useState<Record<string, boolean>>({
+    credit: true,
+    bank: false,
+    savings: false,
+    debt: false,
+  })
+
+  const toggleSection = (key: string) => {
+    setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
   // Grouping Logic
   const groupedAccounts = {
     credit: accounts.filter(a => a.type === 'credit_card'),
@@ -90,94 +104,88 @@ export function AccountTable({
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
-              <TableHead className="w-[300px]">Identity</TableHead>
-              <TableHead className="w-[120px]">Type</TableHead>
-              <TableHead className="text-right w-[150px]">Balance / Limit</TableHead>
-              <TableHead className="w-[250px]">Cashback / KPI</TableHead>
-              <TableHead className="w-[150px]">Cycle / Due</TableHead>
-              <TableHead>Linkage</TableHead>
+              <TableHead className="w-[280px]">Identity</TableHead>
+              <TableHead className="text-right w-[120px]">Balance</TableHead>
+              <TableHead className="text-right w-[120px]">Limit</TableHead>
+              <TableHead className="w-[200px]">Cashback / KPI</TableHead>
+              <TableHead className="w-[140px]">Cycle / Due</TableHead>
+              <TableHead className="w-[160px]">Linkage</TableHead>
               <TableHead className="text-right w-[80px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sections.map(section => (
-              <>
-                {/* Sticky Group Header */}
-                <TableRow key={`header-${section.key}`} className="bg-slate-50 hover:bg-slate-100">
-                  <TableCell colSpan={7} className="py-2">
-                    <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-slate-500">
-                      {section.icon}
-                      {section.title}
-                      <span className="bg-slate-200 text-slate-600 px-1.5 rounded-full text-[10px]">{section.items.length}</span>
-                    </div>
-                  </TableCell>
-                </TableRow>
+            {sections.map(section => {
+              const isExpanded = expandedSections[section.key] ?? false
 
-                {section.items.map(account => {
-                  const stats = account.stats
-                  const config = typeof account.cashback_config === 'string' ? JSON.parse(account.cashback_config) : account.cashback_config
-                  // Parse manually if stats missing or for extra fields
-                  const parsedConfig = config ? parseCashbackConfig(config) : null
+              return (
+                <React.Fragment key={section.key}>
+                  {/* Collapsible Group Header */}
+                  <TableRow className="bg-slate-50 hover:bg-slate-100 cursor-pointer" onClick={() => toggleSection(section.key)}>
+                    <TableCell colSpan={7} className="py-2">
+                      <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-slate-500">
+                        {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                        {section.icon}
+                        {section.title}
+                        <span className="bg-slate-200 text-slate-600 px-1.5 rounded-full text-[10px]">{section.items.length}</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
 
-                  const isNegative = (account.current_balance ?? 0) < 0
-                  const isActive = typeof account.is_active === 'boolean' ? account.is_active : true
-                  const isPending = pendingId === account.id
-                  const balance = account.current_balance ?? 0
-                  const limit = account.credit_limit ?? 0
+                  {isExpanded && section.items.map(account => {
+                    const stats = account.stats
+                    const config = typeof account.cashback_config === 'string' ? JSON.parse(account.cashback_config) : account.cashback_config
+                    // Parse manually if stats missing or for extra fields
+                    const parsedConfig = config ? parseCashbackConfig(config) : null
 
-                  // Usage % for tooltip
-                  const usage = limit > 0 ? (Math.abs(balance) / limit) * 100 : 0
-                  const usageColor = usage > 80 ? 'text-red-600' : usage > 30 ? 'text-amber-600' : 'text-emerald-600'
+                    const isNegative = (account.current_balance ?? 0) < 0
+                    const isActive = typeof account.is_active === 'boolean' ? account.is_active : true
+                    const isPending = pendingId === account.id
+                    const balance = account.current_balance ?? 0
+                    const limit = account.credit_limit ?? 0
 
-                  return (
-                    <TableRow key={account.id} className="group hover:bg-slate-50/50">
-                      {/* Col 1: Identity */}
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="h-10 w-10 shrink-0 overflow-hidden flex items-center justify-center rounded-none border border-slate-100 bg-white">
-                            {account.logo_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={account.logo_url} alt={account.name} className="h-full w-full object-contain p-1" />
-                            ) : (
-                              <div className="text-slate-300">
-                                {getAccountIcon(account.type, "h-5 w-5")}
-                              </div>
-                            )}
+                    // Usage % for tooltip
+                    const usage = limit > 0 ? (Math.abs(balance) / limit) * 100 : 0
+                    const usageColor = usage > 80 ? 'text-red-600' : usage > 30 ? 'text-amber-600' : 'text-emerald-600'
+
+                    return (
+                      <TableRow key={account.id} className="group hover:bg-slate-50/50">
+                        {/* Col 1: Identity */}
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className="h-10 w-16 shrink-0 overflow-hidden flex items-center justify-center rounded-none bg-white">
+                              {account.logo_url ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={account.logo_url} alt={account.name} className="h-full w-full object-contain" />
+                              ) : (
+                                <div className="text-slate-300">
+                                  {getAccountIcon(account.type, "h-5 w-5")}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-col">
+                              <Link href={`/accounts/${account.id}`} className="font-bold text-slate-900 hover:text-blue-700 hover:underline decoration-blue-700/30 underline-offset-4 transition-colors">
+                                {account.name}
+                              </Link>
+                              <span className="text-[10px] text-slate-400 font-mono">{account.id.substring(0, 8)}...</span>
+                            </div>
                           </div>
-                          <div className="flex flex-col">
-                            <Link href={`/accounts/${account.id}`} className="font-bold text-slate-900 hover:text-blue-700 hover:underline decoration-blue-700/30 underline-offset-4 transition-colors">
-                              {account.name}
-                            </Link>
-                            <span className="text-[10px] text-slate-400 font-mono">{account.id.substring(0, 8)}...</span>
-                          </div>
-                        </div>
-                      </TableCell>
+                        </TableCell>
 
-                      {/* Col 2: Type */}
-                      <TableCell>
-                        <span className={cn(
-                          "inline-flex items-center rounded-sm px-2 py-1 text-[10px] font-bold uppercase tracking-wide border",
-                          account.type === 'credit_card' ? "bg-purple-50 text-purple-700 border-purple-100" :
-                            account.type === 'bank' ? "bg-blue-50 text-blue-700 border-blue-100" :
-                              account.type === 'savings' ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
-                                "bg-slate-50 text-slate-600 border-slate-100"
-                        )}>
-                          {getAccountTypeLabel(account.type)}
-                        </span>
-                      </TableCell>
-
-                      {/* Col 3: Balance / Limit */}
-                      <TableCell className="text-right">
-                        <div className="flex flex-col items-end">
+                        {/* Col 2: Balance */}
+                        <TableCell className="text-right">
                           <span className={cn("font-bold text-sm", isNegative ? "text-red-600" : "text-slate-900")}>
                             {formatCurrency(balance)}
                           </span>
-                          {account.type === 'credit_card' && limit > 0 && (
+                        </TableCell>
+
+                        {/* Col 3: Limit */}
+                        <TableCell className="text-right">
+                          {account.type === 'credit_card' && limit > 0 ? (
                             <TooltipProvider>
                               <Tooltip delayDuration={0}>
                                 <TooltipTrigger asChild>
-                                  <span className={cn("text-[10px] cursor-help border-b border-dotted", usageColor)}>
-                                    of {formatCurrency(limit)}
+                                  <span className={cn("text-sm font-medium cursor-help border-b border-dotted", usageColor)}>
+                                    {formatCurrency(limit)}
                                   </span>
                                 </TooltipTrigger>
                                 <TooltipContent>
@@ -185,96 +193,99 @@ export function AccountTable({
                                 </TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
+                          ) : (
+                            <span className="text-slate-300 text-xs">—</span>
                           )}
-                        </div>
-                      </TableCell>
+                        </TableCell>
 
-                      {/* Col 4: Cashback KPI */}
-                      <TableCell>
-                        {account.type === 'credit_card' && stats ? (
-                          <div className="flex flex-col gap-1.5">
-                            {/* Rate & Max */}
-                            <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                              {/* Just a simple rate indicator if we can parse it easily, else just show Cap */}
-                              {/* We don't have rate in AccountStats yet, but we have remains_cap */}
+                        {/* Col 4: Cashback KPI */}
+                        <TableCell>
+                          {account.type === 'credit_card' && stats ? (
+                            <div className="flex flex-col gap-1">
+                              {/* Cap Left */}
                               {stats.remains_cap !== null && (
-                                <span className="flex items-center gap-1 bg-emerald-50 text-emerald-700 px-1.5 rounded-sm whitespace-nowrap">
-                                  <span className="font-bold">Cap left:</span> {formatCurrency(stats.remains_cap)}
+                                <span className="flex items-center gap-1 bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-sm text-[10px] font-semibold whitespace-nowrap">
+                                  Cap: {formatCurrency(stats.remains_cap)}
                                 </span>
                               )}
-                            </div>
 
-                            {/* Min Spend Status */}
-                            {stats.min_spend && stats.min_spend > 0 && (
-                              <div className="flex items-center gap-2">
-                                {(stats.missing_for_min ?? 0) > 0 ? (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-sm border border-amber-100 whitespace-nowrap animate-pulse">
-                                    Need {formatCurrency(stats.missing_for_min ?? 0)}
-                                  </span>
+                              {/* Min Spend Status */}
+                              {stats.min_spend && stats.min_spend > 0 && (
+                                <div>
+                                  {(stats.missing_for_min ?? 0) > 0 ? (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-sm border border-amber-100 whitespace-nowrap">
+                                      Need {formatCurrency(stats.missing_for_min ?? 0)}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-sm border border-emerald-100 whitespace-nowrap">
+                                      <CheckCircle className="h-2.5 w-2.5" /> Met
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-300 text-xs">—</span>
+                          )}
+                        </TableCell>
+
+                        {/* Col 5: Cycle / Due */}
+                        <TableCell>
+                          {stats ? (
+                            <div className="flex flex-col gap-0.5">
+                              {stats.due_date_display && (
+                                <div className="flex items-center gap-1 text-xs font-bold text-red-600">
+                                  Due {stats.due_date_display}
+                                </div>
+                              )}
+                              <div className="text-[10px] text-slate-500 font-medium">
+                                {stats.cycle_range}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-slate-300 text-xs">—</span>
+                          )}
+                        </TableCell>
+
+                        {/* Col 6: Linkage */}
+                        <TableCell>
+                          <div className="flex flex-col items-start gap-1">
+                            {account.relationships?.is_parent && (
+                              <div className="flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded-sm">
+                                <User className="h-3 w-3" />
+                                Parent ({account.relationships.child_count ?? 0})
+                              </div>
+                            )}
+                            {account.relationships?.parent_info && (
+                              <Link href={`/accounts/${account.relationships.parent_info.id}`} className="flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-sm hover:underline decoration-blue-700/30">
+                                {account.relationships.parent_info.type === 'savings' ? (
+                                  <ShieldCheck className="h-3 w-3" />
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-sm border border-emerald-100 whitespace-nowrap">
-                                    <CheckCircle className="h-2.5 w-2.5" /> Met
-                                  </span>
+                                  <Users className="h-3 w-3" />
                                 )}
-                              </div>
+                                {account.relationships.parent_info.type === 'savings' ? 'Secured by' : 'Child'}
+                              </Link>
                             )}
                           </div>
-                        ) : (
-                          <span className="text-slate-300 text-xs">—</span>
-                        )}
-                      </TableCell>
+                        </TableCell>
 
-                      {/* Col 5: Cycle / Due */}
-                      <TableCell>
-                        {stats ? (
-                          <div className="flex flex-col gap-0.5">
-                            {stats.due_date_display && (
-                              <div className="flex items-center gap-1 text-xs font-bold text-red-600">
-                                Due {stats.due_date_display}
-                              </div>
-                            )}
-                            <div className="text-[10px] text-slate-500 font-medium">
-                              {stats.cycle_range}
-                            </div>
+                        {/* Col 7: Actions */}
+                        <TableCell className="text-right">
+                          <div className="flex justify-end">
+                            <EditAccountDialog
+                              account={account}
+                              collateralAccounts={collateralAccounts}
+                              triggerContent={<Zap className="h-4 w-4 text-slate-400 hover:text-slate-700 transition-colors" />}
+                              buttonClassName="p-2 hover:bg-slate-100 rounded-full"
+                            />
                           </div>
-                        ) : (
-                          <span className="text-slate-300 text-xs">—</span>
-                        )}
-                      </TableCell>
-
-                      {/* Col 6: Linkage */}
-                      <TableCell>
-                        <div className="flex flex-col items-start gap-1">
-                          {account.relationships?.is_parent && (
-                            <div className="flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded-sm">
-                              Parent ({account.relationships.child_count}) <ArrowRight className="h-2.5 w-2.5" />
-                            </div>
-                          )}
-                          {account.relationships?.parent_info && (
-                            <Link href={`/accounts/${account.relationships.parent_info.id}`} className="flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-sm hover:underline decoration-blue-700/30">
-                              {account.relationships.parent_info.type === 'savings' ? <ShieldCheck className="h-2.5 w-2.5" /> : null}
-                              {account.relationships.parent_info.type === 'savings' ? 'Linked:' : 'Child of'} {account.relationships.parent_info.name}
-                            </Link>
-                          )}
-                        </div>
-                      </TableCell>
-
-                      {/* Actions */}
-                      <TableCell className="text-right">
-                        <div className="flex justify-end">
-                          <EditAccountDialog
-                            account={account}
-                            collateralAccounts={collateralAccounts}
-                            triggerContent={<Zap className="h-4 w-4 text-slate-400 hover:text-slate-700 transition-colors" />}
-                            buttonClassName="p-2 hover:bg-slate-100 rounded-full"
-                          />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </>
-            ))}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </React.Fragment>
+              )
+            })}
           </TableBody>
         </Table>
       </div>

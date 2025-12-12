@@ -43,4 +43,7 @@ export const SYSTEM_CATEGORIES = {
 
     // Danh mục Credit Payment (Batch Transfer)
     CREDIT_PAYMENT: 'e0000000-0000-0000-0000-000000000091',
+
+    // Danh mục Money Transfer (for Transfer quick-add)
+    MONEY_TRANSFER: 'e0000000-0000-0000-0000-000000000092',
 };

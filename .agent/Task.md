@@ -1,188 +1,287 @@
-# Task: Fix Credit Cards UI/UX + Action Required grouping (rebuild if needed)
+# MF3 — Agent Prompt Pack
 
-## Context
+## Phase P8.x — Accounts Table & Cards UI Polish
 
-This repo is **Money Flow 3** (Next.js 15 App Router, TS, Tailwind + shadcn, Supabase). Credit-card list UI currently has a persistent bug where cards that **Need to Spend more** are shown in a separate section, while **Action Required → Cards due soon or need more spending** only shows **Due soon** cards. This breaks user expectations and causes missing badges/incorrect layout.
+> Style: **Prompt Engineering (phase-style)**
+> You are the coding agent. You will read the repo, reason about the existing code, implement changes, run checks, and open PRs.
+> Do NOT ask the user to code.
 
-You must **research the repo** and implement fixes. Do not ask the user to code. You will code, run checks, and open a PR.
+---
 
-### Screens (symptoms)
+## Prompt Structure Recommendation
 
-* **Bug:** Action Required header says "Cards due soon or need more spending" but only due-soon cards appear. Need-to-spend cards appear elsewhere (separate section), mixed with normal cards.
-* **UX issue:** Standalone badge is black and hard to read; should be a dark-but-not-black color and bold.
-* **Badge missing:** "Due: …" badges disappeared in the Action Required section.
-* **Image issue:** Left image area behaves wrong: images appear sideways / wrong orientation / not filling the left section.
+**Yes — split into 2 prompts.**
 
-## Objectives
+Reason:
 
-### O1 — Unify classification & sectioning (stop the persistent bug)
+* Prompt A touches **table semantics & layout** (AccountTable, AccountList, filters, collapse rows).
+* Prompt B touches **card grid layout & action logic** (AccountCard, card-utils, batch confirm flow).
 
-Rebuild the sectioning logic for credit cards from scratch **if necessary**.
+This reduces regression risk and keeps PRs reviewable.
 
-Expected sections:
+You will produce **2 PRs**, merged in order.
 
-1. **Action Required**
+---
 
-   * Subtitle: "Cards due soon or need more spending".
-   * Contains **ALL cards** that match either:
+# PROMPT A — Accounts Table View Refactor & Grouping
 
-     * **Due soon** (immediate due date window), OR
-     * **Need to spend more** (minSpend not reached for current cycle).
-2. **Credit Cards (without immediate due dates)**
+## Goal
 
-   * Contains remaining credit cards **that are not in Action Required**.
+Refactor **Accounts → Table view** for clarity, density, and consistency.
+Fix spacing, column semantics, grouping UX, and linkage badges.
 
-Constraints:
+## Scope (FILES YOU MUST TOUCH)
 
-* A card must appear in exactly **one** section.
-* Do not show need-to-spend cards in a separate section anymore.
-* Ensure sorting is stable and predictable (see O4).
+* `src/components/moneyflow/account-table.tsx`
+* `src/components/moneyflow/account-list.tsx`
+* (if needed) `src/components/ui/table.tsx`
 
-### O2 — Fix badges & visibility
+## Functional Requirements
 
-* Restore and ensure the **Due: …** badge is displayed wherever it should be (Action Required cards included).
-* Ensure "Need to spend" indicator is clearly visible (existing text is OK, but it must be consistent).
-* Fix the **Standalone** badge:
+### A1 — Columns & spacing
 
-  * Replace pure black background with a dark readable color (e.g., slate/neutral), add **bold** text.
-  * Ensure contrast over any card image.
+* **Remove / hide column `Type`** (both header + cells).
+* Split the current column `Balance / Limit` into **two columns**:
 
-### O3 — Fix left image section & orientation
+  * `Balance`
+  * `Limit`
+* Add a dedicated column `Cashback / KPI`:
 
-The left area of each card should show the card image as a **portrait rectangle** filling the entire left section (no square crop).
+  * Shows `Cap left`, `Met`, `Need to spend` state.
+* Fix the large empty gap between `Linkage` and `Actions`:
 
-#### Must-haves (to prevent the current regression)
+  * Set fixed widths:
 
-* The left image container must **NOT** use `aspect-square`, `aspect-[1/1]`, fixed `h-*` that forces a square, or any layout that clamps height.
-* The container must be **full card height** and a fixed/narrow width (portrait strip): `h-full` + a consistent width (e.g. `w-[120px]` / `w-[132px]` responsive).
-* The `<img>` / `next/image` must **cover** the container: `object-cover` and `w-full h-full` (or `fill` with `className="object-cover"`).
-* Do not let the image render inside a square wrapper. If using `next/image`, ensure its wrapper is not enforcing a square (check parent div styles).
+    * `Linkage`: ~160px
+    * `Actions`: ~72–80px
 
-#### Orientation rule
+### A2 — Identity column (image rules)
 
-* If the source image is landscape (`naturalWidth > naturalHeight`): rotate 90° for display **and still cover** the portrait container.
-* If the source image is already portrait: **do not rotate** and still cover full container.
+* Identity column must show **card image at native ratio**:
 
-#### Suggested implementation pattern (robust)
+  * NO square crop
+  * NO ghost border
+  * Use `object-contain`
+  * Fixed width ~64–72px
+* If no image → fallback icon as before.
 
-Create a reusable component `CardImagePortrait`:
+### A3 — Linkage badge rules
 
-* Outer container: `relative h-full w-[120px] overflow-hidden` (adjust widths per breakpoint)
-* If portrait: render `Image fill className="object-cover"`
-* If landscape: render a nested wrapper with `absolute inset-0 flex items-center justify-center` and rotate the image; ensure scaling keeps coverage:
+* Replace `Parent (1)` text badge:
 
-  * Example technique: place the image in a `div` rotated, then set its width/height swapped and use `object-cover`.
+  * Show **icon only + label**
+  * Parent → `<Users /> Parent`
+  * Child → `<Baby /> Child`
+  * Do NOT show count number when count = 1
+* Badge color stays consistent with card view.
 
-#### Visual QA
+### A4 — Collapsible group headers
 
-* For an already-portrait image (your screenshot #2), it must show **full-height portrait strip**, not a square corner crop.
-* For landscape images, after rotation it must still fill the strip without letterboxing.
-* Due badges near/over the image must remain readable; increase size if needed.
+* Each account type group (Credit Cards, Payment, Savings, Debt) must be:
 
-### O4 — Make state explicit (reduce “blind code”)
+  * Rendered as a **collapsible block** using `<details>/<summary>` or equivalent.
+  * Summary row shows:
 
-Current DB does not store an explicit “need spend more” status.
+    * Group name
+    * Count
+* Default: **expanded**.
+* Sticky header behavior must still work.
 
-You must:
+### A5 — Table actions
 
-* Propose and implement **one** of these approaches (prefer lowest-risk):
-  A) **Derived state in app** (recommended first): compute a `cardActionState` from existing fields and `view_account_stats`/cashback config.
-  B) **DB view** that exposes computed state per account.
-  C) **New columns** on `accounts` (or a new table) to persist state per cycle (with timestamps), plus migrations.
+* Actions column remains right-aligned.
+* No logic changes here (Confirm Paid is handled in Prompt B).
 
-If you choose (C), you must also define state model:
+## Acceptance Criteria (Prompt A)
 
-* `spend_state`: enum like `NONE | NEED_SPEND | QUALIFIED` (or similar)
-* `due_state`: enum like `NONE | DUE_SOON | OVERDUE`
-* `action_required`: boolean derived or stored
-* include cycle boundaries (statement_day, dueDate) to explain why it’s in a state.
+* Table view has no `Type` column.
+* Columns are compact, readable, and aligned.
+* Card images are uncropped and clean.
+* Linkage badges show icons, not numbers.
+* Groups can be collapsed/expanded without layout break.
 
-Given this is UI bugfix first, it’s acceptable to implement (A) now, and leave (C) as a follow-up RFC — but you must write down the recommendation in PR description.
+## PR Instructions (Prompt A)
 
-## Where to look (you must locate exact files)
+* Branch: `fix/accounts-table-layout`
+* Commit examples:
 
-Search for:
+  * `refactor(table): split balance and limit columns`
+  * `feat(table): collapsible account group headers`
+  * `fix(table): linkage badges and spacing`
 
-* The Credit Cards list page / dashboard that renders sections:
+---
 
-  * strings like `Action Required`, `Cards due soon`, `Credit Cards`, `Need to spend`.
-* Components for account cards:
+# PROMPT B — Cards Grid Unification & Action Required Logic
 
-  * likely under `src/components/...` (accounts / moneyflow)
-* Data assembly logic:
+## Goal
 
-  * account stats computation might be in `src/services/account.service.ts` / `src/services/dashboard.service.ts`.
+Unify **Account Card UI**, fix badge logic, restore missing actions, and ensure Action Required is correct.
 
-## Implementation Plan
+## Scope (FILES YOU MUST TOUCH)
 
-### Step 1 — Map current logic
+* `src/components/moneyflow/account-card.tsx`
+* `src/lib/card-utils.ts`
+* `src/components/moneyflow/account-list.tsx`
+* (optional) `src/components/moneyflow/account-detail-header.tsx`
 
-* Identify current computed flags:
+## Functional Requirements
 
-  * `isDueSoon`, `needToSpend`, `hasMinSpend`, `missingSpend`, etc.
-* Identify where sections are built and why cards end up split.
-* Add temporary console logs in development if needed (remove before commit).
+### B1 — Card layout unification (ALL card types)
 
-### Step 2 — Introduce a single source of truth for card state
+Order inside card must be:
 
-Create a function (or small module) that converts an account + stats into:
+1. Header (name + Details/Edit)
+2. Balance
+3. KPI / Spend Progress
+4. Secured / Family info (if exists)
+5. **Limit bar** (ALWAYS pinned at bottom of card body)
+6. **Quick Add actions** (Income / Expense / Pay / Shop / Repay) → ALWAYS LAST
 
-* `actionRequiredReason`: `DUE_SOON | NEED_SPEND | BOTH | NONE`
-* `dueBadgeText`: e.g. `Due: 10 Dec` or `Due in 3 days`
-* `spendBadgeText`: e.g. `Need to spend: 1,288,539`
-* `imageOrientation`: `PORTRAIT | ROTATE_LANDSCAPE`
+Rules:
 
-All UI sections must use ONLY this function.
+* Limit bar must visually sit at the **bottom edge** of card body (no floating).
+* No card may violate this order.
+* Savings / Asset cards must follow same layout where applicable.
 
-### Step 3 — Rebuild the sections
+---
 
-* Build arrays:
+### B2 — Standalone badge logic (FIX)
 
-  * `actionRequiredCards`
-  * `normalCards`
-* Ensure no duplicates.
+Correct logic:
 
-### Step 4 — Fix UI pieces
+```
+isChild = !!account.parent_account_id || !!account.relationships?.parent_info
+isParent = (account.relationships?.child_count ?? 0) > 0 || account.relationships?.is_parent
+showStandalone = !isChild && !isParent
+```
 
-* Update badge styles (Standalone).
-* Restore Due badge visibility.
-* Replace left image rendering with a portrait-cover component that rotates landscape images.
+* Only show Standalone if `showStandalone === true`.
 
-### Step 5 — QA and acceptance
+---
 
-Run:
+### B3 — Visual redesign: Spend / Due / Progress clarity (NEW)
 
-* `pnpm lint`
-* `pnpm typecheck` (if present)
-* `pnpm build`
+#### B3.1 — Redesign `Need to spend` UI
 
-Manual QA checklist:
+Current UI is noisy and inconsistent with `SHARE / REMAINS`.
 
-* Cards needing spend more now appear in **Action Required** section.
-* Action Required section includes both due soon and need spend more.
-* Cards without immediate due dates appear in the second section only.
-* "Due: …" badge present in Action Required cards.
-* Standalone badge is readable and bold.
-* Left image is portrait, covers area, rotates landscape images correctly.
+You must redesign it to match **shared/remains style**, with different color:
 
-## Sample data hint
+* Replace `Need to spend` bar + text with a **two-column pill block**:
 
-Account example (need spend more state is derived from cashback_config + spending):
+  * LEFT: `NEED` (label)
+  * RIGHT: amount remaining to qualify
+* Use warm color (amber/orange), **NO check icon**.
+* Typography must match SHARE/REMAINS block for visual consistency.
 
-* `cashback_config.minSpend = 3,000,000`
-* current cycle spent < minSpend ⇒ show `Need to spend`.
+#### B3.2 — Due badge prominence (IMPORTANT)
 
-## PR instructions
+Current `Due` badge is too small and easy to miss.
 
-* Branch: `fix/cards-action-required-sectioning`
-* Commits:
+You must implement a **top hanging Due banner**:
 
-  1. `fix(cards): unify action-required classification and sections`
-  2. `fix(ui): restore due badges and improve standalone badge style`
-  3. `fix(ui): portrait card image with landscape rotation`
-* PR description must include:
+* Position: slightly **outside and above** the card, attached to **left image section**.
+* Shape: small rounded tag / ribbon (see mockup ref from user).
+* Text: `Due Dec 15` or `Due in 3 days`.
+* Color: red for due soon, darker red for overdue.
+* This element must visually overlap card container (use `absolute -top-*`).
 
-  * Root cause of the persistent bug
-  * What changed
-  * Screenshots (before/after)
-  * Recommendation about DB-persisted state (if not implemented)
+Think of this as a **card status flag**, not a normal badge.
+
+---
+
+### B4 — Transfer quick-add correctness (LOGIC FIX)
+
+When user clicks **Transfer** quick-add:
+
+* Category MUST auto-select `Money Transfer`.
+* Source account selection rules:
+
+  * Transfers **CANNOT originate from Credit Cards**.
+  * Disable / hide credit accounts in source selector.
+
+You must search entire codebase to ensure:
+
+* No path allows transfer-from-credit via UI.
+* Existing transfer flows respect this constraint.
+
+---
+
+### B5 — Action Required grouping (extend)
+
+Action Required must include cards that are:
+
+1. Due soon
+2. Need to spend
+3. Waiting confirm (pending batch)
+
+Order inside section:
+
+* Due soon
+* Need to spend
+* Waiting confirm
+
+Cards in this state:
+
+* Must be placed in Action Required section
+* Must NOT appear in normal card sections
+
+---
+
+### B6 — New Filter: Family Cards (REPLACE Secured filter)
+
+Replace filter button **Secured** with **Family Cards**.
+
+Family Cards filter opens a **2-tab view**:
+
+#### Tab 1 — Secured
+
+* Cards linked via `secured_by_account_id`.
+* Group secured pairs into **one section with border**.
+* Inside section:
+
+  * Hide individual `Secured` badges on cards.
+  * Show a **central arrow icon** between cards (account → secured account).
+* Section acts as a logical unit.
+
+#### Tab 2 — Family
+
+* Group Parent–Child cards by family.
+* Each family = one bordered section.
+* NO arrows required.
+* Section summary (top-right corner):
+
+  * Combined Limit
+  * Combined Balance
+  * Individual balances per card (small text)
+
+---
+
+## Acceptance Criteria (Prompt B)
+
+* Spend / Need UI is clean, symmetric, and readable.
+* Due status is immediately visible without scanning card body.
+* Transfer quick-add always sets correct category and blocks credit source.
+* Limit bar is always at bottom.
+* Family Cards filter works with 2 tabs and correct grouping.
+
+---
+
+## PR Instructions (Prompt B)
+
+* Branch: `fix/cards-ui-b3-redesign`
+* Commit examples:
+
+  * `feat(cards): redesign need-to-spend and due banner`
+  * `fix(transfer): enforce non-credit source and auto category`
+  * `feat(filters): replace secured with family cards view`
+
+---
+
+## QA Checklist
+
+* [ ] Due banner visible and readable
+* [ ] Need spend UI matches shared/remains style
+* [ ] Limit bar always bottom-aligned
+* [ ] Transfer from credit impossible
+* [ ] Family Cards filter groups correctly

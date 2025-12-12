@@ -184,7 +184,8 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
     const debt: Account[] = []
 
     sortedItems.forEach(acc => {
-      const state = getCardActionState(acc)
+      const hasPendingBatch = pendingBatchAccountIds.includes(acc.id)
+      const state = getCardActionState(acc, hasPendingBatch)
 
       if (state.section === 'action_required') {
         actionRequired.push({ account: acc, sortOrder: state.priorities.sortOrder })
@@ -442,6 +443,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
                     shops={shops}
                     collateralAccounts={collateralAccounts}
                     usageStats={usageStats}
+                    pendingBatchAccountIds={pendingBatchAccountIds}
                   />
                 ))}
               </div>
@@ -474,6 +476,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
                     shops={shops}
                     collateralAccounts={collateralAccounts}
                     usageStats={usageStats}
+                    pendingBatchAccountIds={pendingBatchAccountIds}
                   />
                 ))}
               </div>

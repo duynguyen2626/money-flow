@@ -7,6 +7,7 @@ export type CardActionState = {
         due: boolean
         spend: boolean
         standalone: boolean
+        pendingBatch: boolean
     }
     priorities: {
         daysUntilDue: number
@@ -21,11 +22,11 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
 })
 
-export function getCardActionState(account: Account): CardActionState {
+export function getCardActionState(account: Account, hasPendingBatch: boolean = false): CardActionState {
     // Defaults
     const result: CardActionState = {
         section: 'other',
-        badges: { due: false, spend: false, standalone: false },
+        badges: { due: false, spend: false, standalone: false, pendingBatch: false },
         priorities: { daysUntilDue: 999, missingSpend: 0, sortOrder: 0 },
         dueText: null,
         spendText: null,
@@ -34,10 +35,20 @@ export function getCardActionState(account: Account): CardActionState {
     // 1. Identify Account Type
     if (['bank', 'ewallet', 'cash'].includes(account.type)) {
         result.section = 'other' // Payment
+        result.badges.pendingBatch = hasPendingBatch
+        if (hasPendingBatch) {
+            result.section = 'action_required'
+            result.priorities.sortOrder = 11000 // Tier 3: Pending Batch
+        }
         return result
     }
     if (['savings', 'investment', 'asset'].includes(account.type)) {
         result.section = 'other' // Savings
+        result.badges.pendingBatch = hasPendingBatch
+        if (hasPendingBatch) {
+            result.section = 'action_required'
+            result.priorities.sortOrder = 11000 // Tier 3: Pending Batch
+        }
         return result
     }
     if (account.type === 'debt') {
@@ -76,31 +87,36 @@ export function getCardActionState(account: Account): CardActionState {
         result.spendText = needsSpendMore ? `Need: ${numberFormatter.format(missing)}` : null
         result.badges.spend = needsSpendMore
 
+        // --- Pending Batch State ---
+        result.badges.pendingBatch = hasPendingBatch
+
         // --- Sectioning Decision ---
-        // Rule: Action Required if (Due Soon) OR (Needs Spend More)
-        if (isDueSoon || needsSpendMore) {
+        // Rule: Action Required if (Due Soon) OR (Needs Spend More) OR (Has Pending Batch)
+        if (isDueSoon || needsSpendMore || hasPendingBatch) {
             result.section = 'action_required'
 
             // Calculate Sort Order for Action Required
-            // Logic: Due Soon cards first (Tier 1), then Need Spend (Tier 2)
-            // We invert the score so larger is better, or use small for top
-            // Let's use a "Sort Score" where smaller is better (appearing first)
+            // Logic: Due Soon cards first (Tier 1), then Need Spend (Tier 2), then Pending Batch (Tier 3)
+            // We use a "Sort Score" where smaller is better (appearing first)
 
             let score = 0
 
             if (isDueSoon) {
-                // Range 0 - 1000: Due soon priority
+                // Tier 1: Range 0 - 1000: Due soon priority
                 // Days 0 -> Score 0
                 // Days 10 -> Score 10 
                 score = Math.max(0, daysUntilDue)
-            } else {
-                // Range 2000+: Spend priority
+            } else if (needsSpendMore) {
+                // Tier 2: Range 2000-10000: Spend priority
                 // We want Higher Missing Spend to appear first.
                 // Let's map Missing Spend inversely.
                 // missing 10M -> score 2000
                 // missing 1M -> score 3000
                 // Max missing reasonable ~ 100M
                 score = 10000 - Math.min(8000, (missing / 1000))
+            } else if (hasPendingBatch) {
+                // Tier 3: Range 11000+: Pending Batch priority
+                score = 11000
             }
 
             result.priorities.sortOrder = score
@@ -118,10 +134,9 @@ export function getCardActionState(account: Account): CardActionState {
         // It implies it's a credit card that is NOT Action Required? Or just a credit card? 
         // The previous code showed it for ALL credit cards that weren't parent/child.
         // Let's keep that logic in the view, here we just flag it as appropriate.
-        // But since this function doesn't know about parent/child (those are on account.relationships), we might leave strict logic to component.
         // However, we can prep the flag.
+        const isChild = !!account.parent_account_id || !!account.relationships?.parent_info
         const isParent = (account.relationships?.child_count ?? 0) > 0 || account.relationships?.is_parent
-        const isChild = !!account.parent_account_id
 
         result.badges.standalone = !isParent && !isChild
     }
