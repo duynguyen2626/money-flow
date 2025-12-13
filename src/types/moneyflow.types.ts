@@ -45,6 +45,7 @@ export type AccountStats = {
   due_date_display: string | null
   remains_cap: number | null
   shared_cashback: number | null
+  due_date: string | null // ISO Date string for sorting
 }
 
 export type AccountRelationships = {

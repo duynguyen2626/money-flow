@@ -7,10 +7,12 @@ import { parseCashbackConfig, CashbackCycleType, CashbackTier } from '@/lib/cash
 import { Account } from '@/types/moneyflow.types'
 import type { Json } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
+import { createAccount } from '@/actions/account-actions'
 import { Plus, Trash2, X } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { CustomDropdown, type DropdownOption } from '@/components/ui/custom-dropdown'
 import { NumberInputWithSuggestions } from '@/components/ui/number-input-suggestions'
+import { cn } from '@/lib/utils'
 
 type CategoryOption = { id: string; name: string; type: 'expense' | 'income' }
 
@@ -410,17 +412,55 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
     [collateralAccounts]
   )
 
+  // Filter out child accounts - only allow linking to parent or standalone cards
+  const parentCandidates = useMemo(() =>
+    creditCardAccounts.filter(acc => {
+      // Exclude child accounts (those with parent_account_id or parent_info)
+      const isChild = !!acc.parent_account_id || !!acc.relationships?.parent_info
+      return !isChild
+    }),
+    [creditCardAccounts]
+  )
+
   const suggestedParent = useMemo(() => {
     if (!isCreditCard || !name.trim() || parentAccountId) return null
     const firstWord = name.trim().split(' ')[0]
     if (firstWord.length < 2) return null
-    const candidate = creditCardAccounts.find(acc =>
+    const candidate = parentCandidates.find(acc =>
       acc.name.toLowerCase().startsWith(firstWord.toLowerCase())
     )
     return candidate || null
-  }, [name, isCreditCard, parentAccountId, creditCardAccounts])
+    return candidate || null
+  }, [name, isCreditCard, parentAccountId, parentCandidates])
+
+  // State for overriding parent secured asset
+  const [overrideParentSecured, setOverrideParentSecured] = useState(false)
+
+  // Secured Logic Inheritance with Override
+  useEffect(() => {
+    if (parentAccountId && !overrideParentSecured) {
+      const parent = creditCardAccounts.find(a => a.id === parentAccountId)
+      if (parent) {
+        if (parent.secured_by_account_id) {
+          setIsSecured(true)
+          setSecuredByAccountId(parent.secured_by_account_id)
+        } else {
+          setIsSecured(false)
+          setSecuredByAccountId('')
+        }
+      }
+    }
+  }, [parentAccountId, creditCardAccounts, overrideParentSecured])
+
+  // Reset override if parent changes to empty
+  useEffect(() => {
+    if (!parentAccountId) {
+      setOverrideParentSecured(false)
+    }
+  }, [parentAccountId])
 
   const resetForm = () => {
+    setOverrideParentSecured(false)
     setName('')
     setAccountType('credit_card')
     setLogoUrl('')
@@ -504,25 +544,15 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
     startTransition(async () => {
       setStatus(null)
 
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-
-      if (!user) {
-        setStatus({ text: 'You must be logged in to create an account.', variant: 'error' })
-        return
-      }
-
-      const { error } = await supabase.from('accounts').insert({
+      const { error } = await createAccount({
         name: trimmedName,
         type: accountType,
-        credit_limit: nextCreditLimit,
-        cashback_config: configPayload,
-        secured_by_account_id: securedBy,
-        logo_url: cleanedLogoUrl,
-        owner_id: user.id,
-        current_balance: 0,
-        is_active: true,
-        annual_fee: nextAnnualFee
+        creditLimit: nextCreditLimit,
+        cashbackConfig: configPayload,
+        securedByAccountId: securedBy,
+        logoUrl: cleanedLogoUrl,
+        annualFee: nextAnnualFee,
+        parentAccountId: parentAccountId || null,
       })
 
       if (error) {
@@ -705,7 +735,19 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
                     <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Basic Information</h3>
 
                     <div className="space-y-1">
-                      <label className="text-sm font-medium text-slate-600">Name</label>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-sm font-medium text-slate-600">Name</label>
+                        {isCreditCard && (
+                          <span className={cn(
+                            "text-xs px-2.5 py-0.5 rounded-full font-bold border",
+                            parentAccountId
+                              ? "bg-purple-50 text-purple-700 border-purple-100"
+                              : "bg-slate-50 text-slate-700 border-slate-100"
+                          )}>
+                            {parentAccountId ? "Child Card" : "Primary Card"}
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
                         value={name}
@@ -714,6 +756,32 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
                         placeholder="Account name"
                       />
                     </div>
+
+                    {isCreditCard && (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-sm font-medium text-slate-600">Parent Account (Shared Limit)</label>
+                          {suggestedParent && (
+                            <button
+                              type="button"
+                              onClick={() => setParentAccountId(suggestedParent.id)}
+                              className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                            >
+                              Link to {suggestedParent.name}?
+                            </button>
+                          )}
+                        </div>
+                        <CustomDropdown
+                          options={[
+                            { value: '', label: 'None (Primary Card)' },
+                            ...parentCandidates.map(acc => ({ value: acc.id, label: acc.name }))
+                          ]}
+                          value={parentAccountId}
+                          onChange={setParentAccountId}
+                          className="w-full"
+                        />
+                      </div>
+                    )}
 
                     <div className="space-y-1">
                       <label className="text-sm font-medium text-slate-600">Logo URL</label>
@@ -728,6 +796,8 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
 
                     {isCreditCard && (
                       <>
+
+
                         <div className="space-y-1">
                           <label className="text-sm font-medium text-slate-600">Credit Limit</label>
                           <NumberInputWithSuggestions
@@ -735,7 +805,13 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
                             onChange={setCreditLimit}
                             className="w-full"
                             placeholder="Credit limit"
+                            disabled={!!parentAccountId}
                           />
+                          {parentAccountId && (
+                            <p className="text-xs text-amber-600">
+                              Shared limit with parent card
+                            </p>
+                          )}
                         </div>
 
                         <div className="space-y-1">
@@ -748,58 +824,61 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
                           />
                         </div>
 
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium text-slate-600">Parent Account (Shared Limit)</label>
-                            {suggestedParent && (
-                              <button
-                                type="button"
-                                onClick={() => setParentAccountId(suggestedParent.id)}
-                                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-                              >
-                                Link to {suggestedParent.name}?
-                              </button>
-                            )}
-                          </div>
-                          <CustomDropdown
-                            options={[
-                              { value: '', label: 'None (Primary Card)' },
-                              ...creditCardAccounts.map(acc => ({ value: acc.id, label: acc.name }))
-                            ]}
-                            value={parentAccountId}
-                            onChange={setParentAccountId}
-                            className="w-full"
-                          />
-                        </div>
-
                         {collateralOptions.length > 0 && (
-                          <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                            <div className="flex items-center justify-between">
-                              <label className="text-sm font-medium text-slate-700">
-                                Secured (collateral)
-                              </label>
-                              <Switch
-                                checked={isSecured}
-                                onCheckedChange={(checked) => {
-                                  setIsSecured(checked)
-                                  if (!checked) setSecuredByAccountId('')
-                                }}
-                              />
-                            </div>
-                            {isSecured && (
-                              <div className="space-y-1">
-                                <label className="text-sm font-medium text-slate-600">Secured by</label>
-                                <CustomDropdown
-                                  options={[
-                                    { value: '', label: 'None' },
-                                    ...collateralOptions.map(option => ({ value: option.id, label: option.name }))
-                                  ]}
-                                  value={securedByAccountId}
-                                  onChange={setSecuredByAccountId}
-                                  className="w-full"
+                          <div className="space-y-3">
+                            {parentAccountId && (
+                              <div className="flex items-center justify-end gap-2 mb-1">
+                                <label className="text-xs text-slate-500 font-medium">Use different secured asset?</label>
+                                <Switch
+                                  checked={overrideParentSecured}
+                                  onCheckedChange={(checked) => {
+                                    setOverrideParentSecured(checked);
+                                    if (checked) {
+                                      setIsSecured(true);
+                                    }
+                                  }}
+                                  className="scale-75 origin-right"
                                 />
                               </div>
                             )}
+                            <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                              <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium text-slate-700">
+                                  Secured (collateral)
+                                </label>
+                                <Switch
+                                  checked={isSecured}
+                                  disabled={!!parentAccountId && !overrideParentSecured}
+                                  onCheckedChange={(checked) => {
+                                    setIsSecured(checked)
+                                    if (!checked) setSecuredByAccountId('')
+                                  }}
+                                />
+                              </div>
+                              {isSecured && (
+                                <div className="space-y-1 mt-3">
+                                  <label className="text-sm font-medium text-slate-600">Secured by</label>
+                                  <CustomDropdown
+                                    options={[
+                                      { value: '', label: 'None' },
+                                      ...collateralOptions.map(option => ({ value: option.id, label: option.name }))
+                                    ]}
+                                    value={securedByAccountId}
+                                    onChange={setSecuredByAccountId}
+                                    className="w-full"
+                                    disabled={!!parentAccountId && !overrideParentSecured}
+                                  />
+                                  {!overrideParentSecured && parentAccountId && (
+                                    <p className="text-xs text-slate-500">Inherited from parent card</p>
+                                  )}
+                                  {(!parentAccountId || overrideParentSecured) && (
+                                    <p className="text-xs text-slate-500">
+                                      Choose a savings/investment account as collateral for this card.
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </>

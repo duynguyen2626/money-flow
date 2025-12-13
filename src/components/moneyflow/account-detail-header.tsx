@@ -23,6 +23,7 @@ import {
   AlertTriangle,
   BookOpen,
   Hourglass,
+  PiggyBank,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
@@ -439,18 +440,37 @@ export function AccountDetailHeader({
               </p>
             )}
             {account.secured_by_account_id && collateralAccount && (
-              <p className="text-xs text-blue-700">
-                Secured by{' '}
-                <Link href={`/accounts/${collateralAccount.id}`} className="inline-flex items-center gap-1 underline">
-                  <Link2 className="h-3 w-3" />
-                  {collateralAccount.name}
+              <div className="flex items-center gap-2 mt-1">
+                <Link href={`/accounts/${collateralAccount.id}`} className="group flex items-center gap-2 px-3 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-full transition-colors cursor-pointer text-decoration-none">
+                  <PiggyBank className="w-3.5 h-3.5 text-amber-700" />
+                  <span className="text-xs font-bold text-amber-700 uppercase tracking-wide">Secured by</span>
+                  <div className="w-px h-3 bg-amber-300 mx-0.5"></div>
+                  {/* Collateral Asset Info */}
+                  <div className="flex items-center gap-1.5">
+                    <div className="relative w-5 h-5 flex-shrink-0 bg-white rounded-full overflow-hidden border border-amber-200">
+                      {collateralAccount.logo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={collateralAccount.logo_url} alt="" className="w-full h-full object-contain p-0.5" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-500">
+                          {collateralAccount.name.charAt(0)}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-xs font-bold text-slate-900 group-hover:text-amber-900 transition-colors">
+                      {collateralAccount.name}
+                    </span>
+                  </div>
                 </Link>
-              </p>
+              </div>
             )}
             {account.secured_by_account_id && !collateralAccount && (
-              <p className="text-xs text-slate-500">
-                Secured by an account (not found)
-              </p>
+              <div className="flex items-center gap-1.5 mt-1">
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-500 border border-slate-200">
+                  <PiggyBank className="w-3.5 h-3.5" />
+                  Secured by (Missing)
+                </span>
+              </div>
             )}
           </div>
         </div>

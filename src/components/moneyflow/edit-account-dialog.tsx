@@ -13,6 +13,7 @@ import { Plus, Trash2, X } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { CustomDropdown, type DropdownOption } from '@/components/ui/custom-dropdown'
 import { NumberInputWithSuggestions } from '@/components/ui/number-input-suggestions'
+import { cn } from '@/lib/utils'
 
 type CategoryOption = { id: string; name: string; type: 'expense' | 'income' }
 
@@ -437,6 +438,8 @@ export function EditAccountDialog({
     [account.cashback_config]
   )
 
+
+
   const [name, setName] = useState(account.name)
   const [accountType, setAccountType] = useState<Account['type']>(account.type)
   const [securedByAccountId, setSecuredByAccountId] = useState(account.secured_by_account_id ?? '')
@@ -454,6 +457,31 @@ export function EditAccountDialog({
   const [termMonths, setTermMonths] = useState(toNumericString(parsedSavingsConfig.termMonths))
   const [maturityDate, setMaturityDate] = useState(parsedSavingsConfig.maturityDate ?? '')
   const [parentAccountId, setParentAccountId] = useState(getSharedLimitParentId(account.cashback_config) ?? '')
+  const [overrideParentSecured, setOverrideParentSecured] = useState(false)
+
+  // Secured Logic Inheritance with Override
+  useEffect(() => {
+    if (parentAccountId && !overrideParentSecured) {
+      const parent = accounts.find(a => a.id === parentAccountId)
+      if (parent) {
+        if (parent.secured_by_account_id) {
+          setIsSecured(true)
+          setSecuredByAccountId(parent.secured_by_account_id)
+        } else {
+          setIsSecured(false)
+          setSecuredByAccountId('')
+        }
+      }
+    }
+  }, [parentAccountId, accounts, overrideParentSecured])
+
+  // Reset override if parent changes to empty
+  useEffect(() => {
+    if (!parentAccountId) {
+      setOverrideParentSecured(false)
+    }
+  }, [parentAccountId])
+
   const [tiers, setTiers] = useState<CashbackTier[]>(parsedCashbackConfig.tiers ?? [])
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([])
 
@@ -525,24 +553,33 @@ export function EditAccountDialog({
     setOpen(true)
   }
 
-  // Smart Parent Suggestion
-  useEffect(() => {
-    if (!isCreditCard || parentAccountId || !name) return
-
-    const normalizedName = name.toLowerCase()
-
-    const suggestion = accounts.find(acc => {
+  // Filter out child accounts - only allow linking to parent or standalone cards
+  const parentCandidates = useMemo(() =>
+    accounts.filter(acc => {
       if (acc.id === account.id) return false
       if (acc.type !== 'credit_card') return false
+      // Exclude child accounts (those with parent_account_id or parent_info)
+      const isChild = !!acc.parent_account_id || !!acc.relationships?.parent_info
+      return !isChild
+    }),
+    [accounts, account.id]
+  )
 
-      const accName = acc.name.toLowerCase()
-      return normalizedName.includes(accName) && accName.length > 3
-    })
-
-    if (suggestion) {
-      setParentAccountId(suggestion.id)
+  // Smart Parent Suggestion - triggers on name change
+  // Always calculate suggestion, even if parent is already selected
+  const suggestedParent = useMemo(() => {
+    if (!isCreditCard || !name.trim()) return null
+    const firstWord = name.trim().split(' ')[0]
+    if (firstWord.length < 2) return null
+    const candidate = parentCandidates.find(acc =>
+      acc.name.toLowerCase().startsWith(firstWord.toLowerCase())
+    )
+    // Only show suggestion if it's different from current selection
+    if (candidate && candidate.id !== parentAccountId) {
+      return candidate
     }
-  }, [name, isCreditCard, parentAccountId, accounts, account.id])
+    return null
+  }, [name, isCreditCard, parentAccountId, parentCandidates])
 
   const parseStatementDayValue = (value: string) => {
     const parsed = parseOptionalNumber(value)
@@ -610,6 +647,7 @@ export function EditAccountDialog({
         type: accountType,
         securedByAccountId: securedBy,
         logoUrl: cleanedLogoUrl,
+        parentAccountId: parentAccountId || null,
       })
 
       if (!success) {
@@ -816,7 +854,19 @@ export function EditAccountDialog({
                       <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Basic Information</h3>
 
                       <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-600">Name</label>
+                        <div className="flex justify-between items-center mb-1">
+                          <label className="text-sm font-medium text-slate-600">Name</label>
+                          {isCreditCard && (
+                            <span className={cn(
+                              "text-xs px-2.5 py-0.5 rounded-full font-bold border",
+                              parentAccountId
+                                ? "bg-purple-50 text-purple-700 border-purple-100"
+                                : "bg-slate-50 text-slate-700 border-slate-100"
+                            )}>
+                              {parentAccountId ? "Child Card" : "Primary Card"}
+                            </span>
+                          )}
+                        </div>
                         <input
                           type="text"
                           value={name}
@@ -825,6 +875,35 @@ export function EditAccountDialog({
                           placeholder="Account name"
                         />
                       </div>
+
+                      {isCreditCard && (
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-medium text-slate-600">Parent Account (Shared Limit)</label>
+                            {suggestedParent && (
+                              <button
+                                type="button"
+                                onClick={() => setParentAccountId(suggestedParent.id)}
+                                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                              >
+                                Link to {suggestedParent.name}?
+                              </button>
+                            )}
+                          </div>
+                          <CustomDropdown
+                            options={[
+                              { value: '', label: 'None (Primary Card)' },
+                              ...parentCandidates.map(acc => ({ value: acc.id, label: acc.name }))
+                            ]}
+                            value={parentAccountId}
+                            onChange={setParentAccountId}
+                            className="w-full"
+                          />
+                          <p className="text-xs text-slate-500">
+                            If this is a supplementary card, select the primary card here.
+                          </p>
+                        </div>
+                      )}
 
                       <div className="space-y-1">
                         <label className="text-sm font-medium text-slate-600">Logo URL</label>
@@ -839,6 +918,8 @@ export function EditAccountDialog({
 
                       {isCreditCard && (
                         <>
+
+
                           <div className="space-y-1">
                             <label className="text-sm font-medium text-slate-600">Credit Limit</label>
                             <NumberInputWithSuggestions
@@ -846,7 +927,13 @@ export function EditAccountDialog({
                               onChange={setCreditLimit}
                               className="w-full"
                               placeholder="Credit limit"
+                              disabled={!!parentAccountId}
                             />
+                            {parentAccountId && (
+                              <p className="text-xs text-amber-600">
+                                Shared limit with parent card
+                              </p>
+                            )}
                           </div>
 
                           <div className="space-y-1">
@@ -859,40 +946,38 @@ export function EditAccountDialog({
                             />
                           </div>
 
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-600">Parent Account (Shared Limit)</label>
-                            <CustomDropdown
-                              options={[
-                                { value: '', label: 'None (Primary Card)' },
-                                ...accounts
-                                  .filter(acc => acc.type === 'credit_card' && acc.id !== account.id)
-                                  .map(acc => ({ value: acc.id, label: acc.name }))
-                              ]}
-                              value={parentAccountId}
-                              onChange={setParentAccountId}
-                              className="w-full"
-                            />
-                            <p className="text-xs text-slate-500">
-                              If this is a supplementary card, select the primary card here.
-                            </p>
-                          </div>
-
-                          {collateralOptions.length > 0 && (
-                            <div className="space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-end gap-2 mb-1">
+                              <label className="text-xs text-slate-500 font-medium">Use different secured asset?</label>
+                              <Switch
+                                checked={overrideParentSecured}
+                                onCheckedChange={(checked) => {
+                                  setOverrideParentSecured(checked);
+                                  // If turning ON override, force Secured to ON
+                                  if (checked) {
+                                    setIsSecured(true);
+                                  }
+                                }}
+                                className="scale-75 origin-right"
+                              />
+                            </div>
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                               <div className="flex items-center justify-between">
                                 <label className="text-sm font-medium text-slate-700">
                                   Secured (collateral)
                                 </label>
                                 <Switch
                                   checked={isSecured}
+                                  disabled={!!parentAccountId && !overrideParentSecured}
                                   onCheckedChange={(checked) => {
                                     setIsSecured(checked)
                                     if (!checked) setSecuredByAccountId('')
                                   }}
                                 />
                               </div>
+
                               {isSecured && (
-                                <div className="space-y-1">
+                                <div className="space-y-1 mt-3">
                                   <label className="text-sm font-medium text-slate-600">Secured by</label>
                                   <CustomDropdown
                                     options={[
@@ -902,14 +987,20 @@ export function EditAccountDialog({
                                     value={securedByAccountId}
                                     onChange={setSecuredByAccountId}
                                     className="w-full"
+                                    disabled={!!parentAccountId && !overrideParentSecured}
                                   />
-                                  <p className="text-xs text-slate-500">
-                                    Choose a savings/investment account as collateral for this card.
-                                  </p>
+                                  {!overrideParentSecured && parentAccountId && (
+                                    <p className="text-xs text-slate-500">Inherited from parent card</p>
+                                  )}
+                                  {(!parentAccountId || overrideParentSecured) && (
+                                    <p className="text-xs text-slate-500">
+                                      Choose a savings/investment account as collateral for this card.
+                                    </p>
+                                  )}
                                 </div>
                               )}
                             </div>
-                          )}
+                          </div>
                         </>
                       )}
 

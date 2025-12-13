@@ -4,7 +4,7 @@ import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
 import { getAccountsWithPendingBatchItems } from '@/services/batch.service'
-import { getUsageStats } from '@/services/settings.service'
+import { getUsageStats, getQuickPeopleConfig } from '@/services/settings.service'
 import { AccountList } from '@/components/moneyflow/account-list'
 import { FixDataButton } from '@/components/moneyflow/fix-data-button'
 import { AccountCashbackSnapshot, Account } from '@/types/moneyflow.types'
@@ -60,14 +60,24 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 })
 
 export default async function AccountsPage() {
-  const [accounts, categories, people, shops, pendingBatchAccountIds, usageStats] = await Promise.all([
+  const results = await Promise.all([
     getAccounts(),
     getCategories(),
     getPeople(),
     getShops(),
     getAccountsWithPendingBatchItems(),
     getUsageStats(),
+    getQuickPeopleConfig(),
   ])
+
+  // Destructure properly
+  const accounts = results[0]
+  const categories = results[1]
+  const people = results[2]
+  const shops = results[3]
+  const pendingBatchAccountIds = results[4]
+  const usageStats = results[5]
+  const quickPeopleConfig = results[6]
 
   const creditAccountIds = accounts.filter(acc => acc.type === 'credit_card').map(acc => acc.id)
   const cashbackCards =
@@ -154,6 +164,7 @@ export default async function AccountsPage() {
           shops={shops}
           pendingBatchAccountIds={pendingBatchAccountIds}
           usageStats={usageStats}
+          quickPeopleConfig={quickPeopleConfig as any}
         />
       </section>
     </div>

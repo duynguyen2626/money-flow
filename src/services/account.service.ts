@@ -69,6 +69,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
     is_qualified: false,
     cycle_range: "",
     due_date_display: null,
+    due_date: null,
     remains_cap: null,
     shared_cashback: null
   }
@@ -146,6 +147,8 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
 
   // 4. Due Date Display
   let due_date_display: string | null = null
+  let due_date: string | null = null
+
   if (config.dueDate) {
     const now = new Date()
     const currentDay = now.getDate()
@@ -164,6 +167,9 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
 
     // Format: MMM dd (e.g., Dec 15)
     due_date_display = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(targetDate)
+
+    // ISO String for sorting
+    due_date = targetDate.toISOString()
   }
 
   return {
@@ -174,6 +180,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
     is_qualified,
     cycle_range,
     due_date_display,
+    due_date, // Add this field
     remains_cap: config.maxAmount ? Math.max(0, config.maxAmount - total_earned) : null,
     shared_cashback: total_earned
   }
@@ -769,6 +776,8 @@ export async function updateAccountConfig(
     secured_by_account_id?: string | null
     is_active?: boolean | null
     logo_url?: string | null
+    annual_fee?: number | null
+    parent_account_id?: string | null
   }
 ): Promise<boolean> {
   const supabase = createClient()
@@ -799,7 +808,13 @@ export async function updateAccountConfig(
     payload.is_active = data.is_active
   }
 
+  if ('annual_fee' in data) {
+    payload.annual_fee = data.annual_fee ?? null
+  }
 
+  if ('parent_account_id' in data) {
+    payload.parent_account_id = data.parent_account_id ?? null
+  }
 
   if (typeof data.logo_url === 'string') {
     payload.logo_url = data.logo_url

@@ -53,6 +53,11 @@ export function getCardActionState(account: Account, hasPendingBatch: boolean = 
     }
     if (account.type === 'debt') {
         result.section = 'other' // Debt
+        result.badges.pendingBatch = hasPendingBatch
+        if (hasPendingBatch) {
+            result.section = 'action_required'
+            result.priorities.sortOrder = 11000 // Tier 3: Pending Batch
+        }
         return result
     }
 
@@ -135,6 +140,8 @@ export function getCardActionState(account: Account, hasPendingBatch: boolean = 
         // The previous code showed it for ALL credit cards that weren't parent/child.
         // Let's keep that logic in the view, here we just flag it as appropriate.
         // However, we can prep the flag.
+
+        // Check both parent_account_id column and relationships for consistency
         const isChild = !!account.parent_account_id || !!account.relationships?.parent_info
         const isParent = (account.relationships?.child_count ?? 0) > 0 || account.relationships?.is_parent
 
