@@ -2,134 +2,64 @@
 description: Money Flow 3 (Updated Phase 75)
 ---
 
-PROJECT CONTEXT: Money Flow 3 (Updated Phase 75)
+Project
 
-1. Tech Stack
+Money Flow 3 — personal finance manager. Stack: Next.js 15 (App Router), TypeScript, Tailwind + shadcn, Supabase Postgres.
 
-Framework: Next.js 15 (App Router)
+Key Concepts
 
-Language: TypeScript
+Accounts: banks, wallets, credit cards, savings, debt.
 
-Styling: Tailwind CSS, Shadcn UI (Radix Primitive)
+Credit card action states:
 
-Database: Supabase (PostgreSQL)
+Due soon / overdue
 
-State/Data Fetching: React Server Components (RSC), Server Actions, Hooks.
+Need to spend (minSpend)
 
-Icons: Lucide React, SVG (public folder).
+Waiting confirm (pending batch)
 
-2. Directory Structure
+Family:
 
-src/app: Page routes, layouts, route handlers (api).
+Parent/Child relationship uses accounts.parent_account_id.
 
-src/actions: Server Actions (mutations, logic phía server).
+Parent implies shared limit; UI may present shared balance depending on product rule.
 
-src/components: UI components (chia thành moneyflow, batch, people, ui...).
+Secured:
 
-src/lib: Utilities, helpers, supabase client/server configurations.
+accounts.secured_by_account_id links a card to a collateral savings account.
 
-src/services: Business logic layer (tách biệt logic khỏi UI và Actions).
+UI Conventions
 
-src/types: TypeScript interfaces/types (database.types.ts generated from Supabase).
+Card left side is a portrait image strip (no square crop).
 
-supabase/migrations: SQL migrations history.
+Due is displayed as a hanging banner attached to left image section.
 
-3. Core Features & Business Logic
+Need-to-spend uses a two-column pill matching Share/Remains style.
 
-Transactions: - Quản lý thu chi (Income/Expense/Transfer/Debt).
+Quick Add row stays at the bottom; Limit bar pinned above it.
 
-Single Source of Truth: Bảng transactions là nơi duy nhất lưu trữ data.
+Non-negotiable Business Rules
 
-Final Price: Cột final_price được tự động tính toán (Amount + Cashback/Discount) qua Database Trigger.
+Transfer source cannot be Credit Card.
 
-History: Bảng transaction_history lưu snapshot khi edit.
+Transfer quick-add must auto-select category Money Transfer.
 
-Accounts: - Quản lý tài khoản ngân hàng, ví, tín dụng.
+Family linkage must persist to parent_account_id on create/update.
 
-Cashback: Logic tính "Missing for Min Spend" và "Potential Cashback".
+Agent Operating Mode
 
-People/Debts: - Quản lý nợ theo person_id trong bảng transactions.
+Always search the repo for existing implementations before creating new ones.
 
-Không dùng tài khoản nợ ảo (Legacy).
+Make changes in small commits.
 
-Services: Quản lý subscriptions (Netflix, Spotify...).
+Run: lint + build (+ typecheck if present).
 
-Installments: Trả góp (flag is_installment).
+Open PRs with before/after screenshots.
 
-Batch Processing: Import Excel/CSV, mapping ngân hàng.
+Phase Naming
 
-4. Coding Rules & Conventions
+Branch names and commit messages are phase-driven:
 
-Server Actions: Ưu tiên dùng cho các thao tác ghi (POST/PUT/DELETE).
+Branch: PHASE-XX.Y-<SHORT-SLUG>
 
-Service Layer: Logic phức tạp đặt trong src/services.
-
-Type Safety: Luôn import types từ src/types.
-
-UI Components: Shadcn UI (src/components/ui).
-
-5. Recent Schema Context (Crucial)
-
-Transactions: - final_price: Numeric (Calculated via trigger).
-
-person_id: Link tới bảng People (Debt tracking).
-
-Integrity:
-
-Refund Trio: Parent -> Void -> Refund.
-
-Rule: Không được Edit Parent nếu có con (Void/Refund).
-
-6. UI/UX Design System (STRICT - PHASE 75)
-
-Transaction Table:
-
-Column: "Accounts and Debt Managements".
-
-Layout: [Account] (Left) ... [Arrow] (Center) ... [Person] (Right).
-
-Context Aware: Ẩn mũi tên/Source nếu đang xem chi tiết Account/Person đó.
-
-Visuals:
-
-Images/Avatars: BẮT BUỘC dùng rounded-none (Square) cho Icon Shop, Account, Person trong bảng.
-
-Badges: Màu tương phản cao (High Contrast).
-
-Interaction:
-
-Disable click vào dòng (Row). Phải dùng menu ... để Edit/Clone.
-// ... giữ nguyên phần đầu ...
-
-6. Recent Logic & UI System (Phase 77 - Cashback & Layout)
-
-A. Cashback Logic (New Architecture)
-
-Concept: Tách biệt giữa "Progress" (Đủ điều kiện chưa?) và "Economics" (Lời bao nhiêu?).
-
-Volunteer Mode:
-
-Một số Account (ví dụ thẻ phụ) chấp nhận "Lỗ" (Net Profit < 0) để tích điểm cho thẻ chính hoặc hội nhóm.
-
-UI phải hiển thị trạng thái này là "Contribution 💖" thay vì báo lỗi.
-
-Formulas:
-
-Missing Spend = Min Spend - Eligible Spend.
-
-Potential Profit (Temp) = Tiền hoàn dự kiến NHƯNG chưa đủ Min Spend (Màu: Amber/Gray).
-
-Net Profit (Real) = Total Generated - Shared Amount. (Chỉ tính khi đã Qualified).
-
-B. UI Guidelines (Strict Updates)
-
-Action Bar: KHÔNG dùng Grid Button cũ. Sử dụng "Horizontal Icon Bar" (1 hàng ngang, nút ghost/outline nhỏ gọn) nằm dưới cùng của Header.
-
-Account Cards (List):
-
-Tối ưu Performance: Không tính toán trong render.
-
-KPI Focus: Show rõ Min vs Spent vs Need.
-
-Images: BẮT BUỘC rounded-none (Square), border-none.
-
+Commit: PHASE XX.Y - <TITLE>

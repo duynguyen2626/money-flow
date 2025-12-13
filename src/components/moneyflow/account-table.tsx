@@ -54,6 +54,8 @@ function getAccountIcon(type: Account['type'], className = "h-4 w-4") {
   }
 }
 
+import { getDisplayBalance } from '@/lib/display-balance' // Add import
+
 export function AccountTable({
   accounts,
   onToggleStatus,
@@ -74,6 +76,28 @@ export function AccountTable({
     setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
+  // Sorting Helper
+  const getDaysUntilDue = (account: Account) => {
+    if (!account.stats?.due_date) return 999
+    if (account.stats.due_date) {
+      const today = new Date()
+      const due = new Date(account.stats.due_date)
+      const diff = due.getTime() - today.getTime()
+      return Math.ceil(diff / (1000 * 60 * 60 * 24))
+    }
+    return 999
+  }
+
+  // Enhanced Sorting for Credit Cards: Nearest Due Date First
+  const sortCreditCards = (items: Account[]) => {
+    return [...items].sort((a, b) => {
+      // Sort by Due Date urgency
+      const aDue = a.stats?.due_date ? new Date(a.stats.due_date).getTime() : 9999999999999
+      const bDue = b.stats?.due_date ? new Date(b.stats.due_date).getTime() : 9999999999999
+      return aDue - bDue // Ascending (nearest first)
+    })
+  }
+
   // Grouping Logic
   const groupedAccounts = {
     credit: accounts.filter(a => a.type === 'credit_card'),
@@ -81,6 +105,9 @@ export function AccountTable({
     savings: accounts.filter(a => ['savings', 'investment', 'asset'].includes(a.type)),
     debt: accounts.filter(a => a.type === 'debt'),
   }
+
+  // Apply sorting to credit cards
+  groupedAccounts.credit = sortCreditCards(groupedAccounts.credit)
 
   const sections = [
     { key: 'credit', title: 'Credit Cards', icon: <CreditCard className="h-4 w-4" />, items: groupedAccounts.credit },
@@ -104,12 +131,13 @@ export function AccountTable({
         <Table>
           <TableHeader>
             <TableRow className="bg-slate-50/80 hover:bg-slate-50/80">
-              <TableHead className="w-[280px]">Identity</TableHead>
-              <TableHead className="text-right w-[120px]">Balance</TableHead>
-              <TableHead className="text-right w-[120px]">Limit</TableHead>
-              <TableHead className="w-[200px]">Cashback / KPI</TableHead>
-              <TableHead className="w-[140px]">Cycle / Due</TableHead>
-              <TableHead className="w-[160px]">Linkage</TableHead>
+              <TableHead className="w-[340px]">Identity</TableHead>
+              <TableHead className="text-right w-[110px]">Family Bal.</TableHead>
+              <TableHead className="text-right w-[110px]">Real Bal.</TableHead>
+              <TableHead className="text-right w-[110px]">Limit</TableHead>
+              <TableHead className="w-[180px]">Cashback / KPI</TableHead>
+              <TableHead className="w-[120px]">Cycle</TableHead>
+              <TableHead className="w-[140px]">Family</TableHead>
               <TableHead className="text-right w-[80px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -121,7 +149,7 @@ export function AccountTable({
                 <React.Fragment key={section.key}>
                   {/* Collapsible Group Header */}
                   <TableRow className="bg-slate-50 hover:bg-slate-100 cursor-pointer" onClick={() => toggleSection(section.key)}>
-                    <TableCell colSpan={7} className="py-2">
+                    <TableCell colSpan={8} className="py-2">
                       <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-slate-500">
                         {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
                         {section.icon}
@@ -140,7 +168,8 @@ export function AccountTable({
                     const isNegative = (account.current_balance ?? 0) < 0
                     const isActive = typeof account.is_active === 'boolean' ? account.is_active : true
                     const isPending = pendingId === account.id
-                    const balance = account.current_balance ?? 0
+                    // Use displayBalance helper for Family Balance column context
+                    const balance = getDisplayBalance(account, 'family_tab', allAccounts) // Use 'family_tab' context logic (show parent if child)
                     const limit = account.credit_limit ?? 0
 
                     // Usage % for tooltip
@@ -162,19 +191,50 @@ export function AccountTable({
                                 </div>
                               )}
                             </div>
-                            <div className="flex flex-col">
-                              <Link href={`/accounts/${account.id}`} className="font-bold text-slate-900 hover:text-blue-700 hover:underline decoration-blue-700/30 underline-offset-4 transition-colors">
-                                {account.name}
-                              </Link>
+                            <div className="flex flex-col min-w-0">
+                              <div className="flex items-center gap-2">
+                                {/* Due Date Badges */}
+                                {account.type === 'credit_card' && stats?.due_date_display && (
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <span className="inline-flex items-center rounded-sm bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700 whitespace-nowrap">
+                                      {stats.due_date_display}
+                                    </span>
+                                    {/* Simple heuristic for "days left" would go here if available in stats */}
+                                  </div>
+                                )}
+                                <Link href={`/accounts/${account.id}`} className="font-bold text-slate-900 hover:text-blue-700 hover:underline decoration-blue-700/30 underline-offset-4 transition-colors truncate">
+                                  {account.name}
+                                </Link>
+                              </div>
                               <span className="text-[10px] text-slate-400 font-mono">{account.id.substring(0, 8)}...</span>
                             </div>
                           </div>
                         </TableCell>
 
-                        {/* Col 2: Balance */}
+                        {/* Col 2: Family Balance (Parent's if Child) */}
                         <TableCell className="text-right">
                           <span className={cn("font-bold text-sm", isNegative ? "text-red-600" : "text-slate-900")}>
-                            {formatCurrency(balance)}
+                            {/* Logic: If is child in family, show parent balance? 
+                                Actually, Table View usually shows Standalone data. 
+                                But user asked for "Standalone Balance" column, implying "Balance" column might be Family Balance.
+                                However, standard Table View should probably keep "Balance" as is (Official Balance), 
+                                and "Standalone Balance" is redundant if "Balance" is already Standalone.
+                                
+                                User Request: "New Column Standalone Balance... Shows card's own balance (never family-adjusted)"
+                                IMPLICATION: Expected "Balance" column MIGHT be family adjusted (like in Family Cards view).
+                                
+                                Implementation decision: 
+                                - "Family Bal." column: Displays Parent Balance if child (Same as Family Cards view logic)
+                                - "Real Bal." column: Displays actual account balance
+                            */}
+                            {formatCurrency(balance)} {/* For now, keeping as is, but renamed header to Family Bal/Real Bal distinction if logic changes */}
+                          </span>
+                        </TableCell>
+
+                        {/* Col 3: Standalone Balance (Real Balance) */}
+                        <TableCell className="text-right">
+                          <span className={cn("font-medium text-sm text-slate-600")}>
+                            {formatCurrency(account.current_balance)}
                           </span>
                         </TableCell>
 
@@ -229,31 +289,24 @@ export function AccountTable({
                           )}
                         </TableCell>
 
-                        {/* Col 5: Cycle / Due */}
+                        {/* Col 5: Cycle */}
                         <TableCell>
                           {stats ? (
-                            <div className="flex flex-col gap-0.5">
-                              {stats.due_date_display && (
-                                <div className="flex items-center gap-1 text-xs font-bold text-red-600">
-                                  Due {stats.due_date_display}
-                                </div>
-                              )}
-                              <div className="text-[10px] text-slate-500 font-medium">
-                                {stats.cycle_range}
-                              </div>
+                            <div className="text-[10px] text-slate-500 font-medium">
+                              {stats.cycle_range}
                             </div>
                           ) : (
                             <span className="text-slate-300 text-xs">—</span>
                           )}
                         </TableCell>
 
-                        {/* Col 6: Linkage */}
+                        {/* Col 6: Family */}
                         <TableCell>
                           <div className="flex flex-col items-start gap-1">
                             {account.relationships?.is_parent && (
                               <div className="flex items-center gap-1 text-[10px] font-bold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded-sm">
-                                <User className="h-3 w-3" />
-                                Parent ({account.relationships.child_count ?? 0})
+                                <Users className="h-3 w-3" />
+                                Parent
                               </div>
                             )}
                             {account.relationships?.parent_info && (
@@ -261,9 +314,9 @@ export function AccountTable({
                                 {account.relationships.parent_info.type === 'savings' ? (
                                   <ShieldCheck className="h-3 w-3" />
                                 ) : (
-                                  <Users className="h-3 w-3" />
+                                  <User className="h-3 w-3" />
                                 )}
-                                {account.relationships.parent_info.type === 'savings' ? 'Secured by' : 'Child'}
+                                {account.relationships.parent_info.type === 'savings' ? 'Secured' : 'Child'}
                               </Link>
                             )}
                           </div>
@@ -289,6 +342,6 @@ export function AccountTable({
           </TableBody>
         </Table>
       </div>
-    </div>
+    </div >
   )
 }

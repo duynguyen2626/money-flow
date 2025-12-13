@@ -285,3 +285,163 @@ Family Cards filter opens a **2-tab view**:
 * [ ] Limit bar always bottom-aligned
 * [ ] Transfer from credit impossible
 * [ ] Family Cards filter groups correctly
+
+---
+
+# PROMPT C — Family Cards + Table View Polish + Account Form Fixes (NEW)
+
+## Goal
+
+You already implemented B5/B6 (Family Cards filter). Now fix the regressions and complete the UX:
+
+* Family summary correctness + arrow spacing
+* Per-card balance badges placement (Family tab)
+* Table view: new columns + rename Linkage→Family + due badges in Identity/Notes
+* Account add/edit: ensure parent link is stored in DB (`parent_account_id`), and badges Parent/Child/Standalone are consistent
+* Align image + badges in card left section
+
+## Scope (FILES YOU MUST TOUCH)
+
+* `src/components/moneyflow/account-list.tsx`
+* `src/components/moneyflow/account-table.tsx`
+* `src/components/moneyflow/account-card.tsx`
+* `src/lib/card-utils.ts`
+* Account form components (search for `Parent Account (Shared Limit)` and `cashback_config.parentAccountId`)
+* Supabase insert/update helpers for accounts (service or action layer)
+
+## C1 — Family section arrow spacing + summary redesign
+
+### C1.1 Arrow spacing
+
+* In secured-style family sections where you render arrows between cards, arrows are too close to the border.
+* Add internal padding and/or place arrows in a dedicated middle column with min-width.
+* Rule: arrow must never touch section border; keep at least `px-3` spacing.
+
+### C1.2 Summary must be intuitive
+
+* Current family summary is not readable and may be wrong.
+* For a family group:
+
+  * **Family shared limit**: parent’s limit.
+  * **Family shared balance**: by default use parent’s balance (shared-limit card) unless product rule says otherwise.
+
+### C1.3 Per-card balances (Family tab only)
+
+* Each card must show its **own balance badge** under the card (outside the main card body to avoid clutter).
+* Format:
+
+  * `[Vcb Signature: 114,210,000]` badge
+  * `[Vcb Amex: 111]` badge
+* Place these badges in a neat row below cards inside the family section.
+
+### C1.4 Data correctness — child balance showing 0
+
+* Investigate why a child card in a family shows `0` balance while the family is shared.
+* If the product rule is “shared family must share balance”, implement:
+
+  * `displayBalance = parent.balance` for children **in Family tab only**.
+  * Keep `standaloneBalance = account.balance` for table and other contexts.
+* Document the rule in a small helper.
+
+## C2 — Table view improvements
+
+### C2.1 Add column: Standalone Balance
+
+* Add a new column `Standalone Balance`:
+
+  * Shows the card’s own balance (never family-adjusted).
+
+### C2.2 Cashback/KPI visual split
+
+* Ensure `Cashback` and `KPI` are visually split (not merged into one long cell):
+
+  * Use stacked badges or two lines.
+
+### C2.3 Rename Linkage → Family
+
+* Column header becomes `Family`.
+* Cell badges:
+
+  * `Parent` / `Child` badges (icon + label, no “(1)”).
+  * If Parent is also secured-linked, add badge `Secured linked`.
+
+### C2.4 Move Due into Identity/Notes as badges
+
+* Remove big due text from the Cycle/Due column.
+* Instead, before name in Identity/Notes, show compact badges:
+
+  * `[Jan 10]` and `[2 days left]` (two separate badges)
+* Sorting:
+
+  * nearest due date on top within the group.
+
+## C3 — Account add/edit bug: Parent selected but DB still standalone
+
+Evidence:
+
+* Insert SQL shows `parent_account_id` is NULL, while `cashback_config.parentAccountId` is set.
+
+### Required fix
+
+* The canonical relationship must be stored in column `accounts.parent_account_id`.
+* `cashback_config.parentAccountId` is NOT the source of truth for family linkage.
+
+Implementation:
+
+* In account create/update payload, map form parent selection to **`parent_account_id`**.
+* Optionally keep `cashback_config.parentAccountId` in sync for backward compatibility.
+* Update derived logic (`isChild`) to check both:
+
+  * `parent_account_id`
+  * `relationships.parent_info`
+
+Validation:
+
+* Create account, select parent, save → DB row must have `parent_account_id` set.
+* UI must show `Child` badge (not Standalone).
+
+## C4 — Badge rules consistency
+
+* If `isChild` → show `Child` badge under name.
+* If `isParent` → show `Parent` badge.
+* If `Standalone` → do NOT show `Secured/Unsecured` badges.
+
+## C5 — Account modal layout
+
+* Move `Parent Account (Shared Limit)` control up near the image/logo area.
+
+## C6 — Align image + badges
+
+* Fix left-side image + badges alignment:
+
+  * Parent/Cycle/Standalone badges align to a consistent grid.
+  * Avoid vertical jitter between cards.
+
+## Acceptance Criteria (Prompt C)
+
+* Family sections have clean arrow spacing, readable summary, and per-card balance badges under cards.
+* Table view has Standalone Balance; Cashback/KPI split; Family column; Due badges before name.
+* Account create/update persists `parent_account_id` and Child badge shows.
+* Image/badges alignment is consistent.
+
+## PR Instructions (Prompt C)
+
+* Branch: `fix/family-cards-table-and-form`
+* Commits:
+
+  1. `fix(family): improve summary, arrow spacing, and per-card balance badges`
+  2. `refactor(table): family column, due badges, standalone balance`
+  3. `fix(accounts): persist parent_account_id from form and unify badges`
+
+## QA Checklist
+
+* [ ] Family arrow spacing not touching border
+* [ ] Family summary correct and readable
+* [ ] Per-card balance badges appear under cards in Family tab
+* [ ] Child card display balance rule implemented (and standalone balance preserved)
+* [ ] Table: Standalone Balance column exists
+* [ ] Table: Cashback/KPI split
+* [ ] Table: Family column with Parent/Child + Secured linked
+* [ ] Due badges appear before name and nearest-due sorting works
+* [ ] Creating/editing account with parent persists `parent_account_id`
+* [ ] Card shows Child badge and not Standalone when linked

@@ -12,3 +12,8 @@ export function formatCurrency(amount: number) {
     maximumFractionDigits: 0,
   }).format(amount).replace('₫', '').trim()
 }
+
+export function getAccountInitial(name: string) {
+  const firstLetter = name?.trim().charAt(0)
+  return firstLetter ? firstLetter.toUpperCase() : '?'
+}

@@ -5,12 +5,13 @@ import { LayoutGrid, List, Search, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, C
 import { CreateAccountDialog } from './create-account-dialog'
 import { AccountCard } from './account-card'
 import { AccountTable } from './account-table'
+import { FamilyCardGroup } from './family-card-group'
 import { Account, AccountCashbackSnapshot, Category, Person, Shop } from '@/types/moneyflow.types'
 import { updateAccountConfigAction } from '@/actions/account-actions'
 import { computeNextDueDate, getSharedLimitParentId } from '@/lib/account-utils'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
-import { UsageStats } from '@/types/settings.types'
+import { UsageStats, QuickPeopleConfig } from '@/types/settings.types'
 import { getCardActionState } from '@/lib/card-utils'
 
 type AccountListProps = {
@@ -21,20 +22,32 @@ type AccountListProps = {
   shops: Shop[]
   pendingBatchAccountIds?: string[]
   usageStats?: UsageStats // Proper type
+  quickPeopleConfig?: QuickPeopleConfig
 }
 
 type ViewMode = 'grid' | 'table'
-type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt' | 'waiting_confirm' | 'need_to_spend' | 'secured'
+type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt' | 'waiting_confirm' | 'need_to_spend' | 'family_cards'
 type SortKey = 'due_date' | 'balance' | 'limit'
 type SortOrder = 'asc' | 'desc'
 
-const FILTERS: { key: FilterKey; label: string; match: (account: Account) => boolean }[] = [
+const FILTERS: { key: FilterKey; label: string; match: (account: Account, allAccounts?: Account[]) => boolean }[] = [
   { key: 'all', label: 'All', match: () => true },
   { key: 'bank', label: 'Bank', match: account => ['bank', 'cash', 'ewallet'].includes(account.type) },
   { key: 'credit', label: 'Credit', match: account => account.type === 'credit_card' },
   { key: 'savings', label: 'Savings', match: account => ['savings', 'investment', 'asset'].includes(account.type) },
   { key: 'debt', label: 'Debt', match: account => account.type === 'debt' },
-  { key: 'secured', label: 'Secured Cards', match: account => !!account.secured_by_account_id },
+  {
+    key: 'family_cards',
+    label: 'Family Cards',
+    match: (account, allAccounts) =>
+      !!account.secured_by_account_id ||
+      !!account.parent_account_id ||
+      (account.relationships?.child_count ?? 0) > 0 ||
+      // Also include assets that secure other cards
+      !!account.relationships?.is_parent ||
+      // Also include assets that secure other cards
+      (allAccounts?.some(acc => acc.secured_by_account_id === account.id) ?? false)
+  },
   { key: 'waiting_confirm', label: 'Waiting Confirm', match: () => true },
   { key: 'need_to_spend', label: 'Need To Spend', match: () => true },
 ]
@@ -96,7 +109,7 @@ const FilterButton = memo(({ filter, isActive, onClick }: {
 ))
 FilterButton.displayName = 'FilterButton'
 
-export function AccountList({ accounts, cashbackById = {}, categories, people, shops, pendingBatchAccountIds = [], usageStats }: AccountListProps) {
+export function AccountList({ accounts, cashbackById = {}, categories, people, shops, pendingBatchAccountIds = [], usageStats, quickPeopleConfig }: AccountListProps) {
   const [view, setView] = useState<ViewMode>('grid')
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -139,7 +152,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
     } else if (activeFilter === 'need_to_spend') {
       filtered = filtered.filter(acc => (cashbackById[acc.id]?.missing_min_spend ?? 0) > 0)
     } else {
-      filtered = filtered.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc))
+      filtered = filtered.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc, items))
     }
 
     if (searchQuery.trim()) {
@@ -221,7 +234,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
       sections.push({
         key: 'action-required',
         title: '⚠️ Action Required',
-        helper: 'Cards due soon or need more spending',
+        helper: 'Due soon · Need to spend · Pending confirm',
         accounts: actionRequired.map(x => x.account),
         gridCols: 'lg:grid-cols-4 md:grid-cols-2'
       })
@@ -277,7 +290,74 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
     }
 
     return sections
-  }, [sortedItems])
+  }, [sortedItems, pendingBatchAccountIds])
+
+  // Family Grouping Logic (for family_cards filter)
+  const familyGroups = useMemo(() => {
+    if (activeFilter !== 'family_cards') return []
+
+    type FamilyGroup = {
+      id: string
+      securedAsset?: Account
+      parent: Account
+      children: Account[]
+    }
+
+    const groups: FamilyGroup[] = []
+    const processedIds = new Set<string>()
+
+    // Find all parent accounts
+    const parents = sortedItems.filter(
+      acc => (acc.relationships?.child_count ?? 0) > 0 || acc.relationships?.is_parent
+    )
+
+    parents.forEach(parent => {
+      if (processedIds.has(parent.id)) return
+
+      // Find secured asset if exists
+      const securedAsset = parent.secured_by_account_id
+        ? sortedItems.find(acc => acc.id === parent.secured_by_account_id)
+        : undefined
+
+      // Find children
+      const children = sortedItems.filter(
+        acc => acc.parent_account_id === parent.id || acc.relationships?.parent_info?.id === parent.id
+      )
+
+      groups.push({
+        id: parent.id,
+        securedAsset,
+        parent,
+        children,
+      })
+
+      // Mark as processed
+      processedIds.add(parent.id)
+      if (securedAsset) processedIds.add(securedAsset.id)
+      children.forEach(child => processedIds.add(child.id))
+    })
+
+    // Handle standalone secured cards (no parent/child relationship)
+    const standaloneSecured = sortedItems.filter(
+      acc => acc.secured_by_account_id && !processedIds.has(acc.id)
+    )
+
+    standaloneSecured.forEach(card => {
+      const securedAsset = sortedItems.find(acc => acc.id === card.secured_by_account_id)
+      if (securedAsset && !processedIds.has(card.id)) {
+        groups.push({
+          id: card.id,
+          securedAsset,
+          parent: card,
+          children: [],
+        })
+        processedIds.add(card.id)
+        processedIds.add(securedAsset.id)
+      }
+    })
+
+    return groups
+  }, [sortedItems, activeFilter])
 
   const handleToggleStatus = async (accountId: string, nextValue: boolean) => {
     setPendingId(accountId)
@@ -418,71 +498,87 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
           No accounts match this filter.
         </div>
       ) : view === 'grid' ? (
-        <div className="space-y-6">
-          {grouped.map(section => (
-            <div key={section.key} className="space-y-3">
-              <div className="flex items-center justify-between gap-3 bg-slate-50/50 p-2 rounded-lg border border-slate-100/50">
-                <div>
-                  <p className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                    {section.title}
-                  </p>
-                  <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wide opacity-80 pl-6 -mt-0.5">{section.helper}</p>
-                </div>
-                <span className="rounded-full bg-slate-200/50 px-2 py-0.5 text-[10px] font-bold text-slate-600 border border-slate-200">
-                  {section.accounts.length}
-                </span>
-              </div>
-              <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-                {section.accounts.map(account => (
-                  <AccountCard
-                    key={account.id}
-                    account={account}
-                    accounts={items}
-                    categories={categories}
-                    people={people}
-                    shops={shops}
-                    collateralAccounts={collateralAccounts}
-                    usageStats={usageStats}
-                    pendingBatchAccountIds={pendingBatchAccountIds}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
-
-          {closedItems.length > 0 && (
-            <details
-              className="border-t border-slate-200 pt-6 mt-6"
-              open={showClosedAccounts}
-              onToggle={event => setShowClosedAccounts(event.currentTarget.open)}
-            >
-              <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
-                <div className="flex items-center gap-2">
-                  <span>Closed accounts</span>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                    {closedItems.length}
+        activeFilter === 'family_cards' ? (
+          <FamilyCardGroup
+            families={familyGroups}
+            accounts={items}
+            categories={categories}
+            people={people}
+            shops={shops}
+            collateralAccounts={collateralAccounts}
+            usageStats={usageStats}
+            pendingBatchAccountIds={pendingBatchAccountIds}
+          // FamilyCardGroup also needs this prop, but for now we focus on AccountCard
+          />
+        ) : (
+          <div className="space-y-6">
+            {grouped.map(section => (
+              <div key={section.key} className="space-y-3">
+                <div className="flex items-center justify-between gap-3 bg-slate-50/50 p-2 rounded-lg border border-slate-100/50">
+                  <div>
+                    <p className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                      {section.title}
+                    </p>
+                    <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wide opacity-80 pl-6 -mt-0.5">{section.helper}</p>
+                  </div>
+                  <span className="rounded-full bg-slate-200/50 px-2 py-0.5 text-[10px] font-bold text-slate-600 border border-slate-200">
+                    {section.accounts.length}
                   </span>
                 </div>
-                <span className="text-slate-500">{showClosedAccounts ? '▲' : '▼'}</span>
-              </summary>
-              <div className="mt-4 grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-                {closedItems.map(account => (
-                  <AccountCard
-                    key={account.id}
-                    account={account}
-                    accounts={items}
-                    categories={categories}
-                    people={people}
-                    shops={shops}
-                    collateralAccounts={collateralAccounts}
-                    usageStats={usageStats}
-                    pendingBatchAccountIds={pendingBatchAccountIds}
-                  />
-                ))}
+                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+                  {section.accounts.map(account => (
+                    <AccountCard
+                      key={account.id}
+                      account={account}
+                      accounts={items}
+                      categories={categories}
+                      people={people}
+                      shops={shops}
+                      collateralAccounts={collateralAccounts}
+                      usageStats={usageStats}
+                      pendingBatchAccountIds={pendingBatchAccountIds}
+                      quickPeopleConfig={quickPeopleConfig}
+                    />
+                  ))}
+                </div>
               </div>
-            </details>
-          )}
-        </div>
+            ))}
+
+            {closedItems.length > 0 && (
+              <details
+                className="border-t border-slate-200 pt-6 mt-6"
+                open={showClosedAccounts}
+                onToggle={event => setShowClosedAccounts(event.currentTarget.open)}
+              >
+                <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
+                  <div className="flex items-center gap-2">
+                    <span>Closed accounts</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                      {closedItems.length}
+                    </span>
+                  </div>
+                  <span className="text-slate-500">{showClosedAccounts ? '▲' : '▼'}</span>
+                </summary>
+                <div className="mt-4 grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+                  {closedItems.map(account => (
+                    <AccountCard
+                      key={account.id}
+                      account={account}
+                      accounts={items}
+                      categories={categories}
+                      people={people}
+                      shops={shops}
+                      collateralAccounts={collateralAccounts}
+                      usageStats={usageStats}
+                      pendingBatchAccountIds={pendingBatchAccountIds}
+                      quickPeopleConfig={quickPeopleConfig}
+                    />
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        )
       ) : (
         <>
           <AccountTable

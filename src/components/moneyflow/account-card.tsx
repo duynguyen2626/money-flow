@@ -31,6 +31,7 @@ import {
   Eye,
   ShoppingBag,
   ShieldCheck,
+  Lock,
 } from 'lucide-react'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { cn } from '@/lib/utils'
@@ -41,14 +42,21 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card'
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { EditAccountDialog } from './edit-account-dialog'
-import { updateQuickPeopleUsageAction } from '@/actions/settings-actions'
+import { UsageStats, QuickPeopleConfig, DEFAULT_QUICK_PEOPLE_CONFIG } from '@/types/settings.types'
 import { QuickPeopleSettingsDialog } from './quick-people-settings-dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { getCardActionState } from '@/lib/card-utils'
+import { getDisplayBalance } from '@/lib/display-balance'
 import { SYSTEM_CATEGORIES } from '@/lib/constants'
+import { getAccountInitial } from '@/lib/utils'
 
 type AccountCardProps = {
   account: Account
@@ -57,9 +65,11 @@ type AccountCardProps = {
   people?: Person[]
   shops?: Shop[]
   collateralAccounts?: Account[]
-  usageStats?: any // UsageStats from settings.service
+  usageStats?: UsageStats
+  quickPeopleConfig?: QuickPeopleConfig
   pendingBatchAccountIds?: string[]
   className?: string
+  hideSecuredBadge?: boolean
 }
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
@@ -94,8 +104,10 @@ function AccountCardComponent({
   shops = [],
   collateralAccounts = [],
   usageStats = {},
+  quickPeopleConfig = DEFAULT_QUICK_PEOPLE_CONFIG,
   pendingBatchAccountIds = [],
   className,
+  hideSecuredBadge = false,
 }: AccountCardProps) {
   const router = useRouter()
   const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false)
@@ -132,6 +144,14 @@ function AccountCardComponent({
   const formatCurrency = (val: number | null | undefined) => {
     return val !== null && val !== undefined ? numberFormatter.format(val) : '0'
   }
+
+  // Display balance - show parent's balance for child cards in family context
+  const displayBalance = useMemo(() => {
+    // Check if we're in family cards context by looking at hideSecuredBadge prop
+    // (family-card-group passes hideSecuredBadge=true)
+    const context = hideSecuredBadge ? 'family_tab' : 'card'
+    return getDisplayBalance(account, context, accounts)
+  }, [account, hideSecuredBadge, accounts])
 
   // Handle Parent Link Click (Stop Propagation to prevent Card Link)
   const isSecuredAsset = !!securedByAccountId
@@ -182,6 +202,55 @@ function AccountCardComponent({
   const shoppingCatId = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99'
   const shopeeShopId = 'ea3477cb-30dd-4b7f-8826-a89a1b919661'
 
+  // --- Quick People Sorting Logic ---
+  const sortedPeople = useMemo(() => {
+    // 1. Separate pinned vs others
+    const pinnedIds = new Set(quickPeopleConfig?.pinned_ids || [])
+    const pinnedPeople: Person[] = []
+    const otherPeople: Person[] = []
+
+    // Safely check people array
+    if (people) {
+      people.forEach(p => {
+        if (pinnedIds.has(p.id)) {
+          pinnedPeople.push(p)
+        } else {
+          otherPeople.push(p)
+        }
+      })
+    }
+
+    // 2. Sort "others" if mode is SMART
+    if (quickPeopleConfig?.mode === 'smart' && usageStats) {
+      otherPeople.sort((a, b) => {
+        // Combined score (Lend + Repay) for general visibility
+        const statsA = usageStats[a.id]
+        const statsB = usageStats[b.id]
+        const countA = (statsA?.lend_count || 0) + (statsA?.repay_count || 0)
+        const countB = (statsB?.lend_count || 0) + (statsB?.repay_count || 0)
+
+        // Higher count first
+        if (countA !== countB) return countB - countA
+
+        // If count equal, recency
+        const timeA = statsA?.last_used_at ? new Date(statsA.last_used_at).getTime() : 0
+        const timeB = statsB?.last_used_at ? new Date(statsB.last_used_at).getTime() : 0
+        return timeB - timeA
+      })
+    }
+
+    const result = [...pinnedPeople]
+    if (quickPeopleConfig?.mode === 'smart') {
+      // Smart mode: Pinned + Top Others up to 5 total IF slots needed
+      const slotsNeeded = 5 - pinnedPeople.length
+      if (slotsNeeded > 0) {
+        result.push(...otherPeople.slice(0, slotsNeeded))
+      }
+    }
+    // Manual Mode -> Just Pinned (User feedback: Don't show extra people if manual)
+    return result
+  }, [people, quickPeopleConfig, usageStats])
+
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget
     // Consider square images (1:1) as "Landscape-like" for vertical slots -> Rotate them
@@ -195,7 +264,7 @@ function AccountCardComponent({
   // 1. Left Section (Visual) - Portrait Strip (NO SQUARE CROP)
   const renderVisualSection = () => {
     return (
-      <div className="relative h-full w-[148px] sm:w-[160px] bg-muted/5 overflow-hidden group-hover/card:bg-muted/10 transition-colors border-r border-slate-100">
+      <div className="relative h-full w-[160px] sm:w-[180px] bg-muted/5 overflow-hidden group-hover/card:bg-muted/10 transition-colors border-r border-slate-100">
         {/* Image Container - Fills entire portrait strip */}
         <div className="absolute inset-0 w-full h-full overflow-hidden bg-slate-100">
           {account.logo_url ? (
@@ -210,7 +279,7 @@ function AccountCardComponent({
                 // Landscape/Square images: Rotate 90° and show 100% of image (object-contain)
                 // Portrait images: Fill container (object-cover)
                 isCreditCard && isLandscape
-                  ? "rotate-90 w-full h-full object-contain"
+                  ? "rotate-90 w-full h-full object-contain" // Removing bg-slate-950/50 as requested
                   : "w-full h-full object-cover object-center"
               )}
               loading="lazy"
@@ -226,8 +295,8 @@ function AccountCardComponent({
             {/* Removed Confirm Paid from here - moved to header */}
           </div>
 
-          {/* Overlay Badges - Bottom Left */}
-          <div className="absolute bottom-2 left-2 flex flex-col gap-1.5 z-10 w-full px-2 items-start">
+          {/* Overlay Badges - Bottom Center */}
+          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col gap-1.5 z-10 w-full px-2 items-center">
             {showParentBadge && (
               <TooltipProvider>
                 <Tooltip delayDuration={100}>
@@ -293,6 +362,29 @@ function AccountCardComponent({
 
             {/* Unsecured Badge - REMOVED (Moved to Data Section) */}
           </div>
+
+          {/* Hover Details Overlay */}
+          <div className="absolute inset-0 flex flex-col gap-3 items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity duration-200 z-20 pointer-events-none bg-black/10 backdrop-blur-[1px]">
+            {/* Eye Icon (Details) */}
+            <Link
+              href={detailsHref}
+              onClick={handleLinkClick}
+              className="pointer-events-auto text-white p-3 rounded-full hover:bg-black/60 hover:scale-110 active:scale-95 active:bg-black/80 transition-all drop-shadow-xl border border-white/30"
+            >
+              <Eye className="w-6 h-6 drop-shadow-lg" strokeWidth={2.5} />
+            </Link>
+
+            {/* Edit Button (Below Eye) */}
+            <div className="pointer-events-auto">
+              <EditAccountDialog
+                account={account}
+                accounts={accounts}
+                collateralAccounts={collateralAccounts}
+                buttonClassName="text-white p-2.5 rounded-full hover:bg-black/60 hover:scale-110 active:scale-95 active:bg-black/80 transition-all drop-shadow-xl border border-white/30 flex items-center justify-center"
+                triggerContent={<Edit className="w-5 h-5 drop-shadow-lg" strokeWidth={2.5} />}
+              />
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -300,7 +392,7 @@ function AccountCardComponent({
 
   // 2. Right Section (Data)
   const renderDataSection = () => {
-    const balance = account.current_balance ?? 0
+    const balance = displayBalance
     const { percent: usageVal, formattedLimit, formattedUsed } = usageData
 
     let progressColorClass = "bg-emerald-500" // < 30%
@@ -313,15 +405,82 @@ function AccountCardComponent({
     const showKPI = stats?.min_spend && stats.min_spend > 0
     const hasCashbackConfig = stats?.remains_cap !== undefined
 
+    // --- Quick People Sorting Logic ---
+    const sortedPeople = useMemo(() => {
+      // 1. Separate pinned vs others
+      const pinnedIds = new Set(quickPeopleConfig?.pinned_ids || [])
+      const pinnedPeople: Person[] = []
+      const otherPeople: Person[] = []
+
+      // Safely check people array
+      if (people) {
+        people.forEach(p => {
+          if (pinnedIds.has(p.id)) {
+            pinnedPeople.push(p)
+          } else {
+            otherPeople.push(p)
+          }
+        })
+      }
+
+      // 2. Sort "others" if mode is SMART
+      if (quickPeopleConfig?.mode === 'smart' && usageStats) {
+        otherPeople.sort((a, b) => {
+          // Combined score (Lend + Repay) for general visibility
+          const statsA = usageStats[a.id]
+          const statsB = usageStats[b.id]
+          const countA = (statsA?.lend_count || 0) + (statsA?.repay_count || 0)
+          const countB = (statsB?.lend_count || 0) + (statsB?.repay_count || 0)
+
+          // Higher count first
+          if (countA !== countB) return countB - countA
+
+          // If count equal, recency
+          const timeA = statsA?.last_used_at ? new Date(statsA.last_used_at).getTime() : 0
+          const timeB = statsB?.last_used_at ? new Date(statsB.last_used_at).getTime() : 0
+          return timeB - timeA
+        })
+      }
+
+      const result = [...pinnedPeople]
+      if (quickPeopleConfig?.mode === 'smart') {
+        // Smart mode: Pinned + Top Others up to 5 total? Or Pinned + Top N?
+        // User said "Manage list check 1, but quick list shows 5".
+        // The previous code was filling up to 5.
+        // If we want specific behavior:
+        // If Smart: Show Pinned + Popular Others
+        // If Manual: Show ONLY Pinned? Or Pinned + Others?
+        // The Dialog says "Select People for Quick Access" in manual mode.
+        // So manual mode should likely ONLY show pinned people?
+
+        // Assuming consistent "Top 5" UI for now, but filling with smart suggestions.
+        // But if mode is MANUAL, we should probably ONLY show pinned.
+
+        // Let's take Pinned + Top X Others to fill 5 slots IF Smart.
+        // If Manual, just Pinned.
+
+        const slotsNeeded = 5 - pinnedPeople.length
+        if (slotsNeeded > 0) {
+          result.push(...otherPeople.slice(0, slotsNeeded))
+        }
+      }
+      // Manual Mode -> Just Pinned (as per user request "Manage list check 1, quick list 5... remove hard code")
+      // If the user only checked 1 person, they expect only 1 person or exactly what is configured.
+      // So if Manual, we return just pinnedPeople.
+
+      return result
+    }, [people, quickPeopleConfig, usageStats])
+
     return (
       <div className="flex flex-col h-full p-2.5 min-w-0 relative">
+
         {/* 1. TOP ROW: Name + Action Buttons */}
         <div className="flex justify-between items-start gap-1 mb-1">
           {/* Account Name */}
           <TooltipProvider>
             <Tooltip delayDuration={100}>
               <TooltipTrigger asChild>
-                <h3 className="font-bold text-sm leading-tight truncate text-slate-900 flex-1 min-w-0 cursor-default max-w-[120px]">
+                <h3 className="font-bold text-sm leading-tight truncate text-slate-900 flex-1 min-w-0 cursor-pointer max-w-[120px]">
                   {account.name}
                 </h3>
               </TooltipTrigger>
@@ -331,49 +490,7 @@ function AccountCardComponent({
             </Tooltip>
           </TooltipProvider>
 
-          {/* Right: Action Buttons */}
-          <div className="flex flex-col gap-1 shrink-0 items-end">
-            {/* Row 1: Edit + Details (Icon Only, Circular) */}
-            <div className="flex items-center gap-1.5">
-              <TooltipProvider>
-                <Tooltip delayDuration={100}>
-                  <TooltipTrigger asChild>
-                    <div>
-                      <EditAccountDialog
-                        account={account}
-                        accounts={accounts}
-                        collateralAccounts={collateralAccounts}
-                        buttonClassName="flex items-center justify-center rounded-full bg-slate-100 border border-slate-200 w-7 h-7 text-slate-700 hover:bg-slate-200 hover:text-slate-900 hover:border-slate-300 active:scale-95 active:bg-slate-300 transition-all shadow-sm"
-                        triggerContent={<Edit className="w-3.5 h-3.5" />}
-                      />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs font-semibold">
-                    Edit Account
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              <TooltipProvider>
-                <Tooltip delayDuration={100}>
-                  <TooltipTrigger asChild>
-                    <Link
-                      href={detailsHref}
-                      onClick={handleLinkClick}
-                      className="flex items-center justify-center rounded-full bg-blue-50 border border-blue-200 w-7 h-7 text-blue-600 hover:bg-blue-100 hover:text-blue-800 hover:border-blue-300 active:scale-95 active:bg-blue-200 transition-all shadow-sm"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                    </Link>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs font-semibold">
-                    View Details
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-
-            {/* Row 2: Confirm Paid (Moved to Balance Row) */}
-          </div>
+          {/* Right: Action Buttons (REMOVED Edit Icon - Now handled by Card Click) */}
         </div>
 
         {/* 2. SECOND ROW: Balance + Confirm Button (Inline) */}
@@ -457,23 +574,34 @@ function AccountCardComponent({
         )}
 
         {/* 4. Secured By OR Unsecured Badge (MUST be BEFORE Limit bar) */}
-        {isCreditCard && (
-          <div className="mb-2 text-center">
+        {isCreditCard && !hideSecuredBadge && (
+          <div className="mb-2 flex items-center">
             {isSecuredAsset && securedByAccountId ? (
               <TooltipProvider>
-                <Tooltip delayDuration={100}>
+                <Tooltip delayDuration={300}>
                   <TooltipTrigger asChild>
-                    <Link
-                      href={`/accounts/${securedByAccountId}`}
-                      onClick={handleLinkClick}
-                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors"
-                    >
-                      <PiggyBank className="w-3 h-3" />
-                      Secured by Savings
-                    </Link>
+                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-transparent hover:border-amber-200 transition-colors cursor-help">
+                      <Lock className="w-3 h-3" />
+                      <span className="text-[10px] font-bold uppercase tracking-wide">Secured by Savings</span>
+                    </div>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom" className="text-xs">
-                    Linked to {parentInfo?.name || 'Savings Account'}
+                  <TooltipContent side="bottom" className="flex items-center gap-3 p-3 max-w-[280px]">
+                    {(() => {
+                      const securedAsset = accounts.find(a => a.id === account.secured_by_account_id)
+                      if (!securedAsset) return <p className="text-xs">Linked to an unknown asset</p>
+                      return (
+                        <>
+                          <div className="relative w-10 h-6 flex-shrink-0 bg-slate-100 rounded-sm overflow-hidden border border-slate-200">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            {securedAsset.logo_url && <img src={securedAsset.logo_url} className="w-full h-full object-contain p-1" alt="" />}
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">Secured By</p>
+                            <p className="text-sm font-bold text-slate-900 line-clamp-2">{securedAsset.name}</p>
+                          </div>
+                        </>
+                      )
+                    })()}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
@@ -483,6 +611,24 @@ function AccountCardComponent({
                 Unsecured
               </span>
             )}
+          </div>
+        )}
+
+        {/* Child Single Balance (Family View) */}
+        {isCreditCard && hideSecuredBadge && isChild && (
+          <div className="mb-2 flex items-center">
+            <TooltipProvider>
+              <Tooltip delayDuration={300}>
+                <TooltipTrigger asChild>
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300 truncate max-w-full cursor-help">
+                    Single Bal: {formatCurrency(account.current_balance)}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  Single Balance: {formatCurrency(account.current_balance)}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         )}
 
@@ -559,36 +705,101 @@ function AccountCardComponent({
             </button>
           )}
 
-          {/* Lend OR Shopping (for Credit Card) */}
-          {isCreditCard ? (
-            <button
-              onClick={(e) => { e.stopPropagation(); setActiveDialog('shopping') }}
-              className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-bold bg-orange-50 text-orange-700 border border-orange-100 hover:bg-orange-100 transition-all"
-              title="Shopping"
-            >
-              <ShoppingBag className="w-3.5 h-3.5" />
-              Shop
-            </button>
-          ) : (
-            <button
-              onClick={(e) => { e.stopPropagation(); setActiveDialog('debt') }}
-              className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-bold bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-100 transition-all"
-              title="Lend Money"
-            >
-              <ArrowUpRight className="w-3.5 h-3.5" />
-              Lend
-            </button>
-          )}
+          {/* Lend (With Hover List) */}
+          <HoverCard>
+            <HoverCardTrigger asChild>
+              <button
+                onClick={(e) => { e.stopPropagation(); setActiveDialog('debt') }}
+                className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-bold bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-100 transition-all"
+                title="Lend Money"
+              >
+                <ArrowUpRight className="w-3.5 h-3.5" />
+                Lend
+              </button>
+            </HoverCardTrigger>
+            <HoverCardContent className="w-56 p-1 z-[60]" align="center" side="top">
+              <div className="grid gap-1">
+                <p className="px-2 py-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Quick Lend To</p>
+                {sortedPeople.map(person => (
+                  <button
+                    key={person.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedPersonId(person.id);
+                      setActiveDialog('debt');
+                    }}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-left text-slate-700 hover:bg-violet-50 hover:text-violet-700 rounded-md transition-colors"
+                  >
+                    {person.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={person.avatar_url} alt="" className="w-4 h-4 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-600">
+                        {getAccountInitial(person.name)}
+                      </div>
+                    )}
+                    <span className="truncate flex-1">{person.name}</span>
+                  </button>
+                ))}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-xs text-slate-500 hover:bg-slate-100"
+                  onClick={(e) => { e.stopPropagation(); setActiveDialog('people-settings') }}
+                >
+                  <Settings className="w-3 h-3 mr-2" /> Manage List
+                </Button>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
 
-          {/* Repay */}
-          <button
-            onClick={(e) => { e.stopPropagation(); setActiveDialog('repayment') }}
-            className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-bold bg-teal-50 text-teal-700 border border-teal-100 hover:bg-teal-100 transition-all"
-            title="Receive Repayment"
-          >
-            <ArrowDownLeft className="w-3.5 h-3.5" />
-            Repay
-          </button>
+          {/* Repay (With Hover List) */}
+          <HoverCard>
+            <HoverCardTrigger asChild>
+              <button
+                onClick={(e) => { e.stopPropagation(); setActiveDialog('repayment') }}
+                className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-bold bg-teal-50 text-teal-700 border border-teal-100 hover:bg-teal-100 transition-all"
+                title="Receive Repayment"
+              >
+                <ArrowDownLeft className="w-3.5 h-3.5" />
+                Repay
+              </button>
+            </HoverCardTrigger>
+            <HoverCardContent className="w-56 p-1 z-[60]" align="center" side="top">
+              <div className="grid gap-1">
+                <p className="px-2 py-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Quick Repay From</p>
+                {sortedPeople.map(person => (
+                  <button
+                    key={person.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedPersonId(person.id);
+                      setActiveDialog('repayment');
+                    }}
+                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-left text-slate-700 hover:bg-teal-50 hover:text-teal-700 rounded-md transition-colors"
+                  >
+                    {person.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={person.avatar_url} alt="" className="w-4 h-4 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-600">
+                        {getAccountInitial(person.name)}
+                      </div>
+                    )}
+                    <span className="truncate flex-1">{person.name}</span>
+                  </button>
+                ))}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-start text-xs text-slate-500 hover:bg-slate-100"
+                  onClick={(e) => { e.stopPropagation(); setActiveDialog('people-settings') }}
+                >
+                  <Settings className="w-3 h-3 mr-2" /> Manage List
+                </Button>
+              </div>
+            </HoverCardContent>
+          </HoverCard>
         </div>
       </div>
     )
@@ -622,7 +833,6 @@ function AccountCardComponent({
         )}
 
         <div
-          onClick={handleCardClick}
           className={cn(
             "group/card relative block w-full rounded-xl border-2 shadow-sm transition-all overflow-hidden h-full",
             // Border Color Logic

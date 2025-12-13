@@ -18,7 +18,7 @@ import { generateTag } from '@/lib/tag'
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw, ChevronLeft, ExternalLink } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
-import { cn } from '@/lib/utils'
+import { cn, getAccountInitial } from '@/lib/utils'
 import { SmartAmountInput } from '@/components/ui/smart-amount-input'
 import { CategoryDialog } from '@/components/moneyflow/category-dialog'
 import { AddShopDialog } from '@/components/moneyflow/add-shop-dialog'
@@ -121,10 +121,7 @@ function getCycleLabelForDate(
   return formatRangeLabel(range, referenceDate)
 }
 
-function getAccountInitial(name: string) {
-  const firstLetter = name?.trim().charAt(0)
-  return firstLetter ? firstLetter.toUpperCase() : '?'
-}
+
 
 type TransactionFormProps = {
   accounts: Account[];
@@ -559,8 +556,11 @@ export function TransactionForm({
           form.setValue('category_id', repaymentCat.id);
         }
       }
+    } else if (transactionType === 'transfer' && !currentCategoryId) {
+      // Auto-set Money Transfer category
+      const moneyTransferId = 'e0000000-0000-0000-0000-000000000080';
+      form.setValue('category_id', moneyTransferId);
     }
-    // REMOVED: Auto-selection for 'transfer' type to fix incorrect Money Transfer category bug
   }, [transactionType, categories, shops, form, isEditMode]);
 
   const watchedCategoryId = useWatch({
@@ -649,22 +649,28 @@ export function TransactionForm({
           if (cat.id === watchedCategoryId) return true
           return cat.type === targetType
         })
-        .map(cat => ({
-          value: cat.id,
-          label: cat.name,
-          description: cat.type === 'expense' ? 'Expense' : 'Income',
-          searchValue: `${cat.name} ${cat.type}`,
-          icon: cat.logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={cat.logo_url}
-              alt={cat.name}
-              className="h-5 w-5 object-contain rounded-none"
-            />
-          ) : (
-            <span className="text-xl">{cat.icon || '📦'}</span>
-          ),
-        }))
+        .map((cat) => {
+          const isTransfer = transactionType === 'transfer'
+          const typeLabel = cat.type === 'income' ? 'Income' : 'Expense'
+          const description = isTransfer ? undefined : typeLabel
+
+          return {
+            value: cat.id,
+            label: cat.name,
+            description: description,
+            searchValue: `${cat.name} ${typeLabel}`,
+            icon: cat.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={cat.logo_url}
+                alt={cat.name}
+                className="h-5 w-5 object-contain rounded-none"
+              />
+            ) : (
+              <span className="text-xl">{cat.icon || '📦'}</span>
+            ),
+          }
+        })
     }, [categories, transactionType, isRefundMode, refundCategoryId]
   )
 
@@ -1183,13 +1189,7 @@ export function TransactionForm({
                 <RotateCcw className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">Repay</span>
               </TabsTrigger>
-              <TabsTrigger value="quick-people" className={cn(
-                "data-[state=active]:bg-white data-[state=active]:text-violet-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all",
-                transactionType === 'quick-people' ? "bg-white text-violet-600 shadow-sm" : ""
-              )}>
-                <User className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">People</span>
-              </TabsTrigger>
+
             </TabsList>
           </Tabs>
         )}

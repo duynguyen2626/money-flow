@@ -17,6 +17,7 @@ export async function createAccount(payload: {
   securedByAccountId?: string | null;
   logoUrl?: string | null;
   annualFee?: number | null;
+  parentAccountId?: string | null;
 }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -35,7 +36,8 @@ export async function createAccount(payload: {
     secured_by_account_id: payload.securedByAccountId,
     logo_url: payload.logoUrl,
     annual_fee: payload.annualFee ?? 0,
-  }
+    parent_account_id: payload.parentAccountId ?? null,
+  } as any // Cast to any since parent_account_id may not be in generated types yet
 
   const executeInsert = (data: typeof insertPayload) =>
     supabase
@@ -64,6 +66,7 @@ export type UpdateAccountPayload = {
   isActive?: boolean | null
   logoUrl?: string | null
   annualFee?: number | null
+  parentAccountId?: string | null
 }
 
 export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
@@ -76,6 +79,7 @@ export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
     is_active?: boolean | null
     logo_url?: string | null
     annual_fee?: number | null
+    parent_account_id?: string | null
   } = {}
 
   if (typeof payload.name === 'string') {
@@ -107,6 +111,10 @@ export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
 
   if ('logoUrl' in payload) {
     updatePayload.logo_url = payload.logoUrl ?? null
+  }
+
+  if ('parentAccountId' in payload) {
+    updatePayload.parent_account_id = payload.parentAccountId ?? null
   }
 
   return updateAccountConfig(payload.id, updatePayload)
