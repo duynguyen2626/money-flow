@@ -1,447 +1,156 @@
-# MF3 — Agent Prompt Pack
+# MF4.1 — Category Kind + Fix Category Filtering + Preserve Selection on Shop Create
 
-## Phase P8.x — Accounts Table & Cards UI Polish
+You are the coding agent working on **Money Flow 3**.
+This task is **Phase MF4.1**.
 
-> Style: **Prompt Engineering (phase-style)**
-> You are the coding agent. You will read the repo, reason about the existing code, implement changes, run checks, and open PRs.
-> Do NOT ask the user to code.
+Your mission is to fix category filtering across transaction type tabs by introducing a new `kind` field on categories, and to fix the “lost selection” bug when creating a shop inside the Add Transaction modal.
 
----
-
-## Prompt Structure Recommendation
-
-**Yes — split into 2 prompts.**
-
-Reason:
-
-* Prompt A touches **table semantics & layout** (AccountTable, AccountList, filters, collapse rows).
-* Prompt B touches **card grid layout & action logic** (AccountCard, card-utils, batch confirm flow).
-
-This reduces regression risk and keeps PRs reviewable.
-
-You will produce **2 PRs**, merged in order.
+Read the repo first. Reuse existing patterns. Keep PRs reviewable.
 
 ---
 
-# PROMPT A — Accounts Table View Refactor & Grouping
+## Problem Summary
 
-## Goal
+### 1) Category filtering is wrong
 
-Refactor **Accounts → Table view** for clarity, density, and consistency.
-Fix spacing, column semantics, grouping UX, and linkage badges.
+* Current category model only uses `categories.type` (income/expense/transfer).
+* Lending/Repay cannot be filtered correctly because the system has only 3 category types.
+* Transfer tab currently shows all categories.
+* Repay tab doesn’t show category field at all.
 
-## Scope (FILES YOU MUST TOUCH)
+### 2) Lost-selection bug on Create Shop
 
-* `src/components/moneyflow/account-table.tsx`
-* `src/components/moneyflow/account-list.tsx`
-* (if needed) `src/components/ui/table.tsx`
+Flow:
 
-## Functional Requirements
+* Open Add Transaction (Expense)
+* Select Category = `Utility`
+* Click “Create new shop”
+* Create shop `Power`
 
-### A1 — Columns & spacing
+Bug:
 
-* **Remove / hide column `Type`** (both header + cells).
-* Split the current column `Balance / Limit` into **two columns**:
-
-  * `Balance`
-  * `Limit`
-* Add a dedicated column `Cashback / KPI`:
-
-  * Shows `Cap left`, `Met`, `Need to spend` state.
-* Fix the large empty gap between `Linkage` and `Actions`:
-
-  * Set fixed widths:
-
-    * `Linkage`: ~160px
-    * `Actions`: ~72–80px
-
-### A2 — Identity column (image rules)
-
-* Identity column must show **card image at native ratio**:
-
-  * NO square crop
-  * NO ghost border
-  * Use `object-contain`
-  * Fixed width ~64–72px
-* If no image → fallback icon as before.
-
-### A3 — Linkage badge rules
-
-* Replace `Parent (1)` text badge:
-
-  * Show **icon only + label**
-  * Parent → `<Users /> Parent`
-  * Child → `<Baby /> Child`
-  * Do NOT show count number when count = 1
-* Badge color stays consistent with card view.
-
-### A4 — Collapsible group headers
-
-* Each account type group (Credit Cards, Payment, Savings, Debt) must be:
-
-  * Rendered as a **collapsible block** using `<details>/<summary>` or equivalent.
-  * Summary row shows:
-
-    * Group name
-    * Count
-* Default: **expanded**.
-* Sticky header behavior must still work.
-
-### A5 — Table actions
-
-* Actions column remains right-aligned.
-* No logic changes here (Confirm Paid is handled in Prompt B).
-
-## Acceptance Criteria (Prompt A)
-
-* Table view has no `Type` column.
-* Columns are compact, readable, and aligned.
-* Card images are uncropped and clean.
-* Linkage badges show icons, not numbers.
-* Groups can be collapsed/expanded without layout break.
-
-## PR Instructions (Prompt A)
-
-* Branch: `fix/accounts-table-layout`
-* Commit examples:
-
-  * `refactor(table): split balance and limit columns`
-  * `feat(table): collapsible account group headers`
-  * `fix(table): linkage badges and spacing`
+* Category selection jumps to a different value
+* New shop is not auto-selected
 
 ---
 
-# PROMPT B — Cards Grid Unification & Action Required Logic
+## A) Schema Change: add `categories.kind`
 
-## Goal
+### Goal
 
-Unify **Account Card UI**, fix badge logic, restore missing actions, and ensure Action Required is correct.
+Introduce `categories.kind` so we can filter categories correctly per transaction tab.
 
-## Scope (FILES YOU MUST TOUCH)
+### Recommended DB design
 
-* `src/components/moneyflow/account-card.tsx`
-* `src/lib/card-utils.ts`
-* `src/components/moneyflow/account-list.tsx`
-* (optional) `src/components/moneyflow/account-detail-header.tsx`
+Implement `kind` as **Postgres text[]**:
 
-## Functional Requirements
+* `['ex']` = external
+* `['in']` = internal
+* `['ex','in']` = both
 
-### B1 — Card layout unification (ALL card types)
+(If text[] is too hard in your code path, fallback to 2 booleans `kind_ex`, `kind_in`.)
 
-Order inside card must be:
+### Migration rules
 
-1. Header (name + Details/Edit)
-2. Balance
-3. KPI / Spend Progress
-4. Secured / Family info (if exists)
-5. **Limit bar** (ALWAYS pinned at bottom of card body)
-6. **Quick Add actions** (Income / Expense / Pay / Shop / Repay) → ALWAYS LAST
+* Existing `type='transfer'` → `kind=['in']`
+* Existing `type in ('income','expense')` → `kind=['ex']`
 
-Rules:
+Add index if needed (GIN for array).
 
-* Limit bar must visually sit at the **bottom edge** of card body (no floating).
-* No card may violate this order.
-* Savings / Asset cards must follow same layout where applicable.
+### Update shared types
+
+* Update Category TS types + Zod schemas/DTOs to include `kind`.
 
 ---
 
-### B2 — Standalone badge logic (FIX)
+## B) Filtering Rules (must implement)
 
-Correct logic:
+Tab → Category list filter:
 
-```
-isChild = !!account.parent_account_id || !!account.relationships?.parent_info
-isParent = (account.relationships?.child_count ?? 0) > 0 || account.relationships?.is_parent
-showStandalone = !isChild && !isParent
-```
+* **Expense tab**: `type='expense'` AND `kind contains 'ex'`
+* **Income tab**: `type='income'` AND `kind contains 'ex'`
+* **Transfer tab**: `type='transfer'` AND `kind contains 'in'` (no more show-all)
+* **Lending tab**: `kind contains 'in'` AND (use the appropriate type based on existing domain; if no dedicated type, treat as expense-like but internal)
+* **Repay tab**: MUST SHOW category field and filter as internal (same strategy as Lending)
 
-* Only show Standalone if `showStandalone === true`.
+Notes:
 
----
-
-### B3 — Visual redesign: Spend / Due / Progress clarity (NEW)
-
-#### B3.1 — Redesign `Need to spend` UI
-
-Current UI is noisy and inconsistent with `SHARE / REMAINS`.
-
-You must redesign it to match **shared/remains style**, with different color:
-
-* Replace `Need to spend` bar + text with a **two-column pill block**:
-
-  * LEFT: `NEED` (label)
-  * RIGHT: amount remaining to qualify
-* Use warm color (amber/orange), **NO check icon**.
-* Typography must match SHARE/REMAINS block for visual consistency.
-
-#### B3.2 — Due badge prominence (IMPORTANT)
-
-Current `Due` badge is too small and easy to miss.
-
-You must implement a **top hanging Due banner**:
-
-* Position: slightly **outside and above** the card, attached to **left image section**.
-* Shape: small rounded tag / ribbon (see mockup ref from user).
-* Text: `Due Dec 15` or `Due in 3 days`.
-* Color: red for due soon, darker red for overdue.
-* This element must visually overlap card container (use `absolute -top-*`).
-
-Think of this as a **card status flag**, not a normal badge.
+* Ensure Transfer does not leak other category types.
+* Ensure Repay includes category UI.
 
 ---
 
-### B4 — Transfer quick-add correctness (LOGIC FIX)
+## C) Add/Edit Category Modal updates
 
-When user clicks **Transfer** quick-add:
+Update “Add Category” UI:
 
-* Category MUST auto-select `Money Transfer`.
-* Source account selection rules:
+* Add `kind` selector:
 
-  * Transfers **CANNOT originate from Credit Cards**.
-  * Disable / hide credit accounts in source selector.
+  * Checkbox “External (ex)”
+  * Checkbox “Internal (in)”
+  * Allow both checked
 
-You must search entire codebase to ensure:
+Smart defaults based on current transaction tab:
 
-* No path allows transfer-from-credit via UI.
-* Existing transfer flows respect this constraint.
+* Creating from Transfer tab:
 
----
+  * default: `type='transfer'`, `kind=['in']`
+* Creating from Expense/Income:
 
-### B5 — Action Required grouping (extend)
+  * default: `kind=['ex']`
+* Creating from Lending/Repay:
 
-Action Required must include cards that are:
-
-1. Due soon
-2. Need to spend
-3. Waiting confirm (pending batch)
-
-Order inside section:
-
-* Due soon
-* Need to spend
-* Waiting confirm
-
-Cards in this state:
-
-* Must be placed in Action Required section
-* Must NOT appear in normal card sections
+  * default: `kind=['in']` and suitable `type` consistent with your domain
 
 ---
 
-### B6 — New Filter: Family Cards (REPLACE Secured filter)
+## D) Fix Create-Shop flow (preserve category + auto-select new shop)
 
-Replace filter button **Secured** with **Family Cards**.
+### Required behavior
 
-Family Cards filter opens a **2-tab view**:
+* Preserve selected category throughout shop creation.
+* Create Shop modal must receive current `categoryId` and prefill it.
+* After create success:
 
-#### Tab 1 — Secured
+  * Keep `categoryId` unchanged
+  * Auto-select the newly created shop (`setValue('shopId', createdShop.id)`)
+  * Do NOT reset the whole form
 
-* Cards linked via `secured_by_account_id`.
-* Group secured pairs into **one section with border**.
-* Inside section:
+### Implementation guidance
 
-  * Hide individual `Secured` badges on cards.
-  * Show a **central arrow icon** between cards (account → secured account).
-* Section acts as a logical unit.
-
-#### Tab 2 — Family
-
-* Group Parent–Child cards by family.
-* Each family = one bordered section.
-* NO arrows required.
-* Section summary (top-right corner):
-
-  * Combined Limit
-  * Combined Balance
-  * Individual balances per card (small text)
+* Find where shop creation triggers a form reset / default-values reinit.
+* Replace broad `reset()` calls with targeted `setValue` updates.
+* Pass context into the Create Shop modal: `{ currentCategoryId, currentTxnType }`.
 
 ---
 
-## Acceptance Criteria (Prompt B)
+## Acceptance Criteria
 
-* Spend / Need UI is clean, symmetric, and readable.
-* Due status is immediately visible without scanning card body.
-* Transfer quick-add always sets correct category and blocks credit source.
-* Limit bar is always at bottom.
-* Family Cards filter works with 2 tabs and correct grouping.
+* Transfer tab shows only transfer categories.
+* Lending/Repay show only internal categories (per your rules).
+* Repay tab has category field.
+* DB persists `categories.kind` and UI allows editing it.
+* Creating a shop inside Add-Txn:
+
+  * category stays the same
+  * new shop auto-selected
+  * shop modal prefilled with the chosen category
 
 ---
 
-## PR Instructions (Prompt B)
+## Branch / Commit / PR
 
-* Branch: `fix/cards-ui-b3-redesign`
-* Commit examples:
-
-  * `feat(cards): redesign need-to-spend and due banner`
-  * `fix(transfer): enforce non-credit source and auto category`
-  * `feat(filters): replace secured with family cards view`
+* Branch: `PHASE-8.x-CATEGORY-KIND-AND-SHOP-FLOW-FIX`
+* Commit: `PHASE 8.x - Add category kind and fix txn category/shop flows`
+* PR title: `MF4.1: Category kind + correct tab filtering + preserve shop create selection`
 
 ---
 
 ## QA Checklist
 
-* [ ] Due banner visible and readable
-* [ ] Need spend UI matches shared/remains style
-* [ ] Limit bar always bottom-aligned
-* [ ] Transfer from credit impossible
-* [ ] Family Cards filter groups correctly
-
----
-
-# PROMPT C — Family Cards + Table View Polish + Account Form Fixes (NEW)
-
-## Goal
-
-You already implemented B5/B6 (Family Cards filter). Now fix the regressions and complete the UX:
-
-* Family summary correctness + arrow spacing
-* Per-card balance badges placement (Family tab)
-* Table view: new columns + rename Linkage→Family + due badges in Identity/Notes
-* Account add/edit: ensure parent link is stored in DB (`parent_account_id`), and badges Parent/Child/Standalone are consistent
-* Align image + badges in card left section
-
-## Scope (FILES YOU MUST TOUCH)
-
-* `src/components/moneyflow/account-list.tsx`
-* `src/components/moneyflow/account-table.tsx`
-* `src/components/moneyflow/account-card.tsx`
-* `src/lib/card-utils.ts`
-* Account form components (search for `Parent Account (Shared Limit)` and `cashback_config.parentAccountId`)
-* Supabase insert/update helpers for accounts (service or action layer)
-
-## C1 — Family section arrow spacing + summary redesign
-
-### C1.1 Arrow spacing
-
-* In secured-style family sections where you render arrows between cards, arrows are too close to the border.
-* Add internal padding and/or place arrows in a dedicated middle column with min-width.
-* Rule: arrow must never touch section border; keep at least `px-3` spacing.
-
-### C1.2 Summary must be intuitive
-
-* Current family summary is not readable and may be wrong.
-* For a family group:
-
-  * **Family shared limit**: parent’s limit.
-  * **Family shared balance**: by default use parent’s balance (shared-limit card) unless product rule says otherwise.
-
-### C1.3 Per-card balances (Family tab only)
-
-* Each card must show its **own balance badge** under the card (outside the main card body to avoid clutter).
-* Format:
-
-  * `[Vcb Signature: 114,210,000]` badge
-  * `[Vcb Amex: 111]` badge
-* Place these badges in a neat row below cards inside the family section.
-
-### C1.4 Data correctness — child balance showing 0
-
-* Investigate why a child card in a family shows `0` balance while the family is shared.
-* If the product rule is “shared family must share balance”, implement:
-
-  * `displayBalance = parent.balance` for children **in Family tab only**.
-  * Keep `standaloneBalance = account.balance` for table and other contexts.
-* Document the rule in a small helper.
-
-## C2 — Table view improvements
-
-### C2.1 Add column: Standalone Balance
-
-* Add a new column `Standalone Balance`:
-
-  * Shows the card’s own balance (never family-adjusted).
-
-### C2.2 Cashback/KPI visual split
-
-* Ensure `Cashback` and `KPI` are visually split (not merged into one long cell):
-
-  * Use stacked badges or two lines.
-
-### C2.3 Rename Linkage → Family
-
-* Column header becomes `Family`.
-* Cell badges:
-
-  * `Parent` / `Child` badges (icon + label, no “(1)”).
-  * If Parent is also secured-linked, add badge `Secured linked`.
-
-### C2.4 Move Due into Identity/Notes as badges
-
-* Remove big due text from the Cycle/Due column.
-* Instead, before name in Identity/Notes, show compact badges:
-
-  * `[Jan 10]` and `[2 days left]` (two separate badges)
-* Sorting:
-
-  * nearest due date on top within the group.
-
-## C3 — Account add/edit bug: Parent selected but DB still standalone
-
-Evidence:
-
-* Insert SQL shows `parent_account_id` is NULL, while `cashback_config.parentAccountId` is set.
-
-### Required fix
-
-* The canonical relationship must be stored in column `accounts.parent_account_id`.
-* `cashback_config.parentAccountId` is NOT the source of truth for family linkage.
-
-Implementation:
-
-* In account create/update payload, map form parent selection to **`parent_account_id`**.
-* Optionally keep `cashback_config.parentAccountId` in sync for backward compatibility.
-* Update derived logic (`isChild`) to check both:
-
-  * `parent_account_id`
-  * `relationships.parent_info`
-
-Validation:
-
-* Create account, select parent, save → DB row must have `parent_account_id` set.
-* UI must show `Child` badge (not Standalone).
-
-## C4 — Badge rules consistency
-
-* If `isChild` → show `Child` badge under name.
-* If `isParent` → show `Parent` badge.
-* If `Standalone` → do NOT show `Secured/Unsecured` badges.
-
-## C5 — Account modal layout
-
-* Move `Parent Account (Shared Limit)` control up near the image/logo area.
-
-## C6 — Align image + badges
-
-* Fix left-side image + badges alignment:
-
-  * Parent/Cycle/Standalone badges align to a consistent grid.
-  * Avoid vertical jitter between cards.
-
-## Acceptance Criteria (Prompt C)
-
-* Family sections have clean arrow spacing, readable summary, and per-card balance badges under cards.
-* Table view has Standalone Balance; Cashback/KPI split; Family column; Due badges before name.
-* Account create/update persists `parent_account_id` and Child badge shows.
-* Image/badges alignment is consistent.
-
-## PR Instructions (Prompt C)
-
-* Branch: `fix/family-cards-table-and-form`
-* Commits:
-
-  1. `fix(family): improve summary, arrow spacing, and per-card balance badges`
-  2. `refactor(table): family column, due badges, standalone balance`
-  3. `fix(accounts): persist parent_account_id from form and unify badges`
-
-## QA Checklist
-
-* [ ] Family arrow spacing not touching border
-* [ ] Family summary correct and readable
-* [ ] Per-card balance badges appear under cards in Family tab
-* [ ] Child card display balance rule implemented (and standalone balance preserved)
-* [ ] Table: Standalone Balance column exists
-* [ ] Table: Cashback/KPI split
-* [ ] Table: Family column with Parent/Child + Secured linked
-* [ ] Due badges appear before name and nearest-due sorting works
-* [ ] Creating/editing account with parent persists `parent_account_id`
-* [ ] Card shows Child badge and not Standalone when linked
+* [ ] Expense/Income categories correct
+* [ ] Transfer does not show all
+* [ ] Lending filters correctly
+* [ ] Repay shows category and filters correctly
+* [ ] Add Category supports kind (ex/in/both)
+* [ ] Create Shop preserves category and auto-selects new shop

@@ -22,13 +22,24 @@ export async function createAccount(payload: {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Use default user ID if not authenticated
-  const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66'
+  // Require authenticated user
+  if (!user) {
+    return { error: { message: 'User must be authenticated to create an account' } }
+  }
+
+  // Ensure profile exists
+  const { data: existingProfile } = await supabase.from('profiles').select('id').eq('id', user.id).single()
+
+  if (!existingProfile) {
+    return { error: { message: `User profile missing. Please sign out and sign in again to sync your profile.` } }
+  }
+
+
 
   const insertPayload: Database['public']['Tables']['accounts']['Insert'] = {
     name: payload.name,
     current_balance: payload.balance ?? 0,
-    owner_id: userId,
+    owner_id: user.id,
     type: payload.type ?? 'bank',
     is_active: true,
     credit_limit: payload.creditLimit,
@@ -139,7 +150,6 @@ export async function getAccountsAction() {
   const { data, error } = await supabase
     .from('accounts')
     .select('id, name, type, logo_url')
-    .eq('is_active', true)
     .eq('is_active', true)
     .order('name')
 

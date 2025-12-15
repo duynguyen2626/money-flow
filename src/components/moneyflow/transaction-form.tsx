@@ -1,9 +1,10 @@
-'use client'
+
+
 
 import { zodResolver } from '@hookform/resolvers/zod'
 import { format, subMonths } from 'date-fns'
 import { Controller, Resolver, useForm, useWatch } from 'react-hook-form'
-import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { z } from 'zod'
 import { ensureDebtAccountAction } from '@/actions/people-actions'
@@ -16,7 +17,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateTag } from '@/lib/tag'
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
-import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw, ChevronLeft, ExternalLink } from 'lucide-react'
+import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw, ChevronLeft, ExternalLink, X, UploadCloud, Clock } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { cn, getAccountInitial } from '@/lib/utils'
 import { SmartAmountInput } from '@/components/ui/smart-amount-input'
@@ -144,7 +145,10 @@ type TransactionFormProps = {
   refundAction?: 'request' | 'confirm';
   refundMaxAmount?: number;
   defaultRefundStatus?: 'pending' | 'received';
+  onCancel?: () => void;
+  onFormChange?: (hasChanges: boolean) => void;
 }
+
 
 type StatusMessage = {
   type: 'success' | 'error';
@@ -169,6 +173,8 @@ export function TransactionForm({
   refundAction = 'request',
   refundMaxAmount,
   defaultRefundStatus = 'pending',
+  onCancel,
+  onFormChange,
 }: TransactionFormProps) {
   const sourceAccounts = useMemo(
     () => allAccounts,
@@ -221,7 +227,9 @@ export function TransactionForm({
   const [progressLoading, setProgressLoading] = useState(false)
   const [progressError, setProgressError] = useState<string | null>(null)
   const [spendingStats, setSpendingStats] = useState<AccountSpendingStats | null>(null)
-  const [transactionType, setTransactionType] = useState<'expense' | 'income' | 'debt' | 'transfer' | 'repayment' | 'quick-people'>(defaultType || 'expense')
+  const [transactionType, setTransactionType] = useState<'expense' | 'income' | 'debt' | 'transfer' | 'repayment' | 'quick-people'>(
+    initialValues?.type || defaultType || 'expense'
+  )
   const [accountFilter, setAccountFilter] = useState<'all' | 'bank' | 'credit' | 'other'>('all')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [payerName, setPayerName] = useState<string>('')
@@ -242,6 +250,16 @@ export function TransactionForm({
     isConfirmRefund ? 'received' : defaultRefundStatus
   )
   const router = useRouter()
+
+  // Fix for Form Reset Loop
+  const initialValuesRef = useRef(initialValues)
+
+  // Force update ref if transactionId changes (switching to another txn)
+  useEffect(() => {
+    initialValuesRef.current = initialValues
+  }, [transactionId])
+
+
 
   const baseDefaults = useMemo(
     () => ({
@@ -268,12 +286,20 @@ export function TransactionForm({
     defaultValues: {
       ...baseDefaults,
       ...initialValues,
+      occurred_at: initialValues?.occurred_at
+        ? (initialValues.occurred_at instanceof Date ? initialValues.occurred_at : new Date(initialValues.occurred_at))
+        : new Date(),
       amount: initialValues?.amount ? Math.abs(initialValues.amount) : 0,
       cashback_share_percent: (initialValues?.cashback_share_percent && initialValues.cashback_share_percent < 1)
         ? initialValues.cashback_share_percent * 100
         : initialValues?.cashback_share_percent,
     },
   })
+
+  // Track form changes and notify parent
+  useEffect(() => {
+    onFormChange?.(form.formState.isDirty)
+  }, [form.formState.isDirty, onFormChange])
 
   const applyDefaultPersonSelection = useCallback(() => {
     if (!defaultPersonId) {
@@ -299,10 +325,18 @@ export function TransactionForm({
       return
     }
 
+    // Prevent reset if values haven't meaningfully changed (prevents reset on router.refresh)
+    // We check if transactionId changed or if it's a fresh mount
+    if (initialValuesRef.current === initialValues && form.formState.isDirty) {
+      return;
+    }
+
     const newValues = {
       ...baseDefaults,
       ...initialValues,
-      ...initialValues,
+      occurred_at: initialValues.occurred_at
+        ? (initialValues.occurred_at instanceof Date ? initialValues.occurred_at : new Date(initialValues.occurred_at))
+        : new Date(),
       amount: initialValues.amount ? Math.abs(initialValues.amount) : 0,
       cashback_share_percent: (initialValues?.cashback_share_percent && initialValues.cashback_share_percent < 1)
         ? initialValues.cashback_share_percent * 100
@@ -330,12 +364,22 @@ export function TransactionForm({
       }
     }
 
-    form.reset(newValues)
-    setManualTagMode(true)
-    setTransactionType(newValues.type)
-    console.log('Editing Data:', initialValues); // Check if is_installment comes from DB
-    setIsInstallment(Boolean(initialValues.is_installment))
+    // Only reset if we are not deep into editing, or if it's a forced external update
+    // For simplicity, we trust reference equality check at top + ID check
+    // But since we want to allow router.refresh to NOT reset:
+    if (JSON.stringify(initialValues) === JSON.stringify(initialValuesRef.current)) {
+      // Same values, do nothing
+    } else {
+      form.reset(newValues)
+      setManualTagMode(true)
+      setTransactionType(newValues.type)
+      setIsInstallment(Boolean(initialValues.is_installment))
+      initialValuesRef.current = initialValues
+    }
   }, [baseDefaults, form, initialValues, allAccounts])
+
+  // Smart Reset: Clear category/shop if current selection is invalid for the new type
+
 
   useEffect(() => {
     if (!isRefundMode) return
@@ -638,16 +682,47 @@ export function TransactionForm({
         ]
       }
 
-      const targetType = transactionType === 'debt' ? 'expense' : transactionType
-      if (targetType !== 'expense' && targetType !== 'income' && targetType !== 'transfer' && targetType !== 'repayment') {
-        return []
+
+      // MERGED LOGIC: Filter based on transaction type
+      let filterType = 'expense';
+      if (transactionType === 'income' || transactionType === 'repayment') {
+        filterType = 'income';
+      } else if (transactionType === 'transfer') {
+        filterType = 'all'; // Allow all for transfer
       }
 
       return categories
         .filter(cat => {
-          // Always include the currently selected category (e.g. Credit Payment, which might be 'expense' but used in 'transfer')
-          if (cat.id === watchedCategoryId) return true
-          return cat.type === targetType
+          if (cat.id === watchedCategoryId) return true;
+
+          const kind = cat.kind;
+
+          // Income tab: type=income AND kind=internal
+          if (transactionType === 'income') {
+            return cat.type === 'income' && kind === 'internal';
+          }
+
+          // Expense tab: type=expense AND kind=external  
+          if (transactionType === 'expense') {
+            return cat.type === 'expense' && kind === 'external';
+          }
+
+          // Lending tab: type=expense AND kind=external
+          if (transactionType === 'debt') {
+            return cat.type === 'expense' && kind === 'external';
+          }
+
+          // Repay tab: type=income AND kind=external
+          if (transactionType === 'repayment') {
+            return cat.type === 'income' && kind === 'external';
+          }
+
+          // Transfer tab: type=transfer (kind doesn't matter)
+          if (transactionType === 'transfer') {
+            return cat.type === 'transfer';
+          }
+
+          return false;
         })
         .map((cat) => {
           const isTransfer = transactionType === 'transfer'
@@ -664,15 +739,30 @@ export function TransactionForm({
               <img
                 src={cat.logo_url}
                 alt={cat.name}
-                className="h-5 w-5 object-contain rounded-none"
+                className="h-5 w-5 object-contain rounded-full"
               />
             ) : (
               <span className="text-xl">{cat.icon || '📦'}</span>
             ),
           }
         })
-    }, [categories, transactionType, isRefundMode, refundCategoryId]
+    }, [categories, transactionType, isRefundMode, refundCategoryId, watchedCategoryId]
   )
+
+
+  // Smart Reset: Clear category/shop if current selection is invalid for the new type
+  useEffect(() => {
+    const currentCatId = form.getValues('category_id')
+    if (currentCatId) {
+      // Check if current category is present in the AVAILABLE options for this type
+      const isValid = categoryOptions.some(c => c.value === currentCatId)
+      if (!isValid) {
+        console.log('[Auto Reset] Clearing invalid category for type:', transactionType)
+        form.setValue('category_id', '')
+        form.setValue('shop_id', '') // Also clear shop as it depends on category
+      }
+    }
+  }, [transactionType, categoryOptions, form])
 
   const debugCategoryClick = useCallback(() => {
     console.log('[Refund Category Debug]', {
@@ -697,6 +787,9 @@ export function TransactionForm({
           // Hide system accounts (e.g., "System Account") unless in specific modes if needed
           // Based on previous context, REFUND_PENDING_ACCOUNT_ID is a system account.
           if (acc.id === REFUND_PENDING_ACCOUNT_ID && (!isRefundMode || refundStatus !== 'pending')) return false
+
+          // Block Credit Cards for Transfer logic
+          if (transactionType === 'transfer' && acc.type === 'credit_card') return false
 
           return true
         })
@@ -783,26 +876,27 @@ export function TransactionForm({
     [peopleState]
   )
 
-  const shopOptions = useMemo(
-    () =>
-      shops.map(shop => ({
-        value: shop.id,
-        label: shop.name,
-        description: 'Shop',
-        searchValue: shop.name,
-        icon: shop.logo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={shop.logo_url}
-            alt={shop.name}
-            className="h-5 w-5 object-contain rounded-none"
-          />
-        ) : (
-          <Store className="h-4 w-4 text-slate-400" />
-        ),
-      })),
-    [shops]
-  );
+  const shopOptions = useMemo(() => {
+    // Filter shops: if category is selected, only show shops with that default_category_id
+    // But user might want to see all shops?
+    // User request: "Sửa shop dropdowns: nó chỉ show tương ứng với category đã match" -> Strict filter implied.
+    const selectedCategoryId = watch('category_id');
+
+    let filteredShops = shops;
+    if (selectedCategoryId) {
+      // Optional: include shops with NO default category too? Or strictly match?
+      // Usually 'match' means match.
+      filteredShops = shops.filter(s => !s.default_category_id || s.default_category_id === selectedCategoryId);
+    }
+
+    return filteredShops.map(s => ({
+      value: s.id,
+      label: s.name,
+      searchValue: s.name,
+      // Add icon if logo_url exists
+      icon: s.logo_url ? <img src={s.logo_url} alt="" className="w-5 h-5 rounded-full object-cover" /> : <Store className="w-4 h-4 text-slate-400" />
+    }))
+  }, [shops, watch('category_id')])
 
   const selectedAccount = useMemo(
     () => sourceAccounts.find(acc => acc.id === watchedAccountId),
@@ -898,6 +992,15 @@ export function TransactionForm({
       form.setValue('shop_id', undefined)
     }
   }, [transactionType, form])
+
+  // Clear source account if switching to Transfer and it's a credit card
+  useEffect(() => {
+    if (transactionType === 'transfer' && selectedAccount?.type === 'credit_card') {
+      form.setValue('source_account_id', '')
+    }
+  }, [transactionType, selectedAccount, form])
+
+
 
 
 
@@ -1154,7 +1257,7 @@ export function TransactionForm({
       </div>
     </div>
   ) : (
-    <div className="mb-1">
+    <div className="w-full">
       <Controller
         control={control}
         name="type"
@@ -1162,40 +1265,48 @@ export function TransactionForm({
           <Tabs value={field.value} onValueChange={(value) => {
             if (value === 'quick-people') {
               setTransactionType('quick-people');
-              // Don't update form value for type, just keep previous or ignore
             } else {
               field.onChange(value);
               setTransactionType(value as any)
             }
           }} className="w-full">
-            <TabsList className="grid w-full grid-cols-6 gap-1 p-1.5 bg-slate-100/80 rounded-xl">
-              <TabsTrigger value="expense" className="data-[state=active]:bg-white data-[state=active]:text-rose-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all">
-                <ArrowUpRight className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Expense</span>
+            <TabsList className="grid w-full grid-cols-5 p-1 bg-slate-100/80 rounded-xl h-auto">
+              <TabsTrigger value="expense" className="data-[state=active]:bg-rose-100 data-[state=active]:text-rose-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all">
+                <div className="p-1 rounded-full bg-rose-200/50 text-rose-600 group-data-[state=active]:bg-rose-200">
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </div>
+                <span>Expense</span>
               </TabsTrigger>
-              <TabsTrigger value="income" className="data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all">
-                <ArrowDownLeft className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Income</span>
+              <TabsTrigger value="income" className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all">
+                <div className="p-1 rounded-full bg-emerald-200/50 text-emerald-600 group-data-[state=active]:bg-emerald-200">
+                  <ArrowDownLeft className="h-3.5 w-3.5" />
+                </div>
+                <span>Income</span>
               </TabsTrigger>
-              <TabsTrigger value="transfer" className="data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all">
-                <ArrowRightLeft className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Transfer</span>
+              <TabsTrigger value="transfer" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all">
+                <div className="p-1 rounded-full bg-blue-200/50 text-blue-600 group-data-[state=active]:bg-blue-200">
+                  <ArrowRightLeft className="h-3.5 w-3.5" />
+                </div>
+                <span>Transfer</span>
               </TabsTrigger>
-              <TabsTrigger value="debt" className="data-[state=active]:bg-white data-[state=active]:text-orange-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all">
-                <Wallet className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Lending</span>
+              <TabsTrigger value="debt" className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all">
+                <div className="p-1 rounded-full bg-purple-200/50 text-purple-600 group-data-[state=active]:bg-purple-200">
+                  <Wallet className="h-3.5 w-3.5" />
+                </div>
+                <span>Lending</span>
               </TabsTrigger>
-              <TabsTrigger value="repayment" className="data-[state=active]:bg-white data-[state=active]:text-lime-600 data-[state=active]:shadow-sm rounded-lg flex items-center justify-center gap-1 text-xs font-medium transition-all">
-                <RotateCcw className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Repay</span>
+              <TabsTrigger value="repayment" className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all">
+                <div className="p-1 rounded-full bg-orange-200/50 text-orange-600 group-data-[state=active]:bg-orange-200">
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </div>
+                <span>Repay</span>
               </TabsTrigger>
-
             </TabsList>
           </Tabs>
         )}
       />
       {errors.type && (
-        <p className="text-sm text-red-600">{errors.type.message}</p>
+        <p className="text-sm text-red-600 mt-1">{errors.type.message}</p>
       )}
     </div>
   )
@@ -1234,12 +1345,14 @@ export function TransactionForm({
   ) : null
 
   const CategoryInput =
-    transactionType !== 'repayment' &&
-      (transactionType === 'expense' ||
-        transactionType === 'debt' ||
-        transactionType === 'transfer' ||
-        transactionType === 'income' ||
-        isRefundMode) ? (
+    // Update condition: Show for Repayment too per user request
+    // transactionType !== 'repayment' &&  <-- Removed this exclusion
+    (transactionType === 'expense' ||
+      transactionType === 'debt' ||
+      transactionType === 'transfer' ||
+      transactionType === 'income' ||
+      transactionType === 'repayment' || // Added repayment
+      isRefundMode) ? (
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
           <Tag className="h-4 w-4 text-slate-500" />
@@ -1459,18 +1572,12 @@ export function TransactionForm({
             onChange={event => {
               const dateStr = event.target.value
               if (!dateStr) {
-                field.onChange(undefined)
-                return
+                return // Don't allow empty date for now
               }
-              // Create date from input (local midnight)
               const [y, m, d] = dateStr.split('-').map(Number)
-              const date = new Date(y, m - 1, d)
+              const newDate = new Date(y, m - 1, d, 12, 0, 0) // Set to noon to avoid timezone issues
 
-              // Add current time to avoid 00:00 UTC -> 07:00 VN issue
-              const now = new Date()
-              date.setHours(now.getHours(), now.getMinutes(), now.getSeconds())
-
-              field.onChange(date)
+              field.onChange(newDate)
             }}
             className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
           />
@@ -1479,7 +1586,6 @@ export function TransactionForm({
       {errors.occurred_at && (
         <p className="text-sm text-red-600">{errors.occurred_at.message}</p>
       )}
-      {transactionType !== 'debt' && transactionType !== 'repayment' && <p className="text-xs text-gray-500 pt-1">Cycle Tag: <span className="font-semibold">{watch('tag')}</span></p>}
     </div>
   )
 
@@ -1621,6 +1727,7 @@ export function TransactionForm({
             disabled={isConfirmRefund}
             placeholder="0"
             error={errors.amount?.message}
+            className="text-lg font-semibold"
           />
         )}
       />
@@ -1650,7 +1757,24 @@ export function TransactionForm({
     </div>
   )
 
-  const CashbackInputs = showCashbackInputs ? (
+  const showVoluntaryToggle =
+    (transactionType === 'expense' || transactionType === 'debt') &&
+    selectedAccount &&
+    (
+      // Case 1: Not a credit card or No cashback config
+      (selectedAccount.type !== 'credit_card' || !selectedAccount.cashback_config) ||
+      // Case 2: Has cashback but budget is exhausted
+      (selectedAccount.cashback_config && (cashbackProgress?.remainingBudget ?? 1) <= 0)
+    )
+
+  // Standard Cashback Input Condition: Only if config exists AND budget is POSITIVE
+  const showStandardCashback =
+    selectedAccount?.cashback_config &&
+    transactionType === 'expense' &&
+    selectedAccount.type === 'credit_card' &&
+    (cashbackProgress?.remainingBudget ?? 1) > 0;
+
+  const CashbackInputs = showStandardCashback ? (
     <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2 space-y-2">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-medium text-slate-900 flex items-center gap-2">
@@ -1799,13 +1923,8 @@ export function TransactionForm({
     </div>
   ) : null;
 
-  const showVoluntaryToggle =
-    (transactionType === 'expense' || transactionType === 'debt') &&
-    selectedAccount &&
-    (selectedAccount.type !== 'credit_card' || !selectedAccount.cashback_config)
-
   const INSTALLMENT_MIN_AMOUNT = 3_000_000; // 3 million VND threshold
-  const showInstallmentToggle = (transactionType === 'expense' || transactionType === 'debt')
+  const showInstallmentToggle = (transactionType === 'debt' || transactionType === 'repayment')
     && !isRefundMode
     && (watchedAmount ?? 0) >= INSTALLMENT_MIN_AMOUNT;
 
@@ -1816,9 +1935,18 @@ export function TransactionForm({
           <label className="text-sm font-medium text-slate-900">Installment Plan</label>
           <p className="text-xs text-slate-500">Convert this transaction into an installment plan</p>
         </div>
-        <Switch
-          checked={isInstallment}
-          onCheckedChange={setIsInstallment}
+        <Controller
+          control={control}
+          name="is_installment"
+          render={({ field }) => (
+            <Switch
+              checked={field.value ?? false}
+              onCheckedChange={(checked) => {
+                field.onChange(checked)
+                setIsInstallment(checked)
+              }}
+            />
+          )}
         />
       </div>
 
@@ -1826,7 +1954,8 @@ export function TransactionForm({
 
   ) : null
 
-  const VoluntaryCashbackInput = (transactionType === 'expense' || (selectedAccount?.type === 'credit_card' && transactionType !== 'transfer')) ? (
+  // CRITICAL FIX: Voluntary Cashback only for Expense or Debt (Lending), never for Repayment/Transfer/Income
+  const VoluntaryCashbackInput = (transactionType === 'expense' || (transactionType === 'debt' && selectedAccount?.type === 'credit_card')) ? (
     <div className="flex items-center justify-between rounded-lg border border-slate-200 p-4 bg-slate-50">
       <div className="space-y-0.5">
         <label htmlFor="is_voluntary" className="text-sm font-medium text-slate-900">
@@ -1871,131 +2000,179 @@ export function TransactionForm({
           </div>
         </div>
       ) : (
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col h-full">
-          {/* Refund Status (Full Width) */}
-          {RefundStatusInput}
+        <form
+          onSubmit={handleSubmit(onSubmit, (errors) => {
+            console.error('[Form Validation Error]', errors);
+          })}
+          className="flex flex-col h-full overflow-hidden"
+        >
+          {/* STICKY HEADER */}
+          <div className="sticky top-0 z-20 bg-white border-b border-slate-100 shadow-sm flex-none">
+            <div className="px-5 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {transactionType === 'expense' && <div className="p-1.5 bg-rose-100 rounded-full"><ArrowUpRight className="w-4 h-4 text-rose-600" /></div>}
+                {transactionType === 'income' && <div className="p-1.5 bg-emerald-100 rounded-full"><ArrowDownLeft className="w-4 h-4 text-emerald-600" /></div>}
+                {transactionType === 'transfer' && <div className="p-1.5 bg-blue-100 rounded-full"><ArrowRightLeft className="w-4 h-4 text-blue-600" /></div>}
+                {transactionType === 'debt' && <div className="p-1.5 bg-purple-100 rounded-full"><Wallet className="w-4 h-4 text-purple-600" /></div>}
+                {transactionType === 'repayment' && <div className="p-1.5 bg-amber-100 rounded-full"><RotateCcw className="w-4 h-4 text-amber-600" /></div>}
+                <h2 className="text-lg font-semibold text-slate-900 capitalize">
+                  {isEditMode ? 'Edit' : 'New'} {transactionType === 'debt' ? 'Lending' : transactionType === 'repayment' ? 'Repayment' : transactionType}
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={onCancel}
+                className="p-2 -mr-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-          {/* Type Selection (Full Width) - Sticky */}
-          <div className="sticky top-0 z-10 bg-white border-b border-slate-100 px-6 py-3 shadow-sm">
-            {TypeInput}
+            <div className="px-5 pb-3">
+              <Controller
+                control={control}
+                name="type"
+                render={({ field }) => (
+                  <>
+                    {TypeInput}
+                  </>
+                )}
+              />
+            </div>
+
+            {/* Refund Status in Header if needed, or keep in body? keeping in body for now as it's niche */}
           </div>
 
-          {/* Scrollable Content Area with Padding */}
-          <div className="flex-1 px-6 py-6 space-y-6">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              {(transactionType === 'debt' || transactionType === 'repayment') ? (
-                <>
-                  {/* LENDING MODE: Person First */}
-                  <div className="col-span-2">
-                    {PersonInput}
-                  </div>
+          {/* SCROLLABLE BODY */}
+          <div className="flex-1 overflow-y-auto min-h-0 bg-white">
+            <div className="px-5 py-6 space-y-6">
 
-                  {/* Date & Tag */}
-                  <div className="col-span-1">
-                    {DateInput}
-                  </div>
-                  <div className="col-span-1">
-                    {TagInput}
-                  </div>
+              {RefundStatusInput}
 
-                  {/* From Account & Amount (Side-by-Side) */}
-                  <div className="col-span-1">
-                    {SourceAccountInput}
-                  </div>
-                  <div className="col-span-1">
-                    {AmountInput}
-                  </div>
-
-                  {/* Category & Shop */}
-                  {transactionType !== 'repayment' && (
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                {(transactionType === 'debt' || transactionType === 'repayment') ? (
+                  <>
+                    <div className="col-span-2">
+                      {PersonInput}
+                    </div>
+                    <div className="col-span-1">
+                      {DateInput}
+                    </div>
+                    <div className="col-span-1">
+                      {TagInput}
+                    </div>
+                    {/* Always show Category Input for Repayment now */}
                     <div className="col-span-1">
                       {CategoryInput}
                     </div>
-                  )}
-                  <div className={transactionType === 'repayment' ? "col-span-2" : "col-span-1"}>
-                    {ShopInput}
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* OTHER MODES */}
-                  <div className="col-span-2">
-                    {DateInput}
-                  </div>
+                    <div className={transactionType === 'repayment' ? "col-span-1" : "col-span-1"}>
+                      {ShopInput}
+                    </div>
+                    <div className="col-span-1">
+                      {SourceAccountInput}
+                    </div>
+                    <div className="col-span-1">
+                      {AmountInput}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="col-span-2">
+                      {DateInput}
+                    </div>
+                    {transactionType === 'transfer' ? (
+                      <>
+                        <div className="col-span-2">
+                          {CategoryInput}
+                        </div>
+                        <div className="col-span-1">
+                          {SourceAccountInput}
+                        </div>
+                        <div className="col-span-1">
+                          {DestinationAccountInput}
+                        </div>
+                        <div className="col-span-2">
+                          {AmountInput}
+                        </div>
+                      </>
+                    ) : transactionType === 'income' ? (
+                      <>
+                        <div className="col-span-1">
+                          {CategoryInput}
+                        </div>
+                        <div className="col-span-1">
+                          {SourceAccountInput}
+                        </div>
+                        <div className="col-span-1">
+                          {AmountInput}
+                        </div>
+                        <div className="col-span-1">
+                          {PersonInput}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="col-span-1">
+                          {CategoryInput}
+                        </div>
+                        <div className="col-span-1">
+                          {ShopInput}
+                        </div>
+                        <div className="col-span-1">
+                          {SourceAccountInput}
+                        </div>
+                        <div className="col-span-1">
+                          {AmountInput}
+                        </div>
+                        <div className="col-span-2">
+                          {PersonInput}
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
 
-                  {transactionType === 'transfer' ? (
-                    <>
-                      <div className="col-span-1">
-                        {SourceAccountInput}
-                      </div>
-                      <div className="col-span-1">
-                        {DestinationAccountInput}
-                      </div>
-                      <div className="col-span-1">
-                        {CategoryInput}
-                      </div>
-                      <div className="col-span-1">
-                        {AmountInput}
-                      </div>
-                    </>
-                  ) : transactionType === 'income' ? (
-                    <>
-                      <div className="col-span-1">
-                        {CategoryInput}
-                      </div>
-                      <div className="col-span-1">
-                        {SourceAccountInput}
-                      </div>
-                      <div className="col-span-1">
-                        {AmountInput}
-                      </div>
-                      <div className="col-span-1">
-                        {PersonInput}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="col-span-1">
-                        {CategoryInput}
-                      </div>
-                      <div className="col-span-1">
-                        {ShopInput}
-                      </div>
-                      <div className="col-span-1">
-                        {SourceAccountInput}
-                      </div>
-                      <div className="col-span-1">
-                        {AmountInput}
-                      </div>
-                      <div className="col-span-2">
-                        {PersonInput}
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-
-              {/* Common Bottom Section */}
-              <div className="col-span-2 space-y-4 pt-2 border-t border-slate-100">
-                {InstallmentInput}
-                {VoluntaryCashbackInput}
-                {CashbackInputs}
-                {NoteInput}
+                <div className="col-span-2 space-y-4 pt-2 border-t border-slate-100">
+                  {InstallmentInput}
+                  {VoluntaryCashbackInput}
+                  {CashbackInputs}
+                  {NoteInput}
+                </div>
               </div>
             </div>
+          </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+          {/* FIXED FOOTER */}
+          <div className="sticky bottom-0 z-20 bg-white border-t border-slate-100 px-5 py-4 flex-none">
+            <div className="flex justify-end gap-3">
+              {isEditMode && (
+                <button
+                  type="button"
+                  // Add delete handler logic here if needed, or if it was supposed to be here
+                  className="mr-auto text-rose-600 text-sm font-medium hover:underline"
+                >
+                  Delete
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))}
-                className="rounded-md px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+                onClick={onCancel}
+                className="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting || cashbackExceedsAmount}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={cn(
+                  "rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed",
+                  transactionType === 'expense' ? "bg-rose-600 hover:bg-rose-700" :
+                    transactionType === 'income' ? "bg-emerald-600 hover:bg-emerald-700" :
+                      transactionType === 'transfer' ? "bg-blue-600 hover:bg-blue-700" :
+                        transactionType === 'debt' ? "bg-purple-600 hover:bg-purple-700" :
+                          "bg-orange-600 hover:bg-orange-700"
+                )}
                 title={cashbackExceedsAmount ? "Cashback must be less than amount" : undefined}
               >
                 {submitLabel}
@@ -2020,6 +2197,14 @@ export function TransactionForm({
         open={isShopDialogOpen}
         onOpenChange={setIsShopDialogOpen}
         categories={categories}
+        preselectedCategoryId={watchedCategoryId}
+        onShopCreated={(shop) => {
+          console.log('Shop created, auto-selecting:', shop);
+          form.setValue('shop_id', shop.id);
+          // We rely on local state update if needed, or if shopOptions recomputes
+          // Assuming the parent component will re-fetch data or we need to optimistic update
+          // For now, we trust router.refresh() in AddShopDialog combined with our Reset Protection
+        }}
       />
 
       <CreatePersonDialog

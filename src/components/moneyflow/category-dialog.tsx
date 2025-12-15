@@ -7,6 +7,7 @@ import * as z from "zod"
 import { Loader2 } from "lucide-react"
 import { toast } from "sonner"
 
+
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -25,22 +26,24 @@ import {
     FormMessage,
 } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
+import { Switch } from "@/components/ui/switch"
 import { Category } from "@/types/moneyflow.types"
 import { createCategory, updateCategory } from "@/services/category.service"
 
 const formSchema = z.object({
     name: z.string().min(1, "Name is required"),
-    type: z.enum(["expense", "income"]),
+    type: z.enum(["expense", "income", "transfer"]),
     icon: z.string().optional(),
     logo_url: z.string().optional(),
     mcc_codes: z.string().optional(),
+    kind: z.enum(["internal", "external"]).optional(),
 })
 
 interface CategoryDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     category?: Category | null
-    defaultType?: "expense" | "income"
+    defaultType?: "expense" | "income" | "transfer"
     onSuccess: () => void
 }
 
@@ -61,6 +64,7 @@ export function CategoryDialog({
             icon: "",
             logo_url: "",
             mcc_codes: "",
+            kind: "internal", // Default to internal
         },
     })
 
@@ -75,6 +79,7 @@ export function CategoryDialog({
                 icon: category.icon || "",
                 logo_url: category.logo_url || "",
                 mcc_codes: mccCodesStr,
+                kind: category.kind || (category.type === 'transfer' ? 'internal' : 'external'),
             })
         } else {
             form.reset({
@@ -83,6 +88,7 @@ export function CategoryDialog({
                 icon: "",
                 logo_url: "",
                 mcc_codes: "",
+                kind: 'internal', // Default to internal
             })
         }
     }, [category, defaultType, form, open])
@@ -101,6 +107,7 @@ export function CategoryDialog({
                 icon: values.icon,
                 logo_url: values.logo_url,
                 mcc_codes: mccCodesArray.length > 0 ? mccCodesArray : undefined,
+                kind: values.kind,
             };
 
             if (category) {
@@ -140,6 +147,27 @@ export function CategoryDialog({
                                     <FormControl>
                                         <Input placeholder="e.g. Food" {...field} />
                                     </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="kind"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <div className="flex items-center justify-between rounded-lg border border-slate-200 p-4 bg-slate-50">
+                                        <div className="space-y-0.5">
+                                            <FormLabel className="text-base">Kind</FormLabel>
+                                            <DialogDescription>
+                                                {field.value === 'external' ? 'External (People, Shops)' : 'Internal (Transfers, Accounts)'}
+                                            </DialogDescription>
+                                        </div>
+                                        <Switch
+                                            checked={field.value === 'external'}
+                                            onCheckedChange={(checked) => field.onChange(checked ? 'external' : 'internal')}
+                                        />
+                                    </div>
                                     <FormMessage />
                                 </FormItem>
                             )}

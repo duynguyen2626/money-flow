@@ -36,6 +36,7 @@ const navItems: NavItem[] = [
   { title: "People & Debt", href: "/people", icon: <Users className="h-5 w-5" /> },
   { title: "Installments", href: "/installments", icon: <Calendar className="h-5 w-5" /> },
   { title: "Shops", href: "/shops", icon: <ShoppingBag className="h-5 w-5" /> },
+  { title: "Categories", href: "/categories", icon: <Layers className="h-5 w-5" /> },
   { title: "Services", href: "/services", icon: <Wrench className="h-5 w-5" /> },
   { title: "Batches", href: "/batch", icon: <BookOpen className="h-5 w-5" /> },
   { title: "Refunds", href: "/refunds", icon: <RefreshCw className="h-5 w-5" /> },

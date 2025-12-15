@@ -111,6 +111,26 @@ export function AddTransactionDialog({
     event.stopPropagation()
   }
 
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [showCloseWarning, setShowCloseWarning] = useState(false)
+
+  const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
+    // Only close if clicking directly on overlay, not on content
+    if (event.target === event.currentTarget) {
+      if (hasUnsavedChanges) {
+        setShowCloseWarning(true)
+      } else {
+        closeDialog()
+      }
+    }
+  }
+
+  const confirmClose = () => {
+    setShowCloseWarning(false)
+    setHasUnsavedChanges(false)
+    closeDialog()
+  }
+
   const defaultClassName =
     triggerContent && !asChild
       ? 'inline-flex items-center justify-center rounded-md p-0 bg-transparent text-inherit focus:outline-none focus-visible:ring-0'
@@ -141,60 +161,65 @@ export function AddTransactionDialog({
             aria-modal="true"
             aria-label="Add Transaction"
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-4 backdrop-blur-sm"
-            onClick={closeDialog}
+            onClick={handleOverlayClick}
           >
             <div
               className="flex w-full max-w-xl flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden"
               style={{ maxHeight: '90vh' }}
               onClick={stopPropagation}
             >
-              {/* Header */}
-              <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
-                <h2 className="text-xl font-semibold text-slate-900">Add New Transaction</h2>
-                <button
-                  type="button"
-                  className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                  aria-label="Close dialog"
-                  onClick={closeDialog}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M18 6 6 18" />
-                    <path d="m6 6 12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto px-6 py-6">
-                <TransactionForm
-                  accounts={accounts}
-                  categories={categories}
-                  people={people}
-                  shops={shops}
-                  onSuccess={handleSuccess}
-                  defaultTag={defaultTag}
-                  defaultPersonId={urlValues?.person_id ?? defaultPersonId}
-                  defaultType={defaultType}
-                  defaultSourceAccountId={defaultSourceAccountId}
-                  defaultDebtAccountId={defaultDebtAccountId}
-                  initialValues={{
-                    ...urlValues,
-                    ...(defaultAmount ? { amount: defaultAmount } : {}),
-                    ...(cloneInitialValues || {})
-                  }}
-                />
-              </div>
+              <TransactionForm
+                accounts={accounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+                onSuccess={handleSuccess}
+                onCancel={() => {
+                  if (hasUnsavedChanges) {
+                    setShowCloseWarning(true)
+                  } else {
+                    closeDialog()
+                  }
+                }}
+                onFormChange={setHasUnsavedChanges}
+                defaultTag={defaultTag}
+                defaultPersonId={urlValues?.person_id ?? defaultPersonId}
+                defaultType={defaultType}
+                defaultSourceAccountId={defaultSourceAccountId}
+                defaultDebtAccountId={defaultDebtAccountId}
+                initialValues={{
+                  ...urlValues,
+                  ...(defaultAmount ? { amount: defaultAmount } : {}),
+                  ...(cloneInitialValues || {})
+                }}
+              />
             </div>
+
+            {/* Unsaved Changes Warning Dialog */}
+            {showCloseWarning && (
+              <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 px-4">
+                <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl" onClick={stopPropagation}>
+                  <h3 className="text-lg font-semibold text-slate-900 mb-2">Unsaved Changes</h3>
+                  <p className="text-sm text-slate-600 mb-4">
+                    You have unsaved changes. Are you sure you want to close without saving?
+                  </p>
+                  <div className="flex gap-3 justify-end">
+                    <button
+                      onClick={() => setShowCloseWarning(false)}
+                      className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                    >
+                      Continue Editing
+                    </button>
+                    <button
+                      onClick={confirmClose}
+                      className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors"
+                    >
+                      Discard Changes
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>,
           document.body
         )}

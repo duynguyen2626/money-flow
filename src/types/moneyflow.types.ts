@@ -20,11 +20,12 @@ export type CategoryRow = Database["public"]["Tables"]["categories"]["Row"]
 export type Category = {
   id: string
   name: string
-  type: 'expense' | 'income'
+  type: 'expense' | 'income' | 'transfer'
   parent_id?: string | null
   icon?: string | null
   logo_url?: string | null
   mcc_codes?: string[] | null
+  kind?: 'internal' | 'external' | null
 }
 
 export type Shop = {
@@ -216,4 +217,5 @@ export type TransactionWithDetails = TransactionRow & {
   source_account_id?: string | null;
   destination_account_id?: string | null;
   target_account_id?: string | null;
+  history_count?: number;
 }

@@ -1,0 +1,12 @@
+src/actions/account-actions.ts(36,15): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(values: never, options?: { count?: "exact" | "planned" | "estimated" | undefined; } | undefined): PostgrestFilterBuilder<{ PostgrestVersion: "12"; }, never, never, null, "profiles", never, "POST">', gave the following error.
+    Argument of type '{ id?: string | undefined; name: string; email?: string | null | undefined; avatar_url?: string | null | undefined; sheet_link?: string | null | undefined; created_at?: string | undefined; is_owner?: boolean | ... 1 more ... | undefined; }[]' is not assignable to parameter of type 'never'.
+  Overload 2 of 2, '(values: never[], options?: { count?: "exact" | "planned" | "estimated" | undefined; defaultToNull?: boolean | undefined; } | undefined): PostgrestFilterBuilder<{ PostgrestVersion: "12"; }, never, never, null, "profiles", never, "POST">', gave the following error.
+    Argument of type '{ id?: string | undefined; name: string; email?: string | null | undefined; avatar_url?: string | null | undefined; sheet_link?: string | null | undefined; created_at?: string | undefined; is_owner?: boolean | ... 1 more ... | undefined; }[]' is not assignable to parameter of type 'never[]'.
+      Type '{ id?: string | undefined; name: string; email?: string | null | undefined; avatar_url?: string | null | undefined; sheet_link?: string | null | undefined; created_at?: string | undefined; is_owner?: boolean | ... 1 more ... | undefined; }' is not assignable to type 'never'.
+src/components/moneyflow/add-shop-dialog.tsx(57,56): error TS2345: Argument of type 'string' is not assignable to parameter of type 'never'.
+src/services/category.service.ts(31,3): error TS2322: Type '{ id: string; name: string; type: "income" | "expense" | "transfer"; parent_id: string | undefined; icon: string | null; logo_url: string | null; kind: string[] | null; }[]' is not assignable to type 'Category[]'.
+  Type '{ id: string; name: string; type: "income" | "expense" | "transfer"; parent_id: string | undefined; icon: string | null; logo_url: string | null; kind: string[] | null; }' is not assignable to type 'Category'.
+    Types of property 'kind' are incompatible.
+      Type 'string[] | null' is not assignable to type '"internal" | "external" | null | undefined'.
+        Type 'string[]' is not assignable to type '"internal" | "external" | null | undefined'.
