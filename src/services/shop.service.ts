@@ -53,7 +53,6 @@ export async function createShop(input: {
     name: input.name.trim(),
     logo_url: input.logo_url ?? null,
     default_category_id: input.default_category_id ?? null,
-    created_by: userId,
   }
 
   const { data, error } = await (supabase.from('shops').insert as any)(payload).select().single()

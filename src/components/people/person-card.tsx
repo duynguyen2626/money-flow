@@ -14,7 +14,7 @@ import {
     ExternalLink,
 } from 'lucide-react'
 
-import { Account, Category, Person, Shop, Subscription } from '@/types/moneyflow.types'
+import { Account, Category, Person, Shop, Subscription, MonthlyDebtSummary } from '@/types/moneyflow.types'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 import { EditPersonDialog } from '@/components/people/edit-person-dialog'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
@@ -58,6 +58,7 @@ function PersonCardComponent({
     const [showArchiveConfirm, setShowArchiveConfirm] = useState(false)
     const [showDebtsModal, setShowDebtsModal] = useState(false)
     const [showEditDialog, setShowEditDialog] = useState(false)
+    const [selectedRepaymentDebt, setSelectedRepaymentDebt] = useState<MonthlyDebtSummary | null>(null)
 
     const balance = person.balance ?? 0
     const currentCycleDebt = person.current_cycle_debt ?? 0
@@ -284,15 +285,16 @@ function PersonCardComponent({
 
                                     {/* Quick Repay Button */}
                                     <div onClick={stopPropagation}>
-                                        <AddTransactionDialog
-                                            {...dialogBaseProps}
-                                            defaultType="repayment"
-                                            defaultPersonId={person.id}
-                                            defaultTag={debt.tagLabel}
-                                            defaultAmount={Math.abs(debt.amount)}
-                                            buttonClassName="p-1.5 rounded-md bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-colors"
-                                            triggerContent={<Check className="h-3.5 w-3.5" />}
-                                        />
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                setSelectedRepaymentDebt(debt)
+                                                setShowDebtsModal(false)
+                                            }}
+                                            className="p-1.5 rounded-md bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-colors flex items-center justify-center"
+                                        >
+                                            <Check className="h-3.5 w-3.5" />
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -304,6 +306,26 @@ function PersonCardComponent({
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Repayment Dialog from Debts List - Hoisted outside Debts Modal to avoid unmounting */}
+            {selectedRepaymentDebt && (
+                <AddTransactionDialog
+                    {...dialogBaseProps}
+                    defaultType="repayment"
+                    defaultPersonId={person.id}
+                    defaultTag={selectedRepaymentDebt.tagLabel}
+                    defaultAmount={Math.abs(selectedRepaymentDebt.amount)}
+                    isOpen={true}
+                    onOpenChange={(open) => {
+                        if (!open) {
+                            setSelectedRepaymentDebt(null)
+                        }
+                    }}
+                    // Dummy content required by implementation but won't be visible/clickable since isOpen=true
+                    buttonClassName="hidden"
+                    triggerContent={<span className="hidden">Repay</span>}
+                />
+            )}
 
             <ConfirmDialog
                 open={showArchiveConfirm}

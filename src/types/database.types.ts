@@ -204,28 +204,31 @@ export interface Database {
         Row: {
           id: string
           name: string
-          type: 'expense' | 'income'
+          type: 'expense' | 'income' | 'transfer'
           parent_id: string | null
           icon: string | null
           logo_url: string | null
+          kind: 'internal' | 'external' | null
           created_at: string
         }
         Insert: {
           id?: string
           name: string
-          type: 'expense' | 'income'
+          type: 'expense' | 'income' | 'transfer'
           parent_id?: string | null
           icon?: string | null
           logo_url?: string | null
+          kind?: 'internal' | 'external' | null
           created_at?: string
         }
         Update: {
           id?: string
           name?: string
-          type?: 'expense' | 'income'
+          type?: 'expense' | 'income' | 'transfer'
           parent_id?: string | null
           icon?: string | null
           logo_url?: string | null
+          kind?: 'internal' | 'external' | null
           created_at?: string
         }
       }

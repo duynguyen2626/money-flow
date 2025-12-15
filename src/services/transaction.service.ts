@@ -49,7 +49,9 @@ type FlatTransactionRow = {
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
   cashback_share_amount?: number | null;
+
   final_price?: number | null;
+  transaction_history?: { count: number }[];
 };
 
 type NormalizedTransaction = Omit<FlatTransactionRow, 'id' | 'created_at'>;
@@ -361,7 +363,9 @@ function mapTransactionRow(
     cashback_share_percent: row.cashback_share_percent ?? null,
     cashback_share_fixed: row.cashback_share_fixed ?? null,
     cashback_share_amount: row.cashback_share_amount ?? null,
+
     final_price: row.final_price ?? null,
+    history_count: row.transaction_history?.[0]?.count ?? 0,
   };
 }
 
@@ -377,7 +381,7 @@ export async function loadTransactions(options: {
   let query = supabase
     .from('transactions')
     .select(
-      'id, occurred_at, note, status, tag, created_at, created_by, amount, type, account_id, target_account_id, category_id, person_id, metadata, shop_id, persisted_cycle_tag, is_installment, installment_plan_id, cashback_share_percent, cashback_share_fixed, final_price'
+      'id, occurred_at, note, status, tag, created_at, created_by, amount, type, account_id, target_account_id, category_id, person_id, metadata, shop_id, persisted_cycle_tag, is_installment, installment_plan_id, cashback_share_percent, cashback_share_fixed, final_price, transaction_history(count)'
     )
     .order('occurred_at', { ascending: false });
 

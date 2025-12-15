@@ -2,64 +2,91 @@
 description: Money Flow 3 (Updated Phase 75)
 ---
 
-Project
+# .agent/workflows/gemini.md — Context (MF4)
 
-Money Flow 3 — personal finance manager. Stack: Next.js 15 (App Router), TypeScript, Tailwind + shadcn, Supabase Postgres.
+## Project Overview
 
-Key Concepts
+Money Flow 3 is a personal finance manager built with:
 
-Accounts: banks, wallets, credit cards, savings, debt.
+* Next.js (App Router)
+* TypeScript
+* Tailwind CSS + shadcn/ui
+* Supabase (PostgreSQL)
 
-Credit card action states:
+## Key Domain Concepts
 
-Due soon / overdue
+### Transactions
 
-Need to spend (minSpend)
+Types:
 
-Waiting confirm (pending batch)
+* Expense
+* Income
+* Transfer
+* Lending
+* Repay
 
-Family:
+Each transaction type controls visible fields in the modal.
 
-Parent/Child relationship uses accounts.parent_account_id.
+### Accounts
 
-Parent implies shared limit; UI may present shared balance depending on product rule.
+* Credit cards
+* Banks / wallets
+* Savings / secured accounts
 
-Secured:
+Important rules:
 
-accounts.secured_by_account_id links a card to a collateral savings account.
+* Credit cards **cannot** be transfer sources
+* Some credit cards have cashback policies
 
-UI Conventions
+### Cashback (Current State)
 
-Card left side is a portrait image strip (no square crop).
+* Cashback configuration lives in `accounts.cashback_config`
+* Current system computes cashback mostly in backend logic
+* There is no unified table to manage cashback per cycle yet
 
-Due is displayed as a hanging banner attached to left image section.
+### Voluntary Cashback (MF4)
 
-Need-to-spend uses a two-column pill matching Share/Remains style.
+Voluntary cashback means:
 
-Quick Add row stays at the bottom; Limit bar pinned above it.
+* User gives cashback manually even when:
 
-Non-negotiable Business Rules
+  * Account has no cashback
+  * Cashback budget for the cycle is exhausted
 
-Transfer source cannot be Credit Card.
+Rules:
 
-Transfer quick-add must auto-select category Money Transfer.
+* Voluntary cashback is allowed
+* It must NOT affect:
 
-Family linkage must persist to parent_account_id on create/update.
+  * Min spend
+  * Cashback budget
+* These values will be persisted separately in MF5
 
-Agent Operating Mode
+## UI Conventions
 
-Always search the repo for existing implementations before creating new ones.
+* Transaction modal uses sticky header + fixed footer
+* Transaction type tabs are visually dominant
+* Due / cashback logic clarity > compactness
+* Mobile experience is first‑class
 
-Make changes in small commits.
+## Agent Operating Mode
 
-Run: lint + build (+ typecheck if present).
+* Read existing implementation before coding
+* Prefer minimal refactors
+* Do not introduce backend breaking changes
+* Keep UI consistent with existing design system
 
-Open PRs with before/after screenshots.
+## Phase Boundaries
 
-Phase Naming
+MF4 focuses on:
 
-Branch names and commit messages are phase-driven:
+* Transaction modal UI
+* Form logic & validation
 
-Branch: PHASE-XX.Y-<SHORT-SLUG>
+MF5 will handle:
 
-Commit: PHASE XX.Y - <TITLE>
+* Cashback tables
+* Budget aggregation
+* Profit / loss reporting
+
+---

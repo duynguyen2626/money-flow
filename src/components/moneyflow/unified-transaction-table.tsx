@@ -49,7 +49,9 @@ import {
   ArrowDownLeft,
   Notebook,
   HelpCircle,
-  User
+  User,
+  Eraser,
+  Undo2
 } from 'lucide-react'
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -960,14 +962,14 @@ export function UnifiedTransactionTable({
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )} style={{ ['--table-font-size' as string]: `${fontSize}px` } as React.CSSProperties}>
         <Table className="min-w-[1000px] [&_td]:text-[length:var(--table-font-size)] [&_th]:text-[length:var(--table-font-size)]" wrapperClassName="overflow-visible" style={{ fontSize: `${fontSize}px` }}>
-          <TableHeader className="sticky top-0 z-10 bg-slate-100 backdrop-blur text-foreground font-bold shadow-sm">
+          <TableHeader className="sticky top-0 z-30 bg-slate-100 backdrop-blur text-foreground font-bold shadow-sm">
             <TableRow className="hover:bg-transparent border-b-2 border-slate-300">
               {displayedColumns.map(col => {
                 if (col.key === "task") {
                   return (
                     <TableHead
                       key={col.key}
-                      className="text-right border-l-2 border-slate-300 bg-slate-200 whitespace-nowrap sticky right-0 z-30 shadow-[-1px_0_0_0_rgba(0,0,0,0.1)]"
+                      className="text-right border-l-2 border-slate-300 bg-slate-200 whitespace-nowrap sticky right-0 z-40 shadow-[-1px_0_0_0_rgba(0,0,0,0.1)]"
                       style={{ width: columnWidths[col.key] }}
                     >
                       <button
@@ -984,14 +986,14 @@ export function UnifiedTransactionTable({
                 let stickyClass = "";
 
                 if (col.key === 'date') {
-                  stickyClass = "sticky left-0 z-50 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
+                  stickyClass = "sticky left-0 z-40 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
                 } else if (col.key === 'shop') {
                   // Shop (Notes) column is sticky after Date column
                   let left = 0;
                   if (visibleColumns.date) left += columnWidths.date;
                   // Note: 'type' column was removed, it's now merged into date
 
-                  stickyClass = "sticky z-50 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
+                  stickyClass = "sticky z-40 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
                   stickyStyle.left = left;
                 }
 
@@ -1275,17 +1277,19 @@ export function UnifiedTransactionTable({
 
                             <hr className="my-1 border-slate-200" />
 
-                            <button
-                              className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-slate-600 hover:bg-slate-50"
-                              onClick={event => {
-                                event.stopPropagation();
-                                setHistoryTarget(txn);
-                                setActionMenuOpen(null);
-                              }}
-                            >
-                              <History className="h-4 w-4" />
-                              <span>View History</span>
-                            </button>
+                            {(txn.history_count || 0) > 0 && (
+                              <button
+                                className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-slate-600 hover:bg-slate-50"
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  setHistoryTarget(txn);
+                                  setActionMenuOpen(null);
+                                }}
+                              >
+                                <History className="h-4 w-4" />
+                                <span>View History</span>
+                              </button>
+                            )}
                           </>
                         ) : (
                           <>
@@ -1315,25 +1319,26 @@ export function UnifiedTransactionTable({
 
                             {canRequestRefund && !isPendingRefund && (
                               <button
-                                className="flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
+                                className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-blue-600 hover:bg-blue-50"
                                 onClick={event => {
                                   event.stopPropagation();
                                   openRefundForm(txn, 'request');
                                 }}
                               >
+                                <Undo2 className="h-4 w-4" />
                                 <span>Request Refund</span>
                               </button>
                             )}
                             {canRequestRefund && !isPendingRefund && !isFullyRefunded && (
                               <button
-                                className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-red-600 hover:bg-red-50"
+                                className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-purple-700 hover:bg-purple-50"
                                 onClick={event => {
                                   event.stopPropagation();
                                   setConfirmCancelTarget(txn);
                                   setActionMenuOpen(null);
                                 }}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Eraser className="h-4 w-4" />
                                 <span>Cancel Order (100%)</span>
                               </button>
                             )}
@@ -1350,8 +1355,24 @@ export function UnifiedTransactionTable({
                               </button>
                             )}
 
+                            <hr className="my-1 border-slate-200" />
+
+                            {(txn.history_count || 0) > 0 && (
+                              <button
+                                className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-slate-600 hover:bg-slate-50"
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  setHistoryTarget(txn);
+                                  setActionMenuOpen(null);
+                                }}
+                              >
+                                <History className="h-4 w-4" />
+                                <span>View History</span>
+                              </button>
+                            )}
+
                             <button
-                              className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-red-600 hover:bg-red-50"
+                              className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-red-700 hover:bg-red-50"
                               onClick={event => {
                                 event.stopPropagation();
                                 setConfirmVoidTarget(txn);
@@ -1359,22 +1380,8 @@ export function UnifiedTransactionTable({
                                 setActionMenuOpen(null);
                               }}
                             >
-                              <Ban className="h-4 w-4" />
+                              <Trash2 className="h-4 w-4" />
                               <span>Void Transaction</span>
-                            </button>
-
-                            <hr className="my-1 border-slate-200" />
-
-                            <button
-                              className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-slate-600 hover:bg-slate-50"
-                              onClick={event => {
-                                event.stopPropagation();
-                                setHistoryTarget(txn);
-                                setActionMenuOpen(null);
-                              }}
-                            >
-                              <History className="h-4 w-4" />
-                              <span>View History</span>
                             </button>
                           </>
                         )}
@@ -2116,14 +2123,14 @@ export function UnifiedTransactionTable({
                     const stickyBg = getStickyBg();
 
                     if (col.key === 'date') {
-                      stickyClass = cn("sticky left-0 z-30 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
+                      stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
                     } else if (col.key === 'shop') {
                       // Shop (Notes) column sticky positioning
                       let left = 0;
                       if (visibleColumns.date) left += columnWidths.date;
                       // Note: 'type' column was removed, it's now merged into date
                       stickyStyle.left = left;
-                      stickyClass = cn("sticky z-30 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
+                      stickyClass = cn("sticky z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
                     }
 
                     return (
