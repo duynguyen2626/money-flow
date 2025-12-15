@@ -916,6 +916,13 @@ export async function requestRefund(
     original_category_name: categoryLine.categories?.name ?? null,
   }
 
+  const refundCategoryId = await resolveSystemCategory(supabase, 'Refund', 'expense');
+  if (!refundCategoryId) {
+    console.error('FATAL: "Refund" system category not found.');
+    return { success: false, error: 'Hệ thống chưa cấu hình danh mục Hoàn tiền.' }
+  }
+
+  // Single-table insert for Refund Request
   const { data: requestTxn, error: createError } = await (supabase
     .from('transactions')
     .insert as any)({
@@ -925,6 +932,11 @@ export async function requestRefund(
       tag: (existing as any).tag,
       created_by: userId,
       shop_id: (existing as any).shop_id ?? null,
+      account_id: REFUND_PENDING_ACCOUNT_ID,
+      category_id: refundCategoryId,
+      amount: safeAmount,
+      type: 'expense',
+      metadata: lineMetadata
     })
     .select()
     .single()
@@ -934,49 +946,21 @@ export async function requestRefund(
     return { success: false, error: 'Không thể tạo giao dịch yêu cầu hoàn tiền.' }
   }
 
-  const refundCategoryId = await resolveSystemCategory(supabase, 'Refund', 'expense');
-  if (!refundCategoryId) {
-    console.error('FATAL: "Refund" system category not found.');
-    return { success: false, error: 'Hệ thống chưa cấu hình danh mục Hoàn tiền.' }
-  }
-
-  const linesToInsert: any[] = [
-    {
-      transaction_id: requestTxn.id,
-      account_id: REFUND_PENDING_ACCOUNT_ID,
-      amount: safeAmount,
-      type: 'debit',
-      metadata: lineMetadata,
-    },
-    {
-      transaction_id: requestTxn.id,
-      category_id: refundCategoryId,
-      amount: -safeAmount,
-      type: 'credit',
-      metadata: lineMetadata,
-    },
-  ]
-
-  const { error: linesError } = await (supabase.from('transaction_lines').insert as any)(linesToInsert)
-  if (linesError) {
-    console.error('Failed to insert refund request lines:', linesError)
-    return { success: false, error: 'Không thể tạo dòng ghi sổ hoàn tiền.' }
-  }
+  // No lines to insert for single-table schema
 
   try {
-    const originalLines = ((existing as any).transaction_lines as Array<{ id?: string, metadata?: Json | null }>) ?? []
+    // Update original transaction metadata
     const mergedOriginalMeta = mergeMetadata(existingMetadata, {
       refund_request_id: requestTxn.id,
       refund_requested_at: new Date().toISOString(),
       has_refund_request: true,
     })
-    for (const line of originalLines) {
-      if (!line?.id) continue
-      await (supabase.from('transaction_lines').update as any)({ metadata: mergedOriginalMeta }).eq(
-        'id',
-        line.id
-      )
-    }
+
+    // Update directly on transactions table
+    await (supabase.from('transactions').update as any)({ metadata: mergedOriginalMeta }).eq(
+      'id',
+      transactionId
+    )
   } catch (err) {
     console.error('Failed to tag original transaction with refund metadata:', err)
   }
