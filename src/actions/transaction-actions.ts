@@ -503,7 +503,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
   // AND revert GD1's refund_status to 'waiting_refund' (no longer received)
   if (meta?.is_refund_confirmation && meta?.pending_refund_id) {
     await (supabase.from('transactions').update as any)({ status: 'pending' })
-      .eq('id', meta.pending_refund_id);
+      .eq('id', meta.pending_refund_id as string);
     console.log('[Void Rollback] GD3 voided -> GD2 set to pending:', meta.pending_refund_id);
 
     // Also update GD1's metadata to reflect waiting status
@@ -511,7 +511,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
       const { data: gd1 } = await supabase
         .from('transactions')
         .select('metadata')
-        .eq('id', meta.original_transaction_id)
+        .eq('id', meta.original_transaction_id as string)
         .single();
 
       if (gd1) {
@@ -522,7 +522,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
         await (supabase.from('transactions').update as any)({
           status: 'posted', // Keep as posted but with waiting_refund metadata
           metadata: gd1Meta
-        }).eq('id', meta.original_transaction_id);
+        }).eq('id', meta.original_transaction_id as string);
         console.log('[Void Rollback] GD3 voided -> GD1 refund_status set to waiting_refund:', meta.original_transaction_id);
       }
     }
@@ -533,7 +533,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     const { data: gd1 } = await supabase
       .from('transactions')
       .select('metadata')
-      .eq('id', meta.original_transaction_id)
+      .eq('id', meta.original_transaction_id as string)
       .single();
 
     if (gd1) {
@@ -547,7 +547,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
       await (supabase.from('transactions').update as any)({
         status: 'posted',
         metadata: gd1Meta
-      }).eq('id', meta.original_transaction_id);
+      }).eq('id', meta.original_transaction_id as string);
       console.log('[Void Rollback] GD2 voided -> GD1 set to posted:', meta.original_transaction_id);
     }
   }
