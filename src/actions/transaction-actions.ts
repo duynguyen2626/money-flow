@@ -319,7 +319,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   if (!built) {
     return false;
   }
-  const { lines, tag } = built;
+  const { tag } = built;
 
   const persistedCycleTag = await calculatePersistedCycleTag(
     supabase,
@@ -327,6 +327,32 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     new Date(input.occurred_at)
   );
 
+  // Single Table Insertion Logic
+  const originalAmount = Math.abs(input.amount);
+  let finalAmount = originalAmount;
+  let targetAccountId = input.destination_account_id ?? input.debt_account_id ?? null;
+  let personId = input.person_id ?? null;
+  let categoryId = input.category_id ?? null;
+
+  // Debt Logic specific
+  let sharePercent = null;
+  let shareFixed = null;
+
+  if (input.type === 'debt') {
+    const sharePercentEntry = Math.max(0, Number(input.cashback_share_percent ?? 0));
+    const sharePercentCapped = Math.min(100, sharePercentEntry);
+    const sharePercentRate = sharePercentCapped / 100;
+    const shareFixedVal = Math.max(0, Number(input.cashback_share_fixed ?? 0));
+    const percentContribution = sharePercentRate * originalAmount;
+    const rawCashback = percentContribution + shareFixedVal;
+    const cashbackGiven = Math.min(originalAmount, Math.max(0, rawCashback));
+
+    finalAmount = Math.max(0, originalAmount - cashbackGiven);
+    sharePercent = sharePercentRate > 0 ? sharePercentRate : null;
+    shareFixed = shareFixedVal > 0 ? shareFixedVal : null;
+  }
+
+  // Insert into transactions table directly
   const { data: txn, error: txnError } = await (supabase
     .from('transactions')
     .insert as any)({
@@ -337,65 +363,76 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       persisted_cycle_tag: persistedCycleTag,
       shop_id: input.shop_id ?? null,
       created_by: userId,
+      type: input.type,
+      amount: finalAmount,
+      account_id: input.source_account_id,
+      target_account_id: targetAccountId,
+      category_id: categoryId,
+      person_id: personId,
+      cashback_share_percent: sharePercent,
+      cashback_share_fixed: shareFixed,
     })
     .select()
     .single();
 
   if (txnError || !txn) {
-    console.error('Error creating transaction header:', txnError);
-    return false;
-  }
-
-  const linesWithId = lines.map(l => ({ ...l, transaction_id: txn.id }));
-  const { error: linesError } = await (supabase.from('transaction_lines').insert as any)(linesWithId);
-
-  if (linesError) {
-    console.error('Error creating transaction lines:', linesError);
+    console.error('Error creating transaction:', txnError);
     return false;
   }
 
   const shopInfo = await loadShopInfo(supabase, input.shop_id)
 
-  if (input.type === 'repayment') {
-    await syncRepaymentTransaction(supabase, txn.id, input, linesWithId, shopInfo);
-  } else {
-    const syncBase = {
-      id: txn.id,
-      occurred_at: input.occurred_at,
-      note: input.note,
-      tag,
-      shop_name: shopInfo?.name ?? null,
-    };
+  // Sheet Sync Logic
+  if (input.type === 'repayment' && personId && targetAccountId) {
+    const { data: destAccount } = await supabase
+      .from('accounts')
+      .select('name')
+      .eq('id', targetAccountId)
+      .single();
 
-    for (const line of linesWithId) {
-      const personId = line.person_id;
-      if (!personId) continue;
+    void syncTransactionToSheet(
+      personId,
+      {
+        id: txn.id,
+        occurred_at: input.occurred_at,
+        note: input.note,
+        tag: input.tag,
+        shop_name: shopInfo?.name ?? (destAccount as any)?.name ?? null,
+        amount: finalAmount, // Repayment amount
+        original_amount: finalAmount,
+        cashback_share_percent: undefined,
+        cashback_share_fixed: undefined,
+      },
+      'create'
+    ).then(() => {
+      console.log(`[Sheet Sync] Triggered for Repayment to Person ${personId}`);
+    }).catch(err => {
+      console.error('Sheet Sync Error (Repayment):', err);
+    });
 
-      const originalAmount =
-        typeof line.original_amount === 'number' ? line.original_amount : line.amount;
-      const cashbackPercent =
-        typeof line.cashback_share_percent === 'number' ? line.cashback_share_percent : undefined;
-      const cashbackFixed =
-        typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
-
-      void syncTransactionToSheet(
-        personId,
-        {
-          ...syncBase,
-          original_amount: originalAmount,
-          cashback_share_percent: cashbackPercent,
-          cashback_share_fixed: cashbackFixed,
-          amount: line.amount,
-        },
-        'create'
-      )
-        .then(() => {
-          console.log(`[Sheet Sync] Triggered for Person ${personId}`);
-        })
-        .catch(err => {
-          console.error('Sheet Sync Error (Background):', err);
-        });
-    }
+  } else if ((input.type === 'debt' || input.type === 'transfer') && personId) {
+    // Standard debt sync
+    void syncTransactionToSheet(
+      personId,
+      {
+        id: txn.id,
+        occurred_at: input.occurred_at,
+        note: input.note,
+        tag,
+        shop_name: shopInfo?.name ?? null,
+        original_amount: originalAmount,
+        cashback_share_percent: sharePercent,
+        cashback_share_fixed: shareFixed,
+        amount: finalAmount,
+      },
+      'create'
+    )
+      .then(() => {
+        console.log(`[Sheet Sync] Triggered for Person ${personId}`);
+      })
+      .catch(err => {
+        console.error('Sheet Sync Error (Background):', err);
+      });
   }
 
   return true;
