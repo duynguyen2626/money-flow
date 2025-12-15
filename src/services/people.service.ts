@@ -488,7 +488,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
 
     return {
       id: person.id,
-      name: person.name,
+      name: person.name ?? '',
       email: person.email,
       avatar_url: person.avatar_url,
       sheet_link: person.sheet_link,
