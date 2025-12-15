@@ -1,0 +1,17 @@
+#!/bin/sh
+# Pre-push hook to validate TypeScript before pushing
+# This prevents pushing code with TypeScript errors
+
+echo "🔍 Running TypeScript validation before push..."
+
+# Run TypeScript check
+npx tsc --noEmit
+
+if [ $? -ne 0 ]; then
+  echo "❌ TypeScript validation failed!"
+  echo "Fix the errors above before pushing."
+  exit 1
+fi
+
+echo "✅ TypeScript validation passed!"
+exit 0

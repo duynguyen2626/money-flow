@@ -3,6 +3,25 @@ trigger: always_on
 ---
 
 # .agent/rules/gravityrules.md — Rules (MF4)
+TypeScript & Build Validation (CRITICAL)
+ALWAYS run npm run build or npx tsc --noEmit before:
+Committing code
+Pushing to remote
+Marking task as complete
+NEVER assume local dev server success = production build success
+Fix ALL TypeScript errors before proceeding—no exceptions
+When working with database types:
+Check database.types.ts for field definitions
+Handle nullable fields explicitly (use ?? '' or ?? null)
+Include ALL required fields when mapping DB rows to TypeScript interfaces
+Deployment Rules
+Pre-push validation: TypeScript check installed via git hook
+If Vercel build fails:
+Check the exact error from Vercel logs
+Reproduce locally with npm run build
+Fix and verify build passes locally
+Push fix immediately to the failing branch
+Database schema changes require regenerating types
 
 ## UI Rules
 

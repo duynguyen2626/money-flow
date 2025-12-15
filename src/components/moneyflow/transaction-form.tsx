@@ -25,8 +25,10 @@ import { CategoryDialog } from '@/components/moneyflow/category-dialog'
 import { AddShopDialog } from '@/components/moneyflow/add-shop-dialog'
 import { CreatePersonDialog } from '@/components/people/create-person-dialog'
 
+
 import { EditAccountDialog } from './edit-account-dialog'
 import { QuickPeopleSettings } from './quick-people-settings'
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 
 
 
@@ -296,10 +298,14 @@ export function TransactionForm({
     },
   })
 
+
   // Track form changes and notify parent
   useEffect(() => {
     onFormChange?.(form.formState.isDirty)
   }, [form.formState.isDirty, onFormChange])
+
+  // Prompt unsaved changes on refresh/close
+  useUnsavedChanges(form.formState.isDirty)
 
   const applyDefaultPersonSelection = useCallback(() => {
     if (!defaultPersonId) {
@@ -370,6 +376,7 @@ export function TransactionForm({
     if (JSON.stringify(initialValues) === JSON.stringify(initialValuesRef.current)) {
       // Same values, do nothing
     } else {
+      console.log('[TransactionForm] Resetting form with new values (Clone/Edit update)');
       form.reset(newValues)
       setManualTagMode(true)
       setTransactionType(newValues.type)
@@ -2003,6 +2010,8 @@ export function TransactionForm({
         <form
           onSubmit={handleSubmit(onSubmit, (errors) => {
             console.error('[Form Validation Error]', errors);
+            // Optionally set a status error to inform user why nothing happened
+            setStatus({ type: 'error', text: 'Please fix the errors in the form.' })
           })}
           className="flex flex-col h-full overflow-hidden"
         >

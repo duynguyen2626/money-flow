@@ -27,6 +27,10 @@ type AddTransactionDialogProps = {
   cloneInitialValues?: Partial<TransactionFormValues>;
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  // Edit Mode Props
+  mode?: 'create' | 'edit' | 'refund';
+  transactionId?: string;
+  initialValues?: Partial<TransactionFormValues>;
 }
 
 export function AddTransactionDialog({
@@ -49,6 +53,9 @@ export function AddTransactionDialog({
   cloneInitialValues,
   isOpen,
   onOpenChange,
+  mode = 'create',
+  transactionId,
+  initialValues,
 }: AddTransactionDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false)
   const open = isOpen ?? internalOpen
@@ -187,32 +194,43 @@ export function AddTransactionDialog({
                 defaultType={defaultType}
                 defaultSourceAccountId={defaultSourceAccountId}
                 defaultDebtAccountId={defaultDebtAccountId}
+                transactionId={transactionId}
+                mode={mode}
                 initialValues={{
                   ...urlValues,
                   ...(defaultAmount ? { amount: defaultAmount } : {}),
-                  ...(cloneInitialValues || {})
+                  ...(cloneInitialValues || {}),
+                  ...(initialValues || {})
                 }}
               />
             </div>
 
             {/* Unsaved Changes Warning Dialog */}
+            {/* Unsaved Changes Warning Dialog */}
             {showCloseWarning && (
-              <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 px-4">
-                <div className="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl" onClick={stopPropagation}>
-                  <h3 className="text-lg font-semibold text-slate-900 mb-2">Unsaved Changes</h3>
-                  <p className="text-sm text-slate-600 mb-4">
-                    You have unsaved changes. Are you sure you want to close without saving?
-                  </p>
-                  <div className="flex gap-3 justify-end">
+              <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+                <div
+                  className="bg-white rounded-xl p-6 max-w-sm w-full shadow-2xl transform transition-all scale-100"
+                  onClick={stopPropagation}
+                >
+                  <div className="flex flex-col gap-2">
+                    <h3 className="text-lg font-semibold text-slate-900 leading-none tracking-tight">
+                      Unsaved Changes
+                    </h3>
+                    <p className="text-sm text-slate-500 mb-4">
+                      You have unsaved changes. Are you sure you want to close without saving?
+                    </p>
+                  </div>
+                  <div className="flex gap-2 justify-end pt-2">
                     <button
                       onClick={() => setShowCloseWarning(false)}
-                      className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                      className="inline-flex h-9 items-center justify-center rounded-md border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition-colors hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950"
                     >
                       Continue Editing
                     </button>
                     <button
                       onClick={confirmClose}
-                      className="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors"
+                      className="inline-flex h-9 items-center justify-center rounded-md bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow transition-colors hover:bg-rose-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-rose-950"
                     >
                       Discard Changes
                     </button>

@@ -109,8 +109,6 @@ async function normalizeInput(input: CreateTransactionInput): Promise<Normalized
     installment_plan_id: null,
     cashback_share_percent: input.cashback_share_percent ?? null,
     cashback_share_fixed: input.cashback_share_fixed ?? null,
-    cashback_mode: null,
-    currency: null,
   };
 }
 
