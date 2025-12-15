@@ -138,7 +138,7 @@ function resolveAccountMovementInfo(
     }
 }
 
-function extractCashbackFromLines(lines: TransactionRow['transaction_lines']): {
+export function extractCashbackFromLines(lines: TransactionRow['transaction_lines']): {
     cashback_share_percent?: number
     cashback_share_fixed?: number
     cashback_share_amount?: number
@@ -490,5 +490,47 @@ export function mapTransactionRow(
         persisted_cycle_tag: null,
         is_installment: null,
         installment_plan_id: null,
+        cashback_mode: null, // Mapped from txn if available? Manual txn doesn't have it.
+        currency: null,
     }
+}
+
+export function mapUnifiedTransaction(txn: any, contextAccountId?: string): TransactionWithDetails {
+    // Synthesize a line for backward compatibility with UI components that expect transaction_lines
+    const syntheticLine: any = {
+        id: txn.id,
+        transaction_id: txn.id,
+        account_id: txn.account_id,
+        amount: txn.amount,
+        type: txn.type === 'income' ? 'credit' : 'debit',
+        category_id: txn.category_id,
+        person_id: txn.person_id,
+        metadata: txn.metadata,
+        created_at: txn.created_at,
+    };
+
+    return {
+        ...txn,
+        transaction_lines: [syntheticLine],
+
+        // Flatted fields for easy access
+        account_name: txn.accounts?.name,
+        category_name: txn.categories?.name,
+        category_icon: txn.categories?.icon,
+        category_logo_url: txn.categories?.logo_url,
+        shop_name: txn.shops?.name,
+        shop_logo_url: txn.shops?.logo_url,
+
+        // Ensure numeric amount
+        amount: txn.amount,
+
+        // Display helpers
+        displayType: txn.type as any,
+        displayAmount: txn.amount,
+
+        // Ensure required properties defaults
+        cashback_mode: txn.cashback_mode ?? null,
+        currency: txn.currency ?? null,
+        created_by: txn.created_by ?? null,
+    } as TransactionWithDetails;
 }

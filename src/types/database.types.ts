@@ -199,10 +199,12 @@ export type Database = {
           display_link: string | null
           file_name: string
           id: string
+          is_template: boolean | null
           processed_at: string | null
           sheet_name: string | null
           status: string
           total_items: number | null
+          source_account_id: string | null
         }
         Insert: {
           created_at?: string
@@ -210,10 +212,12 @@ export type Database = {
           display_link?: string | null
           file_name: string
           id?: string
+          is_template?: boolean | null
           processed_at?: string | null
           sheet_name?: string | null
           status?: string
           total_items?: number | null
+          source_account_id?: string | null
         }
         Update: {
           created_at?: string
@@ -221,10 +225,13 @@ export type Database = {
           display_link?: string | null
           file_name?: string
           id?: string
+          is_template?: boolean | null
           processed_at?: string | null
           sheet_name?: string | null
           status?: string
           total_items?: number | null
+          source_account_id?: string | null
+
         }
         Relationships: [
           {
@@ -445,6 +452,7 @@ export type Database = {
           name: string
           parent_id: string | null
           type: string
+          kind: "internal" | "external" | null
         }
         Insert: {
           created_at?: string
@@ -456,6 +464,7 @@ export type Database = {
           name: string
           parent_id?: string | null
           type: string
+          kind?: "internal" | "external" | null
         }
         Update: {
           created_at?: string
@@ -467,6 +476,7 @@ export type Database = {
           name?: string
           parent_id?: string | null
           type?: string
+          kind?: "internal" | "external" | null
         }
         Relationships: [
           {
@@ -602,6 +612,7 @@ export type Database = {
           role: string | null
           type: string
           updated_at: string
+          sheet_link: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -617,6 +628,7 @@ export type Database = {
           role?: string | null
           type?: string
           updated_at?: string
+          sheet_link?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -632,8 +644,51 @@ export type Database = {
           role?: string | null
           type?: string
           updated_at?: string
+          sheet_link?: string | null
         }
         Relationships: []
+      }
+      service_members: {
+        Row: {
+          id: string
+          service_id: string
+          profile_id: string
+          slots: number
+          is_owner: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          service_id: string
+          profile_id: string
+          slots: number
+          is_owner?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          service_id?: string
+          profile_id?: string
+          slots?: number
+          is_owner?: boolean
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_members_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "service_members_service_id_fkey"
+            columns: ["service_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          }
+        ]
       }
       sheet_webhook_links: {
         Row: {

@@ -59,7 +59,7 @@ export type AccountRelationships = {
 export type Account = {
   id: string;
   name: string;
-  type: 'bank' | 'cash' | 'credit_card' | 'ewallet' | 'debt' | 'savings' | 'investment' | 'asset';
+  type: 'bank' | 'cash' | 'credit_card' | 'ewallet' | 'debt' | 'savings' | 'investment' | 'asset' | 'system';
   currency: string;
   current_balance: number;
   credit_limit?: number;

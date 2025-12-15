@@ -5,7 +5,7 @@ import { format, setDate, subMonths } from 'date-fns';
 import { Database, Json } from '@/types/database.types';
 import { syncTransactionToSheet } from '@/services/sheet.service';
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds';
-import { loadShopInfo, ShopRow, mapTransactionRow, parseMetadata, extractLineMetadata, TransactionRow as MapperTransactionRow } from '@/lib/transaction-mapper';
+import { loadShopInfo, ShopRow, mapTransactionRow, parseMetadata, extractLineMetadata, TransactionRow as MapperTransactionRow, mapUnifiedTransaction } from '@/lib/transaction-mapper';
 import { TransactionWithDetails } from '@/types/moneyflow.types';
 
 export type CreateTransactionInput = {
@@ -1021,6 +1021,10 @@ export async function confirmRefund(
     linked_transaction_id: pendingTransactionId,
   }
 
+  // Single-table insert for Refund Confirmation
+  // Moving money FROM Pending TO Target.
+  // We model this as a transaction on the Target Account.
+
   const { data: confirmTxn, error: confirmError } = await (supabase
     .from('transactions')
     .insert as any)({
@@ -1029,6 +1033,10 @@ export async function confirmRefund(
       status: 'posted',
       tag: (pending as any).tag,
       created_by: userId,
+      account_id: targetAccountId,
+      amount: amountToConfirm,
+      type: 'income',
+      metadata: confirmationMetadata
     })
     .select()
     .single()
@@ -1038,30 +1046,7 @@ export async function confirmRefund(
     return { success: false, error: 'Không thể tạo giao dịch xác nhận hoàn tiền.' }
   }
 
-  const confirmLines: any[] = [
-    {
-      transaction_id: confirmTxn.id,
-      account_id: targetAccountId,
-      amount: amountToConfirm,
-      type: 'debit',
-      metadata: confirmationMetadata,
-    },
-    {
-      transaction_id: confirmTxn.id,
-      account_id: REFUND_PENDING_ACCOUNT_ID,
-      amount: -amountToConfirm,
-      type: 'credit',
-      metadata: confirmationMetadata,
-    },
-  ]
-
-  const { error: confirmLinesError } = await (supabase.from('transaction_lines').insert as any)(
-    confirmLines
-  )
-  if (confirmLinesError) {
-    console.error('Failed to insert refund confirmation lines:', confirmLinesError)
-    return { success: false, error: 'Không thể ghi sổ dòng hoàn tiền.' }
-  }
+  // No lines to insert
 
   try {
     const updatedPendingMeta = mergeMetadata(pendingMetadata, {
@@ -1069,14 +1054,12 @@ export async function confirmRefund(
       refund_confirmed_transaction_id: confirmTxn.id,
       refunded_at: new Date().toISOString(),
     })
-    const pendingLines = ((pending as any).transaction_lines as Array<{ id?: string, metadata?: Json | null }>) ?? []
-    for (const line of pendingLines) {
-      if (!line?.id) continue
-      await (supabase.from('transaction_lines').update as any)({ metadata: updatedPendingMeta }).eq(
-        'id',
-        line.id
-      )
-    }
+
+    // Update Pending Transaction Metadata
+    await (supabase.from('transactions').update as any)({ metadata: updatedPendingMeta }).eq(
+      'id',
+      pendingTransactionId
+    )
   } catch (err) {
     console.error('Failed to update pending refund metadata:', err)
   }
@@ -1087,29 +1070,31 @@ export async function confirmRefund(
 
   if (originalTransactionId) {
     try {
-      const { data: originalLines } = await supabase
-        .from('transaction_lines')
-        .select('id, metadata')
-        .eq('transaction_id', originalTransactionId)
+      const { data: originalTxn } = await supabase
+        .from('transactions')
+        .select('metadata')
+        .eq('id', originalTransactionId)
+        .single()
 
-      const originalMeta = extractLineMetadata(originalLines as Array<{ metadata?: Json | null }>)
-      const updatedOriginalMeta = mergeMetadata(originalMeta, {
-        refund_status: 'confirmed',
-        refund_confirmed_transaction_id: confirmTxn.id,
-        refund_confirmed_at: new Date().toISOString(),
-      })
+      if (originalTxn) {
+        const updatedOriginalMeta = mergeMetadata((originalTxn as any).metadata, {
+          refund_status: 'confirmed',
+          refund_confirmed_transaction_id: confirmTxn.id,
+          refund_confirmed_at: new Date().toISOString(),
+        })
 
-      for (const line of (originalLines ?? []) as Array<{ id?: string }>) {
-        if (!line?.id) continue
-        await (supabase.from('transaction_lines').update as any)({ metadata: updatedOriginalMeta }).eq(
+        await (supabase.from('transactions').update as any)({ metadata: updatedOriginalMeta }).eq(
           'id',
-          line.id
+          originalTransactionId
         )
       }
     } catch (err) {
-      console.error('Failed to tag original transaction after refund confirmation:', err)
+      console.error('Failed to link original transaction:', err)
     }
   }
+
+
+
 
   return { success: true, confirmTransactionId: confirmTxn.id }
 }
@@ -1128,26 +1113,23 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
       created_at,
       shop_id,
       shops ( id, name, logo_url ),
-      transaction_lines (
-        amount,
-        type,
-        account_id,
-        metadata,
-        category_id,
-        person_id,
-        original_amount,
-        cashback_share_percent,
-        cashback_share_fixed,
-        profiles ( name, avatar_url ),
-        accounts (name, type, logo_url),
-        categories (name, logo_url, icon)
-      )
+      amount,
+      type,
+      account_id,
+      target_account_id,
+      category_id,
+      person_id,
+      metadata,
+      cashback_share_percent,
+      cashback_share_fixed,
+      accounts (name, type, logo_url),
+      categories (name, logo_url, icon)
     `)
     .order('occurred_at', { ascending: false })
     .limit(limit);
 
   if (accountId) {
-    query = query.eq('transaction_lines.account_id', accountId);
+    query = query.eq('account_id', accountId);
   }
 
   const { data, error } = await query;
@@ -1157,5 +1139,7 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
     return [];
   }
 
-  return (data as MapperTransactionRow[]).map(txn => mapTransactionRow(txn, accountId));
+  return (data as any[]).map(txn => mapUnifiedTransaction(txn, accountId));
 }
+
+
