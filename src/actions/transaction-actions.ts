@@ -5,7 +5,7 @@ import { format, setDate, subMonths } from 'date-fns';
 import { Database, Json } from '@/types/database.types';
 import { syncTransactionToSheet } from '@/services/sheet.service';
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds';
-import { loadShopInfo, ShopRow, mapTransactionRow, parseMetadata, extractLineMetadata, TransactionRow as MapperTransactionRow } from '@/lib/transaction-mapper';
+import { loadShopInfo, ShopRow, mapTransactionRow, parseMetadata, extractLineMetadata, TransactionRow as MapperTransactionRow, mapUnifiedTransaction } from '@/lib/transaction-mapper';
 import { TransactionWithDetails } from '@/types/moneyflow.types';
 
 export type CreateTransactionInput = {
@@ -319,7 +319,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   if (!built) {
     return false;
   }
-  const { lines, tag } = built;
+  const { tag } = built;
 
   const persistedCycleTag = await calculatePersistedCycleTag(
     supabase,
@@ -327,6 +327,32 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     new Date(input.occurred_at)
   );
 
+  // Single Table Insertion Logic
+  const originalAmount = Math.abs(input.amount);
+  let finalAmount = originalAmount;
+  let targetAccountId = input.destination_account_id ?? input.debt_account_id ?? null;
+  let personId = input.person_id ?? null;
+  let categoryId = input.category_id ?? null;
+
+  // Debt Logic specific
+  let sharePercent = null;
+  let shareFixed = null;
+
+  if (input.type === 'debt') {
+    const sharePercentEntry = Math.max(0, Number(input.cashback_share_percent ?? 0));
+    const sharePercentCapped = Math.min(100, sharePercentEntry);
+    const sharePercentRate = sharePercentCapped / 100;
+    const shareFixedVal = Math.max(0, Number(input.cashback_share_fixed ?? 0));
+    const percentContribution = sharePercentRate * originalAmount;
+    const rawCashback = percentContribution + shareFixedVal;
+    const cashbackGiven = Math.min(originalAmount, Math.max(0, rawCashback));
+
+    finalAmount = Math.max(0, originalAmount - cashbackGiven);
+    sharePercent = sharePercentRate > 0 ? sharePercentRate : null;
+    shareFixed = shareFixedVal > 0 ? shareFixedVal : null;
+  }
+
+  // Insert into transactions table directly
   const { data: txn, error: txnError } = await (supabase
     .from('transactions')
     .insert as any)({
@@ -337,65 +363,76 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       persisted_cycle_tag: persistedCycleTag,
       shop_id: input.shop_id ?? null,
       created_by: userId,
+      type: input.type,
+      amount: finalAmount,
+      account_id: input.source_account_id,
+      target_account_id: targetAccountId,
+      category_id: categoryId,
+      person_id: personId,
+      cashback_share_percent: sharePercent,
+      cashback_share_fixed: shareFixed,
     })
     .select()
     .single();
 
   if (txnError || !txn) {
-    console.error('Error creating transaction header:', txnError);
-    return false;
-  }
-
-  const linesWithId = lines.map(l => ({ ...l, transaction_id: txn.id }));
-  const { error: linesError } = await (supabase.from('transaction_lines').insert as any)(linesWithId);
-
-  if (linesError) {
-    console.error('Error creating transaction lines:', linesError);
+    console.error('Error creating transaction:', txnError);
     return false;
   }
 
   const shopInfo = await loadShopInfo(supabase, input.shop_id)
 
-  if (input.type === 'repayment') {
-    await syncRepaymentTransaction(supabase, txn.id, input, linesWithId, shopInfo);
-  } else {
-    const syncBase = {
-      id: txn.id,
-      occurred_at: input.occurred_at,
-      note: input.note,
-      tag,
-      shop_name: shopInfo?.name ?? null,
-    };
+  // Sheet Sync Logic
+  if (input.type === 'repayment' && personId && targetAccountId) {
+    const { data: destAccount } = await supabase
+      .from('accounts')
+      .select('name')
+      .eq('id', targetAccountId)
+      .single();
 
-    for (const line of linesWithId) {
-      const personId = line.person_id;
-      if (!personId) continue;
+    void syncTransactionToSheet(
+      personId,
+      {
+        id: txn.id,
+        occurred_at: input.occurred_at,
+        note: input.note,
+        tag: input.tag,
+        shop_name: shopInfo?.name ?? (destAccount as any)?.name ?? null,
+        amount: finalAmount, // Repayment amount
+        original_amount: finalAmount,
+        cashback_share_percent: undefined,
+        cashback_share_fixed: undefined,
+      },
+      'create'
+    ).then(() => {
+      console.log(`[Sheet Sync] Triggered for Repayment to Person ${personId}`);
+    }).catch(err => {
+      console.error('Sheet Sync Error (Repayment):', err);
+    });
 
-      const originalAmount =
-        typeof line.original_amount === 'number' ? line.original_amount : line.amount;
-      const cashbackPercent =
-        typeof line.cashback_share_percent === 'number' ? line.cashback_share_percent : undefined;
-      const cashbackFixed =
-        typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
-
-      void syncTransactionToSheet(
-        personId,
-        {
-          ...syncBase,
-          original_amount: originalAmount,
-          cashback_share_percent: cashbackPercent,
-          cashback_share_fixed: cashbackFixed,
-          amount: line.amount,
-        },
-        'create'
-      )
-        .then(() => {
-          console.log(`[Sheet Sync] Triggered for Person ${personId}`);
-        })
-        .catch(err => {
-          console.error('Sheet Sync Error (Background):', err);
-        });
-    }
+  } else if ((input.type === 'debt' || input.type === 'transfer') && personId) {
+    // Standard debt sync
+    void syncTransactionToSheet(
+      personId,
+      {
+        id: txn.id,
+        occurred_at: input.occurred_at,
+        note: input.note,
+        tag,
+        shop_name: shopInfo?.name ?? null,
+        original_amount: originalAmount,
+        cashback_share_percent: sharePercent,
+        cashback_share_fixed: shareFixed,
+        amount: finalAmount,
+      },
+      'create'
+    )
+      .then(() => {
+        console.log(`[Sheet Sync] Triggered for Person ${personId}`);
+      })
+      .catch(err => {
+        console.error('Sheet Sync Error (Background):', err);
+      });
   }
 
   return true;
@@ -466,7 +503,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
   // AND revert GD1's refund_status to 'waiting_refund' (no longer received)
   if (meta?.is_refund_confirmation && meta?.pending_refund_id) {
     await (supabase.from('transactions').update as any)({ status: 'pending' })
-      .eq('id', meta.pending_refund_id);
+      .eq('id', meta.pending_refund_id as string);
     console.log('[Void Rollback] GD3 voided -> GD2 set to pending:', meta.pending_refund_id);
 
     // Also update GD1's metadata to reflect waiting status
@@ -474,7 +511,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
       const { data: gd1 } = await supabase
         .from('transactions')
         .select('metadata')
-        .eq('id', meta.original_transaction_id)
+        .eq('id', meta.original_transaction_id as string)
         .single();
 
       if (gd1) {
@@ -485,7 +522,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
         await (supabase.from('transactions').update as any)({
           status: 'posted', // Keep as posted but with waiting_refund metadata
           metadata: gd1Meta
-        }).eq('id', meta.original_transaction_id);
+        }).eq('id', meta.original_transaction_id as string);
         console.log('[Void Rollback] GD3 voided -> GD1 refund_status set to waiting_refund:', meta.original_transaction_id);
       }
     }
@@ -496,7 +533,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     const { data: gd1 } = await supabase
       .from('transactions')
       .select('metadata')
-      .eq('id', meta.original_transaction_id)
+      .eq('id', meta.original_transaction_id as string)
       .single();
 
     if (gd1) {
@@ -510,7 +547,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
       await (supabase.from('transactions').update as any)({
         status: 'posted',
         metadata: gd1Meta
-      }).eq('id', meta.original_transaction_id);
+      }).eq('id', meta.original_transaction_id as string);
       console.log('[Void Rollback] GD2 voided -> GD1 set to posted:', meta.original_transaction_id);
     }
   }
@@ -879,6 +916,13 @@ export async function requestRefund(
     original_category_name: categoryLine.categories?.name ?? null,
   }
 
+  const refundCategoryId = await resolveSystemCategory(supabase, 'Refund', 'expense');
+  if (!refundCategoryId) {
+    console.error('FATAL: "Refund" system category not found.');
+    return { success: false, error: 'Hệ thống chưa cấu hình danh mục Hoàn tiền.' }
+  }
+
+  // Single-table insert for Refund Request
   const { data: requestTxn, error: createError } = await (supabase
     .from('transactions')
     .insert as any)({
@@ -888,6 +932,11 @@ export async function requestRefund(
       tag: (existing as any).tag,
       created_by: userId,
       shop_id: (existing as any).shop_id ?? null,
+      account_id: REFUND_PENDING_ACCOUNT_ID,
+      category_id: refundCategoryId,
+      amount: safeAmount,
+      type: 'expense',
+      metadata: lineMetadata
     })
     .select()
     .single()
@@ -897,49 +946,21 @@ export async function requestRefund(
     return { success: false, error: 'Không thể tạo giao dịch yêu cầu hoàn tiền.' }
   }
 
-  const refundCategoryId = await resolveSystemCategory(supabase, 'Refund', 'expense');
-  if (!refundCategoryId) {
-    console.error('FATAL: "Refund" system category not found.');
-    return { success: false, error: 'Hệ thống chưa cấu hình danh mục Hoàn tiền.' }
-  }
-
-  const linesToInsert: any[] = [
-    {
-      transaction_id: requestTxn.id,
-      account_id: REFUND_PENDING_ACCOUNT_ID,
-      amount: safeAmount,
-      type: 'debit',
-      metadata: lineMetadata,
-    },
-    {
-      transaction_id: requestTxn.id,
-      category_id: refundCategoryId,
-      amount: -safeAmount,
-      type: 'credit',
-      metadata: lineMetadata,
-    },
-  ]
-
-  const { error: linesError } = await (supabase.from('transaction_lines').insert as any)(linesToInsert)
-  if (linesError) {
-    console.error('Failed to insert refund request lines:', linesError)
-    return { success: false, error: 'Không thể tạo dòng ghi sổ hoàn tiền.' }
-  }
+  // No lines to insert for single-table schema
 
   try {
-    const originalLines = ((existing as any).transaction_lines as Array<{ id?: string, metadata?: Json | null }>) ?? []
+    // Update original transaction metadata
     const mergedOriginalMeta = mergeMetadata(existingMetadata, {
       refund_request_id: requestTxn.id,
       refund_requested_at: new Date().toISOString(),
       has_refund_request: true,
     })
-    for (const line of originalLines) {
-      if (!line?.id) continue
-      await (supabase.from('transaction_lines').update as any)({ metadata: mergedOriginalMeta }).eq(
-        'id',
-        line.id
-      )
-    }
+
+    // Update directly on transactions table
+    await (supabase.from('transactions').update as any)({ metadata: mergedOriginalMeta }).eq(
+      'id',
+      transactionId
+    )
   } catch (err) {
     console.error('Failed to tag original transaction with refund metadata:', err)
   }
@@ -1000,6 +1021,10 @@ export async function confirmRefund(
     linked_transaction_id: pendingTransactionId,
   }
 
+  // Single-table insert for Refund Confirmation
+  // Moving money FROM Pending TO Target.
+  // We model this as a transaction on the Target Account.
+
   const { data: confirmTxn, error: confirmError } = await (supabase
     .from('transactions')
     .insert as any)({
@@ -1008,6 +1033,10 @@ export async function confirmRefund(
       status: 'posted',
       tag: (pending as any).tag,
       created_by: userId,
+      account_id: targetAccountId,
+      amount: amountToConfirm,
+      type: 'income',
+      metadata: confirmationMetadata
     })
     .select()
     .single()
@@ -1017,30 +1046,7 @@ export async function confirmRefund(
     return { success: false, error: 'Không thể tạo giao dịch xác nhận hoàn tiền.' }
   }
 
-  const confirmLines: any[] = [
-    {
-      transaction_id: confirmTxn.id,
-      account_id: targetAccountId,
-      amount: amountToConfirm,
-      type: 'debit',
-      metadata: confirmationMetadata,
-    },
-    {
-      transaction_id: confirmTxn.id,
-      account_id: REFUND_PENDING_ACCOUNT_ID,
-      amount: -amountToConfirm,
-      type: 'credit',
-      metadata: confirmationMetadata,
-    },
-  ]
-
-  const { error: confirmLinesError } = await (supabase.from('transaction_lines').insert as any)(
-    confirmLines
-  )
-  if (confirmLinesError) {
-    console.error('Failed to insert refund confirmation lines:', confirmLinesError)
-    return { success: false, error: 'Không thể ghi sổ dòng hoàn tiền.' }
-  }
+  // No lines to insert
 
   try {
     const updatedPendingMeta = mergeMetadata(pendingMetadata, {
@@ -1048,14 +1054,12 @@ export async function confirmRefund(
       refund_confirmed_transaction_id: confirmTxn.id,
       refunded_at: new Date().toISOString(),
     })
-    const pendingLines = ((pending as any).transaction_lines as Array<{ id?: string, metadata?: Json | null }>) ?? []
-    for (const line of pendingLines) {
-      if (!line?.id) continue
-      await (supabase.from('transaction_lines').update as any)({ metadata: updatedPendingMeta }).eq(
-        'id',
-        line.id
-      )
-    }
+
+    // Update Pending Transaction Metadata
+    await (supabase.from('transactions').update as any)({ metadata: updatedPendingMeta }).eq(
+      'id',
+      pendingTransactionId
+    )
   } catch (err) {
     console.error('Failed to update pending refund metadata:', err)
   }
@@ -1066,29 +1070,31 @@ export async function confirmRefund(
 
   if (originalTransactionId) {
     try {
-      const { data: originalLines } = await supabase
-        .from('transaction_lines')
-        .select('id, metadata')
-        .eq('transaction_id', originalTransactionId)
+      const { data: originalTxn } = await supabase
+        .from('transactions')
+        .select('metadata')
+        .eq('id', originalTransactionId)
+        .single()
 
-      const originalMeta = extractLineMetadata(originalLines as Array<{ metadata?: Json | null }>)
-      const updatedOriginalMeta = mergeMetadata(originalMeta, {
-        refund_status: 'confirmed',
-        refund_confirmed_transaction_id: confirmTxn.id,
-        refund_confirmed_at: new Date().toISOString(),
-      })
+      if (originalTxn) {
+        const updatedOriginalMeta = mergeMetadata((originalTxn as any).metadata, {
+          refund_status: 'confirmed',
+          refund_confirmed_transaction_id: confirmTxn.id,
+          refund_confirmed_at: new Date().toISOString(),
+        })
 
-      for (const line of (originalLines ?? []) as Array<{ id?: string }>) {
-        if (!line?.id) continue
-        await (supabase.from('transaction_lines').update as any)({ metadata: updatedOriginalMeta }).eq(
+        await (supabase.from('transactions').update as any)({ metadata: updatedOriginalMeta }).eq(
           'id',
-          line.id
+          originalTransactionId
         )
       }
     } catch (err) {
-      console.error('Failed to tag original transaction after refund confirmation:', err)
+      console.error('Failed to link original transaction:', err)
     }
   }
+
+
+
 
   return { success: true, confirmTransactionId: confirmTxn.id }
 }
@@ -1107,26 +1113,23 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
       created_at,
       shop_id,
       shops ( id, name, logo_url ),
-      transaction_lines (
-        amount,
-        type,
-        account_id,
-        metadata,
-        category_id,
-        person_id,
-        original_amount,
-        cashback_share_percent,
-        cashback_share_fixed,
-        profiles ( name, avatar_url ),
-        accounts (name, type, logo_url),
-        categories (name, logo_url, icon)
-      )
+      amount,
+      type,
+      account_id,
+      target_account_id,
+      category_id,
+      person_id,
+      metadata,
+      cashback_share_percent,
+      cashback_share_fixed,
+      accounts (name, type, logo_url),
+      categories (name, logo_url, icon)
     `)
     .order('occurred_at', { ascending: false })
     .limit(limit);
 
   if (accountId) {
-    query = query.eq('transaction_lines.account_id', accountId);
+    query = query.eq('account_id', accountId);
   }
 
   const { data, error } = await query;
@@ -1136,5 +1139,7 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
     return [];
   }
 
-  return (data as MapperTransactionRow[]).map(txn => mapTransactionRow(txn, accountId));
+  return (data as any[]).map(txn => mapUnifiedTransaction(txn, accountId));
 }
+
+

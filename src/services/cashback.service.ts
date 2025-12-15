@@ -557,3 +557,15 @@ export async function getAccountSpendingStats(
   }
 }
 
+
+export async function recomputeCashbackCycle(cycleId: string) {
+  const supabase = createClient()
+  const { error } = await supabase.rpc('recompute_cashback_cycle', {
+    p_cycle_id: cycleId,
+  })
+
+  if (error) {
+    console.error('Failed to recompute cashback cycle:', error)
+    throw error
+  }
+}

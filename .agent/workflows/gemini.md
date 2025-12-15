@@ -88,5 +88,18 @@ MF5 will handle:
 * Cashback tables
 * Budget aggregation
 * Profit / loss reporting
+Cashback is now persisted in:
 
----
+cashback_cycles (per account per cycle)
+
+cashback_entries (ledger)
+
+Modes:
+
+real = awarded cashback (counts toward budget)
+
+virtual = predicted profit (clamped)
+
+voluntary = overflow/loss (does not count)
+
+MF5.1 is schema + backfill only; UI updates later.
