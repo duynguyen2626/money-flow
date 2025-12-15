@@ -10,7 +10,7 @@ type CategoryRow = {
   parent_id: string | null
   icon: string | null
   logo_url: string | null
-  kind: string[] | null
+  kind: Category['kind']
 }
 
 export async function getCategories(): Promise<Category[]> {

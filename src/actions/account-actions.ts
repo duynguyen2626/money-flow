@@ -31,26 +31,10 @@ export async function createAccount(payload: {
   const { data: existingProfile } = await supabase.from('profiles').select('id').eq('id', user.id).single()
 
   if (!existingProfile) {
-    const { error: insertError } = await supabase
-      .from('profiles')
-      .insert({
-        id: user.id,
-        name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
-        email: user.email ?? null,
-        avatar_url: user.user_metadata?.avatar_url ?? null
-      })
-
-    if (insertError) {
-      console.error('Warning: Profile creation failed:', insertError)
-    }
+    return { error: { message: `User profile missing. Please sign out and sign in again to sync your profile.` } }
   }
 
-  // Double check existence to be sure for FK
-  const { data: profileExists } = await supabase.from('profiles').select('id').eq('id', user.id).single()
 
-  if (!profileExists) {
-    return { error: { message: `User profile missing and could not be created for ID: ${user.id}` } }
-  }
 
   const insertPayload: Database['public']['Tables']['accounts']['Insert'] = {
     name: payload.name,

@@ -53,8 +53,9 @@ export function AddShopDialog({
       .filter(c => {
         // Filter by selected kind
         if (selectedKind.length === 0) return true
-        const catKind = c.kind || []
-        return selectedKind.some(k => catKind.includes(k))
+        const kindCode = c.kind === 'internal' ? 'in' : (c.kind === 'external' ? 'ex' : null)
+        if (!kindCode) return false
+        return selectedKind.includes(kindCode)
       })
       .map(c => ({
         value: c.id,
