@@ -2322,41 +2322,21 @@ export function UnifiedTransactionTable({
       }
 
       {
-        editingTxn && editingInitialValues && createPortal(
-          <div
-            className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 px-4 py-4 sm:py-10"
-            onClick={() => setEditingTxn(null)}
-          >
-            <div
-              className="flex w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden max-h-[90vh]"
-              onClick={event => event.stopPropagation()}
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4 bg-white z-20">
-                <h3 className="text-lg font-semibold text-slate-900">Edit Transaction</h3>
-                <button
-                  className="rounded px-2 py-1 text-slate-500 transition hover:bg-slate-100"
-                  onClick={() => setEditingTxn(null)}
-                  aria-label="Close"
-                >
-                  X
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200">
-                <TransactionForm
-                  accounts={accounts}
-                  categories={categories}
-                  people={people}
-                  shops={shops}
-                  transactionId={editingTxn.id}
-                  initialValues={editingInitialValues}
-                  mode="edit"
-                  onSuccess={handleEditSuccess}
-                />
-              </div>
-            </div>
-          </div>,
-          document.body
+        editingTxn && editingInitialValues && (
+          <AddTransactionDialog
+            isOpen={!!editingTxn}
+            onOpenChange={(open) => {
+              if (!open) setEditingTxn(null)
+            }}
+            mode="edit"
+            transactionId={editingTxn.id}
+            initialValues={editingInitialValues}
+            accounts={accounts}
+            categories={categories}
+            people={people}
+            shops={shops}
+            triggerContent={<span className="hidden"></span>}
+          />
         )
       }
 

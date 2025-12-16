@@ -217,7 +217,11 @@ export async function getAccounts(): Promise<Account[]> {
   })
 
   // 2. Parallel fetch stats and build Account objects
-  const accounts = await Promise.all(rows.map(async (item) => {
+  // 2. Linear fetch stats to avoid connection reset (ECONNRESET)
+  const accounts: Account[] = []
+
+  // Single-thread execution (or small batch) to be safe
+  for (const item of rows) {
     const stats = await getStatsForAccount(supabase, item)
 
     // Relationship Logic (Shared Limit Family)
@@ -240,7 +244,7 @@ export async function getAccounts(): Promise<Account[]> {
       } : null
     }
 
-    return {
+    accounts.push({
       id: item.id,
       name: item.name,
       type: item.type,
@@ -257,8 +261,8 @@ export async function getAccounts(): Promise<Account[]> {
       total_out: item.total_out ?? 0,
       stats,
       relationships, // Added field
-    }
-  }))
+    })
+  }
 
   // 3. Sorting Logic
   // Priority: 
@@ -302,7 +306,7 @@ export async function getAccounts(): Promise<Account[]> {
 }
 
 export async function getAccountDetails(id: string): Promise<Account | null> {
-  if (!id || id === 'add' || id === 'undefined') {
+  if (!id || id === 'add' || id === 'new' || id === 'undefined') {
     return null
   }
 
@@ -432,6 +436,9 @@ export async function updateAccountConfig(
     parent_account_id?: string | null
   }
 ): Promise<boolean> {
+  // Guard clause to prevent 22P02 error (invalid input syntax for type uuid)
+  if (accountId === 'new') return false
+
   const supabase = createClient()
 
   const payload: any = {}
