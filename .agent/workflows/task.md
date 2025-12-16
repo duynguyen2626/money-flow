@@ -1,196 +1,227 @@
 ---
-description: Task Descriptions 
+description: Task Descriptions
 ---
 
-# MF5.1 — Cashback Reboot (New Tables + Backfill)
+# MF5.2 — Cashback Engine (Virtual Profit + Voluntary Overflow)
 
 You are the coding agent working on **Money Flow 3**.
-This task is **Phase MF5.1**.
+This task is **Phase MF5.2**.
 
-Goal: introduce a robust, auditable cashback model with **cycle summaries** + **ledger entries**, and backfill from existing data.
+MF5.1 created and backfilled:
 
-This phase is **DB + minimal plumbing only**. Do NOT redesign UI screens yet (that comes in MF5.2+).
+* `cashback_cycles`
+* `cashback_entries`
+* `transactions.cashback_mode`
 
----
-
-## Why we are doing this
-
-Current cashback is computed ad-hoc and is not reliably persisted per cycle. We need:
-
-* A single source of truth for cycle budget remaining / exhausted
-* Auditable entries per transaction
-* Separation of:
-
-  * Real awarded cashback (counts toward budget)
-  * Virtual/predict profit (e.g. “None back / I keep 100%” for Lend)
-  * Voluntary/overflow loss (allowed even when budget exhausted)
+Now we implement the **runtime engine** that keeps these tables correct when transactions are created/edited.
 
 ---
 
-## Phase Scope
+## Goal
 
-### IN SCOPE (MF5.1)
+Implement cashback accounting rules for:
 
-1. Create new tables:
+1. **Virtual profit** from “None back / I keep 100%” flows (especially Lend)
+2. **Voluntary / overflow** cashback when cycle budget is exhausted
+3. Deterministic cycle recomputation after any relevant change
 
-   * `cashback_cycles` (cycle summary)
-   * `cashback_entries` (ledger)
-2. Backfill cycles + entries from existing data:
+This phase must make the system consistent for the 3 cases:
 
-   * existing `transactions`
-   * existing `cashback_profits`
-3. Add minimal new fields needed to remove ambiguity:
-
-   * `transactions.cashback_mode` (enum/text)
-4. Implement a deterministic recompute routine (SQL function or server-side utility) that can rebuild cycle summaries from entries.
-
-### OUT OF SCOPE (MF5.1)
-
-* Rewriting /cashback UI
-* Reworking transaction modal UI (already done in MF4)
-* Full business logic for virtual profit creation (that’s MF5.2)
+* Case 1: Lend + None back → create virtual profit entry
+* Case 2: Budget remaining < requested real cashback → keep real as-is, record overflow loss, clamp virtual
+* Case 3: Real cashback (percent/fixed) as before
 
 ---
 
-## Data Model (Required)
+## Scope
 
-### Table 1 — `cashback_cycles`
+### IN SCOPE (MF5.2)
 
-One row per (account_id, cycle).
+* Create/update `cashback_entries` when saving a transaction
+* Maintain `cashback_cycles` totals by calling recompute
+* Implement mode semantics:
 
-Required columns:
+  * `none_back` → virtual profit
+  * `real_fixed` / `real_percent` → real awarded
+  * `voluntary` → overflow/loss
+* Add minimal columns if required to support the model cleanly
 
-* `id` uuid pk
-* `account_id` uuid fk -> accounts.id
-* `cycle_tag` text (e.g. DEC25) OR (`cycle_start` date, `cycle_end` date). Prefer `cycle_tag` if project already uses tags.
-* `max_budget` numeric (from accounts.cashback_config.maxAmount)
-* `min_spend_target` numeric nullable (from accounts.cashback_config.minSpend)
-* `spent_amount` numeric default 0
-* `real_awarded` numeric default 0  (counts toward budget)
-* `virtual_profit` numeric default 0 (clamped by remaining budget)
-* `overflow_loss` numeric default 0 (budget overflow + voluntary)
-* `is_exhausted` boolean default false
-* `met_min_spend` boolean default false
-* timestamps
+### OUT OF SCOPE (MF5.2)
 
-Indexes:
-
-* unique(account_id, cycle_tag)
-
-### Table 2 — `cashback_entries`
-
-One row per cashback-related event tied to a transaction.
-
-Required columns:
-
-* `id` uuid pk
-* `cycle_id` uuid fk -> cashback_cycles.id
-* `account_id` uuid fk -> accounts.id
-* `transaction_id` uuid fk -> transactions.id
-* `mode` text (enum-like): `real` | `virtual` | `voluntary`
-* `amount` numeric (positive value)
-* `counts_to_budget` boolean
-* `note` text nullable
-* timestamps
-
-Indexes:
-
-* index(account_id, transaction_id)
-* index(cycle_id)
-
-### Add to `transactions`
-
-Add:
-
-* `cashback_mode` text nullable
-
-  * expected values: `none_back` | `real_fixed` | `real_percent` | `shared` | `voluntary`
-
-Purpose:
-
-* Removes ambiguity between “no cashback configured” vs “none-back keep profit” vs “real cashback given”.
+* Major /cashback UI redesign (that is MF5.3)
+* New analytics dashboards
 
 ---
 
-## Backfill Plan (Must implement)
+## Required Data Rules
 
-### Step 1 — Create cycles
+### Definitions
 
-* For each credit card account that appears in existing cashback data, create cycles based on:
+* **Real awarded**: cashback user actually gives/sets on a txn. Counts to budget up to remaining cap.
+* **Virtual profit**: predicted cashback you “keep” when you choose None-back (no sharing). Must be clamped by remaining budget after real.
+* **Overflow/Voluntary**: cashback beyond cap or explicitly voluntary when cap exhausted. Does NOT count to budget.
 
-  * `transactions.persisted_cycle_tag` (if present)
-  * else `transactions.tag` when it stores cycle tags (e.g. DEC25)
-* Each (account_id, cycle_tag) => one `cashback_cycles` row.
-* Populate `max_budget` and `min_spend_target` from `accounts.cashback_config`.
+### Budget semantics
 
-### Step 2 — Backfill entries
-
-* Migrate existing `cashback_profits` into `cashback_entries`:
-
-  * default `mode='real'`
-  * `counts_to_budget=true`
-  * Link to correct `cycle_id` using the transaction’s cycle tag.
-
-* Also create entries from existing transaction cashback fields if present:
-
-  * if `transactions.cashback_share_fixed` is not null => entry `mode='real'`, amount=fixed, counts_to_budget=true
-  * if percent-based fields exist in your schema => create entry similarly
-
-### Step 3 — Backfill `transactions.cashback_mode`
-
-Rules:
-
-* If a transaction has an associated real cashback entry => set `cashback_mode` to `real_fixed` or `real_percent` depending on source.
-* Else leave null for now (MF5.2 will set `none_back` / `voluntary` modes going forward).
-
-### Step 4 — Recompute cycle summaries (deterministic)
-
-Implement a recompute routine that derives `cashback_cycles` totals from `cashback_entries`:
-
-* `real_awarded = sum(amount) where mode='real' AND counts_to_budget=true`
-* `overflow_loss = sum(amount) where mode='voluntary' OR counts_to_budget=false`
-* `virtual_profit` = sum(virtual) clamped to remaining budget after real_awarded
-* `is_exhausted = (real_awarded >= max_budget)`
-* `met_min_spend` computed from `spent_amount >= min_spend_target` when min_spend_target is not null
-
-Important: in MF5.1 you may keep `spent_amount` = 0 if computing spend requires more rules; but provide the recompute hook/shape.
+* Budget cap is `cashback_cycles.max_budget`.
+* Real counts to budget until cap.
+* Virtual counts to budget only if cap remains after real.
+* Overflow/loss never counts to budget.
 
 ---
 
-## Compatibility & Safety
+## A) Transaction integration: create/update entries
 
-* Do NOT delete `cashback_profits` in MF5.1.
-* Keep all existing screens working.
-* New tables must not break existing queries.
+Find the transaction create/edit code path (server action / API route / service).
+When a transaction is saved, do:
+
+1. Identify:
+
+* account_id
+* cycle_tag (use existing cycle tagging logic)
+* txn type (expense/income/transfer/lending/repay)
+
+2. Ensure cycle exists:
+
+* upsert `cashback_cycles` for (account_id, cycle_tag)
+
+3. Determine cashback_mode for this txn:
+
+### Mode 1 — none_back (virtual profit)
+
+When txn is Lend (or other allowed types) and user selects “None back / I keep 100%”:
+
+* Set `transactions.cashback_mode = 'none_back'`
+* Create/Upsert a `cashback_entries` row:
+
+  * mode='virtual'
+  * amount = predicted_profit
+  * counts_to_budget=true (but will be clamped at cycle level)
+  * note='none_back virtual profit'
+
+**Predicted profit calculation** (initial):
+
+* Use account policy rate from `accounts.cashback_config.rate`
+* predicted_profit = abs(txn_amount) * rate
+* If policy has max per txn (optional), apply it
+
+### Mode 2 — real cashback (fixed / percent)
+
+When user inputs cashback (fixed or percent):
+
+* Set `transactions.cashback_mode` accordingly
+* Create/Upsert entry:
+
+  * mode='real'
+  * amount = real_cashback_amount (positive)
+  * counts_to_budget=true initially
+
+### Mode 3 — voluntary / overflow
+
+When cycle is exhausted OR account has no cashback and user toggles Voluntary Cashback:
+
+* Set `transactions.cashback_mode = 'voluntary'` (or keep separate if existing UI uses other fields)
+* Create/Upsert entry:
+
+  * mode='voluntary'
+  * amount = user_input_amount
+  * counts_to_budget=false
+
+4. If editing a txn:
+
+* Update the existing entry for that txn (same cycle) OR delete + recreate deterministically.
+* Ensure idempotency: one txn should not produce duplicate entries.
 
 ---
 
-## Deliverables
+## B) Cycle recomputation (must clamp virtual and overflow correctly)
 
-1. SQL migration(s) to create tables + new column
-2. Backfill script (SQL or server-side) that can be rerun safely (idempotent)
-3. Minimal helper/service to recompute cycles from entries
-4. README note in PR description explaining:
+After entry changes, call a single recompute routine:
 
-   * new tables
-   * backfill strategy
-   * how to validate
+### Recompute algorithm (deterministic)
+
+Given cycle:
+
+* real_total = sum(real entries where counts_to_budget=true)
+* voluntary_total = sum(voluntary entries) + sum(entries where counts_to_budget=false)
+* virtual_total_raw = sum(virtual entries)
+
+Let cap = max_budget
+Let cap_after_real = max(0, cap - real_total)
+
+virtual_total_effective = min(virtual_total_raw, cap_after_real)
+virtual_overflow = max(0, virtual_total_raw - virtual_total_effective)
+
+Set cycle fields:
+
+* real_awarded = real_total
+* virtual_profit = virtual_total_effective
+* overflow_loss = voluntary_total + virtual_overflow + real_overflow (see below)
+* is_exhausted = (real_total >= cap) OR (real_total + virtual_total_effective >= cap)
+
+### Real overflow handling (Case 2)
+
+If a single real entry pushes beyond cap, we must preserve the real entry amount but mark the overflow portion as loss.
+Implement this by:
+
+* Keeping entry amount unchanged
+* At recompute time:
+
+  * real_counts = min(real_total, cap)
+  * real_overflow = max(0, real_total - cap)
+  * cycle.real_awarded should remain as **real_counts** (counts to budget)
+  * Add real_overflow to overflow_loss
+
+Important: Do NOT mutate historical real entry amounts.
 
 ---
 
-## Validation Checklist
+## C) Minimal schema changes (only if needed)
 
-* [ ] After migration, `cashback_cycles` rows exist for accounts with cashback activity
-* [ ] `cashback_entries` count matches prior `cashback_profits` rows (plus any derived from tx fields)
-* [ ] Recompute produces stable totals on repeated runs
-* [ ] Existing app pages still load
+If you need clearer accounting without heavy logic, you may add:
+
+* `cashback_entries.counted_amount` numeric nullable (optional)
+
+  * store the portion that actually counts to budget
+  * but this is optional; recompute-only approach is acceptable
+
+Do not add new tables in MF5.2 unless absolutely necessary.
+
+---
+
+## D) UI touchpoints (minimal)
+
+Only minimal UI updates if required to:
+
+* Set `cashback_mode` for “None back” selection
+* Allow Voluntary Cashback when cycle exhausted / no cashback
+
+Do NOT redesign /cashback pages in MF5.2.
+
+---
+
+## Acceptance Criteria
+
+* Creating a Lend transaction with None-back creates a virtual entry and updates cycle totals.
+* Creating a real cashback txn updates real totals and clamps virtual.
+* If real cashback exceeds remaining budget, cycle shows exhausted and overflow_loss increases (real amount preserved).
+* Voluntary cashback creates voluntary entries that do not affect real/virtual budget.
+* Recompute is deterministic and idempotent (rerun yields same totals).
 
 ---
 
 ## Branch / Commit / PR
 
-* Branch: `PHASE-9.1-CASHBACK-CYCLES-ENTRIES-BACKFILL`
-* Commit: `PHASE 9.1 - Add cashback cycles/entries tables and backfill`
-* PR title: `MF5.1: Introduce cashback_cycles + cashback_entries with backfill`
+* Branch: `PHASE-9.2-CASHBACK-ENGINE-VIRTUAL-VOLUNTARY`
+* Commit: `PHASE 9.2 - Implement cashback engine (virtual profit + voluntary overflow)`
+* PR title: `MF5.2: Cashback engine for none-back virtual profit + voluntary overflow`
 
 ---
+
+## QA Checklist
+
+* [ ] Create Lend none-back → cycle virtual_profit increases (clamped)
+* [ ] Add real cashback txn → cycle real_awarded increases; virtual clamps if needed
+* [ ] Force over-cap real cashback → overflow_loss increases; real_awarded counted to cap
+* [ ] Toggle voluntary when exhausted → voluntary entry created; does not change budget
+* [ ] Edit txn updates entry without duplicates

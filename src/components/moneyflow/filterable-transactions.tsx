@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useCallback, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { ListFilter, X, Trash2, Undo, FileSpreadsheet, ArrowLeft, RotateCcw } from 'lucide-react'
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
@@ -99,6 +99,8 @@ export function FilterableTransactions({
     }, [])
 
     const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
 
     // [M2-SP1] Realtime: Subscribe to transaction changes
     useEffect(() => {
@@ -419,7 +421,21 @@ export function FilterableTransactions({
 
     // Pagination Logic
     const [pageSize, setPageSize] = useState(20)
-    const [currentPage, setCurrentPage] = useState(1)
+    const [currentPage, setCurrentPageState] = useState(1)
+
+    // Sync with URL on mount and updates
+    useEffect(() => {
+        const page = Number(searchParams?.get('page')) || 1
+        setCurrentPageState(page)
+    }, [searchParams])
+
+    const setCurrentPage = (page: number) => {
+        setCurrentPageState(page)
+        const params = new URLSearchParams(searchParams?.toString())
+        params.set('page', String(page))
+        router.push(`${pathname}?${params.toString()}`, { scroll: false })
+    }
+
     const [fontSize, setFontSize] = useState(14)
 
     // Reset to page 1 when filters change
@@ -710,7 +726,7 @@ export function FilterableTransactions({
                     hiddenColumns={[]}
                     isExcelMode={isExcelMode}
                     showPagination={false}
-                    currentPage={currentPage}
+                    currentPage={1} // FORCE 1 to prevent double slicing
                     pageSize={pageSize}
                     onPageChange={setCurrentPage}
                     onPageSizeChange={setPageSize}

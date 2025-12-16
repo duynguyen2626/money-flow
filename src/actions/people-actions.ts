@@ -46,6 +46,7 @@ export async function updatePersonAction(
     email?: string | null
     avatar_url?: string | null
     sheet_link?: string | null
+    google_sheet_url?: string | null
     subscriptionIds?: string[]
     is_owner?: boolean
     is_archived?: boolean

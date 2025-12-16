@@ -14,6 +14,8 @@ interface SmartAmountInputProps {
     placeholder?: string
     error?: string
     label?: string
+    unit?: string
+    hideCurrencyText?: boolean
 }
 
 export function SmartAmountInput({
@@ -23,7 +25,9 @@ export function SmartAmountInput({
     className,
     placeholder = '0',
     error,
-    label = 'Amount'
+    label = 'Amount',
+    unit,
+    hideCurrencyText
 }: SmartAmountInputProps) {
     const [inputValue, setInputValue] = React.useState('')
     const [isFocused, setIsFocused] = React.useState(false)
@@ -33,7 +37,7 @@ export function SmartAmountInput({
     // Sync internal string state with external number value
     React.useEffect(() => {
         if (!isFocused) {
-            setInputValue(value ? new Intl.NumberFormat('en-US').format(value) : '')
+            setInputValue(value ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(value) : '')
         }
     }, [value, isFocused])
 
@@ -66,8 +70,9 @@ export function SmartAmountInput({
             return
         }
 
-        if (!rawInput) {
+        if (rawInput.trim() === '') {
             onChange(undefined)
+            setInputValue('')
             return
         }
 
@@ -76,7 +81,7 @@ export function SmartAmountInput({
             const result = evaluateMath(rawInput)
             if (result !== null) {
                 onChange(result)
-                setInputValue(new Intl.NumberFormat('en-US').format(result))
+                setInputValue(new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(result))
             } else {
                 setMathError('Invalid calculation')
                 // Keep the input as is so user can fix it
@@ -86,7 +91,7 @@ export function SmartAmountInput({
             const num = parseFloat(rawInput)
             if (!isNaN(num)) {
                 onChange(num)
-                setInputValue(new Intl.NumberFormat('en-US').format(num))
+                setInputValue(new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(num))
             } else {
                 onChange(undefined)
                 setInputValue('')
@@ -118,25 +123,18 @@ export function SmartAmountInput({
 
         // If it's a number, format it with commas
         if (raw && !isNaN(Number(raw))) {
-            // Fix: Use parseFloat to support decimals
             const num = parseFloat(raw)
-
-            // Logic: If the user is typing, we only format if it's a "clean" integer and we want to enforce commas.
-            // But formatting while typing can be annoying if it moves cursor or changes decimals.
-            // Best practice: Update internal state with what user typed, only format on blur.
-            // OR: Format integers but leave decimals alone if they are being typed.
-
-            // Current approach (modified):
-            // If the value ends with '.', don't format (user is typing decimal).
-            // If the value has a fractional part being typed (e.g. "1.50"), formatting might strip the 0.
-
-            // SAFE MODE: Just set val to inputValue so the input reflects exactly what user types.
-            // We only trigger onChange with the parsed number.
-            setInputValue(val)
             onChange(num)
+
+            // Realtime formatting for integers
+            if (!val.includes('.') && !val.includes('e')) {
+                setInputValue(new Intl.NumberFormat('en-US').format(num))
+            } else {
+                setInputValue(val)
+            }
         } else {
             setInputValue(val)
-            onChange(undefined)
+            if (raw === '') onChange(undefined)
         }
     }
 
@@ -162,8 +160,12 @@ export function SmartAmountInput({
 
     const textParts = React.useMemo(() => {
         const currentVal = isFocused ? evaluateMath(inputValue.replace(/,/g, '')) : value
+        if (hideCurrencyText) return []
+        if (unit === '%') {
+            return currentVal ? [{ value: new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(currentVal), unit: '%' }] : []
+        }
         return formatVietnameseCurrencyText(currentVal ?? 0)
-    }, [value, inputValue, isFocused])
+    }, [value, inputValue, isFocused, hideCurrencyText, unit])
 
     return (
         <div className={cn("space-y-2", className)}>

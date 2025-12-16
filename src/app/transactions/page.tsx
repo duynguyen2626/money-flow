@@ -14,7 +14,7 @@ export default async function TransactionsPage() {
     getAccounts(),
     getCategories(),
     getPeople(),
-    getUnifiedTransactions({ limit: 100, includeVoided: true }),
+    getUnifiedTransactions({ limit: 1000, includeVoided: true }),
     getShops(),
   ])
 

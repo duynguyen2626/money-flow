@@ -613,6 +613,7 @@ export type Database = {
           type: string
           updated_at: string
           sheet_link: string | null
+          google_sheet_url: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -629,6 +630,7 @@ export type Database = {
           type?: string
           updated_at?: string
           sheet_link?: string | null
+          google_sheet_url?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -645,6 +647,7 @@ export type Database = {
           type?: string
           updated_at?: string
           sheet_link?: string | null
+          google_sheet_url?: string | null
         }
         Relationships: []
       }
