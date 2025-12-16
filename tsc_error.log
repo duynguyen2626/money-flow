@@ -1,4 +1,0 @@
-'CALL "C:\nvm4w\nodejs\\node.exe" "C:\nvm4w\nodejs\\node_modules\npm\bin\npm-prefix.js"' is not recognized as an internal or external command,
-operable program or batch file.
-src/components/moneyflow/transaction-form.tsx(2097,29): error TS2339: Property 'remainingBudget' does not exist on type 'AccountSpendingStats'.
-src/components/moneyflow/transaction-form.tsx(2100,61): error TS2339: Property 'remainingBudget' does not exist on type 'AccountSpendingStats'.

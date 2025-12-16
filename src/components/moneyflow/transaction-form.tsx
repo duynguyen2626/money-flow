@@ -47,7 +47,7 @@ const formSchema = z.object({
   shop_id: z.string().optional(),
   is_voluntary: z.boolean().optional(),
   is_installment: z.boolean().optional(),
-  cashback_mode: z.enum(['none_back', 'voluntary', 'real_fixed', 'real_percent', 'shared']).optional(),
+  cashback_mode: z.enum(['none_back', 'voluntary', 'real_fixed', 'real_percent']).optional(),
 }).refine(data => {
   if ((data.type === 'expense' || data.type === 'income') && !data.category_id) {
     return false
