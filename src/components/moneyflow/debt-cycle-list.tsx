@@ -73,22 +73,52 @@ export function DebtCycleList({
         })
 
         // Convert to array and sort
-        // Sort strategy: Cycles with most recent activity first
+        // Convert to array and sort
         return Array.from(groups.entries()).map(([tag, txns]) => {
-            // Find latest date in this group
+            // Find latest date in this group (fallback)
             const latestDate = txns.reduce((max, txn) => {
                 const d = new Date(txn.occurred_at ?? txn.created_at).getTime()
                 return d > max ? d : max
             }, 0)
 
+            // Try to parse Tag: "MMMyy" (e.g. NOV25, DEC25)
+            // If tag is valid MMMyy, we prioritize it for sorting.
+            let tagDateVal = 0
+            if (tag.length === 5) { // Simple check before regex/parse
+                const monthStr = tag.substring(0, 3)
+                const yearStr = tag.substring(3)
+                const months: Record<string, number> = {
+                    'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
+                    'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
+                }
+                const m = months[monthStr.toUpperCase()]
+                const y = parseInt(yearStr, 10)
+                if (m !== undefined && !isNaN(y)) {
+                    // Year 25 -> 2025
+                    tagDateVal = new Date(2000 + y, m, 1).getTime()
+                }
+            }
+
             return {
                 tag,
                 transactions: txns,
                 latestDate,
-                // Keep track of original index for stability if needed, 
-                // but date sort is usually sufficient.
+                tagDateVal,
             }
-        }).sort((a, b) => b.latestDate - a.latestDate)
+        }).sort((a, b) => {
+            // Primary Sort: Tag Date Time
+            if (a.tagDateVal > 0 && b.tagDateVal > 0) {
+                return b.tagDateVal - a.tagDateVal
+            }
+            // If one has tag date and other doesn't, strict separation? 
+            // Put Tagged ON TOP of Untagged usually? 
+            // Or fallback to latest activity.
+            if (a.tagDateVal > 0) return -1
+            if (b.tagDateVal > 0) return 1
+
+            // Fallback: Latest Activity
+            return b.latestDate - a.latestDate
+        })
     }, [filteredTransactions])
 
     // Accordion State
@@ -133,7 +163,8 @@ export function DebtCycleList({
     const activeTag = useMemo(() => {
         if (groupedCycles.length === 0) return null
         const exists = groupedCycles.find(g => g.tag === expandedTag)
-        return exists ? expandedTag : null
+        // Default to first (latest) if no explicit selection matches, or if nothing selected
+        return exists ? expandedTag : groupedCycles[0].tag
     }, [groupedCycles, expandedTag])
 
 

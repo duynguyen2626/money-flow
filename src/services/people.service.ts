@@ -240,6 +240,11 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         }
 
         if (personId) {
+          // Debugging Cycle Logic
+          // if (personId === '1f4f286e-d24f-47f3-ab04-14bce424f89a') { // Optional: Filter by specific person if known
+          // console.log(`[DebLogic] Txn Date: ${txnDate}, CurrentStart: ${currentMonthStart}, Tag: ${txn.tag}, CurrentTag: ${currentMonthTag}, IsCurrent: ${isCurrentCycle}, Amount: ${txn.amount}`)
+          // }
+
           // Calculate final price (Prefer DB final_price > Calc)
           let finalPrice = 0
           if (typeof (txn as any).final_price === 'number') {
@@ -257,7 +262,12 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
           debtBalanceByPerson.set(personId, current + finalPrice)
 
           // Track current cycle debt separately
-          if (isCurrentCycle) {
+          // STRICTER LOGIC: If tag exists, it MUST match. If no tag, check date.
+          const isStrictlyCurrentCycle = txn.tag
+            ? txn.tag === currentMonthTag
+            : (txnDate && txnDate >= currentMonthStart)
+
+          if (isStrictlyCurrentCycle) {
             const currentCycle = currentCycleDebtByPerson.get(personId) ?? 0
             currentCycleDebtByPerson.set(personId, currentCycle + finalPrice)
           }
@@ -417,6 +427,15 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         const groupingKey = tagValue ?? fallbackKey
         const label = tagValue ?? (validDate ? format(validDate, 'MMM yy', { locale: enUS }).toUpperCase() : 'Repayment')
 
+        // Update current cycle debt if repayment is in current cycle
+        const currentMonthTag = format(new Date(), 'MMMyy').toUpperCase()
+        const isCurrentCycle = (validDate && validDate >= currentMonthStart) || (txn.tag === currentMonthTag)
+
+        if (isCurrentCycle) {
+          const currentCycle = currentCycleDebtByPerson.get(ownerId) ?? 0
+          currentCycleDebtByPerson.set(ownerId, currentCycle - amount)
+        }
+
         const personMap = monthlyDebtMap.get(ownerId) ?? new Map<string, MonthlyDebtSummary>()
         const existing = personMap.get(groupingKey)
 
@@ -506,9 +525,29 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     }
   }) ?? []
 
-  if (includeArchived) return mapped
-  return mapped.filter(person => !person.is_archived)
+  if (includeArchived) return mapped.sort(sortPeopleByDebtAmount)
+  return mapped.filter(person => !person.is_archived).sort(sortPeopleByDebtAmount)
 }
+
+function sortPeopleByDebtAmount(a: Person, b: Person): number {
+  // Sort by Current Cycle Debt (Desc)
+  // "biggest Tab debt remains" -> The Badge Value
+  const debtA = a.current_cycle_debt ?? 0
+  const debtB = b.current_cycle_debt ?? 0
+
+  if (debtB !== debtA) {
+    return debtB - debtA
+  }
+
+  // Fallback: Last Activity
+  const getLastActivity = (p: Person) => {
+    if (!p.monthly_debts || p.monthly_debts.length === 0) return 0
+    const latest = p.monthly_debts[0]
+    return latest.occurred_at ? new Date(latest.occurred_at).getTime() : 0
+  }
+  return getLastActivity(b) - getLastActivity(a)
+}
+
 
 export async function ensureDebtAccount(
   personId: string,
