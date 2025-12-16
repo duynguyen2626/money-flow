@@ -179,6 +179,11 @@ export type TransactionWithLineRelations = TransactionLineRow & {
   person_id?: string | null;
 }
 
+export type CashbackMode = 'none_back' | 'real_fixed' | 'real_percent' | 'voluntary'
+
+export type CashbackEntry = Database['public']['Tables']['cashback_entries']['Row']
+export type CashbackCycle = Database['public']['Tables']['cashback_cycles']['Row']
+
 export type TransactionWithDetails = TransactionRow & {
   amount: number
   transaction_lines?: TransactionWithLineRelations[];
@@ -198,6 +203,9 @@ export type TransactionWithDetails = TransactionRow & {
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
   cashback_share_amount?: number | null;
+
+  // MF5.2 Cashback Mode
+  cashback_mode?: CashbackMode | null
   final_price?: number | null;
   original_amount?: number | null;
   type?: 'income' | 'expense' | 'transfer' | 'debt' | 'repayment';

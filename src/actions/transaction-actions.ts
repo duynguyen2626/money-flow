@@ -23,6 +23,7 @@ export type CreateTransactionInput = {
   cashback_share_fixed?: number | null;
   discount_category_id?: string | null;
   shop_id?: string | null;
+  cashback_mode?: string | null;
 };
 
 async function resolveSystemCategory(

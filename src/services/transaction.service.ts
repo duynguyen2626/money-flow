@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { Json, Database } from '@/types/database.types';
-import { TransactionWithDetails, TransactionWithLineRelations, AccountRow } from '@/types/moneyflow.types';
+import { TransactionWithDetails, TransactionWithLineRelations, AccountRow, CashbackMode } from '@/types/moneyflow.types';
 import { upsertTransactionCashback, removeTransactionCashback } from './cashback.service';
 
 type TransactionStatus = 'posted' | 'pending' | 'void' | 'waiting_refund' | 'refunded' | 'completed';
@@ -26,7 +26,7 @@ export type CreateTransactionInput = {
   is_installment?: boolean;
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
-  cashback_mode?: string | null;
+  cashback_mode?: CashbackMode | null;
 };
 
 type FlatTransactionRow = {
@@ -51,7 +51,7 @@ type FlatTransactionRow = {
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
   cashback_share_amount?: number | null;
-  cashback_mode?: string | null;
+  cashback_mode?: CashbackMode | null;
   currency?: string | null;
 
   final_price?: number | null;
@@ -388,7 +388,7 @@ export async function loadTransactions(options: {
   let query = supabase
     .from('transactions')
     .select(
-      'id, occurred_at, note, status, tag, created_at, created_by, amount, type, account_id, target_account_id, category_id, person_id, metadata, shop_id, persisted_cycle_tag, is_installment, installment_plan_id, cashback_share_percent, cashback_share_fixed, final_price, transaction_history(count)'
+      'id, occurred_at, note, status, tag, created_at, created_by, amount, type, account_id, target_account_id, category_id, person_id, metadata, shop_id, persisted_cycle_tag, is_installment, installment_plan_id, cashback_share_percent, cashback_share_fixed, cashback_mode, final_price, transaction_history(count)'
     )
     .order('occurred_at', { ascending: false });
 
@@ -683,24 +683,17 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
 
         try {
           await syncTransactionToSheet(newPersonId, createPayload as any, 'create');
-          console.log('[Sheet Sync] Create completed');
+          console.log('[Sheet Sync] Create new entry completed');
         } catch (err) {
           console.error('[Sheet Sync] Create new entry failed:', err);
         }
       }
     }
-  } catch (syncError) {
-    console.error('[Sheet Sync] Import or sync failed:', syncError);
-    // Don't fail the update if sheet sync fails
+  } catch (sheetError) {
+    console.error('[Sheet Sync] Overall error:', sheetError);
   }
 
-  revalidatePath('/transactions');
-  revalidatePath('/accounts');
-  revalidatePath('/people');
-
-
-
-  // CASHBACK INTEGRATION
+  // CASHBACK INTEGRATION (Update)
   try {
     const supabase = createClient();
     const { data: rawTxn } = await supabase.from('transactions').select('*, categories(name)').eq('id', id).single();

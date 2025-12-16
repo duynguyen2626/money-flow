@@ -115,7 +115,8 @@ export async function upsertTransactionCashback(
         0
       );
       amount = calcParams.amount;
-      countsToBudget = false;
+      // MF5.2 Rule: Virtual counts to budget initially, but is clamped during recompute
+      countsToBudget = true;
       break;
   }
 
@@ -151,7 +152,87 @@ export async function upsertTransactionCashback(
     await supabase.from('cashback_entries').insert(entryData);
   }
 
-  await supabase.rpc('recompute_cashback_cycle', { p_cycle_id: cycleId });
+  // Trigger TypeScript Recompute Engine
+  await recomputeCashbackCycle(cycleId);
+}
+
+/**
+ * MF5.2 Engine: Deterministic Recomputation
+ */
+export async function recomputeCashbackCycle(cycleId: string) {
+  const supabase = createClient();
+
+  // 1. Fetch Cycle & Entries
+  const { data: cycle } = await supabase
+    .from('cashback_cycles')
+    .select('max_budget')
+    .eq('id', cycleId)
+    .single();
+
+  if (!cycle) return;
+
+  const { data: entries } = await supabase
+    .from('cashback_entries')
+    .select('mode, amount, counts_to_budget')
+    .eq('cycle_id', cycleId);
+
+  if (!entries) return;
+
+  // 2. Aggregate
+  let realTotal = 0;
+  let virtualTotalRaw = 0;
+  let voluntaryTotal = 0;
+
+  // Real Overflow Tracking (Case 2)
+  // We need to sum Real entries that exceed budget as "Real Overflow"
+  // But typically simply sum(real) is enough, and we calc overflow from the Cap.
+
+  entries.forEach(e => {
+    if (e.mode === 'real' && e.counts_to_budget) {
+      realTotal += e.amount;
+    } else if (e.mode === 'virtual') {
+      virtualTotalRaw += e.amount;
+    } else if (e.mode === 'voluntary' || !e.counts_to_budget) {
+      voluntaryTotal += e.amount;
+    }
+  });
+
+  const maxBudget = cycle.max_budget ?? 0;
+
+  // 3. Logic Application
+  // Cap available for Virtual = Max - Real (floor 0)
+  const capAfterReal = Math.max(0, maxBudget - realTotal);
+
+  // Virtual Effective = min(VirtualRaw, CapAvailable)
+  const virtualEffective = Math.min(virtualTotalRaw, capAfterReal);
+
+  // Virtual Overflow = VirtualRaw - VirtualEffective
+  const virtualOverflow = Math.max(0, virtualTotalRaw - virtualEffective);
+
+  // Real Overflow = max(0, RealTotal - Max)
+  const realOverflow = Math.max(0, realTotal - maxBudget);
+
+  // Total Overflow Loss = Voluntary + VirtualOverflow + RealOverflow
+  const overflowLoss = voluntaryTotal + virtualOverflow + realOverflow;
+
+  // Real Awarded for Cycle Stats:
+  // Usually we show the Actual Real amount given even if it overflows?
+  // Spec says: "cycle.real_awarded should remain as real_counts" -> "real_counts = min(real_total, cap)"
+  // Wait, clarify spec: "cycle.real_awarded should remain as real_counts (counts to budget)"
+  // So real_awarded in DB = Min(RealTotal, Cap).
+  // The REST of Real is in overflow_loss.
+  const realEffective = Math.min(realTotal, maxBudget);
+
+  const isExhausted = realTotal >= maxBudget || (realTotal + virtualEffective) >= maxBudget;
+
+  // 4. Update Cycle
+  await supabase.from('cashback_cycles').update({
+    real_awarded: realEffective,
+    virtual_profit: virtualEffective,
+    overflow_loss: overflowLoss,
+    is_exhausted: isExhausted,
+    updated_at: new Date().toISOString()
+  }).eq('id', cycleId);
 }
 
 /**
@@ -169,7 +250,7 @@ export async function removeTransactionCashback(transactionId: string) {
   if (entry) {
     await supabase.from('cashback_entries').delete().eq('transaction_id', transactionId);
     if (entry.cycle_id) {
-      await supabase.rpc('recompute_cashback_cycle', { p_cycle_id: entry.cycle_id });
+      await recomputeCashbackCycle(entry.cycle_id);
     }
   }
 }
