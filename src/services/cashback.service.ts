@@ -24,8 +24,10 @@ async function ensureCycle(accountId: string, cycleTag: string, accountConfig: a
 
   // 2. Create if not exists
   const config = parseCashbackConfig(accountConfig);
-  const maxBudget = config.maxAmount ?? 0;
-  const minSpend = config.minSpend ?? 0;
+  // Default to null if not defined, allowing DB to store NULL.
+  // When doing math later, we treat NULL as 0.
+  const maxBudget = config.maxAmount ?? null;
+  const minSpend = config.minSpend ?? null;
 
   const { data: newCycle, error } = await supabase
     .from('cashback_cycles')

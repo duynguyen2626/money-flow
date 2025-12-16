@@ -9,9 +9,9 @@ description: Commit and Push Changes
 
 ## Required Inputs
 
-* `PHASE_ID` (example: `78.1`)
-* `SCOPE_SLUG` (example: `ACCOUNT-UI-POLISH-LOGIC-FIXES`)
-* `COMMIT_TITLE` (example: `ACCOUNT UI POLISH & LOGIC FIXES`)
+* `PHASE_ID` (example: `9.2.1`)
+* `SCOPE_SLUG` (example: `FIX-RECOMPUTE-CONSISTENCY`)
+* `COMMIT_TITLE` (example: `Fix cashback recompute consistency and normalize budgets`)
 * `BASE_BRANCH` (default: `main`)
 
 ## Derived
