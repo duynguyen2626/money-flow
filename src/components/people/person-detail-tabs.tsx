@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { LayoutDashboard, Link as LinkIcon, ChevronDown, ChevronUp } from 'lucide-react'
+import { LayoutDashboard, Link as LinkIcon, ChevronDown, ChevronUp, History } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { SmartFilterBar } from '@/components/moneyflow/smart-filter-bar'
 import { DebtCycleList } from '@/components/moneyflow/debt-cycle-list'
 import { SheetSyncControls } from '@/components/people/sheet-sync-controls'
+import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 
 interface PersonDetailTabsProps {
     accounts: Account[]
@@ -16,6 +17,7 @@ interface PersonDetailTabsProps {
     personId: string
     sheetProfileId: string
     sheetLink?: string | null
+    googleSheetUrl?: string | null
     transactions: any[]
 }
 
@@ -27,14 +29,16 @@ export function PersonDetailTabs({
     personId,
     sheetProfileId,
     sheetLink,
+    googleSheetUrl,
     transactions,
 }: PersonDetailTabsProps) {
-    const [activeTab, setActiveTab] = useState<'details' | 'sheet'>('details')
+    const [activeTab, setActiveTab] = useState<'details' | 'sheet' | 'history'>('details')
     const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'lend' | 'repay'>('all')
     const [searchTerm, setSearchTerm] = useState('')
 
     const tabs = [
         { id: 'details' as const, label: 'Details', icon: <LayoutDashboard className="h-4 w-4" /> },
+        { id: 'history' as const, label: 'History', icon: <History className="h-4 w-4" /> },
         { id: 'sheet' as const, label: 'Sheet Link', icon: <LinkIcon className="h-4 w-4" /> },
     ]
 
@@ -109,9 +113,29 @@ export function PersonDetailTabs({
                     </div>
                 )}
 
+                {activeTab === 'history' && (
+                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                        <UnifiedTransactionTable
+                            transactions={transactions}
+                            accounts={accounts}
+                            categories={categories}
+                            people={people}
+                            shops={shops}
+                            context="person"
+                            contextId={personId}
+                            showPagination={true}
+                            pageSize={20}
+                        />
+                    </div>
+                )}
+
                 {activeTab === 'sheet' && (
                     <div>
-                        <SheetSyncControls personId={sheetProfileId} sheetLink={sheetLink} />
+                        <SheetSyncControls
+                            personId={sheetProfileId}
+                            sheetLink={sheetLink}
+                            googleSheetUrl={googleSheetUrl}
+                        />
                     </div>
                 )}
             </div>

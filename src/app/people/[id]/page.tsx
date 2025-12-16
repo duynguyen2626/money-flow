@@ -128,6 +128,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
             personId={actualAccountId}
             sheetProfileId={sheetProfileId}
             sheetLink={person.sheet_link}
+            googleSheetUrl={person.google_sheet_url}
             transactions={transactions}
           />
         </div>

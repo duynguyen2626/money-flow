@@ -2,7 +2,7 @@
 
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { format, subMonths } from 'date-fns'
+import { format, subMonths, parseISO } from 'date-fns'
 import { Controller, Resolver, useForm, useWatch } from 'react-hook-form'
 import { useCallback, useEffect, useMemo, useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
@@ -17,7 +17,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateTag } from '@/lib/tag'
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
-import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw, ChevronLeft, ExternalLink, X, UploadCloud, Clock } from 'lucide-react'
+import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw, ChevronLeft, ExternalLink, X, UploadCloud, Clock, Sparkles } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { cn, getAccountInitial } from '@/lib/utils'
 import { SmartAmountInput } from '@/components/ui/smart-amount-input'
@@ -47,6 +47,7 @@ const formSchema = z.object({
   shop_id: z.string().optional(),
   is_voluntary: z.boolean().optional(),
   is_installment: z.boolean().optional(),
+  cashback_mode: z.enum(['none_back', 'voluntary', 'real_fixed', 'real_percent', 'shared']).optional(),
 }).refine(data => {
   if ((data.type === 'expense' || data.type === 'income') && !data.category_id) {
     return false
@@ -279,6 +280,7 @@ export function TransactionForm({
       cashback_share_fixed: undefined,
       is_voluntary: false,
       is_installment: false,
+      cashback_mode: 'none_back' as const,
     }),
     [defaultDebtAccountId, defaultSourceAccountId, defaultTag, defaultType, isRefundMode, refundCategoryId]
   )
@@ -288,6 +290,7 @@ export function TransactionForm({
     defaultValues: {
       ...baseDefaults,
       ...initialValues,
+      cashback_mode: (initialValues?.cashback_mode as any) ?? 'none_back',
       occurred_at: initialValues?.occurred_at
         ? (initialValues.occurred_at instanceof Date ? initialValues.occurred_at : new Date(initialValues.occurred_at))
         : new Date(),
@@ -340,6 +343,7 @@ export function TransactionForm({
     const newValues = {
       ...baseDefaults,
       ...initialValues,
+      cashback_mode: (initialValues.cashback_mode as any) ?? 'none_back',
       occurred_at: initialValues.occurred_at
         ? (initialValues.occurred_at instanceof Date ? initialValues.occurred_at : new Date(initialValues.occurred_at))
         : new Date(),
@@ -657,6 +661,11 @@ export function TransactionForm({
   const watchedCashbackFixed = useWatch({
     control,
     name: 'cashback_share_fixed',
+  })
+
+  const watchedCashbackMode = useWatch({
+    control,
+    name: 'cashback_mode',
   })
 
 
@@ -1120,11 +1129,20 @@ export function TransactionForm({
       return 0
     }
     const rawCashback = Math.abs(watchedAmount) * rate
+
     // Apply category-specific max reward if available
+    let cappedCashback = rawCashback;
     if (spendingStats?.maxReward && spendingStats.maxReward > 0) {
-      return Math.min(rawCashback, spendingStats.maxReward)
+      cappedCashback = Math.min(rawCashback, spendingStats.maxReward)
     }
-    return rawCashback
+
+    // Apply Budget Cap for Potential Profit display
+    if (spendingStats?.maxCashback) {
+      const budgetLeft = Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar);
+      cappedCashback = Math.min(cappedCashback, budgetLeft);
+    }
+
+    return cappedCashback
   }, [cashbackMeta, watchedAmount, spendingStats])
 
   const amountValue = typeof watchedAmount === 'number' ? Math.abs(watchedAmount) : 0
@@ -1166,13 +1184,9 @@ export function TransactionForm({
         )
       )
       : null
-  const isVoluntary = useWatch({ control, name: 'is_voluntary' })
-
   const showCashbackInputs =
-    (transactionType !== 'income' &&
-      transactionType !== 'transfer' &&
-      transactionType !== 'repayment' &&
-      ((selectedAccount?.type === 'credit_card' && amountValue > 0) || isVoluntary))
+    (transactionType === 'expense' || (transactionType === 'debt' && selectedAccount?.type === 'credit_card')) &&
+    (watchedCashbackMode === 'real_fixed' || watchedCashbackMode === 'real_percent' || watchedCashbackMode === 'voluntary')
 
   // Validation: Total cashback must be less than amount
   const cashbackExceedsAmount = showCashbackInputs && rawShareTotal >= amountValue && amountValue > 0
@@ -1242,6 +1256,21 @@ export function TransactionForm({
       form.setValue('source_account_id', defaultSourceAccountId)
     }
   }, [defaultSourceAccountId, form, initialValues?.source_account_id, isEditMode])
+
+  // Reset cashback when Account or Amount changes significantly
+  useEffect(() => {
+    // Only reset if we are not in edit mode loading phase
+    if (!form.formState.isLoading) {
+      // If account changes, reset query logic resets stats, but we should reset inputs
+      form.setValue('cashback_share_fixed', 0);
+      form.setValue('cashback_share_percent', 0);
+      // If amount is cleared, also reset
+      if (!amountValue) {
+        form.setValue('cashback_share_fixed', 0);
+        form.setValue('cashback_share_percent', 0);
+      }
+    }
+  }, [selectedAccount?.id, amountValue, form]);
 
   useEffect(() => {
     if (isEditMode && initialValues?.debt_account_id) return
@@ -1961,28 +1990,364 @@ export function TransactionForm({
 
   ) : null
 
-  // CRITICAL FIX: Voluntary Cashback only for Expense or Debt (Lending), never for Repayment/Transfer/Income
-  const VoluntaryCashbackInput = (transactionType === 'expense' || (transactionType === 'debt' && selectedAccount?.type === 'credit_card')) ? (
-    <div className="flex items-center justify-between rounded-lg border border-slate-200 p-4 bg-slate-50">
-      <div className="space-y-0.5">
-        <label htmlFor="is_voluntary" className="text-sm font-medium text-slate-900">
-          Voluntary Cashback
-        </label>
-        <p className="text-xs text-slate-500">
-          Enable to track cashback without creating a debt record.
-        </p>
+
+
+  const showCashbackSection = (transactionType === 'expense' || (transactionType === 'debt' && selectedAccount?.type === 'credit_card'));
+
+  const CashbackModeInput = showCashbackSection ? (
+    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="text-sm font-medium text-slate-900 flex items-center gap-2">
+          <Percent className="h-4 w-4 text-blue-500" />
+          Cashback
+        </h4>
+        {spendingStats && spendingStats.cycle && (
+          <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
+            {format(parseISO(spendingStats.cycle.start), 'dd MMM')} - {format(parseISO(spendingStats.cycle.end), 'dd MMM')}
+          </span>
+        )}
       </div>
+
+      {/* Mode Selector - Simplified */}
       <Controller
         control={control}
-        name="is_voluntary"
+        name="cashback_mode"
         render={({ field }) => (
-          <Switch
-            checked={field.value ?? false}
-            onCheckedChange={field.onChange}
-          />
+          <div className="flex p-1 bg-slate-200/50 rounded-lg">
+            <button
+              type="button"
+              onClick={() => field.onChange('none_back')}
+              className={cn(
+                "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
+                (!field.value || field.value === 'none_back') ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+              )}
+            >
+              Virtual (Auto)
+            </button>
+            <button
+              type="button"
+              onClick={() => field.onChange(field.value === 'real_percent' ? 'real_percent' : 'real_fixed')}
+              className={cn(
+                "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
+                (field.value === 'real_fixed' || field.value === 'real_percent') ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+              )}
+            >
+              Real (Claimed)
+            </button>
+            <button
+              type="button"
+              onClick={() => field.onChange('voluntary')}
+              className={cn(
+                "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
+                field.value === 'voluntary' ? "bg-white text-amber-700 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+              )}
+            >
+              Voluntary
+            </button>
+          </div>
         )}
       />
-    </div>
+
+      {/* Real Mode: Unified % and Fixed */}
+      {(watchedCashbackMode === 'real_fixed' || watchedCashbackMode === 'real_percent') && (
+        <div className="space-y-3 animate-in fade-in slide-in-from-top-1 bg-white p-3 rounded-md border border-slate-100 shadow-sm">
+          <div className="grid grid-cols-2 gap-3">
+            {/* Percent Input */}
+            <div className="space-y-1">
+              <div className="flex justify-between items-baseline">
+                <label className="text-xs font-medium text-slate-500">% Rate</label>
+                {(() => {
+                  const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
+                  const rateMaxAmount = amountValue * (rateLimitPercent ?? 100) / 100;
+                  const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+                  const currentFixed = form.getValues('cashback_share_fixed') || 0;
+                  const remainingForPercent = Math.max(0, absoluteLimit - currentFixed);
+                  // Calculate implied max percent
+                  const maxPercent = amountValue > 0 ? (remainingForPercent / amountValue) * 100 : 0;
+
+                  return (
+                    <span className="text-[10px] text-slate-400">
+                      Max: {numberFormatter.format(maxPercent)}%
+                    </span>
+                  )
+                })()}
+              </div>
+              <Controller
+                control={control}
+                name="cashback_share_percent"
+                render={({ field }) => {
+                  const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
+                  const rateMaxAmount = amountValue * (rateLimitPercent ?? 100) / 100;
+                  const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+                  const currentFixed = form.getValues('cashback_share_fixed') || 0;
+                  const isFullyConsumedByFixed = currentFixed >= absoluteLimit - 100; // tolerance
+
+                  return (
+                    <SmartAmountInput
+                      value={field.value}
+                      unit="%"
+                      disabled={isFullyConsumedByFixed && !field.value} // Disable if consumed AND empty
+                      onChange={(val) => {
+                        const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
+                        const rateMaxAmount = amountValue * (rateLimitPercent ?? 100) / 100;
+                        const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+
+                        const currentFixed = form.getValues('cashback_share_fixed') || 0;
+                        const remainingForPercent = Math.max(0, absoluteLimit - currentFixed);
+
+                        // Calculate implied amount from this %
+                        let safePercent = val;
+                        if (val !== undefined && amountValue > 0) {
+                          const impliedAmount = (amountValue * val) / 100;
+                          if (impliedAmount > remainingForPercent) {
+                            safePercent = (remainingForPercent / amountValue) * 100;
+                          }
+                        }
+
+                        field.onChange(safePercent);
+                        form.setValue('cashback_mode', 'real_percent');
+                      }}
+                      placeholder="0"
+                      className={cn("w-full", isFullyConsumedByFixed && !field.value && "opacity-50 bg-slate-100 cursor-not-allowed")}
+                    />
+                  )
+                }}
+              />
+            </div>
+
+            {/* Fixed Input */}
+            <div className="space-y-1">
+              <div className="flex justify-between items-baseline">
+                <label className="text-xs font-medium text-slate-500">Amount</label>
+                {(() => {
+                  const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
+                  const rateMaxAmount = amountValue * (rateLimitPercent ?? 100) / 100;
+                  const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+                  const currentPercent = form.getValues('cashback_share_percent') || 0;
+                  const percentAmount = (amountValue * currentPercent) / 100;
+                  const remainingForFixed = Math.max(0, absoluteLimit - percentAmount);
+
+                  return (
+                    <span className="text-[10px] text-slate-400">
+                      Max: {numberFormatter.format(remainingForFixed)}
+                    </span>
+                  )
+                })()}
+              </div>
+              <Controller
+                control={control}
+                name="cashback_share_fixed"
+                render={({ field }) => {
+                  const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
+                  const rateMaxAmount = amountValue * (rateLimitPercent ?? 100) / 100;
+                  const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+                  const currentPercent = form.getValues('cashback_share_percent') || 0;
+                  const percentAmount = (amountValue * currentPercent) / 100;
+                  const isFullyConsumedByPercent = percentAmount >= absoluteLimit - 100; // tolerance
+
+                  return (
+                    <SmartAmountInput
+                      value={field.value}
+                      disabled={isFullyConsumedByPercent && !field.value} // Disable if consumed AND empty
+                      onChange={(val) => {
+                        const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
+                        const rateMaxAmount = amountValue * (rateLimitPercent ?? 100) / 100;
+                        const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+
+                        const currentPercent = form.getValues('cashback_share_percent') || 0;
+                        const percentAmount = (amountValue * currentPercent) / 100;
+                        const remainingForFixed = Math.max(0, absoluteLimit - percentAmount);
+
+                        let safeVal = val;
+                        if (val !== undefined && val > remainingForFixed) {
+                          safeVal = remainingForFixed;
+                        }
+
+                        field.onChange(safeVal);
+                        form.setValue('cashback_mode', 'real_fixed');
+                      }}
+                      placeholder="Amount"
+                      className={cn("w-full", isFullyConsumedByPercent && !field.value && "opacity-50 bg-slate-100 cursor-not-allowed")}
+                    />
+                  )
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Real-time Calculation Display */}
+          <div className="flex flex-col gap-2">
+            <div className="flex justify-between items-center px-2 py-1 bg-slate-50 rounded border border-slate-100">
+              <span className="text-xs font-medium text-slate-500">
+                {transactionType === 'debt' ? 'Total Give Away:' : 'Total Claim:'}
+              </span>
+              <span className="text-sm font-bold text-emerald-700">
+                {numberFormatter.format(
+                  ((amountValue * (watchedCashbackPercent || 0)) / 100) + (watchedCashbackFixed || 0)
+                )}
+              </span>
+            </div>
+
+            {/* Virtual Profit Hint */}
+            {(() => {
+              // Calculate "Potential Max" based on Rate Limit (if exists) or Budget Left
+              const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
+              // If there's a specific rate limit, that is the theoretical max for this transaction
+              const cardRateLimit = rateLimitPercent ?? 100;
+              const rateMaxAmount = amountValue * cardRateLimit / 100;
+
+              // The potential max is the lower of Budget Left or Rate Cap
+              const potentialMax = Math.min(budgetLeft, rateMaxAmount);
+
+              const currentClaim = ((amountValue * (watchedCashbackPercent || 0)) / 100) + (watchedCashbackFixed || 0);
+              const virtualProfit = potentialMax - currentClaim;
+
+              // Only show if there is a meaningful positive difference (> 1k VND to avoid rounding noise)
+              if (virtualProfit > 1000) {
+                return (
+                  <div className="flex justify-between items-center px-2 py-1 bg-emerald-50 rounded border border-emerald-100">
+                    <span className="text-xs font-medium text-emerald-600 flex items-center gap-1">
+                      <Sparkles className="h-3 w-3" />
+                      Virtual Profit (Mine):
+                    </span>
+                    <span className="text-sm font-bold text-emerald-600">
+                      +{numberFormatter.format(virtualProfit)}
+                    </span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
+          </div>
+
+          {/* Hints for Real Mode */}
+          <div className="text-xs text-slate-500 flex flex-col gap-1 border-t border-slate-100 pt-2">
+            {rateLimitPercent !== null && (
+              <div className="flex justify-between">
+                <span>Card Rate:</span>
+                <span className="font-medium bg-slate-100 px-1 py-0.5 rounded">{rateLimitPercent}%</span>
+              </div>
+            )}
+            {spendingStats?.maxCashback && (
+              <div className="flex justify-between text-amber-600">
+                <span>Budget Left:</span>
+                <span>{numberFormatter.format(Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar))}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Voluntary Mode: Decoupled Logic with Total Validated against Amount */}
+      {watchedCashbackMode === 'voluntary' && (
+        <div className="space-y-3 animate-in fade-in slide-in-from-top-1 bg-amber-50/50 p-3 rounded-md border border-amber-100 shadow-sm">
+          <div className="grid grid-cols-2 gap-3">
+            {/* Voluntary Percent */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-amber-700">% Voluntary</label>
+              <Controller
+                control={control}
+                name="cashback_share_percent"
+                render={({ field }) => (
+                  <SmartAmountInput
+                    value={field.value}
+                    unit="%"
+                    onChange={(val) => {
+                      // Total cannot exceed Amount
+                      // Also Cap % by Card Rate
+                      const currentFixed = form.getValues('cashback_share_fixed') || 0;
+                      const remainingForPercent = Math.max(0, amountValue - currentFixed);
+                      let safePercent = val;
+
+                      // 1. Cap by Card Rate (if exists)
+                      if (safePercent !== undefined && rateLimitPercent !== null && safePercent > rateLimitPercent) {
+                        safePercent = rateLimitPercent;
+                      }
+
+                      // 2. Cap by Remaining Amount Space
+                      if (safePercent !== undefined && amountValue > 0) {
+                        const impliedAmount = (amountValue * safePercent) / 100;
+                        if (impliedAmount > remainingForPercent) {
+                          safePercent = (remainingForPercent / amountValue) * 100;
+                        }
+                      }
+                      field.onChange(safePercent);
+                    }}
+                    placeholder="%"
+                    className="w-full border-amber-200 focus-visible:ring-amber-200"
+                  />
+                )}
+              />
+            </div>
+
+            {/* Voluntary Fixed */}
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-amber-700">Amount Voluntary</label>
+              <Controller
+                control={control}
+                name="cashback_share_fixed"
+                render={({ field }) => (
+                  <SmartAmountInput
+                    value={field.value}
+                    onChange={(val) => {
+                      // Total cannot exceed Amount
+                      const currentPercent = form.getValues('cashback_share_percent') || 0;
+                      const percentAmount = (amountValue * currentPercent) / 100;
+                      const remainingForFixed = Math.max(0, amountValue - percentAmount);
+
+                      let safeVal = val;
+                      if (val !== undefined && val > remainingForFixed) {
+                        safeVal = remainingForFixed;
+                      }
+                      field.onChange(safeVal);
+                    }}
+                    placeholder="Overflow Amount"
+                    className="w-full border-amber-200 focus-visible:ring-amber-200"
+                  />
+                )}
+              />
+            </div>
+          </div>
+
+          {/* Voluntary Real-time Display */}
+          <div className="flex justify-between items-center px-2 py-1 bg-amber-100/50 rounded border border-amber-200/50">
+            <span className="text-xs font-medium text-amber-700">Total Overflow:</span>
+            <span className="text-sm font-bold text-amber-800">
+              {numberFormatter.format(
+                ((amountValue * (watchedCashbackPercent || 0)) / 100) + (watchedCashbackFixed || 0)
+              )}
+            </span>
+          </div>
+
+          <p className="text-[10px] text-amber-600 italic">
+            * This amount is tracked as overflow loss and does not count towards standard budget.
+          </p>
+        </div>
+      )}
+
+      {/* Stats / Info - Always Visible if Useful */}
+      <div className="pt-2 border-t border-slate-200/60 space-y-1">
+        {watchedCashbackMode === 'none_back' && potentialCashback > 0 && (
+          <p className="text-xs flex justify-between bg-emerald-50/50 p-1.5 rounded text-emerald-700 border border-emerald-100/50">
+            <span className="opacity-80">Potential Profit:</span>
+            <span className="font-bold">+{numberFormatter.format(potentialCashback)}</span>
+          </p>
+        )}
+
+        {spendingStats && spendingStats.minSpend && spendingStats.minSpend > 0 && (
+          <div className="text-xs flex justify-between items-center">
+            <span className="text-slate-500">Min Spend Progress:</span>
+            <span className={cn("font-medium", projectedSpend >= spendingStats.minSpend ? "text-emerald-600" : "text-amber-600")}>
+              {projectedSpend < spendingStats.minSpend && (
+                <span className="text-slate-400 mr-1 font-normal text-[10px] uppercase tracking-wide">Spend More:</span>
+              )}
+              {numberFormatter.format(projectedSpend)} / {numberFormatter.format(spendingStats.minSpend)}
+            </span>
+          </div>
+        )}
+      </div>
+
+    </div >
   ) : null;
 
   const submitLabel = isSubmitting
@@ -2143,8 +2508,7 @@ export function TransactionForm({
 
                 <div className="col-span-2 space-y-4 pt-2 border-t border-slate-100">
                   {InstallmentInput}
-                  {VoluntaryCashbackInput}
-                  {CashbackInputs}
+                  {CashbackModeInput}
                   {NoteInput}
                 </div>
               </div>

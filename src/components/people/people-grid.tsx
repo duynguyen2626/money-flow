@@ -152,7 +152,65 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
           />
         </div>
 
+        {/* Recent Section */}
+        {searchQuery.trim() === '' && activeTab === 'debt' && (
+          (() => {
+            // Find recent people (Limit 2)
+            const recentPeople = [...filteredPeople]
+              .filter((p) => !p.is_archived) // Only active
+              .map((p) => {
+                // Logic: Hybrid Sort - specific request for "Date Added", but fallback to "Last Activity" if created_at is missing/old
+                // This ensures existing users (who have null created_at) still show up based on activity if relevant
+                const createdAt = p.created_at ? new Date(p.created_at).getTime() : 0;
+
+                // Also get last activity
+                const latestDebt = p.monthly_debts?.[0];
+                const lastActivity = latestDebt?.last_activity
+                  ? new Date(latestDebt.last_activity).getTime()
+                  : (latestDebt?.occurred_at ? new Date(latestDebt.occurred_at).getTime() : 0);
+
+                // Priority: Creation Date (if within last 7 days?) OR just Max(Created, LastActivity)?
+                // User said "recently added" is the issue. If I strictly use created_at, old users disappear.
+                // Let's use MAX to be safe, but prioritize created_at for NEW users.
+
+                return { ...p, _sortRes: Math.max(createdAt, lastActivity) };
+              })
+              .filter((p) => p._sortRes > 0)
+              .sort((a, b) => b._sortRes - a._sortRes)
+              .slice(0, 2);
+
+            if (recentPeople.length === 0) return null;
+
+            return (
+              <div className="mb-6">
+                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Recent</h3>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                  {recentPeople.map(person => (
+                    <PersonCard
+                      key={`recent-${person.id}`}
+                      person={person}
+                      subscriptions={subscriptions}
+                      isSelected={selectedId === person.id}
+                      onSelect={() => handleSelect(person)}
+                      accounts={accounts}
+                      categories={categories}
+                      shops={shops}
+                    />
+                  ))}
+                </div>
+                <div className="mt-6 border-t border-slate-100" />
+              </div>
+            );
+          })()
+        )}
+
         {/* People Grid */}
+        <div className="mb-2">
+          <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+            {activeTab === 'debt' ? 'All Members' : activeTab === 'settled' ? 'Settled Members' : 'Archived Members'}
+          </h3>
+        </div>
+
         {currentPeople.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-center">
             <div className="text-slate-400 mb-2">

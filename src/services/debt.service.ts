@@ -156,20 +156,44 @@ export async function getDebtAccounts(): Promise<DebtAccount[]> {
   })
 }
 
-export async function getPersonDetails(id: string) {
+export async function getPersonDetails(id: string): Promise<{
+  id: string
+  name: string
+  current_balance: number
+  owner_id: string
+  avatar_url: string | null
+  sheet_link: string | null
+  google_sheet_url: string | null
+} | null> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, name, avatar_url, sheet_link')
+    .select('id, name, avatar_url, sheet_link, google_sheet_url')
     .eq('id', id)
     .maybeSingle()
+
+  if (error?.code === '42703' || error?.code === 'PGRST204') {
+    // Fallback if google_sheet_url column doesn't exist
+    const fallback = await supabase
+      .from('profiles')
+      .select('id, name, avatar_url, sheet_link')
+      .eq('id', id)
+      .maybeSingle()
+    return fallback.data ? {
+      ...fallback.data,
+      name: fallback.data.name ?? 'Unknown',
+      owner_id: fallback.data.id,
+      current_balance: await getPersonDebt(id), // Recalculate or reuse logic below
+      google_sheet_url: null
+    } : null
+  }
 
   if (error || !data) {
     if (error) console.error('Error fetching person details:', error)
     return null
   }
 
-  const profile = data as { id: string; name: string; avatar_url: string | null; sheet_link: string | null }
+  const profile = data as { id: string; name: string; avatar_url: string | null; sheet_link: string | null; google_sheet_url?: string | null }
   const currentBalance = await getPersonDebt(id)
   return {
     id: profile.id,
@@ -178,6 +202,7 @@ export async function getPersonDetails(id: string) {
     owner_id: profile.id,
     avatar_url: profile.avatar_url ?? null,
     sheet_link: profile.sheet_link ?? null,
+    google_sheet_url: profile.google_sheet_url ?? null,
   }
 }
 

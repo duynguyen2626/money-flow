@@ -6,7 +6,8 @@ import { Save, ExternalLink, Check } from 'lucide-react'
 
 type Props = {
   personId: string | null
-  sheetLink?: string | null
+  sheetLink?: string | null // Script Link
+  googleSheetUrl?: string | null // View Link
 }
 
 type ToastState = {
@@ -15,22 +16,27 @@ type ToastState = {
   tone?: 'success' | 'error' | 'info'
 }
 
-export function SheetSyncControls({ personId, sheetLink }: Props) {
-  const [currentLink, setCurrentLink] = useState(sheetLink ?? '')
+export function SheetSyncControls({ personId, sheetLink, googleSheetUrl }: Props) {
+  const [currentScriptLink, setCurrentScriptLink] = useState(sheetLink ?? '')
+  const [currentSheetUrl, setCurrentSheetUrl] = useState(googleSheetUrl ?? '')
   const [isEditing, setIsEditing] = useState(false)
-  const hasLink = useMemo(() => Boolean(currentLink && currentLink.trim()), [currentLink])
+
+  const hasScriptLink = useMemo(() => Boolean(currentScriptLink && currentScriptLink.trim()), [currentScriptLink])
+  const hasSheetUrl = useMemo(() => Boolean(currentSheetUrl && currentSheetUrl.trim()), [currentSheetUrl])
+
+  const hasAnyLink = hasScriptLink || hasSheetUrl
   const [toast, setToast] = useState<ToastState | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  const disabled = !hasLink || !personId || isPending
+  const disabled = !hasScriptLink || !personId || isPending
 
   const runTest = () => {
     if (!personId) {
       setToast({ title: 'Missing person', tone: 'error' })
       return
     }
-    if (!hasLink) {
-      setToast({ title: 'Sheet link unavailable', tone: 'error' })
+    if (!hasScriptLink) {
+      setToast({ title: 'Script link unavailable', tone: 'error' })
       return
     }
 
@@ -54,7 +60,7 @@ export function SheetSyncControls({ personId, sheetLink }: Props) {
       setToast({ title: 'Missing person', tone: 'error' })
       return
     }
-    if (!hasLink) {
+    if (!hasAnyLink) {
       setToast({ title: 'Sheet link unavailable', tone: 'error' })
       return
     }
@@ -89,8 +95,11 @@ export function SheetSyncControls({ personId, sheetLink }: Props) {
     }
 
     startTransition(async () => {
-      setToast({ title: 'Saving sheet link...', tone: 'info' })
-      const result = await updatePersonAction(personId, { sheet_link: currentLink.trim() || null })
+      setToast({ title: 'Saving sheet links...', tone: 'info' })
+      const result = await updatePersonAction(personId, {
+        sheet_link: currentScriptLink.trim() || null,
+        google_sheet_url: currentSheetUrl.trim() || null
+      })
       if (result) {
         setToast({ title: 'Sheet link saved!', tone: 'success' })
         setIsEditing(false)
@@ -104,8 +113,8 @@ export function SheetSyncControls({ personId, sheetLink }: Props) {
     })
   }
 
-  const indicatorColor = hasLink ? 'bg-green-500' : 'bg-gray-300'
-  const indicatorText = hasLink ? 'Sheet link saved' : 'No Sheet link'
+  const indicatorColor = hasScriptLink ? 'bg-green-500' : 'bg-gray-300'
+  const indicatorText = hasScriptLink ? 'Script Connected' : 'No Script Link'
 
   return (
     <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm space-y-4">
@@ -115,14 +124,28 @@ export function SheetSyncControls({ personId, sheetLink }: Props) {
         <p className="text-sm font-medium text-slate-700">{indicatorText}</p>
       </div>
 
-      {/* Link Input */}
+      {/* Link Input: Script Link (API) */}
       <div className="space-y-2">
-        <label className="text-xs font-medium text-slate-600">Google Sheet URL</label>
+        <label className="text-xs font-medium text-slate-600">Script Link (API Webhook)</label>
         <div className="flex gap-2">
           <input
             type="url"
-            value={currentLink}
-            onChange={(e) => { setCurrentLink(e.target.value); setIsEditing(true); }}
+            value={currentScriptLink}
+            onChange={(e) => { setCurrentScriptLink(e.target.value); setIsEditing(true); }}
+            placeholder="https://script.google.com/macros/s/..."
+            className="flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          />
+        </div>
+      </div>
+
+      {/* Link Input: Sheet Link (View) */}
+      <div className="space-y-2">
+        <label className="text-xs font-medium text-slate-600">Google Sheet Link (View)</label>
+        <div className="flex gap-2">
+          <input
+            type="url"
+            value={currentSheetUrl}
+            onChange={(e) => { setCurrentSheetUrl(e.target.value); setIsEditing(true); }}
             placeholder="https://docs.google.com/spreadsheets/d/..."
             className="flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
@@ -137,9 +160,9 @@ export function SheetSyncControls({ personId, sheetLink }: Props) {
               Save
             </button>
           )}
-          {hasLink && !isEditing && (
+          {hasSheetUrl && !isEditing && (
             <a
-              href={currentLink}
+              href={currentSheetUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 rounded-md bg-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300 transition"

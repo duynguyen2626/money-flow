@@ -12,6 +12,7 @@ import {
     Check,
     AlertTriangle,
     ExternalLink,
+    Bot,
 } from 'lucide-react'
 
 import { Account, Category, Person, Shop, Subscription, MonthlyDebtSummary } from '@/types/moneyflow.types'
@@ -230,14 +231,56 @@ function PersonCardComponent({
                         </CustomTooltip>
                     )}
 
-                    {/* Detail Arrow */}
+                </div>
+
+                {/* ROW 3: Sheets Linked Badge + Detail Arrow */}
+                <div className="px-3 pb-3 bg-white flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs">
+                        <span className="text-slate-500 font-medium">Sheets Linked:</span>
+                        {person.google_sheet_url ? (
+                            <div className="flex items-center gap-1">
+                                <a
+                                    href={person.google_sheet_url}
+                                    target='_blank'
+                                    rel='noopener noreferrer'
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded border border-green-200 hover:bg-green-100 transition-colors"
+                                >
+                                    <ExternalLink className="h-3 w-3" />
+                                    <span className="font-semibold">View Sheet</span>
+                                </a>
+                                {person.sheet_link && (
+                                    <CustomTooltip content="Script Link (API)">
+                                        <a
+                                            href={person.sheet_link}
+                                            target='_blank'
+                                            rel='noopener noreferrer'
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="flex items-center justify-center bg-blue-50 text-blue-700 p-1 rounded border border-blue-200 hover:bg-blue-100 transition-colors h-full aspect-square"
+                                        >
+                                            <Bot className="h-3 w-3" />
+                                        </a>
+                                    </CustomTooltip>
+                                )}
+                            </div>
+                        ) : person.sheet_link ? (
+                            <span className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">
+                                <Check className="h-3 w-3" />
+                                <span className="font-semibold">Script Only</span>
+                            </span>
+                        ) : (
+                            <span className="text-slate-400 italic">None Link</span>
+                        )}
+                    </div>
+
+                    {/* Detail Arrow - Moved here */}
                     <Link
                         href={`/people/${person.id}`}
                         onClick={stopPropagation}
-                        className="p-2 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-100"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-100"
                         title="View Details"
                     >
-                        <ChevronRight className="h-5 w-5" />
+                        <ChevronRight className="h-4 w-4" />
                     </Link>
                 </div>
             </div>

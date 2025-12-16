@@ -99,6 +99,7 @@ export type DebtAccount = {
   owner_id: string | null;
   avatar_url?: string | null;
   sheet_link?: string | null;
+  google_sheet_url?: string | null;
 }
 
 export type MonthlyDebtSummary = {
@@ -115,10 +116,13 @@ export type MonthlyDebtSummary = {
 
 export type Person = {
   id: string
+  created_at?: string
   name: string
   email?: string | null
   avatar_url?: string | null
+
   sheet_link?: string | null
+  google_sheet_url?: string | null
   debt_account_id?: string | null
   balance?: number | null
   is_owner?: boolean | null
@@ -218,4 +222,19 @@ export type TransactionWithDetails = TransactionRow & {
   destination_account_id?: string | null;
   target_account_id?: string | null;
   history_count?: number;
+}
+
+export type CashbackCard = {
+  accountId: string
+  accountName: string
+  type: string
+  cycleLabel: string
+  progress: number
+  currentSpend: number
+  minSpend: number
+  maxCashback: number
+  earnedSoFar: number
+  remainingBudget: number
+  rate: number
+  logo_url?: string | null
 }

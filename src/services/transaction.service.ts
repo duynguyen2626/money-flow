@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { Json, Database } from '@/types/database.types';
 import { TransactionWithDetails, TransactionWithLineRelations, AccountRow } from '@/types/moneyflow.types';
+import { upsertTransactionCashback, removeTransactionCashback } from './cashback.service';
 
 type TransactionStatus = 'posted' | 'pending' | 'void' | 'waiting_refund' | 'refunded' | 'completed';
 type TransactionType = 'income' | 'expense' | 'transfer' | 'debt' | 'repayment';
@@ -25,6 +26,7 @@ export type CreateTransactionInput = {
   is_installment?: boolean;
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
+  cashback_mode?: string | null;
 };
 
 type FlatTransactionRow = {
@@ -109,6 +111,7 @@ async function normalizeInput(input: CreateTransactionInput): Promise<Normalized
     installment_plan_id: null,
     cashback_share_percent: input.cashback_share_percent ?? null,
     cashback_share_fixed: input.cashback_share_fixed ?? null,
+    cashback_mode: input.cashback_mode ?? null,
   };
 }
 
@@ -488,6 +491,39 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       revalidatePath(`/people/${input.person_id}`);
     }
 
+    // CASHBACK INTEGRATION
+    if (transactionId) {
+      // We need to fetch the full transaction details to pass to the cashback service
+      // reusing loadTransactions is the safest way to get derived fields like category_name
+      const { loadTransactions } = await import('./transaction.service'); // self-import to avoid recursion issues if any? actually we are inside it.
+      // But loadTransactions is exported.
+      // Call internal function if possible, or just use the exported one.
+      // Since we are in the module, we can just call loadTransactions directly if not for "this" binding issues (which don't exist in module scope).
+      // However, loadTransactions uses `fetchLookups` etc.
+
+      // Let's just create a small helper to fetch single transaction or use loadTransactions logic.
+      // Actually, creating a specific fetcher for cashback might be lighter? 
+      // loadTransactions is heavy.
+      // But for correctness of "category_name" (which is needed for tiered cashback), we need the join.
+      // Let's us loadTransactions for now, it's fine for a single item.
+      try {
+        const [txn] = await loadTransactions({ limit: 1, accountId: normalized.account_id });
+        // We can't filter by ID in loadTransactions currently except via filter logic... 
+        // loadTransactions options are limited.
+        // Let's just add a quick helper or fetch it manually.
+
+        // Actually, let's just fetch what we need manually to avoid overhead.
+        const supabase = createClient();
+        const { data: rawTxn } = await supabase.from('transactions').select('*, categories(name)').eq('id', transactionId).single();
+        if (rawTxn) {
+          const txnShape: any = { ...rawTxn, category_name: (rawTxn as any).categories?.name };
+          await upsertTransactionCashback(txnShape);
+        }
+      } catch (cbError) {
+        console.error('Failed to upsert cashback entry:', cbError);
+      }
+    }
+
     return transactionId;
   } catch (error) {
     console.error('Unhandled error in createTransaction:', error);
@@ -661,8 +697,21 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   revalidatePath('/transactions');
   revalidatePath('/accounts');
   revalidatePath('/people');
-  if (oldPersonId) revalidatePath(`/people/${oldPersonId}`);
-  if (newPersonId && newPersonId !== oldPersonId) revalidatePath(`/people/${newPersonId}`);
+
+
+
+  // CASHBACK INTEGRATION
+  try {
+    const supabase = createClient();
+    const { data: rawTxn } = await supabase.from('transactions').select('*, categories(name)').eq('id', id).single();
+    if (rawTxn) {
+      const txnShape: any = { ...rawTxn, category_name: (rawTxn as any).categories?.name };
+      await upsertTransactionCashback(txnShape);
+    }
+  } catch (cbError) {
+    console.error('Failed to update cashback entry:', cbError);
+  }
+
   return true;
 }
 
@@ -691,6 +740,13 @@ export async function deleteTransaction(id: string): Promise<boolean> {
   if ((existing as any)?.person_id) {
     revalidatePath(`/people/${(existing as any).person_id}`);
   }
+  // CASHBACK INTEGRATION
+  try {
+    await removeTransactionCashback(id);
+  } catch (cbError) {
+    console.error('Failed to remove cashback entry:', cbError);
+  }
+
   return true;
 }
 
@@ -787,6 +843,14 @@ export async function voidTransaction(id: string): Promise<boolean> {
   if ((existing as any)?.person_id) {
     revalidatePath(`/people/${(existing as any).person_id}`);
   }
+
+  // CASHBACK INTEGRATION
+  try {
+    await removeTransactionCashback(id);
+  } catch (cbError) {
+    console.error('Failed to remove cashback entry (void):', cbError);
+  }
+
   return true;
 }
 
@@ -819,6 +883,19 @@ export async function restoreTransaction(id: string): Promise<boolean> {
   if ((existing as any)?.person_id) {
     revalidatePath(`/people/${(existing as any).person_id}`);
   }
+
+
+  // CASHBACK INTEGRATION (Restore)
+  try {
+    const { data: rawTxn } = await supabase.from('transactions').select('*, categories(name)').eq('id', id).single();
+    if (rawTxn) {
+      const txnShape: any = { ...rawTxn, category_name: (rawTxn as any).categories?.name };
+      await upsertTransactionCashback(txnShape);
+    }
+  } catch (cbError) {
+    console.error('Failed to restore cashback entry:', cbError);
+  }
+
   return true;
 }
 
@@ -957,9 +1034,28 @@ export async function requestRefund(
 
     // Preserve Person Name in Note if unlinking
     if (originalRow.person_id) {
-      // We need to fetch the name if we want to save it, or use what we solved earlier.
-      // Let's maximize usage of existing data or quick fetch.
-      // We fetched `person` earlier at line 670? YES.
+      // SHEET SYNC: Trigger DELETE from sheet because we are unlinking the person
+      try {
+        const { syncTransactionToSheet } = await import('./sheet.service');
+        console.log('[Sheet Sync] Full Refund - Deleting entry for person:', originalRow.person_id);
+
+        // We need to delete the ORIGINAL transaction from the sheet
+        const deletePayload = {
+          id: transactionId,
+          occurred_at: originalRow.occurred_at,
+          note: originalRow.note,
+          tag: originalRow.tag, // Need tag for lookup? Yes usually.
+          amount: originalRow.amount ?? 0,
+        };
+
+        // We use void to not block the main transaction update, but we log errors
+        void syncTransactionToSheet(originalRow.person_id, deletePayload as any, 'delete').catch(err => {
+          console.error('[Sheet Sync] Refund delete failed:', err);
+        });
+      } catch (syncErr) {
+        console.error('[Sheet Sync] Failed to import sync service:', syncErr);
+      }
+
       // "Cancel Debt: {Name}" logic was used for GD2 note. We can reuse 'person' data.
       const { data: personP } = await supabase.from('profiles').select('name').eq('id', originalRow.person_id).single();
       const personName = (personP as any)?.name;

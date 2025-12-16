@@ -105,8 +105,8 @@ export async function createPerson(
     .select('id, name')
     .single()
 
-  if (profileError?.code === '42703') {
-    const { is_archived: _ignoreArchived, is_owner: _ignoreOwner, ...fallbackPayload } = profilePayload
+  if (profileError?.code === '42703' || profileError?.code === 'PGRST204') {
+    const { is_archived: _ignoreArchived, is_owner: _ignoreOwner, google_sheet_url: _ignoreSheet, ...fallbackPayload } = profilePayload as any
     const fallback = await (supabase
       .from('profiles')
       .insert as any)(fallbackPayload)
@@ -147,12 +147,12 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   const profileSelect = async () => {
     const attempt = await supabase
       .from('profiles')
-      .select('id, name, email, avatar_url, sheet_link, is_owner, is_archived')
+      .select('id, created_at, name, email, avatar_url, sheet_link, google_sheet_url, is_owner, is_archived')
       .order('name', { ascending: true })
-    if (attempt.error?.code === '42703') {
+    if (attempt.error?.code === '42703' || attempt.error?.code === 'PGRST204') {
       const fallback = await supabase
         .from('profiles')
-        .select('id, name, email, avatar_url, sheet_link, is_owner')
+        .select('id, created_at, name, email, avatar_url, sheet_link, is_owner')
         .order('name', { ascending: true })
       return { data: fallback.data, error: fallback.error }
     }
@@ -511,6 +511,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       email: person.email,
       avatar_url: person.avatar_url,
       sheet_link: person.sheet_link,
+      google_sheet_url: person.google_sheet_url,
       is_owner: (person as any).is_owner ?? null,
       is_archived: (person as any).is_archived ?? null,
       debt_account_id: debtInfo?.id ?? null,
@@ -598,6 +599,7 @@ export async function updatePerson(
     email?: string | null
     avatar_url?: string | null
     sheet_link?: string | null
+    google_sheet_url?: string | null
     subscriptionIds?: string[]
     is_owner?: boolean
     is_archived?: boolean
@@ -607,11 +609,14 @@ export async function updatePerson(
   const payload: ProfileUpdate & { is_archived?: boolean } = {}
   const normalizedSheetLink =
     typeof data.sheet_link === 'undefined' ? undefined : data.sheet_link?.trim() || null
+  const normalizedGoogleSheetUrl =
+    typeof data.google_sheet_url === 'undefined' ? undefined : data.google_sheet_url?.trim() || null
 
   if (typeof data.name === 'string') payload.name = data.name.trim()
   if (typeof data.email !== 'undefined') payload.email = data.email?.trim() || null
   if (typeof data.avatar_url !== 'undefined') payload.avatar_url = data.avatar_url?.trim() || null
   if (normalizedSheetLink !== undefined) payload.sheet_link = normalizedSheetLink
+  if (normalizedGoogleSheetUrl !== undefined) payload.google_sheet_url = normalizedGoogleSheetUrl
   if (typeof data.is_owner === 'boolean') payload.is_owner = data.is_owner
   if (typeof data.is_archived === 'boolean') payload.is_archived = data.is_archived
 
@@ -619,8 +624,8 @@ export async function updatePerson(
 
   if (Object.keys(payload).length > 0) {
     let { error } = await (supabase.from('profiles').update as any)(payload).eq('id', id)
-    if (error?.code === '42703') {
-      const { is_archived: _ignoreArchived, is_owner: _ignoreOwner, ...fallbackPayload } = payload
+    if (error?.code === '42703' || error?.code === 'PGRST204') {
+      const { is_archived: _ignoreArchived, is_owner: _ignoreOwner, google_sheet_url: _ignoreSheet, ...fallbackPayload } = payload as any
       const fallback = await (supabase.from('profiles').update as any)(fallbackPayload).eq('id', id)
       error = fallback.error
     }
@@ -643,17 +648,17 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
   const profileSelect = async () => {
     const attempt = await supabase
       .from('profiles')
-      .select('id, name, email, avatar_url, sheet_link, is_owner, is_archived')
+      .select('id, name, email, avatar_url, sheet_link, google_sheet_url, is_owner, is_archived')
       .eq('id', id)
       .maybeSingle()
 
-    if (attempt.error?.code === '42703') {
+    if (attempt.error?.code === '42703' || attempt.error?.code === 'PGRST204') {
       const fallback = await supabase
         .from('profiles')
         .select('id, name, email, avatar_url, sheet_link, is_owner')
         .eq('id', id)
         .maybeSingle()
-      return fallback
+      return { data: fallback.data, error: fallback.error }
     }
     return attempt
   }
@@ -728,6 +733,7 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     email: (profile as any).email,
     avatar_url: (profile as any).avatar_url,
     sheet_link: (profile as any).sheet_link,
+    google_sheet_url: (profile as any).google_sheet_url,
     is_owner: (profile as any).is_owner ?? null,
     is_archived: (profile as any).is_archived ?? null,
     subscription_ids,
