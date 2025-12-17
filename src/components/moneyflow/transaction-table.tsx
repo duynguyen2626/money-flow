@@ -123,7 +123,7 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     debt_account_id: destinationAccountId,
     shop_id: txn.shop_id ?? undefined,
     cashback_share_percent:
-      percentValue !== undefined && percentValue !== null ? percentValue * 100 : undefined,
+      percentValue !== undefined && percentValue !== null ? percentValue : undefined,
     cashback_share_fixed:
       typeof txn.cashback_share_fixed === "number" ? txn.cashback_share_fixed : undefined,
     cashback_mode: (percentValue !== undefined && percentValue !== null && percentValue > 0) ? 'real_percent' :

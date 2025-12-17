@@ -178,7 +178,7 @@ export default function CashbackDetailsPage() {
           source_account_id: sourceId || undefined,
           debt_account_id: destId || undefined,
           shop_id: found.shop_id || undefined,
-          cashback_share_percent: sharePercent ? sharePercent * 100 : undefined,
+          cashback_share_percent: sharePercent ? sharePercent : undefined,
           cashback_share_fixed: shareFixed || undefined
         })
         setEditingTxn(txn)
