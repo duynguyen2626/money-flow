@@ -108,6 +108,12 @@ voluntary = overflow/loss (does not count)
 
 ## Current Phase (MF5.2.1)
 
-* Branch: `PHASE-9.2.1-FIX-RECOMPUTE-CONSISTENCY`
-* Commit: `PHASE 9.2.1 - Fix cashback recompute consistency and normalize budgets`
-* PR title: `MF5.2.1: Fix Recompute Consistency + Normalize Budgets`
+* Branch: `PHASE-9.2.1-CASHBACK-PERCENT-ENTRIES-SHEET`
+* Commit: `PHASE 9.2.1 - Fix cashback percent, ensure entries/cycles, and sheet export`
+* PR title: `MF5.2.1: Fix percent display + ensure cashback tables + correct sheet export`
+
+## Cashback Percent Rules
+* DB stores decimal [0..1] (e.g. 0.05)
+* UI shows percent [0..100] (e.g. 5)
+* Sheet Export sends raw percent [0..100] (e.g. 5)
+* Transactions must ALWAYS update `cashback_entries` and recompute `cashback_cycles` (including old cycle if moved).

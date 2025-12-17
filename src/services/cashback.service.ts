@@ -144,17 +144,23 @@ export async function upsertTransactionCashback(
 
   const { data: existingEntry } = await supabase
     .from('cashback_entries')
-    .select('id')
+    .select('id, cycle_id')
     .eq('transaction_id', transaction.id)
     .maybeSingle();
 
   if (existingEntry) {
     await supabase.from('cashback_entries').update(entryData).eq('id', existingEntry.id);
+
+    // CASBACK CONSISTENCY: If moving between cycles (diff date) or accounts (re-assigned),
+    // we must recompute the OLD cycle too.
+    if (existingEntry.cycle_id && existingEntry.cycle_id !== cycleId) {
+      await recomputeCashbackCycle(existingEntry.cycle_id);
+    }
   } else {
     await supabase.from('cashback_entries').insert(entryData);
   }
 
-  // Trigger TypeScript Recompute Engine
+  // Trigger TypeScript Recompute Engine for the CURRENT cycle
   await recomputeCashbackCycle(cycleId);
 }
 

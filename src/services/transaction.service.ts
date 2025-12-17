@@ -459,9 +459,16 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
 
         // Calculate final amount (for debt: amount - cashback)
         const originalAmount = Math.abs(input.amount);
-        const percentRate = Math.min(100, Math.max(0, Number(input.cashback_share_percent ?? 0))) / 100;
+        // DB stores decimal (0.05). Input to this func came from Form which ALREADY divided by 100.
+        // Wait, looking at Form: 
+        // form.onSubmit: payload.cashback_share_percent = rawPercent / 100;
+        // So 'input.cashback_share_percent' IS ALREADY DECIMAL (e.g. 0.05).
+
+        const decimalRate = Number(input.cashback_share_percent ?? 0);
+        const percentForSheet = decimalRate * 100; // Sheet wants 5 for 5%
+
         const fixedAmount = Math.max(0, Number(input.cashback_share_fixed ?? 0));
-        const cashback = (originalAmount * percentRate) + fixedAmount;
+        const cashback = (originalAmount * decimalRate) + fixedAmount;
         const finalAmount = input.type === 'debt' ? (originalAmount - cashback) : originalAmount;
 
         const syncPayload = {
@@ -472,7 +479,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
           shop_name: shopName,
           amount: finalAmount,
           original_amount: originalAmount,
-          cashback_share_percent: percentRate,
+          cashback_share_percent: percentForSheet, // Send 5 (not 0.05)
           cashback_share_fixed: fixedAmount,
           type: input.type === 'repayment' ? 'In' : 'Debt',
         };
@@ -606,9 +613,12 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
 
       // Calculate final amount
       const originalAmount = Math.abs(input.amount);
-      const percentRate = Math.min(100, Math.max(0, Number(input.cashback_share_percent ?? 0))) / 100;
+      // DB stores decimal (0.05). input is decimal.
+      const decimalRate = Number(input.cashback_share_percent ?? 0);
+      const percentForSheet = decimalRate * 100; // Sheet wants 5 for 5%
+
       const fixedAmount = Math.max(0, Number(input.cashback_share_fixed ?? 0));
-      const cashback = (originalAmount * percentRate) + fixedAmount;
+      const cashback = (originalAmount * decimalRate) + fixedAmount;
       const finalAmount = input.type === 'debt' ? (originalAmount - cashback) : originalAmount;
 
       const updatePayload = {
@@ -619,7 +629,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
         shop_name: shopName,
         amount: finalAmount,
         original_amount: originalAmount,
-        cashback_share_percent: percentRate,
+        cashback_share_percent: percentForSheet, // Send 5
         cashback_share_fixed: fixedAmount,
         type: input.type === 'repayment' ? 'In' : 'Debt',
       };
@@ -663,9 +673,11 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
         }
 
         const originalAmount = Math.abs(input.amount);
-        const percentRate = Math.min(100, Math.max(0, Number(input.cashback_share_percent ?? 0))) / 100;
+        const decimalRate = Number(input.cashback_share_percent ?? 0);
+        const percentForSheet = decimalRate * 100;
+
         const fixedAmount = Math.max(0, Number(input.cashback_share_fixed ?? 0));
-        const cashback = (originalAmount * percentRate) + fixedAmount;
+        const cashback = (originalAmount * decimalRate) + fixedAmount;
         const finalAmount = input.type === 'debt' ? (originalAmount - cashback) : originalAmount;
 
         const createPayload = {
@@ -676,7 +688,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
           shop_name: shopName,
           amount: finalAmount,
           original_amount: originalAmount,
-          cashback_share_percent: percentRate,
+          cashback_share_percent: percentForSheet,
           cashback_share_fixed: fixedAmount,
           type: input.type === 'repayment' ? 'In' : 'Debt',
         };

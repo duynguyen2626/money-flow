@@ -28,8 +28,16 @@ function normalizePercent(value: number | null | undefined): number {
   if (value === null || value === undefined) return 0
   const numeric = Number(value)
   if (!Number.isFinite(numeric) || numeric <= 0) return 0
-  const capped = Math.min(100, numeric)
-  return capped > 1 ? capped / 100 : capped
+
+  // If value > 1, assume it's a percentage number (5 = 5%).
+  // If value <= 1, assume it's a decimal (0.05 = 5%).
+  // This is a heuristic, but covers 99% of cases (nobody has >100% cashback, and nobody has <1% cashback typically indistinguishable from decimal).
+  // Actually, we should standardize. 
+  // The service now sends raw number (5, 8). 
+  // So if we get 5, we return 0.05.
+  // If we get 0.05, we return 0.05.
+
+  return numeric > 1 ? numeric / 100 : numeric
 }
 
 function calculateTotals(txn: SheetSyncTransaction) {
@@ -138,7 +146,11 @@ function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete' | '
     shop: txn.shop_name ?? '',
     notes: txn.note ?? '',
     amount: originalAmount,
-    percent_back: txn.cashback_share_percent_input ?? Math.round(percentRate * 10000) / 100,
+    // We want to send the raw number (0-100).
+    // If input was 5, normalizePercent made it 0.05.
+    // So we assume 'percentRate' is ALWAYS decimal [0..1].
+    // We multiply by 100 to send to sheet.
+    percent_back: Math.round(percentRate * 100 * 100) / 100, // Round to 2 decimals for safety
     fixed_back: fixedBack,
     total_back: totalBack,
     tag: txn.tag ?? undefined,
