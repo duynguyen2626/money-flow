@@ -186,7 +186,7 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     debt_account_id: destinationAccountId,
     shop_id: txn.shop_id ?? undefined,
     cashback_share_percent:
-      percentValue !== undefined && percentValue !== null ? (Number(percentValue) > 1 ? Number(percentValue) : Number(percentValue) * 100) : undefined,
+      percentValue !== undefined && percentValue !== null ? percentValue : undefined,
     cashback_share_fixed:
       txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined ? Number(txn.cashback_share_fixed) : undefined,
     is_installment: txn.is_installment ?? false,
@@ -590,6 +590,39 @@ export function UnifiedTransactionTable({
     setConfirmVoidTarget(null)
     setVoidError(null)
     setIsVoiding(false)
+  }
+
+  const handleRecalcSelections = async () => {
+    if (!selection.size) return
+    const ids = Array.from(selection)
+    const toastId = toast.loading(`Recalculating cashback for ${ids.length} transactions...`)
+
+    let successCount = 0
+    let failCount = 0
+
+    for (const id of ids) {
+      try {
+        const res = await fetch(`/api/debug/recalc-cashback?id=${id}`)
+        if (res.ok) {
+          successCount++
+        } else {
+          failCount++
+        }
+      } catch (e) {
+        console.error(e)
+        failCount++
+      }
+    }
+
+    toast.dismiss(toastId)
+    if (failCount === 0) {
+      toast.success(`Successfully recalculated ${successCount} transactions.`)
+    } else {
+      toast.warning(`Finished with ${successCount} successes and ${failCount} failures.`)
+    }
+    router.refresh()
+    // Clear selection after action
+    updateSelection(new Set())
   }
 
   const handleRestore = (txn: TransactionWithDetails) => {

@@ -3,7 +3,8 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ListFilter, X, Trash2, Undo, FileSpreadsheet, ArrowLeft, RotateCcw } from 'lucide-react'
+import { ListFilter, X, Trash2, Undo, FileSpreadsheet, ArrowLeft, RotateCcw, RefreshCw } from 'lucide-react'
+import { toast } from "sonner"
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
@@ -544,6 +545,36 @@ export function FilterableTransactions({
                                         onClick={() => { setSelectedTxnIds(new Set()); setShowSelectedOnly(false) }}
                                     >
                                         Deselect ({selectedTxnIds.size})
+                                    </button>
+                                    <button
+                                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 whitespace-nowrap"
+                                        onClick={async () => {
+                                            const ids = Array.from(selectedTxnIds)
+                                            const toastId = toast.loading(`Recalculating cashback for ${ids.length} transactions...`)
+                                            let successCount = 0
+                                            let failCount = 0
+                                            for (const id of ids) {
+                                                try {
+                                                    const res = await fetch(`/api/debug/recalc-cashback?id=${id}`)
+                                                    if (res.ok) successCount++
+                                                    else failCount++
+                                                } catch (e) {
+                                                    console.error(e)
+                                                    failCount++
+                                                }
+                                            }
+                                            toast.dismiss(toastId)
+                                            if (failCount === 0) {
+                                                toast.success(`Recalculated ${successCount} items.`)
+                                            } else {
+                                                toast.warning(`Done with ${successCount} successes and ${failCount} failures.`)
+                                            }
+                                            router.refresh()
+                                            setSelectedTxnIds(new Set())
+                                        }}
+                                    >
+                                        <RefreshCw className="h-4 w-4" />
+                                        Recalc Cashback
                                     </button>
                                     <button
                                         className={`px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap ${showSelectedOnly ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
