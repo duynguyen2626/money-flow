@@ -126,6 +126,8 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
       percentValue !== undefined && percentValue !== null ? percentValue * 100 : undefined,
     cashback_share_fixed:
       typeof txn.cashback_share_fixed === "number" ? txn.cashback_share_fixed : undefined,
+    cashback_mode: (percentValue !== undefined && percentValue !== null && percentValue > 0) ? 'real_percent' :
+      (typeof txn.cashback_share_fixed === "number" && txn.cashback_share_fixed > 0) ? 'real_fixed' : 'none_back',
   };
 }
 

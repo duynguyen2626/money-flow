@@ -23,6 +23,19 @@ Fix and verify build passes locally
 Push fix immediately to the failing branch
 Database schema changes require regenerating types
 
+* Never ship with two recompute implementations that disagree.
+* Backfill scripts must use the same recompute semantics as runtime.
+* All data-fix scripts must be idempotent.
+
+## Update `.agent/workflows/commit_and_push.md`
+
+Use dynamic placeholders (if not already):
+
+* PHASE_ID=9.2.1
+* SCOPE_SLUG=FIX-RECOMPUTE-CONSISTENCY
+* COMMIT_TITLE=Fix cashback recompute consistency and normalize budgets
+
+
 ## UI Rules
 
 * Modal layout must be:

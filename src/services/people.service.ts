@@ -186,11 +186,11 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   }
 
   if (debtError) {
-    console.error('Error fetching debt accounts for people:', debtError)
+    console.error('Error fetching debt accounts for people:', JSON.stringify(debtError, null, 2))
   }
 
   if (subError) {
-    console.error('Error fetching subscription memberships for people:', subError)
+    console.error('Error fetching subscription memberships for people:', JSON.stringify(subError, null, 2))
   }
 
   // Calculate balances from transactions

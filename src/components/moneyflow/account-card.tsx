@@ -149,9 +149,14 @@ function AccountCardComponent({
   const displayBalance = useMemo(() => {
     // Check if we're in family cards context by looking at hideSecuredBadge prop
     // (family-card-group passes hideSecuredBadge=true)
+    // FORCE Update: If Child and Family View -> Show Parent's Balance
+    if (hideSecuredBadge && isChild && parentAccountId) {
+      const parent = accounts.find(a => a.id === parentAccountId)
+      if (parent) return parent.current_balance ?? 0
+    }
     const context = hideSecuredBadge ? 'family_tab' : 'card'
     return getDisplayBalance(account, context, accounts)
-  }, [account, hideSecuredBadge, accounts])
+  }, [account, hideSecuredBadge, accounts, isChild, parentAccountId])
 
   // Handle Parent Link Click (Stop Propagation to prevent Card Link)
   const isSecuredAsset = !!securedByAccountId
@@ -264,9 +269,9 @@ function AccountCardComponent({
   // 1. Left Section (Visual) - Portrait Strip (NO SQUARE CROP)
   const renderVisualSection = () => {
     return (
-      <div className="relative h-full w-[160px] sm:w-[180px] bg-muted/5 overflow-hidden group-hover/card:bg-muted/10 transition-colors border-r border-slate-100">
-        {/* Image Container - Fills entire portrait strip */}
-        <div className="absolute inset-0 w-full h-full overflow-hidden bg-slate-100">
+      <div className="relative h-full w-[160px] sm:w-[180px] bg-muted/5 group-hover/card:bg-muted/10 transition-colors border-r border-slate-100 z-10">
+        {/* Image Container - Fills entire portrait strip - Overflow Hidden HERE */}
+        <div className="absolute inset-0 w-full h-full overflow-hidden bg-slate-100 rounded-l-xl">
           {account.logo_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -290,80 +295,7 @@ function AccountCardComponent({
             </div>
           )}
 
-          {/* Overlay Badges - Top Left */}
-          <div className="absolute top-2 left-2 flex flex-col gap-1.5 z-10 pointer-events-none">
-            {/* Removed Confirm Paid from here - moved to header */}
-          </div>
-
-          {/* Overlay Badges - Bottom Center */}
-          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col gap-1.5 z-10 w-full px-2 items-center">
-            {showParentBadge && (
-              <TooltipProvider>
-                <Tooltip delayDuration={100}>
-                  <TooltipTrigger asChild>
-                    <div
-                      className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-indigo-200 pointer-events-auto cursor-help backdrop-blur-sm w-[106px] justify-center"
-                      onClick={handleFamilyBadgeClick}
-                    >
-                      <Users className="w-3.5 h-3.5" />
-                      Parent {childCount > 1 ? `+${childCount}` : ''}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="text-xs">
-                    <p className="font-semibold mb-1">Linked Accounts:</p>
-                    <ul className="list-disc pl-3 space-y-0.5">
-                      {childAccounts.map(c => (
-                        <li key={c.id}>{c.name}</li>
-                      ))}
-                      {childAccounts.length === 0 && <li>No specific selection</li>}
-                    </ul>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-
-            {showChildBadge && (
-              <TooltipProvider>
-                <Tooltip delayDuration={100}>
-                  <TooltipTrigger asChild>
-                    <div
-                      className="flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-purple-200 pointer-events-auto cursor-help backdrop-blur-sm w-[106px] justify-center"
-                      onClick={handleFamilyBadgeClick}
-                    >
-                      <Baby className="w-3.5 h-3.5" />
-                      Child
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="text-xs">
-                    Linked to {parentInfo?.name || "Parent Account"}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-
-            {/* Standalone Badge */}
-            {cardState.badges.standalone && isCreditCard && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-bold bg-slate-800/80 text-white shadow-sm border border-slate-600 backdrop-blur-md w-[106px] justify-center">
-                Standalone
-              </span>
-            )}
-
-            {/* Timeline Badge */}
-            {stats?.cycle_range && (
-              <span className={cn(
-                "inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold shadow-sm backdrop-blur-sm w-[106px] justify-center truncate",
-                stats.cycle_range === "Month Cycle"
-                  ? "bg-teal-100/90 text-teal-800 border border-teal-200"
-                  : "bg-slate-800/80 text-white border border-slate-600"
-              )}>
-                {stats.cycle_range === "Month Cycle" ? "Month Cycle" : stats?.cycle_range}
-              </span>
-            )}
-
-            {/* Unsecured Badge - REMOVED (Moved to Data Section) */}
-          </div>
-
-          {/* Hover Details Overlay */}
+          {/* Hover Details Overlay - Z-INDEX 20 (Below Badges/Tooltips) */}
           <div className="absolute inset-0 flex flex-col gap-3 items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity duration-200 z-20 pointer-events-none bg-black/10 backdrop-blur-[1px]">
             {/* Eye Icon (Details) */}
             <Link
@@ -386,7 +318,97 @@ function AccountCardComponent({
             </div>
           </div>
         </div>
+
+        {/* Badges - OUTSIDE overflow-hidden container, but absolute over the image section */}
+        {renderBadges()}
       </div>
+    )
+  }
+
+
+  const renderBadges = () => {
+    return (
+      <>
+        {/* Overlay Badges - Top Left - Z-INDEX 30 (Above Overlay) */}
+        <div className="absolute top-2 left-2 flex flex-col gap-1.5 z-30 pointer-events-none">
+          {/* DUE BADGE - Redesigned: Single Row, Longer, Mixed Case */}
+          {isDueSoon && cardState.badges.due && (
+            <div className={cn(
+              "flex items-center gap-1.5 rounded-md shadow-sm border px-2 py-1 backdrop-blur-md w-auto min-w-[120px]",
+              "bg-amber-100/95 border-amber-200 text-amber-900"
+            )}>
+              <span className="font-extrabold text-sm text-amber-700">{cardState.badges.due.days}</span>
+              <span className="font-medium text-[10px] text-amber-800/80 whitespace-nowrap">Days left</span>
+              <span className="font-bold text-[10px] ml-auto">
+                {cardState.badges.due.date}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Overlay Badges - Bottom Center - Z-INDEX 30 (Above Overlay) */}
+        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col gap-1.5 z-30 w-full px-2 items-center">
+          {showParentBadge && (
+            <TooltipProvider>
+              <Tooltip delayDuration={100}>
+                <TooltipTrigger asChild>
+                  <div
+                    className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-indigo-200 pointer-events-auto cursor-help backdrop-blur-sm w-[106px] justify-center"
+                    onClick={handleFamilyBadgeClick}
+                  >
+                    <Users className="w-3.5 h-3.5" />
+                    Parent {childCount > 1 ? `+${childCount}` : ''}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="text-xs z-[100]">
+                  <p className="font-semibold mb-1">Linked Accounts:</p>
+                  <ul className="list-disc pl-3 space-y-0.5">
+                    {childAccounts.map(c => (
+                      <li key={c.id}>{c.name}</li>
+                    ))}
+                    {childAccounts.length === 0 && <li>No specific selection</li>}
+                  </ul>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {showChildBadge && (
+            <TooltipProvider>
+              <Tooltip delayDuration={100}>
+                <TooltipTrigger asChild>
+                  <div
+                    className="flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-purple-200 pointer-events-auto cursor-help backdrop-blur-sm w-[106px] justify-center"
+                    onClick={handleFamilyBadgeClick}
+                  >
+                    <Baby className="w-3.5 h-3.5" />
+                    Child
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="text-xs z-[100]">
+                  Linked to {parentInfo?.name || "Parent Account"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {/* Standalone Badge */}
+          {cardState.badges.standalone && isCreditCard && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-bold bg-slate-800/80 text-white shadow-sm border border-slate-600 backdrop-blur-md w-[106px] justify-center">
+              Standalone
+            </span>
+          )}
+
+          {/* Timeline Badge - UNIFIED GREEN STYLE */}
+          {stats?.cycle_range && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold shadow-sm backdrop-blur-sm w-[106px] justify-center truncate bg-teal-100/90 text-teal-800 border border-teal-200">
+              {stats.cycle_range === "Month Cycle" ? "Month Cycle" : stats?.cycle_range}
+            </span>
+          )}
+
+          {/* Unsecured Badge - REMOVED (Moved to Data Section) */}
+        </div>
+      </>
     )
   }
 
@@ -477,18 +499,27 @@ function AccountCardComponent({
         {/* 1. TOP ROW: Name + Action Buttons */}
         <div className="flex justify-between items-start gap-1 mb-1">
           {/* Account Name */}
-          <TooltipProvider>
-            <Tooltip delayDuration={100}>
-              <TooltipTrigger asChild>
-                <h3 className="font-bold text-sm leading-tight truncate text-slate-900 flex-1 min-w-0 cursor-pointer max-w-[120px]">
+          <div className="flex-1 min-w-0 max-w-[130px]">
+            <TooltipProvider>
+              <Tooltip delayDuration={100}>
+                <TooltipTrigger asChild>
+                  <h3 className="font-bold text-sm leading-tight truncate text-slate-900 cursor-pointer">
+                    {account.name}
+                  </h3>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="z-[80] text-xs font-medium max-w-[200px]">
                   {account.name}
-                </h3>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="z-[80] text-xs font-medium max-w-[200px]">
-                {account.name}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            {/* CHILD BADGE (Single Balance) - Inserted Here */}
+            {hideSecuredBadge && isChild && (
+              <div className="text-[10px] font-bold text-slate-500 mt-0.5 truncate">
+                [{formatCurrency(account.current_balance)}]
+              </div>
+            )}
+          </div>
 
           {/* Right: Action Buttons (REMOVED Edit Icon - Now handled by Card Click) */}
         </div>
@@ -614,23 +645,7 @@ function AccountCardComponent({
           </div>
         )}
 
-        {/* Child Single Balance (Family View) */}
-        {isCreditCard && hideSecuredBadge && isChild && (
-          <div className="mb-2 flex items-center">
-            <TooltipProvider>
-              <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300 truncate max-w-full cursor-help">
-                    Single Bal: {formatCurrency(account.current_balance)}
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs">
-                  Single Balance: {formatCurrency(account.current_balance)}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        )}
+
 
         {/* 5. Credit Card Progress Bar (MUST be AFTER Secured by) */}
         {isCreditCard && (
@@ -810,27 +825,7 @@ function AccountCardComponent({
       <div className="relative">
         {/* Due Banner - At top of left section with rounded top-left corner */}
         {/* Show for ALL Credit Cards with a due date */}
-        {isCreditCard && stats?.due_date_display && (
-          <div className="absolute top-[2px] left-[2px] z-20 w-[148px] sm:w-[160px]">
-            <div className={cn(
-              "px-2 py-0.5 rounded-tl-[9px] rounded-br-lg shadow-sm text-[10px] text-center leading-tight transition-colors border-b border-r",
-              cardState.badges.due
-                ? "bg-red-50 border-red-200 text-red-800" // Urgent
-                : "bg-amber-50 border-amber-200 text-amber-800" // Not Urgent
-            )}>
-              {/* Days Left - First */}
-              <div className="text-[9px] uppercase tracking-tight opacity-90 mb-px">
-                <span className="font-bold text-[10px] mr-1">{cardState.priorities.daysUntilDue}</span>
-                days left
-              </div>
 
-              {/* Date Display - Second */}
-              <div className="font-medium text-xs">
-                {stats.due_date_display.split(' ')[0]} <span className="font-bold">{stats.due_date_display.split(' ')[1]}</span>
-              </div>
-            </div>
-          </div>
-        )}
 
         <div
           className={cn(

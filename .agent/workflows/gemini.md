@@ -102,4 +102,12 @@ virtual = predicted profit (clamped)
 
 voluntary = overflow/loss (does not count)
 
-MF5.1 is schema + backfill only; UI updates later.
+* Cashback recomputation must be consistent across SQL and TS.
+* `overflow_loss` must include real overflow when cap is exceeded.
+* Missing config should be stored as NULL, not 0.
+
+## Current Phase (MF5.2.1)
+
+* Branch: `PHASE-9.2.1-FIX-RECOMPUTE-CONSISTENCY`
+* Commit: `PHASE 9.2.1 - Fix cashback recompute consistency and normalize budgets`
+* PR title: `MF5.2.1: Fix Recompute Consistency + Normalize Budgets`

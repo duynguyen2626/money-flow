@@ -190,6 +190,8 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     cashback_share_fixed:
       txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined ? Number(txn.cashback_share_fixed) : undefined,
     is_installment: txn.is_installment ?? false,
+    cashback_mode: (percentValue !== undefined && percentValue !== null && Number(percentValue) > 0) ? 'real_percent' :
+      (txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined && Number(txn.cashback_share_fixed) > 0) ? 'real_fixed' : 'none_back',
   };
 }
 
