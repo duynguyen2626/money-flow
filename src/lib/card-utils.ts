@@ -4,7 +4,7 @@ import { Account } from "@/types/moneyflow.types"
 export type CardActionState = {
     section: 'action_required' | 'credit_card' | 'other'
     badges: {
-        due: boolean
+        due: { days: number, date: string } | null
         spend: boolean
         standalone: boolean
         pendingBatch: boolean
@@ -26,7 +26,7 @@ export function getCardActionState(account: Account, hasPendingBatch: boolean = 
     // Defaults
     const result: CardActionState = {
         section: 'other',
-        badges: { due: false, spend: false, standalone: false, pendingBatch: false },
+        badges: { due: null, spend: false, standalone: false, pendingBatch: false },
         priorities: { daysUntilDue: 999, missingSpend: 0, sortOrder: 0 },
         dueText: null,
         spendText: null,
@@ -79,9 +79,12 @@ export function getCardActionState(account: Account, hasPendingBatch: boolean = 
         const daysUntilDue = getDaysUntilDueFromStats(stats)
         result.priorities.daysUntilDue = daysUntilDue
 
-        const isDueSoon = daysUntilDue <= 10 && debt > 1000 // Tolerance 1k
+        const isDueSoon = daysUntilDue <= 35 && debt > 0 // Show for next month cycle too
         result.dueText = isDueSoon && stats?.due_date_display ? `Due: ${stats.due_date_display}` : null
-        result.badges.due = isDueSoon
+        result.badges.due = isDueSoon ? {
+            days: daysUntilDue,
+            date: stats?.due_date_display || 'Due Soon'
+        } : null
 
         // --- Spend State ---
         const minSpend = stats?.min_spend ?? 0

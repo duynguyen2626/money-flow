@@ -295,9 +295,7 @@ export function TransactionForm({
         ? (initialValues.occurred_at instanceof Date ? initialValues.occurred_at : new Date(initialValues.occurred_at))
         : new Date(),
       amount: initialValues?.amount ? Math.abs(initialValues.amount) : 0,
-      cashback_share_percent: (initialValues?.cashback_share_percent && initialValues.cashback_share_percent < 1)
-        ? initialValues.cashback_share_percent * 100
-        : initialValues?.cashback_share_percent,
+      cashback_share_percent: initialValues?.cashback_share_percent ? initialValues.cashback_share_percent * 100 : undefined,
     },
   })
 
@@ -348,9 +346,7 @@ export function TransactionForm({
         ? (initialValues.occurred_at instanceof Date ? initialValues.occurred_at : new Date(initialValues.occurred_at))
         : new Date(),
       amount: initialValues.amount ? Math.abs(initialValues.amount) : 0,
-      cashback_share_percent: (initialValues?.cashback_share_percent && initialValues.cashback_share_percent < 1)
-        ? initialValues.cashback_share_percent * 100
-        : initialValues?.cashback_share_percent,
+      cashback_share_percent: initialValues?.cashback_share_percent ? initialValues.cashback_share_percent * 100 : undefined,
     };
 
     const isRepayment = initialValues.category_name?.toLowerCase().includes('thu nợ')
@@ -522,7 +518,7 @@ export function TransactionForm({
         note: finalNote,
         destination_account_id: values.type === 'income' ? values.source_account_id : undefined,
         is_installment: isInstallment,
-        cashback_share_percent: rawPercent >= 100 ? rawPercent : rawPercent / 100,
+        cashback_share_percent: rawPercent / 100, // Always divide by 100 to store as decimal (0.08 for 8%)
       }
 
       console.log('[TransactionForm] Submitting payload:', {
@@ -1260,7 +1256,7 @@ export function TransactionForm({
   // Reset cashback when Account or Amount changes significantly
   useEffect(() => {
     // Only reset if we are not in edit mode loading phase
-    if (!form.formState.isLoading) {
+    if (!form.formState.isLoading && !isEditMode) {
       // If account changes, reset query logic resets stats, but we should reset inputs
       form.setValue('cashback_share_fixed', 0);
       form.setValue('cashback_share_percent', 0);
@@ -2374,7 +2370,7 @@ export function TransactionForm({
       ) : (
         <form
           onSubmit={handleSubmit(onSubmit, (errors) => {
-            console.error('[Form Validation Error]', errors);
+            console.error('[Form Validation Error]', JSON.stringify(errors, null, 2));
             // Optionally set a status error to inform user why nothing happened
             setStatus({ type: 'error', text: 'Please fix the errors in the form.' })
           })}
