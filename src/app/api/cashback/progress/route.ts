@@ -8,9 +8,11 @@ export async function GET(request: NextRequest) {
   const accountId = url.searchParams.get('accountId')
   const parsedOffset = Number(offsetParam ?? '0')
   const monthOffset = Number.isFinite(parsedOffset) ? Math.trunc(parsedOffset) : 0
+  const dateParam = url.searchParams.get('date')
+  const referenceDate = dateParam ? new Date(dateParam) : undefined
   const filter = accountId ? [accountId] : undefined
 
-  const cards = await getCashbackProgress(monthOffset, filter)
+  const cards = await getCashbackProgress(monthOffset, filter, referenceDate)
 
   return NextResponse.json(cards)
 }

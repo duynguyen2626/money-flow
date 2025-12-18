@@ -26,14 +26,13 @@ Database schema changes require regenerating types
 * Never ship with two recompute implementations that disagree.
 * Backfill scripts must use the same recompute semantics as runtime.
 * All data-fix scripts must be idempotent.
-
-## Update `.agent/workflows/commit_and_push.md`
-
-Use dynamic placeholders (if not already):
-
-* PHASE_ID=9.2.1
-* SCOPE_SLUG=FIX-RECOMPUTE-CONSISTENCY
-* COMMIT_TITLE=Fix cashback recompute consistency and normalize budgets
+- Cashback UI hints MUST read from cashback_cycles, never directly from account config when a cycle exists.
+- Any transaction with cashback_mode != null must result in:
+  - a cashback_entries row
+  - a recomputed cashback_cycles row
+- Budget Left is always:
+  max_budget - real_awarded - virtual_profit
+- cashback_config parsing must support legacy keys (max_amt, min_spend, cycle, statement_day).
 
 
 ## UI Rules

@@ -1012,6 +1012,17 @@ export function TransactionForm({
     }
   }, [transactionType, selectedAccount, form])
 
+  // Auto-Select "Real" Tab for Lending
+  useEffect(() => {
+    if (transactionType === 'debt' && selectedAccount?.type === 'credit_card') {
+      const currentMode = form.getValues('cashback_mode');
+      if (currentMode !== 'real_fixed' && currentMode !== 'real_percent') {
+        console.log('[Lending Auto-Set] Switching cashback mode to real_fixed for Lending on CC');
+        form.setValue('cashback_mode', 'real_fixed');
+      }
+    }
+  }, [transactionType, selectedAccount, form]);
+
 
 
 
@@ -1083,7 +1094,7 @@ export function TransactionForm({
     setProgressLoading(true)
     setProgressError(null)
 
-    fetch(`/api/cashback/progress?accountId=${selectedAccount.id}`, {
+    fetch(`/api/cashback/progress?accountId=${selectedAccount.id}&date=${watchedDate.toISOString()}`, {
       cache: 'no-store',
       signal: controller.signal,
     })
@@ -1114,7 +1125,7 @@ export function TransactionForm({
     return () => {
       controller.abort()
     }
-  }, [selectedAccount?.id])
+  }, [selectedAccount?.id, watchedDate])
 
   const potentialCashback = useMemo(() => {
     const rate = spendingStats?.potentialRate ?? cashbackMeta?.rate ?? 0
@@ -1140,6 +1151,18 @@ export function TransactionForm({
 
     return cappedCashback
   }, [cashbackMeta, watchedAmount, spendingStats])
+
+  const currentImpact = useMemo(() => {
+    if (watchedCashbackMode === 'real_fixed' || watchedCashbackMode === 'real_percent') {
+      const pAmount = (Math.abs(watchedAmount) * (watchedCashbackPercent || 0)) / 100;
+      const fAmount = watchedCashbackFixed || 0;
+      return pAmount + fAmount;
+    }
+    if (watchedCashbackMode === 'none_back') {
+      return potentialCashback;
+    }
+    return 0;
+  }, [watchedCashbackMode, watchedAmount, watchedCashbackPercent, watchedCashbackFixed, potentialCashback]);
 
   const amountValue = typeof watchedAmount === 'number' ? Math.abs(watchedAmount) : 0
   const projectedSpend = (spendingStats?.currentSpend ?? 0) + amountValue
@@ -1490,7 +1513,7 @@ export function TransactionForm({
           )}
         />
         {errors.person_id && (
-          <p className="text-sm text-red-600">{errors.person_id.message}</p>
+          <p className="text-sm text-red-600 font-medium mt-1 animate-pulse">⚠️ {errors.person_id.message}</p>
         )}
         {debtAccountName && (
           <p className="text-xs text-slate-500 mt-1">
@@ -1557,7 +1580,7 @@ export function TransactionForm({
         </div>
       ) : null}
       {errors.debt_account_id && (
-        <p className="text-sm text-red-600">{errors.debt_account_id.message}</p>
+        <p className="text-sm text-red-600 font-medium mt-1 animate-pulse">⚠️ {errors.debt_account_id.message}</p>
       )}
     </div>
   ) : null
@@ -1948,7 +1971,7 @@ export function TransactionForm({
         {spendingStats && spendingStats.maxCashback && spendingStats.maxCashback > 0 && (
           <p>
             <span className="font-semibold text-slate-700">Budget:</span>
-            {numberFormatter.format(spendingStats.maxCashback - spendingStats.earnedSoFar)} remaining
+            {numberFormatter.format(Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar - currentImpact))} remaining
           </p>
         )}
       </div>
@@ -2227,7 +2250,7 @@ export function TransactionForm({
             {spendingStats?.maxCashback && (
               <div className="flex justify-between text-amber-600">
                 <span>Budget Left:</span>
-                <span>{numberFormatter.format(Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar))}</span>
+                <span>{numberFormatter.format(Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar - currentImpact))}</span>
               </div>
             )}
           </div>
