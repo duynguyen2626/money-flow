@@ -170,15 +170,37 @@ export async function upsertTransactionCashback(
 export async function recomputeCashbackCycle(cycleId: string) {
   const supabase = createClient();
 
-  // 1. Fetch Cycle & Entries
+  // 1. Fetch Cycle & Parent Account Info
   const { data: cycle } = await supabase
     .from('cashback_cycles')
-    .select('max_budget')
+    .select('account_id, cycle_tag, max_budget, min_spend_target')
     .eq('id', cycleId)
     .single();
 
   if (!cycle) return;
 
+  const { data: account } = await supabase
+    .from('accounts')
+    .select('cashback_config')
+    .eq('id', cycle.account_id)
+    .single();
+
+  const config = parseCashbackConfig(account?.cashback_config);
+  const maxBudget = config.maxAmount ?? 0;
+  const minSpendTarget = config.minSpend ?? 0;
+
+  // 2. Aggregate Spent Amount from Transactions
+  const { data: txns } = await supabase
+    .from('transactions')
+    .select('amount')
+    .eq('account_id', cycle.account_id)
+    .eq('persisted_cycle_tag', cycle.cycle_tag)
+    .neq('status', 'void');
+
+  const spentAmount = (txns ?? []).reduce((sum, t) => sum + Math.abs(t.amount || 0), 0);
+  const isMinSpendMet = spentAmount >= minSpendTarget;
+
+  // 3. Aggregate Cashback Entries
   const { data: entries } = await supabase
     .from('cashback_entries')
     .select('mode, amount, counts_to_budget')
@@ -186,14 +208,9 @@ export async function recomputeCashbackCycle(cycleId: string) {
 
   if (!entries) return;
 
-  // 2. Aggregate
   let realTotal = 0;
   let virtualTotalRaw = 0;
   let voluntaryTotal = 0;
-
-  // Real Overflow Tracking (Case 2)
-  // We need to sum Real entries that exceed budget as "Real Overflow"
-  // But typically simply sum(real) is enough, and we calc overflow from the Cap.
 
   entries.forEach(e => {
     if (e.mode === 'real' && e.counts_to_budget) {
@@ -205,36 +222,22 @@ export async function recomputeCashbackCycle(cycleId: string) {
     }
   });
 
-  const maxBudget = cycle.max_budget ?? 0;
-
-  // 3. Logic Application
-  // Cap available for Virtual = Max - Real (floor 0)
+  // 4. Logic Application
   const capAfterReal = Math.max(0, maxBudget - realTotal);
-
-  // Virtual Effective = min(VirtualRaw, CapAvailable)
   const virtualEffective = Math.min(virtualTotalRaw, capAfterReal);
-
-  // Virtual Overflow = VirtualRaw - VirtualEffective
   const virtualOverflow = Math.max(0, virtualTotalRaw - virtualEffective);
-
-  // Real Overflow = max(0, RealTotal - Max)
   const realOverflow = Math.max(0, realTotal - maxBudget);
-
-  // Total Overflow Loss = Voluntary + VirtualOverflow + RealOverflow
   const overflowLoss = voluntaryTotal + virtualOverflow + realOverflow;
-
-  // Real Awarded for Cycle Stats:
-  // Usually we show the Actual Real amount given even if it overflows?
-  // Spec says: "cycle.real_awarded should remain as real_counts" -> "real_counts = min(real_total, cap)"
-  // Wait, clarify spec: "cycle.real_awarded should remain as real_counts (counts to budget)"
-  // So real_awarded in DB = Min(RealTotal, Cap).
-  // The REST of Real is in overflow_loss.
   const realEffective = Math.min(realTotal, maxBudget);
 
   const isExhausted = realTotal >= maxBudget || (realTotal + virtualEffective) >= maxBudget;
 
-  // 4. Update Cycle
+  // 5. Update Cycle
   await supabase.from('cashback_cycles').update({
+    max_budget: maxBudget, // Sync with latest config
+    min_spend_target: minSpendTarget, // Sync with latest config
+    spent_amount: spentAmount,
+    met_min_spend: isMinSpendMet,
     real_awarded: realEffective,
     virtual_profit: virtualEffective,
     overflow_loss: overflowLoss,
@@ -314,10 +317,12 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   };
 }
 
-export async function getCashbackProgress(monthOffset: number = 0, accountIds?: string[]): Promise<CashbackCard[]> {
+export async function getCashbackProgress(monthOffset: number = 0, accountIds?: string[], referenceDate?: Date): Promise<CashbackCard[]> {
   const supabase = createClient();
-  const date = new Date();
-  date.setMonth(date.getMonth() + monthOffset);
+  const date = referenceDate ? new Date(referenceDate) : new Date();
+  if (!referenceDate) {
+    date.setMonth(date.getMonth() + monthOffset);
+  }
 
   const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
   const year = date.getFullYear().toString().slice(-2);
@@ -343,9 +348,11 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       .maybeSingle();
 
     const currentSpend = cycle?.spent_amount ?? 0;
-    const earnedSoFar = (cycle?.real_awarded ?? 0) + (cycle?.virtual_profit ?? 0);
-    const minSpend = config.minSpend ?? 0;
-    const maxCashback = config.maxAmount ?? 0;
+    const realAwarded = cycle?.real_awarded ?? 0;
+    const virtualProfit = cycle?.virtual_profit ?? 0;
+    const earnedSoFar = realAwarded + virtualProfit;
+    const minSpend = cycle?.min_spend_target ?? config.minSpend ?? 0;
+    const maxCashback = cycle?.max_budget ?? config.maxAmount ?? 0;
 
     const remainingBudget = maxCashback > 0 ? (maxCashback - earnedSoFar) : null;
     const progress = minSpend > 0 ? Math.min(100, (currentSpend / minSpend) * 100) : 100;

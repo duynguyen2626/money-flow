@@ -48,7 +48,7 @@ function parseConfigCandidate(raw: Record<string, unknown> | null): ParsedCashba
       ? parsedMax
       : null
 
-  const cycleTypeCandidate = String(raw?.cycle_type ?? raw?.cycleType ?? 'calendar_month')
+  const cycleTypeCandidate = String(raw?.cycle_type ?? raw?.cycle ?? raw?.cycleType ?? 'calendar_month')
   const cycleType: CashbackCycleType =
     cycleTypeCandidate === 'statement_cycle' ? 'statement_cycle' : 'calendar_month'
 

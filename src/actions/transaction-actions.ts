@@ -7,6 +7,7 @@ import { syncTransactionToSheet } from '@/services/sheet.service';
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds';
 import { loadShopInfo, ShopRow, mapTransactionRow, parseMetadata, extractLineMetadata, TransactionRow as MapperTransactionRow, mapUnifiedTransaction } from '@/lib/transaction-mapper';
 import { TransactionWithDetails } from '@/types/moneyflow.types';
+import { upsertTransactionCashback } from '@/services/cashback.service';
 
 export type CreateTransactionInput = {
   occurred_at: string;
@@ -372,6 +373,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       person_id: personId,
       cashback_share_percent: sharePercent,
       cashback_share_fixed: shareFixed,
+      cashback_mode: input.cashback_mode ?? null,
     })
     .select()
     .single();
@@ -434,6 +436,17 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
       .catch(err => {
         console.error('Sheet Sync Error (Background):', err);
       });
+  }
+
+  // Cashback Integration (Create)
+  try {
+    const { data: rawTxn } = await supabase.from('transactions').select('*, categories(name)').eq('id', txn.id).single();
+    if (rawTxn) {
+      const txnShape: any = { ...rawTxn, category_name: (rawTxn as any).categories?.name };
+      await upsertTransactionCashback(txnShape);
+    }
+  } catch (cbError) {
+    console.error('Failed to upsert cashback entry (action):', cbError);
   }
 
   return true;
@@ -791,6 +804,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       cashback_share_fixed: input.cashback_share_fixed ?? null,
       persisted_cycle_tag: persistedCycleTag,
       shop_id: input.shop_id ?? null,
+      cashback_mode: input.cashback_mode ?? null,
     })
     .eq('id', id);
 
@@ -832,6 +846,17 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     void syncTransactionToSheet(newPersonId, syncPayload as any, 'create').catch(err => {
       console.error('Sheet Sync Error (Update/Create):', err);
     });
+  }
+
+  // Cashback Integration (Update)
+  try {
+    const { data: rawTxn } = await supabase.from('transactions').select('*, categories(name)').eq('id', id).single();
+    if (rawTxn) {
+      const txnShape: any = { ...rawTxn, category_name: (rawTxn as any).categories?.name };
+      await upsertTransactionCashback(txnShape);
+    }
+  } catch (cbError) {
+    console.error('Failed to update cashback entry (action):', cbError);
   }
 
   return true;
