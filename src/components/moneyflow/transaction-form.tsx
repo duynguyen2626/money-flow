@@ -2242,9 +2242,16 @@ export function TransactionForm({
 
           {/* Hints for Real Mode */}
           <div className="text-xs text-slate-500 flex flex-col gap-1 border-t border-slate-100 pt-2">
+            <div className="flex justify-between">
+              <span>Match Policy:</span>
+              <span className="font-medium text-slate-700 capitalize">
+                {spendingStats?.matchReason?.replace(/_/g, ' ') || 'Default'}
+                {spendingStats?.maxReward && ` (Max ${numberFormatter.format(spendingStats.maxReward)})`}
+              </span>
+            </div>
             {rateLimitPercent !== null && (
               <div className="flex justify-between">
-                <span>Card Rate:</span>
+                <span>Applied Rate:</span>
                 <span className="font-medium bg-slate-100 px-1 py-0.5 rounded">{rateLimitPercent}%</span>
               </div>
             )}

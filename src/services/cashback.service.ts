@@ -163,6 +163,10 @@ export async function upsertTransactionCashback(
       break;
   }
 
+  if (!policy.metadata) {
+    throw new Error(`Critical: Cashback policy resolution failed to return metadata for transaction ${transaction.id}`);
+  }
+
   const entryData = {
     cycle_id: cycleId,
     account_id: account.id,
@@ -170,7 +174,10 @@ export async function upsertTransactionCashback(
     mode,
     amount, // This is the total value
     counts_to_budget: countsToBudget,
-    note: mode === 'virtual' ? 'Predicted profit (None Back)' : null
+    metadata: policy.metadata,
+    note: mode === 'virtual'
+      ? `Projected: ${policy.metadata.reason}`
+      : (transaction.note || `Manual: ${policy.metadata.reason}`)
   };
 
   // Safe Upsert with Strict Constraint Handling
@@ -356,7 +363,14 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     categoryName = cat?.name;
   }
 
-  const dummyCalc = calculateBankCashback(config, 1000000, categoryName, cycle?.spent_amount ?? 0);
+  const { resolveCashbackPolicy } = await import('./cashback/policy-resolver');
+  const policy = resolveCashbackPolicy({
+    account,
+    categoryId,
+    amount: 1000000,
+    cycleTotals: { spent: cycle?.spent_amount ?? 0 },
+    categoryName
+  });
 
   const realAwarded = cycle?.real_awarded ?? 0;
   const virtualProfit = cycle?.virtual_profit ?? 0;
@@ -372,12 +386,14 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     currentSpend: cycle?.spent_amount ?? 0,
     minSpend: config.minSpend ?? 0,
     maxCashback: config.maxAmount ?? 0,
-    rate: dummyCalc.rate,
+    rate: policy.rate,
+    maxReward: policy.maxReward,
     earnedSoFar,
     sharedAmount,
     potentialProfit: virtualProfit,
     netProfit,
-    potentialRate: dummyCalc.rate,
+    potentialRate: policy.rate,
+    matchReason: policy.metadata?.policySource,
     cycle: {
       label: cycleTag,
       start: cycleRange.start.toISOString(),
@@ -430,6 +446,13 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
     const metMinSpend = cycle?.met_min_spend ?? false;
     const missingMinSpend = minSpend > currentSpend ? minSpend - currentSpend : 0;
 
+    const { resolveCashbackPolicy } = await import('./cashback/policy-resolver');
+    const policy = resolveCashbackPolicy({
+      account: acc,
+      amount: 1000000,
+      cycleTotals: { spent: currentSpend }
+    });
+
     results.push({
       accountId: acc.id,
       accountName: acc.name,
@@ -456,7 +479,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       potential_earned: cycle?.virtual_profit ?? 0,
       transactions: [],
       remainingBudget: remainingBudget,
-      rate: config.rate ?? 0
+      rate: policy.rate
     });
   }
 

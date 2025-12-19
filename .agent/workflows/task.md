@@ -2,248 +2,170 @@
 description: Task Descriptions
 ---
 
-# MF5.2.2B — Fix Cashback Hint + Data Sync (Prep for MF5.3 Category-based Cashback)
+# MF5.3.1 — Checkpoint & Task Prompt (Attribution Metadata + QA Hardening)
 
-You are the coding agent working on **Money Flow 3**.
-This is **Phase MF5.2.2B**.
-
-This phase must stabilize the cashback foundation (cycles/entries/hints) and prepare clean interfaces for MF5.3 where cashback is computed by **category rules / tiers**.
-
----
-
-## 0) What MF5.2.2B is (and is not)
-
-### IN SCOPE
-
-* Fix remaining bugs where cashback % and budget-left hint are incorrect.
-* Ensure every transaction add/edit/delete updates:
-
-  * `transactions`
-  * `cashback_entries`
-  * `cashback_cycles`
-* Fix NaN in edit-account tier UI.
-* Standardize cashback config parsing (aliases) and define a stable internal config shape.
-* Add preparation hooks for MF5.3:
-
-  * clean function boundaries for “resolve cashback policy for txn” (currently just default rate/cap)
-  * ensure category is available in the resolution inputs
-
-### OUT OF SCOPE
-
-* Full MF5.3 implementation of category-based rules and spend thresholds.
-* Major UI redesign.
+> This canvas continues after MF5.3 was implemented.
+> Goal: make MF5.3 **auditable in DB** by ensuring `cashback_entries.metadata` is reliably populated and never silently NULL.
+> **Do NOT redesign the system. Do NOT change MF5.2 cycle/entry engine. Do NOT add new tables.**
 
 ---
 
-## 1) Non-negotiable data contracts
+## 1) Current Checkpoint (Observed Issue)
 
-### 1.1 Percent representation
+### ✅ MF5.3 Implemented
 
-* DB `transactions.cashback_share_percent`: **decimal fraction** in [0..1], e.g. `0.08`.
-* UI percent input/display: **raw percent number** in [0..100], e.g. `8`.
-* Exactly one conversion layer:
+* Category-based rules + spend-based levels
+* `resolveCashbackPolicy()` decides rate/cap and returns metadata
+* UI shows match hints and dynamic rate suggestions
 
-  * Load: decimal → percent
-  * Save: percent → decimal
-* Sheet export: percent must be sent as **raw percent** (8, not 0.08).
+### ❗ Problem to fix (blocking)
 
-### 1.2 Cashback tables must always sync
+* SQL proof shows `cashback_entries.metadata` is **NULL** for recent rows.
 
-For any txn affecting cashback:
-
-* Create/Update must upsert **one** `cashback_entries` row.
-* Delete must remove the entry.
-* Every mutation must recompute `cashback_cycles`.
-* If edit changes account_id or cycle_tag: recompute both old and new cycles.
-
-### 1.3 Budget left formula
-
-When `cashback_cycles` exists for (account_id, cycle_tag):
-
-* `budget_left = max(0, max_budget - real_awarded - virtual_profit)`
-  UI must prefer cycle totals over raw config.
+Expected: metadata contains applied policy context.
 
 ---
 
-## 2) Required fixes
+## 2) MF5.3.1 Objective (Single Sentence)
 
-### 2.1 Fix cashback hint still showing full budget
+> Ensure every cashback-affecting transaction results in exactly one `cashback_entries` row whose `metadata` is populated with policy attribution (level/rule/rate/cap), and provide DB + UI proof.
 
-* Identify all UI components that show:
+---
 
-  * Budget Left
-  * Max budget
-  * Card rate
-  * Cycle range
-* Fix them to read from `cashback_cycles` (when present).
-* If cycle missing, show placeholder (e.g. `--`) for budget-left; do NOT mislead.
+## 3) Scope Boundaries
 
-### 2.2 Ensure `cashback_entries` is created for every cashback txn
+### ✅ IN SCOPE
 
-* Audit transaction create/update code path.
-* Confirm that for `cashback_mode`:
+* Fix persistence path so `cashback_entries.metadata` is always written on create/update
+* Backfill existing `cashback_entries.metadata` for recent/active cycles
+* Add safe guardrails to prevent future NULL metadata (minimal)
+* Provide QA queries + reproducible steps
 
-  * `real_fixed` creates a `cashback_entries(mode='real')` with amount = fixed
-  * `real_percent` creates entry with amount = computed real cashback or stored fixed equivalent (choose one, document)
-  * `none_back` creates entry mode='virtual'
-  * `voluntary` creates entry mode='voluntary' counts_to_budget=false
-* Ensure idempotency: no duplicates per txn.
+### ❌ OUT OF SCOPE
 
-**DB constraint required (safe):**
+* No new tables
+* No new reporting/dashboard
+* No refactor of recompute engine
+* No UI redesign (only fix hints if they are reading wrong field)
 
-* Add unique index: `cashback_entries(account_id, transaction_id)`.
+---
 
-### 2.3 Fix NaN in edit-account-dialog tiers
+## 4) Non‑Negotiable Rules
 
-Console error shows:
+* `resolveCashbackPolicy()` remains the **only** decision point for rate/cap
+* UI must not recompute budgets; budget-left comes from `cashback_cycles`
+* `cashback_entries` must remain 1 row per (account_id, transaction_id)
+* Metadata must enable auditing by DB inspection
 
-* `value={rule.rate * 100}` producing NaN when rate is undefined.
+---
 
-Fix requirements:
+## 5) Required Metadata Shape (Minimum)
 
-* Default rate to 0 for render: `(rule.rate ?? 0) * 100`.
-* On change, parse number safely; if empty string, set to 0 or undefined consistently.
-* Ensure no uncontrolled/controlled warnings.
+Persist at least these keys:
 
-### 2.4 Standardize cashback_config parsing (aliases)
-
-Accounts have mixed keys:
-
-* `max_amt` vs `maxAmount`
-* `min_spend` vs `minSpend`
-* `cycle` vs `cycleType`
-* `statement_day` vs `statementDay`
-
-Implement `parseCashbackConfig()` that returns a single internal shape:
-
-```ts
+```json
 {
-  rate: number;                 // decimal
-  cycleType: 'calendar_month' | 'statement_cycle';
-  maxAmount: number | null;     // VND cap per cycle
-  minSpend: number | null;
-  statementDay: number | null;
-  hasTiers?: boolean;
-  tiers?: ... // keep as-is for MF5.3, but never break if missing
+  "policySource": "program_default" | "level_default" | "category_rule" | "legacy",
+  "levelId": "..." | null,
+  "categoryId": "..." | null,
+  "rate": 0.075,
+  "ruleMaxReward": 100000
 }
 ```
 
----
+Notes:
 
-## 3) MF5.3 preparation: reduce “tier” confusion and create clean extension points
-
-### 3.1 Naming guidance
-
-The term “tier” is confusing. Start migrating terminology in UI labels (no DB rename yet):
-
-* Prefer: **Cashback Levels** or **Cashback Rulesets**
-* In code, prefer: `levels` or `rules` instead of `tiers`
-
-### 3.2 Add a single policy resolver function (stub for MF5.3)
-
-Create a function used by transaction cashback calculation:
-
-* `resolveCashbackPolicy({ account, categoryId, amount, cycleTotals })`
-
-For MF5.2.2B it can return default policy:
-
-* rate, cap, minSpend from parsed config
-
-But it must accept:
-
-* `categoryId` (for MF5.3)
-* `amount` and `spent_amount` (for spend thresholds in MF5.3)
-
-This keeps MF5.3 changes localized.
+* `ruleMaxReward` can be null.
+* Store decimal rate (0.075), not percent.
 
 ---
 
-## 4) Verification checklist (Agent must verify with SQL)
+## 6) Implementation Tasks (Agent Must Do)
 
-For the Lady example (or any card):
+### 6.1 Fix write path (root cause)
 
-### 4.1 transactions
+* Audit `upsertTransactionCashback()`:
 
-* Row has:
+  * Confirm resolver metadata is being passed into the insert/upsert payload
+  * Confirm update path also writes metadata (not only insert)
+  * Ensure metadata is not dropped by type mismatch or undefined filtering
 
-  * `cashback_mode` set appropriately
-  * `cashback_share_fixed` or `cashback_share_percent` correct
+### 6.2 Add guardrail (minimal, safe)
 
-### 4.2 cashback_entries
+* Migration (safe):
 
-* Exactly 1 row exists for the txn:
+  * Set default `cashback_entries.metadata` = `'{}'::jsonb`
+  * Optional: make `metadata` NOT NULL if no conflicts
 
-  * correct `mode`
-  * correct `amount`
-  * `cycle_id` matches cycle
+### 6.3 Backfill existing rows
 
-### 4.3 cashback_cycles
+* For last N days (or active cycles):
 
-* Row exists for (account_id, cycle_tag)
-* `max_budget` matches parsed config maxAmount
-* `real_awarded` updates after txn
-* `budget_left = max_budget - real_awarded - virtual_profit` is correct
+  * For each `cashback_entries` row with NULL/empty metadata:
 
-### 4.4 UI
+    * Load txn + account + cycle
+    * Re-run `resolveCashbackPolicy()` and update metadata
 
-* Hint displays Budget Left correctly
-* No NaN warning in tier editor
-
-### 4.5 Sheet export
-
-* Percent is sent as raw percent number (8 not 0.08)
+Keep backfill small and targeted (avoid heavy scan).
 
 ---
 
-## 5) Required test cases
+## 7) Verification Checklist (Must Pass)
 
-### Test 1 — Real Fixed affects budget left
+### 7.1 SQL Proof
 
-* Card max budget 1,000,000
-* Create txn real_fixed 100,000
-  Expected:
-* cycle.real_awarded=100,000
-* UI budget_left=900,000
+Run:
 
-### Test 2 — Edit txn updates cycle (no duplicates)
+```sql
+SELECT t.amount, t.category_id, ce.amount AS cashback, ce.metadata
+FROM transactions t
+JOIN cashback_entries ce ON t.id = ce.transaction_id
+ORDER BY t.created_at DESC
+LIMIT 20;
+```
 
-* Edit fixed 100,000 → 150,000
-  Expected:
-* still 1 entry
-* cycle.real_awarded=150,000
-* UI budget_left=850,000
+Expected:
 
-### Test 3 — Percent display and sheet export
+* `ce.metadata` is **NOT NULL**
+* `policySource`, `rate`, `ruleMaxReward` present
 
-* DB stores 0.08
-  Expected:
-* UI shows 8
-* Sheet export sends 8
+### 7.2 Level Switch Proof
 
-### Test 4 — NaN regression
+* Create txns to push cycle spent across threshold
+* Verify the next txn picks the higher level
+* Metadata must show the levelId and new rate
 
-* Open edit-account dialog with rules missing rate
-  Expected:
-* no NaN warning
+### 7.3 UI Proof
 
----
+* In transaction modal, changing category updates:
 
-## 6) Branch / PR info (do NOT ask for commit workflow file)
+  * applied rate
+  * rule max reward
+  * suggested cashback
+  * match explanation
 
-* **Branch:** `PHASE-9.2.2B-CASHBACK-HINT-PREP-CATE-RULES`
-* **Commit message:** `MF5.2.2B - Fix cashback hint sync + prep policy resolver for MF5.3`
-* **PR title:** `MF5.2.2B: Fix cashback hint + data sync; prep for category-based cashback`
+Budget-left must still come from `cashback_cycles`.
 
 ---
 
-## 7) PR description requirements
+## 8) Branch / PR
 
-Include:
+* Branch: `PHASE-9.3.1-CASHBACK-METADATA-QA`
+* Commit: `MF5.3.1 - Ensure cashback_entries metadata + backfill`
+* PR Title: `MF5.3.1: Ensure cashback attribution metadata + QA hardening`
 
-* Before/after screenshot of Budget Left for Lady example
-* SQL snippets showing:
+PR must include:
 
-  * transactions row
-  * cashback_entries row
-  * cashback_cycles row
-* Confirmation checklist + test case results
+* Screenshot: transaction modal category switching
+* SQL: transactions + cashback_entries (metadata) + cashback_cycles
+* A short note: root cause + fix
+
+---
+
+## 9) Stop Condition
+
+Stop after PR opened and provide:
+
+* QA steps
+* SQL snippets (before/after)
+* Backfill scope statement (what rows were updated)

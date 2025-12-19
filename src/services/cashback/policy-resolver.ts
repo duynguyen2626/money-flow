@@ -1,16 +1,27 @@
-import { Account } from '@/types/moneyflow.types'
-import { parseCashbackConfig, calculateBankCashback } from '@/lib/cashback'
+import { parseCashbackConfig, calculateBankCashback, CashbackLevel, CashbackCategoryRule } from '@/lib/cashback'
 
 export type CashbackPolicyResult = {
     rate: number
     maxReward?: number
     minSpend?: number
+    metadata: {
+        policySource: 'program_default' | 'level_default' | 'category_rule' | 'legacy'
+        reason: string
+        rate: number
+        levelId?: string
+        levelName?: string
+        ruleId?: string
+        categoryId?: string
+        ruleMaxReward?: number | null
+    }
 }
 
 /**
- * MF5.3 PREP: Single entry point to resolve cashback policy for a transaction.
- * Currently just reads account config, but in MF5.3 this will handle
- * category-based rules, tier lookup by total spend, etc.
+ * MF5.3: Single entry point to resolve cashback policy for a transaction.
+ * Handles:
+ * 1. Spend-based levels (tiers)
+ * 2. Category-based rules
+ * 3. Fallbacks to program defaults
  */
 export function resolveCashbackPolicy(params: {
     account: { cashback_config: any }
@@ -19,23 +30,82 @@ export function resolveCashbackPolicy(params: {
     cycleTotals: {
         spent: number
     }
-    categoryName?: string // Helper for now until we fully switch to ID
+    categoryName?: string // Helper for legacy matching
 }): CashbackPolicyResult {
-    const { account, amount, categoryName, cycleTotals } = params
-
+    const { account, amount, categoryId, categoryName, cycleTotals } = params
     const config = parseCashbackConfig(account.cashback_config)
 
-    // MF5.2 Logic: Use existing calculator which ALREADY supports basic tiers
-    const { rate } = calculateBankCashback(
-        config,
-        amount,
-        categoryName,
-        cycleTotals.spent
-    )
+    // 1. If no MF5.3 program exists, fallback to Legacy Logic (MF5.2)
+    if (!config.program) {
+        const { rate } = calculateBankCashback(
+            config,
+            amount,
+            categoryName,
+            cycleTotals.spent
+        )
+        return {
+            rate,
+            minSpend: config.minSpend ?? undefined,
+            metadata: {
+                policySource: 'legacy',
+                reason: `Legacy rule matched for ${categoryName || 'generic spend'}`,
+                rate
+            }
+        }
+    }
+
+    const { program } = config
+    let finalRate = program.rate
+    let finalMaxReward: number | undefined = undefined
+    let source: CashbackPolicyResult['metadata'] = {
+        policySource: 'program_default',
+        reason: 'Program default rate',
+        rate: finalRate
+    }
+
+    // 2. Select Level by spent_amount
+    let applicableLevel: CashbackLevel | undefined = undefined
+    if (program.levels && program.levels.length > 0) {
+        const sortedLevels = [...program.levels].sort((a, b) => b.minTotalSpend - a.minTotalSpend)
+        applicableLevel = sortedLevels.find(lvl => cycleTotals.spent >= lvl.minTotalSpend)
+
+        if (applicableLevel) {
+            finalRate = applicableLevel.defaultRate
+            source = {
+                policySource: 'level_default',
+                reason: `Level matched: ${applicableLevel.name}`,
+                rate: finalRate,
+                levelId: applicableLevel.id,
+                levelName: applicableLevel.name
+            }
+
+            // 3. Match Category Rule within Level
+            if (categoryId && applicableLevel.categoryRules) {
+                const matchedRule = applicableLevel.categoryRules.find(rule =>
+                    rule.categoryIds.includes(categoryId)
+                )
+
+                if (matchedRule) {
+                    finalRate = matchedRule.rate
+                    finalMaxReward = matchedRule.maxReward ?? undefined
+                    source = {
+                        policySource: 'category_rule',
+                        reason: `Category rule matched for level ${applicableLevel.name}`,
+                        rate: finalRate,
+                        levelId: applicableLevel.id,
+                        levelName: applicableLevel.name,
+                        categoryId: categoryId,
+                        ruleMaxReward: matchedRule.maxReward
+                    }
+                }
+            }
+        }
+    }
 
     return {
-        rate,
-        maxReward: undefined, // Per-transaction cap (not yet supported globally, only total cap)
-        minSpend: config.minSpend ?? undefined
+        rate: finalRate,
+        maxReward: finalMaxReward,
+        minSpend: program.minSpend ?? undefined,
+        metadata: source
     }
 }

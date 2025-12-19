@@ -346,6 +346,7 @@ export type Database = {
           created_at: string | null
           cycle_id: string | null
           id: string
+          metadata: Json | null
           mode: string
           note: string | null
           transaction_id: string | null
@@ -357,6 +358,7 @@ export type Database = {
           created_at?: string | null
           cycle_id?: string | null
           id?: string
+          metadata?: Json | null
           mode: string
           note?: string | null
           transaction_id?: string | null
@@ -368,6 +370,7 @@ export type Database = {
           created_at?: string | null
           cycle_id?: string | null
           id?: string
+          metadata?: Json | null
           mode?: string
           note?: string | null
           transaction_id?: string | null

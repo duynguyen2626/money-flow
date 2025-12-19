@@ -5,7 +5,31 @@ type CycleRange = {
   end: Date
 }
 
-// Tiered cashback tier definition
+// MF5.3 Types
+export type CashbackCategoryRule = {
+  categoryIds: string[];
+  rate: number;
+  maxReward: number | null;
+};
+
+export type CashbackLevel = {
+  id: string;
+  name: string;
+  minTotalSpend: number;
+  defaultRate: number;
+  categoryRules?: CashbackCategoryRule[];
+};
+
+export type CashbackProgram = {
+  rate: number;                    // decimal
+  maxAmount: number | null;        // cycle cap
+  cycleType: CashbackCycleType;
+  statementDay: number | null;
+  minSpend: number | null;
+  levels?: CashbackLevel[];
+};
+
+// Tiered cashback tier definition (Legacy support)
 export type CashbackTier = {
   name?: string // Optional name for the tier (e.g., "Premium", "Gold")
   minSpend: number // Minimum spend to qualify for this tier
@@ -25,20 +49,45 @@ export type ParsedCashbackConfig = {
   statementDay: number | null
   dueDate: number | null
   minSpend: number | null
-  // Tiered cashback support
+  // Tiered cashback support (Legacy)
   hasTiers?: boolean
   tiers?: CashbackTier[]
+  // MF5.3 Support
+  program?: CashbackProgram
 }
 
 function parseConfigCandidate(raw: Record<string, unknown> | null): ParsedCashbackConfig {
-  let rateValue = Number(raw?.rate ?? 0)
+  // 1. Parse Program (MF5.3)
+  let program: CashbackProgram | undefined = undefined;
+  if (raw?.program && typeof raw.program === 'object') {
+    const p = raw.program as any;
+    program = {
+      rate: Number(p.rate ?? 0),
+      maxAmount: p.maxAmount !== undefined && p.maxAmount !== null ? Number(p.maxAmount) : null,
+      cycleType: (p.cycleType === 'statement_cycle' ? 'statement_cycle' : 'calendar_month') as CashbackCycleType,
+      statementDay: p.statementDay !== undefined && p.statementDay !== null ? Number(p.statementDay) : null,
+      minSpend: p.minSpend !== undefined && p.minSpend !== null ? Number(p.minSpend) : null,
+      levels: Array.isArray(p.levels) ? p.levels.map((lvl: any) => ({
+        id: String(lvl.id),
+        name: String(lvl.name),
+        minTotalSpend: Number(lvl.minTotalSpend ?? 0),
+        defaultRate: Number(lvl.defaultRate ?? 0),
+        categoryRules: Array.isArray(lvl.categoryRules) ? lvl.categoryRules.map((rule: any) => ({
+          categoryIds: Array.isArray(rule.categoryIds) ? rule.categoryIds.map(String) : [],
+          rate: Number(rule.rate ?? 0),
+          maxReward: rule.maxReward !== undefined && rule.maxReward !== null ? Number(rule.maxReward) : null,
+        })) : undefined,
+      })) : undefined,
+    };
+  }
 
-
+  // 2. Fallback / Legacy Parsing
+  let rateValue = program ? program.rate : Number(raw?.rate ?? 0)
 
   const parsedRate =
     Number.isFinite(rateValue) && rateValue > 0 ? rateValue : 0
 
-  const rawMax = raw?.max_amt ?? raw?.maxAmount
+  const rawMax = program ? program.maxAmount : (raw?.max_amt ?? raw?.maxAmount)
   const parsedMax =
     rawMax === null || rawMax === undefined
       ? null
@@ -48,11 +97,11 @@ function parseConfigCandidate(raw: Record<string, unknown> | null): ParsedCashba
       ? parsedMax
       : null
 
-  const cycleTypeCandidate = String(raw?.cycle_type ?? raw?.cycle ?? raw?.cycleType ?? 'calendar_month')
+  const cycleTypeCandidate = program ? program.cycleType : String(raw?.cycle_type ?? raw?.cycle ?? raw?.cycleType ?? 'calendar_month')
   const cycleType: CashbackCycleType =
     cycleTypeCandidate === 'statement_cycle' ? 'statement_cycle' : 'calendar_month'
 
-  const statementCandidate = raw?.statement_day ?? raw?.statementDay
+  const statementCandidate = program ? program.statementDay : (raw?.statement_day ?? raw?.statementDay)
   const statementNumber =
     statementCandidate === null || statementCandidate === undefined
       ? null
@@ -72,7 +121,7 @@ function parseConfigCandidate(raw: Record<string, unknown> | null): ParsedCashba
       ? Math.min(Math.max(Math.floor(dueNumber), 1), 31)
       : null
 
-  const minCandidate = raw?.min_spend ?? raw?.minSpend
+  const minCandidate = program ? program.minSpend : (raw?.min_spend ?? raw?.minSpend)
   const minNumber =
     minCandidate === null || minCandidate === undefined
       ? null
@@ -82,7 +131,7 @@ function parseConfigCandidate(raw: Record<string, unknown> | null): ParsedCashba
       ? minNumber
       : null
 
-  // Parse tiered cashback
+  // Parse legacy tiered cashback
   const hasTiers = Boolean(raw?.has_tiers ?? raw?.hasTiers)
   let tiers: CashbackTier[] | undefined = undefined
 
@@ -103,6 +152,7 @@ function parseConfigCandidate(raw: Record<string, unknown> | null): ParsedCashba
     minSpend,
     hasTiers,
     tiers,
+    program,
   }
 }
 
