@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getAccountSpendingStats } from '@/services/cashback.service'
-// Force update
+
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url)

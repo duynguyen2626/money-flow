@@ -110,6 +110,11 @@ export async function upsertTransactionCashback(
 
   const cycleId = await ensureCycle(account.id, cycleTag, account.cashback_config);
 
+  // MF5.2 FIX: Persist the cycle tag to the transaction so recompute (summing logic) works!
+  if (transaction.persisted_cycle_tag !== cycleTag) {
+    await supabase.from('transactions').update({ persisted_cycle_tag: cycleTag }).eq('id', transaction.id);
+  }
+
   // Get Cycle Totals for Policy Resolution (MF5.3 preparation)
   // We need spent_amount so far.
   const { data: cycle } = await supabase.from('cashback_cycles').select('spent_amount').eq('id', cycleId).single();
