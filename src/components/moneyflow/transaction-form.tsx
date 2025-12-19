@@ -159,6 +159,7 @@ type StatusMessage = {
 } | null
 
 export function TransactionForm({
+  // Deployment Verification: Cashback Fix v2.1
   accounts: allAccounts,
   categories,
   people,

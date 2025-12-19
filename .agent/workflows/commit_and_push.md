@@ -16,8 +16,9 @@ description: Commit and Push Changes
 
 ## Derived
 
-* `BRANCH_NAME=PHASE-${PHASE_ID}-${SCOPE_SLUG}`
-* `COMMIT_MSG=PHASE ${PHASE_ID} - ${COMMIT_TITLE}`
+BRANCH_NAME=PHASE-{PHASE_ID}-{SCOPE}
+COMMIT_MSG=PHASE {PHASE_ID} - {TITLE}
+
 
 ## Workflow
 

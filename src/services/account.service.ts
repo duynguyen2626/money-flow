@@ -42,8 +42,6 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
   const currentBalance = account.current_balance ?? 0
 
   // 0. Base Stats (Usage)
-  // Logic: Usage = ABS(Balance) / Limit
-  // Remaining = Limit - Usage (or Limit + Balance if Balance is negative)
   const usage_percent = creditLimit > 0
     ? (Math.abs(currentBalance) / creditLimit) * 100
     : 0
@@ -74,65 +72,61 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
   const now = new Date()
   const { start, end } = getCashbackCycleRange(config, now)
 
-  // Fetch transactions for stats
-  // We need amount, category (for tiered), and metadata (for overrides)
-  // We filter by account_id and "outflow" (expense or negative amount)
-  const { data, error } = await supabase
-    .from('transactions')
-    .select(`
-      amount,
-      type,
-      categories (name),
-      metadata
-    `)
+  // MF5.2.2B FIX: Read from cashback_cycles for consistency
+  // Determine cycle tag
+  const month = now.toLocaleString('en-US', { month: 'short' }).toUpperCase()
+  const year = now.getFullYear().toString().slice(-2)
+  let cycleTag = `${month}${year}` // Default
+
+  // If cycle is statement_cycle, the tag might be different depending on how we name them?
+  // Current logic in `cashback.service.ts` uses Month/Year of the transaction date.
+  // Ideally, we should use the same logic here.
+  // `getAccountSpendingStats` in cashback service does:
+  // const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase(); ...
+  // So let's stick to that for now. 
+  // NOTE: If statement cycle spans 2 months, the tag logic usually picks the start or end month?
+  // In `upsertTransactionCashback`, it tries `persisted_cycle_tag` OR generates from date.
+  // For Hint, we want CURRENT status.
+
+  // Fetch cycle from DB
+  const { data: cycle } = await supabase
+    .from('cashback_cycles')
+    .select('*')
     .eq('account_id', account.id)
-    .or('amount.lt.0,type.eq.expense')
-    .gte('occurred_at', start.toISOString())
-    .lte('occurred_at', end.toISOString())
+    .eq('cycle_tag', cycleTag)
+    .maybeSingle()
 
-  if (error) {
-    console.error('Error calculating account stats:', error)
-    return baseStats
-  }
+  // 1. Stats from Cycle (Primary Source)
+  const spent_this_cycle = cycle?.spent_amount ?? 0
+  const real_awarded = cycle?.real_awarded ?? 0
+  const virtual_profit = cycle?.virtual_profit ?? 0
 
-  const txns: any[] = data || []
-
-  // 1. Calculate Total Eligible Spend
-  const spent_this_cycle = txns.reduce((sum, t) => sum + Math.abs(t.amount), 0)
-
-  // 2. Calculate Earned (for Remains Cap)
-  let total_earned = 0
+  // 2. Budget Left Calculation
+  // Formula: max(0, max_budget - real - virtual)
+  let remains_cap: number | null = null
   if (config.maxAmount) {
-    // Only pay cost of calculation if maxAmount is set (needed for remains_cap)
-    for (const t of txns) {
-      // Safe access to category name
-      const catName = t.categories && !Array.isArray(t.categories) ? t.categories.name : undefined
-      // Calculate
-      const res = calculateBankCashback(config, Math.abs(t.amount), catName, spent_this_cycle)
-      total_earned += res.amount
-    }
-
-    if (config.maxAmount) {
-      total_earned = Math.min(total_earned, config.maxAmount)
-    }
+    // Prefer cycle max_budget if exists (it syncs with config)
+    const maxBudget = cycle?.max_budget ?? config.maxAmount
+    const consumed = real_awarded + virtual_profit
+    remains_cap = Math.max(0, maxBudget - consumed)
   }
 
-  // 3. Stats
-  // 3. Stats
-  const min_spend = config.minSpend || 0
+  // 3. Fallback / Validation if cycle missing (e.g. no txns yet)
+  // If no cycle, spent is 0, real is 0, virtual is 0 -> correct.
+
+  const min_spend = cycle?.min_spend_target ?? config.minSpend ?? 0
   const missing_for_min = Math.max(0, min_spend - spent_this_cycle)
-  const is_qualified = spent_this_cycle >= min_spend
+  const is_qualified = cycle?.met_min_spend ?? (spent_this_cycle >= min_spend)
 
   let cycle_range = `${fmtDate(start)} - ${fmtDate(end)}`
 
   // Smart Cycle Detection
   const isFullMonth = start.getDate() === 1 &&
-    (new Date(end.getTime() + 86400000).getDate() === 1) // Next day of end is 1st
+    (new Date(end.getTime() + 86400000).getDate() === 1)
 
   if (config.cycleType === 'calendar_month' || isFullMonth) {
     cycle_range = "Month Cycle"
   } else {
-    // Format: "Dec 25 - Jan 24"
     cycle_range = `${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(start)} - ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(end)}`
   }
 
@@ -141,11 +135,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
   let due_date: string | null = null
 
   if (config.dueDate) {
-    const now = new Date()
     const currentDay = now.getDate()
-
-    // Logic: If today.day <= dueDay, use CurrentMonth. Else use NextMonth.
-    // Example: Today Dec 12, Due 15. 12 <= 15 -> Dec 15.
     let targetMonth = now.getMonth()
     let targetYear = now.getFullYear()
 
@@ -153,13 +143,8 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
       targetMonth += 1
     }
 
-    // Create date with safe overflow handling
     const targetDate = new Date(targetYear, targetMonth, config.dueDate)
-
-    // Format: MMM dd (e.g., Dec 15)
     due_date_display = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(targetDate)
-
-    // ISO String for sorting
     due_date = targetDate.toISOString()
   }
 
@@ -171,9 +156,9 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
     is_qualified,
     cycle_range,
     due_date_display,
-    due_date, // Add this field
-    remains_cap: config.maxAmount ? Math.max(0, config.maxAmount - total_earned) : null,
-    shared_cashback: total_earned
+    due_date,
+    remains_cap,
+    shared_cashback: real_awarded
   }
 }
 

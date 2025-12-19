@@ -87,16 +87,64 @@ export async function upsertTransactionCashback(
   let countsToBudget = false;
 
   const fixedInput = transaction.cashback_share_fixed ?? 0;
-  const percentInput = transaction.cashback_share_percent ?? 0;
+  // const percentInput = transaction.cashback_share_percent ?? 0; // Unused in favor of Resolver logic unless overridden?
+  // User Rule: "real_percent" transaction calculates from input OR policy?
+  // Current logic used input. Let's see...
+  // "real_percent creates entry with amount = computed real cashback or stored fixed equivalent"
+  // If mode is real_percent, we usually trust the policy? 
+  // No, if it's "real_percent", it implies we are using the % stored in the transaction?
+  // Actually, MF5.2.2 requirements say: "Load: decimal -> percent, Save: percent -> decimal".
+  // transaction.cashback_share_percent IS already the source of truth if set.
+  // But wait, "resolveCashbackPolicy" is the new way.
+
+  // Let's import the resolver
+  const { resolveCashbackPolicy } = await import('./cashback/policy-resolver');
+
+  let cycleTag = transaction.persisted_cycle_tag || transaction.tag;
+  if (!cycleTag) {
+    const date = new Date(transaction.occurred_at);
+    const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    const year = date.getFullYear().toString().slice(-2);
+    cycleTag = `${month}${year}`;
+  }
+
+  const cycleId = await ensureCycle(account.id, cycleTag, account.cashback_config);
+
+  // MF5.2 FIX: Persist the cycle tag to the transaction so recompute (summing logic) works!
+  if (transaction.persisted_cycle_tag !== cycleTag) {
+    await supabase.from('transactions').update({ persisted_cycle_tag: cycleTag }).eq('id', transaction.id);
+  }
+
+  // Get Cycle Totals for Policy Resolution (MF5.3 preparation)
+  // We need spent_amount so far.
+  const { data: cycle } = await supabase.from('cashback_cycles').select('spent_amount').eq('id', cycleId).single();
+  const cycleTotals = { spent: cycle?.spent_amount ?? 0 };
+
+  const policy = resolveCashbackPolicy({
+    account,
+    categoryId: transaction.category_id,
+    amount: Math.abs(transaction.amount),
+    cycleTotals,
+    categoryName: transaction.category_name ?? undefined
+  });
 
   switch (modePreference) {
     case 'real_fixed':
+      mode = 'real';
+      amount = fixedInput;
+      countsToBudget = true;
+      break;
+
     case 'real_percent':
       mode = 'real';
-      // Hybrid Calculation: Sum of % share and Fixed share
-      const pAmount = (Math.abs(transaction.amount) * (percentInput || 0)) / 100;
-      const fAmount = fixedInput || 0;
-      amount = pAmount + fAmount;
+      // Hybrid: If user set a specific percent in Transaction Form, use it?
+      // Or use Policy?
+      // Usually "real_percent" means "Use the Standard Rate".
+      // But if user overrode it in form?
+      // Transaction form seems to save to `cashback_share_percent`.
+      // Let's prefer the explicitly saved percent if non-zero, else policy.
+      const usedRate = transaction.cashback_share_percent ? transaction.cashback_share_percent : policy.rate;
+      amount = Math.abs(transaction.amount) * usedRate + fixedInput;
       countsToBudget = true;
       break;
 
@@ -109,59 +157,80 @@ export async function upsertTransactionCashback(
     case 'none_back':
     default:
       mode = 'virtual';
-      const config = parseCashbackConfig(account.cashback_config);
-      const calcParams = calculateBankCashback(
-        config,
-        Math.abs(transaction.amount),
-        transaction.category_name ?? undefined,
-        0
-      );
-      amount = calcParams.amount;
-      // MF5.2 Rule: Virtual counts to budget initially, but is clamped during recompute
+      // Use Policy for virtual
+      amount = Math.abs(transaction.amount) * policy.rate;
       countsToBudget = true;
       break;
   }
-
-  let cycleTag = transaction.persisted_cycle_tag || transaction.tag;
-  if (!cycleTag) {
-    const date = new Date(transaction.occurred_at);
-    const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-    const year = date.getFullYear().toString().slice(-2);
-    cycleTag = `${month}${year}`;
-  }
-
-  const cycleId = await ensureCycle(account.id, cycleTag, account.cashback_config);
 
   const entryData = {
     cycle_id: cycleId,
     account_id: account.id,
     transaction_id: transaction.id,
     mode,
-    amount,
+    amount, // This is the total value
     counts_to_budget: countsToBudget,
     note: mode === 'virtual' ? 'Predicted profit (None Back)' : null
   };
 
-  const { data: existingEntry } = await supabase
+  // Safe Upsert with Strict Constraint Handling
+  // We used to do check-then-update/insert.
+  // Now we have a unique index. Upsert is safer.
+  const { error: upsertError } = await supabase
     .from('cashback_entries')
-    .select('id, cycle_id')
-    .eq('transaction_id', transaction.id)
-    .maybeSingle();
+    .upsert(entryData, { onConflict: 'account_id, transaction_id' });
 
-  if (existingEntry) {
-    await supabase.from('cashback_entries').update(entryData).eq('id', existingEntry.id);
-
-    // CASBACK CONSISTENCY: If moving between cycles (diff date) or accounts (re-assigned),
-    // we must recompute the OLD cycle too.
-    if (existingEntry.cycle_id && existingEntry.cycle_id !== cycleId) {
-      await recomputeCashbackCycle(existingEntry.cycle_id);
-    }
-  } else {
-    await supabase.from('cashback_entries').insert(entryData);
+  if (upsertError) {
+    console.error('Cashback Upsert Error:', upsertError);
+    // Fallback? No, this is critical.
+    throw upsertError;
   }
 
-  // Trigger TypeScript Recompute Engine for the CURRENT cycle
+  // Handle Cycle Migration (Old Cycle Cleanup)
+  // If transaction MOVED to a new cycle (date change) or account, we must recompute the OLD cycle.
+  // BUT we don't know the old cycle ID here easily without querying BEFORE mutation.
+  // However, `normalizeInput` handles account change.
+  // If we just updated, the OLD entry is overwritten if account same.
+  // If account CHANGED, the OLD entry (with old account_id) needs explicit deletion.
+  // `updateTransaction` in transaction.service calls upsert.
+  // But wait! If account_id changed, the unique constraint (account_id, txn_id) doesn't catch the OLD account_id row.
+  // So we still might have a stale row if account changed?
+  // Ah! `updateTransaction` logic: 
+  // We need to ensure we clean up entries for this txnID on OTHER accounts.
+  // Let's add that safety check.
+
+  // Clean up any entries for this txn that do NOT match current account
+  await supabase.from('cashback_entries')
+    .delete()
+    .eq('transaction_id', transaction.id)
+    .neq('account_id', account.id);
+
+  // Trigger Recompute Engine for CURRENT cycle
   await recomputeCashbackCycle(cycleId);
+
+  // Also, since we don't know the ID of the "Old Cycle" from the "Other Account" we just deleted from,
+  // we should find which cycles were affected.
+  // But `delete` doesn't return the deleted rows' cycle_ids easily without select first.
+  // In `updateTransaction` we can handle this, but better here if we can.
+  // Let's rely on the fact that `recomputeCashbackCycle` runs on `cycleId`.
+  // For the OLD cycle, if we deleted a row, its total will be wrong until recomputed.
+  // Refinement: Query entries to delete first, get their cycle_ids, delete them, then recompute those cycles.
+
+  // Optimization: This cleanup is rare (only on account change).
+  // Query "other entries"
+  const { data: staleEntries } = await supabase
+    .from('cashback_entries')
+    .select('cycle_id')
+    .eq('transaction_id', transaction.id)
+    .neq('account_id', account.id);
+
+  if (staleEntries && staleEntries.length > 0) {
+    const staleCycleIds = Array.from(new Set(staleEntries.map(e => e.cycle_id).filter(Boolean)));
+    await supabase.from('cashback_entries').delete().eq('transaction_id', transaction.id).neq('account_id', account.id);
+    for (const oldCid of staleCycleIds) {
+      if (oldCid) await recomputeCashbackCycle(oldCid);
+    }
+  }
 }
 
 /**

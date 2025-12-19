@@ -114,5 +114,8 @@ voluntary = overflow/loss (does not count)
 * Sheet Export sends raw percent [0..100] (e.g. 5)
 * Transactions must ALWAYS update `cashback_entries` and recompute `cashback_cycles` (including old cycle if moved).
 
-BRANCH_NAME=PHASE-{PHASE_ID}-{SCOPE}
-COMMIT_MSG=PHASE {PHASE_ID} - {TITLE}
+MF5 cashback model:
+- transactions = source of intent
+- cashback_entries = ledger (per transaction)
+- cashback_cycles = single source of truth for UI hints & budgets
+UI must never recompute budget independently.
