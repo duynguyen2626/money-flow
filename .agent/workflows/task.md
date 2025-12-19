@@ -2,255 +2,248 @@
 description: Task Descriptions
 ---
 
-# MF5.2.2 — Fix Cashback Hint (Budget Left) + Ensure Cycle/Entry Updates + Verification Checklist
+# MF5.2.2B — Fix Cashback Hint + Data Sync (Prep for MF5.3 Category-based Cashback)
 
 You are the coding agent working on **Money Flow 3**.
-This task is **Phase MF5.2.2**.
+This is **Phase MF5.2.2B**.
 
-Current status:
-
-* MF5.2.1 fixed percent edit (no more 800/500 bug), but cashback **hint** (Budget Left / Max) still displays incorrect values.
-* Example: Vpbank Lady card has max budget 1,000,000 per cycle and a real_fixed cashback of 100,000 already claimed, yet UI still shows Budget Left = 1,000,000 (should be 900,000).
-
-This phase focuses on:
-
-1. **Correct budget left hint logic**
-2. Ensuring every transaction add/edit/delete produces the necessary data rows in **cashback_entries** and **cashback_cycles** so hints are correct
-3. Providing a strict verification checklist + test cases
+This phase must stabilize the cashback foundation (cycles/entries/hints) and prepare clean interfaces for MF5.3 where cashback is computed by **category rules / tiers**.
 
 ---
 
-## A) Root Cause Targets (what to check/fix)
+## 0) What MF5.2.2B is (and is not)
 
-### A1. Missing entry creation
+### IN SCOPE
 
-If a transaction has `cashback_mode='real_fixed'` (or percent) but there is no row in `cashback_entries`, then cycle totals will remain 0 and hints will be wrong.
+* Fix remaining bugs where cashback % and budget-left hint are incorrect.
+* Ensure every transaction add/edit/delete updates:
 
-### A2. Cycle not recomputed
+  * `transactions`
+  * `cashback_entries`
+  * `cashback_cycles`
+* Fix NaN in edit-account tier UI.
+* Standardize cashback config parsing (aliases) and define a stable internal config shape.
+* Add preparation hooks for MF5.3:
 
-If `cashback_entries` exists but `cashback_cycles` was not recomputed (or recompute uses wrong cap), hint may still show full budget.
+  * clean function boundaries for “resolve cashback policy for txn” (currently just default rate/cap)
+  * ensure category is available in the resolution inputs
 
-### A3. UI hint not using cycle totals
+### OUT OF SCOPE
 
-The UI may be showing max_budget directly from config (or parsing wrong config keys), instead of computing:
+* Full MF5.3 implementation of category-based rules and spend thresholds.
+* Major UI redesign.
 
-`budget_left = max_budget - real_awarded - virtual_profit`
+---
 
-It must always prefer data from `cashback_cycles` if present.
+## 1) Non-negotiable data contracts
 
-### A4. Config parsing mismatch
+### 1.1 Percent representation
 
-Accounts cashback_config currently uses mixed keys in the wild:
+* DB `transactions.cashback_share_percent`: **decimal fraction** in [0..1], e.g. `0.08`.
+* UI percent input/display: **raw percent number** in [0..100], e.g. `8`.
+* Exactly one conversion layer:
+
+  * Load: decimal → percent
+  * Save: percent → decimal
+* Sheet export: percent must be sent as **raw percent** (8, not 0.08).
+
+### 1.2 Cashback tables must always sync
+
+For any txn affecting cashback:
+
+* Create/Update must upsert **one** `cashback_entries` row.
+* Delete must remove the entry.
+* Every mutation must recompute `cashback_cycles`.
+* If edit changes account_id or cycle_tag: recompute both old and new cycles.
+
+### 1.3 Budget left formula
+
+When `cashback_cycles` exists for (account_id, cycle_tag):
+
+* `budget_left = max(0, max_budget - real_awarded - virtual_profit)`
+  UI must prefer cycle totals over raw config.
+
+---
+
+## 2) Required fixes
+
+### 2.1 Fix cashback hint still showing full budget
+
+* Identify all UI components that show:
+
+  * Budget Left
+  * Max budget
+  * Card rate
+  * Cycle range
+* Fix them to read from `cashback_cycles` (when present).
+* If cycle missing, show placeholder (e.g. `--`) for budget-left; do NOT mislead.
+
+### 2.2 Ensure `cashback_entries` is created for every cashback txn
+
+* Audit transaction create/update code path.
+* Confirm that for `cashback_mode`:
+
+  * `real_fixed` creates a `cashback_entries(mode='real')` with amount = fixed
+  * `real_percent` creates entry with amount = computed real cashback or stored fixed equivalent (choose one, document)
+  * `none_back` creates entry mode='virtual'
+  * `voluntary` creates entry mode='voluntary' counts_to_budget=false
+* Ensure idempotency: no duplicates per txn.
+
+**DB constraint required (safe):**
+
+* Add unique index: `cashback_entries(account_id, transaction_id)`.
+
+### 2.3 Fix NaN in edit-account-dialog tiers
+
+Console error shows:
+
+* `value={rule.rate * 100}` producing NaN when rate is undefined.
+
+Fix requirements:
+
+* Default rate to 0 for render: `(rule.rate ?? 0) * 100`.
+* On change, parse number safely; if empty string, set to 0 or undefined consistently.
+* Ensure no uncontrolled/controlled warnings.
+
+### 2.4 Standardize cashback_config parsing (aliases)
+
+Accounts have mixed keys:
 
 * `max_amt` vs `maxAmount`
 * `min_spend` vs `minSpend`
 * `cycle` vs `cycleType`
 * `statement_day` vs `statementDay`
 
-Parsing must support aliases.
+Implement `parseCashbackConfig()` that returns a single internal shape:
 
----
-
-## B) Required Behavior
-
-### B1. Budget left formula (single truth)
-
-For a given account + cycle:
-
-* `budget_left = max(0, max_budget - real_awarded - virtual_profit)`
-* `real_awarded` is already clamped by cap (post MF5.2.1)
-* `virtual_profit` is clamped by remaining cap after real
-
-If `cashback_cycles` row exists:
-
-* UI MUST use it (never fallback to raw config).
-
-If cycle row does not exist:
-
-* UI may show a placeholder (e.g. `--`) or derive max_budget from config, but it must not display misleading “Budget Left” values.
-
-### B2. Entry + cycle guarantees
-
-On transaction create/edit/delete, ensure:
-
-* Transaction is persisted
-* Cashback engine upserts (or deletes) one `cashback_entries` row when needed
-* Cashback engine recomputes the relevant `cashback_cycles`
-
-Edge case:
-
-* If edit changes account_id or cycle_tag, recompute BOTH old and new cycles.
-
----
-
-## C) Implementation Tasks
-
-### C1. Fix/create missing `cashback_entries` for cashback txns
-
-* Audit create/update transaction path to confirm it calls `upsertTransactionCashback`.
-* Ensure mode handling includes `real_fixed` and `real_percent` and creates entry even when percent=0 but fixed>0 (or vice versa).
-* Add/confirm an upsert unique key on `(account_id, transaction_id)` to prevent duplicates.
-
-### C2. Ensure recompute runs after every mutation
-
-* After upsert/delete entry: recompute the cycle.
-* If account_id/cycle_tag changed: recompute old cycle and new cycle.
-
-### C3. Fix UI hint to read from `cashback_cycles`
-
-Locate the UI component(s) showing:
-
-* Budget Left
-* Max
-* Cycle range
-* Min spend progress
-
-Update rules:
-
-* Prefer `cashback_cycles` totals for:
-
-  * `max_budget`
-  * `real_awarded`
-  * `virtual_profit`
-  * `is_exhausted`
-* Compute budget_left using the formula above.
-
-### C4. Fix cashback config parsing aliases
-
-Update `parseCashbackConfig` (or equivalent) to support legacy keys:
-
-* max budget: `max_amt` OR `maxAmount` OR `maxAmount` nested
-* min spend: `min_spend` OR `minSpend`
-* cycle: `cycle` OR `cycleType`
-* statement day: `statement_day` OR `statementDay`
-
-The Vpbank Lady sample uses:
-
-```
-{"rate": 0.15, "cycle": "statement_cycle", "max_amt": 1000000.0, "min_spend": 0.0, "statement_day": 20}
+```ts
+{
+  rate: number;                 // decimal
+  cycleType: 'calendar_month' | 'statement_cycle';
+  maxAmount: number | null;     // VND cap per cycle
+  minSpend: number | null;
+  statementDay: number | null;
+  hasTiers?: boolean;
+  tiers?: ... // keep as-is for MF5.3, but never break if missing
+}
 ```
 
-### C5. Add a lightweight admin/debug recompute (optional but recommended)
+---
 
-* Provide a safe endpoint or script to recompute all cycles for a given account_id + cycle_tag.
-* Use it for QA and to fix old data.
+## 3) MF5.3 preparation: reduce “tier” confusion and create clean extension points
+
+### 3.1 Naming guidance
+
+The term “tier” is confusing. Start migrating terminology in UI labels (no DB rename yet):
+
+* Prefer: **Cashback Levels** or **Cashback Rulesets**
+* In code, prefer: `levels` or `rules` instead of `tiers`
+
+### 3.2 Add a single policy resolver function (stub for MF5.3)
+
+Create a function used by transaction cashback calculation:
+
+* `resolveCashbackPolicy({ account, categoryId, amount, cycleTotals })`
+
+For MF5.2.2B it can return default policy:
+
+* rate, cap, minSpend from parsed config
+
+But it must accept:
+
+* `categoryId` (for MF5.3)
+* `amount` and `spent_amount` (for spend thresholds in MF5.3)
+
+This keeps MF5.3 changes localized.
 
 ---
 
-## D) Verification Checklist (Agent must provide evidence)
+## 4) Verification checklist (Agent must verify with SQL)
 
-### Tables that must be correct
+For the Lady example (or any card):
 
-For any cashback-enabled credit card and a given cycle_tag:
+### 4.1 transactions
 
-1. `transactions`
+* Row has:
 
-* Has correct `cashback_mode`
-* Has correct `cashback_share_fixed` / `cashback_share_percent`
+  * `cashback_mode` set appropriately
+  * `cashback_share_fixed` or `cashback_share_percent` correct
 
-2. `cashback_entries`
+### 4.2 cashback_entries
 
-* Has exactly one row for that transaction (for real/virtual/voluntary as applicable)
-* Correct:
+* Exactly 1 row exists for the txn:
 
-  * `mode`
-  * `amount`
-  * `counts_to_budget`
-  * `cycle_id` matches account + cycle_tag
+  * correct `mode`
+  * correct `amount`
+  * `cycle_id` matches cycle
 
-3. `cashback_cycles`
+### 4.3 cashback_cycles
 
-* Has row for (account_id, cycle_tag)
-* Fields:
+* Row exists for (account_id, cycle_tag)
+* `max_budget` matches parsed config maxAmount
+* `real_awarded` updates after txn
+* `budget_left = max_budget - real_awarded - virtual_profit` is correct
 
-  * `max_budget` matches parsed config
-  * `real_awarded` == sum of real counted (clamped)
-  * `virtual_profit` clamped
-  * `overflow_loss` reflects overflow
+### 4.4 UI
 
-4. (Legacy) `cashback_profits`
+* Hint displays Budget Left correctly
+* No NaN warning in tier editor
 
-* Not required for correctness going forward.
-* Keep it intact; do not rely on it for hint.
+### 4.5 Sheet export
 
-### Must-have QA proof
-
-* SQL screenshots or logs showing:
-
-  * budget_left calculation
-  * entries exist
-  * cycles updated
+* Percent is sent as raw percent number (8 not 0.08)
 
 ---
 
-## E) Test Cases (must run)
+## 5) Required test cases
 
-### Test Case 1 — Real Fixed Budget Left (Lady sample)
+### Test 1 — Real Fixed affects budget left
 
-Setup:
-
-* Account: `Vpbank Lady` config: rate=0.15, max_amt=1,000,000, statement_day=20
-* Create txn:
-
-  * `cashback_mode='real_fixed'`
-  * `cashback_share_fixed=100000`
-    Expected:
-* `cashback_entries` has row for txn with mode='real', amount=100000
-* `cashback_cycles` for DEC25:
-
-  * max_budget=1,000,000
-  * real_awarded=100,000
-  * virtual_profit=0
-* UI shows Budget Left = 900,000
-
-### Test Case 2 — Edit Transaction changes cashback amount
-
-* Edit the same txn: change cashback_fixed from 100,000 -> 150,000
+* Card max budget 1,000,000
+* Create txn real_fixed 100,000
   Expected:
-* No duplicate entries
-* cycle real_awarded updates to 150,000
-* Budget Left updates to 850,000
+* cycle.real_awarded=100,000
+* UI budget_left=900,000
 
-### Test Case 3 — Percent Cashback
+### Test 2 — Edit txn updates cycle (no duplicates)
 
-* Create txn percent: cashback_share_percent=0.08 (8%)
+* Edit fixed 100,000 → 150,000
   Expected:
-* UI shows 8 (not 800)
-* entries amount computed correctly by engine (if engine uses percent)
-* sheet export sends 8
+* still 1 entry
+* cycle.real_awarded=150,000
+* UI budget_left=850,000
 
-### Test Case 4 — Account/cycle change edit
+### Test 3 — Percent display and sheet export
 
-* Edit txn and change occurred_at or tag so cycle_tag changes
+* DB stores 0.08
   Expected:
-* old cycle recomputed (deduct)
-* new cycle recomputed (add)
+* UI shows 8
+* Sheet export sends 8
 
-### Test Case 5 — Transfer/Lending should not break
+### Test 4 — NaN regression
 
-* Ensure non-cashback txns do not create entries
-
----
-
-## Acceptance Criteria
-
-* Budget Left hint always correct for cashback-enabled cards
-* Lady sample: shows 900,000 after 100,000 real_fixed
-* Entries/cycles are created/updated on add/edit/delete
-* UI uses cycle totals, not raw config fallback when cycle exists
+* Open edit-account dialog with rules missing rate
+  Expected:
+* no NaN warning
 
 ---
 
-## Branch / Commit / PR
+## 6) Branch / PR info (do NOT ask for commit workflow file)
 
-* Branch: `PHASE-9.2.2-CASHBACK-HINT-AND-CYCLE-SYNC`
-* Commit: `PHASE 9.2.2 - Fix cashback hint and ensure cycle/entry sync`
-* PR title: `MF5.2.2: Fix cashback budget-left hint + ensure entries/cycles updated`
+* **Branch:** `PHASE-9.2.2B-CASHBACK-HINT-PREP-CATE-RULES`
+* **Commit message:** `MF5.2.2B - Fix cashback hint sync + prep policy resolver for MF5.3`
+* **PR title:** `MF5.2.2B: Fix cashback hint + data sync; prep for category-based cashback`
 
 ---
 
-## What to include in PR description
+## 7) PR description requirements
 
-* Before/after screenshot of cashback hint for Lady card
-* SQL snippet showing cycle values before/after recompute
-* Checklist completion results
+Include:
+
+* Before/after screenshot of Budget Left for Lady example
+* SQL snippets showing:
+
+  * transactions row
+  * cashback_entries row
+  * cashback_cycles row
+* Confirmation checklist + test case results
