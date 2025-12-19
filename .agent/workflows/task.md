@@ -2,170 +2,164 @@
 description: Task Descriptions
 ---
 
-# MF5.3.1 — Checkpoint & Task Prompt (Attribution Metadata + QA Hardening)
+# MF5.3.2 — Checkpoint & Task Prompt (Policy Explanation in UI)
 
-> This canvas continues after MF5.3 was implemented.
-> Goal: make MF5.3 **auditable in DB** by ensuring `cashback_entries.metadata` is reliably populated and never silently NULL.
-> **Do NOT redesign the system. Do NOT change MF5.2 cycle/entry engine. Do NOT add new tables.**
-
----
-
-## 1) Current Checkpoint (Observed Issue)
-
-### ✅ MF5.3 Implemented
-
-* Category-based rules + spend-based levels
-* `resolveCashbackPolicy()` decides rate/cap and returns metadata
-* UI shows match hints and dynamic rate suggestions
-
-### ❗ Problem to fix (blocking)
-
-* SQL proof shows `cashback_entries.metadata` is **NULL** for recent rows.
-
-Expected: metadata contains applied policy context.
+> This canvas continues after **MF5.3 + MF5.3.1**.
+> Goal: surface **cashback policy explanation** to the user using existing metadata.
+> **No new logic. No recomputation. No schema change.**
 
 ---
 
-## 2) MF5.3.1 Objective (Single Sentence)
+## 1) Current Checkpoint (Verified)
 
-> Ensure every cashback-affecting transaction results in exactly one `cashback_entries` row whose `metadata` is populated with policy attribution (level/rule/rate/cap), and provide DB + UI proof.
+### ✅ Completed & Locked
+
+* Cashback engine (MF5.2) is stable
+* Category-based rules + spend-based levels (MF5.3) implemented
+* Attribution metadata is mandatory and audited (MF5.3.1)
+
+Each cashback-affecting transaction now has:
+
+* 1 `cashback_entries` row
+* non-null `metadata` explaining applied policy
 
 ---
 
-## 3) Scope Boundaries
+## 2) Objective of MF5.3.2
+
+> Make cashback decisions **human-readable in UI**, using metadata only.
+
+MF5.3.2 is **read-only UX** on top of existing data.
+
+---
+
+## 3) Scope Boundaries (ANTI-DRIFT)
 
 ### ✅ IN SCOPE
 
-* Fix persistence path so `cashback_entries.metadata` is always written on create/update
-* Backfill existing `cashback_entries.metadata` for recent/active cycles
-* Add safe guardrails to prevent future NULL metadata (minimal)
-* Provide QA queries + reproducible steps
+* Display policy explanation in UI
+* Read exclusively from `cashback_entries.metadata`
+* Minor UI additions (tooltip / expandable info)
 
 ### ❌ OUT OF SCOPE
 
-* No new tables
-* No new reporting/dashboard
-* No refactor of recompute engine
-* No UI redesign (only fix hints if they are reading wrong field)
+* No cashback calculation changes
+* No recompute in UI
+* No edits to `resolveCashbackPolicy`
+* No DB schema changes
+* No settings or rule editing UI
 
 ---
 
-## 4) Non‑Negotiable Rules
+## 4) UI Targets
 
-* `resolveCashbackPolicy()` remains the **only** decision point for rate/cap
-* UI must not recompute budgets; budget-left comes from `cashback_cycles`
-* `cashback_entries` must remain 1 row per (account_id, transaction_id)
-* Metadata must enable auditing by DB inspection
+### 4.1 Transaction Detail / Modal
+
+Show a **policy explanation block** when cashback exists:
+
+Example:
+
+```
+Cashback applied:
+• Category rule: Education
+• Level: Silver
+• Rate: 15%
+• Max reward: 300,000₫
+```
+
+Fallback cases:
+
+* Program default
+* Level default
+* Legacy rule
 
 ---
 
-## 5) Required Metadata Shape (Minimum)
+## 5) Data Contract (STRICT)
 
-Persist at least these keys:
+UI must read ONLY:
+
+```ts
+cashback_entries.metadata
+```
+
+Expected keys:
 
 ```json
 {
   "policySource": "program_default" | "level_default" | "category_rule" | "legacy",
-  "levelId": "..." | null,
-  "categoryId": "..." | null,
-  "rate": 0.075,
-  "ruleMaxReward": 100000
+  "reason": "Level matched: Silver",
+  "levelId": "lvl_2",
+  "levelName": "Silver",
+  "categoryId": "...",
+  "rate": 0.15,
+  "ruleMaxReward": 300000
 }
 ```
 
-Notes:
+UI formatting rules:
 
-* `ruleMaxReward` can be null.
-* Store decimal rate (0.075), not percent.
-
----
-
-## 6) Implementation Tasks (Agent Must Do)
-
-### 6.1 Fix write path (root cause)
-
-* Audit `upsertTransactionCashback()`:
-
-  * Confirm resolver metadata is being passed into the insert/upsert payload
-  * Confirm update path also writes metadata (not only insert)
-  * Ensure metadata is not dropped by type mismatch or undefined filtering
-
-### 6.2 Add guardrail (minimal, safe)
-
-* Migration (safe):
-
-  * Set default `cashback_entries.metadata` = `'{}'::jsonb`
-  * Optional: make `metadata` NOT NULL if no conflicts
-
-### 6.3 Backfill existing rows
-
-* For last N days (or active cycles):
-
-  * For each `cashback_entries` row with NULL/empty metadata:
-
-    * Load txn + account + cycle
-    * Re-run `resolveCashbackPolicy()` and update metadata
-
-Keep backfill small and targeted (avoid heavy scan).
+* `rate` shown as percent (×100)
+* Monetary values formatted normally
 
 ---
 
-## 7) Verification Checklist (Must Pass)
+## 6) UX Rules (Important)
 
-### 7.1 SQL Proof
+* Explanation must be:
 
-Run:
+  * non-intrusive
+  * read-only
+  * visible on demand (tooltip / info icon / expandable)
 
-```sql
-SELECT t.amount, t.category_id, ce.amount AS cashback, ce.metadata
-FROM transactions t
-JOIN cashback_entries ce ON t.id = ce.transaction_id
-ORDER BY t.created_at DESC
-LIMIT 20;
-```
+* No layout redesign
 
-Expected:
+* No new components unless reused
 
-* `ce.metadata` is **NOT NULL**
-* `policySource`, `rate`, `ruleMaxReward` present
+---
 
-### 7.2 Level Switch Proof
+## 7) Verification Checklist
 
-* Create txns to push cycle spent across threshold
-* Verify the next txn picks the higher level
-* Metadata must show the levelId and new rate
+Agent must verify:
 
-### 7.3 UI Proof
+* UI shows explanation for:
 
-* In transaction modal, changing category updates:
+  * program default
+  * level default
+  * category rule
 
-  * applied rate
-  * rule max reward
-  * suggested cashback
-  * match explanation
+* Changing category updates explanation immediately
 
-Budget-left must still come from `cashback_cycles`.
+* Budget-left display remains unchanged
+
+* No UI-side cashback math
 
 ---
 
 ## 8) Branch / PR
 
-* Branch: `PHASE-9.3.1-CASHBACK-METADATA-QA`
-* Commit: `MF5.3.1 - Ensure cashback_entries metadata + backfill`
-* PR Title: `MF5.3.1: Ensure cashback attribution metadata + QA hardening`
+* Branch: `PHASE-9.3.2-CASHBACK-POLICY-EXPLANATION-UI`
+* Commit: `MF5.3.2 - Show cashback policy explanation in UI`
+* PR Title: `MF5.3.2: Show cashback policy explanation (read-only)`
 
 PR must include:
 
-* Screenshot: transaction modal category switching
-* SQL: transactions + cashback_entries (metadata) + cashback_cycles
-* A short note: root cause + fix
+* Screenshot of transaction modal with explanation visible
+* Screenshot for category change case
 
 ---
 
 ## 9) Stop Condition
 
-Stop after PR opened and provide:
+Stop after PR opened.
+Provide:
 
-* QA steps
-* SQL snippets (before/after)
-* Backfill scope statement (what rows were updated)
+* Screenshots
+* Short QA checklist
+
+---
+
+## 10) Guiding Principle
+
+> MF5.3.2 is about **transparency**, not intelligence.
+> UI explains decisions; engine remains untouched.

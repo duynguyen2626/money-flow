@@ -394,6 +394,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     netProfit,
     potentialRate: policy.rate,
     matchReason: policy.metadata?.policySource,
+    policyMetadata: policy.metadata,
     cycle: {
       label: cycleTag,
       start: cycleRange.start.toISOString(),
@@ -482,6 +483,24 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       rate: policy.rate
     });
   }
-
   return results;
+}
+
+/**
+ * Fetches the cashback policy explanation (metadata) for a specific transaction.
+ */
+export async function getTransactionCashbackPolicyExplanation(transactionId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('cashback_entries')
+    .select('metadata')
+    .eq('transaction_id', transactionId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching cashback policy explanation:', error);
+    return null;
+  }
+
+  return data?.metadata ?? null;
 }

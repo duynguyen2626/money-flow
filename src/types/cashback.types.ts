@@ -63,6 +63,16 @@ export type AccountSpendingStats = {
   // Smart Hint fields
   potentialRate?: number
   matchReason?: string
+  policyMetadata?: {
+    policySource: 'program_default' | 'level_default' | 'category_rule' | 'legacy'
+    reason: string
+    rate: number
+    levelId?: string
+    levelName?: string
+    ruleId?: string
+    categoryId?: string
+    ruleMaxReward?: number | null
+  }
   maxReward?: number | null // Category-specific max reward limit
   cycle?: {
     start: string
