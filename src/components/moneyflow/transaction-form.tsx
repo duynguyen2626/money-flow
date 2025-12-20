@@ -122,6 +122,9 @@ function getCycleLabelForDate(
 
   const referenceDate = targetDate ?? new Date()
   const range = getCashbackCycleRange(config, referenceDate)
+  if (!range) {
+    return 'Cycle: -- (Missing Config)'
+  }
   return formatRangeLabel(range, referenceDate)
 }
 
@@ -247,6 +250,7 @@ export function TransactionForm({
   const [statsError, setStatsError] = useState<string | null>(null)
   const [debtEnsureError, setDebtEnsureError] = useState<string | null>(null)
   const [isEnsuringDebt, startEnsuringDebt] = useTransition()
+  const [persistedMetadata, setPersistedMetadata] = useState<any>(null)
   const isEditMode = mode === 'edit' || (mode !== 'refund' && Boolean(transactionId))
   const isRefundMode = mode === 'refund'
   const isConfirmRefund = isRefundMode && refundAction === 'confirm'
@@ -964,7 +968,7 @@ export function TransactionForm({
 
   const cashbackMeta = useMemo(
     () =>
-      selectedAccount ? parseCashbackConfig(selectedAccount.cashback_config) : null,
+      selectedAccount ? parseCashbackConfig(selectedAccount.cashback_config, selectedAccount.id) : null,
     [selectedAccount]
   )
 
@@ -1127,6 +1131,29 @@ export function TransactionForm({
       controller.abort()
     }
   }, [selectedAccount?.id, watchedDate])
+
+  // Fetch persisted metadata for existing transactions
+  useEffect(() => {
+    if (!transactionId || !isEditMode) {
+      setPersistedMetadata(null)
+      return
+    }
+
+    const fetchPersistedMetadata = async () => {
+      try {
+        const response = await fetch(`/api/cashback/policy-explanation?transactionId=${transactionId}`)
+        if (response.ok) {
+          const data = await response.json()
+          setPersistedMetadata(data || null)
+        }
+      } catch (error) {
+        console.error('Failed to fetch persisted cashback metadata:', error)
+      }
+    }
+
+    fetchPersistedMetadata()
+  }, [transactionId, isEditMode])
+
 
   const potentialCashback = useMemo(() => {
     const rate = spendingStats?.potentialRate ?? cashbackMeta?.rate ?? 0
@@ -2242,16 +2269,23 @@ export function TransactionForm({
 
           {/* Hints for Real Mode */}
           <div className="text-xs text-slate-500 flex flex-col gap-1 border-t border-slate-100 pt-2">
+            <div className="flex justify-between">
+              <span>Match Policy:</span>
+              <span className="font-medium text-slate-700 capitalize">
+                {spendingStats?.matchReason?.replace(/_/g, ' ') || 'Default'}
+                {spendingStats?.maxReward && ` (Max ${numberFormatter.format(spendingStats.maxReward)})`}
+              </span>
+            </div>
             {rateLimitPercent !== null && (
               <div className="flex justify-between">
-                <span>Card Rate:</span>
+                <span>Applied Rate:</span>
                 <span className="font-medium bg-slate-100 px-1 py-0.5 rounded">{rateLimitPercent}%</span>
               </div>
             )}
             {spendingStats?.maxCashback && (
               <div className="flex justify-between text-amber-600">
                 <span>Budget Left:</span>
-                <span>{numberFormatter.format(Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar - currentImpact))}</span>
+                <span>{remainingBudget !== null ? numberFormatter.format(Math.max(0, remainingBudget - currentImpact)) : '--'}</span>
               </div>
             )}
           </div>
@@ -2346,16 +2380,59 @@ export function TransactionForm({
       )}
 
       {/* Stats / Info - Always Visible if Useful */}
-      <div className="pt-2 border-t border-slate-200/60 space-y-1">
+      <div className="pt-2 border-t border-slate-200/60 space-y-2">
+        {/* Policy Explanation */}
+        {(persistedMetadata || spendingStats?.policyMetadata) && (
+          <div className="bg-slate-50/80 rounded-lg p-2.5 border border-slate-100 space-y-2">
+            <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              <Sparkles className="w-3 h-3 text-blue-500" />
+              Cashback Policy Details
+            </div>
+
+            <div className="space-y-1.5">
+              {(() => {
+                const meta = persistedMetadata || spendingStats?.policyMetadata;
+                if (!meta) return null;
+
+                const items = [
+                  { label: 'Source', value: meta.policySource?.replace('_', ' '), active: true },
+                  { label: 'Level', value: meta.levelName, active: !!meta.levelName },
+                  { label: 'Reason', value: meta.reason, active: !!meta.reason },
+                  { label: 'Match Rate', value: `${((meta.rate || 0) * 100).toFixed(1)}%`, active: true },
+                  { label: 'Max Reward', value: meta.ruleMaxReward ? numberFormatter.format(meta.ruleMaxReward) : null, active: !!meta.ruleMaxReward },
+                ];
+
+                return items.filter(i => i.active).map((item, idx) => (
+                  <div key={idx} className="flex justify-between items-center text-xs">
+                    <span className="text-slate-500">{item.label}:</span>
+                    <span className="font-semibold text-slate-700 capitalize">{item.value}</span>
+                  </div>
+                ));
+              })()}
+            </div>
+            {persistedMetadata && !spendingStats?.policyMetadata && (
+              <p className="text-[10px] text-slate-400 italic mt-1 border-t border-slate-200 pt-1">
+                * Persisted information from database.
+              </p>
+            )}
+            {!persistedMetadata && spendingStats?.policyMetadata && (
+              <p className="text-[10px] text-blue-500/80 italic mt-1 border-t border-slate-100 pt-1 flex items-center gap-1">
+                <Sparkles className="w-2.5 h-2.5" />
+                Live policy projection based on selection.
+              </p>
+            )}
+          </div>
+        )}
+
         {watchedCashbackMode === 'none_back' && potentialCashback > 0 && (
-          <p className="text-xs flex justify-between bg-emerald-50/50 p-1.5 rounded text-emerald-700 border border-emerald-100/50">
-            <span className="opacity-80">Potential Profit:</span>
+          <p className="text-xs flex justify-between bg-emerald-50/50 p-2 rounded text-emerald-700 border border-emerald-100/50">
+            <span className="opacity-80">Estimated Earnings:</span>
             <span className="font-bold">+{numberFormatter.format(potentialCashback)}</span>
           </p>
         )}
 
         {spendingStats && spendingStats.minSpend && spendingStats.minSpend > 0 && (
-          <div className="text-xs flex justify-between items-center">
+          <div className="text-xs flex justify-between items-center px-1">
             <span className="text-slate-500">Min Spend Progress:</span>
             <span className={cn("font-medium", projectedSpend >= spendingStats.minSpend ? "text-emerald-600" : "text-amber-600")}>
               {projectedSpend < spendingStats.minSpend && (

@@ -138,7 +138,7 @@ export function AccountStatsHeader({
   const earned = cashbackStats?.earnedSoFar ?? 0
   const cap = cashbackStats?.maxCashback
   const progressMax = cap ?? Math.max(earned, 1)
-  const remaining = cap ? Math.max(0, cap - earned) : null
+  const remaining = cashbackStats?.remainingBudget ?? null
   const minSpend = cashbackStats?.minSpend
 
   // Hàm xử lý đóng/mở lại tài khoản
@@ -333,7 +333,7 @@ export function AccountStatsHeader({
               <div className="flex flex-col gap-1">
                 {/* Main Value */}
                 <span className={`text-2xl font-bold tabular-nums ${displayColor}`}>
-                  {formatCurrency(displayValue)}
+                  {remaining !== null ? formatCurrency(remaining) : '--'}
                 </span>
 
                 {/* Additional Info */}

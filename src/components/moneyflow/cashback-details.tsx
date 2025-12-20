@@ -25,8 +25,8 @@ function formatCycleName(card: CashbackCard | null) {
   if (!card) {
     return 'Cycle ?';
   }
-  const monthNumber = new Date(card.cycleEnd).getMonth() + 1;
-  return `Cycle T${String(monthNumber).padStart(2, '0')}`;
+  const monthNumber = card.cycleEnd ? new Date(card.cycleEnd).getMonth() + 1 : 0;
+  return monthNumber > 0 ? `Cycle T${String(monthNumber).padStart(2, '0')}` : 'Cycle --';
 }
 
 export function CashbackDetailsDialog({ card, onClose }: CashbackDetailsDialogProps) {
@@ -116,8 +116,8 @@ export function CashbackDetailsDialog({ card, onClose }: CashbackDetailsDialogPr
   const sharedLabel = currencyFormatter.format(displayCard.sharedAmount);
   const netLabel = currencyFormatter.format(displayCard.netProfit);
   const minSpendRemainingLabel = Math.max(0, activeCard.minSpendRemaining ?? 0);
-  const start = dateFormatter.format(new Date(displayCard.cycleStart));
-  const end = dateFormatter.format(new Date(displayCard.cycleEnd));
+  const start = displayCard.cycleStart ? dateFormatter.format(new Date(displayCard.cycleStart)) : '--';
+  const end = displayCard.cycleEnd ? dateFormatter.format(new Date(displayCard.cycleEnd)) : '--';
 
   return (
     <div
@@ -163,8 +163,8 @@ export function CashbackDetailsDialog({ card, onClose }: CashbackDetailsDialogPr
                 type="button"
                 onClick={() => setSelectedOffset(offset)}
                 className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold transition ${isActive
-                    ? 'border-indigo-600 bg-indigo-600 text-white'
-                    : 'border-slate-200 text-slate-500 hover:border-slate-300'
+                  ? 'border-indigo-600 bg-indigo-600 text-white'
+                  : 'border-slate-200 text-slate-500 hover:border-slate-300'
                   }`}
               >
                 {formatCycleName(optionCard ?? null)}

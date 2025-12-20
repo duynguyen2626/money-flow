@@ -66,11 +66,13 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
   // Only calculate full stats for accounts with cashback config
   if (!account.cashback_config) return baseStats
 
-  const config = parseCashbackConfig(account.cashback_config)
+  const config = parseCashbackConfig(account.cashback_config, account.id)
   if (!config) return baseStats
 
   const now = new Date()
-  const { start, end } = getCashbackCycleRange(config, now)
+  const cycleRange = getCashbackCycleRange(config, now)
+  if (!cycleRange) return baseStats
+  const { start, end } = cycleRange
 
   // MF5.2.2B FIX: Read from cashback_cycles for consistency
   // Determine cycle tag
@@ -102,11 +104,10 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
   const virtual_profit = cycle?.virtual_profit ?? 0
 
   // 2. Budget Left Calculation
-  // Formula: max(0, max_budget - real - virtual)
+  // MF5.3.3 FIX: Budget Left must come from cycle. If no cycle, show null (--) instead of fallback to full budget.
   let remains_cap: number | null = null
-  if (config.maxAmount) {
-    // Prefer cycle max_budget if exists (it syncs with config)
-    const maxBudget = cycle?.max_budget ?? config.maxAmount
+  if (cycle && config.maxAmount) {
+    const maxBudget = cycle.max_budget ?? config.maxAmount
     const consumed = real_awarded + virtual_profit
     remains_cap = Math.max(0, maxBudget - consumed)
   }
@@ -114,11 +115,11 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
   // 3. Fallback / Validation if cycle missing (e.g. no txns yet)
   // If no cycle, spent is 0, real is 0, virtual is 0 -> correct.
 
-  const min_spend = cycle?.min_spend_target ?? config.minSpend ?? 0
-  const missing_for_min = Math.max(0, min_spend - spent_this_cycle)
-  const is_qualified = cycle?.met_min_spend ?? (spent_this_cycle >= min_spend)
+  const min_spend = cycle?.min_spend_target ?? config.minSpend
+  const missing_for_min = (min_spend !== null) ? Math.max(0, min_spend - spent_this_cycle) : null
+  const is_qualified = cycle?.met_min_spend ?? (min_spend !== null && spent_this_cycle >= min_spend)
 
-  let cycle_range = `${fmtDate(start)} - ${fmtDate(end)}`
+  let cycle_range = (start && end) ? `${fmtDate(start)} - ${fmtDate(end)}` : null
 
   // Smart Cycle Detection
   const isFullMonth = start.getDate() === 1 &&

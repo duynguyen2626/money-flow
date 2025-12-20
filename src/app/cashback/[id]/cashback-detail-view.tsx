@@ -30,8 +30,10 @@ export function CashbackDetailView({ card, transactions, cashbackConfig }: Cashb
             let cycleLabel = 'Unknown'
             if (config && txn.occurred_at) {
                 const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
-                const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
-                cycleLabel = `${fmt(range.start)} - ${fmt(range.end)}`
+                if (range) {
+                    const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+                    cycleLabel = `${fmt(range.start)} - ${fmt(range.end)}`
+                }
             }
             return { ...txn, cycleLabel }
         })

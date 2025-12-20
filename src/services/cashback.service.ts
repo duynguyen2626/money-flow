@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { TransactionWithDetails } from '@/types/moneyflow.types';
-import { CashbackCard, AccountSpendingStats } from '@/types/cashback.types';
+import { CashbackCard, AccountSpendingStats, CashbackTransaction } from '@/types/cashback.types';
 import { calculateBankCashback, parseCashbackConfig, getCashbackCycleRange } from '@/lib/cashback';
 
 /**
@@ -23,7 +23,7 @@ async function ensureCycle(accountId: string, cycleTag: string, accountConfig: a
   if (existing) return existing.id;
 
   // 2. Create if not exists
-  const config = parseCashbackConfig(accountConfig);
+  const config = parseCashbackConfig(accountConfig, accountId);
   // Default to null if not defined, allowing DB to store NULL.
   // When doing math later, we treat NULL as 0.
   const maxBudget = config.maxAmount ?? null;
@@ -163,6 +163,10 @@ export async function upsertTransactionCashback(
       break;
   }
 
+  if (!policy.metadata) {
+    throw new Error(`Critical: Cashback policy resolution failed to return metadata for transaction ${transaction.id}`);
+  }
+
   const entryData = {
     cycle_id: cycleId,
     account_id: account.id,
@@ -170,7 +174,10 @@ export async function upsertTransactionCashback(
     mode,
     amount, // This is the total value
     counts_to_budget: countsToBudget,
-    note: mode === 'virtual' ? 'Predicted profit (None Back)' : null
+    metadata: policy.metadata,
+    note: mode === 'virtual'
+      ? `Projected: ${policy.metadata.reason}`
+      : (transaction.note || `Manual: ${policy.metadata.reason}`)
   };
 
   // Safe Upsert with Strict Constraint Handling
@@ -254,17 +261,19 @@ export async function recomputeCashbackCycle(cycleId: string) {
     .eq('id', cycle.account_id)
     .single();
 
-  const config = parseCashbackConfig(account?.cashback_config);
+  const config = parseCashbackConfig(account?.cashback_config, cycle.account_id);
   const maxBudget = config.maxAmount ?? 0;
   const minSpendTarget = config.minSpend ?? 0;
 
   // 2. Aggregate Spent Amount from Transactions
+  // MF5.3.3 FIX: Include ONLY expense and debt (abs). Exclude transfer, repayment, lending.
   const { data: txns } = await supabase
     .from('transactions')
-    .select('amount')
+    .select('amount, type')
     .eq('account_id', cycle.account_id)
     .eq('persisted_cycle_tag', cycle.cycle_tag)
-    .neq('status', 'void');
+    .neq('status', 'void')
+    .in('type', ['expense', 'debt']);
 
   const spentAmount = (txns ?? []).reduce((sum, t) => sum + Math.abs(t.amount || 0), 0);
   const isMinSpendMet = spentAmount >= minSpendTarget;
@@ -343,12 +352,13 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const { data: account } = await supabase.from('accounts').select('cashback_config, type').eq('id', accountId).single();
   if (!account || account.type !== 'credit_card') return null;
 
-  const config = parseCashbackConfig(account.cashback_config);
+  const config = parseCashbackConfig(account.cashback_config, accountId);
   const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
   const year = date.getFullYear().toString().slice(-2);
   const cycleTag = `${month}${year}`;
 
   const { data: cycle } = await supabase.from('cashback_cycles').select('*').eq('account_id', accountId).eq('cycle_tag', cycleTag).maybeSingle();
+  console.log(`[getAccountSpendingStats] AID: ${accountId}, Tag: ${cycleTag}, Found: ${!!cycle}, Real: ${cycle?.real_awarded}`);
 
   let categoryName = undefined;
   if (categoryId) {
@@ -356,7 +366,14 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     categoryName = cat?.name;
   }
 
-  const dummyCalc = calculateBankCashback(config, 1000000, categoryName, cycle?.spent_amount ?? 0);
+  const { resolveCashbackPolicy } = await import('./cashback/policy-resolver');
+  const policy = resolveCashbackPolicy({
+    account,
+    categoryId,
+    amount: 1000000,
+    cycleTotals: { spent: cycle?.spent_amount ?? 0 },
+    categoryName
+  });
 
   const realAwarded = cycle?.real_awarded ?? 0;
   const virtualProfit = cycle?.virtual_profit ?? 0;
@@ -365,6 +382,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const sharedAmount = realAwarded;
   const earnedSoFar = realAwarded + virtualProfit;
   const netProfit = virtualProfit - overflowLoss;
+  const remainingBudget = cycle ? Math.max(0, (config.maxAmount ?? 0) - earnedSoFar) : null;
 
   const cycleRange = getCashbackCycleRange(config, date);
 
@@ -372,21 +390,25 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     currentSpend: cycle?.spent_amount ?? 0,
     minSpend: config.minSpend ?? 0,
     maxCashback: config.maxAmount ?? 0,
-    rate: dummyCalc.rate,
+    rate: policy.rate,
+    maxReward: policy.maxReward,
     earnedSoFar,
     sharedAmount,
     potentialProfit: virtualProfit,
     netProfit,
-    potentialRate: dummyCalc.rate,
-    cycle: {
+    remainingBudget,
+    potentialRate: policy.rate,
+    matchReason: policy.metadata?.policySource,
+    policyMetadata: policy.metadata,
+    cycle: cycleRange ? {
       label: cycleTag,
       start: cycleRange.start.toISOString(),
       end: cycleRange.end.toISOString(),
-    }
+    } : null
   };
 }
 
-export async function getCashbackProgress(monthOffset: number = 0, accountIds?: string[], referenceDate?: Date): Promise<CashbackCard[]> {
+export async function getCashbackProgress(monthOffset: number = 0, accountIds?: string[], referenceDate?: Date, includeTransactions: boolean = false): Promise<CashbackCard[]> {
   const supabase = createClient();
   const date = referenceDate ? new Date(referenceDate) : new Date();
   if (!referenceDate) {
@@ -408,7 +430,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
 
   for (const acc of accounts) {
     if (!acc.cashback_config) continue;
-    const config = parseCashbackConfig(acc.cashback_config);
+    const config = parseCashbackConfig(acc.cashback_config, acc.id);
 
     const { data: cycle } = await supabase.from('cashback_cycles')
       .select('*')
@@ -423,20 +445,93 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
     const minSpend = cycle?.min_spend_target ?? config.minSpend ?? 0;
     const maxCashback = cycle?.max_budget ?? config.maxAmount ?? 0;
 
-    const remainingBudget = maxCashback > 0 ? (maxCashback - earnedSoFar) : null;
+    // MF5.3.3 FIX: Budget Left must come from cycle if exists, else it's essentially unknown/0 for UI
+    // Remove login-dependent fallback to config.maxAmount
+    const remainingBudget = cycle ? Math.max(0, maxCashback - earnedSoFar) : null;
     const progress = minSpend > 0 ? Math.min(100, (currentSpend / minSpend) * 100) : 100;
 
     const cycleRange = getCashbackCycleRange(config, date);
     const metMinSpend = cycle?.met_min_spend ?? false;
     const missingMinSpend = minSpend > currentSpend ? minSpend - currentSpend : 0;
 
+    const { resolveCashbackPolicy } = await import('./cashback/policy-resolver');
+    const policy = resolveCashbackPolicy({
+      account: acc,
+      amount: 1000000,
+      cycleTotals: { spent: currentSpend }
+    });
+
+    let transactions: CashbackTransaction[] = [];
+    if (includeTransactions && cycle) {
+      const { data: entries } = await supabase
+        .from('cashback_entries')
+        .select(`
+          mode, amount, metadata,
+          transaction:transactions (
+            id, occurred_at, note, amount,
+            cashback_share_percent, cashback_share_fixed,
+            transaction_lines (
+               category:categories(name, icon, logo_url),
+               shop:shops(name, logo_url),
+               person:people(name)
+            )
+          )
+        `)
+        .eq('cycle_id', cycle.id);
+
+      if (entries) {
+        transactions = entries.map((e: any) => {
+          const t = e.transaction;
+          if (!t) return null;
+
+          // Flatten lines to find display info
+          // Prioritize first line with info
+          const lines = t.transaction_lines || [];
+          const categoryLine = lines.find((l: any) => l.category) || lines[0];
+          const shopLine = lines.find((l: any) => l.shop) || lines[0];
+          const personLine = lines.find((l: any) => l.person); // Only if person exists
+
+          const category = categoryLine?.category;
+          const shop = shopLine?.shop;
+          const person = personLine?.person;
+
+          const bankBack = e.amount;
+          const peopleBack = e.mode === 'real' ? e.amount : 0;
+          const profit = e.mode === 'virtual' ? e.amount : 0;
+          const effectiveRate = e.metadata?.rate ?? 0;
+
+          return {
+            id: t.id,
+            occurred_at: t.occurred_at,
+            note: t.note,
+            amount: t.amount,
+            earned: bankBack, // Total generated
+            bankBack,
+            peopleBack,
+            profit,
+            effectiveRate,
+            sharePercent: t.cashback_share_percent,
+            shareFixed: t.cashback_share_fixed,
+            shopName: shop?.name,
+            shopLogoUrl: shop?.logo_url,
+            categoryName: category?.name,
+            categoryIcon: category?.icon,
+            categoryLogoUrl: category?.logo_url,
+            personName: person?.name,
+          } as CashbackTransaction;
+
+        }).filter((t: any): t is CashbackTransaction => t !== null)
+          .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
+      }
+    }
+
     results.push({
       accountId: acc.id,
       accountName: acc.name,
       accountLogoUrl: acc.logo_url,
       cycleLabel: cycleTag,
-      cycleStart: cycleRange.start.toISOString(),
-      cycleEnd: cycleRange.end.toISOString(),
+      cycleStart: cycleRange?.start.toISOString() ?? null,
+      cycleEnd: cycleRange?.end.toISOString() ?? null,
       cycleType: config.cycleType,
       progress,
       currentSpend,
@@ -454,11 +549,29 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       is_min_spend_met: metMinSpend,
       missing_min_spend: missingMinSpend,
       potential_earned: cycle?.virtual_profit ?? 0,
-      transactions: [],
+      transactions,
       remainingBudget: remainingBudget,
-      rate: config.rate ?? 0
+      rate: policy.rate
     });
   }
-
   return results;
+}
+
+/**
+ * Fetches the cashback policy explanation (metadata) for a specific transaction.
+ */
+export async function getTransactionCashbackPolicyExplanation(transactionId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('cashback_entries')
+    .select('metadata')
+    .eq('transaction_id', transactionId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching cashback policy explanation:', error);
+    return null;
+  }
+
+  return data?.metadata ?? null;
 }

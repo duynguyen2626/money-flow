@@ -1,11 +1,35 @@
-export type CashbackCycleType = 'calendar_month' | 'statement_cycle'
+export type CashbackCycleType = 'calendar_month' | 'statement_cycle' | null
 
 type CycleRange = {
   start: Date
   end: Date
 }
 
-// Tiered cashback tier definition
+// MF5.3 Types
+export type CashbackCategoryRule = {
+  categoryIds: string[];
+  rate: number;
+  maxReward: number | null;
+};
+
+export type CashbackLevel = {
+  id: string;
+  name: string;
+  minTotalSpend: number;
+  defaultRate: number;
+  categoryRules?: CashbackCategoryRule[];
+};
+
+export type CashbackProgram = {
+  rate: number;                    // decimal
+  maxAmount: number | null;        // cycle cap
+  cycleType: CashbackCycleType;
+  statementDay: number | null;
+  minSpend: number | null;
+  levels?: CashbackLevel[];
+};
+
+// Tiered cashback tier definition (Legacy support)
 export type CashbackTier = {
   name?: string // Optional name for the tier (e.g., "Premium", "Gold")
   minSpend: number // Minimum spend to qualify for this tier
@@ -25,73 +49,105 @@ export type ParsedCashbackConfig = {
   statementDay: number | null
   dueDate: number | null
   minSpend: number | null
-  // Tiered cashback support
+  // Tiered cashback support (Legacy)
   hasTiers?: boolean
   tiers?: CashbackTier[]
+  // MF5.3 Support
+  program?: CashbackProgram
 }
 
-function parseConfigCandidate(raw: Record<string, unknown> | null): ParsedCashbackConfig {
-  let rateValue = Number(raw?.rate ?? 0)
+function parseConfigCandidate(raw: Record<string, unknown> | null, source: string): ParsedCashbackConfig {
+  if (!raw) {
+    console.warn(`[parseCashbackConfig] Received null raw config from ${source}`);
+    return {
+      rate: 0,
+      maxAmount: null,
+      cycleType: 'calendar_month',
+      statementDay: null,
+      dueDate: null,
+      minSpend: null,
+    };
+  }
 
+  // 1. Parse Program (MF5.3)
+  let program: CashbackProgram | undefined = undefined;
+  if (raw.program && typeof raw.program === 'object') {
+    const p = raw.program as any;
+    program = {
+      rate: Number(p.rate ?? 0),
+      maxAmount: p.maxAmount !== undefined && p.maxAmount !== null ? Number(p.maxAmount) : null,
+      cycleType: (p.cycleType === 'statement_cycle' ? 'statement_cycle' : 'calendar_month') as CashbackCycleType,
+      statementDay: p.statementDay !== undefined && p.statementDay !== null ? Number(p.statementDay) : null,
+      minSpend: p.minSpend !== undefined && p.minSpend !== null ? Number(p.minSpend) : null,
+      levels: Array.isArray(p.levels) ? p.levels.map((lvl: any) => ({
+        id: String(lvl.id),
+        name: String(lvl.name),
+        minTotalSpend: Number(lvl.minTotalSpend ?? 0),
+        defaultRate: Number(lvl.defaultRate ?? 0),
+        categoryRules: Array.isArray(lvl.categoryRules) ? lvl.categoryRules.map((rule: any) => ({
+          categoryIds: Array.isArray(rule.categoryIds) ? rule.categoryIds.map(String) : [],
+          rate: Number(rule.rate ?? 0),
+          maxReward: rule.maxReward !== undefined && rule.maxReward !== null ? Number(rule.maxReward) : null,
+        })) : undefined,
+      })) : undefined,
+    };
+  }
 
+  // 2. Fallback / Legacy Parsing
+  // Check for keys in a more robust way
+  const getVal = (keys: string[]) => {
+    for (const k of keys) {
+      if (raw[k] !== undefined && raw[k] !== null) return raw[k];
+    }
+    return undefined;
+  };
 
-  const parsedRate =
-    Number.isFinite(rateValue) && rateValue > 0 ? rateValue : 0
+  const rateValue = program ? program.rate : Number(getVal(['rate']) ?? 0);
+  const parsedRate = Number.isFinite(rateValue) ? rateValue : 0;
 
-  const rawMax = raw?.max_amt ?? raw?.maxAmount
-  const parsedMax =
-    rawMax === null || rawMax === undefined
-      ? null
-      : Number(rawMax)
-  const maxAmount =
-    typeof parsedMax === 'number' && Number.isFinite(parsedMax)
-      ? parsedMax
-      : null
+  const rawMax = program ? program.maxAmount : getVal(['max_amt', 'maxAmount', 'max_amount']);
+  const maxAmount = (rawMax !== undefined && rawMax !== null) ? Number(rawMax) : null;
 
-  const cycleTypeCandidate = String(raw?.cycle_type ?? raw?.cycle ?? raw?.cycleType ?? 'calendar_month')
-  const cycleType: CashbackCycleType =
-    cycleTypeCandidate === 'statement_cycle' ? 'statement_cycle' : 'calendar_month'
+  // IMPORTANT: Fix for "cycleType=statement_cycle and statementDay=15 never default to calendar-month"
+  const rawCycle = program ? program.cycleType : getVal(['cycle_type', 'cycle', 'cycleType']);
+  const cycleType: CashbackCycleType = (rawCycle === 'statement_cycle') ? 'statement_cycle' : (rawCycle === 'calendar_month' ? 'calendar_month' : null);
 
-  const statementCandidate = raw?.statement_day ?? raw?.statementDay
-  const statementNumber =
-    statementCandidate === null || statementCandidate === undefined
-      ? null
-      : Number(statementCandidate)
-  const statementDay =
-    typeof statementNumber === 'number' && Number.isFinite(statementNumber)
-      ? Math.min(Math.max(Math.floor(statementNumber), 1), 31)
-      : null
+  const rawStatementDay = program ? program.statementDay : getVal(['statement_day', 'statementDay', 'statement_date']);
+  let statementDay: number | null = null;
+  if (rawStatementDay !== undefined && rawStatementDay !== null) {
+    const num = Number(rawStatementDay);
+    if (Number.isFinite(num)) {
+      statementDay = Math.min(Math.max(Math.floor(num), 1), 31);
+    }
+  }
 
-  const dueCandidate = raw?.due_date ?? raw?.dueDate
-  const dueNumber =
-    dueCandidate === null || dueCandidate === undefined
-      ? null
-      : Number(dueCandidate)
-  const dueDate =
-    typeof dueNumber === 'number' && Number.isFinite(dueNumber)
-      ? Math.min(Math.max(Math.floor(dueNumber), 1), 31)
-      : null
+  const rawDueDate = getVal(['due_date', 'dueDate', 'due_day']);
+  let dueDate: number | null = null;
+  if (rawDueDate !== undefined && rawDueDate !== null) {
+    const num = Number(rawDueDate);
+    if (Number.isFinite(num)) {
+      dueDate = Math.min(Math.max(Math.floor(num), 1), 31);
+    }
+  }
 
-  const minCandidate = raw?.min_spend ?? raw?.minSpend
-  const minNumber =
-    minCandidate === null || minCandidate === undefined
-      ? null
-      : Number(minCandidate)
-  const minSpend =
-    typeof minNumber === 'number' && Number.isFinite(minNumber) && minNumber > 0
-      ? minNumber
-      : null
+  const rawMinSpend = program ? program.minSpend : getVal(['min_spend', 'minSpend']);
+  const minSpend = (rawMinSpend !== undefined && rawMinSpend !== null) ? Number(rawMinSpend) : null;
 
-  // Parse tiered cashback
-  const hasTiers = Boolean(raw?.has_tiers ?? raw?.hasTiers)
-  let tiers: CashbackTier[] | undefined = undefined
+  // Parse legacy tiered cashback
+  const hasTiers = Boolean(getVal(['has_tiers', 'hasTiers']));
+  let tiers: CashbackTier[] | undefined = undefined;
 
-  if (hasTiers && Array.isArray(raw?.tiers)) {
+  if (hasTiers && Array.isArray(raw.tiers)) {
     tiers = (raw.tiers as any[]).map((tier: any) => ({
       minSpend: Number(tier.minSpend ?? tier.min_spend ?? 0),
       categories: tier.categories ?? {},
       defaultRate: typeof tier.defaultRate === 'number' ? tier.defaultRate : undefined,
-    }))
+    }));
+  }
+
+  // DIAGNOSTIC LOG: If it's supposed to be statement cycle but statementDay is missing
+  if (cycleType === 'statement_cycle' && !statementDay) {
+    console.error(`[parseCashbackConfig] Account ${source} configured as statement_cycle but statementDay is missing/null.`);
   }
 
   return {
@@ -103,65 +159,76 @@ function parseConfigCandidate(raw: Record<string, unknown> | null): ParsedCashba
     minSpend,
     hasTiers,
     tiers,
-  }
+    program,
+  };
 }
 
-export function parseCashbackConfig(raw: unknown): ParsedCashbackConfig {
+export function parseCashbackConfig(raw: unknown, accountId: string = 'unknown'): ParsedCashbackConfig {
   if (!raw) {
     return {
       rate: 0,
       maxAmount: null,
-      cycleType: 'calendar_month',
+      cycleType: null,
       statementDay: null,
       dueDate: null,
       minSpend: null,
       hasTiers: false,
       tiers: undefined,
-    }
+    };
   }
 
   if (typeof raw === 'string') {
     try {
-      const parsed = JSON.parse(raw) as Record<string, unknown> | null
-      return parseConfigCandidate(parsed)
-    } catch {
+      // Handle potential double-escaped strings or standard JSON strings
+      const parsed = JSON.parse(raw);
+      if (typeof parsed === 'string') {
+        // Recurse once if it's a double-encoded string
+        return parseCashbackConfig(parsed, accountId);
+      }
+      return parseConfigCandidate(parsed as Record<string, unknown>, accountId);
+    } catch (e) {
+      console.error(`[parseCashbackConfig] Failed to parse JSON string for account ${accountId}:`, e);
       return {
         rate: 0,
         maxAmount: null,
-        cycleType: 'calendar_month',
+        cycleType: null,
         statementDay: null,
         dueDate: null,
         minSpend: null,
         hasTiers: false,
         tiers: undefined,
-      }
+      };
     }
   }
 
   if (typeof raw === 'object') {
-    return parseConfigCandidate(raw as Record<string, unknown>)
+    return parseConfigCandidate(raw as Record<string, unknown>, accountId);
   }
 
   return {
     rate: 0,
     maxAmount: null,
-    cycleType: 'calendar_month',
+    cycleType: null,
     statementDay: null,
     dueDate: null,
     minSpend: null,
     hasTiers: false,
     tiers: undefined,
-  }
+  };
 }
 
 export function getCashbackCycleRange(
   config: ParsedCashbackConfig,
   referenceDate = new Date()
-): CycleRange {
+): CycleRange | null {
+  if (!config.cycleType) {
+    return null;
+  }
+
   const startOfCalendar = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1)
   const calendarEnd = new Date(referenceDate.getFullYear(), referenceDate.getMonth() + 1, 0)
 
-  if (config.cycleType !== 'statement_cycle' || !config.statementDay) {
+  if (config.cycleType === 'calendar_month') {
     startOfCalendar.setHours(0, 0, 0, 0)
     calendarEnd.setHours(23, 59, 59, 999)
     return {
@@ -170,7 +237,11 @@ export function getCashbackCycleRange(
     }
   }
 
-  const day = config.statementDay
+  if (config.cycleType === 'statement_cycle' && !config.statementDay) {
+    return null;
+  }
+
+  const day = config.statementDay!
 
   const referenceDay = referenceDate.getDate()
   const startOffset = referenceDay >= day ? 0 : -1

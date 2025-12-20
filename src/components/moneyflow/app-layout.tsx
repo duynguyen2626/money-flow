@@ -39,6 +39,7 @@ const navItems: NavItem[] = [
   { title: "Categories", href: "/categories", icon: <Layers className="h-5 w-5" /> },
   { title: "Services", href: "/services", icon: <Wrench className="h-5 w-5" /> },
   { title: "Batches", href: "/batch", icon: <BookOpen className="h-5 w-5" /> },
+  { title: "Cashback", href: "/cashback", icon: <CreditCard className="h-5 w-5" /> },
   { title: "Refunds", href: "/refunds", icon: <RefreshCw className="h-5 w-5" /> },
 ]
 

@@ -408,8 +408,10 @@ export function mapTransactionRow(
             const config = parseCashbackConfig(context.accountInfo.cashback_config)
             if (config.cycleType === 'statement_cycle' && config.statementDay) {
                 const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
-                const fmt = (d: Date) => format(d, 'dd/MM')
-                tag = `${fmt(range.start)} - ${fmt(range.end)}`
+                if (range) {
+                    const fmt = (d: Date) => format(d, 'dd/MM')
+                    tag = `${fmt(range.start)} - ${fmt(range.end)}`
+                }
             }
         } catch (e) {
             console.error('Error calculating cycle tag:', e)

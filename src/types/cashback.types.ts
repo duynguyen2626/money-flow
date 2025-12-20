@@ -33,8 +33,8 @@ export type CashbackCard = {
   progress: number
   rate: number
   spendTarget: number | null
-  cycleStart: string
-  cycleEnd: string
+  cycleStart: string | null
+  cycleEnd: string | null
   cycleLabel: string
   cycleType: ParsedCashbackConfig['cycleType']
   transactions: CashbackTransaction[]
@@ -60,13 +60,24 @@ export type AccountSpendingStats = {
   sharedAmount: number // Total cashback shared with others
   potentialProfit: number // Earnings minus sharing before qualification gates
   netProfit: number // earnedSoFar - sharedAmount
+  remainingBudget: number | null
   // Smart Hint fields
   potentialRate?: number
   matchReason?: string
+  policyMetadata?: {
+    policySource: 'program_default' | 'level_default' | 'category_rule' | 'legacy'
+    reason: string
+    rate: number
+    levelId?: string
+    levelName?: string
+    ruleId?: string
+    categoryId?: string
+    ruleMaxReward?: number | null
+  }
   maxReward?: number | null // Category-specific max reward limit
   cycle?: {
     start: string
     end: string
     label: string
-  }
+  } | null
 }
