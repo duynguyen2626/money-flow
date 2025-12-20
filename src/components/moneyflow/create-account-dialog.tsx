@@ -938,7 +938,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
                               { value: 'calendar_month', label: 'Calendar month' },
                               { value: 'statement_cycle', label: 'Statement cycle' }
                             ]}
-                            value={cycleType}
+                            value={cycleType ?? ''}
                             onChange={(val) => setCycleType(val as CashbackCycleType)}
                             className="w-full"
                           />

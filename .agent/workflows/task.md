@@ -2,34 +2,37 @@
 description: Task Descriptions
 ---
 
-# MF5.3.2 — Checkpoint & Task Prompt (Policy Explanation in UI)
+# MF5.3.3a — Checkpoint & Task Prompt (Eliminate Policy/Cycle Inconsistency Across Logins)
 
-> This canvas continues after **MF5.3 + MF5.3.1**.
-> Goal: surface **cashback policy explanation** to the user using existing metadata.
-> **No new logic. No recomputation. No schema change.**
-
----
-
-## 1) Current Checkpoint (Verified)
-
-### ✅ Completed & Locked
-
-* Cashback engine (MF5.2) is stable
-* Category-based rules + spend-based levels (MF5.3) implemented
-* Attribution metadata is mandatory and audited (MF5.3.1)
-
-Each cashback-affecting transaction now has:
-
-* 1 `cashback_entries` row
-* non-null `metadata` explaining applied policy
+> This canvas is a focused follow-up to MF5.3.3.
+> Goal: eliminate inconsistent cashback policy + cycle range + budget-left across different logins.
+> **DO NOT PATCH OR MODIFY ANY ACCOUNT CASHBACK CONFIG DATA.** Data is already corrected in DB.
+> **Do NOT redesign the system. Do NOT add tables. Do NOT change MF5.2 core engine.**
 
 ---
 
-## 2) Objective of MF5.3.2
+## 1) Current Checkpoint (Observed Confusion)
 
-> Make cashback decisions **human-readable in UI**, using metadata only.
+* VPBank Lady account in DB has correct legacy config:
 
-MF5.3.2 is **read-only UX** on top of existing data.
+  * `rate = 0.15`
+  * `cycleType = statement_cycle`
+  * `statementDay = 15`
+  * `maxAmount = 1,000,000`
+
+But UI can show inconsistent states depending on login:
+
+* Cycle range sometimes shows **calendar month** (`01 Dec - 31 Dec`) instead of statement cycle (`15 Dec - 14 Jan`)
+* Policy can show **Legacy / Base 0.1%** in some views
+* Budget Left sometimes shows `--` or mismatched value across users
+
+This indicates **data fetch / parsing / fallback paths are inconsistent**, not data itself.
+
+---
+
+## 2) MF5.3.3a Objective (Single Sentence)
+
+> Ensure every UI path uses the same account config + same cycle key, and never falls back to guessed defaults.
 
 ---
 
@@ -37,129 +40,129 @@ MF5.3.2 is **read-only UX** on top of existing data.
 
 ### ✅ IN SCOPE
 
-* Display policy explanation in UI
-* Read exclusively from `cashback_entries.metadata`
-* Minor UI additions (tooltip / expandable info)
+* Fix inconsistent fetch/select paths so `accounts.cashback_config` is always available where needed
+* Ensure `parseCashbackConfig` reliably parses JSONB returned as object OR string
+* Ensure cycle range/tag selection is consistent across all logins
+* Remove any silent fallback to hardcoded/default policy (0.1%, calendar-month) when config/cycle is missing
+* Add explicit diagnostics: if cycle/config missing, show placeholder and log error
 
 ### ❌ OUT OF SCOPE
 
-* No cashback calculation changes
-* No recompute in UI
-* No edits to `resolveCashbackPolicy`
-* No DB schema changes
-* No settings or rule editing UI
+* NO DB data patch for Lady or any account
+* NO changes to cashback rules/levels design
+* NO UI redesign
+* NO new tables / dashboards
 
 ---
 
-## 4) UI Targets
+## 4) Non-Negotiable Rules
 
-### 4.1 Transaction Detail / Modal
+* UI must not recompute budget-left; it must come from `cashback_cycles`
+* `resolveCashbackPolicy` remains the only rate/cap decision point
+* If required data is missing:
 
-Show a **policy explanation block** when cashback exists:
+  * UI must show `--` and a clear “Missing cycle/config” hint
+  * MUST NOT guess by using calendar-month defaults or hardcoded rates
 
-Example:
+---
 
+## 5) Implementation Tasks
+
+### 5.1 Make account config fetch consistent
+
+* Identify all UI/API paths used by transaction modal and account header:
+
+  * ensure they select/return `accounts.cashback_config`, `accounts.type`, and `accounts.id`
+* Ensure both login A and login B hit the same endpoint or equivalent payload.
+
+### 5.2 Harden parsing of cashback_config
+
+* Ensure `parseCashbackConfig` supports:
+
+  * JSONB object
+  * JSON string (e.g. `"{\"rate\":0.15,...}"`)
+
+Acceptance:
+
+* `cycleType` and `statementDay` never default incorrectly.
+
+### 5.3 Unify cycle key and cycle range
+
+* Choose ONE consistent cycle key for fetching cycles:
+
+  * `account_id + cycle_tag` (preferred)
+  * where cycle_tag is derived consistently from config + occurred_at
+
+* Ensure the UI cycle date label uses the same computed range function for all logins.
+
+### 5.4 Remove/disable silent fallbacks
+
+* Remove any code path that uses hardcoded “base policy” when config is missing.
+* Replace with:
+
+  * `--` + diagnostic text
+  * console/server log with account_id + user_id
+
+---
+
+## 6) Verification Checklist (Must Pass)
+
+### 6.1 Two-login consistency test
+
+* Login as user A and user B
+* Open the same transaction modal for VPBank Lady
+
+Expected (both users):
+
+* Cycle range shows statement cycle (`15 <month> - 14 <next month>`)
+* Match Policy shows Legacy
+* Applied Rate shows 15%
+* Budget Left is identical (or `--` for both if cycle missing, but never mismatched)
+
+### 6.2 SQL proofs
+
+A) Verify config in DB (read-only):
+
+```sql
+SELECT id, cashback_config
+FROM accounts
+WHERE id = '83a27121-0e34-4231-b060-2818da672eca';
 ```
-Cashback applied:
-• Category rule: Education
-• Level: Silver
-• Rate: 15%
-• Max reward: 300,000₫
+
+B) Verify cycle row exists and budget-left computation:
+
+```sql
+SELECT
+  cycle_tag,
+  max_budget,
+  real_awarded,
+  virtual_profit,
+  (max_budget - real_awarded - virtual_profit) AS computed_budget_left
+FROM cashback_cycles
+WHERE account_id = '83a27121-0e34-4231-b060-2818da672eca'
+ORDER BY updated_at DESC;
 ```
 
-Fallback cases:
-
-* Program default
-* Level default
-* Legacy rule
-
 ---
 
-## 5) Data Contract (STRICT)
+## 7) Branch / PR
 
-UI must read ONLY:
-
-```ts
-cashback_entries.metadata
-```
-
-Expected keys:
-
-```json
-{
-  "policySource": "program_default" | "level_default" | "category_rule" | "legacy",
-  "reason": "Level matched: Silver",
-  "levelId": "lvl_2",
-  "levelName": "Silver",
-  "categoryId": "...",
-  "rate": 0.15,
-  "ruleMaxReward": 300000
-}
-```
-
-UI formatting rules:
-
-* `rate` shown as percent (×100)
-* Monetary values formatted normally
-
----
-
-## 6) UX Rules (Important)
-
-* Explanation must be:
-
-  * non-intrusive
-  * read-only
-  * visible on demand (tooltip / info icon / expandable)
-
-* No layout redesign
-
-* No new components unless reused
-
----
-
-## 7) Verification Checklist
-
-Agent must verify:
-
-* UI shows explanation for:
-
-  * program default
-  * level default
-  * category rule
-
-* Changing category updates explanation immediately
-
-* Budget-left display remains unchanged
-
-* No UI-side cashback math
-
----
-
-## 8) Branch / PR
-
-* Branch: `PHASE-9.3.2-CASHBACK-POLICY-EXPLANATION-UI`
-* Commit: `MF5.3.2 - Show cashback policy explanation in UI`
-* PR Title: `MF5.3.2: Show cashback policy explanation (read-only)`
+* Branch: `PHASE-9.3.3A-CASHBACK-CONSISTENCY-ACROSS-LOGINS`
+* Commit: `MF5.3.3a - Eliminate policy/cycle inconsistency across logins`
+* PR Title: `MF5.3.3a: Eliminate cashback policy/cycle inconsistency across logins`
 
 PR must include:
 
-* Screenshot of transaction modal with explanation visible
-* Screenshot for category change case
+* Screenshot: login A vs login B showing identical cycle range + applied rate
+* Screenshot: if missing cycle, both show `--` with diagnostic text
+* Short root cause explanation
 
 ---
 
-## 9) Stop Condition
+## 8) Stop Condition
 
-Stop after PR opened.
-Provide:
+Stop after PR opened and provide:
 
-* Screenshots
-* Short QA checklist
-
----
-
-## 10) Guiding Principle
-
-> MF5.3.2 is about **transparency**, not intelligence.
-> UI explains decisions; engine remains untouched.
+* QA steps (2-login test)
+* SQL snippet outputs
+* Notes on which fallback was removed and how parsing was hardened

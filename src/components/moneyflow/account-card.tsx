@@ -422,10 +422,11 @@ function AccountCardComponent({
     if (usageVal > 80) progressColorClass = "bg-red-500" // > 80%
 
     // KPI Logic
+    const minSpendValue = stats?.min_spend
     const missing = stats?.missing_for_min ?? 0
-    const isMet = missing <= 0
-    const showKPI = stats?.min_spend && stats.min_spend > 0
-    const hasCashbackConfig = stats?.remains_cap !== undefined
+    const isMet = (minSpendValue === null || minSpendValue === undefined) ? true : (missing <= 0)
+    const showKPI = typeof minSpendValue === 'number' && minSpendValue > 0
+    const hasCashbackConfig = stats?.remains_cap !== null && stats?.remains_cap !== undefined
 
     // --- Quick People Sorting Logic ---
     const sortedPeople = useMemo(() => {
@@ -586,7 +587,11 @@ function AccountCardComponent({
               <div className="w-[1px] h-6 bg-emerald-200/50" />
               <div className="flex flex-col leading-none gap-0.5">
                 <span className="text-[10px] text-emerald-600/80 uppercase font-bold">Remains</span>
-                <span className="font-bold text-emerald-800 text-sm">{formatCurrency(stats?.remains_cap)}</span>
+                <span className="font-bold text-emerald-800 text-sm">
+                  {stats?.remains_cap !== null && stats?.remains_cap !== undefined
+                    ? formatCurrency(stats.remains_cap)
+                    : '--'}
+                </span>
               </div>
             </div>
             {isMet && (

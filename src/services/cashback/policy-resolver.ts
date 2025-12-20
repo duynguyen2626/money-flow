@@ -24,7 +24,7 @@ export type CashbackPolicyResult = {
  * 3. Fallbacks to program defaults
  */
 export function resolveCashbackPolicy(params: {
-    account: { cashback_config: any }
+    account: { id?: string; cashback_config: any }
     categoryId?: string | null
     amount: number
     cycleTotals: {
@@ -33,7 +33,7 @@ export function resolveCashbackPolicy(params: {
     categoryName?: string // Helper for legacy matching
 }): CashbackPolicyResult {
     const { account, amount, categoryId, categoryName, cycleTotals } = params
-    const config = parseCashbackConfig(account.cashback_config)
+    const config = parseCashbackConfig(account.cashback_config, account.id || 'unknown')
 
     // 1. If no MF5.3 program exists, fallback to Legacy Logic (MF5.2)
     if (!config.program) {

@@ -1468,8 +1468,10 @@ export function UnifiedTransactionTable({
                 if (acc && acc.cashback_config) {
                   const config = parseCashbackConfig(acc.cashback_config)
                   const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
-                  const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
-                  cycleLabel = `${fmt(range.start)} - ${fmt(range.end)}`
+                  if (range) {
+                    const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+                    cycleLabel = `${fmt(range.start)} - ${fmt(range.end)}`
+                  }
                 }
               }
 
@@ -1760,8 +1762,10 @@ export function UnifiedTransactionTable({
                       if (acc && acc.cashback_config) {
                         const config = parseCashbackConfig(acc.cashback_config)
                         const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
-                        const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
-                        cycleLabel = `${fmt(range.start)} - ${fmt(range.end)}`
+                        if (range) {
+                          const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
+                          cycleLabel = `${fmt(range.start)} - ${fmt(range.end)}`
+                        }
                       }
                     }
 

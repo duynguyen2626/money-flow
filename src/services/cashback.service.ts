@@ -23,7 +23,7 @@ async function ensureCycle(accountId: string, cycleTag: string, accountConfig: a
   if (existing) return existing.id;
 
   // 2. Create if not exists
-  const config = parseCashbackConfig(accountConfig);
+  const config = parseCashbackConfig(accountConfig, accountId);
   // Default to null if not defined, allowing DB to store NULL.
   // When doing math later, we treat NULL as 0.
   const maxBudget = config.maxAmount ?? null;
@@ -261,17 +261,19 @@ export async function recomputeCashbackCycle(cycleId: string) {
     .eq('id', cycle.account_id)
     .single();
 
-  const config = parseCashbackConfig(account?.cashback_config);
+  const config = parseCashbackConfig(account?.cashback_config, cycle.account_id);
   const maxBudget = config.maxAmount ?? 0;
   const minSpendTarget = config.minSpend ?? 0;
 
   // 2. Aggregate Spent Amount from Transactions
+  // MF5.3.3 FIX: Include ONLY expense and debt (abs). Exclude transfer, repayment, lending.
   const { data: txns } = await supabase
     .from('transactions')
-    .select('amount')
+    .select('amount, type')
     .eq('account_id', cycle.account_id)
     .eq('persisted_cycle_tag', cycle.cycle_tag)
-    .neq('status', 'void');
+    .neq('status', 'void')
+    .in('type', ['expense', 'debt']);
 
   const spentAmount = (txns ?? []).reduce((sum, t) => sum + Math.abs(t.amount || 0), 0);
   const isMinSpendMet = spentAmount >= minSpendTarget;
@@ -350,12 +352,13 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const { data: account } = await supabase.from('accounts').select('cashback_config, type').eq('id', accountId).single();
   if (!account || account.type !== 'credit_card') return null;
 
-  const config = parseCashbackConfig(account.cashback_config);
+  const config = parseCashbackConfig(account.cashback_config, accountId);
   const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
   const year = date.getFullYear().toString().slice(-2);
   const cycleTag = `${month}${year}`;
 
   const { data: cycle } = await supabase.from('cashback_cycles').select('*').eq('account_id', accountId).eq('cycle_tag', cycleTag).maybeSingle();
+  console.log(`[getAccountSpendingStats] AID: ${accountId}, Tag: ${cycleTag}, Found: ${!!cycle}, Real: ${cycle?.real_awarded}`);
 
   let categoryName = undefined;
   if (categoryId) {
@@ -379,6 +382,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const sharedAmount = realAwarded;
   const earnedSoFar = realAwarded + virtualProfit;
   const netProfit = virtualProfit - overflowLoss;
+  const remainingBudget = cycle ? Math.max(0, (config.maxAmount ?? 0) - earnedSoFar) : null;
 
   const cycleRange = getCashbackCycleRange(config, date);
 
@@ -392,14 +396,15 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     sharedAmount,
     potentialProfit: virtualProfit,
     netProfit,
+    remainingBudget,
     potentialRate: policy.rate,
     matchReason: policy.metadata?.policySource,
     policyMetadata: policy.metadata,
-    cycle: {
+    cycle: cycleRange ? {
       label: cycleTag,
       start: cycleRange.start.toISOString(),
       end: cycleRange.end.toISOString(),
-    }
+    } : null
   };
 }
 
@@ -425,7 +430,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
 
   for (const acc of accounts) {
     if (!acc.cashback_config) continue;
-    const config = parseCashbackConfig(acc.cashback_config);
+    const config = parseCashbackConfig(acc.cashback_config, acc.id);
 
     const { data: cycle } = await supabase.from('cashback_cycles')
       .select('*')
@@ -440,7 +445,9 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
     const minSpend = cycle?.min_spend_target ?? config.minSpend ?? 0;
     const maxCashback = cycle?.max_budget ?? config.maxAmount ?? 0;
 
-    const remainingBudget = maxCashback > 0 ? (maxCashback - earnedSoFar) : null;
+    // MF5.3.3 FIX: Budget Left must come from cycle if exists, else it's essentially unknown/0 for UI
+    // Remove login-dependent fallback to config.maxAmount
+    const remainingBudget = cycle ? Math.max(0, maxCashback - earnedSoFar) : null;
     const progress = minSpend > 0 ? Math.min(100, (currentSpend / minSpend) * 100) : 100;
 
     const cycleRange = getCashbackCycleRange(config, date);
@@ -459,8 +466,8 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       accountName: acc.name,
       accountLogoUrl: acc.logo_url,
       cycleLabel: cycleTag,
-      cycleStart: cycleRange.start.toISOString(),
-      cycleEnd: cycleRange.end.toISOString(),
+      cycleStart: cycleRange?.start.toISOString() ?? null,
+      cycleEnd: cycleRange?.end.toISOString() ?? null,
       cycleType: config.cycleType,
       progress,
       currentSpend,

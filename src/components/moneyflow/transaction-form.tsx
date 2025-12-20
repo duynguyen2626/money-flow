@@ -122,6 +122,9 @@ function getCycleLabelForDate(
 
   const referenceDate = targetDate ?? new Date()
   const range = getCashbackCycleRange(config, referenceDate)
+  if (!range) {
+    return 'Cycle: -- (Missing Config)'
+  }
   return formatRangeLabel(range, referenceDate)
 }
 
@@ -965,7 +968,7 @@ export function TransactionForm({
 
   const cashbackMeta = useMemo(
     () =>
-      selectedAccount ? parseCashbackConfig(selectedAccount.cashback_config) : null,
+      selectedAccount ? parseCashbackConfig(selectedAccount.cashback_config, selectedAccount.id) : null,
     [selectedAccount]
   )
 
@@ -2282,7 +2285,7 @@ export function TransactionForm({
             {spendingStats?.maxCashback && (
               <div className="flex justify-between text-amber-600">
                 <span>Budget Left:</span>
-                <span>{numberFormatter.format(Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar - currentImpact))}</span>
+                <span>{remainingBudget !== null ? numberFormatter.format(Math.max(0, remainingBudget - currentImpact)) : '--'}</span>
               </div>
             )}
           </div>
