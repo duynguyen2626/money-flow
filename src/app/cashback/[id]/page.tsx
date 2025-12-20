@@ -45,7 +45,7 @@ export default function CashbackDetailsPage() {
     async function loadData() {
       try {
         // Fetch cashback data
-        const cards = await getCashbackProgress(0, [id])
+        const cards = await getCashbackProgress(0, [id], undefined, true)
         if (cards.length > 0) {
           setCardData(cards[0])
         }

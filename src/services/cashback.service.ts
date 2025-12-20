@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { TransactionWithDetails } from '@/types/moneyflow.types';
-import { CashbackCard, AccountSpendingStats } from '@/types/cashback.types';
+import { CashbackCard, AccountSpendingStats, CashbackTransaction } from '@/types/cashback.types';
 import { calculateBankCashback, parseCashbackConfig, getCashbackCycleRange } from '@/lib/cashback';
 
 /**
@@ -408,7 +408,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   };
 }
 
-export async function getCashbackProgress(monthOffset: number = 0, accountIds?: string[], referenceDate?: Date): Promise<CashbackCard[]> {
+export async function getCashbackProgress(monthOffset: number = 0, accountIds?: string[], referenceDate?: Date, includeTransactions: boolean = false): Promise<CashbackCard[]> {
   const supabase = createClient();
   const date = referenceDate ? new Date(referenceDate) : new Date();
   if (!referenceDate) {
@@ -461,6 +461,70 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       cycleTotals: { spent: currentSpend }
     });
 
+    let transactions: CashbackTransaction[] = [];
+    if (includeTransactions && cycle) {
+      const { data: entries } = await supabase
+        .from('cashback_entries')
+        .select(`
+          mode, amount, metadata,
+          transaction:transactions (
+            id, occurred_at, note, amount,
+            cashback_share_percent, cashback_share_fixed,
+            transaction_lines (
+               category:categories(name, icon, logo_url),
+               shop:shops(name, logo_url),
+               person:people(name)
+            )
+          )
+        `)
+        .eq('cycle_id', cycle.id);
+
+      if (entries) {
+        transactions = entries.map((e: any) => {
+          const t = e.transaction;
+          if (!t) return null;
+
+          // Flatten lines to find display info
+          // Prioritize first line with info
+          const lines = t.transaction_lines || [];
+          const categoryLine = lines.find((l: any) => l.category) || lines[0];
+          const shopLine = lines.find((l: any) => l.shop) || lines[0];
+          const personLine = lines.find((l: any) => l.person); // Only if person exists
+
+          const category = categoryLine?.category;
+          const shop = shopLine?.shop;
+          const person = personLine?.person;
+
+          const bankBack = e.amount;
+          const peopleBack = e.mode === 'real' ? e.amount : 0;
+          const profit = e.mode === 'virtual' ? e.amount : 0;
+          const effectiveRate = e.metadata?.rate ?? 0;
+
+          return {
+            id: t.id,
+            occurred_at: t.occurred_at,
+            note: t.note,
+            amount: t.amount,
+            earned: bankBack, // Total generated
+            bankBack,
+            peopleBack,
+            profit,
+            effectiveRate,
+            sharePercent: t.cashback_share_percent,
+            shareFixed: t.cashback_share_fixed,
+            shopName: shop?.name,
+            shopLogoUrl: shop?.logo_url,
+            categoryName: category?.name,
+            categoryIcon: category?.icon,
+            categoryLogoUrl: category?.logo_url,
+            personName: person?.name,
+          } as CashbackTransaction;
+
+        }).filter((t: any): t is CashbackTransaction => t !== null)
+          .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
+      }
+    }
+
     results.push({
       accountId: acc.id,
       accountName: acc.name,
@@ -485,7 +549,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       is_min_spend_met: metMinSpend,
       missing_min_spend: missingMinSpend,
       potential_earned: cycle?.virtual_profit ?? 0,
-      transactions: [],
+      transactions,
       remainingBudget: remainingBudget,
       rate: policy.rate
     });
