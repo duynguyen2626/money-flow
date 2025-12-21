@@ -67,6 +67,7 @@ export type Account = {
   account_number?: string | null;
   owner_id: string;
   cashback_config?: Json | null;
+  cashback_config_version?: number;
   secured_by_account_id?: string | null;
   is_active?: boolean | null;
   logo_url?: string | null;

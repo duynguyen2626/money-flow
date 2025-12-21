@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           annual_fee: number | null
           cashback_config: Json | null
+          cashback_config_version: number | null
           created_at: string
           credit_limit: number | null
           currency: string | null
@@ -36,6 +37,7 @@ export type Database = {
         Insert: {
           annual_fee?: number | null
           cashback_config?: Json | null
+          cashback_config_version?: number | null
           created_at?: string
           credit_limit?: number | null
           currency?: string | null
@@ -54,6 +56,7 @@ export type Database = {
         Update: {
           annual_fee?: number | null
           cashback_config?: Json | null
+          cashback_config_version?: number | null
           created_at?: string
           credit_limit?: number | null
           currency?: string | null

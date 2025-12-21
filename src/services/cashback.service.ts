@@ -750,34 +750,44 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
 }
 
 /**
- * Recomputes all cycles and entries for an account.
- * Used when statementDay or cycleType changes.
+ * Recomputes cycles and entries for an account.
+ * Used when statementDay, cycleType, or cashback_config_version changes.
+ * Idempotent: deletes existing entries and recreates them.
+ * @param monthsBack Number of full months to look back. If undefined, recomputes ALL.
  */
-export async function recomputeAccountCashback(accountId: string) {
+export async function recomputeAccountCashback(accountId: string, monthsBack?: number) {
   const supabase = createClient();
 
-  // 1. Fetch all posted expense/debt transactions for this account
-  const { data: txns, error: txError } = await supabase
+  // 1. Fetch posted expense/debt transactions for this account
+  let query = supabase
     .from('transactions')
     .select('*')
     .eq('account_id', accountId)
     .neq('status', 'void')
     .in('type', ['expense', 'debt']);
 
+  if (typeof monthsBack === 'number') {
+    const cutOff = new Date();
+    cutOff.setMonth(cutOff.getMonth() - monthsBack);
+    cutOff.setDate(1);
+    cutOff.setHours(0, 0, 0, 0);
+    query = query.gte('occurred_at', cutOff.toISOString());
+  }
+
+  const { data: txns, error: txError } = await query;
+
   if (txError || !txns) {
     console.error('[recomputeAccountCashback] Failed to fetch transactions:', txError);
     return;
   }
 
-  console.log(`[recomputeAccountCashback] Re-processing ${txns.length} transactions for account ${accountId}`);
+  console.log(`[recomputeAccountCashback] Re-processing ${txns.length} transactions for account ${accountId} (monthsBack: ${monthsBack ?? 'ALL'})`);
 
-  // 2. Re-process each transaction to update its tag and entry
-  // We use a loop instead of Promise.all to avoid rate limits and ensure order
+  // 2. Re-process each transaction
+  // Sequential processing to ensure cycle totals are updated correctly
   for (const rawTxn of txns) {
     const txn = mapUnifiedTransaction(rawTxn, accountId);
     // Force clear the tag to trigger recalculation in upsertTransactionCashback
-    // Wait, upsertTransactionCashback checks persisted_cycle_tag.
-    // We should pass a version that doesn't have it, or force update.
     const cleanTxn = { ...txn, persisted_cycle_tag: null };
     await upsertTransactionCashback(cleanTxn);
   }

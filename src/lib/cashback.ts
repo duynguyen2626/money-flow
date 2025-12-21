@@ -6,7 +6,18 @@ type CycleRange = {
 }
 
 // MF5.3 Types
+export type CashbackProgram = {
+  defaultRate: number;                // decimal
+  maxBudget: number | null;           // cycle cap
+  cycleType: CashbackCycleType;
+  statementDay: number | null;
+  minSpendTarget: number | null;
+  dueDate: number | null;
+  levels?: CashbackLevel[];
+};
+
 export type CashbackCategoryRule = {
+  id: string;
   categoryIds: string[];
   rate: number;
   maxReward: number | null;
@@ -16,17 +27,8 @@ export type CashbackLevel = {
   id: string;
   name: string;
   minTotalSpend: number;
-  defaultRate: number;
-  categoryRules?: CashbackCategoryRule[];
-};
-
-export type CashbackProgram = {
-  rate: number;                    // decimal
-  maxAmount: number | null;        // cycle cap
-  cycleType: CashbackCycleType;
-  statementDay: number | null;
-  minSpend: number | null;
-  levels?: CashbackLevel[];
+  defaultRate: number | null;
+  rules?: CashbackCategoryRule[];
 };
 
 // Tiered cashback tier definition (Legacy support)
@@ -74,21 +76,23 @@ function parseConfigCandidate(raw: Record<string, unknown> | null, source: strin
   if (raw.program && typeof raw.program === 'object') {
     const p = raw.program as any;
     program = {
-      rate: Number(p.rate ?? 0),
-      maxAmount: p.maxAmount !== undefined && p.maxAmount !== null ? Number(p.maxAmount) : null,
+      defaultRate: Number(p.defaultRate ?? p.rate ?? 0),
+      maxBudget: Number(p.maxBudget ?? p.maxAmount ?? 0) || null,
       cycleType: (p.cycleType === 'statement_cycle' ? 'statement_cycle' : 'calendar_month') as CashbackCycleType,
-      statementDay: p.statementDay !== undefined && p.statementDay !== null ? Number(p.statementDay) : null,
-      minSpend: p.minSpend !== undefined && p.minSpend !== null ? Number(p.minSpend) : null,
+      statementDay: Number(p.statementDay) || null,
+      minSpendTarget: Number(p.minSpendTarget ?? p.minSpend) || null,
+      dueDate: Number(p.dueDate) || null,
       levels: Array.isArray(p.levels) ? p.levels.map((lvl: any) => ({
         id: String(lvl.id),
         name: String(lvl.name),
         minTotalSpend: Number(lvl.minTotalSpend ?? 0),
-        defaultRate: Number(lvl.defaultRate ?? 0),
-        categoryRules: Array.isArray(lvl.categoryRules) ? lvl.categoryRules.map((rule: any) => ({
+        defaultRate: lvl.defaultRate !== undefined && lvl.defaultRate !== null ? Number(lvl.defaultRate) : null,
+        rules: Array.isArray(lvl.rules ?? lvl.categoryRules) ? (lvl.rules ?? lvl.categoryRules).map((rule: any) => ({
+          id: String(rule.id || Math.random().toString(36).substr(2, 9)),
           categoryIds: Array.isArray(rule.categoryIds) ? rule.categoryIds.map(String) : [],
           rate: Number(rule.rate ?? 0),
           maxReward: rule.maxReward !== undefined && rule.maxReward !== null ? Number(rule.maxReward) : null,
-        })) : undefined,
+        })) : [],
       })) : undefined,
     };
   }
@@ -102,10 +106,10 @@ function parseConfigCandidate(raw: Record<string, unknown> | null, source: strin
     return undefined;
   };
 
-  const rateValue = program ? program.rate : Number(getVal(['rate']) ?? 0);
+  const rateValue = program ? program.defaultRate : Number(getVal(['rate']) ?? 0);
   const parsedRate = Number.isFinite(rateValue) ? rateValue : 0;
 
-  const rawMax = program ? program.maxAmount : getVal(['max_amt', 'maxAmount', 'max_amount']);
+  const rawMax = program ? program.maxBudget : getVal(['max_amt', 'maxAmount', 'max_amount']);
   const maxAmount = (rawMax !== undefined && rawMax !== null) ? Number(rawMax) : null;
 
   // IMPORTANT: Fix for "cycleType=statement_cycle and statementDay=15 never default to calendar-month"
@@ -130,7 +134,7 @@ function parseConfigCandidate(raw: Record<string, unknown> | null, source: strin
     }
   }
 
-  const rawMinSpend = program ? program.minSpend : getVal(['min_spend', 'minSpend']);
+  const rawMinSpend = program ? program.minSpendTarget : getVal(['min_spend', 'minSpend']);
   const minSpend = (rawMinSpend !== undefined && rawMinSpend !== null) ? Number(rawMinSpend) : null;
 
   // Parse legacy tiered cashback
@@ -163,6 +167,56 @@ function parseConfigCandidate(raw: Record<string, unknown> | null, source: strin
   };
 }
 
+export function normalizeCashbackConfig(raw: any): CashbackProgram {
+  const parsed = parseCashbackConfig(raw);
+
+  // If already in new format, just clean up and return
+  if (parsed.program) {
+    return {
+      defaultRate: Number(parsed.program.defaultRate ?? 0),
+      maxBudget: parsed.program.maxBudget !== undefined ? parsed.program.maxBudget : null,
+      cycleType: parsed.program.cycleType || 'calendar_month',
+      statementDay: parsed.program.statementDay !== undefined ? parsed.program.statementDay : null,
+      minSpendTarget: parsed.program.minSpendTarget !== undefined ? parsed.program.minSpendTarget : null,
+      dueDate: parsed.program.dueDate !== undefined ? parsed.program.dueDate : null,
+      levels: parsed.program.levels?.map(lvl => ({
+        id: lvl.id,
+        name: lvl.name,
+        minTotalSpend: Number(lvl.minTotalSpend ?? 0),
+        defaultRate: lvl.defaultRate !== undefined ? lvl.defaultRate : null,
+        rules: lvl.rules?.map(rule => ({
+          id: rule.id,
+          categoryIds: rule.categoryIds || [],
+          rate: Number(rule.rate ?? 0),
+          maxReward: rule.maxReward !== undefined ? rule.maxReward : null,
+        })) || []
+      })) || []
+    };
+  }
+
+  // Fallback to legacy conversion
+  return {
+    defaultRate: parsed.rate,
+    maxBudget: parsed.maxAmount,
+    cycleType: parsed.cycleType || 'calendar_month',
+    statementDay: parsed.statementDay,
+    minSpendTarget: parsed.minSpend,
+    dueDate: parsed.dueDate,
+    levels: parsed.hasTiers && parsed.tiers ? parsed.tiers.map((tier, idx) => ({
+      id: `lvl_${idx + 1}`,
+      name: tier.name || `Level ${idx + 1}`,
+      minTotalSpend: tier.minSpend,
+      defaultRate: tier.defaultRate !== undefined ? tier.defaultRate : null,
+      rules: Object.entries(tier.categories || {}).map(([catKey, catData], rIdx) => ({
+        id: `rule_${idx + 1}_${rIdx + 1}`,
+        categoryIds: [catKey], // Note: legacy used string keys, might need mapping
+        rate: (catData as any).rate ?? 0,
+        maxReward: (catData as any).max_reward ?? (catData as any).maxAmount ?? null,
+      }))
+    })) : []
+  };
+}
+
 export function parseCashbackConfig(raw: unknown, accountId: string = 'unknown'): ParsedCashbackConfig {
   if (!raw) {
     return {
@@ -179,10 +233,8 @@ export function parseCashbackConfig(raw: unknown, accountId: string = 'unknown')
 
   if (typeof raw === 'string') {
     try {
-      // Handle potential double-escaped strings or standard JSON strings
       const parsed = JSON.parse(raw);
       if (typeof parsed === 'string') {
-        // Recurse once if it's a double-encoded string
         return parseCashbackConfig(parsed, accountId);
       }
       return parseConfigCandidate(parsed as Record<string, unknown>, accountId);

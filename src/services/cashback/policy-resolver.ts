@@ -47,7 +47,7 @@ export function resolveCashbackPolicy(params: {
     }
 
     const { program } = config
-    let finalRate = program.rate
+    let finalRate = program.defaultRate
     let finalMaxReward: number | undefined = undefined
     let source: CashbackPolicyResult['metadata'] = {
         policySource: 'program_default',
@@ -62,7 +62,7 @@ export function resolveCashbackPolicy(params: {
         applicableLevel = sortedLevels.find(lvl => cycleTotals.spent >= lvl.minTotalSpend)
 
         if (applicableLevel) {
-            finalRate = applicableLevel.defaultRate
+            finalRate = applicableLevel.defaultRate ?? program.defaultRate
             source = {
                 policySource: 'level_default',
                 reason: `Level matched: ${applicableLevel.name}`,
@@ -73,8 +73,8 @@ export function resolveCashbackPolicy(params: {
             }
 
             // 3. Match Category Rule within Level
-            if (categoryId && applicableLevel.categoryRules) {
-                const matchedRule = applicableLevel.categoryRules.find(rule =>
+            if (categoryId && applicableLevel.rules) {
+                const matchedRule = applicableLevel.rules.find(rule =>
                     rule.categoryIds.includes(categoryId)
                 )
 
@@ -100,7 +100,7 @@ export function resolveCashbackPolicy(params: {
     return {
         rate: finalRate,
         maxReward: finalMaxReward,
-        minSpend: program.minSpend ?? undefined,
+        minSpend: program.minSpendTarget ?? undefined,
         metadata: source
     }
 }

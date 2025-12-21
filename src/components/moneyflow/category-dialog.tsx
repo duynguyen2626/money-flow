@@ -44,7 +44,7 @@ interface CategoryDialogProps {
     onOpenChange: (open: boolean) => void
     category?: Category | null
     defaultType?: "expense" | "income" | "transfer"
-    onSuccess: () => void
+    onSuccess: (newCategoryId?: string) => void
 }
 
 export function CategoryDialog({
@@ -113,11 +113,25 @@ export function CategoryDialog({
             if (category) {
                 await updateCategory(category.id, payload)
                 toast.success("Category updated")
+                onSuccess()
             } else {
-                await createCategory(payload)
-                toast.success("Category created")
+                console.log('🔵 [DEBUG] Creating category with payload:', payload)
+                try {
+                    const newCategory = await createCategory(payload)
+                    console.log('🟡 [DEBUG] createCategory returned:', newCategory)
+                    console.log('🟡 [DEBUG] Category ID:', newCategory?.id)
+
+                    if (!newCategory) {
+                        console.error('🔴 [DEBUG] createCategory returned null - check server logs!')
+                    }
+
+                    toast.success("Category created")
+                    onSuccess(newCategory?.id)
+                } catch (err) {
+                    console.error('🔴 [DEBUG] Exception calling createCategory:', err)
+                    throw err
+                }
             }
-            onSuccess()
             onOpenChange(false)
         } catch (error) {
             console.error(error)
