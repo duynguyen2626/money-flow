@@ -22,6 +22,14 @@ This project uses [`next/font`](https://nextjs.org/docs/app/building-your-applic
 
 ## Money Flow 3
 
+### Latest Updates
+
+**Phase 7.2 – Cashback Policy Resolution** (2025-12-21)
+- Added Level, Rule, and Rate columns to Cashback Transaction Table
+- Implemented level validation and auto-sorting
+- Enhanced policy resolution visibility and traceability
+- See [PHASE_7_2_WALKTHROUGH.md](./PHASE_7_2_WALKTHROUGH.md) for details
+
 ## Debugging Cashback
 If you encounter missing cycle data or incorrect caps in the Cashback Analysis view:
 1. Open `src/components/moneyflow/cashback-analysis-view.tsx`.
