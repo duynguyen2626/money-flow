@@ -1,5 +1,19 @@
 import { ParsedCashbackConfig } from '@/lib/cashback'
 
+export type CashbackPolicySource = 'program_default' | 'level_default' | 'category_rule' | 'legacy'
+
+export type CashbackPolicyMetadata = {
+  policySource: CashbackPolicySource
+  reason: string
+  rate: number
+  levelId?: string
+  levelName?: string
+  levelMinSpend?: number
+  ruleId?: string
+  categoryId?: string
+  ruleMaxReward?: number | null
+}
+
 export type CashbackTransaction = {
   id: string
   occurred_at: string
@@ -19,6 +33,7 @@ export type CashbackTransaction = {
   categoryIcon?: string | null
   categoryLogoUrl?: string | null
   personName?: string | null
+  policyMetadata?: CashbackPolicyMetadata | null
 }
 
 export type CashbackCard = {
@@ -64,17 +79,9 @@ export type AccountSpendingStats = {
   // Smart Hint fields
   potentialRate?: number
   matchReason?: string
-  policyMetadata?: {
-    policySource: 'program_default' | 'level_default' | 'category_rule' | 'legacy'
-    reason: string
-    rate: number
-    levelId?: string
-    levelName?: string
-    ruleId?: string
-    categoryId?: string
-    ruleMaxReward?: number | null
-  }
+  policyMetadata?: CashbackPolicyMetadata
   maxReward?: number | null // Category-specific max reward limit
+  is_min_spend_met?: boolean
   cycle?: {
     start: string
     end: string

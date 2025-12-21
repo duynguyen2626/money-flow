@@ -13,6 +13,7 @@ import { CashbackTransaction } from '@/types/cashback.types'
 import { cn } from '@/lib/utils'
 import { ArrowUpRight, Copy, Check, Pencil } from 'lucide-react'
 import { useState } from 'react'
+import { formatPolicyLabel, formatPercent } from '@/lib/cashback-policy'
 
 interface CashbackTransactionTableProps {
     transactions: CashbackTransaction[]
@@ -21,12 +22,6 @@ interface CashbackTransactionTableProps {
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
-})
-
-const percentFormatter = new Intl.NumberFormat('en-US', {
-    style: 'percent',
-    minimumFractionDigits: 1,
-    maximumFractionDigits: 1,
 })
 
 export function CashbackTransactionTable({ transactions, onEdit }: CashbackTransactionTableProps) {
@@ -69,6 +64,9 @@ export function CashbackTransactionTable({ transactions, onEdit }: CashbackTrans
                             const dateStr = `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}`
 
                             const isProfitPositive = txn.profit >= 0
+                            const policyLabel = formatPolicyLabel(txn.policyMetadata, currencyFormatter)
+                            const effectiveRateLabel = formatPercent(txn.effectiveRate)
+                            const sharedRateLabel = txn.sharePercent !== undefined ? formatPercent(txn.sharePercent) : ''
 
                             return (
                                 <TableRow key={txn.id} className="hover:bg-slate-50/50 text-xs">
@@ -97,9 +95,16 @@ export function CashbackTransactionTable({ transactions, onEdit }: CashbackTrans
                                     </TableCell>
 
                                     <TableCell>
-                                        <span className="text-slate-500 line-clamp-2" title={txn.note || ''}>
-                                            {txn.note || '-'}
-                                        </span>
+                                        <div className="space-y-1">
+                                            <span className="text-slate-500 line-clamp-2" title={txn.note || ''}>
+                                                {txn.note || '-'}
+                                            </span>
+                                            {policyLabel && (
+                                                <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700" title={txn.policyMetadata?.reason}>
+                                                    {policyLabel}
+                                                </span>
+                                            )}
+                                        </div>
                                     </TableCell>
 
                                     <TableCell>
@@ -133,7 +138,7 @@ export function CashbackTransactionTable({ transactions, onEdit }: CashbackTrans
                                                 +{currencyFormatter.format(txn.bankBack)}
                                             </span>
                                             <span className="text-[10px] text-slate-500">
-                                                {percentFormatter.format(txn.effectiveRate)}
+                                                {effectiveRateLabel}
                                             </span>
                                         </div>
                                     </TableCell>
@@ -156,7 +161,7 @@ export function CashbackTransactionTable({ transactions, onEdit }: CashbackTrans
                                             </div>
                                             {txn.peopleBack > 0 && (
                                                 <span className="text-[10px] text-slate-500 whitespace-nowrap">
-                                                    {txn.sharePercent ? percentFormatter.format(txn.sharePercent) : ''}
+                                                    {txn.sharePercent ? sharedRateLabel : ''}
                                                     {txn.sharePercent && txn.shareFixed ? ' + ' : ''}
                                                     {txn.shareFixed ? currencyFormatter.format(txn.shareFixed) : ''}
                                                     {!txn.sharePercent && !txn.shareFixed && 'Shared'}
@@ -176,7 +181,7 @@ export function CashbackTransactionTable({ transactions, onEdit }: CashbackTrans
                                             </span>
                                             <span className="text-[10px] text-slate-500">
                                                 {txn.peopleBack > 0
-                                                    ? `${percentFormatter.format(txn.effectiveRate)} - ${percentFormatter.format(txn.sharePercent || 0)}`
+                                                    ? `${effectiveRateLabel} - ${formatPercent(txn.sharePercent)}`
                                                     : '100% Profit'}
                                             </span>
                                         </div>

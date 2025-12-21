@@ -68,7 +68,9 @@ export function CashbackDashboard({ cards }: CashbackDashboardProps) {
         const progressValue = calculateProgress(card.totalEarned, card.maxCashback)
         const earnedLabel = currencyFormatter.format(card.totalEarned)
         const spendLabel = currencyFormatter.format(card.currentSpend)
-        const ratePercent = `${Math.round(card.rate * 100)}%`
+        const ratePercent = typeof card.rate === 'number' && Number.isFinite(card.rate)
+          ? `${Math.round(card.rate * 100)}%`
+          : '--'
         const maxCashbackLabel =
           typeof card.maxCashback === 'number'
             ? currencyFormatter.format(card.maxCashback)

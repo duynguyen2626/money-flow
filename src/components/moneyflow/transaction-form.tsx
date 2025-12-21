@@ -12,7 +12,7 @@ import { createTransaction, updateTransaction, requestRefund, confirmRefund } fr
 import { convertTransactionToInstallment } from '@/services/installment.service'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
-import { CashbackCard, AccountSpendingStats } from '@/types/cashback.types'
+import { CashbackCard, AccountSpendingStats, CashbackPolicyMetadata } from '@/types/cashback.types'
 import { Combobox } from '@/components/ui/combobox'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { generateTag } from '@/lib/tag'
@@ -24,6 +24,7 @@ import { SmartAmountInput } from '@/components/ui/smart-amount-input'
 import { CategoryDialog } from '@/components/moneyflow/category-dialog'
 import { AddShopDialog } from '@/components/moneyflow/add-shop-dialog'
 import { CreatePersonDialog } from '@/components/people/create-person-dialog'
+import { formatPercent, formatPolicyLabel, normalizePolicyMetadata } from '@/lib/cashback-policy'
 
 
 import { EditAccountDialog } from './edit-account-dialog'
@@ -250,7 +251,7 @@ export function TransactionForm({
   const [statsError, setStatsError] = useState<string | null>(null)
   const [debtEnsureError, setDebtEnsureError] = useState<string | null>(null)
   const [isEnsuringDebt, startEnsuringDebt] = useTransition()
-  const [persistedMetadata, setPersistedMetadata] = useState<any>(null)
+  const [persistedMetadata, setPersistedMetadata] = useState<CashbackPolicyMetadata | null>(null)
   const isEditMode = mode === 'edit' || (mode !== 'refund' && Boolean(transactionId))
   const isRefundMode = mode === 'refund'
   const isConfirmRefund = isRefundMode && refundAction === 'confirm'
@@ -497,7 +498,7 @@ export function TransactionForm({
         return
       }
 
-      const percentLimit = cashbackProgress ? cashbackProgress.rate * 100 : null
+      const percentLimit = typeof cashbackProgress?.rate === 'number' ? cashbackProgress.rate * 100 : null
       const rawPercent = Number(values.cashback_share_percent ?? 0)
       const rawFixed = Number(values.cashback_share_fixed ?? 0)
       const sanitizedPercent =
@@ -1144,7 +1145,7 @@ export function TransactionForm({
         const response = await fetch(`/api/cashback/policy-explanation?transactionId=${transactionId}`)
         if (response.ok) {
           const data = await response.json()
-          setPersistedMetadata(data || null)
+          setPersistedMetadata(normalizePolicyMetadata(data))
         }
       } catch (error) {
         console.error('Failed to fetch persisted cashback metadata:', error)
@@ -1153,6 +1154,13 @@ export function TransactionForm({
 
     fetchPersistedMetadata()
   }, [transactionId, isEditMode])
+
+  const livePolicyMetadata = useMemo(
+    () => normalizePolicyMetadata(spendingStats?.policyMetadata),
+    [spendingStats?.policyMetadata]
+  )
+
+  const policyMetadataToShow = persistedMetadata || livePolicyMetadata
 
 
   const potentialCashback = useMemo(() => {
@@ -2382,7 +2390,7 @@ export function TransactionForm({
       {/* Stats / Info - Always Visible if Useful */}
       <div className="pt-2 border-t border-slate-200/60 space-y-2">
         {/* Policy Explanation */}
-        {(persistedMetadata || spendingStats?.policyMetadata) && (
+        {policyMetadataToShow && (
           <div className="bg-slate-50/80 rounded-lg p-2.5 border border-slate-100 space-y-2">
             <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
               <Sparkles className="w-3 h-3 text-blue-500" />
@@ -2391,31 +2399,39 @@ export function TransactionForm({
 
             <div className="space-y-1.5">
               {(() => {
-                const meta = persistedMetadata || spendingStats?.policyMetadata;
-                if (!meta) return null;
-
+                const meta = policyMetadataToShow;
+                const policyLabel = formatPolicyLabel(meta, numberFormatter);
                 const items = [
+                  { label: 'Summary', value: policyLabel, active: Boolean(policyLabel) },
                   { label: 'Source', value: meta.policySource?.replace('_', ' '), active: true },
-                  { label: 'Level', value: meta.levelName, active: !!meta.levelName },
+                  {
+                    label: 'Level',
+                    value: meta.levelName ? `${meta.levelName}${meta.levelMinSpend ? ` (>= ${numberFormatter.format(meta.levelMinSpend)})` : ''}` : null,
+                    active: !!meta.levelName
+                  },
+                  { label: 'Match Rate', value: formatPercent(meta.rate), active: true },
+                  {
+                    label: 'Max Reward',
+                    value: typeof meta.ruleMaxReward === 'number' ? numberFormatter.format(meta.ruleMaxReward) : null,
+                    active: typeof meta.ruleMaxReward === 'number'
+                  },
                   { label: 'Reason', value: meta.reason, active: !!meta.reason },
-                  { label: 'Match Rate', value: `${((meta.rate || 0) * 100).toFixed(1)}%`, active: true },
-                  { label: 'Max Reward', value: meta.ruleMaxReward ? numberFormatter.format(meta.ruleMaxReward) : null, active: !!meta.ruleMaxReward },
                 ];
 
-                return items.filter(i => i.active).map((item, idx) => (
+                return items.filter(i => i.active && i.value).map((item, idx) => (
                   <div key={idx} className="flex justify-between items-center text-xs">
                     <span className="text-slate-500">{item.label}:</span>
-                    <span className="font-semibold text-slate-700 capitalize">{item.value}</span>
+                    <span className="font-semibold text-slate-700 capitalize text-right">{item.value}</span>
                   </div>
                 ));
               })()}
             </div>
-            {persistedMetadata && !spendingStats?.policyMetadata && (
+            {persistedMetadata && !livePolicyMetadata && (
               <p className="text-[10px] text-slate-400 italic mt-1 border-t border-slate-200 pt-1">
                 * Persisted information from database.
               </p>
             )}
-            {!persistedMetadata && spendingStats?.policyMetadata && (
+            {!persistedMetadata && livePolicyMetadata && (
               <p className="text-[10px] text-blue-500/80 italic mt-1 border-t border-slate-100 pt-1 flex items-center gap-1">
                 <Sparkles className="w-2.5 h-2.5" />
                 Live policy projection based on selection.
