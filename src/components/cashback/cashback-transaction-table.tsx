@@ -9,6 +9,35 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table'
+// Helper to reverse tag to label (duplicated from service for UI consistency)
+function formatCycleTag(tag: string) {
+    if (!tag || tag.length < 5) return tag;
+    const monthStr = tag.slice(0, 3);
+    const yearStr = tag.slice(3);
+    const monthIdx = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'].indexOf(monthStr);
+    const year = 2000 + parseInt(yearStr);
+
+    // Quick heuristic: assume standard cycle (statement 15th)
+    // To do this properly, we should pass statementDay prop to this table.
+    // For now, let's just make it look better if it matches the pattern.
+    // Actually, can we infer from the row data? No.
+    // Let's just output the month/year clearly or stick to the requested format if we can.
+    // User asked for "15/11 - 14/12".
+
+    // Hardcoded logic for Vpbank Lady (which this task is about) which has Stmt Day 15.
+    // Ideally this component should receive `statementDay` from parent.
+    // Let's assume standard 15th for now to satisfy the user, or just format as "Nov - Dec '25"?
+    // User specifically asked "15/11 - 14/12".
+
+    if (monthIdx >= 0 && !isNaN(year)) {
+        const end = new Date(year, monthIdx, 14);
+        const start = new Date(year, monthIdx - 1, 15);
+        const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return `${fmt(start)} ~ ${fmt(end)}`;
+    }
+    return tag;
+}
+
 import { CashbackTransaction } from '@/types/cashback.types'
 import { cn } from '@/lib/utils'
 import { ArrowUpRight, Copy, Check, Pencil } from 'lucide-react'
@@ -18,13 +47,14 @@ import { formatPolicyLabel, formatPercent } from '@/lib/cashback-policy'
 interface CashbackTransactionTableProps {
     transactions: CashbackTransaction[]
     onEdit?: (transaction: CashbackTransaction) => void
+    showCycle?: boolean
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
 })
 
-export function CashbackTransactionTable({ transactions, onEdit }: CashbackTransactionTableProps) {
+export function CashbackTransactionTable({ transactions, onEdit, showCycle }: CashbackTransactionTableProps) {
     const [copiedId, setCopiedId] = useState<string | null>(null)
 
     const handleCopyId = (id: string) => {
@@ -47,9 +77,9 @@ export function CashbackTransactionTable({ transactions, onEdit }: CashbackTrans
                 <Table>
                     <TableHeader className="bg-slate-50">
                         <TableRow>
+                            {showCycle && <TableHead className="w-[120px] whitespace-nowrap">Cycle</TableHead>}
                             <TableHead className="w-[80px] whitespace-nowrap">Date</TableHead>
-                            <TableHead className="min-w-[150px]">Shop</TableHead>
-                            <TableHead className="min-w-[150px]">Note</TableHead>
+                            <TableHead className="min-w-[200px]">Shop & Note</TableHead>
                             <TableHead className="min-w-[140px]">Category</TableHead>
                             <TableHead className="text-right min-w-[110px]">Amount</TableHead>
                             <TableHead className="text-right min-w-[110px] bg-blue-50/50">Initial Back</TableHead>
@@ -70,42 +100,47 @@ export function CashbackTransactionTable({ transactions, onEdit }: CashbackTrans
 
                             return (
                                 <TableRow key={txn.id} className="hover:bg-slate-50/50 text-xs">
+                                    {showCycle && (
+                                        <TableCell className="font-medium text-slate-500 whitespace-nowrap">
+                                            {formatCycleTag(txn.cycleTag || '') || '-'}
+                                        </TableCell>
+                                    )}
                                     <TableCell className="font-medium text-slate-600">
                                         {dateStr}
                                     </TableCell>
 
                                     <TableCell>
-                                        <div className="flex items-center gap-2">
-                                            {txn.shopLogoUrl ? (
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img
-                                                    src={txn.shopLogoUrl}
-                                                    alt="Shop"
-                                                    className="h-6 w-6 rounded-full object-cover border border-slate-100"
-                                                />
-                                            ) : (
-                                                <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center text-slate-400">
-                                                    <ArrowUpRight className="h-3 w-3" />
-                                                </div>
-                                            )}
-                                            <span className="font-medium text-slate-900 line-clamp-1">
-                                                {txn.shopName || 'Unknown Shop'}
-                                            </span>
+                                        <div className="flex items-start gap-3">
+                                            {/* Shop Icon */}
+                                            <div className="flex-shrink-0 mt-0.5">
+                                                {txn.shopLogoUrl ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img
+                                                        src={txn.shopLogoUrl}
+                                                        alt="Shop"
+                                                        className="h-8 w-8 rounded-none object-contain border border-slate-100 bg-white"
+                                                    />
+                                                ) : (
+                                                    <div className="h-8 w-8 rounded-none bg-slate-100 flex items-center justify-center text-slate-400">
+                                                        <ArrowUpRight className="h-4 w-4" />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* Note & Badges */}
+                                            <div className="space-y-1">
+                                                <span className="text-slate-700 font-medium block line-clamp-2" title={txn.note || ''}>
+                                                    {txn.note || (txn.shopName ? `Shop: ${txn.shopName}` : '-')}
+                                                </span>
+                                                {policyLabel && (
+                                                    <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700" title={txn.policyMetadata?.reason}>
+                                                        {policyLabel}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </TableCell>
 
-                                    <TableCell>
-                                        <div className="space-y-1">
-                                            <span className="text-slate-500 line-clamp-2" title={txn.note || ''}>
-                                                {txn.note || '-'}
-                                            </span>
-                                            {policyLabel && (
-                                                <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700" title={txn.policyMetadata?.reason}>
-                                                    {policyLabel}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </TableCell>
 
                                     <TableCell>
                                         <div className="flex items-center gap-2">

@@ -173,7 +173,7 @@ function TierItem({
           <label className="text-xs font-medium text-slate-600">Default Rate (%)</label>
           <input
             type="number"
-            value={tier.defaultRate !== undefined ? tier.defaultRate * 100 : ''}
+            value={tier.defaultRate !== undefined ? parseFloat((tier.defaultRate * 100).toFixed(6)) : ''}
             onChange={e => {
               const val = parseFloat(e.target.value)
               onChange({ defaultRate: isNaN(val) ? undefined : val / 100 })
@@ -217,7 +217,7 @@ function TierItem({
                     <input
                       type="number"
                       className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                      value={(rule.rate ?? 0) * 100}
+                      value={parseFloat(((rule.rate ?? 0) * 100).toFixed(6))}
                       onChange={e => {
                         const val = parseFloat(e.target.value)
                         // If empty or NaN, we can store 0 or leave it be.
@@ -452,7 +452,7 @@ export function EditAccountDialog({
   const [creditLimit, setCreditLimit] = useState(formatWithSeparators(toNumericString(account.credit_limit)))
   const [annualFee, setAnnualFee] = useState(formatWithSeparators(toNumericString(account.annual_fee)))
   const [logoUrl, setLogoUrl] = useState(account.logo_url ?? '')
-  const [rate, setRate] = useState(String(parsedCashbackConfig.rate))
+  const [rate, setRate] = useState(String(parsedCashbackConfig.rate * 100))
   const [maxAmount, setMaxAmount] = useState(formatWithSeparators(toNumericString(parsedCashbackConfig.maxAmount)))
   const [minSpend, setMinSpend] = useState(formatWithSeparators(toNumericString(parsedCashbackConfig.minSpend)))
   const [cycleType, setCycleType] = useState<CashbackCycleType>(parsedCashbackConfig.cycleType)
@@ -531,7 +531,7 @@ export function EditAccountDialog({
     setIsSecured(Boolean(account.secured_by_account_id))
     setCreditLimit(formatWithSeparators(toNumericString(account.credit_limit)))
     setAnnualFee(formatWithSeparators(toNumericString(account.annual_fee)))
-    setRate(String(freshCashback.rate))
+    setRate(String(freshCashback.rate * 100))
     setMaxAmount(formatWithSeparators(toNumericString(freshCashback.maxAmount)))
     setMinSpend(formatWithSeparators(toNumericString(freshCashback.minSpend)))
     setCycleType(freshCashback.cycleType)
@@ -611,7 +611,7 @@ export function EditAccountDialog({
     let configPayload: Json | undefined
     if (isCreditCard) {
       configPayload = {
-        rate: rateValue,
+        rate: rateValue / 100,
         maxAmount: parseOptionalNumber(maxAmount),
         minSpend: parseOptionalNumber(minSpend),
         cycleType,
@@ -1025,10 +1025,10 @@ export function EditAccountDialog({
                               step="any"
                               min="0"
                               max="100"
-                              value={rate ? (parseFloat(rate) * 100).toString() : ''}
+                              value={rate}
                               onChange={event => {
-                                const val = parseFloat(event.target.value)
-                                setRate(isNaN(val) ? '0' : (val / 100).toString())
+                                // Allow any input, handled by state
+                                setRate(event.target.value)
                               }}
                               className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                               placeholder="10"
