@@ -31,12 +31,10 @@ export function NumberInputWithSuggestions({
         if (!isFocused || numericValue === 0) return []
 
         const results: number[] = []
-        const baseDigit = parseInt(value.replace(/[^0-9]/g, '')[0] || '1', 10)
-
-        // Generate suggestions based on first digit
+        // Generate suggestions based on full value
         for (let i = 0; i < maxSuggestions; i++) {
             const multiplier = Math.pow(10, i)
-            const suggestion = baseDigit * step * multiplier
+            const suggestion = numericValue * step * multiplier
             if (suggestion !== numericValue) {
                 results.push(suggestion)
             }

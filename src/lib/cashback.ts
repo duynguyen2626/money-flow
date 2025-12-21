@@ -329,3 +329,26 @@ export function getMinSpendStatus(currentSpend: number, minSpendTarget: number |
     isTargetMet
   }
 }
+
+export function getCashbackCycleTag(
+  referenceDate: Date,
+  config: { statementDay: number | null; cycleType: CashbackCycleType }
+): string | null {
+  const minimalConfig: ParsedCashbackConfig = {
+    rate: 0,
+    maxAmount: null,
+    cycleType: config.cycleType,
+    statementDay: config.statementDay,
+    dueDate: null,
+    minSpend: null,
+  };
+
+  const range = getCashbackCycleRange(minimalConfig, referenceDate);
+  if (!range) return null;
+
+  const end = range.end;
+  const month = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][end.getMonth()];
+  const year = String(end.getFullYear()).slice(2);
+
+  return `${month}${year}`;
+}

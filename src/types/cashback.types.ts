@@ -34,6 +34,7 @@ export type CashbackTransaction = {
   categoryLogoUrl?: string | null
   personName?: string | null
   policyMetadata?: CashbackPolicyMetadata | null
+  cycleTag?: string | null
 }
 
 export type CashbackCard = {

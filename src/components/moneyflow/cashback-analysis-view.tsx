@@ -14,12 +14,14 @@ import {
     Check,
     AlertTriangle
 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { TransactionForm, TransactionFormValues } from '@/components/moneyflow/transaction-form'
 import { CashbackTransactionTable } from '@/components/cashback/cashback-transaction-table'
 import { getCashbackProgress, getCashbackCycleOptions, getAllCashbackHistory } from '@/services/cashback.service'
+import { getCashbackCycleRange } from '@/lib/cashback'
 import { getUnifiedTransactions } from '@/services/transaction.service'
 import { CashbackCard, CashbackTransaction } from '@/types/cashback.types'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
@@ -44,14 +46,7 @@ export function CashbackAnalysisView({
     const [loading, setLoading] = useState(true)
     const [selectedCycleTag, setSelectedCycleTag] = useState<string | null>(null)
     const [cycleOptions, setCycleOptions] = useState<Array<{ tag: string, label: string, statementDay: number | null, cycleType: string | null }>>([])
-
-    // Edit State
-    const [editingTxn, setEditingTxn] = useState<CashbackTransaction | null>(null)
-    const [editInitialValues, setEditInitialValues] = useState<Partial<TransactionFormValues> | null>(null)
-
-    const currencyFormatter = new Intl.NumberFormat('en-US', {
-        maximumFractionDigits: 0,
-    })
+    const [selectedYear, setSelectedYear] = useState<string>(String(new Date().getFullYear()))
 
     // Helper to calculate reference date from tag
     const cycleTagToReferenceDate = (tag: string | null, statementDay: number | null, cycleType: string | null) => {
@@ -67,8 +62,69 @@ export function CashbackAnalysisView({
             // This logic must align with how getCashbackProgress interprets the reference date.
             return new Date(year, month, 1)
         }
-        return new Date(year, month, statementDay || 1)
+        return new Date(year, month, statementDay ?? 1)
     }
+
+    // Derived: Unique Years
+    const uniqueYears = React.useMemo(() => {
+        const years = new Set(cycleOptions
+            .filter(opt => opt.tag !== 'ALL')
+            .flatMap(opt => {
+                // Parse range from tag to get both years if they span
+                const refDate = cycleTagToReferenceDate(opt.tag, opt.statementDay, opt.cycleType);
+                if (!refDate) return [];
+                const range = getCashbackCycleRange({ statementDay: opt.statementDay, cycleType: opt.cycleType } as any, refDate);
+                if (!range) {
+                    // Fallback to tag year
+                    if (opt.tag.length >= 5) return ['20' + opt.tag.slice(3)];
+                    return [];
+                }
+                const startYear = String(range.start.getFullYear());
+                const endYear = String(range.end.getFullYear());
+                return startYear === endYear ? [endYear] : [startYear, endYear];
+            })
+        )
+        // Ensure current year is always in the list if not present
+        const currentYear = String(new Date().getFullYear());
+        years.add(currentYear);
+
+        return ['ALL', ...Array.from(years).sort().reverse()]
+    }, [cycleOptions])
+
+    // Derived: Filtered Options
+    const filteredOptions = React.useMemo(() => {
+        if (selectedYear === 'ALL') return cycleOptions;
+
+        // Always include ALL option if present
+        const allOption = cycleOptions.find(o => o.tag === 'ALL');
+        const others = cycleOptions.filter(opt => {
+            if (opt.tag === 'ALL') return false;
+
+            // Check if cycle overlaps with Selected Year
+            const refDate = cycleTagToReferenceDate(opt.tag, opt.statementDay, opt.cycleType);
+            if (!refDate) return opt.tag.endsWith(selectedYear.slice(2)); // Fallback
+
+            const range = getCashbackCycleRange({ statementDay: opt.statementDay, cycleType: opt.cycleType } as any, refDate);
+            if (!range) return opt.tag.endsWith(selectedYear.slice(2));
+
+            const startYear = String(range.start.getFullYear());
+            const endYear = String(range.end.getFullYear());
+
+            return startYear === selectedYear || endYear === selectedYear;
+        });
+
+        return allOption ? [allOption, ...others] : others;
+    }, [cycleOptions, selectedYear])
+
+    // Edit State
+    const [editingTxn, setEditingTxn] = useState<CashbackTransaction | null>(null)
+    const [editInitialValues, setEditInitialValues] = useState<Partial<TransactionFormValues> | null>(null)
+
+    const currencyFormatter = new Intl.NumberFormat('en-US', {
+        maximumFractionDigits: 0,
+    })
+
+
 
     // Initial Load
     useEffect(() => {
@@ -77,7 +133,8 @@ export function CashbackAnalysisView({
         async function loadData() {
             try {
                 const options = await getCashbackCycleOptions(accountId)
-                const cleanedOptions = options.filter(opt => opt.tag)
+                // Clean empty tags and ensure type safety
+                const cleanedOptions = (options as any[]).filter(opt => opt.tag) as Array<{ tag: string, label: string, statementDay: number | null, cycleType: string | null }>
 
                 // Add ALL Option
                 const allOption = { tag: 'ALL', label: 'All History', statementDay: null, cycleType: null }
@@ -85,11 +142,13 @@ export function CashbackAnalysisView({
 
                 // Default to latest cycle or from existing card data if any
                 // If query param has 'all', select ALL? For now default to latest specific cycle if exists, else ALL.
+                // Logic: If there's a specific cycle available (e.g. Current), default to it.
+                // Usually cleanedOptions[0] is the latest/current.
                 const initialTag = cleanedOptions.length > 0 ? cleanedOptions[0].tag : 'ALL'
                 setSelectedCycleTag(prev => prev ?? initialTag)
 
                 const referenceDate = initialTag && initialTag !== 'ALL'
-                    ? cycleTagToReferenceDate(initialTag, cleanedOptions[0]?.statementDay ?? null, cleanedOptions[0]?.cycleType ?? null)
+                    ? cycleTagToReferenceDate(initialTag, cleanedOptions[0]?.statementDay, cleanedOptions[0]?.cycleType)
                     : undefined
 
                 console.log(`[CashbackAnalysis] Initial Load for ${accountId}. Tag: ${initialTag}`)
@@ -255,17 +314,37 @@ export function CashbackAnalysisView({
             {/* Controls */}
             <div className="flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-slate-800">Cashback Analysis</h2>
-                <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-500 uppercase">Cycle</span>
-                    <select
-                        value={selectedCycleTag ?? ''}
-                        onChange={(e) => setSelectedCycleTag(e.target.value)}
-                        className="text-sm border border-slate-300 rounded-md shadow-sm px-2 py-1 focus:ring-2 focus:ring-indigo-100"
-                    >
-                        {cycleOptions.map(opt => (
-                            <option key={opt.tag} value={opt.tag}>{opt.label}</option>
-                        ))}
-                    </select>
+                {/* <div className="p-2 text-xs bg-red-100 border border-red-500 text-red-800 mb-2">
+                    <b>Debug:</b> Tag={selectedCycleTag},
+                    Opts={JSON.stringify(cycleOptions.map(o => o.tag))},
+                    Net={cardData.netProfit},
+                    Cap={cardData.remainingBudget},
+                    Filter={filteredOptions.length}
+                </div> */}
+                <div className="flex items-center gap-3">
+                    {/* Year Filter */}
+                    <DropdownFilter
+                        label="Year"
+                        value={selectedYear}
+                        options={uniqueYears.map(y => ({ value: y, label: y }))}
+                        onChange={setSelectedYear}
+                        className="w-[100px]"
+                    />
+
+                    {/* Cycle Filter */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold text-slate-500 uppercase">Cycle</span>
+                        <select
+                            value={selectedCycleTag ?? ''}
+                            onChange={(e) => setSelectedCycleTag(e.target.value)}
+                            className="text-sm border border-slate-300 rounded-md shadow-sm px-2 py-1 focus:ring-2 focus:ring-indigo-100 max-w-[200px]"
+                        >
+                            {filteredOptions.length === 0 && <option value="" disabled>No cycles</option>}
+                            {filteredOptions.map(opt => (
+                                <option key={opt.tag} value={opt.tag}>{opt.label}</option>
+                            ))}
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -325,6 +404,7 @@ export function CashbackAnalysisView({
                 <CashbackTransactionTable
                     transactions={cardData.transactions}
                     onEdit={handleEdit}
+                    showCycle={selectedCycleTag === 'ALL'}
                 />
             </div>
 
@@ -368,6 +448,32 @@ export function CashbackAnalysisView({
                 </div>,
                 document.body
             )}
+        </div>
+    )
+}
+
+function DropdownFilter({ label, value, options, onChange, className }: {
+    label: string,
+    value: string,
+    options: { value: string, label: string }[],
+    onChange: (val: string) => void,
+    className?: string
+}) {
+    return (
+        <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-500 uppercase">{label}</span>
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                className={cn(
+                    "text-sm border border-slate-300 rounded-md shadow-sm px-2 py-1 focus:ring-2 focus:ring-indigo-100",
+                    className
+                )}
+            >
+                {options.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+            </select>
         </div>
     )
 }
