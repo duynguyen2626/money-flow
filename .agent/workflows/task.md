@@ -1,3 +1,7 @@
+---
+description: MF5.4.1 — Cashback Page QA + Polish + Consistency
+---
+
 # MF5.4.1 — Cashback Page QA + Polish + Consistency
 
 You are the coding agent working on **Money Flow 3**.

@@ -1,4 +1,4 @@
-import { CashbackPolicyMetadata } from '@/types/cashback.types'
+import { CashbackPolicyMetadata, CashbackPolicySource } from '@/types/cashback.types'
 
 export function formatPercent(rate: number | null | undefined, fallback = '--') {
   if (typeof rate !== 'number' || Number.isNaN(rate)) return fallback
@@ -25,11 +25,15 @@ export function normalizePolicyMetadata(metadata: unknown): CashbackPolicyMetada
   const source = meta['policySource'] ?? meta['policy_source']
   if (typeof source !== 'string') return null
 
+  // Validate literal type
+  const validSources: CashbackPolicySource[] = ['program_default', 'level_default', 'category_rule', 'legacy']
+  if (!validSources.includes(source as any)) return null
+
   const ruleMaxRewardRaw = meta['ruleMaxReward'] ?? meta['rule_max_reward']
   const levelMinSpendRaw = meta['levelMinSpend'] ?? meta['level_min_spend']
 
   const normalized: CashbackPolicyMetadata = {
-    policySource: source,
+    policySource: source as CashbackPolicySource,
     reason: typeof meta['reason'] === 'string' ? meta['reason'] as string : '',
     rate: typeof meta['rate'] === 'number' && !Number.isNaN(meta['rate'] as number) ? meta['rate'] as number : 0,
     levelId: typeof meta['levelId'] === 'string' ? meta['levelId'] as string : undefined,

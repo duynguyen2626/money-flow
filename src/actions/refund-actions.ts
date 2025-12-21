@@ -18,7 +18,7 @@ export async function confirmRefundMoneyReceived(
         // 1. Get the original transaction to find the refund amount
         const { data: originalTx, error: txError } = await supabase
             .from('transactions')
-            .select('*, transaction_lines(*)')
+            .select('*')
             .eq('id', transactionId)
             .single()
 
@@ -26,18 +26,15 @@ export async function confirmRefundMoneyReceived(
             throw new Error('Transaction not found')
         }
 
-        // Find the refund line (debit to pending refunds account)
-        const refundLine = (originalTx.transaction_lines as any[])?.find(
-            (line: any) =>
-                line.account_id === SYSTEM_ACCOUNTS.PENDING_REFUNDS &&
-                line.type === 'debit'
-        )
-
-        if (!refundLine) {
-            throw new Error('No refund line found in this transaction')
+        // Verify this is a refund to Pending Refunds
+        // In flat schema: Transaction with target_account_id = PENDING_REFUNDS
+        if (originalTx.target_account_id !== SYSTEM_ACCOUNTS.PENDING_REFUNDS) {
+            // Fallback/Legacy check: if it was a legacy txn, we might be stuck.
+            // But for now strict enforcement preferred.
+            throw new Error('Transaction is not a valid pending refund (Target != Pending Refunds)')
         }
 
-        const refundAmount = Math.abs(refundLine.amount)
+        const refundAmount = Math.abs(originalTx.amount)
 
         // 2. Get current user
         const {
@@ -45,7 +42,8 @@ export async function confirmRefundMoneyReceived(
         } = await supabase.auth.getUser()
         const userId = user?.id ?? SYSTEM_ACCOUNTS.DEFAULT_USER_ID
 
-        // 3. Create new transaction for confirmation
+        // 3. Create new transaction for confirmation (Pending Refunds -> Target Account)
+        // This is a Transfer.
         const { data: newTx, error: newTxError } = await supabase
             .from('transactions')
             .insert({
@@ -54,33 +52,15 @@ export async function confirmRefundMoneyReceived(
                 status: 'posted',
                 tag: 'REFUND_CONFIRMED',
                 created_by: userId,
+                type: 'transfer',
+                account_id: SYSTEM_ACCOUNTS.PENDING_REFUNDS,
+                target_account_id: targetAccountId,
+                amount: -refundAmount, // Standard transfer logic: negative from source
             })
             .select()
             .single()
 
         if (newTxError) throw newTxError
-
-        // 4. Create transaction lines (Pending Refunds -> Target Account)
-        const lines = [
-            {
-                transaction_id: newTx.id,
-                account_id: SYSTEM_ACCOUNTS.PENDING_REFUNDS,
-                amount: -refundAmount,
-                type: 'credit',
-            },
-            {
-                transaction_id: newTx.id,
-                account_id: targetAccountId,
-                amount: refundAmount,
-                type: 'debit',
-            },
-        ]
-
-        const { error: linesError } = await supabase
-            .from('transaction_lines')
-            .insert(lines)
-
-        if (linesError) throw linesError
 
         // 5. Recalculate balances
         const { recalculateBalance } = await import('@/services/account.service')

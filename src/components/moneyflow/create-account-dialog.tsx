@@ -3,7 +3,7 @@
 import { FormEvent, MouseEvent, ReactNode, useMemo, useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
-import { parseCashbackConfig, CashbackCycleType, CashbackTier } from '@/lib/cashback'
+import { parseCashbackConfig, CashbackCycleType, LegacyCashbackTier } from '@/lib/cashback'
 import { Account } from '@/types/moneyflow.types'
 import type { Json } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
@@ -44,10 +44,10 @@ function TierItem({
   onChange,
   categoryOptions
 }: {
-  tier: CashbackTier
+  tier: LegacyCashbackTier
   index: number
   onRemove: () => void
-  onChange: (updates: Partial<CashbackTier>) => void
+  onChange: (updates: Partial<LegacyCashbackTier>) => void
   categoryOptions: CategoryOption[]
 }) {
   const rules = useMemo(() => {
@@ -302,8 +302,8 @@ function TierList({
   onChange,
   categoryOptions
 }: {
-  tiers: CashbackTier[]
-  onChange: (tiers: CashbackTier[]) => void
+  tiers: LegacyCashbackTier[]
+  onChange: (tiers: LegacyCashbackTier[]) => void
   categoryOptions: CategoryOption[]
 }) {
   const addTier = () => {
@@ -319,7 +319,7 @@ function TierList({
     onChange(next)
   }
 
-  const updateTier = (index: number, updates: Partial<CashbackTier>) => {
+  const updateTier = (index: number, updates: Partial<LegacyCashbackTier>) => {
     const next = [...tiers]
     next[index] = { ...next[index], ...updates }
     onChange(next)
@@ -390,7 +390,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
   const [cycleType, setCycleType] = useState<CashbackCycleType>('calendar_month')
   const [statementDay, setStatementDay] = useState('')
   const [dueDate, setDueDate] = useState('')
-  const [tiers, setTiers] = useState<CashbackTier[]>([])
+  const [tiers, setTiers] = useState<LegacyCashbackTier[]>([])
 
   // Savings fields
   const [interestRate, setInterestRate] = useState('')

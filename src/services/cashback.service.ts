@@ -5,6 +5,7 @@ import { TransactionWithDetails } from '@/types/moneyflow.types';
 import { CashbackCard, AccountSpendingStats, CashbackTransaction } from '@/types/cashback.types';
 import { calculateBankCashback, parseCashbackConfig, getCashbackCycleRange } from '@/lib/cashback';
 import { normalizePolicyMetadata } from '@/lib/cashback-policy';
+import { mapUnifiedTransaction } from '@/lib/transaction-mapper';
 
 /**
  * Ensures a cashback cycle exists for the given account and tag.
@@ -101,9 +102,18 @@ export async function upsertTransactionCashback(
   // Let's import the resolver
   const { resolveCashbackPolicy } = await import('./cashback/policy-resolver');
 
-  let cycleTag = transaction.persisted_cycle_tag || transaction.tag;
-  if (!cycleTag) {
-    const date = new Date(transaction.occurred_at);
+  const config = parseCashbackConfig(account.cashback_config, account.id);
+  const date = new Date(transaction.occurred_at);
+  const cycleRange = getCashbackCycleRange(config, date);
+
+  let cycleTag = transaction.persisted_cycle_tag;
+  if (!cycleTag && cycleRange) {
+    // Determine tag based on cycle END month (for statement cycles, this is the month the statement comes out)
+    const tagDate = cycleRange.end;
+    const month = tagDate.toLocaleString('en-US', { month: 'short' }).toUpperCase();
+    const year = tagDate.getFullYear().toString().slice(-2);
+    cycleTag = `${month}${year}`;
+  } else if (!cycleTag) {
     const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
     const year = date.getFullYear().toString().slice(-2);
     cycleTag = `${month}${year}`;
@@ -471,6 +481,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
 
     let transactions: CashbackTransaction[] = [];
     if (includeTransactions && cycle) {
+      // Use direct relations instead of transaction_lines to fix missing relation error
       const { data: entries } = await supabase
         .from('cashback_entries')
         .select(`
@@ -478,11 +489,9 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
           transaction:transactions!inner (
             id, occurred_at, note, amount, account_id,
             cashback_share_percent, cashback_share_fixed,
-            transaction_lines (
-              category:categories(name, icon, logo_url),
-              shop:shops(name, logo_url),
-              person:people(name)
-            )
+            category:categories(name, icon, logo_url),
+            shop:shops(name, logo_url),
+            person:profiles!transactions_person_id_fkey(name)
           )
         `)
         .eq('cycle_id', cycle.id)
@@ -493,14 +502,9 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
           const t = e.transaction;
           if (!t) return null;
 
-          const lines = t.transaction_lines || [];
-          const categoryLine = lines.find((l: any) => l.category) || lines[0];
-          const shopLine = lines.find((l: any) => l.shop) || lines[0];
-          const personLine = lines.find((l: any) => l.person);
-
-          const category = categoryLine?.category;
-          const shop = shopLine?.shop;
-          const person = personLine?.person;
+          const category = t.category;
+          const shop = t.shop;
+          const person = t.person;
 
           const bankBack = e.amount;
           const peopleBack = e.mode === 'real' ? e.amount : 0;
@@ -584,7 +588,157 @@ export async function getTransactionCashbackPolicyExplanation(transactionId: str
   return normalizePolicyMetadata(data?.metadata) ?? null;
 }
 
-export async function getCashbackCycleOptions(accountId: string, limit: number = 6) {
+/**
+ * Fetches all cashback history for an account (debugging/analysis usage).
+ */
+export async function getAllCashbackHistory(accountId: string): Promise<CashbackCard | null> {
+  const supabase = createClient();
+
+  // 1. Get Account
+  const { data: account } = await supabase.from('accounts').select('id, name, logo_url, cashback_config').eq('id', accountId).single();
+  if (!account) return null;
+
+  const config = parseCashbackConfig(account.cashback_config, accountId);
+
+  // 2. Aggregate ALL stats from cycles
+  const { data: cycles } = await supabase
+    .from('cashback_cycles')
+    .select('*')
+    .eq('account_id', accountId);
+
+  const totalEarned = (cycles ?? []).reduce((sum, c) => sum + (c.real_awarded ?? 0) + (c.virtual_profit ?? 0), 0);
+  const totalShared = (cycles ?? []).reduce((sum, c) => sum + (c.real_awarded ?? 0), 0);
+  const totalNet = (cycles ?? []).reduce((sum, c) => sum + (c.virtual_profit ?? 0) - (c.overflow_loss ?? 0), 0);
+  const sumMaxBudget = (cycles ?? []).reduce((sum, c) => sum + (c.max_budget ?? 0), 0);
+
+  // 3. Fetch ALL entries
+  let transactions: CashbackTransaction[] = [];
+  // Use direct relations instead of transaction_lines to fix missing relation error
+  const { data: entries } = await supabase
+    .from('cashback_entries')
+    .select(`
+          mode, amount, metadata, transaction_id, cycle_id,
+          transaction:transactions!inner (
+            id, occurred_at, note, amount, account_id,
+            cashback_share_percent, cashback_share_fixed,
+            category:categories(name, icon, logo_url),
+            shop:shops(name, logo_url),
+            person:profiles!transactions_person_id_fkey(name)
+          )
+        `)
+    .eq('transaction.account_id', accountId)
+    .eq('account_id', accountId);
+
+  if (entries && entries.length > 0) {
+    console.log(`[getAllCashbackHistory] Found ${entries.length} entries for account ${accountId}`);
+    transactions = entries.map((e: any) => {
+      const t = e.transaction;
+      if (!t) return null;
+
+      const category = t.category;
+      const shop = t.shop;
+      const person = t.person;
+
+      const bankBack = e.amount;
+      const peopleBack = e.mode === 'real' ? e.amount : 0;
+      const profit = e.mode === 'virtual' ? e.amount : 0;
+      const policyMetadata = normalizePolicyMetadata(e.metadata);
+      const effectiveRate = policyMetadata?.rate ?? 0;
+
+      return {
+        id: t.id,
+        occurred_at: t.occurred_at,
+        note: t.note,
+        amount: t.amount,
+        earned: bankBack,
+        bankBack,
+        peopleBack,
+        profit,
+        effectiveRate,
+        sharePercent: t.cashback_share_percent,
+        shareFixed: t.cashback_share_fixed,
+        shopName: shop?.name,
+        shopLogoUrl: shop?.logo_url,
+        categoryName: category?.name,
+        categoryIcon: category?.icon,
+        categoryLogoUrl: category?.logo_url,
+        personName: person?.name,
+        policyMetadata,
+      } as CashbackTransaction;
+    }).filter((t: any): t is CashbackTransaction => t !== null)
+      .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
+  } else {
+    console.log(`[getAllCashbackHistory] No entries found for account ${accountId}`);
+  }
+
+  // Construct a "Virtual" Card
+  return {
+    accountId: account.id,
+    accountName: account.name,
+    accountLogoUrl: account.logo_url,
+    cycleLabel: 'ALL TIME',
+    cycleStart: null,
+    cycleEnd: null,
+    cycleType: null,
+    progress: ((totalEarned / (sumMaxBudget || 1)) * 100),
+    currentSpend: 0,
+    minSpend: 0,
+    maxCashback: sumMaxBudget > 0 ? sumMaxBudget : null,
+    totalEarned,
+    sharedAmount: totalShared,
+    netProfit: totalNet,
+    spendTarget: 0,
+    minSpendMet: true,
+    minSpendRemaining: 0,
+    cycleOffset: 0,
+    min_spend_required: 0,
+    total_spend_eligible: 0,
+    is_min_spend_met: true,
+    missing_min_spend: 0,
+    potential_earned: totalNet,
+    transactions,
+    remainingBudget: sumMaxBudget > 0 ? Math.max(0, sumMaxBudget - totalEarned) : null,
+    rate: 0
+  };
+}
+
+/**
+ * Recomputes all cycles and entries for an account.
+ * Used when statementDay or cycleType changes.
+ */
+export async function recomputeAccountCashback(accountId: string) {
+  const supabase = createClient();
+
+  // 1. Fetch all posted expense/debt transactions for this account
+  const { data: txns, error: txError } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('account_id', accountId)
+    .neq('status', 'void')
+    .in('type', ['expense', 'debt']);
+
+  if (txError || !txns) {
+    console.error('[recomputeAccountCashback] Failed to fetch transactions:', txError);
+    return;
+  }
+
+  console.log(`[recomputeAccountCashback] Re-processing ${txns.length} transactions for account ${accountId}`);
+
+  // 2. Re-process each transaction to update its tag and entry
+  // We use a loop instead of Promise.all to avoid rate limits and ensure order
+  for (const rawTxn of txns) {
+    const txn = mapUnifiedTransaction(rawTxn, accountId);
+    // Force clear the tag to trigger recalculation in upsertTransactionCashback
+    // Wait, upsertTransactionCashback checks persisted_cycle_tag.
+    // We should pass a version that doesn't have it, or force update.
+    const cleanTxn = { ...txn, persisted_cycle_tag: null };
+    await upsertTransactionCashback(cleanTxn);
+  }
+
+  console.log(`[recomputeAccountCashback] Completed re-processing for account ${accountId}`);
+}
+
+export async function getCashbackCycleOptions(accountId: string, limit: number = 12) {
   const supabase = createClient();
   const { data: account } = await supabase
     .from('accounts')
@@ -609,7 +763,7 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
       if (!tag || tag.length < 5) return undefined;
       const monthStr = tag.slice(0, 3);
       const yearStr = tag.slice(3);
-      const month = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'].indexOf(monthStr);
+      const month = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'].indexOf(monthStr);
       const year = 2000 + Number.parseInt(yearStr, 10);
       if (month < 0 || Number.isNaN(year)) return undefined;
       // For statement cycles, tag month represents the cycle ending in that month (statement day in that month),
@@ -622,7 +776,7 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
 
     const range = refDate ? getCashbackCycleRange(config, refDate) : null;
     const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const label = range ? `${tag} (${fmt(range.start)} - ${fmt(range.end)})` : tag;
+    const label = range ? `${fmt(range.start)} - ${fmt(range.end)}` : tag;
 
     return { tag, label, statementDay: config.statementDay ?? null, cycleType: config.cycleType ?? null };
   });

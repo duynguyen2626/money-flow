@@ -30,7 +30,7 @@ export type CashbackProgram = {
 };
 
 // Tiered cashback tier definition (Legacy support)
-export type CashbackTier = {
+export type LegacyCashbackTier = {
   name?: string // Optional name for the tier (e.g., "Premium", "Gold")
   minSpend: number // Minimum spend to qualify for this tier
   categories: Record<string, {
@@ -51,7 +51,7 @@ export type ParsedCashbackConfig = {
   minSpend: number | null
   // Tiered cashback support (Legacy)
   hasTiers?: boolean
-  tiers?: CashbackTier[]
+  tiers?: LegacyCashbackTier[]
   // MF5.3 Support
   program?: CashbackProgram
 }
@@ -135,7 +135,7 @@ function parseConfigCandidate(raw: Record<string, unknown> | null, source: strin
 
   // Parse legacy tiered cashback
   const hasTiers = Boolean(getVal(['has_tiers', 'hasTiers']));
-  let tiers: CashbackTier[] | undefined = undefined;
+  let tiers: LegacyCashbackTier[] | undefined = undefined;
 
   if (hasTiers && Array.isArray(raw.tiers)) {
     tiers = (raw.tiers as any[]).map((tier: any) => ({
