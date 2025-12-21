@@ -81,6 +81,9 @@ export function CashbackTransactionTable({ transactions, onEdit, showCycle }: Ca
                             <TableHead className="w-[80px] whitespace-nowrap">Date</TableHead>
                             <TableHead className="min-w-[200px]">Shop & Note</TableHead>
                             <TableHead className="min-w-[140px]">Category</TableHead>
+                            <TableHead className="min-w-[100px]">Level</TableHead>
+                            <TableHead className="min-w-[100px]">Rule</TableHead>
+                            <TableHead className="text-right min-w-[80px]">Rate</TableHead>
                             <TableHead className="text-right min-w-[110px]">Amount</TableHead>
                             <TableHead className="text-right min-w-[110px] bg-blue-50/50">Initial Back</TableHead>
                             <TableHead className="text-right min-w-[110px] bg-orange-50/50">People Back</TableHead>
@@ -158,6 +161,48 @@ export function CashbackTransactionTable({ transactions, onEdit, showCycle }: Ca
                                                 {txn.categoryName || 'Uncategorized'}
                                             </span>
                                         </div>
+                                    </TableCell>
+
+                                    {/* Level Column */}
+                                    <TableCell>
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-slate-700 font-medium text-xs">
+                                                {txn.policyMetadata?.levelName || '-'}
+                                            </span>
+                                            {txn.policyMetadata?.levelMinSpend && (
+                                                <span className="text-[10px] text-slate-400">
+                                                    ≥ {currencyFormatter.format(txn.policyMetadata.levelMinSpend)}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </TableCell>
+
+                                    {/* Rule Column */}
+                                    <TableCell>
+                                        <span
+                                            className={cn(
+                                                "inline-flex items-center rounded px-2 py-1 text-[10px] font-medium",
+                                                txn.policyMetadata?.policySource === 'category_rule' && "bg-purple-100 text-purple-700",
+                                                txn.policyMetadata?.policySource === 'level_default' && "bg-blue-100 text-blue-700",
+                                                txn.policyMetadata?.policySource === 'program_default' && "bg-slate-100 text-slate-700",
+                                                txn.policyMetadata?.policySource === 'legacy' && "bg-amber-100 text-amber-700",
+                                                !txn.policyMetadata?.policySource && "bg-slate-50 text-slate-400"
+                                            )}
+                                            title={txn.policyMetadata?.reason || 'No policy metadata'}
+                                        >
+                                            {txn.policyMetadata?.policySource === 'category_rule' && 'Category'}
+                                            {txn.policyMetadata?.policySource === 'level_default' && 'Level Default'}
+                                            {txn.policyMetadata?.policySource === 'program_default' && 'Program Default'}
+                                            {txn.policyMetadata?.policySource === 'legacy' && 'Legacy'}
+                                            {!txn.policyMetadata?.policySource && 'Unknown'}
+                                        </span>
+                                    </TableCell>
+
+                                    {/* Rate Column */}
+                                    <TableCell className="text-right">
+                                        <span className="font-semibold text-slate-700">
+                                            {effectiveRateLabel}
+                                        </span>
                                     </TableCell>
 
                                     <TableCell className="text-right">

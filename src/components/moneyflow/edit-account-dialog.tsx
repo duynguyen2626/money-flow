@@ -705,6 +705,21 @@ export function EditAccountDialog({
     const rateValue = parseOptionalNumber(rate) ?? 0
     let configPayload: Json | undefined
     if (isCreditCard) {
+      // Phase 7.2: Validate and auto-sort levels by minTotalSpend
+      const sortedLevels = [...levels].sort((a, b) => a.minTotalSpend - b.minTotalSpend)
+
+      // Check for overlapping ranges (same minTotalSpend values)
+      const minSpendValues = sortedLevels.map(l => l.minTotalSpend)
+      const hasDuplicates = minSpendValues.some((val, idx) => minSpendValues.indexOf(val) !== idx)
+
+      if (hasDuplicates) {
+        setStatus({
+          text: 'Levels cannot have the same Min Total Spend value. Please ensure each level has a unique threshold.',
+          variant: 'error'
+        })
+        return
+      }
+
       configPayload = {
         program: {
           defaultRate: rateValue / 100,
@@ -715,7 +730,7 @@ export function EditAccountDialog({
             ? parseStatementDayValue(statementDay)
             : null,
           dueDate: parseStatementDayValue(dueDate),
-          levels: levels.map(lvl => ({
+          levels: sortedLevels.map(lvl => ({
             id: lvl.id,
             name: lvl.name,
             minTotalSpend: lvl.minTotalSpend,
