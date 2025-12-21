@@ -1,19 +1,11 @@
 import { parseCashbackConfig, calculateBankCashback, CashbackLevel, CashbackCategoryRule } from '@/lib/cashback'
+import { CashbackPolicyMetadata } from '@/types/cashback.types'
 
 export type CashbackPolicyResult = {
     rate: number
     maxReward?: number
     minSpend?: number
-    metadata: {
-        policySource: 'program_default' | 'level_default' | 'category_rule' | 'legacy'
-        reason: string
-        rate: number
-        levelId?: string
-        levelName?: string
-        ruleId?: string
-        categoryId?: string
-        ruleMaxReward?: number | null
-    }
+    metadata: CashbackPolicyMetadata
 }
 
 /**
@@ -76,7 +68,8 @@ export function resolveCashbackPolicy(params: {
                 reason: `Level matched: ${applicableLevel.name}`,
                 rate: finalRate,
                 levelId: applicableLevel.id,
-                levelName: applicableLevel.name
+                levelName: applicableLevel.name,
+                levelMinSpend: applicableLevel.minTotalSpend
             }
 
             // 3. Match Category Rule within Level
@@ -88,12 +81,14 @@ export function resolveCashbackPolicy(params: {
                 if (matchedRule) {
                     finalRate = matchedRule.rate
                     finalMaxReward = matchedRule.maxReward ?? undefined
+                    const reasonLabel = categoryName ? `${categoryName} rule` : `Category rule matched for level ${applicableLevel.name}`
                     source = {
                         policySource: 'category_rule',
-                        reason: `Category rule matched for level ${applicableLevel.name}`,
+                        reason: reasonLabel,
                         rate: finalRate,
                         levelId: applicableLevel.id,
                         levelName: applicableLevel.name,
+                        levelMinSpend: applicableLevel.minTotalSpend,
                         categoryId: categoryId,
                         ruleMaxReward: matchedRule.maxReward
                     }

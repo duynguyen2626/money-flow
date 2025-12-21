@@ -34,6 +34,7 @@ export function CashbackCard({ card }: CashbackCardProps) {
 
     let remainingDisplay = 'Unlimited'
     let progressPercent = 0
+    const rateLabel = typeof rate === 'number' && Number.isFinite(rate) ? `${(rate * 100).toFixed(1)}%` : '--'
 
     if (typeof limit === 'number') {
         const remaining = Math.max(0, limit - earned)
@@ -138,7 +139,7 @@ export function CashbackCard({ card }: CashbackCardProps) {
                     <div className="flex justify-between items-center">
                         <span className="font-semibold text-slate-600">Policy</span>
                         <div className="flex gap-2">
-                            <span>Rate: <span className="font-medium text-slate-700">{(rate * 100).toFixed(1)}%</span></span>
+                            <span>Rate: <span className="font-medium text-slate-700">{rateLabel}</span></span>
                             <span>Max: <span className="font-medium text-slate-700">{typeof limit === 'number' ? currencyFormatter.format(limit) : 'Unl.'}</span></span>
                         </div>
                     </div>

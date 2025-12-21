@@ -17,6 +17,7 @@ import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { getUnifiedTransactions } from '@/services/transaction.service'
+import { getCashbackCycleOptions } from '@/services/cashback.service'
 
 export default function CashbackDetailsPage() {
   const router = useRouter()
@@ -24,6 +25,8 @@ export default function CashbackDetailsPage() {
   const id = params?.id as string
   const [cardData, setCardData] = useState<CashbackCard | null>(null)
   const [loading, setLoading] = useState(true)
+  const [selectedCycleTag, setSelectedCycleTag] = useState<string | null>(null)
+  const [cycleOptions, setCycleOptions] = useState<Array<{ tag: string, label: string, statementDay: number | null, cycleType: string | null }>>([])
 
   // Data for Edit Form
   const [accounts, setAccounts] = useState<Account[]>([])
@@ -39,13 +42,38 @@ export default function CashbackDetailsPage() {
     maximumFractionDigits: 0,
   })
 
+  const cycleTagToReferenceDate = (tag: string | null, statementDay: number | null, cycleType: string | null) => {
+    if (!tag || tag.length < 5) return undefined
+    const monthStr = tag.slice(0, 3)
+    const yearStr = tag.slice(3)
+    const month = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'].indexOf(monthStr)
+    const year = 2000 + Number.parseInt(yearStr, 10)
+    if (month < 0 || Number.isNaN(year)) return undefined
+    if (cycleType === 'statement_cycle') {
+      // Use day 1 of the tagged month so range becomes (statementDay of prev month) -> (statementDay-1 of tagged month)
+      return new Date(year, month, 1)
+    }
+    return new Date(year, month, statementDay || 1)
+  }
+
   useEffect(() => {
     if (!id) return
 
     async function loadData() {
       try {
+        // Fetch available cycles and pick default
+        const options = await getCashbackCycleOptions(id)
+        const cleanedOptions = options.filter(opt => opt.tag)
+        setCycleOptions(cleanedOptions)
+        const initialTag = (cleanedOptions[0]?.tag) ?? cardData?.cycleLabel ?? null
+        setSelectedCycleTag(prev => prev ?? initialTag)
+
+        const referenceDate = initialTag
+          ? cycleTagToReferenceDate(initialTag, cleanedOptions[0]?.statementDay ?? null, cleanedOptions[0]?.cycleType ?? null)
+          : undefined
+
         // Fetch cashback data
-        const cards = await getCashbackProgress(0, [id], undefined, true)
+        const cards = await getCashbackProgress(0, [id], referenceDate, true)
         if (cards.length > 0) {
           setCardData(cards[0])
         }
@@ -70,6 +98,29 @@ export default function CashbackDetailsPage() {
     }
     loadData()
   }, [id])
+
+  useEffect(() => {
+    if (!id || !selectedCycleTag) return
+
+    async function loadCycle() {
+      try {
+        const selectedOpt = cycleOptions.find(opt => opt.tag === selectedCycleTag)
+        const referenceDate = cycleTagToReferenceDate(
+          selectedCycleTag,
+          selectedOpt?.statementDay ?? null,
+          selectedOpt?.cycleType ?? null
+        )
+        const cards = await getCashbackProgress(0, [id], referenceDate, true)
+        if (cards.length > 0) {
+          setCardData(cards[0])
+        }
+      } catch (error) {
+        console.error('Failed to load cashback details:', error)
+      }
+    }
+
+    loadCycle()
+  }, [id, selectedCycleTag])
 
   const handleEdit = async (txn: CashbackTransaction) => {
     // We need to fetch the full transaction details to populate the form correctly
@@ -221,10 +272,17 @@ export default function CashbackDetailsPage() {
     )
   }
 
+  const rateLabel = typeof cardData?.rate === 'number' && Number.isFinite(cardData.rate)
+    ? `${(cardData.rate * 100).toFixed(1)}%`
+    : '--'
+
+  const formatCycleOptionLabel = (label: string) => label
+
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-7xl">
       {/* Header Navigation */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2">
         <Button
           variant="ghost"
           onClick={() => router.push('/cashback')}
@@ -233,6 +291,21 @@ export default function CashbackDetailsPage() {
           <ArrowLeft className="h-4 w-4" />
           Back to Cashback List
         </Button>
+      </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Cycle</label>
+          <select
+            value={selectedCycleTag ?? ''}
+            onChange={(e) => setSelectedCycleTag(e.target.value)}
+            className="text-sm rounded-md border border-slate-200 px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-200"
+          >
+            {cycleOptions.map((opt) => (
+              <option key={`${opt.tag}-${opt.label}`} value={opt.tag}>
+                {formatCycleOptionLabel(opt.label)}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Single Row Header Layout */}
@@ -260,7 +333,7 @@ export default function CashbackDetailsPage() {
                   {cardData.cycleLabel}
                 </span>
                 <span>•</span>
-                <span>{(cardData.rate * 100).toFixed(1)}%</span>
+                <span>{rateLabel}</span>
               </div>
             </div>
           </Link>
@@ -307,7 +380,12 @@ export default function CashbackDetailsPage() {
               {cardData.remainingBudget !== null ? currencyFormatter.format(cardData.remainingBudget) : 'Unlimited'}
             </div>
             {typeof cardData.maxCashback === 'number' && (
-              <Progress value={cardData.progress} className="h-1 mt-1.5 bg-slate-100" />
+              <>
+                <Progress value={cardData.progress} className="h-1 mt-1.5 bg-slate-100" />
+                <span className="text-[10px] text-slate-400 mt-1">
+                  Progress toward min spend/cycle requirement
+                </span>
+              </>
             )}
           </div>
         </div>

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { TransactionWithDetails } from '@/types/moneyflow.types';
 import { CashbackCard, AccountSpendingStats, CashbackTransaction } from '@/types/cashback.types';
 import { calculateBankCashback, parseCashbackConfig, getCashbackCycleRange } from '@/lib/cashback';
+import { normalizePolicyMetadata } from '@/lib/cashback-policy';
 
 /**
  * Ensures a cashback cycle exists for the given account and tag.
@@ -375,6 +376,9 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     categoryName
   });
 
+  const cycleMaxBudget = cycle?.max_budget ?? config.maxAmount ?? null;
+  const minSpendTarget = cycle?.min_spend_target ?? config.minSpend ?? null;
+  const currentSpend = cycle?.spent_amount ?? 0;
   const realAwarded = cycle?.real_awarded ?? 0;
   const virtualProfit = cycle?.virtual_profit ?? 0;
   const overflowLoss = cycle?.overflow_loss ?? 0;
@@ -382,14 +386,16 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const sharedAmount = realAwarded;
   const earnedSoFar = realAwarded + virtualProfit;
   const netProfit = virtualProfit - overflowLoss;
-  const remainingBudget = cycle ? Math.max(0, (config.maxAmount ?? 0) - earnedSoFar) : null;
+  const remainingBudget = cycle && cycleMaxBudget !== null ? Math.max(0, cycleMaxBudget - earnedSoFar) : null;
 
   const cycleRange = getCashbackCycleRange(config, date);
+  const policyMetadata = normalizePolicyMetadata(policy.metadata);
+  const isMinSpendMet = cycle?.met_min_spend ?? (typeof minSpendTarget === 'number' ? currentSpend >= minSpendTarget : true);
 
   return {
-    currentSpend: cycle?.spent_amount ?? 0,
-    minSpend: config.minSpend ?? 0,
-    maxCashback: config.maxAmount ?? 0,
+    currentSpend,
+    minSpend: minSpendTarget,
+    maxCashback: cycleMaxBudget,
     rate: policy.rate,
     maxReward: policy.maxReward,
     earnedSoFar,
@@ -398,8 +404,9 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     netProfit,
     remainingBudget,
     potentialRate: policy.rate,
-    matchReason: policy.metadata?.policySource,
-    policyMetadata: policy.metadata,
+    matchReason: policyMetadata?.policySource,
+    policyMetadata: policyMetadata ?? undefined,
+    is_min_spend_met: isMinSpendMet,
     cycle: cycleRange ? {
       label: cycleTag,
       start: cycleRange.start.toISOString(),
@@ -442,17 +449,18 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
     const realAwarded = cycle?.real_awarded ?? 0;
     const virtualProfit = cycle?.virtual_profit ?? 0;
     const earnedSoFar = realAwarded + virtualProfit;
-    const minSpend = cycle?.min_spend_target ?? config.minSpend ?? 0;
-    const maxCashback = cycle?.max_budget ?? config.maxAmount ?? 0;
+    const minSpend = cycle?.min_spend_target ?? config.minSpend ?? null;
+    const maxCashback = cycle?.max_budget ?? config.maxAmount ?? null;
+    const overflowLoss = cycle?.overflow_loss ?? 0;
 
     // MF5.3.3 FIX: Budget Left must come from cycle if exists, else it's essentially unknown/0 for UI
     // Remove login-dependent fallback to config.maxAmount
-    const remainingBudget = cycle ? Math.max(0, maxCashback - earnedSoFar) : null;
-    const progress = minSpend > 0 ? Math.min(100, (currentSpend / minSpend) * 100) : 100;
+    const remainingBudget = cycle && maxCashback !== null ? Math.max(0, maxCashback - earnedSoFar) : null;
+    const progress = typeof minSpend === 'number' && minSpend > 0 ? Math.min(100, (currentSpend / minSpend) * 100) : 100;
 
     const cycleRange = getCashbackCycleRange(config, date);
-    const metMinSpend = cycle?.met_min_spend ?? false;
-    const missingMinSpend = minSpend > currentSpend ? minSpend - currentSpend : 0;
+    const metMinSpend = cycle?.met_min_spend ?? (typeof minSpend === 'number' ? currentSpend >= minSpend : true);
+    const missingMinSpend = typeof minSpend === 'number' && minSpend > currentSpend ? minSpend - currentSpend : null;
 
     const { resolveCashbackPolicy } = await import('./cashback/policy-resolver');
     const policy = resolveCashbackPolicy({
@@ -466,30 +474,29 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       const { data: entries } = await supabase
         .from('cashback_entries')
         .select(`
-          mode, amount, metadata,
-          transaction:transactions (
-            id, occurred_at, note, amount,
+          mode, amount, metadata, transaction_id,
+          transaction:transactions!inner (
+            id, occurred_at, note, amount, account_id,
             cashback_share_percent, cashback_share_fixed,
             transaction_lines (
-               category:categories(name, icon, logo_url),
-               shop:shops(name, logo_url),
-               person:people(name)
+              category:categories(name, icon, logo_url),
+              shop:shops(name, logo_url),
+              person:people(name)
             )
           )
         `)
-        .eq('cycle_id', cycle.id);
+        .eq('cycle_id', cycle.id)
+        .eq('transaction.account_id', acc.id);
 
-      if (entries) {
+      if (entries && entries.length > 0) {
         transactions = entries.map((e: any) => {
           const t = e.transaction;
           if (!t) return null;
 
-          // Flatten lines to find display info
-          // Prioritize first line with info
           const lines = t.transaction_lines || [];
           const categoryLine = lines.find((l: any) => l.category) || lines[0];
           const shopLine = lines.find((l: any) => l.shop) || lines[0];
-          const personLine = lines.find((l: any) => l.person); // Only if person exists
+          const personLine = lines.find((l: any) => l.person);
 
           const category = categoryLine?.category;
           const shop = shopLine?.shop;
@@ -498,14 +505,15 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
           const bankBack = e.amount;
           const peopleBack = e.mode === 'real' ? e.amount : 0;
           const profit = e.mode === 'virtual' ? e.amount : 0;
-          const effectiveRate = e.metadata?.rate ?? 0;
+          const policyMetadata = normalizePolicyMetadata(e.metadata);
+          const effectiveRate = policyMetadata?.rate ?? 0;
 
           return {
             id: t.id,
             occurred_at: t.occurred_at,
             note: t.note,
             amount: t.amount,
-            earned: bankBack, // Total generated
+            earned: bankBack,
             bankBack,
             peopleBack,
             profit,
@@ -518,8 +526,8 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
             categoryIcon: category?.icon,
             categoryLogoUrl: category?.logo_url,
             personName: person?.name,
+            policyMetadata,
           } as CashbackTransaction;
-
         }).filter((t: any): t is CashbackTransaction => t !== null)
           .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
       }
@@ -538,8 +546,8 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       minSpend,
       maxCashback,
       totalEarned: earnedSoFar,
-      sharedAmount: cycle?.real_awarded ?? 0,
-      netProfit: (cycle?.virtual_profit ?? 0) - (cycle?.overflow_loss ?? 0),
+      sharedAmount: realAwarded,
+      netProfit: virtualProfit - overflowLoss,
       spendTarget: minSpend,
       minSpendMet: metMinSpend,
       minSpendRemaining: missingMinSpend,
@@ -548,7 +556,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       total_spend_eligible: currentSpend,
       is_min_spend_met: metMinSpend,
       missing_min_spend: missingMinSpend,
-      potential_earned: cycle?.virtual_profit ?? 0,
+      potential_earned: virtualProfit,
       transactions,
       remainingBudget: remainingBudget,
       rate: policy.rate
@@ -573,5 +581,51 @@ export async function getTransactionCashbackPolicyExplanation(transactionId: str
     return null;
   }
 
-  return data?.metadata ?? null;
+  return normalizePolicyMetadata(data?.metadata) ?? null;
+}
+
+export async function getCashbackCycleOptions(accountId: string, limit: number = 6) {
+  const supabase = createClient();
+  const { data: account } = await supabase
+    .from('accounts')
+    .select('cashback_config, type')
+    .eq('id', accountId)
+    .maybeSingle();
+
+  if (!account || account.type !== 'credit_card') return [];
+
+  const config = parseCashbackConfig(account.cashback_config, accountId);
+
+  const { data: cycles } = await supabase
+    .from('cashback_cycles')
+    .select('cycle_tag')
+    .eq('account_id', accountId)
+    .order('cycle_tag', { ascending: false })
+    .limit(limit);
+
+  const options = (cycles ?? []).map((c: any) => {
+    const tag: string = c.cycle_tag;
+    const refDate = (() => {
+      if (!tag || tag.length < 5) return undefined;
+      const monthStr = tag.slice(0, 3);
+      const yearStr = tag.slice(3);
+      const month = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'].indexOf(monthStr);
+      const year = 2000 + Number.parseInt(yearStr, 10);
+      if (month < 0 || Number.isNaN(year)) return undefined;
+      // For statement cycles, tag month represents the cycle ending in that month (statement day in that month),
+      // so use day 1 of the tag month to derive the range (prev statement day -> tag month statement day - 1)
+      if (config.cycleType === 'statement_cycle') {
+        return new Date(year, month, 1);
+      }
+      return new Date(year, month, config.statementDay ?? 1);
+    })();
+
+    const range = refDate ? getCashbackCycleRange(config, refDate) : null;
+    const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = range ? `${tag} (${fmt(range.start)} - ${fmt(range.end)})` : tag;
+
+    return { tag, label, statementDay: config.statementDay ?? null, cycleType: config.cycleType ?? null };
+  });
+
+  return options;
 }

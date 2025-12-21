@@ -1,298 +1,132 @@
----
-description: Task Descriptions
----
+# MF5.4.1 — Cashback Page QA + Polish + Consistency
 
-# MF5.4 — Checkpoint & Task Prompt (Cashback Reporting from Cycles + Metadata)
-
-> This canvas starts after MF5.3 → MF5.3.3a is green (correctness + explainability + consistency).
-> MF5.4 goal: **reporting/visibility** using existing tables and metadata.
-> **Do NOT split cashback_config into new tables in MF5.4.** DB normalization is MF5.5.
+You are the coding agent working on **Money Flow 3**.
+MF5.4 (cashback page revived) is merged/ready for QA.
+This phase MF5.4.1 focuses on **correctness, consistency, and UX polish** without changing core architecture.
 
 ---
 
-## 1) Current Checkpoint (Locked)
+## 0) Non-negotiable invariants
 
-### ✅ Engine & Consistency
-
-* `transactions` + `cashback_entries` + `cashback_cycles` are stable
-* `cashback_cycles` is the single source of truth for budgets/spent
-* `cashback_entries.metadata` is mandatory and explains policy attribution
-* UI shows policy explanation in txn modal
-* Cross-login inconsistencies are eliminated
+* `cashback_cycles` is the single source of truth for cycle totals and budget hints.
+* `cashback_entries` is the ledger; exactly one row per (account_id, transaction_id).
+* `cashback_entries.metadata` must exist and be valid JSON for every row.
+* UI must not recompute budgets from raw config when cycle exists.
 
 ---
 
-## 2) MF5.4 Objective# MF5.4 — Checkpoint & Task Prompt (Revive Existing Cashback Page, No New Route)
+## 1) Goals
 
-> This canvas starts after MF5.3 → MF5.3.3a is green.
-> MF5.4 goal: **bring back the existing Cashback page and wire it to cycles + entries + metadata**.
-> **Do NOT create a new /cashback route or a brand-new page. Use what already exists in the repo.**
-> Later (future phase), Cashback will be integrated into `accounts/:id` as a second tab.
+1. **Cashback page correctness**
 
----
+* Totals displayed must match `cashback_cycles` fields.
+* Table rows must be consistent with `cashback_entries` + transactions.
 
-## 1) Current Checkpoint (Locked)
+2. **Consistency of percent/rate display**
 
-### ✅ Engine & Consistency
+* Always show rates as % in UI.
+* Do not show NaN; handle undefined rate safely.
 
-* `transactions` + `cashback_entries` + `cashback_cycles` stable
-* `cashback_cycles` is single source of truth for budget/spent
-* `cashback_entries.metadata` is mandatory and explains policy attribution
-* Transaction modal shows policy explanation
-* Cross-login inconsistencies are eliminated
+3. **Policy explanation UX**
 
----
+* Policy explanation should be readable, stable, and match metadata.
+* In transaction modal edit mode, persisted metadata must show correctly.
 
-## 2) MF5.4 Objective (Single Sentence)
+4. **Performance and stability**
 
-> Make the existing Cashback page visible and accurate by reading totals from `cashback_cycles` and explanations from `cashback_entries.metadata`.
+* Avoid N+1 server calls in cashback table.
+* Ensure no runtime console errors.
 
 ---
 
-## 3) Scope Boundaries (ANTI-DRIFT)
+## 2) Required work items
 
-### ✅ IN SCOPE
+### 2.1 Validate totals mapping (cycle → UI)
 
-* Re-enable / expose the existing Cashback page in navigation
+On `/cashback/[id]` page, verify each number comes from the intended cycle field:
 
-* Fix routing/guards/feature flags so the page reliably renders
+* Remaining cap: `remainingBudget` derived from `cashback_cycles.max_budget - real_awarded - virtual_profit`
+* Net profit: consistent definition across UI and backend
 
-* Wire the page data to:
+If any total is computed ad-hoc in UI, refactor to use cycle values.
 
-  * `cashback_cycles` (totals, budget-left, spent, real_awarded, virtual_profit, overflow_loss)
-  * `cashback_entries` + `transactions` (breakdown + drilldown)
-  * `cashback_entries.metadata` (grouping + explanation)
+### 2.2 Ensure metadata backfill is safe and idempotent
 
-* Provide **lightweight** UI sections:
+* If you added scripts/routes to backfill `cashback_entries.metadata`, ensure:
 
-  * Current cycle summary
-  * Breakdown by category
-  * Breakdown by policySource
-  * Drilldown transaction list
+  * running twice produces same result
+  * no duplicate entries
+  * no breaking changes when metadata already exists
 
-### ❌ OUT OF SCOPE
+### 2.3 Fix any NaN or missing-rate rendering
 
-* No new pages/routes (no new `/cashback`)
-* No integration into `accounts/:id` tabs (postponed)
-* No new DB tables
-* No cashback engine changes
-* No redesign of transaction modal
-* No historical analytics beyond selected cycle
+Search for patterns that can produce NaN:
 
----
+* `value={rule.rate * 100}`
+* `Number(undefined)`
 
-## 4) Data Rules (Strict)
+Replace with safe defaults:
 
-* Budget-related values MUST come from `cashback_cycles`.
-* Any “why” explanation MUST come from `cashback_entries.metadata`.
-* Percent formatting remains unchanged:
+* `(rule.rate ?? 0) * 100`
+* render `--` when not known
 
-  * DB decimal (0.08)
-  * UI percent (8)
+### 2.4 Policy explanation rendering rules
 
----
+* Prefer showing a short label:
 
-## 5) UX Deliverables (Minimal but Useful)
+  * e.g. `Education 10% (max 300k)`
+* If levels exist:
 
-### 5.1 Page Entry
+  * show level name and threshold: `Level 2 (>= 15M)`
+* If fallback default:
 
-* Cashback page is reachable from sidebar/nav
-* The page loads without blank states or 404
+  * show `Default 0.5%` or `Default 0.3%`
 
-### 5.2 Cycle Summary (Header Card)
+Ensure it uses:
 
-Show:
+* persisted metadata when editing existing txn
+* live computed policy when creating new txn
 
-* Current cycle tag + date range
-* Budget Left (derived from cycle totals; do not compute from config)
-* Spent Amount
-* Real Awarded
-* Virtual Profit
-* Exhausted status
+### 2.5 Avoid N+1 requests
 
-### 5.3 Breakdown
+If the cashback transaction table needs policy explanations:
 
-* By Category:
+* Do NOT fetch per-row from `/api/cashback/policy-explanation`.
+* Include necessary metadata in the page payload once (server-side) OR batch fetch.
 
-  * sum spending (abs)
-  * sum cashback
-* By Policy Source:
+### 2.6 Add minimal automated checks (optional but recommended)
 
-  * category_rule / level_default / program_default / legacy
+Add small unit tests for:
 
-### 5.4 Drilldown
-
-* Clicking a category or policy bucket filters a transaction list
-* Each txn row can show applied rate from metadata (read-only)
+* `parseCashbackConfig` alias parsing
+* `resolveCashbackPolicy` level/rule selection
 
 ---
 
-## 6) Query / Reconciliation Rules
+## 3) Acceptance criteria
 
-* Totals must reconcile:
+* Cashback page numbers match DB `cashback_cycles` for the displayed cycle.
+* No console errors (NaN, uncontrolled input warnings).
+* Policy explanation displays correctly for:
 
-  * Page totals == `cashback_cycles` for selected account+cycle
-
-* Breakdown must reconcile:
-
-  * Sum of cashback in breakdown equals sum of `cashback_entries.amount` for that cycle (respect `counts_to_budget` if that is the rule used by totals)
-
----
-
-## 7) Test & Verification Checklist (MF5.4)
-
-### 7.1 Smoke
-
-* Page is visible in nav
-* Page loads for at least one credit-card account
-* No console errors
-
-### 7.2 Consistency
-
-* Cycle summary values match `cashback_cycles` exactly
-
-### 7.3 Breakdown Reconciliation
-
-* Category breakdown sums reconcile with cycle totals
-* PolicySource breakdown sums reconcile with cycle totals
-
-### 7.4 Drilldown
-
-* Clicking a bucket filters the same underlying txns
-* Applied rate shown is `metadata.rate` (formatted), not recomputed
+  * default policy
+  * category rule policy
+  * level-based policy
+* No N+1 network waterfall when rendering the table.
 
 ---
 
-## 8) Branch / PR
+## 4) Branch / Commit / PR
 
-* Branch: `PHASE-9.4-CASHBACK-PAGE-REVIVE`
-* Commit: `MF5.4 - Revive existing cashback page (cycles + metadata)`
-* PR Title: `MF5.4: Revive existing cashback page (cycles + metadata)`
-
-PR must include:
-
-* Screenshots (page header + breakdown + drilldown)
-* SQL snippets proving totals reconciliation
-* QA checklist run
+* **Branch:** `PHASE-9.4.1-CASHBACK-PAGE-QA-POLISH`
+* **Commit:** `MF5.4.1 - Cashback page QA, polish, and metadata consistency`
+* **PR title:** `MF5.4.1: Cashback page QA + polish + metadata consistency`
 
 ---
 
-## 9) Stop Condition
+## 5) What to include in PR description
 
-Stop after PR opened and provide:
-
-* QA steps
-* SQL reconciliation snippets
-* Screenshots
-
----
-
-## 10) Roadmap Note (Postponed)
-
-* Future phase: integrate Cashback into `accounts/:id` as a second tab (Transactions | Cashback)
-* MF5.5: DB normalization/splitting config into tables/columns
-
-
-> Provide a clear cashback reporting UI that helps users understand **where cashback came from** and **how much budget is left**, without changing core calculations.
-
----
-
-## 3) Scope Boundaries (ANTI-DRIFT)
-
-### ✅ IN SCOPE
-
-* New reporting UI pages/sections (lightweight):
-
-  * Cycle summary per credit card
-  * Breakdown by category and by policySource/level
-  * Drill-down list of transactions contributing to a cycle
-
-* Queries are derived from:
-
-  * `cashback_cycles` totals (budget_left, spent_amount, real_awarded, virtual_profit, overflow_loss)
-  * `cashback_entries` + `transactions` for breakdown
-  * `cashback_entries.metadata` for explanation grouping
-
-* Optional: small helper view/query (no new tables) if it simplifies joins
-
-### ❌ OUT OF SCOPE
-
-* ❌ No new DB tables
-* ❌ No splitting `cashback_config` into columns/tables
-* ❌ No refactor of cashback engine
-* ❌ No UI redesign of transaction modal
-* ❌ No analytics beyond cycle scope
-
----
-
-## 4) Reporting UX Deliverables
-
-### 4.1 Cashback Dashboard (Per Card)
-
-For each credit card account:
-
-* Current cycle tag + date range
-* Budget Left (from cycle)
-* Real Awarded, Virtual Profit, Spent Amount
-* Exhausted status
-
-### 4.2 Cycle Breakdown
-
-Within a selected cycle:
-
-* Breakdown by **category** (sum of spending, sum of cashback)
-* Breakdown by **policySource** (category_rule / level_default / program_default / legacy)
-* Top contributing transactions list (with applied rate shown from metadata)
-
-### 4.3 Drill-down
-
-* Click a category/policySource bucket → show filtered transactions
-
----
-
-## 5) Data Rules (Strict)
-
-* Budget-related values MUST come from `cashback_cycles`.
-* Any “why” explanation MUST come from `cashback_entries.metadata`.
-* Percent formatting rules remain unchanged (DB decimal, UI percent).
-
----
-
-## 6) Verification Checklist
-
-* Cycle totals match `cashback_cycles` exactly
-* Breakdown sums reconcile:
-
-  * sum(entries.amount where counts_to_budget) == cycle.real_awarded (or matches according to mode rules)
-* Clicking buckets filters transaction list correctly
-* No NaN / percent regressions
-
----
-
-## 7) Branch / PR
-
-* Branch: `PHASE-9.4-CASHBACK-REPORTING`
-* Commit: `MF5.4 - Cashback reporting from cycles + metadata`
-* PR Title: `MF5.4: Cashback reporting (cycles + metadata)`
-
-PR must include:
-
-* Screenshots of dashboard + cycle breakdown
-* SQL snippets proving totals and reconciliation
-
----
-
-## 8) Stop Condition
-
-Stop after PR opened and provide:
-
-* QA steps
-* Reconciliation SQL
-* Screenshots
-
----
-
-## 9) Roadmap Note
-
-* MF5.5 is where we normalize metadata/rules into tables and/or split config columns.
-* MF5.4 must stay thin and focus on visibility.
+* Screenshot of `/cashback/[id]` totals and the SQL query used to verify.
+* One example txn row showing metadata and the displayed explanation.
+* Confirmation: no console errors.
+* Confirmation: no N+1 requests.

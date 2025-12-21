@@ -217,8 +217,12 @@ function TierItem({
                     <input
                       type="number"
                       className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                      value={rule.rate * 100}
-                      onChange={e => updateRule(rIndex, 'rate', parseFloat(e.target.value) / 100)}
+                      value={(rule.rate ?? 0) * 100}
+                      onChange={e => {
+                        const parsed = parseFloat(e.target.value)
+                        const safeRate = Number.isFinite(parsed) ? parsed / 100 : 0
+                        updateRule(rIndex, 'rate', safeRate)
+                      }}
                       placeholder="0"
                     />
                   </div>
