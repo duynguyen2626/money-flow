@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
         .from('transactions')
         .select(`
             *,
-            transaction_lines (*)
+            categories(name)
         `)
         .eq('id', txnId)
         .single();
@@ -52,7 +52,11 @@ export async function GET(req: NextRequest) {
 
     try {
         // Force re-run logic
-        await upsertTransactionCashback(txn as unknown as TransactionWithDetails);
+        const payload = {
+            ...txn,
+            category_name: (txn as any).categories?.name
+        };
+        await upsertTransactionCashback(payload as unknown as TransactionWithDetails);
 
         // Fetch result
         const { data: newEntry } = await supabase

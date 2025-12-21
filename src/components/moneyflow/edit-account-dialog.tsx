@@ -3,7 +3,7 @@
 import { FormEvent, MouseEvent, ReactNode, useMemo, useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
-import { parseCashbackConfig, CashbackCycleType, CashbackTier } from '@/lib/cashback'
+import { parseCashbackConfig, CashbackCycleType, LegacyCashbackTier } from '@/lib/cashback'
 import { getSharedLimitParentId } from '@/lib/account-utils'
 import { Account } from '@/types/moneyflow.types'
 import { updateAccountConfigAction } from '@/actions/account-actions'
@@ -42,10 +42,10 @@ function TierItem({
   onChange,
   categoryOptions
 }: {
-  tier: CashbackTier
+  tier: LegacyCashbackTier
   index: number
   onRemove: () => void
-  onChange: (updates: Partial<CashbackTier>) => void
+  onChange: (updates: Partial<LegacyCashbackTier>) => void
   categoryOptions: CategoryOption[]
 }) {
   const rules = useMemo(() => {
@@ -304,8 +304,8 @@ function TierList({
   onChange,
   categoryOptions
 }: {
-  tiers: CashbackTier[]
-  onChange: (tiers: CashbackTier[]) => void
+  tiers: LegacyCashbackTier[]
+  onChange: (tiers: LegacyCashbackTier[]) => void
   categoryOptions: CategoryOption[]
 }) {
   const addTier = () => {
@@ -321,7 +321,7 @@ function TierList({
     onChange(next)
   }
 
-  const updateTier = (index: number, updates: Partial<CashbackTier>) => {
+  const updateTier = (index: number, updates: Partial<LegacyCashbackTier>) => {
     const next = [...tiers]
     next[index] = { ...next[index], ...updates }
     onChange(next)
@@ -487,7 +487,7 @@ export function EditAccountDialog({
     }
   }, [parentAccountId])
 
-  const [tiers, setTiers] = useState<CashbackTier[]>(parsedCashbackConfig.tiers ?? [])
+  const [tiers, setTiers] = useState<LegacyCashbackTier[]>(parsedCashbackConfig.tiers ?? [])
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([])
 
   useEffect(() => {

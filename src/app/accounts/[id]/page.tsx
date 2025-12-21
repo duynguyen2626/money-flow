@@ -9,14 +9,23 @@ import { AccountDetailHeader } from '@/components/moneyflow/account-detail-heade
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 
+import Link from 'next/link'
+import { CashbackAnalysisView } from '@/components/moneyflow/cashback-analysis-view'
+import { cn } from '@/lib/utils'
+
 type PageProps = {
   params: Promise<{
     id: string
   }>
+  searchParams: Promise<{
+    tab?: string
+  }>
 }
 
-export default async function AccountPage({ params }: PageProps) {
+export default async function AccountPage({ params, searchParams }: PageProps) {
   const { id } = await params
+  const { tab } = await searchParams
+  const activeTab = tab === 'cashback' ? 'cashback' : 'transactions'
 
   if (!id || id === 'undefined') {
     return (
@@ -43,7 +52,11 @@ export default async function AccountPage({ params }: PageProps) {
     getShops(),
     getAccountBatchStats(id),
     getAccountSpendingStats(id, new Date()),
-    loadTransactions({ accountId: id, context: 'account', limit: 1000 }),
+    // Only load transactions if we are in transactions tab to save performance, 
+    // although FilterableTransactions might do its own fetching? 
+    // Wait, the original code fetched 1000 transactions upfront.
+    // CashbackAnalysisView fetches its own data.
+    activeTab === 'transactions' ? loadTransactions({ accountId: id, context: 'account', limit: 1000 }) : Promise.resolve([]),
   ])
 
   // Derived data for header
@@ -54,7 +67,7 @@ export default async function AccountPage({ params }: PageProps) {
     <div className="flex flex-col h-full overflow-hidden mb-20">
       <TagFilterProvider>
         {/* Header */}
-        <div className="mx-6 mt-6 space-y-3">
+        <div className="mx-6 mt-6 space-y-4">
           <AccountDetailHeader
             account={account}
             categories={categories}
@@ -69,21 +82,59 @@ export default async function AccountPage({ params }: PageProps) {
             shops={shops}
             batchStats={batchStats}
           />
+
+          {/* Tabs */}
+          <div className="flex border-b border-slate-200">
+            <Link
+              href={`/accounts/${id}?tab=transactions`}
+              className={cn(
+                "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                activeTab === 'transactions'
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Transactions
+            </Link>
+            <Link
+              href={`/accounts/${id}?tab=cashback`}
+              className={cn(
+                "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+                activeTab === 'cashback'
+                  ? "border-emerald-500 text-emerald-600"
+                  : "border-transparent text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Cashback Analysis
+            </Link>
+          </div>
         </div>
 
-        {/* Transaction List */}
-        <div className="flex-1 overflow-hidden mt-6 bg-white border-t border-slate-200">
-          <FilterableTransactions
-            transactions={transactions}
-            accounts={allAccounts}
-            categories={categories}
-            people={people}
-            shops={shops}
-            accountId={account.id}
-            accountType={account.type}
-            contextId={account.id}
-            context="account"
-          />
+        {/* Content Area */}
+        <div className="flex-1 overflow-hidden mt-2 bg-white">
+          {activeTab === 'transactions' ? (
+            <FilterableTransactions
+              transactions={transactions}
+              accounts={allAccounts}
+              categories={categories}
+              people={people}
+              shops={shops}
+              accountId={account.id}
+              accountType={account.type}
+              contextId={account.id}
+              context="account"
+            />
+          ) : (
+            <div className="h-full overflow-y-auto p-6">
+              <CashbackAnalysisView
+                accountId={account.id}
+                accounts={allAccounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+              />
+            </div>
+          )}
         </div>
       </TagFilterProvider>
     </div>

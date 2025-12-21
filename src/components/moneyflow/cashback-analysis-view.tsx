@@ -1,0 +1,373 @@
+'use client'
+
+import React, { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { useRouter } from 'next/navigation'
+import {
+    TrendingUp,
+    Wallet,
+    PiggyBank,
+    ChevronRight,
+    ArrowUpRight,
+    Pencil,
+    Copy,
+    Check,
+    AlertTriangle
+} from 'lucide-react'
+
+import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
+import { TransactionForm, TransactionFormValues } from '@/components/moneyflow/transaction-form'
+import { CashbackTransactionTable } from '@/components/cashback/cashback-transaction-table'
+import { getCashbackProgress, getCashbackCycleOptions, getAllCashbackHistory } from '@/services/cashback.service'
+import { getUnifiedTransactions } from '@/services/transaction.service'
+import { CashbackCard, CashbackTransaction } from '@/types/cashback.types'
+import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
+
+type CashbackAnalysisViewProps = {
+    accountId: string
+    accounts: Account[]
+    categories: Category[]
+    people: Person[]
+    shops: Shop[]
+}
+
+export function CashbackAnalysisView({
+    accountId,
+    accounts,
+    categories,
+    people,
+    shops
+}: CashbackAnalysisViewProps) {
+    const router = useRouter()
+    const [cardData, setCardData] = useState<CashbackCard | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [selectedCycleTag, setSelectedCycleTag] = useState<string | null>(null)
+    const [cycleOptions, setCycleOptions] = useState<Array<{ tag: string, label: string, statementDay: number | null, cycleType: string | null }>>([])
+
+    // Edit State
+    const [editingTxn, setEditingTxn] = useState<CashbackTransaction | null>(null)
+    const [editInitialValues, setEditInitialValues] = useState<Partial<TransactionFormValues> | null>(null)
+
+    const currencyFormatter = new Intl.NumberFormat('en-US', {
+        maximumFractionDigits: 0,
+    })
+
+    // Helper to calculate reference date from tag
+    const cycleTagToReferenceDate = (tag: string | null, statementDay: number | null, cycleType: string | null) => {
+        if (!tag || tag.length < 5) return undefined
+        const monthStr = tag.slice(0, 3)
+        const yearStr = tag.slice(3)
+        const month = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'].indexOf(monthStr)
+        const year = 2000 + Number.parseInt(yearStr, 10)
+        if (month < 0 || Number.isNaN(year)) return undefined
+
+        if (cycleType === 'statement_cycle') {
+            // Use day 1 of the tagged month so range becomes roughly (statementDay of prev month) -> (statementDay-1 of tagged month)
+            // This logic must align with how getCashbackProgress interprets the reference date.
+            return new Date(year, month, 1)
+        }
+        return new Date(year, month, statementDay || 1)
+    }
+
+    // Initial Load
+    useEffect(() => {
+        if (!accountId) return
+
+        async function loadData() {
+            try {
+                const options = await getCashbackCycleOptions(accountId)
+                const cleanedOptions = options.filter(opt => opt.tag)
+
+                // Add ALL Option
+                const allOption = { tag: 'ALL', label: 'All History', statementDay: null, cycleType: null }
+                setCycleOptions([allOption, ...cleanedOptions])
+
+                // Default to latest cycle or from existing card data if any
+                // If query param has 'all', select ALL? For now default to latest specific cycle if exists, else ALL.
+                const initialTag = cleanedOptions.length > 0 ? cleanedOptions[0].tag : 'ALL'
+                setSelectedCycleTag(prev => prev ?? initialTag)
+
+                const referenceDate = initialTag && initialTag !== 'ALL'
+                    ? cycleTagToReferenceDate(initialTag, cleanedOptions[0]?.statementDay ?? null, cleanedOptions[0]?.cycleType ?? null)
+                    : undefined
+
+                console.log(`[CashbackAnalysis] Initial Load for ${accountId}. Tag: ${initialTag}`)
+
+                let cards: CashbackCard[] = []
+                if (initialTag === 'ALL') {
+                    const allData = await getAllCashbackHistory(accountId)
+                    if (allData) cards = [allData]
+                } else {
+                    cards = await getCashbackProgress(0, [accountId], referenceDate, true)
+                }
+
+                if (cards.length > 0) {
+                    console.log(`[CashbackAnalysis] Loaded card data. Transactions: ${cards[0].transactions?.length}`)
+                    setCardData(cards[0])
+                } else {
+                    console.log(`[CashbackAnalysis] No card data returned.`)
+                }
+            } catch (error) {
+                console.error('Failed to load cashback details:', error)
+            } finally {
+                setLoading(false)
+            }
+        }
+        loadData()
+    }, [accountId])
+
+    // Cycle Change
+    useEffect(() => {
+        if (!accountId || !selectedCycleTag) return
+        console.log(`[CashbackAnalysis] Cycle Changed to: ${selectedCycleTag}`)
+
+        async function loadCycle() {
+            try {
+                setLoading(true)
+                if (selectedCycleTag === 'ALL') {
+                    const allData = await getAllCashbackHistory(accountId)
+                    if (allData) {
+                        console.log(`[CashbackAnalysis] Loaded ALL History. Txns: ${allData.transactions?.length}`)
+                        setCardData(allData)
+                    }
+                } else {
+                    const selectedOpt = cycleOptions.find(opt => opt.tag === selectedCycleTag)
+                    const referenceDate = cycleTagToReferenceDate(
+                        selectedCycleTag,
+                        selectedOpt?.statementDay ?? null,
+                        selectedOpt?.cycleType ?? null
+                    )
+                    const cards = await getCashbackProgress(0, [accountId], referenceDate, true)
+                    if (cards.length > 0) {
+                        console.log(`[CashbackAnalysis] Loaded Cycle ${selectedCycleTag}. Txns: ${cards[0].transactions?.length}`)
+                        setCardData(cards[0])
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load cashback cycle:', error)
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        loadCycle()
+    }, [accountId, selectedCycleTag]) // Removed cycleOptions dep to avoid loop if options change ref (it shouldn't but safe)
+
+    const handleEdit = async (txn: CashbackTransaction) => {
+        try {
+            // Fetch full transaction logic re-implemented or simplified.
+            // We'll trust the user wants to edit this specific txn.
+            // Since we don't have existing service exposing "getById", we fetch list and find.
+            // Optimization: In real app, we should have getTransactionById(id).
+            const allTxns = await getUnifiedTransactions({ accountId: accountId, limit: 1000 })
+            const found = allTxns.find(t => t.id === txn.id)
+
+            if (found) {
+                // Reconstruct form values
+                const lines = found.transaction_lines || []
+                const creditLine = lines.find(l => l.type === 'credit')
+                const debitLine = lines.find(l => l.type === 'debit')
+                const debtLine = lines.find(l => l.accounts?.type === 'debt')
+
+                let type: TransactionFormValues['type'] = 'expense'
+                if (found.type === 'income') type = 'income'
+                if (found.type === 'transfer') type = 'transfer'
+                if (found.type === 'repayment') type = 'repayment'
+                if (found.type === 'debt') type = 'debt'
+                if (debtLine && type !== 'repayment' && type !== 'income') type = 'debt'
+
+                const categoryId = lines.find(l => l.category_id)?.category_id
+                const personId = lines.find(l => l.person_id)?.person_id
+                const sourceId = type === 'income' ? debitLine?.account_id : (creditLine?.account_id || debitLine?.account_id)
+                const destId = (type === 'transfer' || type === 'repayment' || type === 'debt') ? (debtLine?.account_id || debitLine?.account_id) : undefined
+
+                // Share info
+                let sharePercent = found.cashback_share_percent
+                let shareFixed = found.cashback_share_fixed
+                if (sharePercent === undefined && shareFixed === undefined) {
+                    const lineWithShare = lines.find(l => l.cashback_share_percent !== undefined || l.cashback_share_fixed !== undefined)
+                    if (lineWithShare) {
+                        sharePercent = lineWithShare.cashback_share_percent ?? null
+                        shareFixed = lineWithShare.cashback_share_fixed ?? null
+                    }
+                }
+
+                setEditInitialValues({
+                    occurred_at: new Date(found.occurred_at || new Date()),
+                    type,
+                    amount: found.amount,
+                    note: found.note || '',
+                    tag: found.tag || '',
+                    category_id: categoryId || undefined,
+                    person_id: personId || undefined,
+                    source_account_id: sourceId || undefined,
+                    debt_account_id: destId || undefined,
+                    shop_id: found.shop_id || undefined,
+                    cashback_share_percent: sharePercent ?? undefined,
+                    cashback_share_fixed: shareFixed ?? undefined
+                })
+                setEditingTxn(txn)
+            } else {
+                alert('Could not load transaction details.')
+            }
+        } catch (e) {
+            console.error(e)
+            alert("Failed to prepare edit form")
+        }
+    }
+
+    const handleEditSuccess = () => {
+        setEditingTxn(null)
+        setEditInitialValues(null)
+        // Reload current cycle
+        if (selectedCycleTag) {
+            // Trigger a re-load logic or simpler: reload page
+            // window.location.reload() -> This is heavy.
+            // Let's just re-fetch the cycle data
+            const loadCycle = async () => {
+                const selectedOpt = cycleOptions.find(opt => opt.tag === selectedCycleTag)
+                const referenceDate = cycleTagToReferenceDate(
+                    selectedCycleTag,
+                    selectedOpt?.statementDay ?? null,
+                    selectedOpt?.cycleType ?? null
+                )
+                const cards = await getCashbackProgress(0, [accountId], referenceDate, true)
+                if (cards.length > 0) {
+                    setCardData(cards[0])
+                }
+            }
+            loadCycle()
+            router.refresh() // Syncs server components too
+        }
+    }
+
+    if (loading) {
+        return <div className="p-10 text-center text-slate-400 animate-pulse">Loading analysis...</div>
+    }
+
+    if (!cardData) {
+        return <div className="p-10 text-center text-slate-500">No cashback data available.</div>
+    }
+
+    return (
+        <div className="space-y-6">
+            {/* Controls */}
+            <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-800">Cashback Analysis</h2>
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-500 uppercase">Cycle</span>
+                    <select
+                        value={selectedCycleTag ?? ''}
+                        onChange={(e) => setSelectedCycleTag(e.target.value)}
+                        className="text-sm border border-slate-300 rounded-md shadow-sm px-2 py-1 focus:ring-2 focus:ring-indigo-100"
+                    >
+                        {cycleOptions.map(opt => (
+                            <option key={opt.tag} value={opt.tag}>{opt.label}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
+            {/* Stats Cards (Copied from old detail view) */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                {/* Net Profit */}
+                <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Net Profit</span>
+                    <div className="text-2xl font-bold text-emerald-600 whitespace-nowrap">
+                        {currencyFormatter.format(cardData.netProfit)}
+                    </div>
+                </div>
+
+                {/* Total Earned */}
+                <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1 flex items-center gap-1">
+                        Earned <span className="text-slate-300 font-normal">(Bank)</span>
+                    </span>
+                    <div className="text-xl font-bold text-blue-600 whitespace-nowrap">
+                        {currencyFormatter.format(cardData.totalEarned)}
+                    </div>
+                </div>
+
+                {/* Shared */}
+                <div className="flex flex-col">
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-1">Shared</span>
+                    <div className="text-xl font-bold text-orange-600 whitespace-nowrap">
+                        {currencyFormatter.format(cardData.sharedAmount)}
+                    </div>
+                </div>
+
+                {/* Remaining Cap */}
+                <div className="flex flex-col">
+                    <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Cap</span>
+                        <span className="text-[10px] font-medium text-slate-500">
+                            {typeof cardData.maxCashback === 'number' ? `${cardData.progress.toFixed(0)}%` : '∞'}
+                        </span>
+                    </div>
+                    <div className="text-xl font-bold text-slate-700 whitespace-nowrap">
+                        {cardData.remainingBudget !== null ? currencyFormatter.format(cardData.remainingBudget) : 'Unlimited'}
+                    </div>
+                    {typeof cardData.maxCashback === 'number' && (
+                        <>
+                            <Progress value={cardData.progress} className="h-1 mt-1.5 bg-slate-200" />
+                            <span className="text-[10px] text-slate-400 mt-1">
+                                Progress toward max budget
+                            </span>
+                        </>
+                    )}
+                </div>
+            </div>
+
+            {/* Transactions Table */}
+            <div className="space-y-3">
+                <h3 className="text-sm font-semibold text-slate-700">Transactions in Cycle</h3>
+                <CashbackTransactionTable
+                    transactions={cardData.transactions}
+                    onEdit={handleEdit}
+                />
+            </div>
+
+            {/* Edit Portal */}
+            {editingTxn && editInitialValues && createPortal(
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-4 sm:py-10"
+                    onClick={() => {
+                        setEditingTxn(null)
+                        setEditInitialValues(null)
+                    }}
+                >
+                    <div
+                        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-lg bg-white p-6 shadow-2xl scrollbar-thin scrollbar-thumb-rounded scrollbar-thumb-slate-200"
+                        onClick={event => event.stopPropagation()}
+                    >
+                        <div className="mb-4 flex items-center justify-between">
+                            <h3 className="text-lg font-semibold text-slate-900">Edit Transaction</h3>
+                            <button
+                                className="rounded px-2 py-1 text-slate-500 transition hover:bg-slate-100"
+                                onClick={() => {
+                                    setEditingTxn(null)
+                                    setEditInitialValues(null)
+                                }}
+                                aria-label="Close"
+                            >
+                                X
+                            </button>
+                        </div>
+                        <TransactionForm
+                            accounts={accounts}
+                            categories={categories}
+                            people={people}
+                            shops={shops}
+                            transactionId={editingTxn.id}
+                            initialValues={editInitialValues}
+                            mode="edit"
+                            onSuccess={handleEditSuccess}
+                        />
+                    </div>
+                </div>,
+                document.body
+            )}
+        </div>
+    )
+}

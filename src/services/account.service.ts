@@ -437,7 +437,24 @@ export async function updateAccountConfig(
     payload.credit_limit = data.credit_limit
   }
 
+  // MF5.4.2: Detect changes to statementDay or cycleType to trigger recompute
+  let needsRecompute = false
   if (typeof data.cashback_config !== 'undefined') {
+    const { data: oldAccount } = await supabase
+      .from('accounts')
+      .select('cashback_config')
+      .eq('id', accountId)
+      .single()
+
+    const oldConfig = parseCashbackConfig(oldAccount?.cashback_config)
+    const newConfig = parseCashbackConfig(data.cashback_config)
+
+    if (
+      oldConfig.statementDay !== newConfig.statementDay ||
+      oldConfig.cycleType !== newConfig.cycleType
+    ) {
+      needsRecompute = true
+    }
     payload.cashback_config = data.cashback_config
   }
 
@@ -477,6 +494,12 @@ export async function updateAccountConfig(
   if (error) {
     console.error('Error updating account configuration:', error)
     return false
+  }
+
+  // Trigger recompute if needed (async)
+  if (needsRecompute) {
+    console.log(`[updateAccountConfig] Triggering mandatory recompute for account ${accountId} due to config change`)
+    import('@/services/cashback.service').then(m => m.recomputeAccountCashback(accountId))
   }
 
   return true
