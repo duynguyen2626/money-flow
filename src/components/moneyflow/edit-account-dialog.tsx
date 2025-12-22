@@ -1,21 +1,24 @@
 'use client'
 
-import { FormEvent, MouseEvent, ReactNode, useMemo, useState, useTransition, useEffect } from 'react'
+import { FormEvent, MouseEvent, ReactNode, useMemo, useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
-import { parseCashbackConfig, CashbackCycleType, LegacyCashbackTier } from '@/lib/cashback'
+import { parseCashbackConfig, CashbackCycleType, CashbackLevel, normalizeCashbackConfig } from '@/lib/cashback'
 import { getSharedLimitParentId } from '@/lib/account-utils'
 import { Account } from '@/types/moneyflow.types'
 import { updateAccountConfigAction } from '@/actions/account-actions'
 import type { Json } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2, X } from 'lucide-react'
+import { Plus, Trash2, X, Copy } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { CustomDropdown, type DropdownOption } from '@/components/ui/custom-dropdown'
+import { ConfirmationModal } from '@/components/ui/confirmation-modal'
+import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 import { NumberInputWithSuggestions } from '@/components/ui/number-input-suggestions'
+import { CategoryDialog } from '@/components/moneyflow/category-dialog'
 import { cn } from '@/lib/utils'
 
-type CategoryOption = { id: string; name: string; type: 'expense' | 'income' }
+type CategoryOption = { id: string; name: string; type: string; icon?: string | null; logo_url?: string | null }
 
 const toNumericString = (value: number | null | undefined) =>
   typeof value === 'number' ? String(value) : ''
@@ -35,136 +38,93 @@ const parseOptionalNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-function TierItem({
-  tier,
+function LevelItem({
+  level,
   index,
   onRemove,
+  onClone,
   onChange,
-  categoryOptions
+  categoryOptions,
+  onAddCategory,
+  activeCategoryCallback
 }: {
-  tier: LegacyCashbackTier
+  level: CashbackLevel
   index: number
   onRemove: () => void
-  onChange: (updates: Partial<LegacyCashbackTier>) => void
+  onClone: () => void
+  onChange: (updates: Partial<CashbackLevel>) => void
   categoryOptions: CategoryOption[]
+  onAddCategory?: () => void
+  activeCategoryCallback?: React.MutableRefObject<((categoryId: string) => void) | null>
 }) {
-  const rules = useMemo(() => {
-    const grouped: { rate: number; maxAmount?: number; mcc_codes?: string; max_reward?: number; categories: string[] }[] = []
-
-    Object.entries(tier.categories).forEach(([catKey, config]) => {
-      const existing = grouped.find(
-        g => g.rate === config.rate && g.maxAmount === config.maxAmount && g.mcc_codes === config.mcc_codes && g.max_reward === config.max_reward
-      )
-      if (existing) {
-        existing.categories.push(catKey)
-      } else {
-        grouped.push({
-          rate: config.rate,
-          maxAmount: config.maxAmount,
-          mcc_codes: config.mcc_codes,
-          max_reward: config.max_reward,
-          categories: [catKey]
-        })
-      }
-    })
-    return grouped
-  }, [tier.categories])
-
-  const updateRules = (newRules: { rate: number; maxAmount?: number; mcc_codes?: string; max_reward?: number; categories: string[] }[]) => {
-    const newCategories: Record<string, { rate: number; maxAmount?: number; mcc_codes?: string; max_reward?: number }> = {}
-    newRules.forEach(rule => {
-      rule.categories.forEach(cat => {
-        newCategories[cat] = {
-          rate: rule.rate,
-          maxAmount: rule.maxAmount,
-          mcc_codes: rule.mcc_codes,
-          max_reward: rule.max_reward
-        }
-      })
-    })
-    onChange({ categories: newCategories })
-  }
+  const [ruleToDelete, setRuleToDelete] = useState<number | null>(null)
+  const rules = level.rules || []
 
   const addRule = () => {
-    const draftKey = `DRAFT_${Math.random().toString(36).substr(2, 9)}`
-    const newCategories = {
-      ...tier.categories,
-      [draftKey]: {
+    const newRules = [
+      ...rules,
+      {
+        id: `rule_${Math.random().toString(36).substr(2, 9)}`,
+        categoryIds: [],
         rate: 0,
-        max_reward: undefined,
-        mcc_codes: undefined
+        maxReward: null
       }
-    }
-    onChange({ categories: newCategories })
+    ]
+    onChange({ rules: newRules })
   }
 
   const removeRule = (ruleIndex: number) => {
     const next = [...rules]
     next.splice(ruleIndex, 1)
-    updateRules(next)
+    onChange({ rules: next })
   }
 
-  const updateRule = (ruleIndex: number, field: string, value: any) => {
-    const rule = rules[ruleIndex]
-    const newCategories = { ...tier.categories }
-
-    if (field === 'categories') {
-      const newCats = value as string[]
-      rule.categories.forEach(c => delete newCategories[c])
-
-      if (newCats.length === 0) {
-        const draftKey = `DRAFT_${Math.random().toString(36).substr(2, 9)}`
-        newCategories[draftKey] = {
-          rate: rule.rate,
-          maxAmount: rule.maxAmount,
-          mcc_codes: rule.mcc_codes,
-          max_reward: rule.max_reward
-        }
-      } else {
-        newCats.forEach(c => {
-          newCategories[c] = {
-            rate: rule.rate,
-            maxAmount: rule.maxAmount,
-            mcc_codes: rule.mcc_codes,
-            max_reward: rule.max_reward
-          }
-        })
-      }
-    } else {
-      rule.categories.forEach(c => {
-        if (newCategories[c]) {
-          newCategories[c] = { ...newCategories[c], [field]: value }
-        }
-      })
-    }
-
-    onChange({ categories: newCategories })
+  const updateRule = (ruleIndex: number, updates: Partial<any>) => {
+    const next = [...rules]
+    next[ruleIndex] = { ...next[ruleIndex], ...updates }
+    onChange({ rules: next })
   }
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div className="flex items-center gap-3 flex-1">
-          <h5 className="text-sm font-bold text-slate-700 uppercase">Tier {index + 1}</h5>
+          <h5 className="text-sm font-bold text-slate-700 uppercase">Level {index + 1}</h5>
           <input
             type="text"
-            value={tier.name || ''}
+            value={level.name || ''}
             onChange={e => onChange({ name: e.target.value })}
             className="flex-1 max-w-xs rounded border border-slate-200 px-3 py-1.5 text-sm"
             placeholder="e.g. Premium, Gold, Platinum"
           />
         </div>
-        <button type="button" onClick={onRemove} className="text-red-500 hover:text-red-600">
-          <Trash2 className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={onClone}
+            className="rounded-lg p-2 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600"
+            title="Clone Level"
+          >
+            <Copy className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+            title="Delete Level"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">Min Total Spend</label>
           <NumberInputWithSuggestions
-            value={formatWithSeparators(toNumericString(tier.minSpend))}
-            onChange={val => onChange({ minSpend: parseOptionalNumber(val) ?? 0 })}
+            value={formatWithSeparators(toNumericString(level.minTotalSpend))}
+            onChange={val => onChange({ minTotalSpend: parseOptionalNumber(val) ?? 0 })}
+            onFocus={e => e.target.select()}
             className="w-full"
             placeholder="15,000,000"
           />
@@ -173,13 +133,14 @@ function TierItem({
           <label className="text-xs font-medium text-slate-600">Default Rate (%)</label>
           <input
             type="number"
-            value={tier.defaultRate !== undefined ? parseFloat((tier.defaultRate * 100).toFixed(6)) : ''}
+            value={level.defaultRate !== null ? parseFloat((level.defaultRate * 100).toFixed(6)) : ''}
             onChange={e => {
               const val = parseFloat(e.target.value)
-              onChange({ defaultRate: isNaN(val) ? undefined : val / 100 })
+              onChange({ defaultRate: isNaN(val) ? null : val / 100 })
             }}
+            onFocus={e => e.target.select()}
             className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-            placeholder="Default for this tier"
+            placeholder="Default for this level"
           />
         </div>
       </div>
@@ -196,93 +157,145 @@ function TierItem({
           <p className="text-xs text-slate-400 italic">No category rules. Click "+ Add Rule" to add specific rates.</p>
         )}
 
-        {rules.length > 0 && (
-          <div className="space-y-3">
-            {rules.map((rule, rIndex) => (
-              <div key={rIndex} className="rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-3">
-                {/* Row 1: Category */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-semibold text-slate-500 uppercase">Category</label>
-                  <CategoryMultiSelect
-                    options={categoryOptions}
-                    selected={rule.categories.filter(c => !c.startsWith('DRAFT_'))}
-                    onChange={(cats) => updateRule(rIndex, 'categories', cats)}
-                  />
-                </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {rules.map((rule, rIndex) => (
+            <div key={rule.id || rIndex} className="relative group rounded-xl border-2 border-slate-100 bg-slate-50/50 p-4 transition-all hover:border-blue-200 hover:bg-white hover:shadow-md space-y-4">
+              {/* Delete Rule button - visible on hover */}
+              <button
+                type="button"
+                onClick={() => setRuleToDelete(rIndex)}
+                className="absolute -top-2 -right-2 rounded-full bg-white border border-slate-200 p-1.5 text-slate-400 shadow-sm transition hover:bg-red-50 hover:text-red-500 hover:border-red-200 z-10"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
 
-                {/* Row 2: Rate & Max Reward */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase">Rate (%)</label>
+              {/* Row 1: Category */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Categories</label>
+                </div>
+                <CategoryMultiSelect
+                  options={categoryOptions}
+                  selected={rule.categoryIds || []}
+                  onChange={(cats) => updateRule(rIndex, { categoryIds: cats })}
+                  onAddNew={() => {
+                    console.log('🔵 [DEBUG] Create New Category clicked in LevelItem')
+                    // Register this CategoryMultiSelect's onChange callback
+                    if (activeCategoryCallback) {
+                      activeCategoryCallback.current = (categoryId: string) => {
+                        console.log('🟢 [DEBUG] Auto-adding category to rule:', categoryId)
+                        updateRule(rIndex, { categoryIds: [...(rule.categoryIds || []), categoryId] })
+                      }
+                      console.log('🔵 [DEBUG] Callback registered for rule index:', rIndex)
+                    } else {
+                      console.error('🔴 [DEBUG] activeCategoryCallback is undefined!')
+                    }
+                    if (onAddCategory) onAddCategory()
+                  }}
+                />
+              </div>
+
+              {/* Row 2: Rate & Max Reward */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Rate (%)</label>
+                  <div className="relative">
                     <input
                       type="number"
-                      className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
+                      step="0.1"
+                      className="w-full rounded-lg border-slate-200 px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 bg-white"
                       value={parseFloat(((rule.rate ?? 0) * 100).toFixed(6))}
                       onChange={e => {
                         const val = parseFloat(e.target.value)
-                        // If empty or NaN, we can store 0 or leave it be.
-                        // Best to safe parse.
-                        updateRule(rIndex, 'rate', isNaN(val) ? 0 : val / 100)
+                        updateRule(rIndex, { rate: isNaN(val) ? 0 : val / 100 })
                       }}
-                      placeholder="0"
+                      onFocus={e => e.target.select()}
+                      placeholder="e.g. 15"
                     />
+                    <span className="absolute right-3 top-2 text-slate-400 text-xs">%</span>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase">Max Reward (VND)</label>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Max Reward</label>
+                  <div className="relative">
                     <NumberInputWithSuggestions
-                      value={formatWithSeparators(toNumericString(rule.max_reward))}
-                      onChange={val => updateRule(rIndex, 'max_reward', parseOptionalNumber(val))}
-                      className="w-full"
+                      value={formatWithSeparators(toNumericString(rule.maxReward))}
+                      onChange={val => updateRule(rIndex, { maxReward: parseOptionalNumber(val) })}
+                      onFocus={(e) => e.target.select()}
+                      className="w-full rounded-lg border-slate-200 pl-3 pr-8 py-2 text-sm bg-white"
                       placeholder="No Limit"
                     />
+                    <span className="absolute right-3 top-2 text-slate-400 text-[10px] font-medium">VND</span>
                   </div>
-                </div>
-
-                {/* Row 3: MCC & Delete */}
-                <div className="flex items-end gap-3">
-                  <div className="flex-1 space-y-1">
-                    <label className="text-[10px] font-semibold text-slate-500 uppercase">MCC Codes</label>
-                    <input
-                      type="text"
-                      className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                      value={rule.mcc_codes || ''}
-                      onChange={e => updateRule(rIndex, 'mcc_codes', e.target.value)}
-                      placeholder="e.g. 5411, 5812"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => removeRule(rIndex)}
-                    className="rounded-md bg-red-50 p-2 text-red-500 hover:bg-red-100 transition"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
                 </div>
               </div>
-            ))}
-          </div>
-        )}
+
+              {rule.categoryIds.length === 0 && (
+                <p className="text-[10px] text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-100 italic">
+                  Hint: Select categories this rule applies to.
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={ruleToDelete !== null}
+        onClose={() => setRuleToDelete(null)}
+        onConfirm={() => {
+          if (ruleToDelete !== null) {
+            removeRule(ruleToDelete)
+          }
+        }}
+        title="Remove Category Rule"
+        description="Are you sure you want to remove this category rule? This action cannot be undone."
+      />
     </div>
   )
 }
 
-function CategoryMultiSelect({ options, selected, onChange }: { options: CategoryOption[], selected: string[], onChange: (val: string[]) => void }) {
+
+function CategoryMultiSelect({ options, selected, onChange, onAddNew, onCategoryCreated }: { options: CategoryOption[], selected: string[], onChange: (val: string[]) => void, onAddNew?: () => void, onCategoryCreated?: (categoryId: string) => void }) {
   const expenseOptions = useMemo(() => options.filter(o => o.type === 'expense'), [options])
 
+  // Auto-add newly created category
+  const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (pendingCategoryId && !selected.includes(pendingCategoryId)) {
+      onChange([...selected, pendingCategoryId])
+      setPendingCategoryId(null)
+    }
+  }, [pendingCategoryId, selected, onChange])
+
   const dropdownOptions = useMemo(() =>
-    expenseOptions.map(opt => ({ value: opt.name, label: opt.name }))
+    expenseOptions.map(opt => ({
+      value: opt.id,
+      label: opt.name,
+      icon: opt.icon || undefined,
+      logo_url: opt.logo_url || undefined
+    }))
     , [expenseOptions])
 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-1.5">
-        {selected.map(cat => (
-          <span key={cat} className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 px-2.5 py-1 text-xs text-blue-700 font-medium">
-            {cat}
-            <button type="button" onClick={() => onChange(selected.filter(c => c !== cat))} className="hover:text-blue-900">×</button>
-          </span>
-        ))}
+        {selected.map(catId => {
+          const cat = options.find(o => o.id === catId || o.name === catId)
+          const label = cat ? cat.name : catId
+          return (
+            <span key={catId} className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-100 px-2.5 py-1 text-xs text-blue-700 font-medium">
+              {cat?.logo_url ? (
+                <img src={cat.logo_url} alt="" className="h-3 w-3 object-contain rounded-none mr-0.5" />
+              ) : cat?.icon ? (
+                <span className="text-[10px] mr-0.5">{cat.icon}</span>
+              ) : null}
+              {label}
+              <button type="button" onClick={() => onChange(selected.filter(c => c !== catId))} className="hover:text-blue-900 ml-0.5 font-bold">×</button>
+            </span>
+          )
+        })}
       </div>
       <CustomDropdown
         options={dropdownOptions}
@@ -294,66 +307,106 @@ function CategoryMultiSelect({ options, selected, onChange }: { options: Categor
         }}
         placeholder="+ Add Category"
         className="w-full"
+        allowCustom
+        onAddNew={onAddNew}
+        addLabel="Category"
       />
     </div>
   )
 }
 
-function TierList({
-  tiers,
+function LevelList({
+  levels,
   onChange,
-  categoryOptions
+  categoryOptions,
+  onAddCategory,
+  activeCategoryCallback
 }: {
-  tiers: LegacyCashbackTier[]
-  onChange: (tiers: LegacyCashbackTier[]) => void
+  levels: CashbackLevel[]
+  onChange: (levels: CashbackLevel[]) => void
   categoryOptions: CategoryOption[]
+  onAddCategory?: () => void
+  activeCategoryCallback?: React.MutableRefObject<((categoryId: string) => void) | null>
 }) {
-  const addTier = () => {
+  const [levelToDelete, setLevelToDelete] = useState<number | null>(null)
+  const addLevel = () => {
     onChange([
-      ...tiers,
-      { minSpend: 0, categories: {}, defaultRate: 0 }
+      ...levels,
+      { id: `lvl_${Date.now()}`, name: '', minTotalSpend: 0, defaultRate: null, rules: [] }
     ])
   }
 
-  const removeTier = (index: number) => {
-    const next = [...tiers]
+  const removeLevel = (index: number) => {
+    const next = [...levels]
     next.splice(index, 1)
     onChange(next)
   }
 
-  const updateTier = (index: number, updates: Partial<LegacyCashbackTier>) => {
-    const next = [...tiers]
+  const updateLevel = (index: number, updates: Partial<CashbackLevel>) => {
+    const next = [...levels]
     next[index] = { ...next[index], ...updates }
+    onChange(next)
+  }
+
+  const cloneLevel = (index: number) => {
+    const levelToClone = levels[index]
+    const clonedLevel: CashbackLevel = {
+      ...levelToClone,
+      id: `lvl_${Math.random().toString(36).substr(2, 9)}`,
+      name: levelToClone.name ? `${levelToClone.name} (Copy)` : '',
+      // Clone rules but give them new IDs
+      rules: levelToClone.rules?.map(rule => ({
+        ...rule,
+        id: `rule_${Math.random().toString(36).substr(2, 9)}`
+      }))
+    }
+    const next = [...levels]
+    next.splice(index + 1, 0, clonedLevel)
     onChange(next)
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-slate-700">Advanced Tiers</h4>
+        <h4 className="text-sm font-semibold text-slate-700">Cashback Levels</h4>
         <button
           type="button"
-          onClick={addTier}
+          onClick={addLevel}
           className="flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
         >
-          <Plus className="h-4 w-4" /> Add Tier
+          <Plus className="h-4 w-4" /> Add Level
         </button>
       </div>
 
-      {tiers.length === 0 && (
-        <p className="text-sm text-slate-500 italic">No tiers configured. Base rate applies.</p>
+      {levels.length === 0 && (
+        <p className="text-sm text-slate-500 italic">No levels configured. Base rate applies.</p>
       )}
 
-      {tiers.map((tier, index) => (
-        <TierItem
-          key={index}
-          tier={tier}
+      {levels.map((level, index) => (
+        <LevelItem
+          key={level.id || index}
+          level={level}
           index={index}
-          onRemove={() => removeTier(index)}
-          onChange={(updates) => updateTier(index, updates)}
+          onRemove={() => setLevelToDelete(index)}
+          onClone={() => cloneLevel(index)}
+          onChange={(updates) => updateLevel(index, updates)}
           categoryOptions={categoryOptions}
+          onAddCategory={onAddCategory}
+          activeCategoryCallback={activeCategoryCallback}
         />
       ))}
+
+      <ConfirmationModal
+        isOpen={levelToDelete !== null}
+        onClose={() => setLevelToDelete(null)}
+        onConfirm={() => {
+          if (levelToDelete !== null) {
+            removeLevel(levelToDelete)
+          }
+        }}
+        title="Delete Cashback Level"
+        description="Are you sure you want to delete this level and all its rules? This action cannot be undone."
+      />
     </div>
   )
 }
@@ -433,9 +486,16 @@ export function EditAccountDialog({
   const setOpen = isControllable ? externalOnOpenChange : setInternalOpen
   const [status, setStatus] = useState<StatusMessage>(null)
   const [isPending, startTransition] = useTransition()
+  const [isDirty, setIsDirty] = useState(false)
+  const [showCloseWarning, setShowCloseWarning] = useState(false)
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
+  const activeCategoryCallback = useRef<((categoryId: string) => void) | null>(null)
 
-  const parsedCashbackConfig = useMemo(
-    () => parseCashbackConfig(account.cashback_config),
+  // Protect against browser reload
+  useUnsavedChanges(isDirty)
+
+  const normalizedCashback = useMemo(
+    () => normalizeCashbackConfig(account.cashback_config),
     [account.cashback_config]
   )
   const parsedSavingsConfig = useMemo(
@@ -452,12 +512,12 @@ export function EditAccountDialog({
   const [creditLimit, setCreditLimit] = useState(formatWithSeparators(toNumericString(account.credit_limit)))
   const [annualFee, setAnnualFee] = useState(formatWithSeparators(toNumericString(account.annual_fee)))
   const [logoUrl, setLogoUrl] = useState(account.logo_url ?? '')
-  const [rate, setRate] = useState(String(parsedCashbackConfig.rate * 100))
-  const [maxAmount, setMaxAmount] = useState(formatWithSeparators(toNumericString(parsedCashbackConfig.maxAmount)))
-  const [minSpend, setMinSpend] = useState(formatWithSeparators(toNumericString(parsedCashbackConfig.minSpend)))
-  const [cycleType, setCycleType] = useState<CashbackCycleType>(parsedCashbackConfig.cycleType)
-  const [statementDay, setStatementDay] = useState(toNumericString(parsedCashbackConfig.statementDay))
-  const [dueDate, setDueDate] = useState(toNumericString(parsedCashbackConfig.dueDate))
+  const [rate, setRate] = useState(String(normalizedCashback.defaultRate * 100))
+  const [maxAmount, setMaxAmount] = useState(formatWithSeparators(toNumericString(normalizedCashback.maxBudget)))
+  const [minSpend, setMinSpend] = useState(formatWithSeparators(toNumericString(normalizedCashback.minSpendTarget)))
+  const [cycleType, setCycleType] = useState<CashbackCycleType>(normalizedCashback.cycleType)
+  const [statementDay, setStatementDay] = useState(toNumericString(normalizedCashback.statementDay))
+  const [dueDate, setDueDate] = useState(toNumericString(normalizedCashback.dueDate))
   const [interestRate, setInterestRate] = useState(toNumericString(parsedSavingsConfig.interestRate))
   const [termMonths, setTermMonths] = useState(toNumericString(parsedSavingsConfig.termMonths))
   const [maturityDate, setMaturityDate] = useState(parsedSavingsConfig.maturityDate ?? '')
@@ -487,14 +547,42 @@ export function EditAccountDialog({
     }
   }, [parentAccountId])
 
-  const [tiers, setTiers] = useState<LegacyCashbackTier[]>(parsedCashbackConfig.tiers ?? [])
+  const [levels, setLevels] = useState<CashbackLevel[]>(normalizedCashback.levels ?? [])
   const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([])
+
+  // Tracking changes for isDirty
+  useEffect(() => {
+    if (!open) {
+      setIsDirty(false)
+      return
+    }
+
+    const hasChanged =
+      name !== (account.name || '') ||
+      accountType !== account.type ||
+      securedByAccountId !== (account.secured_by_account_id || '') ||
+      logoUrl !== (account.logo_url || '') ||
+      rate !== String(normalizedCashback.defaultRate * 100) ||
+      maxAmount !== formatWithSeparators(toNumericString(normalizedCashback.maxBudget)) ||
+      minSpend !== formatWithSeparators(toNumericString(normalizedCashback.minSpendTarget)) ||
+      cycleType !== normalizedCashback.cycleType ||
+      statementDay !== toNumericString(normalizedCashback.statementDay) ||
+      dueDate !== toNumericString(normalizedCashback.dueDate) ||
+      parentAccountId !== (getSharedLimitParentId(account.cashback_config) || '') ||
+      JSON.stringify(levels) !== JSON.stringify(normalizedCashback.levels ?? [])
+
+    setIsDirty(hasChanged)
+  }, [
+    open, name, accountType, securedByAccountId, logoUrl, rate, maxAmount,
+    minSpend, cycleType, statementDay, dueDate, parentAccountId, levels,
+    account, normalizedCashback
+  ])
 
   useEffect(() => {
     const fetchCategories = async () => {
       const supabase = createClient()
-      const { data } = await supabase.from('categories').select('id, name, type').order('name')
-      if (data) setCategoryOptions(data)
+      const { data } = await supabase.from('categories').select('id, name, type, icon, logo_url').order('name')
+      if (data) setCategoryOptions(data as any)
     }
     fetchCategories()
   }, [])
@@ -523,7 +611,7 @@ export function EditAccountDialog({
   )
 
   const resetForm = () => {
-    const freshCashback = parseCashbackConfig(account.cashback_config)
+    const freshCashback = normalizeCashbackConfig(account.cashback_config)
     const freshSavings = parseSavingsConfig(account.cashback_config)
     setName(account.name)
     setAccountType(account.type)
@@ -531,9 +619,9 @@ export function EditAccountDialog({
     setIsSecured(Boolean(account.secured_by_account_id))
     setCreditLimit(formatWithSeparators(toNumericString(account.credit_limit)))
     setAnnualFee(formatWithSeparators(toNumericString(account.annual_fee)))
-    setRate(String(freshCashback.rate * 100))
-    setMaxAmount(formatWithSeparators(toNumericString(freshCashback.maxAmount)))
-    setMinSpend(formatWithSeparators(toNumericString(freshCashback.minSpend)))
+    setRate(String(freshCashback.defaultRate * 100))
+    setMaxAmount(formatWithSeparators(toNumericString(freshCashback.maxBudget)))
+    setMinSpend(formatWithSeparators(toNumericString(freshCashback.minSpendTarget)))
     setCycleType(freshCashback.cycleType)
     setStatementDay(toNumericString(freshCashback.statementDay))
     setDueDate(toNumericString(freshCashback.dueDate))
@@ -542,11 +630,18 @@ export function EditAccountDialog({
     setMaturityDate(freshSavings.maturityDate ?? '')
     setLogoUrl(account.logo_url ?? '')
     setParentAccountId(getSharedLimitParentId(account.cashback_config) ?? '')
-    setTiers(freshCashback.tiers ?? [])
+    setLevels(freshCashback.levels ?? [])
     setStatus(null)
   }
 
-  const closeDialog = () => setOpen(false)
+  const closeDialog = (force = false) => {
+    if (isDirty && !force) {
+      setShowCloseWarning(true)
+      return
+    }
+    setOpen(false)
+    setIsDirty(false)
+  }
 
   const stopPropagation = (event?: MouseEvent<HTMLDivElement>) => {
     event?.stopPropagation()
@@ -611,25 +706,29 @@ export function EditAccountDialog({
     let configPayload: Json | undefined
     if (isCreditCard) {
       configPayload = {
-        rate: rateValue / 100,
-        maxAmount: parseOptionalNumber(maxAmount),
-        minSpend: parseOptionalNumber(minSpend),
-        cycleType,
-        statementDay: cycleType === 'statement_cycle'
-          ? parseStatementDayValue(statementDay)
-          : null,
-        dueDate: parseStatementDayValue(dueDate),
+        program: {
+          defaultRate: rateValue / 100,
+          maxBudget: parseOptionalNumber(maxAmount),
+          minSpendTarget: parseOptionalNumber(minSpend),
+          cycleType,
+          statementDay: cycleType === 'statement_cycle'
+            ? parseStatementDayValue(statementDay)
+            : null,
+          dueDate: parseStatementDayValue(dueDate),
+          levels: levels.map(lvl => ({
+            id: lvl.id,
+            name: lvl.name,
+            minTotalSpend: lvl.minTotalSpend,
+            defaultRate: lvl.defaultRate,
+            rules: lvl.rules?.map(rule => ({
+              id: rule.id,
+              categoryIds: rule.categoryIds,
+              rate: rule.rate,
+              maxReward: rule.maxReward
+            }))
+          }))
+        },
         parentAccountId: parentAccountId || null,
-        hasTiers: tiers.length > 0,
-        tiers: tiers.length > 0 ? tiers.map(t => {
-          const cleanCategories: Record<string, any> = {}
-          Object.entries(t.categories).forEach(([k, v]) => {
-            if (!k.startsWith('DRAFT_')) {
-              cleanCategories[k] = v
-            }
-          })
-          return { ...t, categories: cleanCategories }
-        }) : undefined,
       }
     } else if (isAssetAccount) {
       configPayload = {
@@ -661,6 +760,7 @@ export function EditAccountDialog({
       }
 
       setOpen(false)
+      setIsDirty(false)
       router.refresh()
     })
   }
@@ -701,7 +801,7 @@ export function EditAccountDialog({
             aria-modal="true"
             aria-label="Edit account configuration"
             className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-12"
-            onClick={closeDialog}
+            onClick={() => closeDialog()}
           >
             <div
               className="w-full max-w-5xl rounded-xl bg-white shadow-2xl flex flex-col"
@@ -714,7 +814,7 @@ export function EditAccountDialog({
                 <button
                   type="button"
                   className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                  onClick={closeDialog}
+                  onClick={() => closeDialog()}
                   aria-label="Close dialog"
                 >
                   <X className="h-5 w-5" />
@@ -877,8 +977,28 @@ export function EditAccountDialog({
                           value={name}
                           onChange={event => setName(event.target.value)}
                           className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                          placeholder="Account name"
+                          placeholder="e.g. Vpbank Lady"
                         />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-sm font-medium text-slate-600">Logo/Thumbnail URL</label>
+                        <div className="flex gap-3">
+                          <input
+                            type="text"
+                            value={logoUrl}
+                            onChange={e => setLogoUrl(e.target.value)}
+                            className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            placeholder="https://example.com/logo.png"
+                          />
+                          <div className="h-10 w-10 shrink-0 rounded border border-slate-100 bg-slate-50 flex items-center justify-center overflow-hidden">
+                            {logoUrl ? (
+                              <img src={logoUrl} alt="Preview" className="h-full w-full object-contain rounded-none" />
+                            ) : (
+                              <span className="text-[10px] text-slate-400">No img</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
 
                       {isCreditCard && (
@@ -910,16 +1030,6 @@ export function EditAccountDialog({
                         </div>
                       )}
 
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-600">Logo URL</label>
-                        <input
-                          type="url"
-                          value={logoUrl}
-                          onChange={event => setLogoUrl(event.target.value)}
-                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                          placeholder="https://logo.example.com/bank.png"
-                        />
-                      </div>
 
                       {isCreditCard && (
                         <>
@@ -930,6 +1040,7 @@ export function EditAccountDialog({
                             <NumberInputWithSuggestions
                               value={creditLimit}
                               onChange={setCreditLimit}
+                              onFocus={e => e.target.select()}
                               className="w-full"
                               placeholder="Credit limit"
                               disabled={!!parentAccountId}
@@ -946,6 +1057,7 @@ export function EditAccountDialog({
                             <NumberInputWithSuggestions
                               value={annualFee}
                               onChange={setAnnualFee}
+                              onFocus={e => e.target.select()}
                               className="w-full"
                               placeholder="Annual fee"
                             />
@@ -1030,6 +1142,7 @@ export function EditAccountDialog({
                                 // Allow any input, handled by state
                                 setRate(event.target.value)
                               }}
+                              onFocus={e => e.target.select()}
                               className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                               placeholder="10"
                             />
@@ -1041,6 +1154,7 @@ export function EditAccountDialog({
                               <NumberInputWithSuggestions
                                 value={maxAmount}
                                 onChange={setMaxAmount}
+                                onFocus={e => e.target.select()}
                                 className="w-full"
                                 placeholder="Ex: 100000"
                               />
@@ -1050,6 +1164,7 @@ export function EditAccountDialog({
                               <NumberInputWithSuggestions
                                 value={minSpend}
                                 onChange={setMinSpend}
+                                onFocus={e => e.target.select()}
                                 className="w-full"
                                 placeholder="Ex: 500000"
                               />
@@ -1166,10 +1281,16 @@ export function EditAccountDialog({
                     </div>
                   </div>
 
-                  {/* Advanced Tiers - Full Width */}
+                  {/* Cashback Levels - Full Width */}
                   {isCreditCard && (
                     <div className="mt-6 pt-6 border-t border-slate-200">
-                      <TierList tiers={tiers} onChange={setTiers} categoryOptions={categoryOptions} />
+                      <LevelList
+                        levels={levels}
+                        onChange={setLevels}
+                        categoryOptions={categoryOptions}
+                        onAddCategory={() => setIsCategoryDialogOpen(true)}
+                        activeCategoryCallback={activeCategoryCallback}
+                      />
                     </div>
                   )}
 
@@ -1186,7 +1307,7 @@ export function EditAccountDialog({
                   <button
                     type="button"
                     className="rounded-md border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
-                    onClick={closeDialog}
+                    onClick={() => closeDialog()}
                   >
                     Cancel
                   </button>
@@ -1203,6 +1324,41 @@ export function EditAccountDialog({
           </div>,
           document.body
         )}
+
+      <ConfirmationModal
+        isOpen={showCloseWarning}
+        onClose={() => setShowCloseWarning(false)}
+        onConfirm={() => closeDialog(true)}
+        title="Unsaved Changes"
+        description="You have unsaved changes. Are you sure you want to discard them and close?"
+        confirmText="Discard Changes"
+        cancelText="Keep Editing"
+      />
+
+      <CategoryDialog
+        open={isCategoryDialogOpen}
+        onOpenChange={setIsCategoryDialogOpen}
+        defaultType="expense"
+        onSuccess={async (newCategoryId) => {
+          console.log('🟡 [DEBUG] CategoryDialog onSuccess called with ID:', newCategoryId)
+          // Refresh category list
+          const supabase = createClient()
+          const { data } = await supabase.from('categories').select('id, name, type, icon, logo_url').order('name')
+          console.log('🟡 [DEBUG] Refreshed categories, count:', data?.length)
+          if (data) setCategoryOptions(data as any)
+
+          // Auto-add new category using registered callback
+          console.log('🟡 [DEBUG] Checking callback - newCategoryId:', newCategoryId, 'callback exists:', !!activeCategoryCallback.current)
+          if (newCategoryId && activeCategoryCallback.current) {
+            console.log('🟢 [DEBUG] Invoking registered callback with category ID:', newCategoryId)
+            activeCategoryCallback.current(newCategoryId)
+            activeCategoryCallback.current = null
+            console.log('🟢 [DEBUG] Callback invoked and cleared')
+          } else {
+            console.error('🔴 [DEBUG] Cannot invoke callback - newCategoryId:', newCategoryId, 'callback:', activeCategoryCallback.current)
+          }
+        }}
+      />
     </>
   )
 }

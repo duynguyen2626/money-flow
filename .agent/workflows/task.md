@@ -1,136 +1,177 @@
 ---
-description: MF5.4.1 — Cashback Page QA + Polish + Consistency
+description: Task.md
 ---
 
-# MF5.4.1 — Cashback Page QA + Polish + Consistency
+# PHASE 7.1 — Cashback Rules UI Rework
 
-You are the coding agent working on **Money Flow 3**.
-MF5.4 (cashback page revived) is merged/ready for QA.
-This phase MF5.4.1 focuses on **correctness, consistency, and UX polish** without changing core architecture.
-
----
-
-## 0) Non-negotiable invariants
-
-* `cashback_cycles` is the single source of truth for cycle totals and budget hints.
-* `cashback_entries` is the ledger; exactly one row per (account_id, transaction_id).
-* `cashback_entries.metadata` must exist and be valid JSON for every row.
-* UI must not recompute budgets from raw config when cycle exists.
+> Priority decision: Start Phase 7 with **UI + naming + config normalization + versioning** (items 2,3,5).
+> Reason: It reduces confusion, prevents NaN/percent bugs, and creates a stable base for advanced category rules in 7.2.
 
 ---
 
-## 1) Goals
+## Why PHASE 7.1 is the best next canvas
 
-1. **Cashback page correctness**
+We already confirmed Phase 6 migration is clean and the Account Details now has **Transactions** + **Cashback Analysis** tabs.
+The remaining risk is: the current “Tier” UI + mixed config keys leads to user confusion, percent display bugs, and recompute uncertainty.
 
-* Totals displayed must match `cashback_cycles` fields.
-* Table rows must be consistent with `cashback_entries` + transactions.
+So Phase 7.1 focuses on:
 
-2. **Consistency of percent/rate display**
+* rename concepts (Tier → Level, Tier Rule → Category Rule)
+* normalize `accounts.cashback_config` into one canonical shape
+* introduce `cashback_config_version` to force deterministic recompute
 
-* Always show rates as % in UI.
-* Do not show NaN; handle undefined rate safely.
-
-3. **Policy explanation UX**
-
-* Policy explanation should be readable, stable, and match metadata.
-* In transaction modal edit mode, persisted metadata must show correctly.
-
-4. **Performance and stability**
-
-* Avoid N+1 server calls in cashback table.
-* Ensure no runtime console errors.
+This unlocks Phase 7.2 (advanced category rules) safely.
 
 ---
 
-## 2) Required work items
+## Scope
 
-### 2.1 Validate totals mapping (cycle → UI)
+### In scope
 
-On `/cashback/[id]` page, verify each number comes from the intended cycle field:
+### (2) Rename Tier UI and labels → Levels / Rules
 
-* Remaining cap: `remainingBudget` derived from `cashback_cycles.max_budget - real_awarded - virtual_profit`
-* Net profit: consistent definition across UI and backend
+* Everywhere in UI, replace:
 
-If any total is computed ad-hoc in UI, refactor to use cycle values.
+  * “Tier” → **Level**
+  * “Advanced Tiers” → **Cashback Levels**
+  * “Tier 1/2/3” → **Level 1/2/3**
+  * “Category Rules” stays but must be clearly nested under a Level.
 
-### 2.2 Ensure metadata backfill is safe and idempotent
+* Also update helper texts:
 
-* If you added scripts/routes to backfill `cashback_entries.metadata`, ensure:
+  * “Min Total Spend” = threshold to enter that level
+  * “Default Rate” = level default rate (inherits from program default if blank)
+  * “Max Reward” = cap for that rule/level
 
-  * running twice produces same result
-  * no duplicate entries
-  * no breaking changes when metadata already exists
+### (3) Implement/prepare Advanced Category Rules (UI groundwork, not full engine)
 
-### 2.3 Fix any NaN or missing-rate rendering
+* Keep the existing ability to add multiple category rules inside a level.
+* Improve UX:
 
-Search for patterns that can produce NaN:
+  * Add “Applies to Categories” multi-select with chips
+  * Add numeric inputs with percent formatting (UI shows %; DB stores decimals)
+  * Add “Max Reward (VND)” optional
 
-* `value={rule.rate * 100}`
-* `Number(undefined)`
+> NOTE: Full dynamic policy resolution by category will be Phase 7.2.
+> In 7.1 we only ensure the UI can reliably capture + persist rules.
 
-Replace with safe defaults:
+### (5) Add deterministic recompute triggers via versioning
 
-* `(rule.rate ?? 0) * 100`
-* render `--` when not known
+* Add column `accounts.cashback_config_version` (int, default 1).
+* Any change to cashback_config (cycleType, statementDay, rates, levels, rules, maxBudget, minSpend) must:
 
-### 2.4 Policy explanation rendering rules
-
-* Prefer showing a short label:
-
-  * e.g. `Education 10% (max 300k)`
-* If levels exist:
-
-  * show level name and threshold: `Level 2 (>= 15M)`
-* If fallback default:
-
-  * show `Default 0.5%` or `Default 0.3%`
-
-Ensure it uses:
-
-* persisted metadata when editing existing txn
-* live computed policy when creating new txn
-
-### 2.5 Avoid N+1 requests
-
-If the cashback transaction table needs policy explanations:
-
-* Do NOT fetch per-row from `/api/cashback/policy-explanation`.
-* Include necessary metadata in the page payload once (server-side) OR batch fetch.
-
-### 2.6 Add minimal automated checks (optional but recommended)
-
-Add small unit tests for:
-
-* `parseCashbackConfig` alias parsing
-* `resolveCashbackPolicy` level/rule selection
+  1. increment `cashback_config_version`
+  2. trigger recompute for recent cycles (ex: last 12 cycles)
 
 ---
 
-## 3) Acceptance criteria
+## Canonical cashback_config shape (must be enforced)
 
-* Cashback page numbers match DB `cashback_cycles` for the displayed cycle.
-* No console errors (NaN, uncontrolled input warnings).
-* Policy explanation displays correctly for:
+Agent must normalize legacy keys into this canonical JSON shape on read & write:
 
-  * default policy
-  * category rule policy
-  * level-based policy
-* No N+1 network waterfall when rendering the table.
+```json
+{
+  "program": {
+    "defaultRate": 0.003,
+    "cycleType": "statement_cycle",
+    "statementDay": 20,
+    "maxBudget": 1000000,
+    "minSpendTarget": 0,
+    "dueDate": 15
+  },
+  "levels": [
+    {
+      "id": "lvl_1",
+      "name": "Default",
+      "minTotalSpend": 0,
+      "defaultRate": null,
+      "rules": [
+        {
+          "id": "rule_1",
+          "categoryIds": ["..."],
+          "rate": 0.1,
+          "maxReward": 300000
+        }
+      ]
+    }
+  ]
+}
+```
+
+Rules:
+
+* UI displays rates as percent (10) but persist decimals (0.1)
+* If `levels` is empty, treat as only `program.defaultRate`
+* Parse legacy config keys:
+
+  * `rate` → program.defaultRate
+  * `cycle` or `cycleType` → program.cycleType
+  * `max_amt` or `maxAmount` → program.maxBudget
+  * `min_spend` or `minSpend` → program.minSpendTarget
+  * `statement_day` or `statementDay` → program.statementDay
 
 ---
 
-## 4) Branch / Commit / PR
+## Required engineering changes
 
-* **Branch:** `PHASE-9.4.1-CASHBACK-PAGE-QA-POLISH`
-* **Commit:** `MF5.4.1 - Cashback page QA, polish, and metadata consistency`
-* **PR title:** `MF5.4.1: Cashback page QA + polish + metadata consistency`
+### A) UI refactor (edit/create account dialogs)
+
+* Rename all labels + section headers.
+* Ensure numeric inputs never receive NaN (guard empty state).
+* Percent inputs:
+
+  * UI value is 0..100
+  * state stores decimal 0..1
+  * display rounding to max 2 decimals
+
+### B) Config normalization utilities
+
+* Create 1 helper:
+
+  * `normalizeCashbackConfig(rawConfig): CanonicalConfig`
+* Use it consistently in:
+
+  * account forms
+  * cashback policy resolution
+  * cashback recompute services
+
+### C) Versioning + recompute
+
+* Add DB migration:
+
+  * `accounts.cashback_config_version int not null default 1`
+* On account update, detect if cashback_config changed (deep compare canonical form).
+
+  * If changed: increment version and call recompute
+
+### D) Recompute behavior
+
+* Implement/standardize one function:
+
+  * `recomputeCashbackForAccount(accountId, { monthsBack: 12 })`
+* Must be idempotent.
 
 ---
 
-## 5) What to include in PR description
+## Acceptance criteria
 
-* Screenshot of `/cashback/[id]` totals and the SQL query used to verify.
-* One example txn row showing metadata and the displayed explanation.
-* Confirmation: no console errors.
-* Confirmation: no N+1 requests.
+1. No more “Tier” wording in UI; everything reads “Level / Rule”.
+2. Saving account config produces canonical JSON shape.
+3. Editing rates never shows 500%/800% type bugs.
+4. Changing cashback config increments version and triggers recompute.
+5. Existing accounts with legacy config still render correctly after normalization.
+
+---
+
+## Branch / Commit / PR
+
+* Branch: `PHASE-7.1-CASHBACK-RULES-UI-NORMALIZE`
+* Commit: `PHASE 7.1 - Rename tiers to levels, normalize cashback config, add versioning + recompute`
+* PR title: `Phase 7.1: Cashback rules UI refresh + config normalization + versioned recompute`
+
+---
+
+## Phase 7 roadmap (for reference)
+
+* **PHASE 7.2**: Implement full category-based policy resolution (Levels + Rules) affecting entries/cycles.
+* **PHASE 7.3**: Optional DB normalization (split rules into relational tables) only if JSON becomes too heavy.

@@ -437,25 +437,28 @@ export async function updateAccountConfig(
     payload.credit_limit = data.credit_limit
   }
 
-  // MF5.4.2: Detect changes to statementDay or cycleType to trigger recompute
-  let needsRecompute = false
+  // MF5.4.2: Detect changes to cashback_config to increment version and trigger recompute
   if (typeof data.cashback_config !== 'undefined') {
     const { data: oldAccount } = await supabase
       .from('accounts')
-      .select('cashback_config')
+      .select('cashback_config, cashback_config_version')
       .eq('id', accountId)
       .single()
 
-    const oldConfig = parseCashbackConfig(oldAccount?.cashback_config)
-    const newConfig = parseCashbackConfig(data.cashback_config)
+    const oldConfigStr = JSON.stringify(oldAccount?.cashback_config)
+    const newConfigStr = JSON.stringify(data.cashback_config)
 
-    if (
-      oldConfig.statementDay !== newConfig.statementDay ||
-      oldConfig.cycleType !== newConfig.cycleType
-    ) {
-      needsRecompute = true
+    if (oldConfigStr !== newConfigStr) {
+      const nextVersion = (Number(oldAccount?.cashback_config_version) || 1) + 1
+      payload.cashback_config_version = nextVersion
+      payload.cashback_config = data.cashback_config
+
+      console.log(`[updateAccountConfig] Config changed for ${accountId}. Incrementing version to ${nextVersion}`)
+
+      // Trigger recompute if version changed (async)
+      // We look back 3 months by default for safety on config change
+      import('@/services/cashback.service').then(m => m.recomputeAccountCashback(accountId, 3))
     }
-    payload.cashback_config = data.cashback_config
   }
 
   if (typeof data.type === 'string') {
@@ -494,12 +497,6 @@ export async function updateAccountConfig(
   if (error) {
     console.error('Error updating account configuration:', error)
     return false
-  }
-
-  // Trigger recompute if needed (async)
-  if (needsRecompute) {
-    console.log(`[updateAccountConfig] Triggering mandatory recompute for account ${accountId} due to config change`)
-    import('@/services/cashback.service').then(m => m.recomputeAccountCashback(accountId))
   }
 
   return true
