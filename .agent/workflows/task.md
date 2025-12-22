@@ -1,177 +1,174 @@
 ---
-description: Task.md
+description: Task Descriptions
 ---
 
-# PHASE 7.1 — Cashback Rules UI Rework
+# PHASE 7.2B — Cashback Rules UX (Less Cloning for Level Thresholds)
 
-> Priority decision: Start Phase 7 with **UI + naming + config normalization + versioning** (items 2,3,5).
-> Reason: It reduces confusion, prevents NaN/percent bugs, and creates a stable base for advanced category rules in 7.2.
-
----
-
-## Why PHASE 7.1 is the best next canvas
-
-We already confirmed Phase 6 migration is clean and the Account Details now has **Transactions** + **Cashback Analysis** tabs.
-The remaining risk is: the current “Tier” UI + mixed config keys leads to user confusion, percent display bugs, and recompute uncertainty.
-
-So Phase 7.1 focuses on:
-
-* rename concepts (Tier → Level, Tier Rule → Category Rule)
-* normalize `accounts.cashback_config` into one canonical shape
-* introduce `cashback_config_version` to force deterministic recompute
-
-This unlocks Phase 7.2 (advanced category rules) safely.
+> This is a refinement to Phase 7.2. Goal: **reduce manual cloning** when the same category set exists across multiple spend groups (Levels), e.g. VPBank Lady rules for <15M and ≥15M statement-cycle spend.
 
 ---
 
-## Scope
+## Problem to solve
 
-### In scope
+Current UI forces the user to:
 
-### (2) Rename Tier UI and labels → Levels / Rules
+* create Level 1 (<15M)
+* create Level 2 (≥15M)
+* then **duplicate** the same category groups (Education, Insurance, Beauty/Health/Fashion/Entertainment, Supermarket) across Levels, re-selecting categories and retyping caps.
 
-* Everywhere in UI, replace:
-
-  * “Tier” → **Level**
-  * “Advanced Tiers” → **Cashback Levels**
-  * “Tier 1/2/3” → **Level 1/2/3**
-  * “Category Rules” stays but must be clearly nested under a Level.
-
-* Also update helper texts:
-
-  * “Min Total Spend” = threshold to enter that level
-  * “Default Rate” = level default rate (inherits from program default if blank)
-  * “Max Reward” = cap for that rule/level
-
-### (3) Implement/prepare Advanced Category Rules (UI groundwork, not full engine)
-
-* Keep the existing ability to add multiple category rules inside a level.
-* Improve UX:
-
-  * Add “Applies to Categories” multi-select with chips
-  * Add numeric inputs with percent formatting (UI shows %; DB stores decimals)
-  * Add “Max Reward (VND)” optional
-
-> NOTE: Full dynamic policy resolution by category will be Phase 7.2.
-> In 7.1 we only ensure the UI can reliably capture + persist rules.
-
-### (5) Add deterministic recompute triggers via versioning
-
-* Add column `accounts.cashback_config_version` (int, default 1).
-* Any change to cashback_config (cycleType, statementDay, rates, levels, rules, maxBudget, minSpend) must:
-
-  1. increment `cashback_config_version`
-  2. trigger recompute for recent cycles (ex: last 12 cycles)
+This is high-friction and error-prone.
 
 ---
 
-## Canonical cashback_config shape (must be enforced)
+## UX Goals
 
-Agent must normalize legacy keys into this canonical JSON shape on read & write:
+1. User can define the **category sets once** and reuse them across Levels.
+2. User can input “paired” values for the same set across multiple Levels (e.g. low/high) without cloning rules manually.
+3. Still supports true cloning for unrelated rules (e.g. Medical vs Education).
+
+---
+
+## Proposed UX (Minimal change, maximum relief)
+
+### A) Rule Templates (Category Sets) within an Account
+
+Introduce an in-form concept: **Rule Templates** (local to the account config screen; persisted into cashback_config).
+
+* A template = a named set of categories.
+* Example templates:
+
+  * `Education`
+  * `Insurance`
+  * `Beauty/Health/Fashion/Entertainment`
+  * `Supermarket`
+
+**UI placement:**
+
+* Above “Cashback Levels”, add a compact section:
+
+  * `Category Sets (Templates)`
+  * [Add Set]
+  * Each set: Name + multi-select categories + (optional) icon
+
+**How it reduces work:**
+
+* In a Level’s rules area, user chooses `Use Category Set` dropdown → pick `Education` → categories auto-filled.
+
+---
+
+### B) Multi-Level Rate Input for a Template (optional, but recommended)
+
+For common patterns like VPBank Lady, provide a “2-group builder”:
+
+* User defines 2 Levels:
+
+  * Group A: `< 15,000,000` (Level 1)
+  * Group B: `≥ 15,000,000` (Level 2)
+
+Then for each Category Set template, show a compact matrix row:
+
+| Category Set | Level 1 Rate | Level 1 Max | Level 2 Rate | Level 2 Max |
+| ------------ | ------------ | ----------- | ------------ | ----------- |
+| Education    | 7.5%         | 150k        | 15%          | 200k        |
+
+**UI behavior:**
+
+* This matrix writes two rules automatically:
+
+  * One rule in Level 1
+  * One rule in Level 2
+* No cloning or reselecting categories.
+
+**Important:** This is just a UI helper. Persisted config remains the same canonical Levels/Rules shape.
+
+---
+
+### C) “Apply this rule to other levels…” shortcut (fastest win)
+
+If you want the smallest possible scope:
+
+* On each rule card, add action: **Apply to…**
+
+  * modal: select target Levels (checkbox list)
+  * options:
+
+    * copy categories only
+    * copy rate/max too
+    * copy categories but allow me to edit rate/max after
+
+This alone solves the complaint: you build Education once, then apply to Level 2 and only adjust numbers.
+
+---
+
+## How VPBank Lady is represented
+
+### Levels
+
+* Level 1: minTotalSpend = 0
+* Level 2: minTotalSpend = 15,000,000
+
+### Default fallback (both groups)
+
+* program.defaultRate = 0.001 (0.1% unlimited)
+
+### Category Rules examples
+
+* Education:
+
+  * L1: 0.075 max 150k (or 200k if the product spec says so)
+  * L2: 0.15 max 200k
+* Insurance:
+
+  * L1: 0.075 max 150k
+  * L2: 0.15 max 300k
+* Supermarket:
+
+  * L1: 0.025 max 150k
+  * L2: 0.05 max 200k
+
+---
+
+## Persistence (No schema changes)
+
+Do NOT add new tables.
+Persist templates inside cashback_config under:
 
 ```json
 {
-  "program": {
-    "defaultRate": 0.003,
-    "cycleType": "statement_cycle",
-    "statementDay": 20,
-    "maxBudget": 1000000,
-    "minSpendTarget": 0,
-    "dueDate": 15
-  },
-  "levels": [
-    {
-      "id": "lvl_1",
-      "name": "Default",
-      "minTotalSpend": 0,
-      "defaultRate": null,
-      "rules": [
-        {
-          "id": "rule_1",
-          "categoryIds": ["..."],
-          "rate": 0.1,
-          "maxReward": 300000
-        }
-      ]
-    }
-  ]
+  "templates": [
+    {"id":"tpl_edu","name":"Education","categoryIds":["..."]}
+  ],
+  "program": {...},
+  "levels": [...]
 }
 ```
 
-Rules:
+During normalization:
 
-* UI displays rates as percent (10) but persist decimals (0.1)
-* If `levels` is empty, treat as only `program.defaultRate`
-* Parse legacy config keys:
-
-  * `rate` → program.defaultRate
-  * `cycle` or `cycleType` → program.cycleType
-  * `max_amt` or `maxAmount` → program.maxBudget
-  * `min_spend` or `minSpend` → program.minSpendTarget
-  * `statement_day` or `statementDay` → program.statementDay
+* templates are optional
+* if templates exist, UI uses them
+* policy resolution ignores templates (rules already expanded into levels)
 
 ---
 
-## Required engineering changes
+## Acceptance Criteria
 
-### A) UI refactor (edit/create account dialogs)
-
-* Rename all labels + section headers.
-* Ensure numeric inputs never receive NaN (guard empty state).
-* Percent inputs:
-
-  * UI value is 0..100
-  * state stores decimal 0..1
-  * display rounding to max 2 decimals
-
-### B) Config normalization utilities
-
-* Create 1 helper:
-
-  * `normalizeCashbackConfig(rawConfig): CanonicalConfig`
-* Use it consistently in:
-
-  * account forms
-  * cashback policy resolution
-  * cashback recompute services
-
-### C) Versioning + recompute
-
-* Add DB migration:
-
-  * `accounts.cashback_config_version int not null default 1`
-* On account update, detect if cashback_config changed (deep compare canonical form).
-
-  * If changed: increment version and call recompute
-
-### D) Recompute behavior
-
-* Implement/standardize one function:
-
-  * `recomputeCashbackForAccount(accountId, { monthsBack: 12 })`
-* Must be idempotent.
+1. User can create a rule once and apply it to multiple levels without reselecting categories.
+2. Editing a template updates category selection in the UI helpers (but does not silently mutate expanded rules unless user confirms).
+3. No breaking change to existing accounts without templates.
+4. VPBank Lady setup can be entered with **~70% fewer clicks** compared to current UI.
 
 ---
 
-## Acceptance criteria
+## Recommended implementation order
 
-1. No more “Tier” wording in UI; everything reads “Level / Rule”.
-2. Saving account config produces canonical JSON shape.
-3. Editing rates never shows 500%/800% type bugs.
-4. Changing cashback config increments version and triggers recompute.
-5. Existing accounts with legacy config still render correctly after normalization.
+1. Add “Apply to other levels…” shortcut (smallest scope, biggest relief)
+2. Add Rule Templates (category sets)
+3. Add optional matrix builder (only if you want a premium UX)
 
 ---
 
-## Branch / Commit / PR
+## Branch / PR
 
-* Branch: `PHASE-7.1-CASHBACK-RULES-UI-NORMALIZE`
-* Commit: `PHASE 7.1 - Rename tiers to levels, normalize cashback config, add versioning + recompute`
-* PR title: `Phase 7.1: Cashback rules UI refresh + config normalization + versioned recompute`
-
----
-
-## Phase 7 roadmap (for reference)
-
-* **PHASE 7.2**: Implement full category-based policy resolution (Levels + Rules) affecting entries/cycles.
-* **PHASE 7.3**: Optional DB normalization (split rules into relational tables) only if JSON becomes too heavy.
+* Branch: `phase-7.2b-cashback-rules-ux`
+* PR title: `Phase 7.2B: Cashback rules UX (apply-to-levels + category templates)`

@@ -1203,9 +1203,11 @@ export function TransactionForm({
   const amountValue = typeof watchedAmount === 'number' ? Math.abs(watchedAmount) : 0
   const projectedSpend = (spendingStats?.currentSpend ?? 0) + amountValue
   const rateLimitPercent =
-    typeof cashbackProgress?.rate === 'number'
-      ? cashbackProgress.rate * 100
-      : null
+    spendingStats?.potentialRate !== undefined
+      ? spendingStats.potentialRate * 100
+      : (typeof cashbackProgress?.rate === 'number'
+        ? cashbackProgress.rate * 100
+        : null)
   const percentEntry = Number.isFinite(Number(watchedCashbackPercent ?? 0))
     ? Number(watchedCashbackPercent ?? 0)
     : 0
