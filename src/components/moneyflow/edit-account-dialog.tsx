@@ -3,19 +3,22 @@
 import { FormEvent, MouseEvent, ReactNode, useMemo, useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
-import { parseCashbackConfig, CashbackCycleType, CashbackLevel, normalizeCashbackConfig } from '@/lib/cashback'
+import { parseCashbackConfig, CashbackCycleType, CashbackLevel, normalizeCashbackConfig, CashbackCategoryRule } from '@/lib/cashback'
 import { getSharedLimitParentId } from '@/lib/account-utils'
 import { Account } from '@/types/moneyflow.types'
 import { updateAccountConfigAction } from '@/actions/account-actions'
 import type { Json } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
-import { Plus, Trash2, X, Copy } from 'lucide-react'
+import { Plus, Trash2, X, Copy, Info } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { CustomDropdown, type DropdownOption } from '@/components/ui/custom-dropdown'
 import { ConfirmationModal } from '@/components/ui/confirmation-modal'
 import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 import { NumberInputWithSuggestions } from '@/components/ui/number-input-suggestions'
 import { CategoryDialog } from '@/components/moneyflow/category-dialog'
+import { ApplyRuleDialog } from '@/components/moneyflow/apply-rule-dialog'
+import { CashbackGuideModal } from '@/components/moneyflow/cashback-guide-modal'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 type CategoryOption = { id: string; name: string; type: string; icon?: string | null; logo_url?: string | null }
@@ -38,6 +41,19 @@ const parseOptionalNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+const FieldHint = ({ content, side = "top" }: { content: string, side?: "top" | "bottom" | "left" | "right" }) => (
+  <TooltipProvider>
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>
+        <Info className="h-3.5 w-3.5 text-slate-400 hover:text-blue-500 transition-colors cursor-help" />
+      </TooltipTrigger>
+      <TooltipContent side={side} className="max-w-[200px] text-xs bg-slate-800 text-white border-slate-700">
+        {content}
+      </TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+)
+
 function LevelItem({
   level,
   index,
@@ -46,7 +62,8 @@ function LevelItem({
   onChange,
   categoryOptions,
   onAddCategory,
-  activeCategoryCallback
+  activeCategoryCallback,
+  onApplyRule
 }: {
   level: CashbackLevel
   index: number
@@ -56,6 +73,7 @@ function LevelItem({
   categoryOptions: CategoryOption[]
   onAddCategory?: () => void
   activeCategoryCallback?: React.MutableRefObject<((categoryId: string) => void) | null>
+  onApplyRule: (ruleIndex: number) => void
 }) {
   const [ruleToDelete, setRuleToDelete] = useState<number | null>(null)
   const rules = level.rules || []
@@ -89,13 +107,16 @@ function LevelItem({
     <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm space-y-4">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div className="flex items-center gap-3 flex-1">
-          <h5 className="text-sm font-bold text-slate-700 uppercase">Level {index + 1}</h5>
+          <h5 className="text-sm font-bold text-slate-700 uppercase flex items-center gap-1">
+            Level {index + 1}
+            <FieldHint content="Name of this cashback tier (e.g. 'Premium Tier', 'Standard')." />
+          </h5>
           <input
             type="text"
             value={level.name || ''}
             onChange={e => onChange({ name: e.target.value })}
             className="flex-1 max-w-xs rounded border border-slate-200 px-3 py-1.5 text-sm"
-            placeholder="e.g. Premium, Gold, Platinum"
+            placeholder="e.g., Premium (≥15M) or Standard (<15M)"
           />
         </div>
         <div className="flex items-center gap-1">
@@ -120,27 +141,47 @@ function LevelItem({
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-600">Min Total Spend</label>
+          <div className="flex items-center gap-1">
+            <label className="text-xs font-medium text-slate-600">Min Total Spend</label>
+            <FieldHint content="Customers qualify for this level when their total spending in a cycle reaches this amount. Example: 15,000,000 = ≥15M/cycle" />
+          </div>
           <NumberInputWithSuggestions
             value={formatWithSeparators(toNumericString(level.minTotalSpend))}
             onChange={val => onChange({ minTotalSpend: parseOptionalNumber(val) ?? 0 })}
             onFocus={e => e.target.select()}
             className="w-full"
-            placeholder="15,000,000"
+            placeholder="e.g., 15,000,000"
           />
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-600">Default Rate (%)</label>
+          <div className="flex items-center gap-1">
+            <label className="text-xs font-medium text-slate-600">Default Rate (%)</label>
+            <FieldHint content="Rate for categories not covered by specific rules. Usually 0.1% for 'other' spending." />
+          </div>
           <input
             type="number"
+            step="0.1"
             value={level.defaultRate !== null ? parseFloat((level.defaultRate * 100).toFixed(6)) : ''}
             onChange={e => {
               const val = parseFloat(e.target.value)
               onChange({ defaultRate: isNaN(val) ? null : val / 100 })
             }}
-            onFocus={e => e.target.select()}
+            onFocus={e => {
+              e.target.select()
+              // Auto-clear if value is 0
+              if (e.target.value === '0') {
+                e.target.value = ''
+              }
+            }}
+            onInput={e => {
+              // Prevent leading zeros
+              const input = e.target as HTMLInputElement
+              if (input.value.startsWith('0') && input.value.length > 1 && input.value[1] !== '.') {
+                input.value = input.value.replace(/^0+/, '')
+              }
+            }}
             className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-            placeholder="Default for this level"
+            placeholder="e.g., 0.1 for other categories"
           />
         </div>
       </div>
@@ -169,11 +210,34 @@ function LevelItem({
                 <X className="h-3.5 w-3.5" />
               </button>
 
+              {/* Apply to Other Levels button - visible on hover */}
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => onApplyRule(rIndex)}
+                      className="absolute -top-2 right-6 rounded-full bg-white border border-slate-200 p-1.5 text-slate-400 shadow-sm transition hover:bg-blue-50 hover:text-blue-500 hover:border-blue-200 z-10"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent className="max-w-xs">
+                    <p className="text-xs font-semibold mb-1">Copy this rule to other levels</p>
+                    <p className="text-xs text-slate-300">Useful when the same categories apply across levels with different rates (e.g., VPBank Lady: Education 15% for ≥15M, 7.5% for &lt;15M)</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
               {/* Row 1: Category */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Categories</label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                    Categories
+                    <FieldHint content="Select specific categories for this rule (e.g. Education, Insurance)." />
+                  </label>
                 </div>
+                <p className="text-[10px] text-slate-500 italic mb-1">Select categories this rate applies to (e.g., Education, Insurance)</p>
                 <CategoryMultiSelect
                   options={categoryOptions}
                   selected={rule.categoryIds || []}
@@ -198,7 +262,10 @@ function LevelItem({
               {/* Row 2: Rate & Max Reward */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Rate (%)</label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                    Rate (%)
+                    <FieldHint content="The percentage cashback for these categories (e.g. 15 for 15%)." />
+                  </label>
                   <div className="relative">
                     <input
                       type="number"
@@ -209,14 +276,30 @@ function LevelItem({
                         const val = parseFloat(e.target.value)
                         updateRule(rIndex, { rate: isNaN(val) ? 0 : val / 100 })
                       }}
-                      onFocus={e => e.target.select()}
-                      placeholder="e.g. 15"
+                      onFocus={e => {
+                        e.target.select()
+                        // Auto-clear if value is 0
+                        if (e.target.value === '0') {
+                          e.target.value = ''
+                        }
+                      }}
+                      onInput={e => {
+                        // Prevent leading zeros
+                        const input = e.target as HTMLInputElement
+                        if (input.value.startsWith('0') && input.value.length > 1 && input.value[1] !== '.') {
+                          input.value = input.value.replace(/^0+/, '')
+                        }
+                      }}
+                      placeholder="e.g., 15 for 15%"
                     />
                     <span className="absolute right-3 top-2 text-slate-400 text-xs">%</span>
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Max Reward</label>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                    Max Reward
+                    <FieldHint content="Maximum cashback amount allowed for these categories per cycle (e.g. 300,000)." />
+                  </label>
                   <div className="relative">
                     <NumberInputWithSuggestions
                       value={formatWithSeparators(toNumericString(rule.maxReward))}
@@ -329,6 +412,8 @@ function LevelList({
   activeCategoryCallback?: React.MutableRefObject<((categoryId: string) => void) | null>
 }) {
   const [levelToDelete, setLevelToDelete] = useState<number | null>(null)
+  const [applyingRule, setApplyingRule] = useState<{ levelIndex: number, ruleIndex: number, rule: CashbackCategoryRule } | null>(null)
+
   const addLevel = () => {
     onChange([
       ...levels,
@@ -365,10 +450,39 @@ function LevelList({
     onChange(next)
   }
 
+  const handleApplyRuleConfirm = (targetLevelIds: string[], mode: 'cat_only' | 'cat_rate') => {
+    if (!applyingRule) return
+
+    const { rule } = applyingRule
+    const nextLevels = [...levels]
+
+    targetLevelIds.forEach(targetId => {
+      const targetIndex = nextLevels.findIndex(l => l.id === targetId)
+      if (targetIndex !== -1) {
+        const targetLevel = { ...nextLevels[targetIndex] }
+        const newRule: CashbackCategoryRule = {
+          id: `rule_${Math.random().toString(36).substr(2, 9)}`,
+          categoryIds: [...rule.categoryIds],
+          rate: mode === 'cat_rate' ? rule.rate : 0,
+          maxReward: mode === 'cat_rate' ? rule.maxReward : null
+        }
+
+        targetLevel.rules = [...(targetLevel.rules || []), newRule]
+        nextLevels[targetIndex] = targetLevel
+      }
+    })
+
+    onChange(nextLevels)
+    setApplyingRule(null)
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-slate-700">Cashback Levels</h4>
+        <div className="flex items-center gap-2">
+          <h4 className="text-sm font-semibold text-slate-700">Cashback Levels</h4>
+          <CashbackGuideModal />
+        </div>
         <button
           type="button"
           onClick={addLevel}
@@ -377,6 +491,8 @@ function LevelList({
           <Plus className="h-4 w-4" /> Add Level
         </button>
       </div>
+
+
 
       {levels.length === 0 && (
         <p className="text-sm text-slate-500 italic">No levels configured. Base rate applies.</p>
@@ -393,8 +509,29 @@ function LevelList({
           categoryOptions={categoryOptions}
           onAddCategory={onAddCategory}
           activeCategoryCallback={activeCategoryCallback}
+          onApplyRule={(ruleIndex) => {
+            if (level.rules && level.rules[ruleIndex]) {
+              setApplyingRule({
+                levelIndex: index,
+                ruleIndex: ruleIndex,
+                rule: level.rules[ruleIndex]
+              })
+            }
+          }}
         />
       ))}
+
+      {applyingRule && (
+        <ApplyRuleDialog
+          isOpen={true}
+          onClose={() => setApplyingRule(null)}
+          onConfirm={handleApplyRuleConfirm}
+          levels={levels.filter((_, idx) => idx !== applyingRule.levelIndex).map(l => ({ id: l.id, name: l.name }))}
+          ruleSummary={`${applyingRule.rule.categoryIds.length} Categor${applyingRule.rule.categoryIds.length === 1 ? 'y' : 'ies'}, ${(applyingRule.rule.rate * 100).toFixed(1)}%`}
+          currentLevelId={levels[applyingRule.levelIndex].id}
+          currentLevelName={levels[applyingRule.levelIndex].name || `Level ${applyingRule.levelIndex + 1}`}
+        />
+      )}
 
       <ConfirmationModal
         isOpen={levelToDelete !== null}
