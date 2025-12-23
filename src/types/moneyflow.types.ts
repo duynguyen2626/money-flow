@@ -59,7 +59,9 @@ export type DebtAccount = {
 export type MonthlyDebtSummary = {
   tag?: string | null
   tagLabel: string
-  amount: number
+  amount: number        // Remains (Net: Lent - Repaid)
+  total_debt: number   // Total Lent
+  total_repaid: number // Total Repaid
   occurred_at?: string | null
 }
 

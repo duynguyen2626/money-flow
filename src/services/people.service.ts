@@ -234,7 +234,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     const { data: monthlyLines, error: monthlyLinesError } = await supabase
       .from('transaction_lines')
       .select('account_id, amount, type, transactions!inner(tag, occurred_at, status)')
-      .eq('type', 'debit')
+      .in('type', ['debit', 'credit'])
       .in('account_id', debtAccountIds)
       .neq('transactions.status', 'void')
       .order('occurred_at', { ascending: false, foreignTable: 'transactions' })
@@ -268,13 +268,17 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         const updated: MonthlyDebtSummary = existing
           ? {
             ...existing,
-            amount: existing.amount + amountValue,
+            total_debt: existing.total_debt + (line.type === 'debit' ? amountValue : 0),
+            total_repaid: existing.total_repaid + (line.type === 'credit' ? amountValue : 0),
+            amount: existing.amount + (line.type === 'debit' ? amountValue : -amountValue),
             occurred_at: existing.occurred_at ?? (validDate ? validDate.toISOString() : occurredAt),
           }
           : {
             tag: tagValue ?? undefined,
             tagLabel: label,
-            amount: amountValue,
+            total_debt: line.type === 'debit' ? amountValue : 0,
+            total_repaid: line.type === 'credit' ? amountValue : 0,
+            amount: line.type === 'debit' ? amountValue : -amountValue,
             occurred_at: validDate ? validDate.toISOString() : occurredAt ?? undefined,
           }
 
