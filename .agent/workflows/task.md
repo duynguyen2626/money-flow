@@ -1,139 +1,75 @@
----
-description: Task Descriptions
----
+🚨 GRAVITY TASK: M1.1 - REFACTOR CORE ACCOUNT & CASHBACK LOGIC
 
-# PHASE 7.3 — Cashback Policy Engine (Priority, Conflict Resolution, Preview)
+Status: CRITICAL
+Priority: P0 (Stop existing work, fix this first)
+Context: The integration of Cashback Analysis has corrupted the Account Balance logic and introduced RLS blocking issues. The Data Layer is currently unreliable.
 
-## Goal
+🎯 OBJECTIVES
 
-Finalize the cashback policy engine so that **any transaction always resolves to exactly one explainable policy**.
-This phase completes the cashback logic after UX improvements in Phase 7.2B.
+Restructure the Database Logic and Service Layer to ensure Data Integrity for Accounts and Cashback Cycles.
 
----
+🛠️ SPECIFIC TASKS
 
-## In Scope
+1. 🛡️ Fix Database Security & Integrity (RLS)
 
-### 1. Deterministic Policy Resolution (Final Form)
+Problem: Failed to sync cashback... new row violates row-level security policy for table "cashback_cycles".
 
-Implement a strict resolution order when multiple rules may apply:
+Action:
 
-**Resolution order:**
+Audit and Fix RLS policies for cashback_cycles and cashback_entries.
 
-1. Active Level (by min_total_spend)
-2. Category Rules inside the active Level
+Ensure the authenticated role can INSERT/UPDATE these tables when triggered by a transaction change.
 
-   * More specific rules win (smaller category set)
-   * If equal specificity, lower index (earlier rule) wins
-3. Level default rate
-4. Program default rate (fallback)
+Verification: Run a script to simulate a transaction insert and ensure cashback_cycles accepts the data.
 
-Only ONE policy must be applied per transaction.
+2. 🧮 Fix Account Balance Logic (The "30M Limit" Bug)
 
----
+Problem: Limit 30M, Spent ~2.9M, but Balance = 32.9M and Available = 62.9M.
 
-### 2. Rule Priority & Conflict Handling
+Root Cause: The current logic is incorrectly adding Debt to Limit or treating Debt as positive Assets during aggregation.
 
-Enhance rule metadata:
+Action:
 
-```ts
-policy: {
-  levelId: string;
-  ruleId?: string;
-  ruleType: 'category' | 'level_default' | 'program_default';
-  priority: number;
-}
-```
+Refactor: Update calculate_account_balance (SQL or TS Service) to strictly follow the formulas in .agent/context/domain_logic.md.
 
-Rules:
+Display: Ensure account-card.tsx uses the correct Available formula.
 
-* priority is implicit from order (earlier = higher priority)
-* no manual priority UI yet
-* conflict resolution must be fully deterministic
+3. 🔄 Refactor Cashback Trigger Logic (The "Cycle" Bug)
 
----
+Problem: Cashback is pulling wrong tags (DEC25 for debt vs Cashback Cycle), and Edits don't trigger updates.
 
-### 3. Cashback Preview / Simulation
+Action:
 
-Add a preview layer (read-only):
+Unify Cycle Logic: Implement the "Cashback Cycle Determination" logic from .agent/context/domain_logic.md.
 
-```ts
-simulateCashback({
-  accountId,
-  amount,
-  categoryId,
-  occurredAt
-}) => {
-  rate,
-  maxReward,
-  estimatedReward,
-  appliedLevel,
-  appliedRule
-}
-```
+Triggers: Ensure INSERT, UPDATE, and DELETE on transactions table correctly trigger the cashback recalculation.
 
-Usage:
+Metadata: Ensure year is handled to prevent Year-over-Year collision.
 
-* Transaction add/edit modal
-* Tooltip in Cashback Analysis table
+4. 🧹 Data Cleanup Script
 
-Preview must NOT persist data.
+Create a script (scripts/hotfix-m1-integrity.ts) to:
 
----
+Recalculate current_balance for all accounts based on actual transaction history using the corrected formulas.
 
-### 4. Entry Generation (Final Rules)
+Wipe invalid cashback_cycles / cashback_entries.
 
-When persisting:
+Re-sync Cashback history from transactions table.
 
-* One transaction → one cashback_entry
-* entry.metadata.policy must fully describe resolution
-* Respect cycle budget and overflow rules
+🧪 VERIFICATION (Definition of Done)
 
----
+Balance Check: Account with 30M Limit and 2.9M Debt MUST show:
 
-### 5. UI Enhancements (Minimal)
+Balance: -2.9M (or 2.9M Debt)
 
-* Cashback Analysis table:
+Available: ~27.1M
 
-  * Show Policy column (Level + Rule name)
-  * Hover tooltip shows resolution details
+Sync Check: Creating/Editing a Transaction (via UI or SQL) MUST update cashback_cycles.
 
-* Transaction modal:
+No Console Errors: No RLS 42501 errors in logs.
 
-  * Show preview hint ("Estimated cashback: …")
-
-No redesign beyond this.
-
----
-
-## Out of Scope
-
-* No new database tables
-* No relational refactor of rules
-* No admin dashboard
-
----
-
-## Acceptance Criteria
-
-1. Any transaction resolves to exactly one policy
-2. Conflicting category rules always resolve deterministically
-3. Cashback preview matches persisted result
-4. Editing rules triggers recompute correctly
-5. No NaN / undefined cashback values
-
----
-
-## Test Scenarios
-
-1. Overlapping category rules (same category in 2 rules)
-2. Multi-category transaction
-3. No category (fallback)
-4. Budget exhausted
-5. Preview vs persisted consistency
-
----
-
-## Branch / PR
-
-* Branch: phase-7.3-cashback-policy-engine
-* PR title: Phase 7.3 – Cashback Policy Engine (priority, conflicts, preview)
+Instruction for Agent: 1. Read @domain_logic.md carefully.
+2. Fix RLS policies in supabase/migrations.
+3. Fix Balance calculation in src/services/account.service.ts or DB functions.
+4. Fix Cashback triggers in src/services/cashback.service.ts or DB triggers.
+5. Run cleanup script.

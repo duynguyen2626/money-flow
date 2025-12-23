@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useMemo } from 'react'
+import { Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import {
@@ -132,6 +133,7 @@ export function EditShopDialog({ shop, categories = [] }: EditShopDialogProps) {
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={isPending}>
+            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isPending ? 'Saving...' : 'Update Shop'}
           </Button>
         </DialogFooter>

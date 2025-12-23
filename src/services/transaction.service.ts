@@ -530,7 +530,14 @@ export async function loadTransactions(options: {
   const { data, error } = await query;
 
   if (error || !data) {
-    console.error("Error fetching transactions:", error);
+    console.error("Error fetching transactions:", {
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+      hasData: !!data,
+      fullError: error
+    });
     return [];
   }
 

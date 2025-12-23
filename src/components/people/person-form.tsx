@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { z } from 'zod'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -290,6 +291,7 @@ export function PersonForm({
           disabled={isSubmitting}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
         >
+          {isSubmitting && <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" />}
           {isSubmitting ? 'Dang luu...' : submitLabel ?? (mode === 'create' ? 'Tao moi' : 'Cap nhat')}
         </button>
       </div>

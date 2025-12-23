@@ -29,6 +29,8 @@ import {
   getCashbackCycleRange,
   ParsedCashbackConfig,
 } from "@/lib/cashback";
+import { createClient as createSupabaseClient } from "@/lib/supabase/client";
+import { getDisplayBalance } from "@/lib/display-balance";
 import {
   CashbackCard,
   AccountSpendingStats,
@@ -60,6 +62,7 @@ import {
   UploadCloud,
   Clock,
   Sparkles,
+  Loader2,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -174,23 +177,19 @@ const REFUND_CATEGORY_ID = "e0000000-0000-0000-0000-000000000095";
 
 export type TransactionFormValues = z.infer<typeof formSchema>;
 
-const cycleDateFormatter = new Intl.DateTimeFormat("en-US", {
-  day: "2-digit",
-  month: "2-digit",
-});
-
-function formatRangeLabel(range: { start: Date; end: Date }, targetDate: Date) {
+function formatRangeLabel(range: { start: Date; end: Date }) {
   const fmt = (date: Date) => {
     const day = String(date.getDate()).padStart(2, "0");
     const month = String(date.getMonth() + 1).padStart(2, "0");
-    const year = date.getFullYear();
-    return `${day}/${month}/${year}`;
+    return `${day}.${month}`;
   };
 
-  const diffTime = range.end.getTime() - targetDate.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return `${fmt(range.start)} - ${fmt(range.end)}`;
+}
 
-  return `Cycle: ${fmt(range.start)} - ${fmt(range.end)} (Remaining: ${diffDays} days)`;
+function formatCycleRangeFromIso(start?: string | null, end?: string | null) {
+  if (!start || !end) return "";
+  return formatRangeLabel({ start: new Date(start), end: new Date(end) });
 }
 
 function getCycleLabelForDate(
@@ -204,9 +203,37 @@ function getCycleLabelForDate(
   const referenceDate = targetDate ?? new Date();
   const range = getCashbackCycleRange(config, referenceDate);
   if (!range) {
-    return "Cycle: -- (Missing Config)";
+    return "--";
   }
-  return formatRangeLabel(range, referenceDate);
+  return formatRangeLabel(range);
+}
+
+function parseDateInput(value: string): Date | null {
+  const match = value.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!match) return null;
+
+  const day = Number(match[1]);
+  const month = Number(match[2]);
+  const year = Number(match[3]);
+
+  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) {
+    return null;
+  }
+
+  if (month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+
+  const candidate = new Date(year, month - 1, day, 12, 0, 0);
+  if (
+    candidate.getFullYear() !== year ||
+    candidate.getMonth() !== month - 1 ||
+    candidate.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return candidate;
 }
 
 type TransactionFormProps = {
@@ -323,11 +350,13 @@ export function TransactionForm({
     "expense" | "income" | "debt" | "transfer" | "repayment" | "quick-people"
   >(initialValues?.type || defaultType || "expense");
   const [accountFilter, setAccountFilter] = useState<
-    "all" | "bank" | "credit" | "other"
-  >("all");
+    "credit" | "account" | "other" | "all"
+  >("credit");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [payerName, setPayerName] = useState<string>("");
   const [isInstallment, setIsInstallment] = useState(false);
+  const [recentAccountIds, setRecentAccountIds] = useState<string[]>([]);
+  const [dateInputValue, setDateInputValue] = useState("");
 
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [isShopDialogOpen, setIsShopDialogOpen] = useState(false);
@@ -355,6 +384,7 @@ export function TransactionForm({
 
   // Fix for Form Reset Loop
   const initialValuesRef = useRef(initialValues);
+  const hiddenDateInputRef = useRef<HTMLInputElement | null>(null);
 
   // Force update ref if transactionId changes (switching to another txn)
   useEffect(() => {
@@ -837,6 +867,55 @@ export function TransactionForm({
     name: "occurred_at",
   });
 
+  useEffect(() => {
+    let active = true;
+    const loadRecentAccounts = async () => {
+      try {
+        const supabase = createSupabaseClient();
+        const { data, error } = await supabase
+          .from("transactions")
+          .select("account_id, target_account_id, created_at")
+          .order("created_at", { ascending: false })
+          .limit(50);
+
+        if (error) {
+          console.error("Failed to load recent accounts:", error);
+          return;
+        }
+
+        const ids: string[] = [];
+        const pushUnique = (id?: string | null) => {
+          if (!id || ids.includes(id)) return;
+          ids.push(id);
+        };
+
+        (data ?? []).forEach((row: any) => {
+          pushUnique(row.account_id);
+          pushUnique(row.target_account_id);
+        });
+
+        if (active) {
+          setRecentAccountIds(ids);
+        }
+      } catch (err) {
+        console.error("Failed to load recent accounts:", err);
+      }
+    };
+
+    loadRecentAccounts();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!watchedDate) {
+      setDateInputValue("");
+      return;
+    }
+    setDateInputValue(format(watchedDate, "dd.MM.yyyy"));
+  }, [watchedDate]);
+
   const watchedPersonId = useWatch({
     control,
     name: "person_id",
@@ -952,26 +1031,27 @@ export function TransactionForm({
       .filter((cat) => {
         if (cat.id === watchedCategoryId) return true;
 
-        const kind = cat.kind;
+        const kind = cat.kind ?? null;
+        const allowMissingKind = kind === null;
 
         // Income tab: type=income AND kind=internal
         if (transactionType === "income") {
-          return cat.type === "income" && kind === "internal";
+          return cat.type === "income" && (kind === "internal" || allowMissingKind);
         }
 
         // Expense tab: type=expense AND kind=external
         if (transactionType === "expense") {
-          return cat.type === "expense" && kind === "external";
+          return cat.type === "expense" && (kind === "external" || allowMissingKind);
         }
 
         // Lending tab: type=expense AND kind=external
         if (transactionType === "debt") {
-          return cat.type === "expense" && kind === "external";
+          return cat.type === "expense" && (kind === "external" || allowMissingKind);
         }
 
         // Repay tab: type=income AND kind=external
         if (transactionType === "repayment") {
-          return cat.type === "income" && kind === "external";
+          return cat.type === "income" && (kind === "external" || allowMissingKind);
         }
 
         // Transfer tab: type=transfer (kind doesn't matter)
@@ -1037,93 +1117,158 @@ export function TransactionForm({
     });
   }, [categoryOptions, form, isRefundMode, refundCategoryId]);
 
-  const accountOptions = useMemo(() => {
-    let filteredAccounts = sourceAccounts.filter((acc) => {
-      // Filter by type if a filter is active
-      if (accountFilter === "bank" && acc.type !== "bank") return false;
-      if (accountFilter === "credit" && acc.type !== "credit_card")
-        return false;
-      if (
-        accountFilter === "other" &&
-        (acc.type === "bank" || acc.type === "credit_card")
-      )
-        return false;
+  const { accountOptions, accountOptionGroups } = useMemo(() => {
+    const accountTypes = {
+      credit: new Set(["credit_card"]),
+      account: new Set(["bank", "cash", "ewallet"]),
+      save: new Set(["savings", "investment", "asset"]),
+    };
 
-      // Hide system accounts (e.g., "System Account") unless in specific modes if needed
-      // Based on previous context, REFUND_PENDING_ACCOUNT_ID is a system account.
+    const matchesFilter = (acc: Account) => {
+      if (accountFilter === "credit") return accountTypes.credit.has(acc.type);
+      if (accountFilter === "account") return accountTypes.account.has(acc.type);
+      if (accountFilter === "other") {
+        return (
+          !accountTypes.credit.has(acc.type) &&
+          !accountTypes.account.has(acc.type)
+        );
+      }
+      return true;
+    };
+
+    const eligibleAccounts = sourceAccounts.filter((acc) => {
+      if (acc.type === "system" || acc.type === "debt") return false;
+      if (!matchesFilter(acc)) return false;
+
       if (
         acc.id === REFUND_PENDING_ACCOUNT_ID &&
         (!isRefundMode || refundStatus !== "pending")
       )
         return false;
-
-      // Block Credit Cards for Transfer logic
       if (transactionType === "transfer" && acc.type === "credit_card")
         return false;
-
       return true;
     });
 
-    // If category is selected, sort relevant accounts to top (existing logic)
-    if (watchedCategoryId) {
-      const category = categories.find((c) => c.id === watchedCategoryId);
-      if (category && category.name) {
-        // ... (existing sort logic if needed)
-      }
+    const buildItem = (acc: Account) => {
+      const displayBalance =
+        acc.type === "credit_card"
+          ? getDisplayBalance(acc, "family_tab", sourceAccounts)
+          : acc.current_balance ?? 0;
+      const typeLabel = acc.type.replace("_", " ");
+      return {
+        value: acc.id,
+        label: acc.name,
+        description: `${typeLabel} - ${numberFormatter.format(displayBalance)}`,
+        searchValue: `${acc.name} ${typeLabel} ${displayBalance}`,
+        icon: acc.logo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={acc.logo_url}
+            alt={acc.name}
+            className="h-5 w-5 object-contain rounded-none"
+          />
+        ) : (
+          <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
+            {getAccountInitial(acc.name)}
+          </span>
+        ),
+      };
+    };
+
+    const recentAccounts = recentAccountIds
+      .map((id) => eligibleAccounts.find((acc) => acc.id === id))
+      .filter((acc): acc is Account => Boolean(acc))
+      .slice(0, 6);
+    const recentSet = new Set(recentAccounts.map((acc) => acc.id));
+
+    const creditAccounts = eligibleAccounts.filter(
+      (acc) => accountTypes.credit.has(acc.type) && !recentSet.has(acc.id),
+    );
+    const accountAccounts = eligibleAccounts.filter(
+      (acc) => accountTypes.account.has(acc.type) && !recentSet.has(acc.id),
+    );
+    const saveAccounts = eligibleAccounts.filter(
+      (acc) => accountTypes.save.has(acc.type) && !recentSet.has(acc.id),
+    );
+    const otherAccounts = eligibleAccounts.filter(
+      (acc) =>
+        !recentSet.has(acc.id) &&
+        !accountTypes.credit.has(acc.type) &&
+        !accountTypes.account.has(acc.type) &&
+        !accountTypes.save.has(acc.type),
+    );
+
+    let groups = [];
+    if (accountFilter === "all") {
+      groups = [
+        { label: "Recent", items: recentAccounts.map(buildItem) },
+        { label: "Credit", items: creditAccounts.map(buildItem) },
+        { label: "Account", items: accountAccounts.map(buildItem) },
+        { label: "Save", items: saveAccounts.map(buildItem) },
+        { label: "Others", items: otherAccounts.map(buildItem) },
+      ];
+    } else if (accountFilter === "credit") {
+      groups = [
+        { label: "Recent", items: recentAccounts.map(buildItem) },
+        { label: "Credit", items: creditAccounts.map(buildItem) },
+      ];
+    } else if (accountFilter === "account") {
+      groups = [
+        { label: "Recent", items: recentAccounts.map(buildItem) },
+        { label: "Account", items: accountAccounts.map(buildItem) },
+      ];
+    } else {
+      groups = [
+        { label: "Recent", items: recentAccounts.map(buildItem) },
+        { label: "Others", items: otherAccounts.map(buildItem) },
+      ];
     }
 
-    return filteredAccounts.map((acc) => ({
-      value: acc.id,
-      label: acc.name,
-      description: `${acc.type.replace("_", " ")} - ${numberFormatter.format(acc.current_balance)}`,
-      searchValue: `${acc.name} ${acc.type.replace("_", " ")} ${acc.current_balance}`,
-      icon: acc.logo_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={acc.logo_url}
-          alt={acc.name}
-          className="h-5 w-5 object-contain rounded-none"
-        />
-      ) : (
-        <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
-          {getAccountInitial(acc.name)}
-        </span>
-      ),
-    }));
+    const filteredGroups = groups.filter((group) => group.items.length > 0);
+    const items = filteredGroups.flatMap((group) => group.items);
+
+    return { accountOptions: items, accountOptionGroups: filteredGroups };
   }, [
     sourceAccounts,
-    watchedCategoryId,
-    categories,
-    transactionType,
+    recentAccountIds,
     accountFilter,
     isRefundMode,
     refundStatus,
+    transactionType,
   ]);
 
   const destinationAccountOptions = useMemo(() => {
-    let filteredAccounts = allAccounts;
-    if (watchedAccountId) {
-      filteredAccounts = allAccounts.filter((a) => a.id !== watchedAccountId);
-    }
+    const filteredAccounts = allAccounts.filter((acc) => {
+      if (acc.type === "system" || acc.type === "debt") return false;
+      if (watchedAccountId && acc.id === watchedAccountId) return false;
+      return true;
+    });
 
-    return filteredAccounts.map((acc) => ({
-      value: acc.id,
-      label: acc.name,
-      description: numberFormatter.format(acc.current_balance),
-      searchValue: `${acc.name} ${acc.type.replace("_", " ")} ${acc.current_balance}`,
-      icon: acc.logo_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={acc.logo_url}
-          alt={acc.name}
-          className="h-5 w-5 object-contain rounded-none"
-        />
-      ) : (
-        <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
-          {getAccountInitial(acc.name)}
-        </span>
-      ),
-    }));
+    return filteredAccounts.map((acc) => {
+      const displayBalance =
+        acc.type === "credit_card"
+          ? getDisplayBalance(acc, "family_tab", allAccounts)
+          : acc.current_balance ?? 0;
+      return {
+        value: acc.id,
+        label: acc.name,
+        description: numberFormatter.format(displayBalance),
+        searchValue: `${acc.name} ${acc.type.replace("_", " ")} ${displayBalance}`,
+        icon: acc.logo_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={acc.logo_url}
+            alt={acc.name}
+            className="h-5 w-5 object-contain rounded-none"
+          />
+        ) : (
+          <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
+            {getAccountInitial(acc.name)}
+          </span>
+        ),
+      };
+    });
   }, [allAccounts, watchedAccountId]);
 
   const personOptions = useMemo(
@@ -2023,21 +2168,62 @@ export function TransactionForm({
         control={control}
         name="occurred_at"
         render={({ field }) => (
-          <input
-            type="date"
-            value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
-            onChange={(event) => {
-              const dateStr = event.target.value;
-              if (!dateStr) {
-                return; // Don't allow empty date for now
-              }
-              const [y, m, d] = dateStr.split("-").map(Number);
-              const newDate = new Date(y, m - 1, d, 12, 0, 0); // Set to noon to avoid timezone issues
-
-              field.onChange(newDate);
-            }}
-            className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="dd.mm.yyyy"
+              value={dateInputValue}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                setDateInputValue(nextValue);
+                const parsed = parseDateInput(nextValue);
+                if (parsed) {
+                  field.onChange(parsed);
+                }
+              }}
+              onBlur={() => {
+                const parsed = parseDateInput(dateInputValue);
+                if (!parsed && field.value) {
+                  setDateInputValue(format(field.value, "dd.MM.yyyy"));
+                }
+              }}
+              className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 pr-10 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const input = hiddenDateInputRef.current;
+                if (!input) return;
+                const picker = input as HTMLInputElement & { showPicker?: () => void };
+                if (typeof picker.showPicker === "function") {
+                  picker.showPicker();
+                } else {
+                  input.focus();
+                  input.click();
+                }
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-500 hover:text-slate-700"
+              aria-label="Open date picker"
+            >
+              <Calendar className="h-4 w-4" />
+            </button>
+            <input
+              ref={hiddenDateInputRef}
+              type="date"
+              value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
+              onChange={(event) => {
+                const dateStr = event.target.value;
+                if (!dateStr) return;
+                const [y, m, d] = dateStr.split("-").map(Number);
+                const newDate = new Date(y, m - 1, d, 12, 0, 0);
+                field.onChange(newDate);
+              }}
+              className="absolute h-0 w-0 opacity-0 pointer-events-none"
+              tabIndex={-1}
+              aria-hidden="true"
+            />
+          </div>
         )}
       />
       {errors.occurred_at && (
@@ -2150,6 +2336,7 @@ export function TransactionForm({
           render={({ field }) => (
             <Combobox
               items={accountOptions}
+              groups={accountOptionGroups}
               value={field.value}
               onValueChange={field.onChange}
               placeholder={
@@ -2163,28 +2350,28 @@ export function TransactionForm({
               className="h-11"
               tabs={[
                 {
-                  value: "all",
-                  label: "All",
-                  active: accountFilter === "all",
-                  onClick: () => setAccountFilter("all"),
-                },
-                {
-                  value: "bank",
-                  label: "Bank",
-                  active: accountFilter === "bank",
-                  onClick: () => setAccountFilter("bank"),
-                },
-                {
                   value: "credit",
                   label: "Credit",
                   active: accountFilter === "credit",
                   onClick: () => setAccountFilter("credit"),
                 },
                 {
+                  value: "account",
+                  label: "Account",
+                  active: accountFilter === "account",
+                  onClick: () => setAccountFilter("account"),
+                },
+                {
                   value: "other",
                   label: "Others",
                   active: accountFilter === "other",
                   onClick: () => setAccountFilter("other"),
+                },
+                {
+                  value: "all",
+                  label: "All",
+                  active: accountFilter === "all",
+                  onClick: () => setAccountFilter("all"),
                 },
               ]}
               onAddNew={() => setIsAccountDialogOpen(true)}
@@ -2269,7 +2456,7 @@ export function TransactionForm({
         </h4>
         {spendingStats && spendingStats.cycle && (
           <span className="text-xs text-slate-500">
-            Cycle: {spendingStats.cycle.label}
+            Cycle: {formatCycleRangeFromIso(spendingStats.cycle.start, spendingStats.cycle.end) || spendingStats.cycle.label}
           </span>
         )}
       </div>
@@ -2371,7 +2558,7 @@ export function TransactionForm({
       <div className="border-t border-indigo-200/80 pt-2 text-slate-500 space-y-1">
         <p className="text-xs">
           <span className="font-semibold text-slate-700">Cycle:</span>{" "}
-          {selectedCycleLabel ?? "N/A"}
+          {selectedCycleLabel || "N/A"}
         </p>
 
         {/* Smart Hint Display */}
@@ -3394,6 +3581,9 @@ export function TransactionForm({
                     : undefined
                 }
               >
+                {isSubmitting && (
+                  <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" />
+                )}
                 {submitLabel}
               </button>
             </div>

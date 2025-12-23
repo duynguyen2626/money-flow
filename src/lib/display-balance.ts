@@ -1,4 +1,5 @@
 import { Account } from '@/types/moneyflow.types'
+import { getCreditCardAvailableBalance } from '@/lib/account-balance'
 
 export type DisplayContext = 'family_tab' | 'table' | 'card' | 'other'
 
@@ -20,6 +21,9 @@ export function getDisplayBalance(
 ): number {
     // If not in family tab, always show own balance
     if (context !== 'family_tab') {
+        if (account.type === 'credit_card') {
+            return getCreditCardAvailableBalance(account)
+        }
         return account.current_balance ?? 0
     }
 
@@ -60,50 +64,13 @@ export function getDisplayBalance(
 
             const familyMembers = [parent, ...children];
 
-            // Calculate Total Used
-            // Assumption: Credit Card 'current_balance' = Available Limit.
-            // Used = Credit Limit - Current Balance.
-            // If Account is NOT credit card, this logic might be weird.
-            // Ensure we only do this for credit cards.
             if (parent.type === 'credit_card') {
-                const totalLimit = parent.credit_limit ?? 0;
+                const totalLimit = parent.credit_limit ?? 0
+                const totalDebt = familyMembers.reduce((sum, member) => {
+                    return sum + (member.current_balance ?? 0)
+                }, 0)
 
-                let totalUsed = 0;
-
-                familyMembers.forEach(member => {
-                    const limit = member.credit_limit ?? 0;
-                    const balance = member.current_balance ?? 0;
-
-                    // Usage on this card
-                    // If member has its own limit (sub-limit), logic is complex.
-                    // Assume Shared Limit model: All usage deducts from Parent Limit.
-                    // Member Used = Limit - Balance? 
-                    // No, if member shares limit, usually member.limit == parent.limit (visually) or 0?
-                    // Let's assume: Used = (Limit > 0 ? Limit : 0) - Balance. 
-                    // WAIT. If Child Limit is 0, and Balance is -3M (spent 3M). Used = 0 - (-3M) = 3M.
-                    // If Child Limit is 30M, and Balance is 27M. Used = 30M - 27M = 3M.
-                    // So `max(0, (Limit || 0) - Balance)` isn't quite right if Balance can be negative.
-
-                    // Robust check:
-                    let used = 0;
-                    if ((member.credit_limit || 0) > 0) {
-                        used = (member.credit_limit || 0) - balance;
-                    } else {
-                        // If no limit, assume balance is negative debt? 
-                        // Or maybe `current_balance` is just positive available?
-                        // If limit is 0, and balance is 0 => used 0.
-                        // If limit is 0, and balance is -100 => used 100.
-                        used = -balance;
-                    }
-                    // Sanity check
-                    if (used < 0) used = 0;
-
-                    totalUsed += used;
-                });
-
-                // Effective Available
-                const effectiveAvailable = totalLimit - totalUsed;
-                return effectiveAvailable;
+                return totalLimit - totalDebt
             }
 
             // Fallback for non-credit cards (e.g. Bank Account Parent/Child?)

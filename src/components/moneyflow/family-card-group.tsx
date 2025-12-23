@@ -4,6 +4,7 @@ import { Account } from '@/types/moneyflow.types'
 import { AccountCard } from './account-card'
 import { ArrowRight } from 'lucide-react'
 import { useMemo } from 'react'
+import { getDisplayBalance } from '@/lib/display-balance'
 
 type FamilyGroup = {
     id: string
@@ -50,7 +51,7 @@ export function FamilyCardGroup({
             {families.map((family) => {
                 // Family shared limit/balance = parent's values (children share the same limit)
                 const familyLimit = family.parent.credit_limit ?? 0
-                const familyBalance = family.parent.current_balance ?? 0
+                const familyBalance = getDisplayBalance(family.parent, 'family_tab', accounts)
 
                 // Build card sequence: [Asset] → [Parent] → [Child1] → [Child2] → ...
                 const cardSequence: { card: Account; type: 'asset' | 'parent' | 'child' }[] = []
@@ -128,7 +129,7 @@ export function FamilyCardGroup({
                                     key={item.card.id}
                                     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200"
                                 >
-                                    {item.card.name}: {numberFormatter.format(item.card.current_balance ?? 0)}
+                                    {item.card.name}: {numberFormatter.format(getDisplayBalance(item.card, 'card', accounts))}
                                 </span>
                             ))}
                         </div>

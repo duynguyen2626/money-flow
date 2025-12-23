@@ -5,8 +5,11 @@ import { Account, AccountRelationships, AccountStats, TransactionLine, Transacti
 import {
   parseCashbackConfig,
   getCashbackCycleRange,
-  calculateBankCashback
+  calculateBankCashback,
+  formatIsoCycleTag,
+  formatLegacyCycleTag
 } from '@/lib/cashback'
+import { computeAccountTotals, getCreditCardAvailableBalance, getCreditCardUsage } from '@/lib/account-balance'
 import {
   TransactionRow,
   mapTransactionRow,
@@ -42,11 +45,21 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
   const currentBalance = account.current_balance ?? 0
 
   // 0. Base Stats (Usage)
-  const usage_percent = creditLimit > 0
-    ? (Math.abs(currentBalance) / creditLimit) * 100
+  const usage_percent = account.type === 'credit_card'
+    ? getCreditCardUsage({
+      type: account.type,
+      credit_limit: creditLimit,
+      current_balance: currentBalance,
+    }).percent
     : 0
 
-  const remaining_limit = creditLimit + currentBalance
+  const remaining_limit = account.type === 'credit_card'
+    ? getCreditCardAvailableBalance({
+      type: account.type,
+      credit_limit: creditLimit,
+      current_balance: currentBalance,
+    })
+    : currentBalance
 
   // Default values
   const baseStats: AccountStats = {
@@ -75,47 +88,84 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
   const { start, end } = cycleRange
 
   // MF5.2.2B FIX: Read from cashback_cycles for consistency
-  // Determine cycle tag
-  const month = now.toLocaleString('en-US', { month: 'short' }).toUpperCase()
-  const year = now.getFullYear().toString().slice(-2)
-  let cycleTag = `${month}${year}` // Default
+  // Determine cycle tag using statement day logic.
+  const tagDate = cycleRange.end
+  const cycleTag = formatIsoCycleTag(tagDate)
+  const legacyCycleTag = formatLegacyCycleTag(tagDate)
+  const cycleTags = legacyCycleTag !== cycleTag ? [cycleTag, legacyCycleTag] : [cycleTag]
 
-  // If cycle is statement_cycle, the tag might be different depending on how we name them?
-  // Current logic in `cashback.service.ts` uses Month/Year of the transaction date.
-  // Ideally, we should use the same logic here.
-  // `getAccountSpendingStats` in cashback service does:
-  // const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase(); ...
-  // So let's stick to that for now. 
-  // NOTE: If statement cycle spans 2 months, the tag logic usually picks the start or end month?
-  // In `upsertTransactionCashback`, it tries `persisted_cycle_tag` OR generates from date.
-  // For Hint, we want CURRENT status.
-
-  // Fetch cycle from DB
-  const { data: cycle } = await supabase
+  let cycle = (await supabase
     .from('cashback_cycles')
     .select('*')
     .eq('account_id', account.id)
     .eq('cycle_tag', cycleTag)
-    .maybeSingle()
+    .maybeSingle()).data ?? null
+
+  if (!cycle && legacyCycleTag !== cycleTag) {
+    cycle = (await supabase
+      .from('cashback_cycles')
+      .select('*')
+      .eq('account_id', account.id)
+      .eq('cycle_tag', legacyCycleTag)
+      .maybeSingle()).data ?? null
+  }
 
   // 1. Stats from Cycle (Primary Source)
-  const spent_this_cycle = cycle?.spent_amount ?? 0
+  let spent_this_cycle = cycle?.spent_amount ?? 0
   const real_awarded = cycle?.real_awarded ?? 0
   const virtual_profit = cycle?.virtual_profit ?? 0
+
+  if (!cycle || spent_this_cycle === 0) {
+    const { data: taggedTxns, error: taggedError } = await supabase
+      .from('transactions')
+      .select('amount')
+      .eq('account_id', account.id)
+      .neq('status', 'void')
+      .in('type', ['expense', 'debt'])
+      .in('persisted_cycle_tag', cycleTags)
+
+    if (!taggedError && taggedTxns && taggedTxns.length > 0) {
+      const taggedSum = taggedTxns.reduce((sum, txn) => sum + Math.abs(txn.amount ?? 0), 0)
+      if (taggedSum > 0) {
+        spent_this_cycle = taggedSum
+      }
+    } else if (!taggedError && start && end) {
+      const { data: rangeTxns } = await supabase
+        .from('transactions')
+        .select('amount')
+        .eq('account_id', account.id)
+        .neq('status', 'void')
+        .in('type', ['expense', 'debt'])
+        .gte('occurred_at', start.toISOString())
+        .lte('occurred_at', end.toISOString())
+
+      if (rangeTxns && rangeTxns.length > 0) {
+        const rangeSum = rangeTxns.reduce((sum, txn) => sum + Math.abs(txn.amount ?? 0), 0)
+        if (rangeSum > 0) {
+          spent_this_cycle = rangeSum
+        }
+      }
+    }
+  }
 
   // 2. Budget Left Calculation
   // MF5.3.3 FIX: Budget Left must come from cycle. If no cycle, show null (--) instead of fallback to full budget.
   let remains_cap: number | null = null
-  if (cycle && config.maxAmount) {
-    const maxBudget = cycle.max_budget ?? config.maxAmount
+  if (cycle) {
+    const maxBudget = cycle.max_budget ?? null
+    if (maxBudget !== null) {
+      const consumed = real_awarded + virtual_profit
+      remains_cap = Math.max(0, maxBudget - consumed)
+    }
+  } else if (config.maxAmount) {
     const consumed = real_awarded + virtual_profit
-    remains_cap = Math.max(0, maxBudget - consumed)
+    remains_cap = Math.max(0, config.maxAmount - consumed)
   }
 
   // 3. Fallback / Validation if cycle missing (e.g. no txns yet)
   // If no cycle, spent is 0, real is 0, virtual is 0 -> correct.
 
-  const min_spend = cycle?.min_spend_target ?? config.minSpend
+  const min_spend = cycle ? (cycle.min_spend_target ?? null) : config.minSpend
   const missing_for_min = (min_spend !== null) ? Math.max(0, min_spend - spent_this_cycle) : null
   const is_qualified = cycle?.met_min_spend ?? (min_spend !== null && spent_this_cycle >= min_spend)
 
@@ -128,7 +178,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
   if (config.cycleType === 'calendar_month' || isFullMonth) {
     cycle_range = "Month Cycle"
   } else {
-    cycle_range = `${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(start)} - ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(end)}`
+    cycle_range = `${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(start)} - ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(end)}`
   }
 
   // 4. Due Date Display
@@ -152,7 +202,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
   return {
     ...baseStats,
     spent_this_cycle,
-    min_spend: config.minSpend,
+    min_spend,
     missing_for_min,
     is_qualified,
     cycle_range,
@@ -293,6 +343,11 @@ export async function getAccounts(): Promise<Account[]> {
 
 export async function getAccountDetails(id: string): Promise<Account | null> {
   if (!id || id === 'add' || id === 'new' || id === 'undefined') {
+    return null
+  }
+
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  if (!isUuid) {
     return null
   }
 
@@ -588,52 +643,16 @@ export async function recalculateBalance(accountId: string): Promise<boolean> {
     return false
   }
 
-  const isCredit = account.type === 'credit_card' || account.type === 'loan'
-
-  let netFlow = 0
-  let totalIn = 0
-  let totalOut = 0
-
-  for (const t of (txns as any[] || [])) {
-    const amt = Number(t.amount) || 0
-
-    // Determine direction relative to this account
-    let isIncoming = false
-    let isOutgoing = false
-
-    if (t.account_id === accountId) {
-      // This account is the SOURCE
-      if (t.type === 'income') {
-        isIncoming = true
-      } else {
-        // expense, transfer (source), debt (lending?), repayment (paying)
-        isOutgoing = true
-      }
-    } else if (t.target_account_id === accountId) {
-      // This account is the TARGET (mostly transfers)
-      isIncoming = true
-    }
-
-    if (isIncoming) {
-      netFlow += amt
-      totalIn += amt
-    } else if (isOutgoing) {
-      netFlow -= amt
-      totalOut += amt
-    }
-  }
-
-  // For Credit Cards: 
-  // - Spending (Outgoing) increases Debt (Visualized as Negative Balance or Positive Owed amount?)
-  // In MoneyFlow generic logic:
-  // Current Balance = Total In - Total Out.
-  // - Credit Card starts at 0. Spend 100 -> Balance -100. Repay 100 -> Balance 0.
-  // This matches standard accounting.
+  const { totalIn, totalOut, currentBalance } = computeAccountTotals({
+    accountId,
+    accountType: account.type,
+    transactions: (txns as any[] || []),
+  })
 
   const { error: updateError } = await (supabase
     .from('accounts')
     .update as any)({
-      current_balance: netFlow,
+      current_balance: currentBalance,
       total_in: totalIn,
       total_out: totalOut
     })

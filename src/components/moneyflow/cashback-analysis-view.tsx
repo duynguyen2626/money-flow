@@ -21,7 +21,7 @@ import { Progress } from '@/components/ui/progress'
 import { TransactionForm, TransactionFormValues } from '@/components/moneyflow/transaction-form'
 import { CashbackTransactionTable } from '@/components/cashback/cashback-transaction-table'
 import { getCashbackProgress, getCashbackCycleOptions, getAllCashbackHistory } from '@/services/cashback.service'
-import { getCashbackCycleRange } from '@/lib/cashback'
+import { getCashbackCycleRange, parseCycleTag } from '@/lib/cashback'
 import { getUnifiedTransactions } from '@/services/transaction.service'
 import { CashbackCard, CashbackTransaction } from '@/types/cashback.types'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
@@ -50,19 +50,20 @@ export function CashbackAnalysisView({
 
     // Helper to calculate reference date from tag
     const cycleTagToReferenceDate = (tag: string | null, statementDay: number | null, cycleType: string | null) => {
-        if (!tag || tag.length < 5) return undefined
-        const monthStr = tag.slice(0, 3)
-        const yearStr = tag.slice(3)
-        const month = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'].indexOf(monthStr)
-        const year = 2000 + Number.parseInt(yearStr, 10)
-        if (month < 0 || Number.isNaN(year)) return undefined
+        if (!tag || tag === 'ALL') return undefined
+
+        const parsed = parseCycleTag(tag)
+        if (!parsed) return undefined
+
+        const monthIdx = parsed.month - 1
+        const year = parsed.year
 
         if (cycleType === 'statement_cycle') {
             // Use day 1 of the tagged month so range becomes roughly (statementDay of prev month) -> (statementDay-1 of tagged month)
-            // This logic must align with how getCashbackProgress interprets the reference date.
-            return new Date(year, month, 1)
+            return new Date(year, monthIdx, 1)
         }
-        return new Date(year, month, statementDay ?? 1)
+
+        return new Date(year, monthIdx, statementDay ?? 1)
     }
 
     // Derived: Unique Years
@@ -102,10 +103,18 @@ export function CashbackAnalysisView({
 
             // Check if cycle overlaps with Selected Year
             const refDate = cycleTagToReferenceDate(opt.tag, opt.statementDay, opt.cycleType);
-            if (!refDate) return opt.tag.endsWith(selectedYear.slice(2)); // Fallback
+            if (!refDate) {
+                const parsed = parseCycleTag(opt.tag);
+                if (parsed) return String(parsed.year) === selectedYear;
+                return opt.tag.endsWith(selectedYear.slice(2));
+            }
 
             const range = getCashbackCycleRange({ statementDay: opt.statementDay, cycleType: opt.cycleType } as any, refDate);
-            if (!range) return opt.tag.endsWith(selectedYear.slice(2));
+            if (!range) {
+                const parsed = parseCycleTag(opt.tag);
+                if (parsed) return String(parsed.year) === selectedYear;
+                return opt.tag.endsWith(selectedYear.slice(2));
+            }
 
             const startYear = String(range.start.getFullYear());
             const endYear = String(range.end.getFullYear());
@@ -123,6 +132,22 @@ export function CashbackAnalysisView({
     const currencyFormatter = new Intl.NumberFormat('en-US', {
         maximumFractionDigits: 0,
     })
+
+    const cycleRangeLabel = React.useMemo(() => {
+        if (selectedCycleTag === 'ALL') return 'All history'
+        if (!cardData?.cycleStart || !cardData?.cycleEnd) return null
+
+        const startDate = new Date(cardData.cycleStart)
+        const endDate = new Date(cardData.cycleEnd)
+
+        if (cardData.cycleType === 'statement_cycle') {
+            const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`
+            return `${fmt(startDate)} - ${fmt(endDate)}`
+        }
+
+        const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+        return `${fmt.format(startDate)} - ${fmt.format(endDate)}`
+    }, [selectedCycleTag, cardData?.cycleStart, cardData?.cycleEnd, cardData?.cycleType])
 
 
 
@@ -347,6 +372,12 @@ export function CashbackAnalysisView({
                     </div>
                 </div>
             </div>
+            {cycleRangeLabel && (
+                <div className="text-xs text-slate-500">
+                    <span className="font-semibold uppercase text-slate-400 mr-2">Cycle</span>
+                    {cycleRangeLabel}
+                </div>
+            )}
 
             {/* Stats Cards (Copied from old detail view) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 border border-slate-200 rounded-xl">

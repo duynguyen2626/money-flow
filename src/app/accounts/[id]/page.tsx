@@ -9,9 +9,8 @@ import { AccountDetailHeader } from '@/components/moneyflow/account-detail-heade
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 
-import Link from 'next/link'
 import { CashbackAnalysisView } from '@/components/moneyflow/cashback-analysis-view'
-import { cn } from '@/lib/utils'
+import { AccountTabs } from '@/components/moneyflow/account-tabs'
 
 type PageProps = {
   params: Promise<{
@@ -83,31 +82,7 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
             batchStats={batchStats}
           />
 
-          {/* Tabs */}
-          <div className="flex border-b border-slate-200">
-            <Link
-              href={`/accounts/${id}?tab=transactions`}
-              className={cn(
-                "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
-                activeTab === 'transactions'
-                  ? "border-blue-500 text-blue-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              )}
-            >
-              Transactions
-            </Link>
-            <Link
-              href={`/accounts/${id}?tab=cashback`}
-              className={cn(
-                "px-4 py-2 text-sm font-medium border-b-2 transition-colors",
-                activeTab === 'cashback'
-                  ? "border-emerald-500 text-emerald-600"
-                  : "border-transparent text-slate-500 hover:text-slate-700"
-              )}
-            >
-              Cashback Analysis
-            </Link>
-          </div>
+          <AccountTabs accountId={account.id} activeTab={activeTab} />
         </div>
 
         {/* Content Area */}

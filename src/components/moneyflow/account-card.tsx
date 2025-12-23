@@ -67,6 +67,7 @@ import { getCardActionState } from "@/lib/card-utils";
 import { getDisplayBalance } from "@/lib/display-balance";
 import { SYSTEM_CATEGORIES } from "@/lib/constants";
 import { getAccountInitial } from "@/lib/utils";
+import { getCreditCardUsage } from "@/lib/account-balance";
 
 type AccountCardProps = {
   account: Account;
@@ -181,12 +182,14 @@ function AccountCardComponent({
     // 1. If Child with Parent -> Return Parent Balance
     // 2. Else -> Return Own Balance
 
+    const familyContext = hideSecuredBadge || isChild || isParent;
+    const context = familyContext ? "family_tab" : "card";
+
     if (isChild && parentAccountId) {
       const parent = accounts.find((a) => a.id === parentAccountId);
-      if (parent) return parent.current_balance ?? 0;
+      if (parent) return getDisplayBalance(parent, "family_tab", accounts);
     }
 
-    const context = hideSecuredBadge ? "family_tab" : "card";
     return getDisplayBalance(account, context, accounts);
   }, [account, hideSecuredBadge, accounts, isChild, parentAccountId]);
 
@@ -213,17 +216,20 @@ function AccountCardComponent({
     const balance = account.current_balance ?? 0;
 
     let usedCheck = 0;
-    if (account.type === "credit_card" && limit > 0) {
-      if (balance >= 0) {
-        usedCheck = Math.max(0, limit - balance);
-      } else {
-        usedCheck = Math.abs(balance);
-      }
+    let percent = 0;
+
+    if (account.type === "credit_card") {
+      const usage = getCreditCardUsage({
+        type: account.type,
+        credit_limit: limit,
+        current_balance: balance,
+      });
+      usedCheck = usage.used;
+      percent = usage.percent;
     } else {
       usedCheck = Math.abs(balance);
+      percent = limit > 0 ? (usedCheck / limit) * 100 : 0;
     }
-
-    const percent = limit > 0 ? (usedCheck / limit) * 100 : 0;
 
     return {
       limit,
@@ -551,6 +557,15 @@ function AccountCardComponent({
 
     // Variables for HoverCard
     const ownBalance = account.current_balance ?? 0;
+    const ownBalanceTone = account.type === "credit_card"
+      ? ownBalance > 0
+        ? "text-red-600"
+        : ownBalance < 0
+          ? "text-emerald-600"
+          : "text-slate-900"
+      : ownBalance < 0
+        ? "text-red-600"
+        : "text-slate-900";
     const totalIn = account.total_in ?? 0;
     const totalOut = account.total_out ?? 0;
 
@@ -670,7 +685,7 @@ function AccountCardComponent({
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-slate-500">Private Usage</span>
-                        <span className={cn("font-bold text-base", ownBalance < 0 ? "text-red-600" : "text-slate-900")}>
+                        <span className={cn("font-bold text-base", ownBalanceTone)}>
                           {formatCurrency(ownBalance)}
                         </span>
                       </div>

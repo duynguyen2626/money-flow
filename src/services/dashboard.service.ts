@@ -164,7 +164,7 @@ export async function getDashboardStats(
       .select(`
         amount,
         categories (
-          id, name, icon, logo_url, type
+          id, name, icon, type
         )
       `)
       .eq('type', 'expense')
@@ -193,7 +193,7 @@ export async function getDashboardStats(
         const categoryId = cat.id
         const categoryName = cat.name || 'Uncategorized'
         const categoryIcon = cat.icon
-        const categoryLogoUrl = cat.logo_url
+        const categoryLogoUrl = cat.logo_url ?? null
         const amount = Math.abs(tx.amount || 0)
 
         if (categoryMap.has(categoryId)) {

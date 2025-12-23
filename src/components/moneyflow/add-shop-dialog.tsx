@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -219,6 +220,7 @@ export function AddShopDialog({
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={isPending}>
+            {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isPending ? 'Saving...' : 'Create Shop'}
           </Button>
         </DialogFooter>

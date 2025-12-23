@@ -111,15 +111,15 @@ export function CashbackTransactionTable({ transactions, onEdit, showCycle }: Ca
                                     </TableCell>
 
                                     <TableCell>
-                                        <div className="flex items-start gap-3">
+                                        <div className="flex items-center gap-3">
                                             {/* Shop Icon */}
-                                            <div className="flex-shrink-0 mt-0.5">
+                                            <div className="flex-shrink-0">
                                                 {txn.shopLogoUrl ? (
                                                     // eslint-disable-next-line @next/next/no-img-element
                                                     <img
                                                         src={txn.shopLogoUrl}
                                                         alt="Shop"
-                                                        className="h-8 w-8 rounded-none object-contain border border-slate-100 bg-white"
+                                                        className="h-8 w-8 rounded-none object-contain bg-white"
                                                     />
                                                 ) : (
                                                     <div className="h-8 w-8 rounded-none bg-slate-100 flex items-center justify-center text-slate-400">
@@ -128,10 +128,13 @@ export function CashbackTransactionTable({ transactions, onEdit, showCycle }: Ca
                                                 )}
                                             </div>
 
-                                            {/* Note & Badges */}
-                                            <div className="space-y-1">
-                                                <span className="text-slate-700 font-medium block line-clamp-2" title={txn.note || ''}>
-                                                    {txn.note || (txn.shopName ? `Shop: ${txn.shopName}` : '-')}
+                                            {/* Notes Only */}
+                                            <div className="min-w-0 space-y-1">
+                                                <span
+                                                    className="block text-sm font-semibold text-slate-800 truncate"
+                                                    title={txn.note || ''}
+                                                >
+                                                    {txn.note || '-'}
                                                 </span>
                                             </div>
                                         </div>
