@@ -12,6 +12,8 @@ export type CashbackPolicyMetadata = {
   ruleId?: string
   categoryId?: string
   ruleMaxReward?: number | null
+  ruleType?: 'category' | 'level_default' | 'program_default' | 'legacy'
+  priority?: number
 }
 
 export type CashbackTransaction = {

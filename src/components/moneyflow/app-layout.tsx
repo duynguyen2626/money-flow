@@ -17,7 +17,14 @@ import {
   Calendar,
   Wrench,
   BookOpen,
-  RefreshCw
+  RefreshCw,
+  Landmark,
+  Hourglass,
+  Tags,
+  Wallet,
+  Cloud,
+  Database,
+  Undo2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -31,16 +38,16 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/", icon: <LayoutDashboard className="h-5 w-5" /> },
+  { title: "Accounts", href: "/accounts", icon: <Landmark className="h-5 w-5" /> },
   { title: "Transactions", href: "/transactions", icon: <ArrowRightLeft className="h-5 w-5" /> },
-  { title: "Accounts", href: "/accounts", icon: <CreditCard className="h-5 w-5" /> },
-  { title: "People & Debt", href: "/people", icon: <Users className="h-5 w-5" /> },
-  { title: "Installments", href: "/installments", icon: <Calendar className="h-5 w-5" /> },
+  { title: "Installments", href: "/installments", icon: <Hourglass className="h-5 w-5" /> },
+  { title: "Categories", href: "/categories", icon: <Tags className="h-5 w-5" /> },
   { title: "Shops", href: "/shops", icon: <ShoppingBag className="h-5 w-5" /> },
-  { title: "Categories", href: "/categories", icon: <Layers className="h-5 w-5" /> },
-  { title: "Services", href: "/services", icon: <Wrench className="h-5 w-5" /> },
-  { title: "Batches", href: "/batch", icon: <BookOpen className="h-5 w-5" /> },
-  { title: "Cashback", href: "/cashback", icon: <CreditCard className="h-5 w-5" /> },
-  { title: "Refunds", href: "/refunds", icon: <RefreshCw className="h-5 w-5" /> },
+  { title: "People", href: "/people", icon: <Users className="h-5 w-5" /> },
+  { title: "Cashback", href: "/cashback", icon: <Wallet className="h-5 w-5" /> },
+  { title: "Batches", href: "/batch", icon: <Database className="h-5 w-5" /> },
+  { title: "Services", href: "/services", icon: <Cloud className="h-5 w-5" /> },
+  { title: "Refunds", href: "/refunds", icon: <Undo2 className="h-5 w-5" /> },
 ]
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
@@ -72,6 +79,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // The client must render the same structure initially.
   if (!isMounted) {
     return <div className="flex h-full w-full overflow-hidden" suppressHydrationWarning />
+  }
+
+  // Hide sidebar on login page
+  if (pathname?.startsWith('/login')) {
+    return (
+      <main className="h-full w-full overflow-auto bg-background">
+        {children}
+      </main>
+    )
   }
 
   return (

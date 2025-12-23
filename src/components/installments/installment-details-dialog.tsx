@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { Installment, settleEarly } from "@/services/installment.service"
+import { InstallmentHistoryList } from "./installment-history-list"
 import {
     Dialog,
     DialogContent,
@@ -101,6 +102,13 @@ export function InstallmentDetailsDialog({
                             <p className="text-sm font-medium">
                                 {installment.next_due_date ? format(new Date(installment.next_due_date), 'dd/MM/yyyy') : '-'}
                             </p>
+                        </div>
+                    </div>
+
+                    <div className="border-t pt-4">
+                        <p className="text-sm font-medium text-muted-foreground mb-3">Payment History</p>
+                        <div className="max-h-[200px] overflow-y-auto">
+                            <InstallmentHistoryList planId={installment.id} />
                         </div>
                     </div>
                 </div>

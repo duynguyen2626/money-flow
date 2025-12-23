@@ -1,111 +1,191 @@
+import { zodResolver } from "@hookform/resolvers/zod";
+import { format, subMonths, parseISO } from "date-fns";
+import { Controller, Resolver, useForm, useWatch } from "react-hook-form";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useTransition,
+  useRef,
+} from "react";
+import { useRouter } from "next/navigation";
+import { z } from "zod";
+import { ensureDebtAccountAction } from "@/actions/people-actions";
+import {
+  createTransaction,
+  updateTransaction,
+  requestRefund,
+  confirmRefund,
+} from "@/services/transaction.service";
+import { convertTransactionToInstallment } from "@/services/installment.service";
+import {
+  previewCashbackAction,
+  CashbackPreviewResult,
+} from "@/actions/cashback-preview.action";
+import { Account, Category, Person, Shop } from "@/types/moneyflow.types";
+import {
+  parseCashbackConfig,
+  getCashbackCycleRange,
+  ParsedCashbackConfig,
+} from "@/lib/cashback";
+import {
+  CashbackCard,
+  AccountSpendingStats,
+  CashbackPolicyMetadata,
+} from "@/types/cashback.types";
+import { Installment } from "@/services/installment.service";
+import { Combobox } from "@/components/ui/combobox";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { generateTag } from "@/lib/tag";
+import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds";
+import {
+  Lock,
+  Wallet,
+  User,
+  Store,
+  Tag,
+  Calendar,
+  FileText,
+  Percent,
+  DollarSign,
+  ArrowRightLeft,
+  ArrowDownLeft,
+  ArrowUpRight,
+  CreditCard,
+  RotateCcw,
+  ChevronLeft,
+  ExternalLink,
+  X,
+  UploadCloud,
+  Clock,
+  Sparkles,
+} from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { cn, getAccountInitial } from "@/lib/utils";
+import { SmartAmountInput } from "@/components/ui/smart-amount-input";
+import { CategoryDialog } from "@/components/moneyflow/category-dialog";
+import { AddShopDialog } from "@/components/moneyflow/add-shop-dialog";
+import { CreatePersonDialog } from "@/components/people/create-person-dialog";
+import {
+  formatPercent,
+  formatPolicyLabel,
+  normalizePolicyMetadata,
+} from "@/lib/cashback-policy";
 
+import { EditAccountDialog } from "./edit-account-dialog";
+import { QuickPeopleSettings } from "./quick-people-settings";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 
+const formSchema = z
+  .object({
+    occurred_at: z.date(),
+    type: z.enum(["expense", "income", "debt", "transfer", "repayment"]),
+    amount: z.coerce.number().positive(),
+    note: z.string().optional(),
+    tag: z.string().min(1, "Tag is required"),
+    source_account_id: z
+      .string()
+      .min(1, { message: "Please select an account." }),
+    category_id: z.string().optional(),
+    person_id: z.string().optional(),
+    debt_account_id: z.string().optional(),
+    cashback_share_percent: z.coerce.number().min(0).optional(),
+    cashback_share_fixed: z.coerce.number().min(0).optional(),
+    shop_id: z.string().optional(),
+    is_voluntary: z.boolean().optional(),
+    is_installment: z.boolean().optional(),
+    installment_plan_id: z.string().optional(),
+    cashback_mode: z
+      .enum(["none_back", "voluntary", "real_fixed", "real_percent"])
+      .optional(),
+  })
+  .refine(
+    (data) => {
+      if (
+        (data.type === "expense" || data.type === "income") &&
+        !data.category_id
+      ) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "Category is required for expenses and incomes.",
+      path: ["category_id"],
+    },
+  )
+  .refine(
+    (data) => {
+      if (
+        (data.type === "debt" || data.type === "repayment") &&
+        !data.person_id
+      ) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "Please choose a person for this transaction.",
+      path: ["person_id"],
+    },
+  )
+  .refine(
+    (data) => {
+      if (
+        (data.type === "debt" ||
+          data.type === "transfer" ||
+          data.type === "repayment") &&
+        !data.debt_account_id
+      ) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "Destination account is required for this transaction.",
+      path: ["debt_account_id"],
+    },
+  )
+  .refine(
+    (data) => {
+      if (
+        (data.type === "transfer" ||
+          data.type === "debt" ||
+          data.type === "repayment") &&
+        data.debt_account_id &&
+        data.debt_account_id === data.source_account_id
+      ) {
+        return false;
+      }
+      return true;
+    },
+    {
+      message: "Source and destination must be different.",
+      path: ["debt_account_id"],
+    },
+  );
 
-import { zodResolver } from '@hookform/resolvers/zod'
-import { format, subMonths, parseISO } from 'date-fns'
-import { Controller, Resolver, useForm, useWatch } from 'react-hook-form'
-import { useCallback, useEffect, useMemo, useState, useTransition, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { z } from 'zod'
-import { ensureDebtAccountAction } from '@/actions/people-actions'
-import { createTransaction, updateTransaction, requestRefund, confirmRefund } from '@/services/transaction.service'
-import { convertTransactionToInstallment } from '@/services/installment.service'
-import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
-import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
-import { CashbackCard, AccountSpendingStats, CashbackPolicyMetadata } from '@/types/cashback.types'
-import { Combobox } from '@/components/ui/combobox'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { generateTag } from '@/lib/tag'
-import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
-import { Lock, Wallet, User, Store, Tag, Calendar, FileText, Percent, DollarSign, ArrowRightLeft, ArrowDownLeft, ArrowUpRight, CreditCard, RotateCcw, ChevronLeft, ExternalLink, X, UploadCloud, Clock, Sparkles } from 'lucide-react'
-import { Switch } from '@/components/ui/switch'
-import { cn, getAccountInitial } from '@/lib/utils'
-import { SmartAmountInput } from '@/components/ui/smart-amount-input'
-import { CategoryDialog } from '@/components/moneyflow/category-dialog'
-import { AddShopDialog } from '@/components/moneyflow/add-shop-dialog'
-import { CreatePersonDialog } from '@/components/people/create-person-dialog'
-import { formatPercent, formatPolicyLabel, normalizePolicyMetadata } from '@/lib/cashback-policy'
-
-
-import { EditAccountDialog } from './edit-account-dialog'
-import { QuickPeopleSettings } from './quick-people-settings'
-import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
-
-
-
-const formSchema = z.object({
-  occurred_at: z.date(),
-  type: z.enum(['expense', 'income', 'debt', 'transfer', 'repayment']),
-  amount: z.coerce.number().positive(),
-  note: z.string().optional(),
-  tag: z.string().min(1, 'Tag is required'),
-  source_account_id: z.string().min(1, { message: 'Please select an account.' }),
-  category_id: z.string().optional(),
-  person_id: z.string().optional(),
-  debt_account_id: z.string().optional(),
-  cashback_share_percent: z.coerce.number().min(0).optional(),
-  cashback_share_fixed: z.coerce.number().min(0).optional(),
-  shop_id: z.string().optional(),
-  is_voluntary: z.boolean().optional(),
-  is_installment: z.boolean().optional(),
-  cashback_mode: z.enum(['none_back', 'voluntary', 'real_fixed', 'real_percent']).optional(),
-}).refine(data => {
-  if ((data.type === 'expense' || data.type === 'income') && !data.category_id) {
-    return false
-  }
-  return true;
-}, {
-  message: 'Category is required for expenses and incomes.',
-  path: ['category_id'],
-}).refine(data => {
-  if ((data.type === 'debt' || data.type === 'repayment') && !data.person_id) {
-    return false
-  }
-  return true
-}, {
-  message: 'Please choose a person for this transaction.',
-  path: ['person_id'],
-}).refine(data => {
-  if ((data.type === 'debt' || data.type === 'transfer' || data.type === 'repayment') && !data.debt_account_id) {
-    return false
-  }
-  return true
-}, {
-  message: 'Destination account is required for this transaction.',
-  path: ['debt_account_id'],
-}).refine(data => {
-  if (
-    (data.type === 'transfer' || data.type === 'debt' || data.type === 'repayment') &&
-    data.debt_account_id &&
-    data.debt_account_id === data.source_account_id
-  ) {
-    return false
-  }
-  return true
-}, {
-  message: 'Source and destination must be different.',
-  path: ['debt_account_id'],
-});
-
-const numberFormatter = new Intl.NumberFormat('en-US', {
+const numberFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
-})
-const REFUND_CATEGORY_ID = 'e0000000-0000-0000-0000-000000000095'
+});
+const REFUND_CATEGORY_ID = "e0000000-0000-0000-0000-000000000095";
 
-export type TransactionFormValues = z.infer<typeof formSchema>
+export type TransactionFormValues = z.infer<typeof formSchema>;
 
-const cycleDateFormatter = new Intl.DateTimeFormat('en-US', {
-  day: '2-digit',
-  month: '2-digit',
-})
+const cycleDateFormatter = new Intl.DateTimeFormat("en-US", {
+  day: "2-digit",
+  month: "2-digit",
+});
 
 function formatRangeLabel(range: { start: Date; end: Date }, targetDate: Date) {
   const fmt = (date: Date) => {
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, "0");
+    const month = String(date.getMonth() + 1).padStart(2, "0");
     const year = date.getFullYear();
     return `${day}/${month}/${year}`;
-  }
+  };
 
   const diffTime = range.end.getTime() - targetDate.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -115,52 +195,51 @@ function formatRangeLabel(range: { start: Date; end: Date }, targetDate: Date) {
 
 function getCycleLabelForDate(
   targetDate: Date | undefined,
-  config: ParsedCashbackConfig | null
+  config: ParsedCashbackConfig | null,
 ): string {
   if (!config) {
-    return ''
+    return "";
   }
 
-  const referenceDate = targetDate ?? new Date()
-  const range = getCashbackCycleRange(config, referenceDate)
+  const referenceDate = targetDate ?? new Date();
+  const range = getCashbackCycleRange(config, referenceDate);
   if (!range) {
-    return 'Cycle: -- (Missing Config)'
+    return "Cycle: -- (Missing Config)";
   }
-  return formatRangeLabel(range, referenceDate)
+  return formatRangeLabel(range, referenceDate);
 }
-
-
 
 type TransactionFormProps = {
   accounts: Account[];
   categories: Category[];
   people: Person[];
   shops?: Shop[];
+  installments?: Installment[]; // Phase 7X
   onSuccess?: () => void;
   defaultTag?: string;
   defaultPersonId?: string;
-  defaultType?: 'expense' | 'income' | 'debt' | 'transfer' | 'repayment';
+  defaultType?: "expense" | "income" | "debt" | "transfer" | "repayment";
   defaultSourceAccountId?: string;
   defaultDebtAccountId?: string;
   transactionId?: string;
   initialValues?: Partial<TransactionFormValues> & {
-    category_name?: string
-    account_name?: string
+    category_name?: string;
+    account_name?: string;
+    metadata?: any;
   };
-  mode?: 'create' | 'edit' | 'refund';
+  mode?: "create" | "edit" | "refund";
   refundTransactionId?: string;
-  refundAction?: 'request' | 'confirm';
+  refundAction?: "request" | "confirm";
   refundMaxAmount?: number;
-  defaultRefundStatus?: 'pending' | 'received';
+  defaultRefundStatus?: "pending" | "received";
   onCancel?: () => void;
   onFormChange?: (hasChanges: boolean) => void;
-}
-
+};
 
 type StatusMessage = {
-  type: 'success' | 'error';
+  type: "success" | "error";
   text: string;
-} | null
+} | null;
 
 export function TransactionForm({
   // Deployment Verification: Cashback Fix v2.1
@@ -176,26 +255,26 @@ export function TransactionForm({
   defaultDebtAccountId,
   transactionId,
   initialValues,
-  mode = 'create',
+  installments = [], // Phase 7X
+  mode = "create",
   refundTransactionId,
-  refundAction = 'request',
+  refundAction = "request",
   refundMaxAmount,
-  defaultRefundStatus = 'pending',
+  defaultRefundStatus = "pending",
   onCancel,
   onFormChange,
 }: TransactionFormProps) {
-  const sourceAccounts = useMemo(
-    () => allAccounts,
-    [allAccounts]
-  )
+  const sourceAccounts = useMemo(() => allAccounts, [allAccounts]);
 
-  const [peopleState, setPeopleState] = useState<Person[]>(people)
+  const [peopleState, setPeopleState] = useState<Person[]>(people);
 
   useEffect(() => {
-    setPeopleState(people)
-  }, [people])
+    setPeopleState(people);
+  }, [people]);
 
-  const [manualTagMode, setManualTagMode] = useState(() => Boolean(defaultTag || initialValues?.tag));
+  const [manualTagMode, setManualTagMode] = useState(() =>
+    Boolean(defaultTag || initialValues?.tag),
+  );
 
   const suggestedTags = useMemo(() => {
     const tags = [];
@@ -208,134 +287,159 @@ export function TransactionForm({
   }, []);
 
   const personMap = useMemo(() => {
-    const map = new Map<string, Person>()
-    peopleState.forEach(person => map.set(person.id, person))
-    return map
-  }, [peopleState])
+    const map = new Map<string, Person>();
+    peopleState.forEach((person) => map.set(person.id, person));
+    return map;
+  }, [peopleState]);
 
   const debtAccountByPerson = useMemo(() => {
-    const map = new Map<string, string>()
-    peopleState.forEach(person => {
+    const map = new Map<string, string>();
+    peopleState.forEach((person) => {
       if (person.debt_account_id) {
-        map.set(person.id, person.debt_account_id)
+        map.set(person.id, person.debt_account_id);
       }
-    })
-    return map
-  }, [peopleState])
+    });
+    return map;
+  }, [peopleState]);
 
   const refundCategoryId = useMemo(() => {
-    const direct = categories.find(cat => cat.id === REFUND_CATEGORY_ID)
-    if (direct) return direct.id
-    const byName = categories.find(cat => (cat.name ?? '').toLowerCase().includes('refund'))
-    return byName?.id ?? REFUND_CATEGORY_ID
-  }, [categories])
+    const direct = categories.find((cat) => cat.id === REFUND_CATEGORY_ID);
+    if (direct) return direct.id;
+    const byName = categories.find((cat) =>
+      (cat.name ?? "").toLowerCase().includes("refund"),
+    );
+    return byName?.id ?? REFUND_CATEGORY_ID;
+  }, [categories]);
 
-  const [status, setStatus] = useState<StatusMessage>(null)
-  const [cashbackProgress, setCashbackProgress] = useState<CashbackCard | null>(null)
-  const [progressLoading, setProgressLoading] = useState(false)
-  const [progressError, setProgressError] = useState<string | null>(null)
-  const [spendingStats, setSpendingStats] = useState<AccountSpendingStats | null>(null)
-  const [transactionType, setTransactionType] = useState<'expense' | 'income' | 'debt' | 'transfer' | 'repayment' | 'quick-people'>(
-    initialValues?.type || defaultType || 'expense'
-  )
-  const [accountFilter, setAccountFilter] = useState<'all' | 'bank' | 'credit' | 'other'>('all')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [payerName, setPayerName] = useState<string>('')
-  const [isInstallment, setIsInstallment] = useState(false)
+  const [status, setStatus] = useState<StatusMessage>(null);
+  const [cashbackProgress, setCashbackProgress] = useState<CashbackCard | null>(
+    null,
+  );
+  const [progressLoading, setProgressLoading] = useState(false);
+  const [progressError, setProgressError] = useState<string | null>(null);
+  const [spendingStats, setSpendingStats] =
+    useState<AccountSpendingStats | null>(null);
+  const [transactionType, setTransactionType] = useState<
+    "expense" | "income" | "debt" | "transfer" | "repayment" | "quick-people"
+  >(initialValues?.type || defaultType || "expense");
+  const [accountFilter, setAccountFilter] = useState<
+    "all" | "bank" | "credit" | "other"
+  >("all");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [payerName, setPayerName] = useState<string>("");
+  const [isInstallment, setIsInstallment] = useState(false);
 
-  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
-  const [isShopDialogOpen, setIsShopDialogOpen] = useState(false)
-  const [isPersonDialogOpen, setIsPersonDialogOpen] = useState(false)
-  const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false)
-  const [statsLoading, setStatsLoading] = useState(false)
-  const [statsError, setStatsError] = useState<string | null>(null)
-  const [debtEnsureError, setDebtEnsureError] = useState<string | null>(null)
-  const [isEnsuringDebt, startEnsuringDebt] = useTransition()
-  const [persistedMetadata, setPersistedMetadata] = useState<CashbackPolicyMetadata | null>(null)
-  const isEditMode = mode === 'edit' || (mode !== 'refund' && Boolean(transactionId))
-  const isRefundMode = mode === 'refund'
-  const isConfirmRefund = isRefundMode && refundAction === 'confirm'
-  const [refundStatus, setRefundStatus] = useState<'pending' | 'received'>(
-    isConfirmRefund ? 'received' : defaultRefundStatus
-  )
-  const router = useRouter()
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [isShopDialogOpen, setIsShopDialogOpen] = useState(false);
+  const [isPersonDialogOpen, setIsPersonDialogOpen] = useState(false);
+  const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [debtEnsureError, setDebtEnsureError] = useState<string | null>(null);
+  const [isEnsuringDebt, startEnsuringDebt] = useTransition();
+  const [persistedMetadata, setPersistedMetadata] =
+    useState<CashbackPolicyMetadata | null>(null);
+
+  // Phase 7.3: Cashback Preview State
+  const [cashbackPreview, setCashbackPreview] =
+    useState<CashbackPreviewResult | null>(null);
+
+  const isEditMode =
+    mode === "edit" || (mode !== "refund" && Boolean(transactionId));
+  const isRefundMode = mode === "refund";
+  const isConfirmRefund = isRefundMode && refundAction === "confirm";
+  const [refundStatus, setRefundStatus] = useState<"pending" | "received">(
+    isConfirmRefund ? "received" : defaultRefundStatus,
+  );
+  const router = useRouter();
 
   // Fix for Form Reset Loop
-  const initialValuesRef = useRef(initialValues)
+  const initialValuesRef = useRef(initialValues);
 
   // Force update ref if transactionId changes (switching to another txn)
   useEffect(() => {
-    initialValuesRef.current = initialValues
-  }, [transactionId])
-
-
+    initialValuesRef.current = initialValues;
+  }, [transactionId]);
 
   const baseDefaults = useMemo(
     () => ({
       occurred_at: new Date(),
-      type: defaultType ?? (isRefundMode ? 'income' : 'expense'),
+      type: defaultType ?? (isRefundMode ? "income" : "expense"),
       amount: 0,
-      note: '',
+      note: "",
       tag: defaultTag ?? generateTag(new Date()),
       source_account_id: defaultSourceAccountId ?? undefined,
       person_id: undefined,
       debt_account_id: defaultDebtAccountId ?? undefined,
-      category_id: isRefundMode ? refundCategoryId ?? undefined : undefined,
+      category_id: isRefundMode ? (refundCategoryId ?? undefined) : undefined,
       shop_id: undefined,
       cashback_share_percent: undefined,
       cashback_share_fixed: undefined,
       is_voluntary: false,
       is_installment: false,
-      cashback_mode: 'none_back' as const,
+      installment_plan_id: undefined,
+      cashback_mode: "none_back" as const,
     }),
-    [defaultDebtAccountId, defaultSourceAccountId, defaultTag, defaultType, isRefundMode, refundCategoryId]
-  )
+    [
+      defaultDebtAccountId,
+      defaultSourceAccountId,
+      defaultTag,
+      defaultType,
+      isRefundMode,
+      refundCategoryId,
+    ],
+  );
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(formSchema) as any,
     defaultValues: {
       ...baseDefaults,
       ...initialValues,
-      cashback_mode: (initialValues?.cashback_mode as any) ?? 'none_back',
+      cashback_mode: (initialValues?.cashback_mode as any) ?? "none_back",
       occurred_at: initialValues?.occurred_at
-        ? (initialValues.occurred_at instanceof Date ? initialValues.occurred_at : new Date(initialValues.occurred_at))
+        ? initialValues.occurred_at instanceof Date
+          ? initialValues.occurred_at
+          : new Date(initialValues.occurred_at)
         : new Date(),
       amount: initialValues?.amount ? Math.abs(initialValues.amount) : 0,
-      cashback_share_percent: initialValues?.cashback_share_percent ? initialValues.cashback_share_percent * 100 : undefined,
+      cashback_share_percent: initialValues?.cashback_share_percent
+        ? initialValues.cashback_share_percent * 100
+        : undefined,
     },
-  })
-
+  });
 
   // Track form changes and notify parent
   useEffect(() => {
-    onFormChange?.(form.formState.isDirty)
-  }, [form.formState.isDirty, onFormChange])
+    onFormChange?.(form.formState.isDirty);
+  }, [form.formState.isDirty, onFormChange]);
 
   // Prompt unsaved changes on refresh/close
-  useUnsavedChanges(form.formState.isDirty)
+  useUnsavedChanges(form.formState.isDirty);
 
   const applyDefaultPersonSelection = useCallback(() => {
     if (!defaultPersonId) {
-      return
+      return;
     }
-    const direct = personMap.get(defaultPersonId)
+    const direct = personMap.get(defaultPersonId);
     if (direct) {
-      form.setValue('person_id', direct.id)
-      form.setValue('debt_account_id', direct.debt_account_id ?? undefined)
-      return
+      form.setValue("person_id", direct.id);
+      form.setValue("debt_account_id", direct.debt_account_id ?? undefined);
+      return;
     }
-    const fromDebt = peopleState.find(person => person.debt_account_id === defaultPersonId)
+    const fromDebt = peopleState.find(
+      (person) => person.debt_account_id === defaultPersonId,
+    );
     if (fromDebt) {
-      form.setValue('person_id', fromDebt.id)
-      form.setValue('debt_account_id', fromDebt.debt_account_id ?? undefined)
-      return
+      form.setValue("person_id", fromDebt.id);
+      form.setValue("debt_account_id", fromDebt.debt_account_id ?? undefined);
+      return;
     }
-    form.setValue('debt_account_id', defaultPersonId)
-  }, [defaultPersonId, form, peopleState, personMap])
+    form.setValue("debt_account_id", defaultPersonId);
+  }, [defaultPersonId, form, peopleState, personMap]);
 
   useEffect(() => {
     if (!initialValues) {
-      return
+      return;
     }
 
     // Prevent reset if values haven't meaningfully changed (prevents reset on router.refresh)
@@ -347,27 +451,35 @@ export function TransactionForm({
     const newValues = {
       ...baseDefaults,
       ...initialValues,
-      cashback_mode: (initialValues.cashback_mode as any) ?? 'none_back',
+      cashback_mode: (initialValues.cashback_mode as any) ?? "none_back",
       occurred_at: initialValues.occurred_at
-        ? (initialValues.occurred_at instanceof Date ? initialValues.occurred_at : new Date(initialValues.occurred_at))
+        ? initialValues.occurred_at instanceof Date
+          ? initialValues.occurred_at
+          : new Date(initialValues.occurred_at)
         : new Date(),
       amount: initialValues.amount ? Math.abs(initialValues.amount) : 0,
-      cashback_share_percent: initialValues?.cashback_share_percent ? initialValues.cashback_share_percent * 100 : undefined,
+      cashback_share_percent: initialValues?.cashback_share_percent
+        ? initialValues.cashback_share_percent * 100
+        : undefined,
     };
 
-    const isRepayment = initialValues.category_name?.toLowerCase().includes('thu nợ')
-      || initialValues.category_name?.toLowerCase().includes('repayment')
-      || (initialValues.type === 'repayment');
+    const isRepayment =
+      initialValues.category_name?.toLowerCase().includes("thu nợ") ||
+      initialValues.category_name?.toLowerCase().includes("repayment") ||
+      initialValues.type === "repayment";
 
-    const isDebt = initialValues.type === 'debt' || (initialValues.type as string) === 'lending';
-    const isIncomeWithPerson = initialValues.type === 'income' && initialValues.person_id;
+    const isDebt =
+      initialValues.type === "debt" ||
+      (initialValues.type as string) === "lending";
+    const isIncomeWithPerson =
+      initialValues.type === "income" && initialValues.person_id;
 
     if (isRepayment || (isIncomeWithPerson && !isDebt)) {
-      newValues.type = 'repayment';
+      newValues.type = "repayment";
       const sourceId = newValues.source_account_id;
-      const sourceAcc = allAccounts.find(a => a.id === sourceId);
+      const sourceAcc = allAccounts.find((a) => a.id === sourceId);
 
-      if (sourceAcc?.type === 'debt') {
+      if (sourceAcc?.type === "debt") {
         if (newValues.debt_account_id) {
           const temp = newValues.source_account_id;
           newValues.source_account_id = newValues.debt_account_id;
@@ -379,142 +491,200 @@ export function TransactionForm({
     // Only reset if we are not deep into editing, or if it's a forced external update
     // For simplicity, we trust reference equality check at top + ID check
     // But since we want to allow router.refresh to NOT reset:
-    if (JSON.stringify(initialValues) === JSON.stringify(initialValuesRef.current)) {
+    if (
+      JSON.stringify(initialValues) === JSON.stringify(initialValuesRef.current)
+    ) {
       // Same values, do nothing
     } else {
-      console.log('[TransactionForm] Resetting form with new values (Clone/Edit update)');
-      form.reset(newValues)
-      setManualTagMode(true)
-      setTransactionType(newValues.type)
-      setIsInstallment(Boolean(initialValues.is_installment))
-      initialValuesRef.current = initialValues
+      console.log(
+        "[TransactionForm] Resetting form with new values (Clone/Edit update)",
+      );
+      form.reset(newValues);
+      setManualTagMode(true);
+      setTransactionType(newValues.type);
+      setIsInstallment(Boolean(initialValues.is_installment));
+      if (initialValues.installment_plan_id) {
+        form.setValue("installment_plan_id", initialValues.installment_plan_id);
+      }
+      initialValuesRef.current = initialValues;
     }
-  }, [baseDefaults, form, initialValues, allAccounts])
+  }, [baseDefaults, form, initialValues, allAccounts]);
 
   // Smart Reset: Clear category/shop if current selection is invalid for the new type
 
-
   useEffect(() => {
-    if (!isRefundMode) return
-    form.setValue('type', 'income')
-    setTransactionType('income')
-    form.setValue('category_id', refundCategoryId ?? REFUND_CATEGORY_ID, { shouldValidate: true })
-    const currentNote = form.getValues('note')
+    if (!isRefundMode) return;
+    form.setValue("type", "income");
+    setTransactionType("income");
+    form.setValue("category_id", refundCategoryId ?? REFUND_CATEGORY_ID, {
+      shouldValidate: true,
+    });
+    const currentNote = form.getValues("note");
     if (!currentNote || currentNote.trim().length === 0) {
       // Clean the note - use only the original note without shop name
-      let baseNote = initialValues?.note ?? ''
+      let baseNote = initialValues?.note ?? "";
 
       // If the note already starts with "Refund:", extract the actual note part
-      if (baseNote.startsWith('Refund:')) {
-        baseNote = baseNote.replace(/^Refund:\s*/, '').trim()
+      if (baseNote.startsWith("Refund:")) {
+        baseNote = baseNote.replace(/^Refund:\s*/, "").trim();
       }
 
       // Build the refund note with just the original note
-      const nextNote = baseNote ? `Refund: ${baseNote}` : 'Refund'
-      form.setValue('note', nextNote)
+      const nextNote = baseNote ? `Refund: ${baseNote}` : "Refund";
+      form.setValue("note", nextNote);
     }
-  }, [form, initialValues?.note, isRefundMode, refundCategoryId])
+  }, [form, initialValues?.note, isRefundMode, refundCategoryId]);
 
-  async function onSubmit(values: TransactionFormValues) {
-    console.log('[Form Submit] Category ID being submitted:', values.category_id);
-    console.log('[Form Submit] Full values:', values);
-    setStatus(null)
-    setIsSubmitting(true)
-
+  const onSubmit = async (values: TransactionFormValues) => {
     try {
       if (isRefundMode) {
-        const targetTransactionId = refundTransactionId ?? transactionId
+        const targetTransactionId = refundTransactionId ?? transactionId;
         if (!targetTransactionId) {
-          setStatus({ type: 'error', text: 'Missing target transaction to refund.' })
-          return
+          setStatus({
+            type: "error",
+            text: "Missing target transaction to refund.",
+          });
+          return;
         }
 
-        const maxRefund = typeof refundMaxAmount === 'number' ? Math.abs(refundMaxAmount) : Math.abs(values.amount ?? 0)
+        const maxRefund =
+          typeof refundMaxAmount === "number"
+            ? Math.abs(refundMaxAmount)
+            : Math.abs(values.amount ?? 0);
 
         if (Math.abs(values.amount ?? 0) > maxRefund) {
-          setStatus({ type: 'error', text: `Refund amount cannot exceed ${numberFormatter.format(maxRefund)}` })
-          return
+          setStatus({
+            type: "error",
+            text: `Refund amount cannot exceed ${numberFormatter.format(maxRefund)}`,
+          });
+          return;
         }
 
-        const safeAmount = Math.abs(values.amount ?? 0)
+        const safeAmount = Math.abs(values.amount ?? 0);
         if (!Number.isFinite(safeAmount) || safeAmount <= 0) {
-          setStatus({ type: 'error', text: 'Please enter a valid refund amount.' })
-          return
+          setStatus({
+            type: "error",
+            text: "Please enter a valid refund amount.",
+          });
+          return;
         }
 
-        const partialFlag = safeAmount < maxRefund
+        const partialFlag = safeAmount < maxRefund;
 
         if (isConfirmRefund) {
-          const targetAccountId = values.source_account_id
-          if (!targetAccountId || targetAccountId === REFUND_PENDING_ACCOUNT_ID) {
-            setStatus({ type: 'error', text: 'Choose the receiving account for this refund.' })
-            return
+          const targetAccountId = values.source_account_id;
+          if (
+            !targetAccountId ||
+            targetAccountId === REFUND_PENDING_ACCOUNT_ID
+          ) {
+            setStatus({
+              type: "error",
+              text: "Choose the receiving account for this refund.",
+            });
+            return;
           }
-          const confirmResult = await confirmRefund(targetTransactionId, targetAccountId)
+          const confirmResult = await confirmRefund(
+            targetTransactionId,
+            targetAccountId,
+          );
           if (!confirmResult.success) {
-            setStatus({ type: 'error', text: confirmResult.error ?? 'Unable to confirm refund.' })
-            return
+            setStatus({
+              type: "error",
+              text: confirmResult.error ?? "Unable to confirm refund.",
+            });
+            return;
           }
-          router.refresh()
-          setStatus({ type: 'success', text: 'Refund confirmed successfully.' })
-          onSuccess?.()
-          return
+          router.refresh();
+          setStatus({
+            type: "success",
+            text: "Refund confirmed successfully.",
+          });
+          onSuccess?.();
+          return;
         }
 
-        const requestResult = await requestRefund(targetTransactionId, safeAmount, partialFlag)
+        const requestResult = await requestRefund(
+          targetTransactionId,
+          safeAmount,
+          partialFlag,
+        );
 
         if (!requestResult.success) {
-          setStatus({ type: 'error', text: requestResult.error ?? 'Unable to create refund request.' })
-          return
+          setStatus({
+            type: "error",
+            text: requestResult.error ?? "Unable to create refund request.",
+          });
+          return;
         }
 
-        if (refundStatus === 'received') {
+        if (refundStatus === "received") {
           const preferredAccount =
             values.source_account_id === REFUND_PENDING_ACCOUNT_ID
-              ? defaultSourceAccountId ?? initialValues?.source_account_id ?? null
-              : values.source_account_id ?? null
+              ? (defaultSourceAccountId ??
+                initialValues?.source_account_id ??
+                null)
+              : (values.source_account_id ?? null);
 
           if (!preferredAccount) {
-            setStatus({ type: 'error', text: 'Select where the refunded money was received.' })
-            return
+            setStatus({
+              type: "error",
+              text: "Select where the refunded money was received.",
+            });
+            return;
           }
 
           const confirmResult = await confirmRefund(
-            requestResult.refundTransactionId ?? '',
-            preferredAccount
-          )
+            requestResult.refundTransactionId ?? "",
+            preferredAccount,
+          );
           if (!confirmResult.success) {
-            setStatus({ type: 'error', text: confirmResult.error ?? 'Unable to confirm refund.' })
-            return
+            setStatus({
+              type: "error",
+              text: confirmResult.error ?? "Unable to confirm refund.",
+            });
+            return;
           }
         }
 
-        router.refresh()
+        router.refresh();
         setStatus({
-          type: 'success',
-          text: refundStatus === 'received' ? 'Refund confirmed successfully.' : 'Refund request created.',
-        })
-        onSuccess?.()
-        return
+          type: "success",
+          text:
+            refundStatus === "received"
+              ? "Refund confirmed successfully."
+              : "Refund request created.",
+        });
+        onSuccess?.();
+        return;
       }
 
-      const percentLimit = typeof cashbackProgress?.rate === 'number' ? cashbackProgress.rate * 100 : null
-      const rawPercent = Number(values.cashback_share_percent ?? 0)
-      const rawFixed = Number(values.cashback_share_fixed ?? 0)
+      const percentLimit =
+        typeof cashbackProgress?.rate === "number"
+          ? cashbackProgress.rate * 100
+          : null;
+      const rawPercent = Number(values.cashback_share_percent ?? 0);
+      const rawFixed = Number(values.cashback_share_fixed ?? 0);
       const sanitizedPercent =
         percentLimit !== null
           ? Math.min(percentLimit, Math.max(0, rawPercent))
-          : Math.max(0, rawPercent)
-      const sanitizedFixed = Math.max(0, rawFixed)
+          : Math.max(0, rawPercent);
+      const sanitizedFixed = Math.max(0, rawFixed);
 
       // Check if this is a group debt repayment and append payer name to note
-      const selectedPerson = values.person_id ? personMap.get(values.person_id) : null
-      const isGroupDebt = selectedPerson?.name?.toLowerCase().includes('clt') ||
-        selectedPerson?.name?.toLowerCase().includes('group')
+      const selectedPerson = values.person_id
+        ? personMap.get(values.person_id)
+        : null;
+      const isGroupDebt =
+        selectedPerson?.name?.toLowerCase().includes("clt") ||
+        selectedPerson?.name?.toLowerCase().includes("group");
 
-      let finalNote = values.note ?? ''
-      if ((values.type === 'repayment' || values.type === 'debt') && isGroupDebt && payerName.trim()) {
-        finalNote = `${finalNote} (paid by ${payerName.trim()})`
+      let finalNote = values.note ?? "";
+      if (
+        (values.type === "repayment" || values.type === "debt") &&
+        isGroupDebt &&
+        payerName.trim()
+      ) {
+        finalNote = `${finalNote} (paid by ${payerName.trim()})`;
       }
 
       const payload: Parameters<typeof createTransaction>[0] = {
@@ -522,37 +692,46 @@ export function TransactionForm({
         occurred_at: values.occurred_at.toISOString(),
         shop_id: values.shop_id ?? undefined,
         note: finalNote,
-        destination_account_id: values.type === 'income' ? values.source_account_id : undefined,
+        destination_account_id:
+          values.type === "income" ? values.source_account_id : undefined,
         is_installment: isInstallment,
         cashback_share_percent: rawPercent / 100, // Always divide by 100 to store as decimal (0.08 for 8%)
-      }
+        metadata: values.installment_plan_id
+          ? {
+            installment_id: values.installment_plan_id,
+            ...(initialValues?.metadata || {}), // Preserve other metadata if any
+          }
+          : undefined,
+      };
 
-      console.log('[TransactionForm] Submitting payload:', {
+      console.log("[TransactionForm] Submitting payload:", {
         isInstallmentState: isInstallment,
         payloadIsInstallment: payload.is_installment,
-        transactionId
+        transactionId,
       });
 
       const result = transactionId
         ? await updateTransaction(transactionId, payload)
-        : await createTransaction(payload)
+        : await createTransaction(payload);
 
       if (result) {
         setStatus({
-          type: 'success',
-          text: isEditMode ? 'Transaction updated successfully.' : 'Transaction created successfully.',
-        })
+          type: "success",
+          text: isEditMode
+            ? "Transaction updated successfully."
+            : "Transaction created successfully.",
+        });
 
-        router.refresh()
+        router.refresh();
         if (isEditMode) {
-          onSuccess?.()
-          return
+          onSuccess?.();
+          return;
         }
         form.reset({
           ...baseDefaults,
           occurred_at: new Date(),
           amount: 0,
-          note: '',
+          note: "",
           tag: defaultTag ?? generateTag(new Date()),
           source_account_id: defaultSourceAccountId ?? undefined,
           category_id: undefined,
@@ -561,21 +740,21 @@ export function TransactionForm({
           shop_id: undefined,
           cashback_share_percent: undefined,
           cashback_share_fixed: undefined,
-        })
-        setManualTagMode(Boolean(defaultTag))
-        setIsInstallment(false)
-        applyDefaultPersonSelection()
-        onSuccess?.()
+        });
+        setManualTagMode(Boolean(defaultTag));
+        setIsInstallment(false);
+        applyDefaultPersonSelection();
+        onSuccess?.();
       } else {
         setStatus({
-          type: 'error',
-          text: 'Failed to create transaction.',
-        })
+          type: "error",
+          text: "Failed to create transaction.",
+        });
       }
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const {
     control,
@@ -583,301 +762,377 @@ export function TransactionForm({
     formState: { errors },
     register,
     watch,
-  } = form
+  } = form;
+
+  // Watch for installment toggle
+  const watchedIsInstallment = useWatch({ control, name: "is_installment" });
 
   useEffect(() => {
     if (isEditMode) return;
 
-    const currentCategoryId = form.getValues('category_id');
+    const currentCategoryId = form.getValues("category_id");
 
     // Only auto-set category if it's currently empty
-    if (transactionType === 'debt' && !currentCategoryId) {
-      const peopleShoppingCat = categories.find(c => c.name === 'People Shopping' || c.name === 'Shopping');
+    if (transactionType === "debt" && !currentCategoryId) {
+      const peopleShoppingCat = categories.find(
+        (c) => c.name === "People Shopping" || c.name === "Shopping",
+      );
       if (peopleShoppingCat) {
-        console.log('[Category Auto-Set] Setting category to People Shopping/Shopping for debt type');
-        form.setValue('category_id', peopleShoppingCat.id);
+        console.log(
+          "[Category Auto-Set] Setting category to People Shopping/Shopping for debt type",
+        );
+        form.setValue("category_id", peopleShoppingCat.id);
       }
-      const shopeeShop = shops.find(s => s.name === 'Shopee');
+      const shopeeShop = shops.find((s) => s.name === "Shopee");
       if (shopeeShop) {
-        form.setValue('shop_id', shopeeShop.id);
+        form.setValue("shop_id", shopeeShop.id);
       }
-    } else if (transactionType === 'repayment' && !currentCategoryId) {
-      const repaymentCatId = 'e0000000-0000-0000-0000-000000000097';
-      if (categories.some(c => c.id === repaymentCatId)) {
-        console.log('[Category Auto-Set] Setting category to Repayment for repayment type');
-        form.setValue('category_id', repaymentCatId);
+    } else if (transactionType === "repayment" && !currentCategoryId) {
+      const repaymentCatId = "e0000000-0000-0000-0000-000000000097";
+      if (categories.some((c) => c.id === repaymentCatId)) {
+        console.log(
+          "[Category Auto-Set] Setting category to Repayment for repayment type",
+        );
+        form.setValue("category_id", repaymentCatId);
       } else {
-        const repaymentCat = categories.find(c => c.name === 'Thu nợ người khác' || c.name === 'Repayment');
+        const repaymentCat = categories.find(
+          (c) => c.name === "Thu nợ người khác" || c.name === "Repayment",
+        );
         if (repaymentCat) {
-          console.log('[Category Auto-Set] Setting category to Thu nợ người khác for repayment type');
-          form.setValue('category_id', repaymentCat.id);
+          console.log(
+            "[Category Auto-Set] Setting category to Thu nợ người khác for repayment type",
+          );
+          form.setValue("category_id", repaymentCat.id);
         }
       }
-    } else if (transactionType === 'transfer' && !currentCategoryId) {
+    } else if (transactionType === "transfer" && !currentCategoryId) {
       // Auto-set Money Transfer category
-      const moneyTransferId = 'e0000000-0000-0000-0000-000000000080';
-      form.setValue('category_id', moneyTransferId);
+      const moneyTransferId = "e0000000-0000-0000-0000-000000000080";
+      form.setValue("category_id", moneyTransferId);
     }
   }, [transactionType, categories, shops, form, isEditMode]);
 
   const watchedCategoryId = useWatch({
     control,
-    name: 'category_id',
-  })
+    name: "category_id",
+  });
 
   const watchedAccountId = useWatch({
     control,
-    name: 'source_account_id',
-  })
+    name: "source_account_id",
+  });
 
   const watchedShopId = useWatch({
     control,
-    name: 'shop_id',
-  })
+    name: "shop_id",
+  });
 
   const watchedAmount = useWatch({
     control,
-    name: 'amount',
-  })
+    name: "amount",
+  });
 
   const watchedDate = useWatch({
     control,
-    name: 'occurred_at',
-  })
+    name: "occurred_at",
+  });
 
   const watchedPersonId = useWatch({
     control,
-    name: 'person_id',
-  })
+    name: "person_id",
+  });
+
+  // Phase 7.3: Cashback Simulation Effect
+  useEffect(() => {
+    // Only run if expenses and valid amount/account
+    const type = form.getValues("type");
+    const accountId = form.getValues("source_account_id");
+    const categoryId = form.getValues("category_id");
+    const amount = form.getValues("amount");
+    const occurredAt = form.getValues("occurred_at");
+
+    if (type !== "expense" || !accountId || !amount || amount <= 0) {
+      setCashbackPreview(null);
+      return;
+    }
+
+    // Determine if account is credit card
+    const account = allAccounts.find((a) => a.id === accountId);
+    if (account?.type !== "credit_card") {
+      setCashbackPreview(null);
+      return;
+    }
+
+    // Debounce
+    const timeoutId = setTimeout(async () => {
+      try {
+        const result = await previewCashbackAction(
+          accountId,
+          amount,
+          categoryId,
+          occurredAt ? occurredAt.toISOString() : undefined,
+        );
+        setCashbackPreview(result);
+      } catch (err) {
+        console.error("Simulate Cashback Error:", err);
+        setCashbackPreview(null);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [
+    watchedAmount,
+    watchedCategoryId,
+    watchedAccountId,
+    watchedDate,
+    transactionType,
+    allAccounts,
+  ]);
 
   const watchedDebtAccountId = useWatch({
     control,
-    name: 'debt_account_id',
-  })
+    name: "debt_account_id",
+  });
 
   const watchedCashbackPercent = useWatch({
     control,
-    name: 'cashback_share_percent',
-  })
+    name: "cashback_share_percent",
+  });
 
   const watchedCashbackFixed = useWatch({
     control,
-    name: 'cashback_share_fixed',
-  })
+    name: "cashback_share_fixed",
+  });
 
   const watchedCashbackMode = useWatch({
     control,
-    name: 'cashback_mode',
-  })
+    name: "cashback_mode",
+  });
 
+  const categoryOptions = useMemo(() => {
+    if (isRefundMode && refundCategoryId) {
+      const refundCat =
+        categories.find((cat) => cat.id === refundCategoryId) ??
+        categories.find((cat) =>
+          (cat.name ?? "").toLowerCase().includes("refund"),
+        ) ??
+        categories.find((cat) =>
+          (cat.name ?? "").toLowerCase().includes("pending"),
+        ) ??
+        null;
+      return [
+        {
+          value: refundCategoryId,
+          label: refundCat?.name ?? "Refund",
+          description: refundCat?.type === "income" ? "Income" : "Expense",
+          searchValue: refundCat?.name ?? "Refund",
+          icon: refundCat?.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={refundCat.logo_url}
+              alt={refundCat.name}
+              className="h-5 w-5 object-contain rounded-none"
+            />
+          ) : (
+            <span className="text-xl">{refundCat?.icon || "📦"}</span>
+          ),
+        },
+      ];
+    }
 
+    // MERGED LOGIC: Filter based on transaction type
+    let filterType = "expense";
+    if (transactionType === "income" || transactionType === "repayment") {
+      filterType = "income";
+    } else if (transactionType === "transfer") {
+      filterType = "all"; // Allow all for transfer
+    }
 
-  const categoryOptions = useMemo(
-    () => {
-      if (isRefundMode && refundCategoryId) {
-        const refundCat =
-          categories.find(cat => cat.id === refundCategoryId) ??
-          categories.find(cat => (cat.name ?? '').toLowerCase().includes('refund')) ??
-          categories.find(cat => (cat.name ?? '').toLowerCase().includes('pending')) ??
-          null
-        return [
-          {
-            value: refundCategoryId,
-            label: refundCat?.name ?? 'Refund',
-            description: refundCat?.type === 'income' ? 'Income' : 'Expense',
-            searchValue: refundCat?.name ?? 'Refund',
-            icon: refundCat?.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={refundCat.logo_url}
-                alt={refundCat.name}
-                className="h-5 w-5 object-contain rounded-none"
-              />
-            ) : (
-              <span className="text-xl">{refundCat?.icon || '📦'}</span>
-            ),
-          },
-        ]
-      }
+    return categories
+      .filter((cat) => {
+        if (cat.id === watchedCategoryId) return true;
 
+        const kind = cat.kind;
 
-      // MERGED LOGIC: Filter based on transaction type
-      let filterType = 'expense';
-      if (transactionType === 'income' || transactionType === 'repayment') {
-        filterType = 'income';
-      } else if (transactionType === 'transfer') {
-        filterType = 'all'; // Allow all for transfer
-      }
+        // Income tab: type=income AND kind=internal
+        if (transactionType === "income") {
+          return cat.type === "income" && kind === "internal";
+        }
 
-      return categories
-        .filter(cat => {
-          if (cat.id === watchedCategoryId) return true;
+        // Expense tab: type=expense AND kind=external
+        if (transactionType === "expense") {
+          return cat.type === "expense" && kind === "external";
+        }
 
-          const kind = cat.kind;
+        // Lending tab: type=expense AND kind=external
+        if (transactionType === "debt") {
+          return cat.type === "expense" && kind === "external";
+        }
 
-          // Income tab: type=income AND kind=internal
-          if (transactionType === 'income') {
-            return cat.type === 'income' && kind === 'internal';
-          }
+        // Repay tab: type=income AND kind=external
+        if (transactionType === "repayment") {
+          return cat.type === "income" && kind === "external";
+        }
 
-          // Expense tab: type=expense AND kind=external  
-          if (transactionType === 'expense') {
-            return cat.type === 'expense' && kind === 'external';
-          }
+        // Transfer tab: type=transfer (kind doesn't matter)
+        if (transactionType === "transfer") {
+          return cat.type === "transfer";
+        }
 
-          // Lending tab: type=expense AND kind=external
-          if (transactionType === 'debt') {
-            return cat.type === 'expense' && kind === 'external';
-          }
+        return false;
+      })
+      .map((cat) => {
+        const isTransfer = transactionType === "transfer";
+        const typeLabel = cat.type === "income" ? "Income" : "Expense";
+        const description = isTransfer ? undefined : typeLabel;
 
-          // Repay tab: type=income AND kind=external
-          if (transactionType === 'repayment') {
-            return cat.type === 'income' && kind === 'external';
-          }
-
-          // Transfer tab: type=transfer (kind doesn't matter)
-          if (transactionType === 'transfer') {
-            return cat.type === 'transfer';
-          }
-
-          return false;
-        })
-        .map((cat) => {
-          const isTransfer = transactionType === 'transfer'
-          const typeLabel = cat.type === 'income' ? 'Income' : 'Expense'
-          const description = isTransfer ? undefined : typeLabel
-
-          return {
-            value: cat.id,
-            label: cat.name,
-            description: description,
-            searchValue: `${cat.name} ${typeLabel}`,
-            icon: cat.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={cat.logo_url}
-                alt={cat.name}
-                className="h-5 w-5 object-contain rounded-full"
-              />
-            ) : (
-              <span className="text-xl">{cat.icon || '📦'}</span>
-            ),
-          }
-        })
-    }, [categories, transactionType, isRefundMode, refundCategoryId, watchedCategoryId]
-  )
-
+        return {
+          value: cat.id,
+          label: cat.name,
+          description: description,
+          searchValue: `${cat.name} ${typeLabel}`,
+          icon: cat.logo_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={cat.logo_url}
+              alt={cat.name}
+              className="h-5 w-5 object-contain rounded-full"
+            />
+          ) : (
+            <span className="text-xl">{cat.icon || "📦"}</span>
+          ),
+        };
+      });
+  }, [
+    categories,
+    transactionType,
+    isRefundMode,
+    refundCategoryId,
+    watchedCategoryId,
+  ]);
 
   // Smart Reset: Clear category/shop if current selection is invalid for the new type
   useEffect(() => {
-    const currentCatId = form.getValues('category_id')
+    const currentCatId = form.getValues("category_id");
     if (currentCatId) {
       // Check if current category is present in the AVAILABLE options for this type
-      const isValid = categoryOptions.some(c => c.value === currentCatId)
+      const isValid = categoryOptions.some((c) => c.value === currentCatId);
       if (!isValid) {
-        console.log('[Auto Reset] Clearing invalid category for type:', transactionType)
-        form.setValue('category_id', '')
-        form.setValue('shop_id', '') // Also clear shop as it depends on category
+        console.log(
+          "[Auto Reset] Clearing invalid category for type:",
+          transactionType,
+        );
+        form.setValue("category_id", "");
+        form.setValue("shop_id", ""); // Also clear shop as it depends on category
       }
     }
-  }, [transactionType, categoryOptions, form])
+  }, [transactionType, categoryOptions, form]);
 
   const debugCategoryClick = useCallback(() => {
-    console.log('[Refund Category Debug]', {
+    console.log("[Refund Category Debug]", {
       isRefundMode,
-      categoryValue: form.getValues('category_id'),
+      categoryValue: form.getValues("category_id"),
       refundCategoryId,
       categoryOptions,
-    })
-  }, [categoryOptions, form, isRefundMode, refundCategoryId])
+    });
+  }, [categoryOptions, form, isRefundMode, refundCategoryId]);
 
+  const accountOptions = useMemo(() => {
+    let filteredAccounts = sourceAccounts.filter((acc) => {
+      // Filter by type if a filter is active
+      if (accountFilter === "bank" && acc.type !== "bank") return false;
+      if (accountFilter === "credit" && acc.type !== "credit_card")
+        return false;
+      if (
+        accountFilter === "other" &&
+        (acc.type === "bank" || acc.type === "credit_card")
+      )
+        return false;
 
+      // Hide system accounts (e.g., "System Account") unless in specific modes if needed
+      // Based on previous context, REFUND_PENDING_ACCOUNT_ID is a system account.
+      if (
+        acc.id === REFUND_PENDING_ACCOUNT_ID &&
+        (!isRefundMode || refundStatus !== "pending")
+      )
+        return false;
 
-  const accountOptions = useMemo(
-    () => {
-      let filteredAccounts = sourceAccounts
-        .filter(acc => {
-          // Filter by type if a filter is active
-          if (accountFilter === 'bank' && acc.type !== 'bank') return false
-          if (accountFilter === 'credit' && acc.type !== 'credit_card') return false
-          if (accountFilter === 'other' && (acc.type === 'bank' || acc.type === 'credit_card')) return false
+      // Block Credit Cards for Transfer logic
+      if (transactionType === "transfer" && acc.type === "credit_card")
+        return false;
 
-          // Hide system accounts (e.g., "System Account") unless in specific modes if needed
-          // Based on previous context, REFUND_PENDING_ACCOUNT_ID is a system account.
-          if (acc.id === REFUND_PENDING_ACCOUNT_ID && (!isRefundMode || refundStatus !== 'pending')) return false
+      return true;
+    });
 
-          // Block Credit Cards for Transfer logic
-          if (transactionType === 'transfer' && acc.type === 'credit_card') return false
-
-          return true
-        })
-
-      // If category is selected, sort relevant accounts to top (existing logic)
-      if (watchedCategoryId) {
-        const category = categories.find(c => c.id === watchedCategoryId)
-        if (category && category.name) {
-          // ... (existing sort logic if needed)
-        }
+    // If category is selected, sort relevant accounts to top (existing logic)
+    if (watchedCategoryId) {
+      const category = categories.find((c) => c.id === watchedCategoryId);
+      if (category && category.name) {
+        // ... (existing sort logic if needed)
       }
+    }
 
-      return filteredAccounts.map(acc => ({
-        value: acc.id,
-        label: acc.name,
-        description: `${acc.type.replace('_', ' ')} - ${numberFormatter.format(acc.current_balance)}`,
-        searchValue: `${acc.name} ${acc.type.replace('_', ' ')} ${acc.current_balance}`,
-        icon: acc.logo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={acc.logo_url}
-            alt={acc.name}
-            className="h-5 w-5 object-contain rounded-none"
-          />
-        ) : (
-          <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
-            {getAccountInitial(acc.name)}
-          </span>
-        ),
-      }))
-    },
-    [sourceAccounts, watchedCategoryId, categories, transactionType, accountFilter, isRefundMode, refundStatus]
-  )
+    return filteredAccounts.map((acc) => ({
+      value: acc.id,
+      label: acc.name,
+      description: `${acc.type.replace("_", " ")} - ${numberFormatter.format(acc.current_balance)}`,
+      searchValue: `${acc.name} ${acc.type.replace("_", " ")} ${acc.current_balance}`,
+      icon: acc.logo_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={acc.logo_url}
+          alt={acc.name}
+          className="h-5 w-5 object-contain rounded-none"
+        />
+      ) : (
+        <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
+          {getAccountInitial(acc.name)}
+        </span>
+      ),
+    }));
+  }, [
+    sourceAccounts,
+    watchedCategoryId,
+    categories,
+    transactionType,
+    accountFilter,
+    isRefundMode,
+    refundStatus,
+  ]);
 
-  const destinationAccountOptions = useMemo(
-    () => {
-      let filteredAccounts = allAccounts;
-      if (watchedAccountId) {
-        filteredAccounts = allAccounts.filter(a => a.id !== watchedAccountId);
-      }
+  const destinationAccountOptions = useMemo(() => {
+    let filteredAccounts = allAccounts;
+    if (watchedAccountId) {
+      filteredAccounts = allAccounts.filter((a) => a.id !== watchedAccountId);
+    }
 
-      return filteredAccounts.map(acc => ({
-        value: acc.id,
-        label: acc.name,
-        description: numberFormatter.format(acc.current_balance),
-        searchValue: `${acc.name} ${acc.type.replace('_', ' ')} ${acc.current_balance}`,
-        icon: acc.logo_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={acc.logo_url}
-            alt={acc.name}
-            className="h-5 w-5 object-contain rounded-none"
-          />
-        ) : (
-          <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
-            {getAccountInitial(acc.name)}
-          </span>
-        ),
-      }))
-    },
-    [allAccounts, watchedAccountId]
-  )
+    return filteredAccounts.map((acc) => ({
+      value: acc.id,
+      label: acc.name,
+      description: numberFormatter.format(acc.current_balance),
+      searchValue: `${acc.name} ${acc.type.replace("_", " ")} ${acc.current_balance}`,
+      icon: acc.logo_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={acc.logo_url}
+          alt={acc.name}
+          className="h-5 w-5 object-contain rounded-none"
+        />
+      ) : (
+        <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
+          {getAccountInitial(acc.name)}
+        </span>
+      ),
+    }));
+  }, [allAccounts, watchedAccountId]);
 
   const personOptions = useMemo(
     () =>
-      peopleState.map(person => ({
+      peopleState.map((person) => ({
         value: person.id,
         label: person.name,
-        description: person.email || 'No email',
-        searchValue: `${person.name} ${person.email ?? ''}`.trim(),
+        description: person.email || "No email",
+        searchValue: `${person.name} ${person.email ?? ""}`.trim(),
         icon: person.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -891,35 +1146,47 @@ export function TransactionForm({
           </span>
         ),
       })),
-    [peopleState]
-  )
+    [peopleState],
+  );
 
   const shopOptions = useMemo(() => {
     // Filter shops: if category is selected, only show shops with that default_category_id
     // But user might want to see all shops?
     // User request: "Sửa shop dropdowns: nó chỉ show tương ứng với category đã match" -> Strict filter implied.
-    const selectedCategoryId = watch('category_id');
+    const selectedCategoryId = watch("category_id");
 
     let filteredShops = shops;
     if (selectedCategoryId) {
       // Optional: include shops with NO default category too? Or strictly match?
       // Usually 'match' means match.
-      filteredShops = shops.filter(s => !s.default_category_id || s.default_category_id === selectedCategoryId);
+      filteredShops = shops.filter(
+        (s) =>
+          !s.default_category_id ||
+          s.default_category_id === selectedCategoryId,
+      );
     }
 
-    return filteredShops.map(s => ({
+    return filteredShops.map((s) => ({
       value: s.id,
       label: s.name,
       searchValue: s.name,
       // Add icon if logo_url exists
-      icon: s.logo_url ? <img src={s.logo_url} alt="" className="w-5 h-5 rounded-full object-cover" /> : <Store className="w-4 h-4 text-slate-400" />
-    }))
-  }, [shops, watch('category_id')])
+      icon: s.logo_url ? (
+        <img
+          src={s.logo_url}
+          alt=""
+          className="w-5 h-5 rounded-full object-cover"
+        />
+      ) : (
+        <Store className="w-4 h-4 text-slate-400" />
+      ),
+    }));
+  }, [shops, watch("category_id")]);
 
   const selectedAccount = useMemo(
-    () => sourceAccounts.find(acc => acc.id === watchedAccountId),
-    [sourceAccounts, watchedAccountId]
-  )
+    () => sourceAccounts.find((acc) => acc.id === watchedAccountId),
+    [sourceAccounts, watchedAccountId],
+  );
 
   useEffect(() => {
     // CRITICAL FIX: Only auto-set category from shop if:
@@ -929,33 +1196,46 @@ export function TransactionForm({
     if (isEditMode) return;
     if (!watchedShopId) return;
 
-    const currentCategoryId = form.getValues('category_id');
+    const currentCategoryId = form.getValues("category_id");
     if (currentCategoryId) {
-      console.log('[Shop Category] User already selected category, not overriding:', currentCategoryId);
+      console.log(
+        "[Shop Category] User already selected category, not overriding:",
+        currentCategoryId,
+      );
       return; // User already selected a category, don't override!
     }
 
-    const shop = shops.find(s => s.id === watchedShopId);
+    const shop = shops.find((s) => s.id === watchedShopId);
     if (shop?.default_category_id) {
-      console.log('[Shop Category] Auto-setting category from shop:', shop.name, shop.default_category_id);
-      form.setValue('category_id', shop.default_category_id);
+      console.log(
+        "[Shop Category] Auto-setting category from shop:",
+        shop.name,
+        shop.default_category_id,
+      );
+      form.setValue("category_id", shop.default_category_id);
     }
-  }, [watchedShopId, shops, form, isEditMode])
+  }, [watchedShopId, shops, form, isEditMode]);
 
   useEffect(() => {
-    if (!isRefundMode) return
-    if (refundStatus === 'pending') {
-      form.setValue('source_account_id', REFUND_PENDING_ACCOUNT_ID, { shouldValidate: true })
-      return
+    if (!isRefundMode) return;
+    if (refundStatus === "pending") {
+      form.setValue("source_account_id", REFUND_PENDING_ACCOUNT_ID, {
+        shouldValidate: true,
+      });
+      return;
     }
     const preferredAccount =
-      (watchedAccountId && watchedAccountId !== REFUND_PENDING_ACCOUNT_ID ? watchedAccountId : undefined) ??
+      (watchedAccountId && watchedAccountId !== REFUND_PENDING_ACCOUNT_ID
+        ? watchedAccountId
+        : undefined) ??
       defaultSourceAccountId ??
       initialValues?.source_account_id ??
-      sourceAccounts.find(acc => acc.id !== REFUND_PENDING_ACCOUNT_ID)?.id
+      sourceAccounts.find((acc) => acc.id !== REFUND_PENDING_ACCOUNT_ID)?.id;
 
     if (preferredAccount) {
-      form.setValue('source_account_id', preferredAccount, { shouldValidate: true })
+      form.setValue("source_account_id", preferredAccount, {
+        shouldValidate: true,
+      });
     }
   }, [
     defaultSourceAccountId,
@@ -965,382 +1245,416 @@ export function TransactionForm({
     refundStatus,
     sourceAccounts,
     watchedAccountId,
-  ])
+  ]);
 
   const cashbackMeta = useMemo(
     () =>
-      selectedAccount ? parseCashbackConfig(selectedAccount.cashback_config, selectedAccount.id) : null,
-    [selectedAccount]
-  )
+      selectedAccount
+        ? parseCashbackConfig(
+          selectedAccount.cashback_config,
+          selectedAccount.id,
+        )
+        : null,
+    [selectedAccount],
+  );
 
   const selectedCycleLabel = useMemo(
     () => getCycleLabelForDate(watchedDate, cashbackMeta),
-    [watchedDate, cashbackMeta]
-  )
+    [watchedDate, cashbackMeta],
+  );
 
   useEffect(() => {
     if (!defaultPersonId) {
-      return
+      return;
     }
-    const currentPerson = form.getValues('person_id')
-    const currentDebt = form.getValues('debt_account_id')
+    const currentPerson = form.getValues("person_id");
+    const currentDebt = form.getValues("debt_account_id");
     if (currentPerson || currentDebt) {
-      return
+      return;
     }
-    applyDefaultPersonSelection()
-  }, [applyDefaultPersonSelection, defaultPersonId, form])
+    applyDefaultPersonSelection();
+  }, [applyDefaultPersonSelection, defaultPersonId, form]);
 
   useEffect(() => {
-    if (transactionType !== 'debt' && transactionType !== 'repayment') {
-      setDebtEnsureError(null)
-      return
+    if (transactionType !== "debt" && transactionType !== "repayment") {
+      setDebtEnsureError(null);
+      return;
     }
     if (!watchedPersonId) {
-      form.setValue('debt_account_id', undefined)
-      setDebtEnsureError(null)
-      return
+      form.setValue("debt_account_id", undefined);
+      setDebtEnsureError(null);
+      return;
     }
-    setDebtEnsureError(null)
-    const linkedAccountId = debtAccountByPerson.get(watchedPersonId)
-    form.setValue('debt_account_id', linkedAccountId ?? undefined)
-  }, [transactionType, watchedPersonId, debtAccountByPerson, form])
+    setDebtEnsureError(null);
+    const linkedAccountId = debtAccountByPerson.get(watchedPersonId);
+    form.setValue("debt_account_id", linkedAccountId ?? undefined);
+  }, [transactionType, watchedPersonId, debtAccountByPerson, form]);
 
   useEffect(() => {
-    if (transactionType !== 'expense' && transactionType !== 'debt' && transactionType !== 'repayment') {
-      form.setValue('shop_id', undefined)
+    if (
+      transactionType !== "expense" &&
+      transactionType !== "debt" &&
+      transactionType !== "repayment"
+    ) {
+      form.setValue("shop_id", undefined);
     }
-  }, [transactionType, form])
+  }, [transactionType, form]);
 
   // Clear source account if switching to Transfer and it's a credit card
   useEffect(() => {
-    if (transactionType === 'transfer' && selectedAccount?.type === 'credit_card') {
-      form.setValue('source_account_id', '')
+    if (
+      transactionType === "transfer" &&
+      selectedAccount?.type === "credit_card"
+    ) {
+      form.setValue("source_account_id", "");
     }
-  }, [transactionType, selectedAccount, form])
+  }, [transactionType, selectedAccount, form]);
 
   // Auto-Select "Real" Tab for Lending
   useEffect(() => {
-    if (transactionType === 'debt' && selectedAccount?.type === 'credit_card') {
-      const currentMode = form.getValues('cashback_mode');
-      if (currentMode !== 'real_fixed' && currentMode !== 'real_percent') {
-        console.log('[Lending Auto-Set] Switching cashback mode to real_fixed for Lending on CC');
-        form.setValue('cashback_mode', 'real_fixed');
+    if (transactionType === "debt" && selectedAccount?.type === "credit_card") {
+      const currentMode = form.getValues("cashback_mode");
+      if (currentMode !== "real_fixed" && currentMode !== "real_percent") {
+        console.log(
+          "[Lending Auto-Set] Switching cashback mode to real_fixed for Lending on CC",
+        );
+        form.setValue("cashback_mode", "real_fixed");
       }
     }
   }, [transactionType, selectedAccount, form]);
 
-
-
-
-
   useEffect(() => {
     if (isRefundMode) {
-      setSpendingStats(null)
-      setStatsError(null)
-      setStatsLoading(false)
-      return
+      setSpendingStats(null);
+      setStatsError(null);
+      setStatsLoading(false);
+      return;
     }
 
     if (!watchedAccountId) {
-      setSpendingStats(null)
-      setStatsError(null)
-      setStatsLoading(false)
-      return
+      setSpendingStats(null);
+      setStatsError(null);
+      setStatsLoading(false);
+      return;
     }
 
-    const controller = new AbortController()
-    setStatsLoading(true)
-    setStatsError(null)
+    const controller = new AbortController();
+    setStatsLoading(true);
+    setStatsError(null);
 
-    const params = new URLSearchParams()
-    params.set('accountId', watchedAccountId)
+    const params = new URLSearchParams();
+    params.set("accountId", watchedAccountId);
     if (watchedDate) {
-      params.set('date', watchedDate.toISOString())
+      params.set("date", watchedDate.toISOString());
     }
     if (watchedCategoryId) {
-      params.set('categoryId', watchedCategoryId)
+      params.set("categoryId", watchedCategoryId);
     }
 
     fetch(`/api/cashback/stats?${params.toString()}`, {
-      cache: 'no-store',
+      cache: "no-store",
       signal: controller.signal,
     })
-      .then(async response => {
+      .then(async (response) => {
         if (!response.ok) {
-          throw new Error('Failed to load spending stats')
+          throw new Error("Failed to load spending stats");
         }
-        const payload = await response.json()
-        setSpendingStats(payload ?? null)
+        const payload = await response.json();
+        setSpendingStats(payload ?? null);
       })
-      .catch(error => {
-        if ((error as { name?: string }).name === 'AbortError') {
-          return
+      .catch((error) => {
+        if ((error as { name?: string }).name === "AbortError") {
+          return;
         }
-        console.error(error)
-        setSpendingStats(null)
-        setStatsError('Could not load Min Spend info')
+        console.error(error);
+        setSpendingStats(null);
+        setStatsError("Could not load Min Spend info");
       })
       .finally(() => {
-        setStatsLoading(false)
-      })
+        setStatsLoading(false);
+      });
 
     return () => {
-      controller.abort()
-    }
-  }, [isRefundMode, watchedAccountId, watchedDate, watchedCategoryId])
+      controller.abort();
+    };
+  }, [isRefundMode, watchedAccountId, watchedDate, watchedCategoryId]);
 
   useEffect(() => {
     if (!selectedAccount?.id) {
-      setCashbackProgress(null)
-      setProgressError(null)
-      return undefined
+      setCashbackProgress(null);
+      setProgressError(null);
+      return undefined;
     }
 
-    const controller = new AbortController()
-    setProgressLoading(true)
-    setProgressError(null)
+    const controller = new AbortController();
+    setProgressLoading(true);
+    setProgressError(null);
 
-    fetch(`/api/cashback/progress?accountId=${selectedAccount.id}&date=${watchedDate.toISOString()}`, {
-      cache: 'no-store',
-      signal: controller.signal,
-    })
-      .then(async response => {
+    fetch(
+      `/api/cashback/progress?accountId=${selectedAccount.id}&date=${watchedDate.toISOString()}`,
+      {
+        cache: "no-store",
+        signal: controller.signal,
+      },
+    )
+      .then(async (response) => {
         if (!response.ok) {
-          throw new Error('Failed to load cashback progress')
+          throw new Error("Failed to load cashback progress");
         }
-        const payload = (await response.json()) as CashbackCard[]
+        const payload = (await response.json()) as CashbackCard[];
         if (!payload.length) {
-          setCashbackProgress(null)
-          setProgressError('Could not find cashback cycle data')
-          return
+          setCashbackProgress(null);
+          setProgressError("Could not find cashback cycle data");
+          return;
         }
-        setCashbackProgress(payload[0])
+        setCashbackProgress(payload[0]);
       })
       .catch((error: unknown) => {
-        if ((error as { name?: string }).name === 'AbortError') {
-          return
+        if ((error as { name?: string }).name === "AbortError") {
+          return;
         }
-        console.error(error)
-        setCashbackProgress(null)
-        setProgressError('Could not load cashback info')
+        console.error(error);
+        setCashbackProgress(null);
+        setProgressError("Could not load cashback info");
       })
       .finally(() => {
-        setProgressLoading(false)
-      })
+        setProgressLoading(false);
+      });
 
     return () => {
-      controller.abort()
-    }
-  }, [selectedAccount?.id, watchedDate])
+      controller.abort();
+    };
+  }, [selectedAccount?.id, watchedDate]);
 
   // Fetch persisted metadata for existing transactions
   useEffect(() => {
     if (!transactionId || !isEditMode) {
-      setPersistedMetadata(null)
-      return
+      setPersistedMetadata(null);
+      return;
     }
 
     const fetchPersistedMetadata = async () => {
       try {
-        const response = await fetch(`/api/cashback/policy-explanation?transactionId=${transactionId}`)
+        const response = await fetch(
+          `/api/cashback/policy-explanation?transactionId=${transactionId}`,
+        );
         if (response.ok) {
-          const data = await response.json()
-          setPersistedMetadata(normalizePolicyMetadata(data))
+          const data = await response.json();
+          setPersistedMetadata(normalizePolicyMetadata(data));
         }
       } catch (error) {
-        console.error('Failed to fetch persisted cashback metadata:', error)
+        console.error("Failed to fetch persisted cashback metadata:", error);
       }
-    }
+    };
 
-    fetchPersistedMetadata()
-  }, [transactionId, isEditMode])
+    fetchPersistedMetadata();
+  }, [transactionId, isEditMode]);
 
-  const livePolicyMetadata = useMemo(
-    () => normalizePolicyMetadata(spendingStats?.policyMetadata),
-    [spendingStats?.policyMetadata]
-  )
+  // Phase 7.3: Policy Metadata Resolution
+  const policyMetadataToShow =
+    cashbackPreview?.metadata ??
+    (spendingStats?.matchReason
+      ? ({
+        policySource: "virtual" as any,
+        reason: spendingStats.matchReason,
+        rate: spendingStats.potentialRate ?? spendingStats.rate,
+        ruleMaxReward: spendingStats.maxReward,
+      } as CashbackPolicyMetadata)
+      : null) ??
+    persistedMetadata;
 
-  const policyMetadataToShow = persistedMetadata || livePolicyMetadata
-
-
-  const potentialCashback = useMemo(() => {
-    const rate = spendingStats?.potentialRate ?? cashbackMeta?.rate ?? 0
-    if (rate === 0) {
-      return 0
-    }
-    if (typeof watchedAmount !== 'number' || Number.isNaN(watchedAmount)) {
-      return 0
-    }
-    const rawCashback = Math.abs(watchedAmount) * rate
-
-    // Apply category-specific max reward if available
-    let cappedCashback = rawCashback;
-    if (spendingStats?.maxReward && spendingStats.maxReward > 0) {
-      cappedCashback = Math.min(rawCashback, spendingStats.maxReward)
-    }
-
-    // Apply Budget Cap for Potential Profit display
-    if (spendingStats?.maxCashback) {
-      const budgetLeft = Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar);
-      cappedCashback = Math.min(cappedCashback, budgetLeft);
-    }
-
-    return cappedCashback
-  }, [cashbackMeta, watchedAmount, spendingStats])
+  const potentialCashback =
+    cashbackPreview?.estimatedReward ??
+    (spendingStats
+      ? (watchedAmount || 0) *
+      (spendingStats.potentialRate ?? spendingStats.rate)
+      : 0);
+  const livePolicyMetadata = !!cashbackPreview;
 
   const currentImpact = useMemo(() => {
-    if (watchedCashbackMode === 'real_fixed' || watchedCashbackMode === 'real_percent') {
-      const pAmount = (Math.abs(watchedAmount) * (watchedCashbackPercent || 0)) / 100;
+    if (
+      watchedCashbackMode === "real_fixed" ||
+      watchedCashbackMode === "real_percent"
+    ) {
+      const pAmount =
+        (Math.abs(watchedAmount) * (watchedCashbackPercent || 0)) / 100;
       const fAmount = watchedCashbackFixed || 0;
       return pAmount + fAmount;
     }
-    if (watchedCashbackMode === 'none_back') {
+    if (watchedCashbackMode === "none_back") {
       return potentialCashback;
     }
     return 0;
-  }, [watchedCashbackMode, watchedAmount, watchedCashbackPercent, watchedCashbackFixed, potentialCashback]);
+  }, [
+    watchedCashbackMode,
+    watchedAmount,
+    watchedCashbackPercent,
+    watchedCashbackFixed,
+    potentialCashback,
+  ]);
 
-  const amountValue = typeof watchedAmount === 'number' ? Math.abs(watchedAmount) : 0
-  const projectedSpend = (spendingStats?.currentSpend ?? 0) + amountValue
+  const amountValue =
+    typeof watchedAmount === "number" ? Math.abs(watchedAmount) : 0;
+  const projectedSpend = (spendingStats?.currentSpend ?? 0) + amountValue;
   const rateLimitPercent =
     spendingStats?.potentialRate !== undefined
       ? spendingStats.potentialRate * 100
-      : (typeof cashbackProgress?.rate === 'number'
+      : typeof cashbackProgress?.rate === "number"
         ? cashbackProgress.rate * 100
-        : null)
+        : null;
   const percentEntry = Number.isFinite(Number(watchedCashbackPercent ?? 0))
     ? Number(watchedCashbackPercent ?? 0)
-    : 0
+    : 0;
   const appliedPercent =
     rateLimitPercent !== null
       ? Math.min(rateLimitPercent, Math.max(0, percentEntry))
-      : Math.max(0, percentEntry)
-  const fixedEntry = Math.max(0, Number(watchedCashbackFixed ?? 0))
-  const percentBackValue = (appliedPercent / 100) * amountValue
-  const rawShareTotal = percentBackValue + fixedEntry
+      : Math.max(0, percentEntry);
+  const fixedEntry = Math.max(0, Number(watchedCashbackFixed ?? 0));
+  const percentBackValue = (appliedPercent / 100) * amountValue;
+  const rawShareTotal = percentBackValue + fixedEntry;
   const remainingBudget =
-    typeof cashbackProgress?.remainingBudget === 'number'
+    typeof cashbackProgress?.remainingBudget === "number"
       ? Math.max(0, cashbackProgress.remainingBudget)
-      : null
+      : null;
   const budgetLimitedShare =
-    typeof remainingBudget === 'number'
+    typeof remainingBudget === "number"
       ? Math.min(rawShareTotal, remainingBudget)
-      : rawShareTotal
-  const totalBackGiven = Math.min(amountValue, budgetLimitedShare)
+      : rawShareTotal;
+  const totalBackGiven = Math.min(amountValue, budgetLimitedShare);
   const budgetExceeded =
-    typeof remainingBudget === 'number' && rawShareTotal > remainingBudget
+    typeof remainingBudget === "number" && rawShareTotal > remainingBudget;
   const budgetMaxed =
-    typeof remainingBudget === 'number' && remainingBudget <= 0
+    typeof remainingBudget === "number" && remainingBudget <= 0;
   const suggestedPercent =
-    typeof remainingBudget === 'number' && amountValue > 0
+    typeof remainingBudget === "number" && amountValue > 0
       ? Math.max(
         0,
         Math.min(
           rateLimitPercent ?? Infinity,
-          ((remainingBudget - fixedEntry) / amountValue) * 100
-        )
+          ((remainingBudget - fixedEntry) / amountValue) * 100,
+        ),
       )
-      : null
+      : null;
   const showCashbackInputs =
-    (transactionType === 'expense' || (transactionType === 'debt' && selectedAccount?.type === 'credit_card')) &&
-    (watchedCashbackMode === 'real_fixed' || watchedCashbackMode === 'real_percent' || watchedCashbackMode === 'voluntary')
+    (transactionType === "expense" ||
+      (transactionType === "debt" &&
+        selectedAccount?.type === "credit_card")) &&
+    (watchedCashbackMode === "real_fixed" ||
+      watchedCashbackMode === "real_percent" ||
+      watchedCashbackMode === "voluntary");
 
   // Validation: Total cashback must be less than amount
-  const cashbackExceedsAmount = showCashbackInputs && rawShareTotal >= amountValue && amountValue > 0
+  const cashbackExceedsAmount =
+    showCashbackInputs && rawShareTotal >= amountValue && amountValue > 0;
 
   useEffect(() => {
     if (amountValue <= 0) {
-      form.setValue('cashback_share_percent', undefined)
-      form.setValue('cashback_share_fixed', undefined)
-      return
+      form.setValue("cashback_share_percent", undefined);
+      form.setValue("cashback_share_fixed", undefined);
+      return;
     }
-    if (typeof watchedCashbackFixed === 'number' && watchedCashbackFixed > amountValue) {
-      form.setValue('cashback_share_fixed', amountValue)
+    if (
+      typeof watchedCashbackFixed === "number" &&
+      watchedCashbackFixed > amountValue
+    ) {
+      form.setValue("cashback_share_fixed", amountValue);
     }
-  }, [amountValue, form, watchedCashbackFixed])
+  }, [amountValue, form, watchedCashbackFixed]);
 
   const handleEnsureDebtAccount = () => {
     if (!watchedPersonId) {
-      return
+      return;
     }
-    const person = personMap.get(watchedPersonId)
+    const person = personMap.get(watchedPersonId);
     startEnsuringDebt(async () => {
-      setDebtEnsureError(null)
-      const accountId = await ensureDebtAccountAction(watchedPersonId, person?.name)
+      setDebtEnsureError(null);
+      const accountId = await ensureDebtAccountAction(
+        watchedPersonId,
+        person?.name,
+      );
       if (!accountId) {
-        setDebtEnsureError('Could not create debt account. Please try again.')
-        return
+        setDebtEnsureError("Could not create debt account. Please try again.");
+        return;
       }
-      setPeopleState(prev => prev.map(p => p.id === watchedPersonId ? { ...p, debt_account_id: accountId } : p))
-      form.setValue('debt_account_id', accountId, { shouldValidate: true })
-    })
-  }
+      setPeopleState((prev) =>
+        prev.map((p) =>
+          p.id === watchedPersonId ? { ...p, debt_account_id: accountId } : p,
+        ),
+      );
+      form.setValue("debt_account_id", accountId, { shouldValidate: true });
+    });
+  };
 
   useEffect(() => {
     if (!manualTagMode && watchedDate) {
-      form.setValue('tag', generateTag(watchedDate));
+      form.setValue("tag", generateTag(watchedDate));
     }
   }, [watchedDate, manualTagMode, form]);
 
   useEffect(() => {
     if (isEditMode && initialValues?.tag) {
-      return
+      return;
     }
-    if (typeof defaultTag === 'string') {
-      form.setValue('tag', defaultTag);
+    if (typeof defaultTag === "string") {
+      form.setValue("tag", defaultTag);
       setManualTagMode(true);
     }
   }, [defaultTag, form, initialValues?.tag, isEditMode]);
 
   useEffect(() => {
-    if (isEditMode || isRefundMode) return
+    if (isEditMode || isRefundMode) return;
     if (defaultType) {
-      form.setValue('type', defaultType);
+      form.setValue("type", defaultType);
       setTransactionType(defaultType);
     }
   }, [defaultType, form, isEditMode, isRefundMode]);
 
   useEffect(() => {
     if (isRefundMode) {
-      form.setValue('type', 'income')
-      setTransactionType('income')
+      form.setValue("type", "income");
+      setTransactionType("income");
     }
-  }, [form, isRefundMode])
+  }, [form, isRefundMode]);
 
   useEffect(() => {
-    if (isEditMode && initialValues?.source_account_id) return
+    if (isEditMode && initialValues?.source_account_id) return;
     if (defaultSourceAccountId) {
-      form.setValue('source_account_id', defaultSourceAccountId)
+      form.setValue("source_account_id", defaultSourceAccountId);
     }
-  }, [defaultSourceAccountId, form, initialValues?.source_account_id, isEditMode])
+  }, [
+    defaultSourceAccountId,
+    form,
+    initialValues?.source_account_id,
+    isEditMode,
+  ]);
 
   // Reset cashback when Account or Amount changes significantly
   useEffect(() => {
     // Only reset if we are not in edit mode loading phase
     if (!form.formState.isLoading && !isEditMode) {
       // If account changes, reset query logic resets stats, but we should reset inputs
-      form.setValue('cashback_share_fixed', 0);
-      form.setValue('cashback_share_percent', 0);
+      form.setValue("cashback_share_fixed", 0);
+      form.setValue("cashback_share_percent", 0);
       // If amount is cleared, also reset
       if (!amountValue) {
-        form.setValue('cashback_share_fixed', 0);
-        form.setValue('cashback_share_percent', 0);
+        form.setValue("cashback_share_fixed", 0);
+        form.setValue("cashback_share_percent", 0);
       }
     }
   }, [selectedAccount?.id, amountValue, form]);
 
   useEffect(() => {
-    if (isEditMode && initialValues?.debt_account_id) return
+    if (isEditMode && initialValues?.debt_account_id) return;
     if (defaultDebtAccountId) {
-      form.setValue('debt_account_id', defaultDebtAccountId)
+      form.setValue("debt_account_id", defaultDebtAccountId);
     }
-  }, [defaultDebtAccountId, form, initialValues?.debt_account_id, isEditMode])
+  }, [defaultDebtAccountId, form, initialValues?.debt_account_id, isEditMode]);
 
   const debtAccountName = useMemo(() => {
-    if (!watchedDebtAccountId) return null
-    const account = allAccounts.find(acc => acc.id === watchedDebtAccountId)
-    return account?.name ?? null
-  }, [watchedDebtAccountId, allAccounts])
+    if (!watchedDebtAccountId) return null;
+    const account = allAccounts.find((acc) => acc.id === watchedDebtAccountId);
+    return account?.name ?? null;
+  }, [watchedDebtAccountId, allAccounts]);
 
   const TypeInput = isRefundMode ? (
     <div className="space-y-2">
@@ -1355,40 +1669,59 @@ export function TransactionForm({
         control={control}
         name="type"
         render={({ field }) => (
-          <Tabs value={field.value} onValueChange={(value) => {
-            if (value === 'quick-people') {
-              setTransactionType('quick-people');
-            } else {
-              field.onChange(value);
-              setTransactionType(value as any)
-            }
-          }} className="w-full">
+          <Tabs
+            value={field.value}
+            onValueChange={(value) => {
+              if (value === "quick-people") {
+                setTransactionType("quick-people");
+              } else {
+                field.onChange(value);
+                setTransactionType(value as any);
+              }
+            }}
+            className="w-full"
+          >
             <TabsList className="grid w-full grid-cols-5 p-1 bg-slate-100/80 rounded-xl h-auto">
-              <TabsTrigger value="expense" className="data-[state=active]:bg-rose-100 data-[state=active]:text-rose-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all">
+              <TabsTrigger
+                value="expense"
+                className="data-[state=active]:bg-rose-100 data-[state=active]:text-rose-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all"
+              >
                 <div className="p-1 rounded-full bg-rose-200/50 text-rose-600 group-data-[state=active]:bg-rose-200">
                   <ArrowUpRight className="h-3.5 w-3.5" />
                 </div>
                 <span>Expense</span>
               </TabsTrigger>
-              <TabsTrigger value="income" className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all">
+              <TabsTrigger
+                value="income"
+                className="data-[state=active]:bg-emerald-100 data-[state=active]:text-emerald-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all"
+              >
                 <div className="p-1 rounded-full bg-emerald-200/50 text-emerald-600 group-data-[state=active]:bg-emerald-200">
                   <ArrowDownLeft className="h-3.5 w-3.5" />
                 </div>
                 <span>Income</span>
               </TabsTrigger>
-              <TabsTrigger value="transfer" className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all">
+              <TabsTrigger
+                value="transfer"
+                className="data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all"
+              >
                 <div className="p-1 rounded-full bg-blue-200/50 text-blue-600 group-data-[state=active]:bg-blue-200">
                   <ArrowRightLeft className="h-3.5 w-3.5" />
                 </div>
                 <span>Transfer</span>
               </TabsTrigger>
-              <TabsTrigger value="debt" className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all">
+              <TabsTrigger
+                value="debt"
+                className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all"
+              >
                 <div className="p-1 rounded-full bg-purple-200/50 text-purple-600 group-data-[state=active]:bg-purple-200">
                   <Wallet className="h-3.5 w-3.5" />
                 </div>
                 <span>Lending</span>
               </TabsTrigger>
-              <TabsTrigger value="repayment" className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all">
+              <TabsTrigger
+                value="repayment"
+                className="data-[state=active]:bg-orange-100 data-[state=active]:text-orange-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all"
+              >
                 <div className="p-1 rounded-full bg-orange-200/50 text-orange-600 group-data-[state=active]:bg-orange-200">
                   <RotateCcw className="h-3.5 w-3.5" />
                 </div>
@@ -1402,7 +1735,7 @@ export function TransactionForm({
         <p className="text-sm text-red-600 mt-1">{errors.type.message}</p>
       )}
     </div>
-  )
+  );
 
   const RefundStatusInput = isRefundMode ? (
     <div className="space-y-2">
@@ -1410,19 +1743,23 @@ export function TransactionForm({
       <div className="inline-flex rounded-lg bg-slate-100 p-1 text-sm font-semibold text-slate-600">
         <button
           type="button"
-          className={`rounded-md px-3 py-1 transition ${refundStatus === 'received' ? 'bg-white text-slate-900 shadow-sm' : 'hover:text-slate-900'
+          className={`rounded-md px-3 py-1 transition ${refundStatus === "received"
+            ? "bg-white text-slate-900 shadow-sm"
+            : "hover:text-slate-900"
             }`}
-          onClick={() => setRefundStatus('received')}
+          onClick={() => setRefundStatus("received")}
         >
           Received (Instant)
         </button>
         <button
           type="button"
-          className={`rounded-md px-3 py-1 transition ${refundStatus === 'pending' ? 'bg-white text-slate-900 shadow-sm' : 'hover:text-slate-900'
-            } ${isConfirmRefund ? 'opacity-60 cursor-not-allowed' : ''}`}
+          className={`rounded-md px-3 py-1 transition ${refundStatus === "pending"
+            ? "bg-white text-slate-900 shadow-sm"
+            : "hover:text-slate-900"
+            } ${isConfirmRefund ? "opacity-60 cursor-not-allowed" : ""}`}
           onClick={() => {
-            if (isConfirmRefund) return
-            setRefundStatus('pending')
+            if (isConfirmRefund) return;
+            setRefundStatus("pending");
           }}
           disabled={isConfirmRefund}
         >
@@ -1430,26 +1767,26 @@ export function TransactionForm({
         </button>
       </div>
       <p className="text-xs text-slate-500">
-        {refundStatus === 'pending'
-          ? 'Money will stay in the system account until you confirm it.'
-          : 'Use the receiving account to mark the refund as received.'}
+        {refundStatus === "pending"
+          ? "Money will stay in the system account until you confirm it."
+          : "Use the receiving account to mark the refund as received."}
       </p>
     </div>
-  ) : null
+  ) : null;
 
   const CategoryInput =
     // Update condition: Show for Repayment too per user request
     // transactionType !== 'repayment' &&  <-- Removed this exclusion
-    (transactionType === 'expense' ||
-      transactionType === 'debt' ||
-      transactionType === 'transfer' ||
-      transactionType === 'income' ||
-      transactionType === 'repayment' || // Added repayment
-      isRefundMode) ? (
+    transactionType === "expense" ||
+      transactionType === "debt" ||
+      transactionType === "transfer" ||
+      transactionType === "income" ||
+      transactionType === "repayment" || // Added repayment
+      isRefundMode ? (
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
           <Tag className="h-4 w-4 text-slate-500" />
-          Category {transactionType === 'transfer' ? '(Optional)' : ''}
+          Category {transactionType === "transfer" ? "(Optional)" : ""}
         </label>
         <Controller
           control={control}
@@ -1475,18 +1812,20 @@ export function TransactionForm({
           <p className="text-sm text-red-600">{errors.category_id.message}</p>
         )}
       </div>
-    ) : null
+    ) : null;
 
   const debtAccountForRepayment = useMemo(() => {
-    if (transactionType !== 'repayment' || !watchedDebtAccountId) return null;
-    return allAccounts.find(acc => acc.id === watchedDebtAccountId) ?? null;
+    if (transactionType !== "repayment" || !watchedDebtAccountId) return null;
+    return allAccounts.find((acc) => acc.id === watchedDebtAccountId) ?? null;
   }, [transactionType, watchedDebtAccountId, allAccounts]);
 
   const ShopInput =
-    transactionType === 'expense' ||
-      transactionType === 'debt' ||
-      transactionType === 'repayment' ||
-      (isEditMode && transactionType !== 'income' && transactionType !== 'transfer') ? (
+    transactionType === "expense" ||
+      transactionType === "debt" ||
+      transactionType === "repayment" ||
+      (isEditMode &&
+        transactionType !== "income" &&
+        transactionType !== "transfer") ? (
       <div className="space-y-2">
         <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
           <Store className="h-4 w-4 text-slate-500" />
@@ -1509,7 +1848,7 @@ export function TransactionForm({
                     <span>To: {debtAccountForRepayment.name}</span>
                   </span>
                 ) : (
-                  'Select shop'
+                  "Select shop"
                 )
               }
               inputPlaceholder="Search shop..."
@@ -1521,133 +1860,158 @@ export function TransactionForm({
           )}
         />
       </div>
-    ) : null
+    ) : null;
 
-  const PersonInput = (transactionType === 'debt' || transactionType === 'repayment' || (transactionType === 'income' && !isRefundMode)) ? (
-    <div className="space-y-3">
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">
-          Person
-        </label>
-        <Controller
-          control={control}
-          name="person_id"
-          render={({ field }) => (
-            <Combobox
-              value={field.value}
-              onValueChange={value => {
-                field.onChange(value)
-                const linkedAccount = value ? debtAccountByPerson.get(value) : undefined
-                form.setValue('debt_account_id', linkedAccount ?? undefined, { shouldValidate: true })
-              }}
-              items={personOptions}
-              placeholder="Select person"
-              inputPlaceholder="Search person..."
-              emptyState="No person found"
-              className="h-11"
-              onAddNew={() => setIsPersonDialogOpen(true)}
-              addLabel="New Person"
-            />
+  const PersonInput =
+    transactionType === "debt" ||
+      transactionType === "repayment" ||
+      (transactionType === "income" && !isRefundMode) ? (
+      <div className="space-y-3">
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">Person</label>
+          <Controller
+            control={control}
+            name="person_id"
+            render={({ field }) => (
+              <Combobox
+                value={field.value}
+                onValueChange={(value) => {
+                  field.onChange(value);
+                  const linkedAccount = value
+                    ? debtAccountByPerson.get(value)
+                    : undefined;
+                  form.setValue("debt_account_id", linkedAccount ?? undefined, {
+                    shouldValidate: true,
+                  });
+                }}
+                items={personOptions}
+                placeholder="Select person"
+                inputPlaceholder="Search person..."
+                emptyState="No person found"
+                className="h-11"
+                onAddNew={() => setIsPersonDialogOpen(true)}
+                addLabel="New Person"
+              />
+            )}
+          />
+          {errors.person_id && (
+            <p className="text-sm text-red-600 font-medium mt-1 animate-pulse">
+              ⚠️ {errors.person_id.message}
+            </p>
           )}
-        />
-        {errors.person_id && (
-          <p className="text-sm text-red-600 font-medium mt-1 animate-pulse">⚠️ {errors.person_id.message}</p>
-        )}
-        {debtAccountName && (
-          <p className="text-xs text-slate-500 mt-1">
-            Debt Account: <span className="font-semibold text-slate-700">{debtAccountName}</span>
+          {debtAccountName && (
+            <p className="text-xs text-slate-500 mt-1">
+              Debt Account:{" "}
+              <span className="font-semibold text-slate-700">
+                {debtAccountName}
+              </span>
+            </p>
+          )}
+        </div>
+
+        {/* Payer Name Input for Group Debt Repayments/Lending */}
+        {(transactionType === "repayment" || transactionType === "debt") &&
+          watchedPersonId &&
+          (() => {
+            const selectedPerson = personMap.get(watchedPersonId);
+            const isGroupDebt =
+              selectedPerson?.name?.toLowerCase().includes("clt") ||
+              selectedPerson?.name?.toLowerCase().includes("group");
+            return isGroupDebt ? (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Payer Name (Who paid?)
+                </label>
+                <input
+                  type="text"
+                  value={payerName}
+                  onChange={(e) => setPayerName(e.target.value)}
+                  placeholder="Enter payer name..."
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+                <p className="text-xs text-slate-500">
+                  This will be appended to the note as "(paid by [name])"
+                </p>
+              </div>
+            ) : null;
+          })()}
+
+        {watchedPersonId && !debtAccountByPerson.get(watchedPersonId) ? (
+          <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            <div className="space-y-1">
+              <p className="font-semibold">
+                This person does not have a debt account.
+              </p>
+              <p>
+                A debt account will be created automatically when you click the
+                button.
+              </p>
+              {debtEnsureError && (
+                <p className="font-semibold text-red-600">{debtEnsureError}</p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleEnsureDebtAccount}
+              disabled={isEnsuringDebt}
+              className="shrink-0 rounded bg-amber-600 px-3 py-1.5 font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
+            >
+              {isEnsuringDebt ? "Creating..." : "Create & Link Now"}
+            </button>
+          </div>
+        ) : watchedPersonId && debtAccountByPerson.get(watchedPersonId) ? (
+          <div className="flex items-center gap-2 mt-2">
+            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
+              Linked
+            </span>
+            <a
+              href={`/people/${watchedPersonId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+            >
+              View Details <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
+        ) : null}
+        {errors.debt_account_id && (
+          <p className="text-sm text-red-600 font-medium mt-1 animate-pulse">
+            ⚠️ {errors.debt_account_id.message}
           </p>
         )}
       </div>
+    ) : null;
 
-      {/* Payer Name Input for Group Debt Repayments/Lending */}
-      {(transactionType === 'repayment' || transactionType === 'debt') && watchedPersonId && (() => {
-        const selectedPerson = personMap.get(watchedPersonId)
-        const isGroupDebt = selectedPerson?.name?.toLowerCase().includes('clt') ||
-          selectedPerson?.name?.toLowerCase().includes('group')
-        return isGroupDebt ? (
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700">
-              Payer Name (Who paid?)
-            </label>
-            <input
-              type="text"
-              value={payerName}
-              onChange={(e) => setPayerName(e.target.value)}
-              placeholder="Enter payer name..."
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            />
-            <p className="text-xs text-slate-500">
-              This will be appended to the note as "(paid by [name])"
-            </p>
-          </div>
-        ) : null
-      })()}
-
-      {watchedPersonId && !debtAccountByPerson.get(watchedPersonId) ? (
-        <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          <div className="space-y-1">
-            <p className="font-semibold">This person does not have a debt account.</p>
-            <p>A debt account will be created automatically when you click the button.</p>
-            {debtEnsureError && (
-              <p className="font-semibold text-red-600">{debtEnsureError}</p>
+  const DestinationAccountInput =
+    transactionType === "transfer" ? (
+      <div className="space-y-3">
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-gray-700">
+            Destination account
+          </label>
+          <Controller
+            control={control}
+            name="debt_account_id"
+            render={({ field }) => (
+              <Combobox
+                value={field.value}
+                onValueChange={field.onChange}
+                items={destinationAccountOptions}
+                placeholder="Select destination"
+                inputPlaceholder="Search account..."
+                emptyState="No account found"
+                className="h-11"
+              />
             )}
-          </div>
-          <button
-            type="button"
-            onClick={handleEnsureDebtAccount}
-            disabled={isEnsuringDebt}
-            className="shrink-0 rounded bg-amber-600 px-3 py-1.5 font-semibold text-white hover:bg-amber-700 disabled:opacity-50"
-          >
-            {isEnsuringDebt ? 'Creating...' : 'Create & Link Now'}
-          </button>
-        </div>
-      ) : watchedPersonId && debtAccountByPerson.get(watchedPersonId) ? (
-        <div className="flex items-center gap-2 mt-2">
-          <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-            Linked
-          </span>
-          <a
-            href={`/people/${watchedPersonId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-          >
-            View Details <ExternalLink className="h-3 w-3" />
-          </a>
-        </div>
-      ) : null}
-      {errors.debt_account_id && (
-        <p className="text-sm text-red-600 font-medium mt-1 animate-pulse">⚠️ {errors.debt_account_id.message}</p>
-      )}
-    </div>
-  ) : null
-
-  const DestinationAccountInput = (transactionType === 'transfer') ? (
-    <div className="space-y-3">
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-gray-700">Destination account</label>
-        <Controller
-          control={control}
-          name="debt_account_id"
-          render={({ field }) => (
-            <Combobox
-              value={field.value}
-              onValueChange={field.onChange}
-              items={destinationAccountOptions}
-              placeholder="Select destination"
-              inputPlaceholder="Search account..."
-              emptyState="No account found"
-              className="h-11"
-            />
+          />
+          {errors.debt_account_id && (
+            <p className="text-sm text-red-600">
+              {errors.debt_account_id.message}
+            </p>
           )}
-        />
-        {errors.debt_account_id && (
-          <p className="text-sm text-red-600">{errors.debt_account_id.message}</p>
-        )}
+        </div>
       </div>
-    </div>
-  ) : null
+    ) : null;
 
   const DateInput = (
     <div className="space-y-2">
@@ -1661,16 +2025,16 @@ export function TransactionForm({
         render={({ field }) => (
           <input
             type="date"
-            value={field.value ? format(field.value, 'yyyy-MM-dd') : ''}
-            onChange={event => {
-              const dateStr = event.target.value
+            value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
+            onChange={(event) => {
+              const dateStr = event.target.value;
               if (!dateStr) {
-                return // Don't allow empty date for now
+                return; // Don't allow empty date for now
               }
-              const [y, m, d] = dateStr.split('-').map(Number)
-              const newDate = new Date(y, m - 1, d, 12, 0, 0) // Set to noon to avoid timezone issues
+              const [y, m, d] = dateStr.split("-").map(Number);
+              const newDate = new Date(y, m - 1, d, 12, 0, 0); // Set to noon to avoid timezone issues
 
-              field.onChange(newDate)
+              field.onChange(newDate);
             }}
             className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
           />
@@ -1680,85 +2044,88 @@ export function TransactionForm({
         <p className="text-sm text-red-600">{errors.occurred_at.message}</p>
       )}
     </div>
-  )
+  );
 
-  const TagInput = (transactionType === 'debt' || transactionType === 'repayment') ? (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-          <Tag className="h-4 w-4 text-slate-500" />
-          Tag
-        </label>
-        <div className="flex items-center gap-2">
-          {suggestedTags.slice(0, 1).map((tag) => (
+  const TagInput =
+    transactionType === "debt" || transactionType === "repayment" ? (
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <Tag className="h-4 w-4 text-slate-500" />
+            Tag
+          </label>
+          <div className="flex items-center gap-2">
+            {suggestedTags.slice(0, 1).map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => {
+                  form.setValue("tag", tag, { shouldValidate: true });
+                  setManualTagMode(true);
+                }}
+                className={cn(
+                  "rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors border",
+                  watch("tag") === tag
+                    ? "bg-blue-100 text-blue-700 border-blue-200"
+                    : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100",
+                )}
+              >
+                {tag}
+              </button>
+            ))}
+            <div className="h-4 w-px bg-slate-200 mx-1" />
             <button
-              key={tag}
               type="button"
               onClick={() => {
-                form.setValue('tag', tag, { shouldValidate: true });
+                const currentDate = watchedDate || new Date();
+                const previousMonth = subMonths(currentDate, 1);
+                const previousTag = generateTag(previousMonth);
+                form.setValue("tag", previousTag, { shouldValidate: true });
                 setManualTagMode(true);
               }}
-              className={cn(
-                "rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors border",
-                watch('tag') === tag
-                  ? "bg-blue-100 text-blue-700 border-blue-200"
-                  : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
-              )}
+              className="flex h-5 w-5 items-center justify-center rounded-md hover:bg-slate-100 text-slate-500 transition-colors"
+              title="Previous Month"
             >
-              {tag}
+              <ChevronLeft className="h-3.5 w-3.5" />
             </button>
-          ))}
-          <div className="h-4 w-px bg-slate-200 mx-1" />
-          <button
-            type="button"
-            onClick={() => {
-              const currentDate = watchedDate || new Date();
-              const previousMonth = subMonths(currentDate, 1);
-              const previousTag = generateTag(previousMonth);
-              form.setValue('tag', previousTag, { shouldValidate: true });
-              setManualTagMode(true);
-            }}
-            className="flex h-5 w-5 items-center justify-center rounded-md hover:bg-slate-100 text-slate-500 transition-colors"
-            title="Previous Month"
-          >
-            <ChevronLeft className="h-3.5 w-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              form.setValue('tag', generateTag(new Date()), { shouldValidate: true });
-              setManualTagMode(true);
-            }}
-            className="flex h-5 w-5 items-center justify-center rounded-md hover:bg-slate-100 text-slate-500 transition-colors"
-            title="Reset to Current"
-          >
-            <RotateCcw className="h-3 w-3" />
-          </button>
-        </div>
-      </div>
-      <Controller
-        control={control}
-        name="tag"
-        render={({ field }) => (
-          <input
-            {...field}
-            value={field.value || ''}
-            onChange={(e) => {
-              field.onChange(e.target.value);
-              if (e.target.value) {
+            <button
+              type="button"
+              onClick={() => {
+                form.setValue("tag", generateTag(new Date()), {
+                  shouldValidate: true,
+                });
                 setManualTagMode(true);
-              }
-            }}
-            className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            placeholder="Enter tag (e.g., NOV25)"
-          />
+              }}
+              className="flex h-5 w-5 items-center justify-center rounded-md hover:bg-slate-100 text-slate-500 transition-colors"
+              title="Reset to Current"
+            >
+              <RotateCcw className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+        <Controller
+          control={control}
+          name="tag"
+          render={({ field }) => (
+            <input
+              {...field}
+              value={field.value || ""}
+              onChange={(e) => {
+                field.onChange(e.target.value);
+                if (e.target.value) {
+                  setManualTagMode(true);
+                }
+              }}
+              className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              placeholder="Enter tag (e.g., NOV25)"
+            />
+          )}
+        />
+        {errors.tag && (
+          <p className="text-sm text-red-600">{errors.tag.message}</p>
         )}
-      />
-      {errors.tag && (
-        <p className="text-sm text-red-600">{errors.tag.message}</p>
-      )}
-    </div>
-  ) : null
+      </div>
+    ) : null;
 
   const SourceAccountInput = (
     <div className="space-y-3">
@@ -1767,14 +2134,14 @@ export function TransactionForm({
           <Wallet className="h-4 w-4 text-slate-500" />
           <span>
             {isRefundMode
-              ? refundStatus === 'pending'
-                ? 'Holding Account'
-                : 'Receiving Account'
-              : transactionType === 'income' || transactionType === 'repayment'
-                ? 'To Account'
-                : transactionType === 'transfer'
-                  ? 'Source of Funds'
-                  : 'From Account'}
+              ? refundStatus === "pending"
+                ? "Holding Account"
+                : "Receiving Account"
+              : transactionType === "income" || transactionType === "repayment"
+                ? "To Account"
+                : transactionType === "transfer"
+                  ? "Source of Funds"
+                  : "From Account"}
           </span>
         </label>
         <Controller
@@ -1785,16 +2152,40 @@ export function TransactionForm({
               items={accountOptions}
               value={field.value}
               onValueChange={field.onChange}
-              placeholder={isRefundMode && refundStatus === 'pending' ? 'System Account' : 'Select account'}
+              placeholder={
+                isRefundMode && refundStatus === "pending"
+                  ? "System Account"
+                  : "Select account"
+              }
               inputPlaceholder="Search account..."
               emptyState="No account found"
-              disabled={isRefundMode && refundStatus === 'pending'}
+              disabled={isRefundMode && refundStatus === "pending"}
               className="h-11"
               tabs={[
-                { value: 'all', label: 'All', active: accountFilter === 'all', onClick: () => setAccountFilter('all') },
-                { value: 'bank', label: 'Bank', active: accountFilter === 'bank', onClick: () => setAccountFilter('bank') },
-                { value: 'credit', label: 'Credit', active: accountFilter === 'credit', onClick: () => setAccountFilter('credit') },
-                { value: 'other', label: 'Others', active: accountFilter === 'other', onClick: () => setAccountFilter('other') },
+                {
+                  value: "all",
+                  label: "All",
+                  active: accountFilter === "all",
+                  onClick: () => setAccountFilter("all"),
+                },
+                {
+                  value: "bank",
+                  label: "Bank",
+                  active: accountFilter === "bank",
+                  onClick: () => setAccountFilter("bank"),
+                },
+                {
+                  value: "credit",
+                  label: "Credit",
+                  active: accountFilter === "credit",
+                  onClick: () => setAccountFilter("credit"),
+                },
+                {
+                  value: "other",
+                  label: "Others",
+                  active: accountFilter === "other",
+                  onClick: () => setAccountFilter("other"),
+                },
               ]}
               onAddNew={() => setIsAccountDialogOpen(true)}
               addLabel="New Account"
@@ -1802,11 +2193,13 @@ export function TransactionForm({
           )}
         />
         {errors.source_account_id && (
-          <p className="text-sm text-red-600">{errors.source_account_id.message}</p>
+          <p className="text-sm text-red-600">
+            {errors.source_account_id.message}
+          </p>
         )}
       </div>
     </div>
-  )
+  );
 
   const AmountInput = (
     <div className="space-y-3">
@@ -1831,7 +2224,7 @@ export function TransactionForm({
         <p className="text-xs text-rose-600">{progressError}</p>
       )}
     </div>
-  )
+  );
 
   const NoteInput = (
     <div className="space-y-2">
@@ -1840,7 +2233,7 @@ export function TransactionForm({
         Note
       </label>
       <textarea
-        {...register('note')}
+        {...register("note")}
         placeholder="Add a note..."
         className="min-h-[60px] w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
       />
@@ -1848,23 +2241,23 @@ export function TransactionForm({
         <p className="text-sm text-red-600">{errors.note.message}</p>
       )}
     </div>
-  )
+  );
 
   const showVoluntaryToggle =
-    (transactionType === 'expense' || transactionType === 'debt') &&
+    (transactionType === "expense" || transactionType === "debt") &&
     selectedAccount &&
-    (
-      // Case 1: Not a credit card or No cashback config
-      (selectedAccount.type !== 'credit_card' || !selectedAccount.cashback_config) ||
+    // Case 1: Not a credit card or No cashback config
+    (selectedAccount.type !== "credit_card" ||
+      !selectedAccount.cashback_config ||
       // Case 2: Has cashback but budget is exhausted
-      (selectedAccount.cashback_config && (cashbackProgress?.remainingBudget ?? 1) <= 0)
-    )
+      (selectedAccount.cashback_config &&
+        (cashbackProgress?.remainingBudget ?? 1) <= 0));
 
   // Standard Cashback Input Condition: Only if config exists AND budget is POSITIVE
   const showStandardCashback =
     selectedAccount?.cashback_config &&
-    transactionType === 'expense' &&
-    selectedAccount.type === 'credit_card' &&
+    transactionType === "expense" &&
+    selectedAccount.type === "credit_card" &&
     (cashbackProgress?.remainingBudget ?? 1) > 0;
 
   const CashbackInputs = showStandardCashback ? (
@@ -1892,13 +2285,16 @@ export function TransactionForm({
                 value={field.value}
                 onChange={(val) => {
                   if (val === undefined) {
-                    field.onChange(undefined)
-                    return
+                    field.onChange(undefined);
+                    return;
                   }
                   // Clamp to rateLimitPercent if available, else max 100
-                  const max = rateLimitPercent !== null ? Math.min(50, rateLimitPercent) : 100
-                  const clamped = Math.min(val, max)
-                  field.onChange(clamped)
+                  const max =
+                    rateLimitPercent !== null
+                      ? Math.min(50, rateLimitPercent)
+                      : 100;
+                  const clamped = Math.min(val, max);
+                  field.onChange(clamped);
                 }}
                 disabled={budgetMaxed}
                 className="w-full"
@@ -1908,25 +2304,29 @@ export function TransactionForm({
           />
           {rateLimitPercent !== null && (
             <p className="text-xs text-slate-500">
-              Max {Math.min(50, rateLimitPercent).toFixed(2)}% according to card policy
+              Max {Math.min(50, rateLimitPercent).toFixed(2)}% according to card
+              policy
             </p>
           )}
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-600">Fixed Back</label>
+          <label className="text-xs font-medium text-slate-600">
+            Fixed Back
+          </label>
           <Controller
             control={control}
             name="cashback_share_fixed"
             render={({ field }) => (
               <SmartAmountInput
                 value={field.value}
-                onChange={val => {
+                onChange={(val) => {
                   if (val === undefined) {
-                    field.onChange(undefined)
-                    return
+                    field.onChange(undefined);
+                    return;
                   }
-                  const clamped = amountValue > 0 ? Math.min(val, amountValue) : val
-                  field.onChange(clamped)
+                  const clamped =
+                    amountValue > 0 ? Math.min(val, amountValue) : val;
+                  field.onChange(clamped);
                 }}
                 disabled={budgetMaxed}
                 placeholder="Enter fixed amount"
@@ -1936,7 +2336,9 @@ export function TransactionForm({
             )}
           />
           {budgetMaxed && (
-            <p className="text-xs text-rose-600">Budget exhausted, cannot add fixed amount.</p>
+            <p className="text-xs text-rose-600">
+              Budget exhausted, cannot add fixed amount.
+            </p>
           )}
         </div>
       </div>
@@ -1948,46 +2350,60 @@ export function TransactionForm({
       </div>
       {budgetExceeded && remainingBudget !== null && (
         <p className="text-xs text-amber-600">
-          Cashback budget only has {numberFormatter.format(remainingBudget)} remaining.
+          Cashback budget only has {numberFormatter.format(remainingBudget)}{" "}
+          remaining.
         </p>
       )}
       {suggestedPercent !== null && budgetExceeded && (
         <p className="text-xs text-amber-600">
-          Suggest lowering percentage to {suggestedPercent.toFixed(2)}% to not exceed budget.
+          Suggest lowering percentage to {suggestedPercent.toFixed(2)}% to not
+          exceed budget.
         </p>
       )}
       {/* Validation: Cashback >= Amount Warning */}
       {cashbackExceedsAmount && (
         <p className="text-xs text-rose-600 font-semibold">
-          ⚠️ Total cashback ({numberFormatter.format(rawShareTotal)}) must be less than amount ({numberFormatter.format(amountValue)}). Please reduce % or fixed amount.
+          ⚠️ Total cashback ({numberFormatter.format(rawShareTotal)}) must be
+          less than amount ({numberFormatter.format(amountValue)}). Please
+          reduce % or fixed amount.
         </p>
       )}
       <div className="border-t border-indigo-200/80 pt-2 text-slate-500 space-y-1">
         <p className="text-xs">
-          <span className="font-semibold text-slate-700">Cycle:</span> {selectedCycleLabel ?? 'N/A'}
+          <span className="font-semibold text-slate-700">Cycle:</span>{" "}
+          {selectedCycleLabel ?? "N/A"}
         </p>
 
         {/* Smart Hint Display */}
         {spendingStats && spendingStats.matchReason && (
           <p className="text-xs">
-            <span className="font-semibold text-slate-700">Applied Rate:</span>{' '}
+            <span className="font-semibold text-slate-700">Applied Rate:</span>{" "}
             <span className="text-emerald-600 font-bold">
-              {((spendingStats.potentialRate ?? spendingStats.rate) * 100).toFixed(2)}%
-            </span>
-            {' '}({spendingStats.matchReason})
+              {(
+                (spendingStats.potentialRate ?? spendingStats.rate) * 100
+              ).toFixed(2)}
+              %
+            </span>{" "}
+            ({spendingStats.matchReason})
           </p>
         )}
-        {spendingStats && spendingStats.maxReward && spendingStats.maxReward > 0 && (
-          <p className="text-xs">
-            <span className="font-semibold text-slate-700">Max Reward (Category):</span>{' '}
-            <span className="text-blue-600 font-bold">
-              {numberFormatter.format(spendingStats.maxReward)}đ
-            </span>
-          </p>
-        )}
+        {spendingStats &&
+          spendingStats.maxReward &&
+          spendingStats.maxReward > 0 && (
+            <p className="text-xs">
+              <span className="font-semibold text-slate-700">
+                Max Reward (Category):
+              </span>{" "}
+              <span className="text-blue-600 font-bold">
+                {numberFormatter.format(spendingStats.maxReward)}đ
+              </span>
+            </p>
+          )}
         {potentialCashback > 0 && (
           <p className="text-xs">
-            <span className="font-semibold text-slate-700">Estimated Cashback:</span>{' '}
+            <span className="font-semibold text-slate-700">
+              Estimated Cashback:
+            </span>{" "}
             <span className="text-emerald-600 font-bold">
               {numberFormatter.format(potentialCashback)}
             </span>
@@ -1996,37 +2412,62 @@ export function TransactionForm({
 
         {statsLoading && <p>Loading min spend...</p>}
         {statsError && <p className="text-rose-600">{statsError}</p>}
-        {spendingStats && spendingStats.minSpend && spendingStats.minSpend > 0 && (
-          <p>
-            <span className="font-semibold text-slate-700">Min Spend:</span>
-            {projectedSpend >= spendingStats.minSpend ? (
-              <span className="text-emerald-600"> Met ({numberFormatter.format(projectedSpend)} / {numberFormatter.format(spendingStats.minSpend)})</span>
-            ) : (
-              <span className="text-amber-600"> Pending ({numberFormatter.format(projectedSpend)} / {numberFormatter.format(spendingStats.minSpend)})</span>
-            )}
-          </p>
-        )}
-        {spendingStats && spendingStats.maxCashback && spendingStats.maxCashback > 0 && (
-          <p>
-            <span className="font-semibold text-slate-700">Budget:</span>
-            {numberFormatter.format(Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar - currentImpact))} remaining
-          </p>
-        )}
+        {spendingStats &&
+          spendingStats.minSpend &&
+          spendingStats.minSpend > 0 && (
+            <p>
+              <span className="font-semibold text-slate-700">Min Spend:</span>
+              {projectedSpend >= spendingStats.minSpend ? (
+                <span className="text-emerald-600">
+                  {" "}
+                  Met ({numberFormatter.format(projectedSpend)} /{" "}
+                  {numberFormatter.format(spendingStats.minSpend)})
+                </span>
+              ) : (
+                <span className="text-amber-600">
+                  {" "}
+                  Pending ({numberFormatter.format(projectedSpend)} /{" "}
+                  {numberFormatter.format(spendingStats.minSpend)})
+                </span>
+              )}
+            </p>
+          )}
+        {spendingStats &&
+          spendingStats.maxCashback &&
+          spendingStats.maxCashback > 0 && (
+            <p>
+              <span className="font-semibold text-slate-700">Budget:</span>
+              {numberFormatter.format(
+                Math.max(
+                  0,
+                  spendingStats.maxCashback -
+                  spendingStats.earnedSoFar -
+                  currentImpact,
+                ),
+              )}{" "}
+              remaining
+            </p>
+          )}
       </div>
     </div>
   ) : null;
 
   const INSTALLMENT_MIN_AMOUNT = 3_000_000; // 3 million VND threshold
-  const showInstallmentToggle = (transactionType === 'debt' || transactionType === 'repayment')
-    && !isRefundMode
-    && (watchedAmount ?? 0) >= INSTALLMENT_MIN_AMOUNT;
+  const showInstallmentToggle =
+    (transactionType === "debt" || transactionType === "repayment") &&
+    !isRefundMode &&
+    (watchedAmount ?? 0) >= INSTALLMENT_MIN_AMOUNT;
 
   const InstallmentInput = showInstallmentToggle ? (
     <div className="rounded-lg border border-slate-200 p-4 space-y-4 bg-slate-50/50">
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
-          <label className="text-sm font-medium text-slate-900">Installment Plan</label>
-          <p className="text-xs text-slate-500">Convert this transaction into an installment plan</p>
+          <label className="text-sm font-medium text-slate-900">
+            Installment Plan
+          </label>
+          <p className="text-xs text-slate-500">
+            Convert this transaction into an installment plan
+          </p>
         </div>
         <Controller
           control={control}
@@ -2035,21 +2476,98 @@ export function TransactionForm({
             <Switch
               checked={field.value ?? false}
               onCheckedChange={(checked) => {
-                field.onChange(checked)
-                setIsInstallment(checked)
+                field.onChange(checked);
+                setIsInstallment(checked);
               }}
             />
           )}
         />
       </div>
-
     </div>
+  ) : null;
 
-  ) : null
+  const InstallmentRepaymentSelector =
+    (installments && installments.length > 0) ||
+      form.getValues("installment_plan_id") ? (
+      <div className="rounded-lg border border-purple-200 p-4 space-y-4 bg-purple-50/50">
+        <div className="flex items-center gap-2 mb-2">
+          <Sparkles className="w-4 h-4 text-purple-600" />
+          <h4 className="text-sm font-semibold text-purple-900">
+            Installment Repayment
+          </h4>
+        </div>
+        <Controller
+          control={control}
+          name="installment_plan_id"
+          render={({ field }) => (
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-purple-700 uppercase tracking-wider">
+                Select Plan
+              </label>
+              <Combobox
+                items={installments.map((i) => ({
+                  value: i.id,
+                  label: i.name,
+                  description: `Due: ${i.next_due_date ? format(new Date(i.next_due_date), "dd/MM/yyyy") : "N/A"} - ${numberFormatter.format(i.monthly_amount)}`,
+                  icon: <Sparkles className="w-4 h-4 text-purple-500" />,
+                }))}
+                value={field.value}
+                onValueChange={(val: string | undefined) => {
+                  if (!val) {
+                    field.onChange(undefined);
+                    return;
+                  }
+                  field.onChange(val);
+                  // Auto-fill details if plan selected details are available
+                  const plan = installments.find((i) => i.id === val);
+                  if (plan) {
+                    // If Amount is empty or 0, auto fill monthly amount
+                    const currentAmt = form.getValues("amount");
+                    if (!currentAmt || currentAmt === 0) {
+                      form.setValue("amount", plan.monthly_amount);
+                    }
 
+                    // Update Note if empty or generic
+                    const currentNote = form.getValues("note");
+                    if (!currentNote || currentNote.trim() === "") {
+                      // Calculate month index
+                      const start = new Date(plan.start_date);
+                      const now = new Date();
+                      // Rough month diff
+                      const diffMonths =
+                        (now.getFullYear() - start.getFullYear()) * 12 +
+                        (now.getMonth() - start.getMonth()) +
+                        1;
+                      const monthNum = Math.min(
+                        Math.max(1, diffMonths),
+                        plan.term_months,
+                      );
+                      form.setValue(
+                        "note",
+                        `${plan.name} (Month ${monthNum}/${plan.term_months})`,
+                      );
+                    }
+                  }
+                }}
+                placeholder="Select Installment Plan..."
+                className="w-full bg-white border-purple-200"
+                disabled={!installments.length && !!field.value} // Read-only if ID set but no list
+              />
+              {!installments.length && field.value && (
+                <p className="text-[10px] text-purple-600 italic">
+                  Linked to plan ID: {field.value.slice(0, 8)}... (List not
+                  loaded)
+                </p>
+              )}
+            </div>
+          )}
+        />
+      </div>
+    ) : null;
 
-
-  const showCashbackSection = (transactionType === 'expense' || (transactionType === 'debt' && selectedAccount?.type === 'credit_card'));
+  const showCashbackSection =
+    transactionType === "expense" ||
+    (transactionType === "debt" && selectedAccount?.type === "credit_card");
 
   const CashbackModeInput = showCashbackSection ? (
     <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-3 space-y-3">
@@ -2060,7 +2578,8 @@ export function TransactionForm({
         </h4>
         {spendingStats && spendingStats.cycle && (
           <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
-            {format(parseISO(spendingStats.cycle.start), 'dd MMM')} - {format(parseISO(spendingStats.cycle.end), 'dd MMM')}
+            {format(parseISO(spendingStats.cycle.start), "dd MMM")} -{" "}
+            {format(parseISO(spendingStats.cycle.end), "dd MMM")}
           </span>
         )}
       </div>
@@ -2073,30 +2592,42 @@ export function TransactionForm({
           <div className="flex p-1 bg-slate-200/50 rounded-lg">
             <button
               type="button"
-              onClick={() => field.onChange('none_back')}
+              onClick={() => field.onChange("none_back")}
               className={cn(
                 "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
-                (!field.value || field.value === 'none_back') ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                !field.value || field.value === "none_back"
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50",
               )}
             >
               Virtual (Auto)
             </button>
             <button
               type="button"
-              onClick={() => field.onChange(field.value === 'real_percent' ? 'real_percent' : 'real_fixed')}
+              onClick={() =>
+                field.onChange(
+                  field.value === "real_percent"
+                    ? "real_percent"
+                    : "real_fixed",
+                )
+              }
               className={cn(
                 "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
-                (field.value === 'real_fixed' || field.value === 'real_percent') ? "bg-white text-emerald-700 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                field.value === "real_fixed" || field.value === "real_percent"
+                  ? "bg-white text-emerald-700 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50",
               )}
             >
               Real (Claimed)
             </button>
             <button
               type="button"
-              onClick={() => field.onChange('voluntary')}
+              onClick={() => field.onChange("voluntary")}
               className={cn(
                 "flex-1 py-1.5 text-xs font-semibold rounded-md transition-all",
-                field.value === 'voluntary' ? "bg-white text-amber-700 shadow-sm" : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                field.value === "voluntary"
+                  ? "bg-white text-amber-700 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50",
               )}
             >
               Voluntary
@@ -2106,209 +2637,314 @@ export function TransactionForm({
       />
 
       {/* Real Mode: Unified % and Fixed */}
-      {(watchedCashbackMode === 'real_fixed' || watchedCashbackMode === 'real_percent') && (
-        <div className="space-y-3 animate-in fade-in slide-in-from-top-1 bg-white p-3 rounded-md border border-slate-100 shadow-sm">
-          <div className="grid grid-cols-2 gap-3">
-            {/* Percent Input */}
-            <div className="space-y-1">
-              <div className="flex justify-between items-baseline">
-                <label className="text-xs font-medium text-slate-500">% Rate</label>
-                {(() => {
-                  const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
-                  const rateMaxAmount = amountValue * (rateLimitPercent ?? 100) / 100;
-                  const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
-                  const currentFixed = form.getValues('cashback_share_fixed') || 0;
-                  const remainingForPercent = Math.max(0, absoluteLimit - currentFixed);
-                  // Calculate implied max percent
-                  const maxPercent = amountValue > 0 ? (remainingForPercent / amountValue) * 100 : 0;
+      {(watchedCashbackMode === "real_fixed" ||
+        watchedCashbackMode === "real_percent") && (
+          <div className="space-y-3 animate-in fade-in slide-in-from-top-1 bg-white p-3 rounded-md border border-slate-100 shadow-sm">
+            <div className="grid grid-cols-2 gap-3">
+              {/* Percent Input */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-baseline">
+                  <label className="text-xs font-medium text-slate-500">
+                    % Rate
+                  </label>
+                  {(() => {
+                    const budgetLeft = spendingStats?.maxCashback
+                      ? Math.max(
+                        0,
+                        spendingStats.maxCashback - spendingStats.earnedSoFar,
+                      )
+                      : Infinity;
+                    const rateMaxAmount =
+                      (amountValue * (rateLimitPercent ?? 100)) / 100;
+                    const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+                    const currentFixed =
+                      form.getValues("cashback_share_fixed") || 0;
+                    const remainingForPercent = Math.max(
+                      0,
+                      absoluteLimit - currentFixed,
+                    );
+                    // Calculate implied max percent
+                    const maxPercent =
+                      amountValue > 0
+                        ? (remainingForPercent / amountValue) * 100
+                        : 0;
 
-                  return (
-                    <span className="text-[10px] text-slate-400">
-                      Max: {numberFormatter.format(maxPercent)}%
-                    </span>
-                  )
-                })()}
-              </div>
-              <Controller
-                control={control}
-                name="cashback_share_percent"
-                render={({ field }) => {
-                  const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
-                  const rateMaxAmount = amountValue * (rateLimitPercent ?? 100) / 100;
-                  const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
-                  const currentFixed = form.getValues('cashback_share_fixed') || 0;
-                  const isFullyConsumedByFixed = currentFixed >= absoluteLimit - 100; // tolerance
+                    return (
+                      <span className="text-[10px] text-slate-400">
+                        Max: {numberFormatter.format(maxPercent)}%
+                      </span>
+                    );
+                  })()}
+                </div>
+                <Controller
+                  control={control}
+                  name="cashback_share_percent"
+                  render={({ field }) => {
+                    const budgetLeft = spendingStats?.maxCashback
+                      ? Math.max(
+                        0,
+                        spendingStats.maxCashback - spendingStats.earnedSoFar,
+                      )
+                      : Infinity;
+                    const rateMaxAmount =
+                      (amountValue * (rateLimitPercent ?? 100)) / 100;
+                    const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+                    const currentFixed =
+                      form.getValues("cashback_share_fixed") || 0;
+                    const isFullyConsumedByFixed =
+                      currentFixed >= absoluteLimit - 100; // tolerance
 
-                  return (
-                    <SmartAmountInput
-                      value={field.value}
-                      unit="%"
-                      disabled={isFullyConsumedByFixed && !field.value} // Disable if consumed AND empty
-                      onChange={(val) => {
-                        const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
-                        const rateMaxAmount = amountValue * (rateLimitPercent ?? 100) / 100;
-                        const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+                    return (
+                      <SmartAmountInput
+                        value={field.value}
+                        unit="%"
+                        disabled={isFullyConsumedByFixed && !field.value} // Disable if consumed AND empty
+                        onChange={(val) => {
+                          const budgetLeft = spendingStats?.maxCashback
+                            ? Math.max(
+                              0,
+                              spendingStats.maxCashback -
+                              spendingStats.earnedSoFar,
+                            )
+                            : Infinity;
+                          const rateMaxAmount =
+                            (amountValue * (rateLimitPercent ?? 100)) / 100;
+                          const absoluteLimit = Math.min(
+                            budgetLeft,
+                            rateMaxAmount,
+                          );
 
-                        const currentFixed = form.getValues('cashback_share_fixed') || 0;
-                        const remainingForPercent = Math.max(0, absoluteLimit - currentFixed);
+                          const currentFixed =
+                            form.getValues("cashback_share_fixed") || 0;
+                          const remainingForPercent = Math.max(
+                            0,
+                            absoluteLimit - currentFixed,
+                          );
 
-                        // Calculate implied amount from this %
-                        let safePercent = val;
-                        if (val !== undefined && amountValue > 0) {
-                          const impliedAmount = (amountValue * val) / 100;
-                          if (impliedAmount > remainingForPercent) {
-                            safePercent = (remainingForPercent / amountValue) * 100;
+                          // Calculate implied amount from this %
+                          let safePercent = val;
+                          if (val !== undefined && amountValue > 0) {
+                            const impliedAmount = (amountValue * val) / 100;
+                            if (impliedAmount > remainingForPercent) {
+                              safePercent =
+                                (remainingForPercent / amountValue) * 100;
+                            }
                           }
-                        }
 
-                        field.onChange(safePercent);
-                        form.setValue('cashback_mode', 'real_percent');
-                      }}
-                      placeholder="0"
-                      className={cn("w-full", isFullyConsumedByFixed && !field.value && "opacity-50 bg-slate-100 cursor-not-allowed")}
-                    />
-                  )
-                }}
-              />
-            </div>
-
-            {/* Fixed Input */}
-            <div className="space-y-1">
-              <div className="flex justify-between items-baseline">
-                <label className="text-xs font-medium text-slate-500">Amount</label>
-                {(() => {
-                  const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
-                  const rateMaxAmount = amountValue * (rateLimitPercent ?? 100) / 100;
-                  const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
-                  const currentPercent = form.getValues('cashback_share_percent') || 0;
-                  const percentAmount = (amountValue * currentPercent) / 100;
-                  const remainingForFixed = Math.max(0, absoluteLimit - percentAmount);
-
-                  return (
-                    <span className="text-[10px] text-slate-400">
-                      Max: {numberFormatter.format(remainingForFixed)}
-                    </span>
-                  )
-                })()}
+                          field.onChange(safePercent);
+                          form.setValue("cashback_mode", "real_percent");
+                        }}
+                        placeholder="0"
+                        className={cn(
+                          "w-full",
+                          isFullyConsumedByFixed &&
+                          !field.value &&
+                          "opacity-50 bg-slate-100 cursor-not-allowed",
+                        )}
+                      />
+                    );
+                  }}
+                />
               </div>
-              <Controller
-                control={control}
-                name="cashback_share_fixed"
-                render={({ field }) => {
-                  const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
-                  const rateMaxAmount = amountValue * (rateLimitPercent ?? 100) / 100;
-                  const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
-                  const currentPercent = form.getValues('cashback_share_percent') || 0;
-                  const percentAmount = (amountValue * currentPercent) / 100;
-                  const isFullyConsumedByPercent = percentAmount >= absoluteLimit - 100; // tolerance
 
-                  return (
-                    <SmartAmountInput
-                      value={field.value}
-                      disabled={isFullyConsumedByPercent && !field.value} // Disable if consumed AND empty
-                      onChange={(val) => {
-                        const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
-                        const rateMaxAmount = amountValue * (rateLimitPercent ?? 100) / 100;
-                        const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+              {/* Fixed Input */}
+              <div className="space-y-1">
+                <div className="flex justify-between items-baseline">
+                  <label className="text-xs font-medium text-slate-500">
+                    Amount
+                  </label>
+                  {(() => {
+                    const budgetLeft = spendingStats?.maxCashback
+                      ? Math.max(
+                        0,
+                        spendingStats.maxCashback - spendingStats.earnedSoFar,
+                      )
+                      : Infinity;
+                    const rateMaxAmount =
+                      (amountValue * (rateLimitPercent ?? 100)) / 100;
+                    const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+                    const currentPercent =
+                      form.getValues("cashback_share_percent") || 0;
+                    const percentAmount = (amountValue * currentPercent) / 100;
+                    const remainingForFixed = Math.max(
+                      0,
+                      absoluteLimit - percentAmount,
+                    );
 
-                        const currentPercent = form.getValues('cashback_share_percent') || 0;
-                        const percentAmount = (amountValue * currentPercent) / 100;
-                        const remainingForFixed = Math.max(0, absoluteLimit - percentAmount);
+                    return (
+                      <span className="text-[10px] text-slate-400">
+                        Max: {numberFormatter.format(remainingForFixed)}
+                      </span>
+                    );
+                  })()}
+                </div>
+                <Controller
+                  control={control}
+                  name="cashback_share_fixed"
+                  render={({ field }) => {
+                    const budgetLeft = spendingStats?.maxCashback
+                      ? Math.max(
+                        0,
+                        spendingStats.maxCashback - spendingStats.earnedSoFar,
+                      )
+                      : Infinity;
+                    const rateMaxAmount =
+                      (amountValue * (rateLimitPercent ?? 100)) / 100;
+                    const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+                    const currentPercent =
+                      form.getValues("cashback_share_percent") || 0;
+                    const percentAmount = (amountValue * currentPercent) / 100;
+                    const isFullyConsumedByPercent =
+                      percentAmount >= absoluteLimit - 100; // tolerance
 
-                        let safeVal = val;
-                        if (val !== undefined && val > remainingForFixed) {
-                          safeVal = remainingForFixed;
-                        }
+                    return (
+                      <SmartAmountInput
+                        value={field.value}
+                        disabled={isFullyConsumedByPercent && !field.value} // Disable if consumed AND empty
+                        onChange={(val) => {
+                          const budgetLeft = spendingStats?.maxCashback
+                            ? Math.max(
+                              0,
+                              spendingStats.maxCashback -
+                              spendingStats.earnedSoFar,
+                            )
+                            : Infinity;
+                          const rateMaxAmount =
+                            (amountValue * (rateLimitPercent ?? 100)) / 100;
+                          const absoluteLimit = Math.min(
+                            budgetLeft,
+                            rateMaxAmount,
+                          );
 
-                        field.onChange(safeVal);
-                        form.setValue('cashback_mode', 'real_fixed');
-                      }}
-                      placeholder="Amount"
-                      className={cn("w-full", isFullyConsumedByPercent && !field.value && "opacity-50 bg-slate-100 cursor-not-allowed")}
-                    />
+                          const currentPercent =
+                            form.getValues("cashback_share_percent") || 0;
+                          const percentAmount =
+                            (amountValue * currentPercent) / 100;
+                          const remainingForFixed = Math.max(
+                            0,
+                            absoluteLimit - percentAmount,
+                          );
+
+                          let safeVal = val;
+                          if (val !== undefined && val > remainingForFixed) {
+                            safeVal = remainingForFixed;
+                          }
+
+                          field.onChange(safeVal);
+                          form.setValue("cashback_mode", "real_fixed");
+                        }}
+                        placeholder="Amount"
+                        className={cn(
+                          "w-full",
+                          isFullyConsumedByPercent &&
+                          !field.value &&
+                          "opacity-50 bg-slate-100 cursor-not-allowed",
+                        )}
+                      />
+                    );
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Real-time Calculation Display */}
+            <div className="flex flex-col gap-2">
+              <div className="flex justify-between items-center px-2 py-1 bg-slate-50 rounded border border-slate-100">
+                <span className="text-xs font-medium text-slate-500">
+                  {transactionType === "debt"
+                    ? "Total Give Away:"
+                    : "Total Claim:"}
+                </span>
+                <span className="text-sm font-bold text-emerald-700">
+                  {numberFormatter.format(
+                    (amountValue * (watchedCashbackPercent || 0)) / 100 +
+                    (watchedCashbackFixed || 0),
+                  )}
+                </span>
+              </div>
+
+              {/* Virtual Profit Hint */}
+              {(() => {
+                // Calculate "Potential Max" based on Rate Limit (if exists) or Budget Left
+                const budgetLeft = spendingStats?.maxCashback
+                  ? Math.max(
+                    0,
+                    spendingStats.maxCashback - spendingStats.earnedSoFar,
                   )
-                }}
-              />
+                  : Infinity;
+                // If there's a specific rate limit, that is the theoretical max for this transaction
+                const cardRateLimit = rateLimitPercent ?? 100;
+                const rateMaxAmount = (amountValue * cardRateLimit) / 100;
+
+                // The potential max is the lower of Budget Left or Rate Cap
+                const potentialMax = Math.min(budgetLeft, rateMaxAmount);
+
+                const currentClaim =
+                  (amountValue * (watchedCashbackPercent || 0)) / 100 +
+                  (watchedCashbackFixed || 0);
+                const virtualProfit = potentialMax - currentClaim;
+
+                // Only show if there is a meaningful positive difference (> 1k VND to avoid rounding noise)
+                if (virtualProfit > 1000) {
+                  return (
+                    <div className="flex justify-between items-center px-2 py-1 bg-emerald-50 rounded border border-emerald-100">
+                      <span className="text-xs font-medium text-emerald-600 flex items-center gap-1">
+                        <Sparkles className="h-3 w-3" />
+                        Virtual Profit (Mine):
+                      </span>
+                      <span className="text-sm font-bold text-emerald-600">
+                        +{numberFormatter.format(virtualProfit)}
+                      </span>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
-          </div>
 
-          {/* Real-time Calculation Display */}
-          <div className="flex flex-col gap-2">
-            <div className="flex justify-between items-center px-2 py-1 bg-slate-50 rounded border border-slate-100">
-              <span className="text-xs font-medium text-slate-500">
-                {transactionType === 'debt' ? 'Total Give Away:' : 'Total Claim:'}
-              </span>
-              <span className="text-sm font-bold text-emerald-700">
-                {numberFormatter.format(
-                  ((amountValue * (watchedCashbackPercent || 0)) / 100) + (watchedCashbackFixed || 0)
-                )}
-              </span>
-            </div>
-
-            {/* Virtual Profit Hint */}
-            {(() => {
-              // Calculate "Potential Max" based on Rate Limit (if exists) or Budget Left
-              const budgetLeft = spendingStats?.maxCashback ? Math.max(0, spendingStats.maxCashback - spendingStats.earnedSoFar) : Infinity;
-              // If there's a specific rate limit, that is the theoretical max for this transaction
-              const cardRateLimit = rateLimitPercent ?? 100;
-              const rateMaxAmount = amountValue * cardRateLimit / 100;
-
-              // The potential max is the lower of Budget Left or Rate Cap
-              const potentialMax = Math.min(budgetLeft, rateMaxAmount);
-
-              const currentClaim = ((amountValue * (watchedCashbackPercent || 0)) / 100) + (watchedCashbackFixed || 0);
-              const virtualProfit = potentialMax - currentClaim;
-
-              // Only show if there is a meaningful positive difference (> 1k VND to avoid rounding noise)
-              if (virtualProfit > 1000) {
-                return (
-                  <div className="flex justify-between items-center px-2 py-1 bg-emerald-50 rounded border border-emerald-100">
-                    <span className="text-xs font-medium text-emerald-600 flex items-center gap-1">
-                      <Sparkles className="h-3 w-3" />
-                      Virtual Profit (Mine):
-                    </span>
-                    <span className="text-sm font-bold text-emerald-600">
-                      +{numberFormatter.format(virtualProfit)}
-                    </span>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-          </div>
-
-          {/* Hints for Real Mode */}
-          <div className="text-xs text-slate-500 flex flex-col gap-1 border-t border-slate-100 pt-2">
-            <div className="flex justify-between">
-              <span>Match Policy:</span>
-              <span className="font-medium text-slate-700 capitalize">
-                {spendingStats?.matchReason?.replace(/_/g, ' ') || 'Default'}
-                {spendingStats?.maxReward && ` (Max ${numberFormatter.format(spendingStats.maxReward)})`}
-              </span>
-            </div>
-            {rateLimitPercent !== null && (
+            {/* Hints for Real Mode */}
+            <div className="text-xs text-slate-500 flex flex-col gap-1 border-t border-slate-100 pt-2">
               <div className="flex justify-between">
-                <span>Applied Rate:</span>
-                <span className="font-medium bg-slate-100 px-1 py-0.5 rounded">{rateLimitPercent}%</span>
+                <span>Match Policy:</span>
+                <span className="font-medium text-slate-700 capitalize">
+                  {spendingStats?.matchReason?.replace(/_/g, " ") || "Default"}
+                  {spendingStats?.maxReward &&
+                    ` (Max ${numberFormatter.format(spendingStats.maxReward)})`}
+                </span>
               </div>
-            )}
-            {spendingStats?.maxCashback && (
-              <div className="flex justify-between text-amber-600">
-                <span>Budget Left:</span>
-                <span>{remainingBudget !== null ? numberFormatter.format(Math.max(0, remainingBudget - currentImpact)) : '--'}</span>
-              </div>
-            )}
+              {rateLimitPercent !== null && (
+                <div className="flex justify-between">
+                  <span>Applied Rate:</span>
+                  <span className="font-medium bg-slate-100 px-1 py-0.5 rounded">
+                    {rateLimitPercent}%
+                  </span>
+                </div>
+              )}
+              {spendingStats?.maxCashback && (
+                <div className="flex justify-between text-amber-600">
+                  <span>Budget Left:</span>
+                  <span>
+                    {remainingBudget !== null
+                      ? numberFormatter.format(
+                        Math.max(0, remainingBudget - currentImpact),
+                      )
+                      : "--"}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Voluntary Mode: Decoupled Logic with Total Validated against Amount */}
-      {watchedCashbackMode === 'voluntary' && (
+      {watchedCashbackMode === "voluntary" && (
         <div className="space-y-3 animate-in fade-in slide-in-from-top-1 bg-amber-50/50 p-3 rounded-md border border-amber-100 shadow-sm">
           <div className="grid grid-cols-2 gap-3">
             {/* Voluntary Percent */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-amber-700">% Voluntary</label>
+              <label className="text-xs font-medium text-amber-700">
+                % Voluntary
+              </label>
               <Controller
                 control={control}
                 name="cashback_share_percent"
@@ -2319,12 +2955,20 @@ export function TransactionForm({
                     onChange={(val) => {
                       // Total cannot exceed Amount
                       // Also Cap % by Card Rate
-                      const currentFixed = form.getValues('cashback_share_fixed') || 0;
-                      const remainingForPercent = Math.max(0, amountValue - currentFixed);
+                      const currentFixed =
+                        form.getValues("cashback_share_fixed") || 0;
+                      const remainingForPercent = Math.max(
+                        0,
+                        amountValue - currentFixed,
+                      );
                       let safePercent = val;
 
                       // 1. Cap by Card Rate (if exists)
-                      if (safePercent !== undefined && rateLimitPercent !== null && safePercent > rateLimitPercent) {
+                      if (
+                        safePercent !== undefined &&
+                        rateLimitPercent !== null &&
+                        safePercent > rateLimitPercent
+                      ) {
                         safePercent = rateLimitPercent;
                       }
 
@@ -2332,7 +2976,8 @@ export function TransactionForm({
                       if (safePercent !== undefined && amountValue > 0) {
                         const impliedAmount = (amountValue * safePercent) / 100;
                         if (impliedAmount > remainingForPercent) {
-                          safePercent = (remainingForPercent / amountValue) * 100;
+                          safePercent =
+                            (remainingForPercent / amountValue) * 100;
                         }
                       }
                       field.onChange(safePercent);
@@ -2346,7 +2991,9 @@ export function TransactionForm({
 
             {/* Voluntary Fixed */}
             <div className="space-y-1">
-              <label className="text-xs font-medium text-amber-700">Amount Voluntary</label>
+              <label className="text-xs font-medium text-amber-700">
+                Amount Voluntary
+              </label>
               <Controller
                 control={control}
                 name="cashback_share_fixed"
@@ -2355,9 +3002,14 @@ export function TransactionForm({
                     value={field.value}
                     onChange={(val) => {
                       // Total cannot exceed Amount
-                      const currentPercent = form.getValues('cashback_share_percent') || 0;
-                      const percentAmount = (amountValue * currentPercent) / 100;
-                      const remainingForFixed = Math.max(0, amountValue - percentAmount);
+                      const currentPercent =
+                        form.getValues("cashback_share_percent") || 0;
+                      const percentAmount =
+                        (amountValue * currentPercent) / 100;
+                      const remainingForFixed = Math.max(
+                        0,
+                        amountValue - percentAmount,
+                      );
 
                       let safeVal = val;
                       if (val !== undefined && val > remainingForFixed) {
@@ -2375,16 +3027,20 @@ export function TransactionForm({
 
           {/* Voluntary Real-time Display */}
           <div className="flex justify-between items-center px-2 py-1 bg-amber-100/50 rounded border border-amber-200/50">
-            <span className="text-xs font-medium text-amber-700">Total Overflow:</span>
+            <span className="text-xs font-medium text-amber-700">
+              Total Overflow:
+            </span>
             <span className="text-sm font-bold text-amber-800">
               {numberFormatter.format(
-                ((amountValue * (watchedCashbackPercent || 0)) / 100) + (watchedCashbackFixed || 0)
+                (amountValue * (watchedCashbackPercent || 0)) / 100 +
+                (watchedCashbackFixed || 0),
               )}
             </span>
           </div>
 
           <p className="text-[10px] text-amber-600 italic">
-            * This amount is tracked as overflow loss and does not count towards standard budget.
+            * This amount is tracked as overflow loss and does not count towards
+            standard budget.
           </p>
         </div>
       )}
@@ -2404,28 +3060,56 @@ export function TransactionForm({
                 const meta = policyMetadataToShow;
                 const policyLabel = formatPolicyLabel(meta, numberFormatter);
                 const items = [
-                  { label: 'Summary', value: policyLabel, active: Boolean(policyLabel) },
-                  { label: 'Source', value: meta.policySource?.replace('_', ' '), active: true },
                   {
-                    label: 'Level',
-                    value: meta.levelName ? `${meta.levelName}${meta.levelMinSpend ? ` (>= ${numberFormatter.format(meta.levelMinSpend)})` : ''}` : null,
-                    active: !!meta.levelName
+                    label: "Summary",
+                    value: policyLabel,
+                    active: Boolean(policyLabel),
                   },
-                  { label: 'Match Rate', value: formatPercent(meta.rate), active: true },
                   {
-                    label: 'Max Reward',
-                    value: typeof meta.ruleMaxReward === 'number' ? numberFormatter.format(meta.ruleMaxReward) : null,
-                    active: typeof meta.ruleMaxReward === 'number'
+                    label: "Source",
+                    value: meta.policySource?.replace("_", " "),
+                    active: true,
                   },
-                  { label: 'Reason', value: meta.reason, active: !!meta.reason },
+                  {
+                    label: "Level",
+                    value: meta.levelName
+                      ? `${meta.levelName}${meta.levelMinSpend ? ` (>= ${numberFormatter.format(meta.levelMinSpend)})` : ""}`
+                      : null,
+                    active: !!meta.levelName,
+                  },
+                  {
+                    label: "Match Rate",
+                    value: formatPercent(meta.rate),
+                    active: true,
+                  },
+                  {
+                    label: "Max Reward",
+                    value:
+                      typeof meta.ruleMaxReward === "number"
+                        ? numberFormatter.format(meta.ruleMaxReward)
+                        : null,
+                    active: typeof meta.ruleMaxReward === "number",
+                  },
+                  {
+                    label: "Reason",
+                    value: meta.reason,
+                    active: !!meta.reason,
+                  },
                 ];
 
-                return items.filter(i => i.active && i.value).map((item, idx) => (
-                  <div key={idx} className="flex justify-between items-center text-xs">
-                    <span className="text-slate-500">{item.label}:</span>
-                    <span className="font-semibold text-slate-700 capitalize text-right">{item.value}</span>
-                  </div>
-                ));
+                return items
+                  .filter((i) => i.active && i.value)
+                  .map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex justify-between items-center text-xs"
+                    >
+                      <span className="text-slate-500">{item.label}:</span>
+                      <span className="font-semibold text-slate-700 capitalize text-right">
+                        {item.value}
+                      </span>
+                    </div>
+                  ));
               })()}
             </div>
             {persistedMetadata && !livePolicyMetadata && (
@@ -2442,42 +3126,55 @@ export function TransactionForm({
           </div>
         )}
 
-        {watchedCashbackMode === 'none_back' && potentialCashback > 0 && (
+        {watchedCashbackMode === "none_back" && potentialCashback > 0 && (
           <p className="text-xs flex justify-between bg-emerald-50/50 p-2 rounded text-emerald-700 border border-emerald-100/50">
             <span className="opacity-80">Estimated Earnings:</span>
-            <span className="font-bold">+{numberFormatter.format(potentialCashback)}</span>
+            <span className="font-bold">
+              +{numberFormatter.format(potentialCashback)}
+            </span>
           </p>
         )}
 
-        {spendingStats && spendingStats.minSpend && spendingStats.minSpend > 0 && (
-          <div className="text-xs flex justify-between items-center px-1">
-            <span className="text-slate-500">Min Spend Progress:</span>
-            <span className={cn("font-medium", projectedSpend >= spendingStats.minSpend ? "text-emerald-600" : "text-amber-600")}>
-              {projectedSpend < spendingStats.minSpend && (
-                <span className="text-slate-400 mr-1 font-normal text-[10px] uppercase tracking-wide">Spend More:</span>
-              )}
-              {numberFormatter.format(projectedSpend)} / {numberFormatter.format(spendingStats.minSpend)}
-            </span>
-          </div>
-        )}
+        {spendingStats &&
+          spendingStats.minSpend &&
+          spendingStats.minSpend > 0 && (
+            <div className="text-xs flex justify-between items-center px-1">
+              <span className="text-slate-500">Min Spend Progress:</span>
+              <span
+                className={cn(
+                  "font-medium",
+                  projectedSpend >= spendingStats.minSpend
+                    ? "text-emerald-600"
+                    : "text-amber-600",
+                )}
+              >
+                {projectedSpend < spendingStats.minSpend && (
+                  <span className="text-slate-400 mr-1 font-normal text-[10px] uppercase tracking-wide">
+                    Spend More:
+                  </span>
+                )}
+                {numberFormatter.format(projectedSpend)} /{" "}
+                {numberFormatter.format(spendingStats.minSpend)}
+              </span>
+            </div>
+          )}
       </div>
-
-    </div >
+    </div>
   ) : null;
 
   const submitLabel = isSubmitting
-    ? 'Saving...'
+    ? "Saving..."
     : isRefundMode
-      ? refundStatus === 'received'
-        ? 'Confirm Refund'
-        : 'Request Refund'
+      ? refundStatus === "received"
+        ? "Confirm Refund"
+        : "Request Refund"
       : isEditMode
-        ? 'Update Transaction'
-        : 'Add Transaction'
+        ? "Update Transaction"
+        : "Add Transaction";
 
   return (
     <>
-      {transactionType === 'quick-people' ? (
+      {transactionType === "quick-people" ? (
         <div className="h-full flex flex-col">
           <div className="sticky top-0 z-10 bg-white border-b border-slate-100 px-6 py-3 shadow-sm">
             {TypeInput}
@@ -2489,9 +3186,15 @@ export function TransactionForm({
       ) : (
         <form
           onSubmit={handleSubmit(onSubmit, (errors) => {
-            console.error('[Form Validation Error]', JSON.stringify(errors, null, 2));
+            console.error(
+              "[Form Validation Error]",
+              JSON.stringify(errors, null, 2),
+            );
             // Optionally set a status error to inform user why nothing happened
-            setStatus({ type: 'error', text: 'Please fix the errors in the form.' })
+            setStatus({
+              type: "error",
+              text: "Please fix the errors in the form.",
+            });
           })}
           className="flex flex-col h-full overflow-hidden"
         >
@@ -2499,13 +3202,38 @@ export function TransactionForm({
           <div className="sticky top-0 z-20 bg-white border-b border-slate-100 shadow-sm flex-none">
             <div className="px-5 py-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                {transactionType === 'expense' && <div className="p-1.5 bg-rose-100 rounded-full"><ArrowUpRight className="w-4 h-4 text-rose-600" /></div>}
-                {transactionType === 'income' && <div className="p-1.5 bg-emerald-100 rounded-full"><ArrowDownLeft className="w-4 h-4 text-emerald-600" /></div>}
-                {transactionType === 'transfer' && <div className="p-1.5 bg-blue-100 rounded-full"><ArrowRightLeft className="w-4 h-4 text-blue-600" /></div>}
-                {transactionType === 'debt' && <div className="p-1.5 bg-purple-100 rounded-full"><Wallet className="w-4 h-4 text-purple-600" /></div>}
-                {transactionType === 'repayment' && <div className="p-1.5 bg-amber-100 rounded-full"><RotateCcw className="w-4 h-4 text-amber-600" /></div>}
+                {transactionType === "expense" && (
+                  <div className="p-1.5 bg-rose-100 rounded-full">
+                    <ArrowUpRight className="w-4 h-4 text-rose-600" />
+                  </div>
+                )}
+                {transactionType === "income" && (
+                  <div className="p-1.5 bg-emerald-100 rounded-full">
+                    <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
+                  </div>
+                )}
+                {transactionType === "transfer" && (
+                  <div className="p-1.5 bg-blue-100 rounded-full">
+                    <ArrowRightLeft className="w-4 h-4 text-blue-600" />
+                  </div>
+                )}
+                {transactionType === "debt" && (
+                  <div className="p-1.5 bg-purple-100 rounded-full">
+                    <Wallet className="w-4 h-4 text-purple-600" />
+                  </div>
+                )}
+                {transactionType === "repayment" && (
+                  <div className="p-1.5 bg-amber-100 rounded-full">
+                    <RotateCcw className="w-4 h-4 text-amber-600" />
+                  </div>
+                )}
                 <h2 className="text-lg font-semibold text-slate-900 capitalize">
-                  {isEditMode ? 'Edit' : 'New'} {transactionType === 'debt' ? 'Lending' : transactionType === 'repayment' ? 'Repayment' : transactionType}
+                  {isEditMode ? "Edit" : "New"}{" "}
+                  {transactionType === "debt"
+                    ? "Lending"
+                    : transactionType === "repayment"
+                      ? "Repayment"
+                      : transactionType}
                 </h2>
               </div>
               <button
@@ -2521,11 +3249,7 @@ export function TransactionForm({
               <Controller
                 control={control}
                 name="type"
-                render={({ field }) => (
-                  <>
-                    {TypeInput}
-                  </>
-                )}
+                render={({ field }) => <>{TypeInput}</>}
               />
             </div>
 
@@ -2535,94 +3259,93 @@ export function TransactionForm({
           {/* SCROLLABLE BODY */}
           <div className="flex-1 overflow-y-auto min-h-0 bg-white">
             <div className="px-5 py-6 space-y-6">
-
               {RefundStatusInput}
 
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                {(transactionType === 'debt' || transactionType === 'repayment') ? (
+                {transactionType === "debt" ||
+                  transactionType === "repayment" ? (
                   <>
-                    <div className="col-span-2">
-                      {PersonInput}
-                    </div>
-                    <div className="col-span-1">
-                      {DateInput}
-                    </div>
-                    <div className="col-span-1">
-                      {TagInput}
-                    </div>
+                    <div className="col-span-2">{PersonInput}</div>
+                    <div className="col-span-1">{DateInput}</div>
+                    <div className="col-span-1">{TagInput}</div>
                     {/* Always show Category Input for Repayment now */}
-                    <div className="col-span-1">
-                      {CategoryInput}
-                    </div>
-                    <div className={transactionType === 'repayment' ? "col-span-1" : "col-span-1"}>
+                    <div className="col-span-1">{CategoryInput}</div>
+                    <div
+                      className={
+                        transactionType === "repayment"
+                          ? "col-span-1"
+                          : "col-span-1"
+                      }
+                    >
                       {ShopInput}
                     </div>
-                    <div className="col-span-1">
-                      {SourceAccountInput}
-                    </div>
-                    <div className="col-span-1">
-                      {AmountInput}
-                    </div>
+                    <div className="col-span-1">{SourceAccountInput}</div>
+                    <div className="col-span-1">{AmountInput}</div>
                   </>
                 ) : (
                   <>
-                    <div className="col-span-2">
-                      {DateInput}
-                    </div>
-                    {transactionType === 'transfer' ? (
+                    <div className="col-span-2">{DateInput}</div>
+                    {transactionType === "transfer" ? (
                       <>
-                        <div className="col-span-2">
-                          {CategoryInput}
-                        </div>
-                        <div className="col-span-1">
-                          {SourceAccountInput}
-                        </div>
+                        <div className="col-span-2">{CategoryInput}</div>
+                        <div className="col-span-1">{SourceAccountInput}</div>
                         <div className="col-span-1">
                           {DestinationAccountInput}
                         </div>
-                        <div className="col-span-2">
-                          {AmountInput}
-                        </div>
+                        <div className="col-span-2">{AmountInput}</div>
                       </>
-                    ) : transactionType === 'income' ? (
+                    ) : transactionType === "income" ? (
                       <>
-                        <div className="col-span-1">
-                          {CategoryInput}
-                        </div>
-                        <div className="col-span-1">
-                          {SourceAccountInput}
-                        </div>
-                        <div className="col-span-1">
-                          {AmountInput}
-                        </div>
-                        <div className="col-span-1">
-                          {PersonInput}
-                        </div>
+                        <div className="col-span-1">{CategoryInput}</div>
+                        <div className="col-span-1">{SourceAccountInput}</div>
+                        <div className="col-span-1">{AmountInput}</div>
+                        <div className="col-span-1">{PersonInput}</div>
                       </>
                     ) : (
                       <>
-                        <div className="col-span-1">
-                          {CategoryInput}
-                        </div>
-                        <div className="col-span-1">
-                          {ShopInput}
-                        </div>
-                        <div className="col-span-1">
-                          {SourceAccountInput}
-                        </div>
-                        <div className="col-span-1">
-                          {AmountInput}
-                        </div>
-                        <div className="col-span-2">
-                          {PersonInput}
-                        </div>
+                        <div className="col-span-1">{CategoryInput}</div>
+                        <div className="col-span-1">{ShopInput}</div>
+                        <div className="col-span-1">{SourceAccountInput}</div>
+                        <div className="col-span-1">{AmountInput}</div>
+                        <div className="col-span-2">{PersonInput}</div>
                       </>
                     )}
                   </>
                 )}
 
                 <div className="col-span-2 space-y-4 pt-2 border-t border-slate-100">
-                  {InstallmentInput}
+                  {/* Phase 7X: Explicit Installment Toggle */}
+                  {(transactionType === "repayment" || transactionType === "expense" || transactionType === "income") && installments.length > 0 && (
+                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="is-installment-repay" className="text-sm font-medium text-slate-900">
+                          Pay for Installment?
+                        </Label>
+                        <p className="text-xs text-slate-500">
+                          Link this {transactionType} to an active plan
+                        </p>
+                      </div>
+                      <Controller
+                        control={control}
+                        name="is_installment"
+                        render={({ field }) => (
+                          <Switch
+                            id="is-installment-repay"
+                            checked={field.value}
+                            onCheckedChange={(checked) => {
+                              field.onChange(checked);
+                              if (!checked) {
+                                form.setValue("installment_plan_id", undefined);
+                              }
+                            }}
+                          />
+                        )}
+                      />
+                    </div>
+                  )}
+
+                  {watchedIsInstallment && InstallmentRepaymentSelector}
+                  {!watchedIsInstallment && InstallmentInput}
                   {CashbackModeInput}
                   {NoteInput}
                 </div>
@@ -2655,13 +3378,21 @@ export function TransactionForm({
                 disabled={isSubmitting || cashbackExceedsAmount}
                 className={cn(
                   "rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed",
-                  transactionType === 'expense' ? "bg-rose-600 hover:bg-rose-700" :
-                    transactionType === 'income' ? "bg-emerald-600 hover:bg-emerald-700" :
-                      transactionType === 'transfer' ? "bg-blue-600 hover:bg-blue-700" :
-                        transactionType === 'debt' ? "bg-purple-600 hover:bg-purple-700" :
-                          "bg-orange-600 hover:bg-orange-700"
+                  transactionType === "expense"
+                    ? "bg-rose-600 hover:bg-rose-700"
+                    : transactionType === "income"
+                      ? "bg-emerald-600 hover:bg-emerald-700"
+                      : transactionType === "transfer"
+                        ? "bg-blue-600 hover:bg-blue-700"
+                        : transactionType === "debt"
+                          ? "bg-purple-600 hover:bg-purple-700"
+                          : "bg-orange-600 hover:bg-orange-700",
                 )}
-                title={cashbackExceedsAmount ? "Cashback must be less than amount" : undefined}
+                title={
+                  cashbackExceedsAmount
+                    ? "Cashback must be less than amount"
+                    : undefined
+                }
               >
                 {submitLabel}
               </button>
@@ -2670,7 +3401,6 @@ export function TransactionForm({
         </form>
       )}
 
-
       <CategoryDialog
         open={isCategoryDialogOpen}
         onOpenChange={setIsCategoryDialogOpen}
@@ -2678,7 +3408,7 @@ export function TransactionForm({
           // Ideally we should refresh categories or select the new one
           // But for now just closing is fine, the parent might refresh
         }}
-        defaultType={transactionType === 'income' ? 'income' : 'expense'}
+        defaultType={transactionType === "income" ? "income" : "expense"}
       />
 
       <AddShopDialog
@@ -2687,8 +3417,8 @@ export function TransactionForm({
         categories={categories}
         preselectedCategoryId={watchedCategoryId}
         onShopCreated={(shop) => {
-          console.log('Shop created, auto-selecting:', shop);
-          form.setValue('shop_id', shop.id);
+          console.log("Shop created, auto-selecting:", shop);
+          form.setValue("shop_id", shop.id);
           // We rely on local state update if needed, or if shopOptions recomputes
           // Assuming the parent component will re-fetch data or we need to optimistic update
           // For now, we trust router.refresh() in AddShopDialog combined with our Reset Protection
@@ -2701,22 +3431,24 @@ export function TransactionForm({
         subscriptions={[]}
       />
       <EditAccountDialog
-        account={{
-          id: 'new',
-          name: '',
-          type: 'bank',
-          current_balance: 0,
-          credit_limit: undefined,
-          cashback_config: null,
-          secured_by_account_id: undefined,
-          is_active: true,
-          owner_id: '',
-          logo_url: null,
-        } as Account}
+        account={
+          {
+            id: "new",
+            name: "",
+            type: "bank",
+            current_balance: 0,
+            credit_limit: undefined,
+            cashback_config: null,
+            secured_by_account_id: undefined,
+            is_active: true,
+            owner_id: "",
+            logo_url: null,
+          } as Account
+        }
         open={isAccountDialogOpen}
         onOpenChange={setIsAccountDialogOpen}
         accounts={allAccounts}
       />
     </>
-  )
+  );
 }

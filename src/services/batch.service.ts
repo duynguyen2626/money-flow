@@ -140,6 +140,57 @@ export async function confirmBatchItem(itemId: string, targetAccountId?: string)
     const { data: { user } } = await supabase.auth.getUser()
     const userId = user?.id ?? null // Use null if no user (will rely on RLS default)
 
+    // Phase 7X: Smart Installment Matching
+    let installmentPlanId: string | null = null;
+    let isInstallment = item.is_installment_payment; // Prioritize checkbox
+
+    if (isInstallment) {
+        // Find active installments for this account
+        // Note: We use raw query here to avoid circular deps or heavy imports if possible,
+        // but importing types is fine.
+        const { data: activePlans } = await supabase
+            .from('installments')
+            .select('id, monthly_amount, remaining_amount')
+            .eq('status', 'active')
+            .order('created_at', { ascending: true }); // Oldest first
+
+        if (activePlans && activePlans.length > 0) {
+            // 1. Filter by Account? 
+            // Wait, installments are linked to an Original Transaction.
+            // That transaction has an Account ID.
+            // We need to filter plans where original_transaction.account_id == finalTargetId
+            // But the above query didn't join.
+
+            // Let's re-query with join
+            const { data: accountPlans } = await supabase
+                .from('installments')
+                .select('id, monthly_amount, remaining_amount, original_transaction:transactions!inner(account_id)')
+                .eq('status', 'active')
+                .eq('original_transaction.account_id', finalTargetId)
+                .order('created_at', { ascending: true });
+
+            if (accountPlans && accountPlans.length > 0) {
+                const itemAmount = Math.abs(item.amount);
+
+                // Try to find exact match on monthly amount (allow small diff < 1000 VND)
+                const matchedPlan = accountPlans.find((p: any) => Math.abs(p.monthly_amount - itemAmount) < 1000);
+
+                if (matchedPlan) {
+                    installmentPlanId = matchedPlan.id;
+                } else {
+                    // If only one active plan exists, assume it's that one? 
+                    // Risk: Paying wrong plan.
+                    // Better strategy: If I marked it as installment manually, likely I want to pay the one matching amount.
+                    // If no match, maybe I just log it?
+                    // Let's fallback to the Oldest Active Plan if only 1 exists?
+                    if (accountPlans.length === 1) {
+                        installmentPlanId = accountPlans[0].id;
+                    }
+                }
+            }
+        }
+    }
+
     // 2. Create Transaction (Draft Fund -> Target) [Single-Table Schema]
     const { data: txn, error: txnError } = await supabase
         .from('transactions')
@@ -154,12 +205,21 @@ export async function confirmBatchItem(itemId: string, targetAccountId?: string)
             account_id: SYSTEM_ACCOUNTS.DRAFT_FUND,
             target_account_id: finalTargetId,
             amount: Math.abs(item.amount),
-            type: 'transfer'
+            type: 'transfer',
+            is_installment: isInstallment,
+            installment_plan_id: installmentPlanId
         })
         .select()
         .single()
 
     if (txnError) throw txnError
+
+    // Phase 7X: Auto-Settle Trigger
+    if (installmentPlanId) {
+        import('./installment.service').then(({ checkAndAutoSettleInstallment }) => {
+            checkAndAutoSettleInstallment(installmentPlanId!);
+        }).catch(err => console.error("Failed to auto-settle batch installment", err));
+    }
 
     // 3. Update Item Status
     const { error: updateError } = await supabase

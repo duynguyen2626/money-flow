@@ -1,13 +1,27 @@
-'use server';
+"use server";
 
-import { revalidatePath } from 'next/cache';
-import { createClient } from '@/lib/supabase/server';
-import { Json, Database } from '@/types/database.types';
-import { TransactionWithDetails, TransactionWithLineRelations, AccountRow, CashbackMode } from '@/types/moneyflow.types';
-import { upsertTransactionCashback, removeTransactionCashback } from './cashback.service';
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { Json, Database } from "@/types/database.types";
+import {
+  TransactionWithDetails,
+  TransactionWithLineRelations,
+  AccountRow,
+  CashbackMode,
+} from "@/types/moneyflow.types";
+import {
+  upsertTransactionCashback,
+  removeTransactionCashback,
+} from "./cashback.service";
 
-type TransactionStatus = 'posted' | 'pending' | 'void' | 'waiting_refund' | 'refunded' | 'completed';
-type TransactionType = 'income' | 'expense' | 'transfer' | 'debt' | 'repayment';
+type TransactionStatus =
+  | "posted"
+  | "pending"
+  | "void"
+  | "waiting_refund"
+  | "refunded"
+  | "completed";
+type TransactionType = "income" | "expense" | "transfer" | "debt" | "repayment";
 
 export type CreateTransactionInput = {
   occurred_at: string;
@@ -24,6 +38,7 @@ export type CreateTransactionInput = {
   shop_id?: string | null;
   metadata?: Json | null;
   is_installment?: boolean;
+  installment_plan_id?: string | null;
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
   cashback_mode?: CashbackMode | null;
@@ -58,72 +73,96 @@ type FlatTransactionRow = {
   transaction_history?: { count: number }[];
 };
 
-type NormalizedTransaction = Omit<FlatTransactionRow, 'id' | 'created_at'>;
+type NormalizedTransaction = Omit<FlatTransactionRow, "id" | "created_at">;
 
 type LookupMaps = {
-  accounts: Map<string, { id: string; name: string; logo_url: string | null; type: string | null }>;
-  categories: Map<string, { id: string; name: string; type: 'income' | 'expense'; logo_url?: string | null; icon?: string | null }>;
+  accounts: Map<
+    string,
+    { id: string; name: string; logo_url: string | null; type: string | null }
+  >;
+  categories: Map<
+    string,
+    {
+      id: string;
+      name: string;
+      type: "income" | "expense";
+      logo_url?: string | null;
+      icon?: string | null;
+    }
+  >;
   people: Map<string, { id: string; name: string; avatar_url: string | null }>;
   shops: Map<string, { id: string; name: string; logo_url: string | null }>;
 };
 
-function resolveBaseType(type: TransactionType): 'income' | 'expense' | 'transfer' {
-  if (type === 'repayment') return 'income';
-  if (type === 'debt') return 'expense';
-  if (type === 'transfer') return 'transfer';
+function resolveBaseType(
+  type: TransactionType,
+): "income" | "expense" | "transfer" {
+  if (type === "repayment") return "income";
+  if (type === "debt") return "expense";
+  if (type === "transfer") return "transfer";
   return type;
 }
 
-export async function normalizeAmountForType(type: TransactionType, amount: number): Promise<number> {
+export async function normalizeAmountForType(
+  type: TransactionType,
+  amount: number,
+): Promise<number> {
   const baseType = resolveBaseType(type);
   const absolute = Math.abs(amount);
-  if (baseType === 'income') return absolute;
-  if (baseType === 'transfer') return -absolute;
+  if (baseType === "income") return absolute;
+  if (baseType === "transfer") return -absolute;
   return -absolute;
 }
 
-async function normalizeInput(input: CreateTransactionInput): Promise<NormalizedTransaction> {
+async function normalizeInput(
+  input: CreateTransactionInput,
+): Promise<NormalizedTransaction> {
   const baseType = resolveBaseType(input.type);
-  const targetAccountId = input.target_account_id ?? input.destination_account_id ?? input.debt_account_id ?? null;
+  const targetAccountId =
+    input.target_account_id ??
+    input.destination_account_id ??
+    input.debt_account_id ??
+    null;
 
-  if (input.type === 'transfer' && !targetAccountId) {
-    throw new Error('Transfer requires targetAccountId');
+  if (input.type === "transfer" && !targetAccountId) {
+    throw new Error("Transfer requires targetAccountId");
   }
 
-  const normalizedAmount = await normalizeAmountForType(input.type, input.amount);
+  const normalizedAmount = await normalizeAmountForType(
+    input.type,
+    input.amount,
+  );
 
   return {
     occurred_at: input.occurred_at,
     note: input.note ?? null,
-    status: 'posted',
+    status: "posted",
     tag: input.tag ?? null,
     created_by: null,
     amount: normalizedAmount,
     type: input.type,
     account_id: input.source_account_id,
-    target_account_id: baseType === 'transfer' ? targetAccountId : null,
+    target_account_id: baseType === "transfer" ? targetAccountId : null,
     category_id: input.category_id ?? null,
     person_id: input.person_id ?? null,
     metadata: input.metadata ?? null,
     shop_id: input.shop_id ?? null,
     persisted_cycle_tag: null,
     is_installment: Boolean(input.is_installment),
-    installment_plan_id: null,
+    installment_plan_id: input.installment_plan_id ?? null,
     cashback_share_percent: input.cashback_share_percent ?? null,
     cashback_share_fixed: input.cashback_share_fixed ?? null,
     cashback_mode: input.cashback_mode ?? null,
   };
 }
 
-
-
 async function logHistory(
   transactionId: string,
-  changeType: 'edit' | 'void',
-  snapshot: any
+  changeType: "edit" | "void",
+  snapshot: any,
 ) {
   const supabase = createClient();
-  const { error } = await supabase.from('transaction_history' as any).insert({
+  const { error } = await supabase.from("transaction_history" as any).insert({
     transaction_id: transactionId,
     change_type: changeType,
     snapshot_before: snapshot,
@@ -131,7 +170,7 @@ async function logHistory(
   } as any);
 
   if (error) {
-    console.error('Failed to log transaction history:', error);
+    console.error("Failed to log transaction history:", error);
   }
 }
 
@@ -142,14 +181,15 @@ export async function calculateAccountImpacts(txn: {
   amount: number;
   status?: TransactionStatus | null;
 }): Promise<Record<string, number>> {
-  if (txn.status === 'void') return {};
+  if (txn.status === "void") return {};
 
   const baseType = resolveBaseType(txn.type);
   const impacts: Record<string, number> = {};
   impacts[txn.account_id] = (impacts[txn.account_id] ?? 0) + txn.amount;
 
-  if (baseType === 'transfer' && txn.target_account_id) {
-    impacts[txn.target_account_id] = (impacts[txn.target_account_id] ?? 0) + Math.abs(txn.amount);
+  if (baseType === "transfer" && txn.target_account_id) {
+    impacts[txn.target_account_id] =
+      (impacts[txn.target_account_id] ?? 0) + Math.abs(txn.amount);
   }
 
   return impacts;
@@ -157,8 +197,8 @@ export async function calculateAccountImpacts(txn: {
 
 async function recalcForAccounts(accountIds: Set<string>) {
   if (accountIds.size === 0) return;
-  const { recalculateBalance } = await import('./account.service');
-  await Promise.all(Array.from(accountIds).map(id => recalculateBalance(id)));
+  const { recalculateBalance } = await import("./account.service");
+  await Promise.all(Array.from(accountIds).map((id) => recalculateBalance(id)));
 }
 
 async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
@@ -168,7 +208,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
   const personIds = new Set<string>();
   const shopIds = new Set<string>();
 
-  rows.forEach(row => {
+  rows.forEach((row) => {
     accountIds.add(row.account_id);
     if (row.target_account_id) accountIds.add(row.target_account_id);
     if (row.category_id) categoryIds.add(row.category_id);
@@ -178,23 +218,53 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
 
   const [accountsRes, categoriesRes, peopleRes, shopsRes] = await Promise.all([
     accountIds.size
-      ? supabase.from('accounts').select('id, name, logo_url, type').in('id', Array.from(accountIds))
+      ? supabase
+        .from("accounts")
+        .select("id, name, logo_url, type")
+        .in("id", Array.from(accountIds))
       : Promise.resolve({ data: [] as any[], error: null }),
     categoryIds.size
-      ? supabase.from('categories').select('id, name, type, logo_url, icon').in('id', Array.from(categoryIds))
+      ? supabase
+        .from("categories")
+        .select("id, name, type, logo_url, icon")
+        .in("id", Array.from(categoryIds))
       : Promise.resolve({ data: [] as any[], error: null }),
     personIds.size
-      ? supabase.from('profiles').select('id, name, avatar_url').in('id', Array.from(personIds))
+      ? supabase
+        .from("profiles")
+        .select("id, name, avatar_url")
+        .in("id", Array.from(personIds))
       : Promise.resolve({ data: [] as any[], error: null }),
     shopIds.size
-      ? supabase.from('shops').select('id, name, logo_url').in('id', Array.from(shopIds))
+      ? supabase
+        .from("shops")
+        .select("id, name, logo_url")
+        .in("id", Array.from(shopIds))
       : Promise.resolve({ data: [] as any[], error: null }),
   ]);
 
-  const accounts = new Map<string, { id: string; name: string; logo_url: string | null; type: string | null }>();
-  const categories = new Map<string, { id: string; name: string; type: 'income' | 'expense'; logo_url?: string | null; icon?: string | null }>();
-  const people = new Map<string, { id: string; name: string; avatar_url: string | null }>();
-  const shops = new Map<string, { id: string; name: string; logo_url: string | null }>();
+  const accounts = new Map<
+    string,
+    { id: string; name: string; logo_url: string | null; type: string | null }
+  >();
+  const categories = new Map<
+    string,
+    {
+      id: string;
+      name: string;
+      type: "income" | "expense";
+      logo_url?: string | null;
+      icon?: string | null;
+    }
+  >();
+  const people = new Map<
+    string,
+    { id: string; name: string; avatar_url: string | null }
+  >();
+  const shops = new Map<
+    string,
+    { id: string; name: string; logo_url: string | null }
+  >();
 
   (accountsRes.data ?? []).forEach((row: any) => {
     if (!row?.id) return;
@@ -240,45 +310,63 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
 
 function buildSyntheticLines(
   row: FlatTransactionRow,
-  baseType: 'income' | 'expense' | 'transfer',
-  lookups: LookupMaps
+  baseType: "income" | "expense" | "transfer",
+  lookups: LookupMaps,
 ): TransactionWithLineRelations[] {
   const lines: TransactionWithLineRelations[] = [];
   const amountAbs = Math.abs(row.amount);
   const sourceAccount = lookups.accounts.get(row.account_id) ?? null;
-  const targetAccount = row.target_account_id ? lookups.accounts.get(row.target_account_id) ?? null : null;
-  const category = row.category_id ? lookups.categories.get(row.category_id) ?? null : null;
-  const person = row.person_id ? lookups.people.get(row.person_id) ?? null : null;
+  const targetAccount = row.target_account_id
+    ? (lookups.accounts.get(row.target_account_id) ?? null)
+    : null;
+  const category = row.category_id
+    ? (lookups.categories.get(row.category_id) ?? null)
+    : null;
+  const person = row.person_id
+    ? (lookups.people.get(row.person_id) ?? null)
+    : null;
 
   lines.push({
     id: `${row.id}:source`,
     transaction_id: row.id,
     account_id: row.account_id,
     amount: row.amount,
-    type: row.amount >= 0 ? 'debit' : 'credit',
+    type: row.amount >= 0 ? "debit" : "credit",
     person_id: row.person_id,
     metadata: row.metadata,
     original_amount: amountAbs,
     accounts: sourceAccount
-      ? { name: sourceAccount.name, logo_url: sourceAccount.logo_url, type: sourceAccount.type as AccountRow['type'] }
+      ? {
+        name: sourceAccount.name,
+        logo_url: sourceAccount.logo_url,
+        type: sourceAccount.type as AccountRow["type"],
+      }
       : null,
     categories: null,
-    profiles: person ? { name: person.name, avatar_url: person.avatar_url } : null,
+    profiles: person
+      ? { name: person.name, avatar_url: person.avatar_url }
+      : null,
   });
 
-  if (baseType === 'transfer' && row.target_account_id) {
+  if (baseType === "transfer" && row.target_account_id) {
     lines.push({
       id: `${row.id}:target`,
       transaction_id: row.id,
       account_id: row.target_account_id,
       amount: amountAbs,
-      type: 'debit',
+      type: "debit",
       person_id: row.person_id,
       accounts: targetAccount
-        ? { name: targetAccount.name, logo_url: targetAccount.logo_url, type: targetAccount.type as AccountRow['type'] }
+        ? {
+          name: targetAccount.name,
+          logo_url: targetAccount.logo_url,
+          type: targetAccount.type as AccountRow["type"],
+        }
         : null,
       categories: null,
-      profiles: person ? { name: person.name, avatar_url: person.avatar_url } : null,
+      profiles: person
+        ? { name: person.name, avatar_url: person.avatar_url }
+        : null,
     });
   }
 
@@ -287,15 +375,22 @@ function buildSyntheticLines(
       id: `${row.id}:category`,
       transaction_id: row.id,
       category_id: row.category_id,
-      amount: baseType === 'income' ? -amountAbs : amountAbs,
-      type: baseType === 'income' ? 'credit' : 'debit',
+      amount: baseType === "income" ? -amountAbs : amountAbs,
+      type: baseType === "income" ? "credit" : "debit",
       person_id: row.person_id,
       metadata: row.metadata,
       accounts: null,
       categories: category
-        ? { name: category.name, type: category.type, logo_url: category.logo_url ?? null, icon: category.icon ?? null }
+        ? {
+          name: category.name,
+          type: category.type,
+          logo_url: category.logo_url ?? null,
+          icon: category.icon ?? null,
+        }
         : null,
-      profiles: person ? { name: person.name, avatar_url: person.avatar_url } : null,
+      profiles: person
+        ? { name: person.name, avatar_url: person.avatar_url }
+        : null,
     });
   }
 
@@ -304,41 +399,51 @@ function buildSyntheticLines(
 
 function mapTransactionRow(
   row: FlatTransactionRow,
-  options: { lookups: LookupMaps; contextAccountId?: string; contextMode?: 'person' | 'account' | 'general' }
+  options: {
+    lookups: LookupMaps;
+    contextAccountId?: string;
+    contextMode?: "person" | "account" | "general";
+  },
 ): TransactionWithDetails {
   const { lookups, contextAccountId } = options;
   const baseType = resolveBaseType(row.type);
   const account = lookups.accounts.get(row.account_id) ?? null;
-  const target = row.target_account_id ? lookups.accounts.get(row.target_account_id) ?? null : null;
-  const category = row.category_id ? lookups.categories.get(row.category_id) ?? null : null;
-  const person = row.person_id ? lookups.people.get(row.person_id) ?? null : null;
-  const shop = row.shop_id ? lookups.shops.get(row.shop_id) ?? null : null;
+  const target = row.target_account_id
+    ? (lookups.accounts.get(row.target_account_id) ?? null)
+    : null;
+  const category = row.category_id
+    ? (lookups.categories.get(row.category_id) ?? null)
+    : null;
+  const person = row.person_id
+    ? (lookups.people.get(row.person_id) ?? null)
+    : null;
+  const shop = row.shop_id ? (lookups.shops.get(row.shop_id) ?? null) : null;
 
   // Fix Unknown: If transfer-like but NO destination (no target account AND no person),
   // force it to act like a simple income/expense so we don't show "Account -> Unknown"
   let effectiveBaseType = baseType;
-  if (baseType === 'transfer' && !row.target_account_id && !row.person_id) {
-    effectiveBaseType = row.amount >= 0 ? 'income' : 'expense';
+  if (baseType === "transfer" && !row.target_account_id && !row.person_id) {
+    effectiveBaseType = row.amount >= 0 ? "income" : "expense";
   }
 
   let displayAmount = row.amount;
   if (
     contextAccountId &&
-    effectiveBaseType === 'transfer' &&
+    effectiveBaseType === "transfer" &&
     row.target_account_id === contextAccountId &&
     row.account_id !== contextAccountId
   ) {
     displayAmount = Math.abs(row.amount);
   }
 
-  const displayType: TransactionWithDetails['displayType'] =
-    effectiveBaseType === 'transfer'
+  const displayType: TransactionWithDetails["displayType"] =
+    effectiveBaseType === "transfer"
       ? row.target_account_id && contextAccountId === row.target_account_id
-        ? 'income'
-        : 'expense'
-      : effectiveBaseType === 'income'
-        ? 'income'
-        : 'expense';
+        ? "income"
+        : "expense"
+      : effectiveBaseType === "income"
+        ? "income"
+        : "expense";
 
   const lines = buildSyntheticLines(row, effectiveBaseType, lookups);
 
@@ -347,7 +452,12 @@ function mapTransactionRow(
     amount: displayAmount,
     original_amount: Math.abs(row.amount),
     displayType,
-    display_type: displayType === 'income' ? 'IN' : displayType === 'expense' ? 'OUT' : 'TRANSFER',
+    display_type:
+      displayType === "income"
+        ? "IN"
+        : displayType === "expense"
+          ? "OUT"
+          : "TRANSFER",
     category_name: category?.name,
     category_icon: category?.icon ?? null,
     category_logo_url: category?.logo_url ?? null,
@@ -380,30 +490,37 @@ export async function loadTransactions(options: {
   accountId?: string;
   personId?: string;
   shopId?: string;
+  installmentPlanId?: string;
   limit?: number;
-  context?: 'person' | 'account' | 'general';
+  context?: "person" | "account" | "general";
   includeVoided?: boolean;
 }): Promise<TransactionWithDetails[]> {
   const supabase = createClient();
   let query = supabase
-    .from('transactions')
+    .from("transactions")
     .select(
-      'id, occurred_at, note, status, tag, created_at, created_by, amount, type, account_id, target_account_id, category_id, person_id, metadata, shop_id, persisted_cycle_tag, is_installment, installment_plan_id, cashback_share_percent, cashback_share_fixed, cashback_mode, final_price, transaction_history(count)'
+      "id, occurred_at, note, status, tag, created_at, created_by, amount, type, account_id, target_account_id, category_id, person_id, metadata, shop_id, persisted_cycle_tag, is_installment, installment_plan_id, cashback_share_percent, cashback_share_fixed, cashback_mode, final_price, transaction_history(count)",
     )
-    .order('occurred_at', { ascending: false });
+    .order("occurred_at", { ascending: false });
 
   if (!options.includeVoided) {
-    query = query.neq('status', 'void');
+    query = query.neq("status", "void");
   }
 
   if (options.personId) {
-    query = query.eq('person_id', options.personId);
+    query = query.eq("person_id", options.personId);
   } else if (options.accountId) {
-    query = query.or(`account_id.eq.${options.accountId},target_account_id.eq.${options.accountId}`);
+    query = query.or(
+      `account_id.eq.${options.accountId},target_account_id.eq.${options.accountId}`,
+    );
   }
 
   if (options.shopId) {
-    query = query.eq('shop_id', options.shopId);
+    query = query.eq("shop_id", options.shopId);
+  }
+
+  if (options.installmentPlanId) {
+    query = query.eq("installment_plan_id", options.installmentPlanId);
   }
 
   if (options.limit) {
@@ -413,28 +530,36 @@ export async function loadTransactions(options: {
   const { data, error } = await query;
 
   if (error || !data) {
-    console.error('Error fetching transactions:', error);
+    console.error("Error fetching transactions:", error);
     return [];
   }
 
   const rows = data as FlatTransactionRow[];
   const lookups = await fetchLookups(rows);
-  return rows.map(row => mapTransactionRow(row, { lookups, contextAccountId: options.accountId, contextMode: options.context ?? 'general' }));
+  return rows.map((row) =>
+    mapTransactionRow(row, {
+      lookups,
+      contextAccountId: options.accountId,
+      contextMode: options.context ?? "general",
+    }),
+  );
 }
 
-export async function createTransaction(input: CreateTransactionInput): Promise<string | null> {
+export async function createTransaction(
+  input: CreateTransactionInput,
+): Promise<string | null> {
   try {
     const normalized = await normalizeInput(input);
     const supabase = createClient();
 
     const { data, error } = await supabase
-      .from('transactions')
+      .from("transactions")
       .insert(normalized as any)
       .select()
       .single();
 
     if (error || !data) {
-      console.error('Error creating transaction:', error);
+      console.error("Error creating transaction:", error);
       return null;
     }
 
@@ -442,34 +567,43 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
 
     const affectedAccounts = new Set<string>();
     affectedAccounts.add(normalized.account_id);
-    if (normalized.target_account_id) affectedAccounts.add(normalized.target_account_id);
+    if (normalized.target_account_id)
+      affectedAccounts.add(normalized.target_account_id);
     await recalcForAccounts(affectedAccounts);
 
     // SHEET SYNC: Auto-sync to Google Sheets when person_id exists
     if (transactionId && input.person_id) {
       try {
-        const { syncTransactionToSheet } = await import('./sheet.service');
+        const { syncTransactionToSheet } = await import("./sheet.service");
 
         // Fetch shop name for payload
         let shopName: string | null = null;
         if (input.shop_id) {
-          const { data: shop } = await supabase.from('shops').select('name').eq('id', input.shop_id).single();
+          const { data: shop } = await supabase
+            .from("shops")
+            .select("name")
+            .eq("id", input.shop_id)
+            .single();
           shopName = (shop as any)?.name ?? null;
         }
 
         // Calculate final amount (for debt: amount - cashback)
         const originalAmount = Math.abs(input.amount);
         // DB stores decimal (0.05). Input to this func came from Form which ALREADY divided by 100.
-        // Wait, looking at Form: 
+        // Wait, looking at Form:
         // form.onSubmit: payload.cashback_share_percent = rawPercent / 100;
         // So 'input.cashback_share_percent' IS ALREADY DECIMAL (e.g. 0.05).
 
         const decimalRate = Number(input.cashback_share_percent ?? 0);
         const percentForSheet = decimalRate * 100; // Sheet wants 5 for 5%
 
-        const fixedAmount = Math.max(0, Number(input.cashback_share_fixed ?? 0));
-        const cashback = (originalAmount * decimalRate) + fixedAmount;
-        const finalAmount = input.type === 'debt' ? (originalAmount - cashback) : originalAmount;
+        const fixedAmount = Math.max(
+          0,
+          Number(input.cashback_share_fixed ?? 0),
+        );
+        const cashback = originalAmount * decimalRate + fixedAmount;
+        const finalAmount =
+          input.type === "debt" ? originalAmount - cashback : originalAmount;
 
         const syncPayload = {
           id: transactionId,
@@ -481,19 +615,23 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
           original_amount: originalAmount,
           cashback_share_percent: percentForSheet, // Send 5 (not 0.05)
           cashback_share_fixed: fixedAmount,
-          type: input.type === 'repayment' ? 'In' : 'Debt',
+          type: input.type === "repayment" ? "In" : "Debt",
         };
-        void syncTransactionToSheet(input.person_id, syncPayload as any, 'create').catch(err => {
-          console.error('[Sheet Sync] Create entry failed:', err);
+        void syncTransactionToSheet(
+          input.person_id,
+          syncPayload as any,
+          "create",
+        ).catch((err) => {
+          console.error("[Sheet Sync] Create entry failed:", err);
         });
       } catch (syncError) {
-        console.error('[Sheet Sync] Import or sync failed:', syncError);
+        console.error("[Sheet Sync] Import or sync failed:", syncError);
       }
     }
 
-    revalidatePath('/transactions');
-    revalidatePath('/accounts');
-    revalidatePath('/people');
+    revalidatePath("/transactions");
+    revalidatePath("/accounts");
+    revalidatePath("/people");
     if (input.person_id) {
       revalidatePath(`/people/${input.person_id}`);
     }
@@ -502,54 +640,92 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     if (transactionId) {
       // We need to fetch the full transaction details to pass to the cashback service
       // reusing loadTransactions is the safest way to get derived fields like category_name
-      const { loadTransactions } = await import('./transaction.service'); // self-import to avoid recursion issues if any? actually we are inside it.
+      const { loadTransactions } = await import("./transaction.service"); // self-import to avoid recursion issues if any? actually we are inside it.
       // But loadTransactions is exported.
       // Call internal function if possible, or just use the exported one.
       // Since we are in the module, we can just call loadTransactions directly if not for "this" binding issues (which don't exist in module scope).
       // However, loadTransactions uses `fetchLookups` etc.
 
       // Let's just create a small helper to fetch single transaction or use loadTransactions logic.
-      // Actually, creating a specific fetcher for cashback might be lighter? 
+      // Actually, creating a specific fetcher for cashback might be lighter?
       // loadTransactions is heavy.
       // But for correctness of "category_name" (which is needed for tiered cashback), we need the join.
       // Let's us loadTransactions for now, it's fine for a single item.
       try {
-        const [txn] = await loadTransactions({ limit: 1, accountId: normalized.account_id });
-        // We can't filter by ID in loadTransactions currently except via filter logic... 
+        const [txn] = await loadTransactions({
+          limit: 1,
+          accountId: normalized.account_id,
+        });
+        // We can't filter by ID in loadTransactions currently except via filter logic...
         // loadTransactions options are limited.
         // Let's just add a quick helper or fetch it manually.
 
         // Actually, let's just fetch what we need manually to avoid overhead.
         const supabase = createClient();
-        const { data: rawTxn } = await supabase.from('transactions').select('*, categories(name)').eq('id', transactionId).single();
+        const { data: rawTxn } = await supabase
+          .from("transactions")
+          .select("*, categories(name)")
+          .eq("id", transactionId)
+          .single();
         if (rawTxn) {
-          const txnShape: any = { ...rawTxn, category_name: (rawTxn as any).categories?.name };
+          const txnShape: any = {
+            ...rawTxn,
+            category_name: (rawTxn as any).categories?.name,
+          };
           await upsertTransactionCashback(txnShape);
         }
       } catch (cbError) {
-        console.error('Failed to upsert cashback entry:', cbError);
+        console.error("Failed to upsert cashback entry:", cbError);
+      }
+
+      // INSTALLMENT INTEGRATION: Process Monthly Payment
+      const meta = normalized.metadata as any;
+      if (meta && meta.installment_id) {
+        try {
+          const { processMonthlyPayment } =
+            await import("./installment.service");
+          await processMonthlyPayment(
+            meta.installment_id,
+            Math.abs(normalized.amount),
+          );
+          revalidatePath("/installments");
+        } catch (instError) {
+          console.error("Failed to process installment payment:", instError);
+        }
+      }
+
+      // Phase 7X: Auto-Settle Installment
+      if (normalized.installment_plan_id) {
+        import("./installment.service").then(({ checkAndAutoSettleInstallment }) => {
+          checkAndAutoSettleInstallment(normalized.installment_plan_id!);
+        });
       }
     }
 
     return transactionId;
   } catch (error) {
-    console.error('Unhandled error in createTransaction:', error);
+    console.error("Unhandled error in createTransaction:", error);
     return null;
   }
 }
 
-export async function updateTransaction(id: string, input: CreateTransactionInput): Promise<boolean> {
+export async function updateTransaction(
+  id: string,
+  input: CreateTransactionInput,
+): Promise<boolean> {
   const supabase = createClient();
 
   // Fetch existing transaction INCLUDING person_id for sheet sync
   const { data: existing, error: fetchError } = await supabase
-    .from('transactions')
-    .select('id, occurred_at, note, tag, account_id, target_account_id, person_id, amount, type, shop_id, cashback_share_percent, cashback_share_fixed')
-    .eq('id', id)
+    .from("transactions")
+    .select(
+      "id, occurred_at, note, tag, account_id, target_account_id, person_id, amount, type, shop_id, cashback_share_percent, cashback_share_fixed",
+    )
+    .eq("id", id)
     .maybeSingle();
 
   if (fetchError || !existing) {
-    console.error('Failed to load transaction before update:', fetchError);
+    console.error("Failed to load transaction before update:", fetchError);
     return false;
   }
 
@@ -557,33 +733,35 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   try {
     normalized = await normalizeInput(input);
   } catch (err) {
-    console.error('Invalid transaction input:', err);
+    console.error("Invalid transaction input:", err);
     return false;
   }
 
   if (!normalized) {
-    console.error('Invalid input for transaction update');
+    console.error("Invalid input for transaction update");
     return false;
   }
 
   // LOG HISTORY BEFORE UPDATE
-  await logHistory(id, 'edit', existing);
+  await logHistory(id, "edit", existing);
 
-  const { error } = await (supabase
-    .from('transactions')
-    .update as any)(normalized)
-    .eq('id', id);
+  const { error } = await (supabase.from("transactions").update as any)(
+    normalized,
+  ).eq("id", id);
 
   if (error) {
-    console.error('Failed to update transaction:', error);
+    console.error("Failed to update transaction:", error);
     return false;
   }
 
   const affectedAccounts = new Set<string>();
-  if ((existing as any).account_id) affectedAccounts.add((existing as any).account_id);
-  if ((existing as any).target_account_id) affectedAccounts.add((existing as any).target_account_id);
+  if ((existing as any).account_id)
+    affectedAccounts.add((existing as any).account_id);
+  if ((existing as any).target_account_id)
+    affectedAccounts.add((existing as any).target_account_id);
   affectedAccounts.add(normalized.account_id);
-  if (normalized.target_account_id) affectedAccounts.add(normalized.target_account_id);
+  if (normalized.target_account_id)
+    affectedAccounts.add(normalized.target_account_id);
   await recalcForAccounts(affectedAccounts);
 
   const oldPersonId = (existing as any).person_id;
@@ -591,23 +769,30 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
 
   // SHEET SYNC: Auto-sync to Google Sheets when person_id exists
   try {
-    const { syncTransactionToSheet } = await import('./sheet.service');
+    const { syncTransactionToSheet } = await import("./sheet.service");
 
-    console.log('[Sheet Sync] updateTransaction sync triggered', {
+    console.log("[Sheet Sync] updateTransaction sync triggered", {
       id,
       oldPersonId,
       newPersonId,
-      samePerson: oldPersonId === newPersonId
+      samePerson: oldPersonId === newPersonId,
     });
 
     // OPTIMIZATION: If person is the same, use 'update' action (mapped to 'edit')
     if (oldPersonId && newPersonId && oldPersonId === newPersonId) {
-      console.log('[Sheet Sync] Updating existing entry for person:', newPersonId);
+      console.log(
+        "[Sheet Sync] Updating existing entry for person:",
+        newPersonId,
+      );
 
       // Fetch shop name for payload
       let shopName: string | null = null;
       if (input.shop_id) {
-        const { data: shop } = await supabase.from('shops').select('name').eq('id', input.shop_id).single();
+        const { data: shop } = await supabase
+          .from("shops")
+          .select("name")
+          .eq("id", input.shop_id)
+          .single();
         shopName = (shop as any)?.name ?? null;
       }
 
@@ -618,8 +803,9 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       const percentForSheet = decimalRate * 100; // Sheet wants 5 for 5%
 
       const fixedAmount = Math.max(0, Number(input.cashback_share_fixed ?? 0));
-      const cashback = (originalAmount * decimalRate) + fixedAmount;
-      const finalAmount = input.type === 'debt' ? (originalAmount - cashback) : originalAmount;
+      const cashback = originalAmount * decimalRate + fixedAmount;
+      const finalAmount =
+        input.type === "debt" ? originalAmount - cashback : originalAmount;
 
       const updatePayload = {
         id,
@@ -631,22 +817,25 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
         original_amount: originalAmount,
         cashback_share_percent: percentForSheet, // Send 5
         cashback_share_fixed: fixedAmount,
-        type: input.type === 'repayment' ? 'In' : 'Debt',
+        type: input.type === "repayment" ? "In" : "Debt",
       };
 
       try {
-        await syncTransactionToSheet(newPersonId, updatePayload as any, 'update');
-        console.log('[Sheet Sync] Update completed');
+        await syncTransactionToSheet(
+          newPersonId,
+          updatePayload as any,
+          "update",
+        );
+        console.log("[Sheet Sync] Update completed");
       } catch (err) {
-        console.error('[Sheet Sync] Update entry failed:', err);
+        console.error("[Sheet Sync] Update entry failed:", err);
       }
-
     } else {
       // Logic for DIFFERENT person (or one added/removed): Delete Old -> Create New
 
       // 1. Delete old entry if existed
       if (oldPersonId) {
-        console.log('[Sheet Sync] Deleting old entry for person:', oldPersonId);
+        console.log("[Sheet Sync] Deleting old entry for person:", oldPersonId);
         const deletePayload = {
           id: (existing as any).id,
           occurred_at: (existing as any).occurred_at,
@@ -655,20 +844,28 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
           amount: (existing as any).amount ?? 0,
         };
         try {
-          await syncTransactionToSheet(oldPersonId, deletePayload as any, 'delete');
-          console.log('[Sheet Sync] Delete completed');
+          await syncTransactionToSheet(
+            oldPersonId,
+            deletePayload as any,
+            "delete",
+          );
+          console.log("[Sheet Sync] Delete completed");
         } catch (err) {
-          console.error('[Sheet Sync] Delete old entry failed:', err);
+          console.error("[Sheet Sync] Delete old entry failed:", err);
         }
       }
 
       // 2. Create new entry if exists (AFTER delete)
       if (newPersonId) {
-        console.log('[Sheet Sync] Creating new entry for person:', newPersonId);
+        console.log("[Sheet Sync] Creating new entry for person:", newPersonId);
 
         let shopName: string | null = null;
         if (input.shop_id) {
-          const { data: shop } = await supabase.from('shops').select('name').eq('id', input.shop_id).single();
+          const { data: shop } = await supabase
+            .from("shops")
+            .select("name")
+            .eq("id", input.shop_id)
+            .single();
           shopName = (shop as any)?.name ?? null;
         }
 
@@ -676,9 +873,13 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
         const decimalRate = Number(input.cashback_share_percent ?? 0);
         const percentForSheet = decimalRate * 100;
 
-        const fixedAmount = Math.max(0, Number(input.cashback_share_fixed ?? 0));
-        const cashback = (originalAmount * decimalRate) + fixedAmount;
-        const finalAmount = input.type === 'debt' ? (originalAmount - cashback) : originalAmount;
+        const fixedAmount = Math.max(
+          0,
+          Number(input.cashback_share_fixed ?? 0),
+        );
+        const cashback = originalAmount * decimalRate + fixedAmount;
+        const finalAmount =
+          input.type === "debt" ? originalAmount - cashback : originalAmount;
 
         const createPayload = {
           id,
@@ -690,31 +891,51 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
           original_amount: originalAmount,
           cashback_share_percent: percentForSheet,
           cashback_share_fixed: fixedAmount,
-          type: input.type === 'repayment' ? 'In' : 'Debt',
+          type: input.type === "repayment" ? "In" : "Debt",
         };
 
         try {
-          await syncTransactionToSheet(newPersonId, createPayload as any, 'create');
-          console.log('[Sheet Sync] Create new entry completed');
+          await syncTransactionToSheet(
+            newPersonId,
+            createPayload as any,
+            "create",
+          );
+          console.log("[Sheet Sync] Create new entry completed");
         } catch (err) {
-          console.error('[Sheet Sync] Create new entry failed:', err);
+          console.error("[Sheet Sync] Create new entry failed:", err);
         }
       }
     }
   } catch (sheetError) {
-    console.error('[Sheet Sync] Overall error:', sheetError);
+    console.error("[Sheet Sync] Overall error:", sheetError);
   }
 
   // CASHBACK INTEGRATION (Update)
   try {
     const supabase = createClient();
-    const { data: rawTxn } = await supabase.from('transactions').select('*, categories(name)').eq('id', id).single();
+    const { data: rawTxn } = await supabase
+      .from("transactions")
+      .select("*, categories(name)")
+      .eq("id", id)
+      .single();
     if (rawTxn) {
-      const txnShape: any = { ...rawTxn, category_name: (rawTxn as any).categories?.name };
+      const txnShape: any = {
+        ...rawTxn,
+        category_name: (rawTxn as any).categories?.name,
+      };
       await upsertTransactionCashback(txnShape);
     }
   } catch (cbError) {
-    console.error('Failed to update cashback entry:', cbError);
+    console.error("Failed to update cashback entry:", cbError);
+  }
+
+  // Phase 7X: Auto-Settle Installment (Update)
+  if (normalized.installment_plan_id) {
+    // We should also check the OLD plan if changed? 
+    // For now just check current.
+    import("./installment.service").then(({ checkAndAutoSettleInstallment }) => {
+      checkAndAutoSettleInstallment(normalized!.installment_plan_id!);
+    });
   }
 
   return true;
@@ -722,34 +943,44 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
 
 export async function deleteTransaction(id: string): Promise<boolean> {
   const supabase = createClient();
-  const { data: existing } = await supabase
-    .from('transactions')
-    .select('account_id, target_account_id, person_id')
-    .eq('id', id)
+  // Fetch existing transaction INCLUDING person_id for sheet sync and installment_plan_id for auto-settle
+  const { data: existing, error: fetchError } = await supabase
+    .from("transactions")
+    .select("account_id, target_account_id, person_id, installment_plan_id")
+    .eq("id", id)
     .maybeSingle();
 
-  const { error } = await supabase.from('transactions').delete().eq('id', id);
+  const { error } = await supabase.from("transactions").delete().eq("id", id);
   if (error) {
-    console.error('Error deleting transaction:', error);
+    console.error("Error deleting transaction:", error);
     return false;
   }
 
   const affected = new Set<string>();
   if ((existing as any)?.account_id) affected.add((existing as any).account_id);
-  if ((existing as any)?.target_account_id) affected.add((existing as any).target_account_id);
+  if ((existing as any)?.target_account_id)
+    affected.add((existing as any).target_account_id);
   await recalcForAccounts(affected);
 
-  revalidatePath('/transactions');
-  revalidatePath('/accounts');
-  revalidatePath('/people');
+  revalidatePath("/transactions");
+  revalidatePath("/accounts");
+  revalidatePath("/people");
   if ((existing as any)?.person_id) {
     revalidatePath(`/people/${(existing as any).person_id}`);
   }
+
+  // Phase 7X: Auto-Settle Installment (Delete)
+  if ((existing as any)?.installment_plan_id) {
+    import("./installment.service").then(({ checkAndAutoSettleInstallment }) => {
+      checkAndAutoSettleInstallment((existing as any).installment_plan_id);
+    });
+  }
+
   // CASHBACK INTEGRATION
   try {
     await removeTransactionCashback(id);
   } catch (cbError) {
-    console.error('Failed to remove cashback entry:', cbError);
+    console.error("Failed to remove cashback entry:", cbError);
   }
 
   return true;
@@ -758,9 +989,9 @@ export async function deleteTransaction(id: string): Promise<boolean> {
 export async function voidTransaction(id: string): Promise<boolean> {
   const supabase = createClient();
   const { data: existing } = await supabase
-    .from('transactions')
-    .select('account_id, target_account_id, metadata, status, person_id')
-    .eq('id', id)
+    .from("transactions")
+    .select("account_id, target_account_id, metadata, status, person_id")
+    .eq("id", id)
     .maybeSingle();
 
   // 1. Guard: Check for children (linked transactions) - STRICT CHECK
@@ -772,43 +1003,55 @@ export async function voidTransaction(id: string): Promise<boolean> {
 
   // First check linked_transaction_id column directly
   const { data: linkedChildren } = await supabase
-    .from('transactions')
-    .select('id, status')
-    .neq('status', 'void')
-    .eq('linked_transaction_id', id)
+    .from("transactions")
+    .select("id, status")
+    .neq("status", "void")
+    .eq("linked_transaction_id", id)
     .limit(1);
 
   if (linkedChildren && linkedChildren.length > 0) {
-    throw new Error("Không thể hủy giao dịch này vì đã có giao dịch liên quan (VD: Đã xác nhận tiền về). Vui lòng hủy giao dịch nối tiếp trước.");
+    throw new Error(
+      "Không thể hủy giao dịch này vì đã có giao dịch liên quan (VD: Đã xác nhận tiền về). Vui lòng hủy giao dịch nối tiếp trước.",
+    );
   }
 
   // Also check metadata fields using contains filter (for JSONB)
   const { data: metaChildren } = await supabase
-    .from('transactions')
-    .select('id, status, metadata')
-    .neq('status', 'void')
-    .or(`metadata.cs.{"original_transaction_id":"${id}"},metadata.cs.{"pending_refund_id":"${id}"}`)
+    .from("transactions")
+    .select("id, status, metadata")
+    .neq("status", "void")
+    .or(
+      `metadata.cs.{"original_transaction_id":"${id}"},metadata.cs.{"pending_refund_id":"${id}"}`,
+    )
     .limit(1);
 
   if (metaChildren && metaChildren.length > 0) {
-    throw new Error("Không thể hủy giao dịch này vì đã có giao dịch liên quan (VD: Đã xác nhận tiền về). Vui lòng hủy giao dịch nối tiếp trước.");
+    throw new Error(
+      "Không thể hủy giao dịch này vì đã có giao dịch liên quan (VD: Đã xác nhận tiền về). Vui lòng hủy giao dịch nối tiếp trước.",
+    );
   }
 
   // 2. Log History
-  await logHistory(id, 'void', existing);
+  await logHistory(id, "void", existing);
 
   // 3. Rollback Logic (Refund Chain)
   const meta = ((existing as any)?.metadata || {}) as any;
 
   // Case A: Voiding Confirmation (GD3) -> Revert Pending Refund (GD2) to 'pending'
   if (meta.is_refund_confirmation && meta.pending_refund_id) {
-    await (supabase.from('transactions').update as any)({ status: 'pending' }).eq('id', meta.pending_refund_id);
+    await (supabase.from("transactions").update as any)({
+      status: "pending",
+    }).eq("id", meta.pending_refund_id);
   }
 
   // Case B: Voiding Refund Request (GD2) -> Revert Original (GD1) to 'posted' & Clear Metadata
   // Only if NOT a confirmation (which also has original_id)
   if (meta.original_transaction_id && !meta.is_refund_confirmation) {
-    const { data: gd1 } = await supabase.from('transactions').select('metadata').eq('id', meta.original_transaction_id).single();
+    const { data: gd1 } = await supabase
+      .from("transactions")
+      .select("metadata")
+      .eq("id", meta.original_transaction_id)
+      .single();
     if (gd1) {
       const newMeta = { ...((gd1 as any).metadata || {}) };
       delete newMeta.refund_status;
@@ -816,35 +1059,35 @@ export async function voidTransaction(id: string): Promise<boolean> {
       delete newMeta.has_refund_request;
       delete newMeta.refund_request_id;
 
-      await (supabase.from('transactions').update as any)({
-        status: 'posted',
-        metadata: newMeta
-      }).eq('id', meta.original_transaction_id);
+      await (supabase.from("transactions").update as any)({
+        status: "posted",
+        metadata: newMeta,
+      }).eq("id", meta.original_transaction_id);
     }
   }
 
   // Simplified Void: Just update status. No need to join lines which might be complex or deleted.
-  const { error } = await (supabase
-    .from('transactions')
-    .update as any)({ status: 'void' })
-    .eq('id', id);
+  const { error } = await (supabase.from("transactions").update as any)({
+    status: "void",
+  }).eq("id", id);
 
   if (error) {
-    console.error('Failed to void transaction:', error);
+    console.error("Failed to void transaction:", error);
     return false;
   }
 
   const affected = new Set<string>();
   if ((existing as any)?.account_id) affected.add((existing as any).account_id);
-  if ((existing as any)?.target_account_id) affected.add((existing as any).target_account_id);
+  if ((existing as any)?.target_account_id)
+    affected.add((existing as any).target_account_id);
   // Also try to trigger sync delete to sheet if possible, but service method might not have full context.
   // The ACTION layer handles sheet sync better. Service is low-level.
 
   await recalcForAccounts(affected);
 
-  revalidatePath('/transactions');
-  revalidatePath('/accounts');
-  revalidatePath('/people');
+  revalidatePath("/transactions");
+  revalidatePath("/accounts");
+  revalidatePath("/people");
   if ((existing as any)?.person_id) {
     revalidatePath(`/people/${(existing as any).person_id}`);
   }
@@ -853,7 +1096,7 @@ export async function voidTransaction(id: string): Promise<boolean> {
   try {
     await removeTransactionCashback(id);
   } catch (cbError) {
-    console.error('Failed to remove cashback entry (void):', cbError);
+    console.error("Failed to remove cashback entry (void):", cbError);
   }
 
   return true;
@@ -862,53 +1105,64 @@ export async function voidTransaction(id: string): Promise<boolean> {
 export async function restoreTransaction(id: string): Promise<boolean> {
   const supabase = createClient();
   const { data: existing } = await supabase
-    .from('transactions')
-    .select('account_id, target_account_id, person_id')
-    .eq('id', id)
+    .from("transactions")
+    .select("account_id, target_account_id, person_id")
+    .eq("id", id)
     .maybeSingle();
 
-  const { error } = await (supabase
-    .from('transactions')
-    .update as any)({ status: 'posted' })
-    .eq('id', id);
+  const { error } = await (supabase.from("transactions").update as any)({
+    status: "posted",
+  }).eq("id", id);
 
   if (error) {
-    console.error('Failed to restore transaction:', error);
+    console.error("Failed to restore transaction:", error);
     return false;
   }
 
   const affected = new Set<string>();
   if ((existing as any)?.account_id) affected.add((existing as any).account_id);
-  if ((existing as any)?.target_account_id) affected.add((existing as any).target_account_id);
+  if ((existing as any)?.target_account_id)
+    affected.add((existing as any).target_account_id);
   await recalcForAccounts(affected);
 
-  revalidatePath('/transactions');
-  revalidatePath('/accounts');
-  revalidatePath('/people');
+  revalidatePath("/transactions");
+  revalidatePath("/accounts");
+  revalidatePath("/people");
   if ((existing as any)?.person_id) {
     revalidatePath(`/people/${(existing as any).person_id}`);
   }
 
-
   // CASHBACK INTEGRATION (Restore)
   try {
-    const { data: rawTxn } = await supabase.from('transactions').select('*, categories(name)').eq('id', id).single();
+    const { data: rawTxn } = await supabase
+      .from("transactions")
+      .select("*, categories(name)")
+      .eq("id", id)
+      .single();
     if (rawTxn) {
-      const txnShape: any = { ...rawTxn, category_name: (rawTxn as any).categories?.name };
+      const txnShape: any = {
+        ...rawTxn,
+        category_name: (rawTxn as any).categories?.name,
+      };
       await upsertTransactionCashback(txnShape);
     }
   } catch (cbError) {
-    console.error('Failed to restore cashback entry:', cbError);
+    console.error("Failed to restore cashback entry:", cbError);
   }
 
   return true;
 }
 
-export async function getRecentTransactions(limit: number = 10): Promise<TransactionWithDetails[]> {
+export async function getRecentTransactions(
+  limit: number = 10,
+): Promise<TransactionWithDetails[]> {
   return loadTransactions({ limit });
 }
 
-export async function getTransactionsByShop(shopId: string, limit: number = 50): Promise<TransactionWithDetails[]> {
+export async function getTransactionsByShop(
+  shopId: string,
+  limit: number = 50,
+): Promise<TransactionWithDetails[]> {
   return loadTransactions({ shopId, limit });
 }
 
@@ -916,16 +1170,16 @@ type UnifiedTransactionParams = {
   accountId?: string;
   personId?: string;
   limit?: number;
-  context?: 'person' | 'account';
+  context?: "person" | "account";
   includeVoided?: boolean;
 };
 
 export async function getUnifiedTransactions(
   accountOrOptions?: string | UnifiedTransactionParams,
-  limitArg: number = 50
+  limitArg: number = 50,
 ): Promise<TransactionWithDetails[]> {
   const parsed =
-    typeof accountOrOptions === 'object' && accountOrOptions !== null
+    typeof accountOrOptions === "object" && accountOrOptions !== null
       ? accountOrOptions
       : { accountId: accountOrOptions as string | undefined, limit: limitArg };
 
@@ -934,7 +1188,7 @@ export async function getUnifiedTransactions(
     personId: parsed.personId,
     limit: parsed.limit ?? limitArg,
     context: parsed.context,
-    includeVoided: parsed.includeVoided
+    includeVoided: parsed.includeVoided,
   });
 }
 
@@ -956,35 +1210,39 @@ export type PendingRefundItem = {
 export async function requestRefund(
   transactionId: string,
   amount: number,
-  isPartial: boolean
+  isPartial: boolean,
 ): Promise<{ success: boolean; refundTransactionId?: string; error?: string }> {
   const supabase = createClient();
 
   // 1. Fetch original transaction to get metadata
   const { data: originalTxn, error: fetchError } = await supabase
-    .from('transactions')
-    .select('*')
-    .eq('id', transactionId)
+    .from("transactions")
+    .select("*")
+    .eq("id", transactionId)
     .single();
 
   if (fetchError || !originalTxn) {
-    return { success: false, error: 'Original transaction not found' };
+    return { success: false, error: "Original transaction not found" };
   }
 
   const originalRow = originalTxn as FlatTransactionRow;
   const originalMeta = (originalRow.metadata || {}) as Record<string, any>;
 
   // 1a. Format Note (GD2) - No prefix ID, badges show ID separately
-  const shortId = originalRow.id.split('-')[0].toUpperCase();
-  let formattedNote = `Refund Request: ${originalRow.note ?? ''}`;
+  const shortId = originalRow.id.split("-")[0].toUpperCase();
+  let formattedNote = `Refund Request: ${originalRow.note ?? ""}`;
 
   // If original was debt (had person_id), append Cancel Debt info
   if (originalRow.person_id) {
-    // Fetch person name if possible, or just append generic. 
+    // Fetch person name if possible, or just append generic.
     // We can try to fetch, or just accept that we might not have name handy here without extra query.
-    // But wait, we can do a quick lookup if we want, or just "Cancel Debt". 
+    // But wait, we can do a quick lookup if we want, or just "Cancel Debt".
     // "Cancel Debt: ${PersonName}" was requested.
-    const { data: person } = await supabase.from('profiles').select('name').eq('id', originalRow.person_id).single();
+    const { data: person } = await supabase
+      .from("profiles")
+      .select("name")
+      .eq("id", originalRow.person_id)
+      .single();
     if (person) {
       formattedNote += ` - Cancel Debt: ${(person as any).name}`;
     }
@@ -996,27 +1254,27 @@ export async function requestRefund(
   const refundTransaction = {
     occurred_at: new Date().toISOString(),
     amount: Math.abs(amount), // Ensure positive for Income
-    type: 'income',
-    account_id: '99999999-9999-9999-9999-999999999999', // REFUND_PENDING_ACCOUNT_ID
-    category_id: 'e0000000-0000-0000-0000-000000000095', // REFUND_CAT_ID (System Category)
+    type: "income",
+    account_id: "99999999-9999-9999-9999-999999999999", // REFUND_PENDING_ACCOUNT_ID
+    category_id: "e0000000-0000-0000-0000-000000000095", // REFUND_CAT_ID (System Category)
     note: formattedNote,
-    status: 'pending', // Yellow badge for pending
+    status: "pending", // Yellow badge for pending
     metadata: {
       original_transaction_id: transactionId,
-      refund_type: isPartial ? 'partial' : 'full',
+      refund_type: isPartial ? "partial" : "full",
       original_note: originalRow.note,
     },
-    created_by: null
+    created_by: null,
   };
 
   const { data: newRefund, error } = await supabase
-    .from('transactions')
+    .from("transactions")
     .insert(refundTransaction as any)
     .select()
     .single();
 
   if (error || !newRefund) {
-    console.error('Failed to create refund transaction:', error);
+    console.error("Failed to create refund transaction:", error);
     return { success: false, error: error?.message };
   }
 
@@ -1026,11 +1284,13 @@ export async function requestRefund(
   const updatePayload: any = {
     metadata: {
       ...originalMeta,
-      refund_status: isFullRefund ? 'refunded' : 'requested',
-      refunded_amount: originalMeta.refunded_amount ? originalMeta.refunded_amount + amount : amount,
+      refund_status: isFullRefund ? "refunded" : "requested",
+      refunded_amount: originalMeta.refunded_amount
+        ? originalMeta.refunded_amount + amount
+        : amount,
       has_refund_request: true,
-      refund_request_id: (newRefund as any).id
-    }
+      refund_request_id: (newRefund as any).id,
+    },
   };
 
   // UNLINK PERSON IF FULL REFUND
@@ -1041,8 +1301,11 @@ export async function requestRefund(
     if (originalRow.person_id) {
       // SHEET SYNC: Trigger DELETE from sheet because we are unlinking the person
       try {
-        const { syncTransactionToSheet } = await import('./sheet.service');
-        console.log('[Sheet Sync] Full Refund - Deleting entry for person:', originalRow.person_id);
+        const { syncTransactionToSheet } = await import("./sheet.service");
+        console.log(
+          "[Sheet Sync] Full Refund - Deleting entry for person:",
+          originalRow.person_id,
+        );
 
         // We need to delete the ORIGINAL transaction from the sheet
         const deletePayload = {
@@ -1054,18 +1317,26 @@ export async function requestRefund(
         };
 
         // We use void to not block the main transaction update, but we log errors
-        void syncTransactionToSheet(originalRow.person_id, deletePayload as any, 'delete').catch(err => {
-          console.error('[Sheet Sync] Refund delete failed:', err);
+        void syncTransactionToSheet(
+          originalRow.person_id,
+          deletePayload as any,
+          "delete",
+        ).catch((err) => {
+          console.error("[Sheet Sync] Refund delete failed:", err);
         });
       } catch (syncErr) {
-        console.error('[Sheet Sync] Failed to import sync service:', syncErr);
+        console.error("[Sheet Sync] Failed to import sync service:", syncErr);
       }
 
       // "Cancel Debt: {Name}" logic was used for GD2 note. We can reuse 'person' data.
-      const { data: personP } = await supabase.from('profiles').select('name').eq('id', originalRow.person_id).single();
+      const { data: personP } = await supabase
+        .from("profiles")
+        .select("name")
+        .eq("id", originalRow.person_id)
+        .single();
       const personName = (personP as any)?.name;
       if (personName) {
-        const currentNote = originalRow.note || '';
+        const currentNote = originalRow.note || "";
         if (!currentNote.includes(`(Debtor: ${personName})`)) {
           updatePayload.note = `${currentNote} - (Debtor: ${personName})`;
         }
@@ -1074,49 +1345,59 @@ export async function requestRefund(
   }
 
   if (isFullRefund) {
-    updatePayload.status = 'waiting_refund'; // Orange/Amber badge
+    updatePayload.status = "waiting_refund"; // Orange/Amber badge
   }
 
-  await (supabase.from('transactions').update as any)(updatePayload).eq('id', transactionId);
+  await (supabase.from("transactions").update as any)(updatePayload).eq(
+    "id",
+    transactionId,
+  );
 
-  revalidatePath('/transactions');
+  revalidatePath("/transactions");
   return { success: true, refundTransactionId: (newRefund as any).id };
 }
 
 export async function confirmRefund(
   pendingTransactionId: string,
-  targetAccountId: string
-): Promise<{ success: boolean; confirmTransactionId?: string; error?: string }> {
+  targetAccountId: string,
+): Promise<{
+  success: boolean;
+  confirmTransactionId?: string;
+  error?: string;
+}> {
   const supabase = createClient();
 
   // 1. Fetch the Pending Transaction (GD2)
   const { data: pendingTxn, error: fetchError } = await supabase
-    .from('transactions')
-    .select('*')
-    .eq('id', pendingTransactionId)
+    .from("transactions")
+    .select("*")
+    .eq("id", pendingTransactionId)
     .single();
 
   if (fetchError || !pendingTxn) {
-    return { success: false, error: 'Pending refund transaction not found' };
+    return { success: false, error: "Pending refund transaction not found" };
   }
 
   const pendingRow = pendingTxn as FlatTransactionRow;
   const pendingMeta = (pendingRow.metadata || {}) as Record<string, any>;
 
   // Extract Short ID from Original Transaction ID (if available)
-  const originalTxnId = pendingMeta.original_transaction_id as string | undefined;
-  const shortId = originalTxnId ? originalTxnId.substring(0, 4).toUpperCase() : '????';
+  const originalTxnId = pendingMeta.original_transaction_id as
+    | string
+    | undefined;
+  const shortId = originalTxnId
+    ? originalTxnId.substring(0, 4).toUpperCase()
+    : "????";
 
   // 2. Update GD2 -> Completed
-  const { error: updateError } = await (supabase
-    .from('transactions')
-    .update as any)({
-      status: 'completed', // Green/Done
-    })
-    .eq('id', pendingTransactionId);
+  const { error: updateError } = await (
+    supabase.from("transactions").update as any
+  )({
+    status: "completed", // Green/Done
+  }).eq("id", pendingTransactionId);
 
   if (updateError) {
-    console.error('Confirm refund failed (update pending):', updateError);
+    console.error("Confirm refund failed (update pending):", updateError);
     return { success: false, error: updateError.message };
   }
 
@@ -1124,42 +1405,50 @@ export async function confirmRefund(
   const confirmationTransaction = {
     occurred_at: new Date().toISOString(),
     amount: Math.abs(pendingRow.amount),
-    type: 'income',
+    type: "income",
     account_id: targetAccountId, // The Real Bank
-    category_id: 'e0000000-0000-0000-0000-000000000095', // REFUND_CAT_ID
+    category_id: "e0000000-0000-0000-0000-000000000095", // REFUND_CAT_ID
     note: `Refund Received`,
-    status: 'posted',
+    status: "posted",
     created_by: null,
     // linked_transaction_id column = GD2's ID so void guard can detect it
     linked_transaction_id: pendingTransactionId,
     metadata: {
       original_transaction_id: pendingMeta.original_transaction_id,
       pending_refund_id: pendingTransactionId,
-      is_refund_confirmation: true
-    }
+      is_refund_confirmation: true,
+    },
   };
 
   const { error: createError } = await supabase
-    .from('transactions')
+    .from("transactions")
     .insert(confirmationTransaction as any);
 
   if (createError) {
-    console.error('Confirm refund failed (create confirmation):', createError);
+    console.error("Confirm refund failed (create confirmation):", createError);
     // Rollback GD2 update theoretically, but let's just return error for now
     return { success: false, error: createError.message };
   }
 
-  await recalcForAccounts(new Set([targetAccountId, '99999999-9999-9999-9999-999999999999']));
+  await recalcForAccounts(
+    new Set([targetAccountId, "99999999-9999-9999-9999-999999999999"]),
+  );
 
   // Also finalize the original transaction if it was full refund?
   if (pendingMeta.original_transaction_id) {
-    const { data: original } = await supabase.from('transactions').select('status, metadata').eq('id', pendingMeta.original_transaction_id).single();
-    if (original && (original as any).status === 'waiting_refund') {
-      await (supabase.from('transactions').update as any)({ status: 'refunded' }).eq('id', pendingMeta.original_transaction_id);
+    const { data: original } = await supabase
+      .from("transactions")
+      .select("status, metadata")
+      .eq("id", pendingMeta.original_transaction_id)
+      .single();
+    if (original && (original as any).status === "waiting_refund") {
+      await (supabase.from("transactions").update as any)({
+        status: "refunded",
+      }).eq("id", pendingMeta.original_transaction_id);
     }
   }
 
-  revalidatePath('/transactions');
+  revalidatePath("/transactions");
 
   return { success: true };
 }
@@ -1167,11 +1456,11 @@ export async function confirmRefund(
 export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
   const supabase = createClient();
   const { data, error } = await supabase
-    .from('transactions')
-    .select('*')
-    .eq('account_id', '99999999-9999-9999-9999-999999999999')
-    .eq('status', 'pending') // Only show actual pending, not completed ones history
-    .order('occurred_at', { ascending: false });
+    .from("transactions")
+    .select("*")
+    .eq("account_id", "99999999-9999-9999-9999-999999999999")
+    .eq("status", "pending") // Only show actual pending, not completed ones history
+    .order("occurred_at", { ascending: false });
 
   if (error || !data) return [];
 

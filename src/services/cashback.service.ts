@@ -628,6 +628,86 @@ export async function getTransactionCashbackPolicyExplanation(transactionId: str
 }
 
 /**
+ * MF7.3: Simulates cashback for a potential transaction (Preview Mode).
+ * Does not persist any data.
+ */
+export async function simulateCashback(params: {
+  accountId: string
+  amount: number
+  categoryId?: string
+  occurredAt?: string
+}) {
+  const supabase = createClient();
+  const { accountId, amount, categoryId, occurredAt } = params;
+  const date = occurredAt ? new Date(occurredAt) : new Date();
+
+  // 1. Get Account Config
+  const { data: account } = await supabase
+    .from('accounts')
+    .select('id, name, cashback_config, type')
+    .eq('id', accountId)
+    .single();
+
+  if (!account || account.type !== 'credit_card') {
+    return {
+      rate: 0,
+      estimatedReward: 0,
+      metadata: null
+    };
+  }
+
+  const config = parseCashbackConfig(account.cashback_config, accountId);
+  const cycleRange = getCashbackCycleRange(config, date);
+  const cycleTag = getCashbackCycleTag(date, config);
+
+  // 2. Get Current Cycle Totals (Read-Only)
+  // We need to find the correct cycle to know the 'spent_amount' so far.
+  let spentSoFar = 0;
+  if (cycleTag) {
+    const { data: cycle } = await supabase
+      .from('cashback_cycles')
+      .select('spent_amount')
+      .eq('account_id', accountId)
+      .eq('cycle_tag', cycleTag)
+      .maybeSingle();
+
+    spentSoFar = cycle?.spent_amount ?? 0;
+  }
+
+  // 3. Resolve Policy
+  const { resolveCashbackPolicy } = await import('./cashback/policy-resolver');
+
+  // Fetch Category Name if ID provided (for pretty reason text)
+  let categoryName: string | undefined = undefined;
+  if (categoryId) {
+    const { data: cat } = await supabase.from('categories').select('name').eq('id', categoryId).single();
+    categoryName = cat?.name;
+  }
+
+  const policy = resolveCashbackPolicy({
+    account,
+    categoryId,
+    amount,
+    cycleTotals: { spent: spentSoFar },
+    categoryName
+  });
+
+  const estimatedReward = amount * policy.rate;
+  // Apply Rule Max Reward Cap if exists
+  const finalReward = (policy.maxReward !== undefined && policy.maxReward !== null)
+    ? Math.min(estimatedReward, policy.maxReward)
+    : estimatedReward;
+
+  return {
+    rate: policy.rate,
+    estimatedReward: finalReward,
+    metadata: normalizePolicyMetadata(policy.metadata),
+    maxReward: policy.maxReward,
+    isCapped: finalReward < estimatedReward
+  };
+}
+
+/**
  * Fetches all cashback history for an account (debugging/analysis usage).
  */
 export async function getAllCashbackHistory(accountId: string): Promise<CashbackCard | null> {
@@ -798,7 +878,6 @@ export async function recomputeAccountCashback(accountId: string, monthsBack?: n
 export async function getCashbackCycleOptions(accountId: string, limit: number = 12) {
   // DEBUG: Use Admin Client to bypass RLS
   const supabase = createAdminClient();
-
   const { data: cycles } = await supabase
     .from('cashback_cycles')
     .select('cycle_tag')
@@ -875,3 +954,6 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
     };
   });
 }
+
+
+

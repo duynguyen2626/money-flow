@@ -278,12 +278,12 @@ export function UnifiedTransactionTable({
 }: UnifiedTransactionTableProps) {
   const tableData = data ?? transactions ?? []
   const defaultColumns: ColumnConfig[] = [
-    { key: "date", label: "Date", defaultWidth: 80, minWidth: 70 },
+    { key: "date", label: "Date", defaultWidth: 70, minWidth: 60 },
     { key: "shop", label: "Note", defaultWidth: 200, minWidth: 150 },
-    { key: "category", label: "Category", defaultWidth: 150 },
     { key: "account", label: "Accounts ➜ People", defaultWidth: 180, minWidth: 180 },
     { key: "amount", label: "Amount", defaultWidth: 100 },
     { key: "final_price", label: "Final Price", defaultWidth: 100 },
+    { key: "category", label: "Type / Category", defaultWidth: 120 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
   ]
@@ -1486,34 +1486,35 @@ export function UnifiedTransactionTable({
                     })
                     const dateStr = dateFormatter.format(d)
 
+                    // Determine badge color for Date
+                    let dateBadgeColors = "bg-slate-50 text-slate-700 border-slate-200";
+                    if (txn.type === 'transfer') dateBadgeColors = "bg-sky-50 text-sky-700 border-sky-200";
+                    else if (txn.type === 'income') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                    else if (txn.type === 'repayment') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-200";
+                    else if (txn.type === 'expense') dateBadgeColors = "bg-red-50 text-red-700 border-red-200";
+
                     return (
-                      <div className="flex items-center gap-1.5 w-full">
-                        {/* Checkbox for row selection */}
+                      <div className="flex items-center gap-1.5 overflow-hidden">
                         <input
                           type="checkbox"
-                          className="rounded border-gray-300 shrink-0"
+                          className="rounded border-slate-300 pointer-events-auto"
                           checked={isSelected}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            handleSelectOne(txn.id, e.target.checked);
-                          }}
                           onClick={(e) => {
                             e.stopPropagation();
                             if (e.shiftKey) {
                               handleSelectOne(txn.id, !isSelected, true);
                             }
                           }}
+                          onChange={(e) => {
+                            handleSelectOne(txn.id, e.target.checked);
+                          }}
                         />
-                        {/* Date and Time */}
-                        <div className="flex flex-col min-w-[50px]">
-                          <span className="font-semibold whitespace-nowrap leading-none">{dateStr}</span>
-                          <span className="text-[0.7em] text-slate-400 font-medium leading-tight">
+                        {/* Date Badge */}
+                        <div className={cn("flex flex-col items-center justify-center px-1.5 py-0.5 rounded border min-w-[50px]", dateBadgeColors)}>
+                          <span className="font-bold text-[0.85em] leading-none whitespace-nowrap">{dateStr}</span>
+                          <span className="text-[0.65em] opacity-80 font-medium leading-tight mt-0.5">
                             {d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}
                           </span>
-                        </div>
-                        {/* Type Badge */}
-                        <div className="ml-auto pl-1.5 border-l border-slate-100 flex items-center shrink-0">
-                          {typeBadge}
                         </div>
                       </div>
                     )
@@ -1555,7 +1556,7 @@ export function UnifiedTransactionTable({
                           <img src={shopLogo} alt="" className="h-6 w-6 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none" />
                         ) : (
                           // Replaced ShoppingBasket with Status/Refund Indicator
-                          // User requested: No border for Refund icon, bigger size. Darker ShoppingBasket.
+                          // Enforce Bank Icon for Repayments without logo
                           <div className={cn(
                             "flex items-center justify-center h-8 w-8 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0",
                             !statusIndicator && ""
@@ -1565,7 +1566,11 @@ export function UnifiedTransactionTable({
                                 <span className="text-xl cursor-help font-bold text-slate-800" suppressHydrationWarning>{statusIndicator}</span>
                               </CustomTooltip>
                             ) : (
-                              <ShoppingBasket className="h-5 w-5 text-slate-500" />
+                              txn.type === 'repayment' ? (
+                                <Wallet className="h-5 w-5 text-orange-600" />
+                              ) : (
+                                <ShoppingBasket className="h-5 w-5 text-slate-500" />
+                              )
                             )}
                           </div>
                         )}
@@ -1612,7 +1617,7 @@ export function UnifiedTransactionTable({
                       </div>
                     );
                   }
-                  case "note":
+                  case "note": {
                     const linkedIdForCopy = (refundSeq === 2 || refundSeq === 3) ? displayIdForBadge : null;
                     return (
                       <div className="flex items-center gap-1 max-w-[250px] group/note">
@@ -1665,36 +1670,41 @@ export function UnifiedTransactionTable({
                         </button>
                       </div>
                     );
+                  }
                   case "category": {
                     // Determine badge color by type
                     let badgeColors = "bg-red-100 text-red-700 ring-red-600/10"; // Default = expense
                     if (txn.type === 'transfer') badgeColors = "bg-sky-100 text-sky-700 ring-sky-700/10";
-                    else if (txn.type === 'income' || visualType === 'income') badgeColors = "bg-emerald-100 text-emerald-700 ring-emerald-600/20";
-                    else if (txn.type === 'repayment') badgeColors = "bg-orange-100 text-orange-800 ring-orange-600/20";
+                    else if (txn.type === 'income') badgeColors = "bg-emerald-100 text-emerald-700 ring-emerald-600/20";
+                    else if (txn.type === 'repayment') badgeColors = "bg-emerald-100 text-emerald-700 ring-emerald-600/20";
 
-                    if (!txn.category_name) {
-                      if (txn.type === 'repayment') return <div className="flex items-center gap-2 justify-start"><span className="inline-flex items-center justify-center rounded-md bg-orange-100 px-2 py-1 text-[0.9em] font-medium text-orange-800 ring-1 ring-inset ring-orange-600/20 w-[120px]">Repayment</span></div>;
-                      if (txn.type === 'transfer') return <div className="flex items-center gap-2 justify-start"><span className="inline-flex items-center justify-center rounded-md bg-blue-100 px-2 py-1 text-[0.9em] font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10 w-[120px]">Transfer</span></div>;
-                      return <div className="flex items-center gap-2 justify-start"><span className="inline-flex items-center justify-center rounded-md bg-red-50 px-2 py-1 text-[0.9em] font-medium text-red-700 ring-1 ring-inset ring-red-600/10 w-[120px]">Uncategorized</span></div>;
-                    }
+                    const displayCategory = txn.category_name || (txn.type ? txn.type.charAt(0).toUpperCase() + txn.type.slice(1) : "Uncategorized");
+
                     return (
-                      <CustomTooltip content={txn.category_name ?? "No Category"}>
+                      <CustomTooltip content={displayCategory}>
                         <div className="flex items-center gap-2 justify-start">
                           {/* Category Icon - always show */}
                           {txn.category_logo_url ? (
                             <div className="flex h-6 w-6 items-center justify-center shrink-0">
                               <img src={txn.category_logo_url} alt="" className="h-full w-full object-contain !rounded-none !border-none ring-0 outline-none" />
                             </div>
-                          ) : txn.category_icon ? (
-                            <span className="text-base shrink-0">{txn.category_icon}</span>
                           ) : (
-                            <span className="flex h-6 w-6 items-center justify-center bg-slate-100 rounded-full text-xs font-semibold text-slate-600 shrink-0">
-                              {txn.category_name.charAt(0).toUpperCase()}
-                            </span>
+                            // Enhanced Icon Logic for Merged Column
+                            txn.category_icon ? (
+                              <span className="text-base shrink-0">{txn.category_icon}</span>
+                            ) : txn.type === 'transfer' ? (
+                              <ArrowRightLeft className="h-4 w-4 text-slate-500" />
+                            ) : txn.type === 'repayment' ? (
+                              <RefreshCw className="h-4 w-4 text-slate-500" />
+                            ) : (
+                              <span className="flex h-6 w-6 items-center justify-center bg-slate-100 rounded-full text-xs font-semibold text-slate-600 shrink-0">
+                                {displayCategory.charAt(0).toUpperCase()}
+                              </span>
+                            )
                           )}
-                          {/* Category Badge */}
+                          {/* Category Badge - Fallback to Type if missing */}
                           <span className={cn("inline-flex items-center justify-center rounded-md px-2 py-1 text-[0.9em] font-medium ring-1 ring-inset truncate w-[120px]", badgeColors)}>
-                            {txn.category_name}
+                            {displayCategory}
                           </span>
                         </div>
                       </CustomTooltip>
@@ -1845,23 +1855,46 @@ export function UnifiedTransactionTable({
 
                     // SCENARIO 1: VIEWING PERSON PAGE (Context = Person)
                     if (isPersonContext && contextId && personId === contextId) {
-                      // We are looking at the Person. 
-                      // Show: FROM [Source Account]
-                      // Hide: Arrow & Person (Self)
+                      // Use Transaction Type to determine direction, strictly.
+                      // Repayment = Person -> Account (Show TO: Account)
+                      // Debt = Account -> Person (Show FROM: Account)
+                      // Note: unified-table logic often defaults Person to Target in parsing, but check names to be sure.
 
-                      return (
-                        <div className="flex items-center w-full">
-                          <div className="flex-1 min-w-0">
-                            <RenderEntity
-                              name={sourceName}
-                              icon={sourceIcon}
-                              link={sourceId ? `/accounts/${sourceId}` : null}
-                              badges={[cycleBadge]}
-                              contextBadge={fromBadge}
-                            />
+                      const isPersonPaying = txn.type === 'repayment' || txn.type === 'income';
+
+                      if (isPersonPaying) {
+                        // Person -> Target (Repayment to Bank)
+                        // Show Target (TO)
+                        return (
+                          <div className="flex items-center w-full">
+                            <div className="flex-1 min-w-0">
+                              <RenderEntity
+                                name={targetName}
+                                icon={targetIcon}
+                                link={targetLink}
+                                badges={[tagBadge]} // Tags on target
+                                contextBadge={toBadge}
+                              />
+                            </div>
                           </div>
-                        </div>
-                      )
+                        )
+                      } else {
+                        // Source -> Person (Lending to Person, or Person Repayment from Bank?)
+                        // Show Source (FROM)
+                        return (
+                          <div className="flex items-center w-full">
+                            <div className="flex-1 min-w-0">
+                              <RenderEntity
+                                name={sourceName}
+                                icon={sourceIcon}
+                                link={sourceId ? `/accounts/${sourceId}` : null}
+                                badges={[cycleBadge]}
+                                contextBadge={fromBadge}
+                              />
+                            </div>
+                          </div>
+                        )
+                      }
                     }
 
                     // SCENARIO 2: VIEWING ACCOUNT PAGE (Context = Account)
