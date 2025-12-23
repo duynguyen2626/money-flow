@@ -1,0 +1,20 @@
+﻿
+src\components\moneyfl
+ow\transaction-form.ts
+x:1258:  const 
+potentialCashback = 
+useMemo(() => {
+src\components\moneyfl
+ow\transaction-form.ts
+x:2157:  const 
+potentialCashback = (c
+ashbackPreview?.estima
+tedReward) ?? 
+(spendingStats ? 
+((watchedAmount || 0) 
+* (spendingStats.poten
+tialRate ?? 
+spendingStats.rate)) 
+: 0);
+
+

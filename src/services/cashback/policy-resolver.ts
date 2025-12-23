@@ -35,53 +35,96 @@ export function resolveCashbackPolicy(params: {
             categoryName,
             cycleTotals.spent
         )
+        // Fix: Ensure we return metadata even for legacy fallback, but strictly typed
+        // The previous code returned rate/minSpend but the return type requires metadata.
         return {
             rate,
             minSpend: config.minSpend ?? undefined,
             metadata: {
                 policySource: 'legacy',
                 reason: `Legacy rule matched for ${categoryName || 'generic spend'}`,
-                rate
+                rate,
+                ruleType: 'legacy',
+                priority: 0
             }
         }
     }
 
     const { program } = config
+
+    // Default: Program fallback
     let finalRate = program.defaultRate
     let finalMaxReward: number | undefined = undefined
+
+    // Base metadata: Program Default
     let source: CashbackPolicyResult['metadata'] = {
         policySource: 'program_default',
         reason: 'Program default rate',
-        rate: finalRate
+        rate: finalRate,
+        ruleType: 'program_default',
+        priority: 0
     }
 
-    // 2. Select Level by spent_amount
-    let applicableLevel: CashbackLevel | undefined = undefined
+    // 2. Select Level by spent_amount (Highest qualifying level wins)
+    // Sort levels by minTotalSpend DESC
     if (program.levels && program.levels.length > 0) {
+        // Create a copy to sort without mutating original
         const sortedLevels = [...program.levels].sort((a, b) => b.minTotalSpend - a.minTotalSpend)
-        applicableLevel = sortedLevels.find(lvl => cycleTotals.spent >= lvl.minTotalSpend)
+        const applicableLevel = sortedLevels.find(lvl => cycleTotals.spent >= lvl.minTotalSpend)
 
         if (applicableLevel) {
-            finalRate = applicableLevel.defaultRate ?? program.defaultRate
+            // Found a level. Set it as the new baseline (Level Default).
+            // Level default overrides Program default.
+            const levelDefaultRate = applicableLevel.defaultRate ?? program.defaultRate
+            finalRate = levelDefaultRate
+
             source = {
                 policySource: 'level_default',
                 reason: `Level matched: ${applicableLevel.name}`,
                 rate: finalRate,
                 levelId: applicableLevel.id,
                 levelName: applicableLevel.name,
-                levelMinSpend: applicableLevel.minTotalSpend
+                levelMinSpend: applicableLevel.minTotalSpend,
+                ruleType: 'level_default',
+                priority: 10 // Higher than program default (0)
             }
 
-            // 3. Match Category Rule within Level
-            if (categoryId && applicableLevel.rules) {
-                const matchedRule = applicableLevel.rules.find(rule =>
+            // 3. Match Category Rule within the Active Level
+            // Rules are specific to the ACTIVE level only.
+            if (categoryId && applicableLevel.rules && applicableLevel.rules.length > 0) {
+                // Find all rules that match this category
+                const matchingRules = applicableLevel.rules.filter(rule =>
                     rule.categoryIds.includes(categoryId)
                 )
 
-                if (matchedRule) {
+                if (matchingRules.length > 0) {
+                    // Sort matching rules for determinism:
+                    // 1. Specificity (Ascending size of categoryIds) -> Fewer categories = More specific rule = Higher Win
+                    // 2. Priority/Index (Ascending original index) -> Earlier rule = Higher Win (Implicit priority)
+
+                    // We need original index. `applicableLevel.rules` is the source of truth for order.
+                    const rulesWithIndex = matchingRules.map(r => ({
+                        ...r,
+                        originalIndex: applicableLevel.rules!.indexOf(r)
+                    }))
+
+                    rulesWithIndex.sort((a, b) => {
+                        // 1. Specificity: Smaller count first
+                        const specDiff = a.categoryIds.length - b.categoryIds.length
+                        if (specDiff !== 0) return specDiff
+
+                        // 2. Priority: Lower index first
+                        return a.originalIndex - b.originalIndex
+                    })
+
+                    const matchedRule = rulesWithIndex[0] // Best match wins
+
                     finalRate = matchedRule.rate
                     finalMaxReward = matchedRule.maxReward ?? undefined
-                    const reasonLabel = categoryName ? `${categoryName} rule` : `Category rule matched for level ${applicableLevel.name}`
+                    const reasonLabel = categoryName
+                        ? `${categoryName} rule (${applicableLevel.name})`
+                        : `Category rule matched for level ${applicableLevel.name}`
+
                     source = {
                         policySource: 'category_rule',
                         reason: reasonLabel,
@@ -90,7 +133,16 @@ export function resolveCashbackPolicy(params: {
                         levelName: applicableLevel.name,
                         levelMinSpend: applicableLevel.minTotalSpend,
                         categoryId: categoryId,
-                        ruleMaxReward: matchedRule.maxReward
+                        ruleId: matchedRule.id,
+                        ruleMaxReward: matchedRule.maxReward,
+                        ruleType: 'category',
+                        // Priority Calculation:
+                        // Base 20 (Category Rule) + (1000 - Index) to ensure earlier rules are "higher" value if we visualized value?
+                        // Wait, implicit priority means EARLIER index is BETTER.
+                        // Let's just store a number that represents "winningness" is hard.
+                        // Let's store 20. The Determinism is in the LOGIC above, not just this number.
+                        // But to be helpful, let's distinguish them.
+                        priority: 20
                     }
                 }
             }

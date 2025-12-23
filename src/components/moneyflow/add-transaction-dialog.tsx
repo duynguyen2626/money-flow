@@ -1,21 +1,24 @@
-'use client'
+"use client";
 
-import { MouseEvent, ReactNode, useState, useEffect } from 'react'
-import { createPortal } from 'react-dom'
-import { Slot } from '@radix-ui/react-slot'
-import { TransactionForm, TransactionFormValues } from './transaction-form'
-import { useRouter, useSearchParams } from 'next/navigation'
-import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
+import { MouseEvent, ReactNode, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
+import { Slot } from "@radix-ui/react-slot";
+import { TransactionForm, TransactionFormValues } from "./transaction-form";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Account, Category, Person, Shop } from "@/types/moneyflow.types";
+import { Installment } from "@/services/installment.service";
 
 type AddTransactionDialogProps = {
   accounts: Account[];
   categories: Category[];
   people: Person[];
+
   shops?: Shop[];
+  installments?: Installment[];
   buttonText?: string;
   defaultTag?: string;
   defaultPersonId?: string;
-  defaultType?: 'expense' | 'income' | 'debt' | 'transfer' | 'repayment';
+  defaultType?: "expense" | "income" | "debt" | "transfer" | "repayment";
   buttonClassName?: string;
   defaultSourceAccountId?: string;
   defaultDebtAccountId?: string;
@@ -28,17 +31,18 @@ type AddTransactionDialogProps = {
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   // Edit Mode Props
-  mode?: 'create' | 'edit' | 'refund';
+  mode?: "create" | "edit" | "refund";
   transactionId?: string;
   initialValues?: Partial<TransactionFormValues>;
-}
+};
 
 export function AddTransactionDialog({
   accounts,
   categories,
   people,
   shops = [],
-  buttonText = 'Add Transaction',
+  installments = [],
+  buttonText = "Add Transaction",
   defaultTag,
   defaultPersonId,
   defaultType,
@@ -53,44 +57,62 @@ export function AddTransactionDialog({
   cloneInitialValues,
   isOpen,
   onOpenChange,
-  mode = 'create',
+  mode = "create",
   transactionId,
   initialValues,
 }: AddTransactionDialogProps) {
-  const [internalOpen, setInternalOpen] = useState(false)
-  const open = isOpen ?? internalOpen
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = isOpen ?? internalOpen;
+
+  // Phase 7X: Fetch installments if not provided (fixes toggle missing issue)
+  const [fetchedInstallments, setFetchedInstallments] = useState<Installment[]>([]);
+  useEffect(() => {
+    if (open && installments.length === 0) {
+      import("@/services/installment.service").then(({ getActiveInstallments }) => {
+        getActiveInstallments().then((data) => {
+          if (data) setFetchedInstallments(data);
+        });
+      });
+    }
+  }, [open, installments.length]);
+
+  const effectiveInstallments = installments.length > 0 ? installments : fetchedInstallments;
 
   const handleOpenChange = (newOpen: boolean) => {
     if (isOpen === undefined) {
-      setInternalOpen(newOpen)
+      setInternalOpen(newOpen);
     }
-    onOpenChange?.(newOpen)
-  }
+    onOpenChange?.(newOpen);
+  };
 
-  const router = useRouter()
+  const router = useRouter();
 
-  const searchParams = useSearchParams()
-  const [urlValues, setUrlValues] = useState<any>(null)
+  const searchParams = useSearchParams();
+  const [urlValues, setUrlValues] = useState<any>(null);
 
   useEffect(() => {
-    if (listenToUrlParams && searchParams.get('action') === 'new') {
-      handleOpenChange(true)
+    if (listenToUrlParams && searchParams.get("action") === "new") {
+      handleOpenChange(true);
 
-      const amountParam = searchParams.get('amount')
-      const noteParam = searchParams.get('note')
-      const shopParam = searchParams.get('shop')
-      const personParam = searchParams.get('for')
+      const amountParam = searchParams.get("amount");
+      const noteParam = searchParams.get("note");
+      const shopParam = searchParams.get("shop");
+      const personParam = searchParams.get("for");
 
-      const amount = amountParam ? parseFloat(amountParam) : undefined
+      const amount = amountParam ? parseFloat(amountParam) : undefined;
 
-      let shopId = undefined
+      let shopId = undefined;
       if (shopParam) {
-        const found = shops.find(s => s.name.toLowerCase() === shopParam.toLowerCase())
-        shopId = found?.id
+        const found = shops.find(
+          (s) => s.name.toLowerCase() === shopParam.toLowerCase(),
+        );
+        shopId = found?.id;
 
-        if (!shopId && shopParam.toLowerCase() === 'shopee') {
-          const shopee = shops.find(s => s.name.toLowerCase().includes('shopee'))
-          shopId = shopee?.id
+        if (!shopId && shopParam.toLowerCase() === "shopee") {
+          const shopee = shops.find((s) =>
+            s.name.toLowerCase().includes("shopee"),
+          );
+          shopId = shopee?.id;
         }
       }
 
@@ -99,51 +121,51 @@ export function AddTransactionDialog({
         note: noteParam || undefined,
         shop_id: shopId,
         person_id: personParam || undefined,
-      })
+      });
     }
-  }, [listenToUrlParams, searchParams, shops])
+  }, [listenToUrlParams, searchParams, shops]);
 
   const handleSuccess = () => {
-    handleOpenChange(false)
-    setUrlValues(null) // Reset
-    router.refresh()
-  }
+    handleOpenChange(false);
+    setUrlValues(null); // Reset
+    router.refresh();
+  };
 
   const closeDialog = () => {
-    handleOpenChange(false)
-    setUrlValues(null)
-  }
+    handleOpenChange(false);
+    setUrlValues(null);
+  };
 
   const stopPropagation = (event: MouseEvent<HTMLDivElement>) => {
-    event.stopPropagation()
-  }
+    event.stopPropagation();
+  };
 
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-  const [showCloseWarning, setShowCloseWarning] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [showCloseWarning, setShowCloseWarning] = useState(false);
 
   const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
     // Only close if clicking directly on overlay, not on content
     if (event.target === event.currentTarget) {
       if (hasUnsavedChanges) {
-        setShowCloseWarning(true)
+        setShowCloseWarning(true);
       } else {
-        closeDialog()
+        closeDialog();
       }
     }
-  }
+  };
 
   const confirmClose = () => {
-    setShowCloseWarning(false)
-    setHasUnsavedChanges(false)
-    closeDialog()
-  }
+    setShowCloseWarning(false);
+    setHasUnsavedChanges(false);
+    closeDialog();
+  };
 
   const defaultClassName =
     triggerContent && !asChild
-      ? 'inline-flex items-center justify-center rounded-md p-0 bg-transparent text-inherit focus:outline-none focus-visible:ring-0'
-      : 'rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600'
+      ? "inline-flex items-center justify-center rounded-md p-0 bg-transparent text-inherit focus:outline-none focus-visible:ring-0"
+      : "rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600";
 
-  const Comp = asChild ? Slot : 'button'
+  const Comp = asChild ? Slot : "button";
 
   return (
     <>
@@ -151,12 +173,14 @@ export function AddTransactionDialog({
         type={asChild ? undefined : "button"}
         className={buttonClassName || defaultClassName}
         onMouseDown={onOpen}
-        onClick={event => {
-          event.stopPropagation()
-          onOpen?.()
-          handleOpenChange(true)
+        onClick={(event) => {
+          event.stopPropagation();
+          onOpen?.();
+          handleOpenChange(true);
         }}
-        aria-label={typeof buttonText === 'string' ? buttonText : 'Add transaction'}
+        aria-label={
+          typeof buttonText === "string" ? buttonText : "Add transaction"
+        }
       >
         {triggerContent ?? buttonText}
       </Comp>
@@ -172,7 +196,7 @@ export function AddTransactionDialog({
           >
             <div
               className="flex w-full max-w-xl flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden"
-              style={{ maxHeight: '90vh' }}
+              style={{ maxHeight: "90vh" }}
               onClick={stopPropagation}
             >
               <TransactionForm
@@ -180,12 +204,13 @@ export function AddTransactionDialog({
                 categories={categories}
                 people={people}
                 shops={shops}
+                installments={effectiveInstallments}
                 onSuccess={handleSuccess}
                 onCancel={() => {
                   if (hasUnsavedChanges) {
-                    setShowCloseWarning(true)
+                    setShowCloseWarning(true);
                   } else {
-                    closeDialog()
+                    closeDialog();
                   }
                 }}
                 onFormChange={setHasUnsavedChanges}
@@ -200,7 +225,7 @@ export function AddTransactionDialog({
                   ...urlValues,
                   ...(defaultAmount ? { amount: defaultAmount } : {}),
                   ...(cloneInitialValues || {}),
-                  ...(initialValues || {})
+                  ...(initialValues || {}),
                 }}
               />
             </div>
@@ -218,7 +243,8 @@ export function AddTransactionDialog({
                       Unsaved Changes
                     </h3>
                     <p className="text-sm text-slate-500 mb-4">
-                      You have unsaved changes. Are you sure you want to close without saving?
+                      You have unsaved changes. Are you sure you want to close
+                      without saving?
                     </p>
                   </div>
                   <div className="flex gap-2 justify-end pt-2">
@@ -239,8 +265,8 @@ export function AddTransactionDialog({
               </div>
             )}
           </div>,
-          document.body
+          document.body,
         )}
     </>
-  )
+  );
 }

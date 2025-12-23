@@ -81,6 +81,7 @@ export function CashbackTransactionTable({ transactions, onEdit, showCycle }: Ca
                             <TableHead className="w-[80px] whitespace-nowrap">Date</TableHead>
                             <TableHead className="min-w-[200px]">Shop & Note</TableHead>
                             <TableHead className="min-w-[140px]">Category</TableHead>
+                            <TableHead className="min-w-[120px]">Policy</TableHead>
                             <TableHead className="text-right min-w-[110px]">Amount</TableHead>
                             <TableHead className="text-right min-w-[110px] bg-blue-50/50">Initial Back</TableHead>
                             <TableHead className="text-right min-w-[110px] bg-orange-50/50">People Back</TableHead>
@@ -132,11 +133,6 @@ export function CashbackTransactionTable({ transactions, onEdit, showCycle }: Ca
                                                 <span className="text-slate-700 font-medium block line-clamp-2" title={txn.note || ''}>
                                                     {txn.note || (txn.shopName ? `Shop: ${txn.shopName}` : '-')}
                                                 </span>
-                                                {policyLabel && (
-                                                    <span className="inline-flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-700" title={txn.policyMetadata?.reason}>
-                                                        {policyLabel}
-                                                    </span>
-                                                )}
                                             </div>
                                         </div>
                                     </TableCell>
@@ -158,6 +154,23 @@ export function CashbackTransactionTable({ transactions, onEdit, showCycle }: Ca
                                                 {txn.categoryName || 'Uncategorized'}
                                             </span>
                                         </div>
+                                    </TableCell>
+
+                                    <TableCell>
+                                        {policyLabel ? (
+                                            <span
+                                                className="inline-flex items-center rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 cursor-help"
+                                                title={`Source: ${txn.policyMetadata?.policySource || 'Unknown'}
+Level: ${txn.policyMetadata?.levelName || 'N/A'}
+Reason: ${txn.policyMetadata?.reason || 'N/A'}
+Rule ID: ${txn.policyMetadata?.ruleId || 'N/A'}
+Priority: ${txn.policyMetadata?.priority ?? 'N/A'}`}
+                                            >
+                                                {policyLabel}
+                                            </span>
+                                        ) : (
+                                            <span className="text-slate-400 italic">Virtual</span>
+                                        )}
                                     </TableCell>
 
                                     <TableCell className="text-right">

@@ -42,6 +42,18 @@ export async function getInstallments() {
     return data as Installment[];
 }
 
+export async function getInstallmentById(id: string) {
+    const supabase: any = createClient();
+    const { data, error } = await supabase
+        .from('installments')
+        .select('*, original_transaction:transactions(account:accounts!transactions_account_id_fkey(id, name))')
+        .eq('id', id)
+        .single();
+
+    if (error) throw error;
+    return data as Installment;
+}
+
 export async function getActiveInstallments() {
     const supabase: any = createClient();
     const { data, error } = await supabase
@@ -98,8 +110,99 @@ export async function getPendingInstallmentTransactions() {
         .is('installment_plan_id', null)
         .order('occurred_at', { ascending: false });
 
+
     if (error) throw error;
     return data;
+}
+
+// Phase 7X: Auto-Settlement Logic
+export async function checkAndAutoSettleInstallment(planId: string) {
+    const supabase: any = createClient();
+
+    // 1. Fetch Plan
+    const { data: plan, error: planError } = await supabase
+        .from('installments')
+        .select('*')
+        .eq('id', planId)
+        .single();
+
+    if (planError || !plan) return;
+
+    // 2. Calculate Total Paid from Transactions
+    // We sum all transactions linked to this plan.
+    // Assuming positive amount = repayment/income (reducing debt).
+    // Note: 'expense' could also be linked if it's a correction? 
+    // Usually repayments are 'repayment' (income) or 'income'.
+    const { data: txns, error: txnError } = await supabase
+        .from('transactions')
+        .select('amount, type')
+        .eq('installment_plan_id', planId);
+
+    if (txnError) return;
+
+    // Filter base types: repayment/income are positive. expense are negative.
+    // We want to sum the EFFECTIVE repayment amount.
+    // If user enters 'expense' linked to plan, does it mean they spent MORE? 
+    // Or they paid the bank? 
+    // Convention: Transactions linked to installment plan are REPAYMENTS.
+    // Normalized input ensures repayments are positive? 
+    // Actually, createTransaction normalizes `income` to positive abs(amount).
+    // `expense` to negative abs(amount).
+
+    // So we just sum the amount. If sum > 0, it means we paid.
+    // If sum < 0, it means we added debt? (Maybe interest?)
+
+    let totalPaid = 0;
+    txns?.forEach((t: any) => {
+        // Only count positive amounts as repayment?
+        // Or just sum everything?
+        // If I make a mistake and add an expense, it increases debt. 
+        // That seems correct for "remaining amount".
+        // remaining = total_amount - (sum(amount) where amount > 0?)
+        // Let's assume all transactions linked are repayments.
+
+        // However, the original transaction (the purchase) might be linked?
+        // No, original transaction is linked via `original_transaction_id` column on installment, 
+        // NOT `installment_plan_id` on transaction (unless we backfill).
+        // Usually `installment_plan_id` is for repayments.
+
+        // Refund? If I get a refund for an installment item?
+        // We will just sum `amount`.
+
+        // Constraint: Installment is usually on a Credit Card (Liability).
+        // Income/Repayment on Liability = Positive (Reduces Debt).
+        // Expense on Liability = Negative (Increases Debt).
+        // So Remaining = Initial_Total - Sum(Transactions.amount)
+        // Wait. Initial_Total is positive (e.g. 10M).
+        // If I pay 1M (Income), amount is +1M.
+        // Remaining = 10M - 1M = 9M.
+        // If I spend 1M (Expense/Fee), amount is -1M.
+        // Remaining = 10M - (-1M) = 11M.
+        // This logic holds.
+
+        totalPaid += t.amount || 0;
+    });
+
+    const remaining = plan.total_amount - totalPaid;
+
+    // 3. Update Installment
+    const updates: any = {
+        remaining_amount: remaining
+    };
+
+    if (remaining <= 1000 && plan.status === 'active') { // 1000 VND epsilon
+        updates.status = 'completed';
+    } else if (remaining > 1000 && plan.status === 'completed') {
+        // Re-open if payment deleted?
+        updates.status = 'active';
+    }
+
+    await supabase
+        .from('installments')
+        .update(updates)
+        .eq('id', planId);
+
+    return { success: true, remaining, status: updates.status || plan.status };
 }
 
 export async function convertTransactionToInstallment(payload: {
@@ -354,4 +457,27 @@ export async function processBatchInstallments(date?: string) {
                 metadata: { installment_id: inst.id }
             });
     }
+}
+
+export async function getInstallmentRepayments(planId: string) {
+    const supabase = createClient();
+    const { data, error } = await supabase
+        .from('transactions')
+        .select(`
+            id,
+            occurred_at,
+            amount,
+            note,
+            type,
+            created_by,
+            profiles:created_by ( name )
+        `)
+        .eq('installment_plan_id', planId)
+        .order('occurred_at', { ascending: false });
+
+    if (error) {
+        console.error('Error fetching installment repayments:', error);
+        return [];
+    }
+    return data;
 }
