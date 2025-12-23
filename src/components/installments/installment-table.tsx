@@ -1,7 +1,7 @@
 "use client";
 
 import { Installment } from "@/services/installment.service";
-import { Copy, CheckCheck } from "lucide-react";
+import { Copy, CheckCheck, Eye } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
   Table,
@@ -12,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { formatCurrency, cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
@@ -71,6 +71,7 @@ export function InstallmentTable({
             <TableHead>Original Txn</TableHead>
             <TableHead>Plan Name</TableHead>
             <TableHead>Account</TableHead>
+            <TableHead>People</TableHead>
             <TableHead>Progress</TableHead>
             <TableHead>Monthly</TableHead>
             <TableHead>Next Due</TableHead>
@@ -81,7 +82,7 @@ export function InstallmentTable({
         <TableBody>
           {installments.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={8} className="h-24 text-center">
+              <TableCell colSpan={9} className="h-24 text-center">
                 No active installments.
               </TableCell>
             </TableRow>
@@ -146,6 +147,9 @@ export function InstallmentTable({
                   <TableCell>
                     {inst.original_transaction?.account?.name || "-"}
                   </TableCell>
+                  <TableCell>
+                    {inst.original_transaction?.person?.name || "-"}
+                  </TableCell>
                   <TableCell className="w-[200px]">
                     <div className="flex items-center gap-2">
                       <Progress value={progress} className="h-2" />
@@ -170,7 +174,14 @@ export function InstallmentTable({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-2 items-center">
+                      <Link
+                        href={`/installments/${inst.id}`}
+                        className={cn(buttonVariants({ variant: "ghost", size: "icon" }), "h-8 w-8 text-slate-500 hover:text-blue-600")}
+                        title="View Details"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Link>
                       {inst.status === "active" && (
                         <>
                           <Button

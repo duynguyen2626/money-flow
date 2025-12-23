@@ -99,6 +99,14 @@ function PersonCardComponent({
     // Service badges
     const services = person.subscription_details ?? []
 
+    // Find the detailed debt summary for the current cycle to get accurate Balance (Remains) and Repaid amounts
+    const currentDebtDetails = monthlyDebts.find(d => d.tagLabel === cycleLabel)
+
+    // Use the detailed amount (Remains) if available, otherwise fallback to top-level property
+    // The user explicitly requested to show "Remains" (Balance) instead of Total Debt here.
+    const displayCycleBalance = currentDebtDetails ? currentDebtDetails.amount : (person.current_cycle_debt ?? 0)
+    const displayCycleRepaid = currentDebtDetails?.total_repaid ?? 0
+
     return (
         <>
             {/* Card - Wider minimum width */}
@@ -209,9 +217,16 @@ function PersonCardComponent({
                             )}
                             triggerContent={
                                 <>
-                                    <div className="flex items-center gap-2">
-                                        <span className="opacity-70 text-xs font-semibold">{cycleLabel}:</span>
-                                        <span className="text-base">{numberFormatter.format(currentCycleDebt)}</span>
+                                    <div className="flex flex-col items-start min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="opacity-70 text-xs font-semibold">{cycleLabel} (Remains):</span>
+                                            <span className="text-base">{numberFormatter.format(displayCycleBalance)}</span>
+                                        </div>
+                                        {currentDebtDetails && (
+                                            <span className="text-[10px] font-medium opacity-80 mt-0.5 text-emerald-600">
+                                                Repaid: {numberFormatter.format(displayCycleRepaid)}
+                                            </span>
+                                        )}
                                     </div>
                                     {isSettled ? <Check className="h-4 w-4" /> : hasDebt ? <AlertTriangle className="h-4 w-4" /> : null}
                                 </>

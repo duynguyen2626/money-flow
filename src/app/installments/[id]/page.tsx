@@ -10,8 +10,8 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { TransactionWithDetails } from "@/types/moneyflow.types";
 
-export default async function InstallmentDetail({ params }: { params: { id: string } }) {
-    const { id } = params;
+export default async function InstallmentDetail({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
     let installment;
     let transactions: TransactionWithDetails[] = [];
 
