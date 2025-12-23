@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { recalculateBalance } from '@/services/account.service'
 import { revalidatePath } from 'next/cache'
 
-export async function fixAllAccountBalances() {
+export async function resyncAllAccountBalances() {
     const supabase = createClient()
 
     try {

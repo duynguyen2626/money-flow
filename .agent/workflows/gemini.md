@@ -1,121 +1,23 @@
 ---
-description: Money Flow 3 (Updated Phase 75)
+description: Money Flow 3 - Milestone 1 Context
 ---
 
-# .agent/workflows/gemini.md — Context (MF4)
+B. .agent/workflows/gemini.md (Context — MUST READ)
 
-## Project Overview
+Mục đích: context dự án để Agent không “đi lạc”, nhắc các khái niệm domain và chuẩn UI hiện tại.
 
-Money Flow 3 is a personal finance manager built with:
+Cập nhật cần thêm theo tình hình mới nhất:
 
-* Next.js (App Router)
-* TypeScript
-* Tailwind CSS + shadcn/ui
-* Supabase (PostgreSQL)
+Stack: Next.js 15 App Router + TS + Tailwind/shadcn + Supabase.
 
-## Key Domain Concepts
+Conventions UI table: avatars square, Actions menu, row click disabled.
 
-### Transactions
+Accounts: credit card rules, cashback model (nếu còn dùng), nhưng story hiện tại tập trung integrity + UI people/accounts.
 
-Types:
+New issue context:
 
-* Expense
-* Income
-* Transfer
-* Lending
-* Repay
+Browser tab icon (favicon) đang deploy vẫn hiện cloud cũ.
 
-Each transaction type controls visible fields in the modal.
+Accounts balance: khi account thiếu limit ban đầu = 0, sau edit balance bị lệch vì không resync theo lịch sử giao dịch.
 
-### Accounts
-
-* Credit cards
-* Banks / wallets
-* Savings / secured accounts
-
-Important rules:
-
-* Credit cards **cannot** be transfer sources
-* Some credit cards have cashback policies
-
-### Cashback (Current State)
-
-* Cashback configuration lives in `accounts.cashback_config`
-* Current system computes cashback mostly in backend logic
-* There is no unified table to manage cashback per cycle yet
-
-### Voluntary Cashback (MF4)
-
-Voluntary cashback means:
-
-* User gives cashback manually even when:
-
-  * Account has no cashback
-  * Cashback budget for the cycle is exhausted
-
-Rules:
-
-* Voluntary cashback is allowed
-* It must NOT affect:
-
-  * Min spend
-  * Cashback budget
-* These values will be persisted separately in MF5
-
-## UI Conventions
-
-* Transaction modal uses sticky header + fixed footer
-* Transaction type tabs are visually dominant
-* Due / cashback logic clarity > compactness
-* Mobile experience is first‑class
-
-## Agent Operating Mode
-
-* Read existing implementation before coding
-* Prefer minimal refactors
-* Do not introduce backend breaking changes
-* Keep UI consistent with existing design system
-
-## Phase Boundaries
-
-MF4 focuses on:
-
-* Transaction modal UI
-* Form logic & validation
-
-MF5 will handle:
-
-* Cashback tables
-* Budget aggregation
-* Profit / loss reporting
-Cashback is now persisted in:
-
-cashback_cycles (per account per cycle)
-
-cashback_entries (ledger)
-
-Modes:
-
-real = awarded cashback (counts toward budget)
-
-virtual = predicted profit (clamped)
-
-voluntary = overflow/loss (does not count)
-
-* Cashback recomputation must be consistent across SQL and TS.
-* `overflow_loss` must include real overflow when cap is exceeded.
-* Missing config should be stored as NULL, not 0.
-
-
-
-## Cashback Percent Rules
-* DB stores decimal [0..1] (e.g. 0.05)
-* UI shows percent [0..100] (e.g. 5)
-* Sheet Export sends raw percent [0..100] (e.g. 5)
-* Transactions must ALWAYS update `cashback_entries` and recompute `cashback_cycles` (including old cycle if moved).
-
-MF5 cashback model:
-- transactions = source of intent
-- cashback_entries = ledger (per transaction)
-- cashback_cycles = single source of truth for UI hints & budgets
-UI must never recompute budget independently.
+People pages: Remains vs Total per cycle đang nhầm; unify transactions table column mapping/badges bị lệch.

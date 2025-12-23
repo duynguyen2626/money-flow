@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useMemo, useState, useRef } from "react"
+import { format } from "date-fns"
 import {
   ArrowUpDown,
   Calendar,
@@ -278,12 +279,12 @@ export function UnifiedTransactionTable({
 }: UnifiedTransactionTableProps) {
   const tableData = data ?? transactions ?? []
   const defaultColumns: ColumnConfig[] = [
-    { key: "date", label: "Date", defaultWidth: 70, minWidth: 60 },
+    { key: "date", label: "Date", defaultWidth: 55, minWidth: 50 },
     { key: "shop", label: "Note", defaultWidth: 200, minWidth: 150 },
-    { key: "account", label: "Accounts ➜ People", defaultWidth: 180, minWidth: 180 },
+    { key: "account", label: "Accounts & People", defaultWidth: 180, minWidth: 180 },
     { key: "amount", label: "Amount", defaultWidth: 100 },
     { key: "final_price", label: "Final Price", defaultWidth: 100 },
-    { key: "category", label: "Type / Category", defaultWidth: 120 },
+    { key: "category", label: "Type & Category", defaultWidth: 120 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
   ]
@@ -1484,11 +1485,11 @@ export function UnifiedTransactionTable({
                       month: '2-digit',
                       timeZone: 'Asia/Ho_Chi_Minh',
                     })
-                    const dateStr = dateFormatter.format(d)
+                    const dateStr = format(d, 'dd.MM')
 
                     // Determine badge color for Date
                     let dateBadgeColors = "bg-slate-50 text-slate-700 border-slate-200";
-                    if (txn.type === 'transfer') dateBadgeColors = "bg-sky-50 text-sky-700 border-sky-200";
+                    if (txn.type === 'transfer') dateBadgeColors = "bg-blue-50 text-blue-700 border-blue-200";
                     else if (txn.type === 'income') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-200";
                     else if (txn.type === 'repayment') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-200";
                     else if (txn.type === 'expense') dateBadgeColors = "bg-red-50 text-red-700 border-red-200";
@@ -1575,9 +1576,9 @@ export function UnifiedTransactionTable({
                           </div>
                         )}
 
-                        {/* Refund Badge - moved after img */}
+                        {/* Refund Badge - moved after img, z-index adjustment */}
                         {refundSeq > 0 && (
-                          <span className="inline-flex items-center justify-center rounded-md bg-blue-100 text-blue-700 px-1.5 h-5 text-[10px] font-bold shrink-0 whitespace-nowrap" title={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
+                          <span className="inline-flex items-center justify-center rounded-md bg-blue-100 text-blue-700 px-1.5 h-5 text-[10px] font-bold shrink-0 whitespace-nowrap z-10" title={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
                             {refundSeq}. {shortIdBadge}
                           </span>
                         )}
@@ -1682,7 +1683,7 @@ export function UnifiedTransactionTable({
 
                     return (
                       <CustomTooltip content={displayCategory}>
-                        <div className="flex items-center gap-2 justify-start">
+                        <div className="flex items-center gap-2 justify-start min-w-0">
                           {/* Category Icon - always show */}
                           {txn.category_logo_url ? (
                             <div className="flex h-6 w-6 items-center justify-center shrink-0">
@@ -1703,7 +1704,7 @@ export function UnifiedTransactionTable({
                             )
                           )}
                           {/* Category Badge - Fallback to Type if missing */}
-                          <span className={cn("inline-flex items-center justify-center rounded-md px-2 py-1 text-[0.9em] font-medium ring-1 ring-inset truncate w-[120px]", badgeColors)}>
+                          <span className={cn("inline-flex items-center justify-center rounded-md px-2 h-5 text-[0.85em] font-medium ring-1 ring-inset truncate max-w-[120px]", badgeColors)}>
                             {displayCategory}
                           </span>
                         </div>
@@ -1836,19 +1837,19 @@ export function UnifiedTransactionTable({
 
                     // Badges Construction
                     const cycleBadge = (cycleLabel && cycleLabel !== '-') ? (
-                      <span key="cycle" className="inline-flex items-center rounded-sm bg-purple-100 px-1 py-0.5 text-[0.7em] font-bold text-purple-700 whitespace-nowrap leading-none">
+                      <span key="cycle" className="inline-flex items-center rounded-sm bg-purple-100 px-1 py-0.5 text-[0.7em] font-bold text-purple-700 whitespace-nowrap leading-none h-4">
                         {cycleLabel}
                       </span>
                     ) : null
 
                     const tagBadge = (cycleTag || debtTag) ? (
-                      <span key="tag" className="inline-flex items-center rounded-sm bg-teal-100 px-1 py-0.5 text-[0.7em] font-bold text-teal-800 whitespace-nowrap leading-none">
+                      <span key="tag" className="inline-flex items-center rounded-sm bg-teal-100 px-1 py-0.5 text-[0.7em] font-bold text-teal-800 whitespace-nowrap leading-none h-4">
                         {cycleTag || debtTag}
                       </span>
                     ) : null
 
-                    const fromBadge = <span key="from" className="inline-flex items-center rounded-sm bg-orange-100 px-1.5 py-0.5 text-[0.7em] font-extrabold text-orange-700 border border-orange-200">FROM</span>
-                    const toBadge = <span key="to" className="inline-flex items-center rounded-sm bg-sky-100 px-1.5 py-0.5 text-[0.7em] font-extrabold text-sky-700 border border-sky-200">TO</span>
+                    const fromBadge = <span key="from" className="inline-flex items-center rounded-sm bg-orange-100 px-1.5 py-0.5 text-[0.7em] font-extrabold text-orange-700 border border-orange-200 h-4">FROM</span>
+                    const toBadge = <span key="to" className="inline-flex items-center rounded-sm bg-sky-100 px-1.5 py-0.5 text-[0.7em] font-extrabold text-sky-700 border border-sky-200 h-4">TO</span>
 
 
                     // --- 5. Main Render Switch ---

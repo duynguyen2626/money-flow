@@ -2,92 +2,85 @@
 trigger: always_on
 ---
 
-# .agent/rules/gravityrules.md — Rules (MF4)
-TypeScript & Build Validation (CRITICAL)
-ALWAYS run npm run build or npx tsc --noEmit before:
-Committing code
-Pushing to remote
-Marking task as complete
-NEVER assume local dev server success = production build success
-Fix ALL TypeScript errors before proceeding—no exceptions
-When working with database types:
-Check database.types.ts for field definitions
-Handle nullable fields explicitly (use ?? '' or ?? null)
-Include ALL required fields when mapping DB rows to TypeScript interfaces
-Deployment Rules
-Pre-push validation: TypeScript check installed via git hook
-If Vercel build fails:
-Check the exact error from Vercel logs
-Reproduce locally with npm run build
-Fix and verify build passes locally
-Push fix immediately to the failing branch
-Database schema changes require regenerating types
+A. .agent/rules/gravityrules.md (Rules — MUST READ)
 
-* Never ship with two recompute implementations that disagree.
-* Backfill scripts must use the same recompute semantics as runtime.
-* All data-fix scripts must be idempotent.
-- Cashback UI hints MUST read from cashback_cycles, never directly from account config when a cycle exists.
-- Any transaction with cashback_mode != null must result in:
-  - a cashback_entries row
-  - a recomputed cashback_cycles row
-- Budget Left is always:
-  max_budget - real_awarded - virtual_profit
-- cashback_config parsing must support legacy keys (max_amt, min_spend, cycle, statement_day).
+Mục đích: luật vận hành + kỷ luật build/typecheck + chuẩn UI + logic nghiệp vụ + dynamic branch/commit/push (gộp workflow commit_and_push).
 
+Nội dung cần có (gợi ý cấu trúc):
 
-## UI Rules
+Operating Mode (Always-On)
 
-* Modal layout must be:
+Đọc code hiện có trước khi sửa.
 
-  * Sticky header
-  * Scrollable body
-  * Fixed footer
+Minimal diff, tránh refactor lan man.
 
-* Transaction type tabs:
+Không phá backend, không đổi schema DB nếu chưa có story.
 
-  * Must never scroll out of view
-  * Must clearly indicate active state
+Pre-Commit / Pre-Push Gate (CRITICAL)
 
-* Do not stack multiple progress bars or dense indicators
+Luôn chạy: npm run build (hoặc pnpm build tùy repo) và npx tsc --noEmit nếu tách riêng.
 
-* Prefer badges, pills, and grouped information
+Fix hết TS/ESLint warnings trở lên (không để NaN/undefined).
 
-## Cashback Rules (MF4)
+Type Safety & Supabase / RLS
 
-* Voluntary Cashback is allowed when:
+Không dùng any.
 
-  * Account has no cashback
-  * OR cashback budget is exhausted
+Nullable: xử lý rõ ?? null / ?? ''.
 
-* Voluntary cashback values:
+Query chọn cột cụ thể.
 
-  * Are allowed to be negative / overflow
-  * Must NOT affect min spend or budget calculations
+RLS luôn bật, không bypass.
 
-* No cashback database schema changes in MF4
+UI Rules (STRICT)
 
-## Business Rules
+Table avatars/thumbnails square (rounded-none).
 
-* Transfer transactions:
+Row click không trigger action; chỉ Actions menu/buttons.
 
-  * Must auto‑select category `Money Transfer`
-  * Must NOT allow credit cards as source accounts
+Modal layout: sticky header + scrollable body + fixed footer.
 
-* Lending / Repay:
+Badges: size nhất quán, chữ dài vẫn giữ chiều cao/padding đồng đều.
 
-  * Require person selection
+Business Integrity Rules (CRITICAL)
 
-## Engineering Discipline
+transactions là source-of-truth.
 
-* Do not duplicate business logic across components
-* Keep derived state in helpers when possible
-* Small, reviewable commits only
+Refund trio: Parent → Void → Refund; không cho edit Parent khi có linked children.
 
-## QA Expectations
+Installments không double-count.
 
-* Test modal on mobile & desktop
-* Test each transaction type
-* Verify voluntary cashback toggle behavior
-* Verify transfer constraints
+Dynamic Branch + Commit + Push (NEW — integrated)
 
----
+Agent không push main.
+
+Agent tạo branch theo format: story-{MILESTONE_ID}-{SCOPE_SLUG}
+
+Ví dụ: story-m1.1-resync-accounts-balance
+
+Commit message format: Story {MILESTONE_ID}: {TITLE}
+
+Checklist trước push: build pass, typecheck pass.
+
+Gợi ý đoạn hướng dẫn thao tác (không cần dài):
+
+checkout main → pull --rebase → checkout -b branch → git add . → git commit -m … → git push -u origin branch.
+Mục đích: tóm luật coding + UI standards mà Agent hay vi phạm.
+
+Cập nhật cần thêm:
+
+Không dùng header có dấu “/” (xấu). Đặt tên header mượt.
+
+Badges trong table: đồng size (height/padding/font), không phụ thuộc độ dài text.
+
+Ở People Transactions table:
+
+Type In/Out color phải rõ (In xanh, Out đỏ).
+
+Không còn “left spacing” do Type badge cũ.
+
+Notes column: nếu repay không có shop image → dùng image của account nhận tiền.
+
+Cột “Accounts ➜ People” đổi tên + logic hiển thị đúng chiều (Repay: to Account, không phải to Person).
+
+Icon refund/installment nếu còn: phải “nằm sau lưng img” (layering), không che avatar.

@@ -1,56 +1,46 @@
 ---
-description: Commit and Push Changes
+description: Dynamic Story Commit Flow
 ---
 
-# .agent/workflows/commit_and_push.md — Dynamic (Template)
+description: Dynamic Story Commit Flow
 
-> Purpose: avoid rewriting branch/commit instructions each phase.
-> This workflow uses placeholders.
+.agent/workflows/commit_and_push.md — Story Sprint
 
-## Required Inputs
+Purpose: Standardize git flow for Story Sprints.
 
-* `PHASE_ID` (example: `9.2.1`)
-* `SCOPE_SLUG` (example: `FIX-RECOMPUTE-CONSISTENCY`)
-* `COMMIT_TITLE` (example: `Fix cashback recompute consistency and normalize budgets`)
-* `BASE_BRANCH` (default: `main`)
+Required Inputs
 
-## Derived
+STORY_ID (example: M1.1)
 
-BRANCH_NAME=PHASE-{PHASE_ID}-{SCOPE}
-COMMIT_MSG=PHASE {PHASE_ID} - {TITLE}
+SLUG (example: ui-polish-people)
+
+MESSAGE (example: Update transaction badges and fix favicon)
+
+Workflow
+
+Switch/Create Branch
+
+# Ensure we are on main and up to date
+git checkout main
+git pull origin main
+
+# Create new story branch
+git checkout -b story/${STORY_ID}-${SLUG}
 
 
-## Workflow
+Stage & Commit
 
-1. Create Branch
-
-```bash
-git checkout ${BASE_BRANCH}
-git pull --rebase
-git checkout -b ${BRANCH_NAME}
-```
-
-2. Add All
-
-```bash
 git add .
-```
+git commit -m "STORY ${STORY_ID}: ${MESSAGE}"
 
-3. Commit
 
-```bash
-git commit -m "${COMMIT_MSG}"
-```
+Push
 
-4. Push
+git push -u origin story/${STORY_ID}-${SLUG}
 
-```bash
-git push -u origin ${BRANCH_NAME}
-```
 
-## Notes
+Notes
 
-* If multiple commits are needed, keep commit messages consistent:
+Keep PRs focused. If M1.1 gets too big, split it into M1.1a, M1.1b.
 
-  * `PHASE ${PHASE_ID} - <SUBTITLE>`
-* Never push directly to `main`; use PR flow.
+Always self-review diffs before committing.

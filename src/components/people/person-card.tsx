@@ -102,10 +102,11 @@ function PersonCardComponent({
     // Find the detailed debt summary for the current cycle to get accurate Balance (Remains) and Repaid amounts
     const currentDebtDetails = monthlyDebts.find(d => d.tagLabel === cycleLabel)
 
-    // Use the detailed amount (Remains) if available, otherwise fallback to top-level property
-    // The user explicitly requested to show "Remains" (Balance) instead of Total Debt here.
-    const displayCycleBalance = currentDebtDetails ? currentDebtDetails.amount : (person.current_cycle_debt ?? 0)
+    // Use the detailed amount (Total Debt) if available
+    const totalCycleDebt = currentDebtDetails ? currentDebtDetails.amount : (person.current_cycle_debt ?? 0)
     const displayCycleRepaid = currentDebtDetails?.total_repaid ?? 0
+    // "Remains" = Total Debt - Repaid
+    const displayCycleBalance = totalCycleDebt - displayCycleRepaid
 
     return (
         <>
@@ -217,16 +218,25 @@ function PersonCardComponent({
                             )}
                             triggerContent={
                                 <>
-                                    <div className="flex flex-col items-start min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="opacity-70 text-xs font-semibold">{cycleLabel} (Remains):</span>
-                                            <span className="text-base">{numberFormatter.format(displayCycleBalance)}</span>
+                                    <div className="flex flex-col items-start min-w-0 w-full gap-0.5">
+                                        {/* Row 1: Remains */}
+                                        <div className="flex items-center gap-2 w-full justify-between">
+                                            <span className="text-xs text-slate-500 font-medium">{cycleLabel}:</span>
+                                            {displayCycleBalance <= 0 ? (
+                                                <span className="flex items-center gap-1 text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded text-xs font-bold border border-emerald-100">
+                                                    <Check className="h-3 w-3" /> Paid
+                                                </span>
+                                            ) : (
+                                                <span className="text-base font-bold text-slate-900">{numberFormatter.format(displayCycleBalance)}</span>
+                                            )}
                                         </div>
-                                        {currentDebtDetails && (
-                                            <span className="text-[10px] font-medium opacity-80 mt-0.5 text-emerald-600">
-                                                Repaid: {numberFormatter.format(displayCycleRepaid)}
+                                        {/* Row 2: Repaid */}
+                                        <div className="flex items-center gap-2 w-full justify-between border-t border-slate-100 pt-0.5 mt-0.5">
+                                            <span className="text-[10px] text-slate-400 font-medium">Paid:</span>
+                                            <span className="text-[10px] font-medium text-emerald-600">
+                                                {compactNumberFormatter.format(displayCycleRepaid)}
                                             </span>
-                                        )}
+                                        </div>
                                     </div>
                                     {isSettled ? <Check className="h-4 w-4" /> : hasDebt ? <AlertTriangle className="h-4 w-4" /> : null}
                                 </>

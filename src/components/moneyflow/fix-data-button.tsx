@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { RefreshCw, CheckCircle, AlertCircle } from 'lucide-react'
-import { fixAllAccountBalances } from '@/actions/admin-actions'
+import { resyncAllAccountBalances } from '@/actions/admin-actions'
 import { cn } from '@/lib/utils'
 
 export function FixDataButton() {
@@ -16,7 +16,7 @@ export function FixDataButton() {
         setStatus('idle')
 
         try {
-            const result = await fixAllAccountBalances()
+            const result = await resyncAllAccountBalances()
             if (result.success) {
                 setStatus('success')
                 setMessage(result.message || 'Success')
@@ -59,7 +59,7 @@ export function FixDataButton() {
                 <RefreshCw className="h-3.5 w-3.5" />
             )}
             <span>
-                {isLoading ? 'Fixing...' : status === 'idle' ? 'Fix Data Integrity' : message}
+                {isLoading ? 'Re-Syncing...' : status === 'idle' ? 'Re-Sync' : message}
             </span>
         </button>
     )

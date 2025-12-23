@@ -1,139 +1,123 @@
 ---
-description: Task Descriptions
+description: Current Story Sprint Tasks
 ---
 
-# PHASE 7.3 — Cashback Policy Engine (Priority, Conflict Resolution, Preview)
+.agent/workflows/task.md (Story Sprint — Milestone 1: Abcde…)
 
-## Goal
+Tên story: Milestone 1 (Abcde…) — Re-Sync Integrity + People/Accounts UI Fixes
 
-Finalize the cashback policy engine so that **any transaction always resolves to exactly one explainable policy**.
-This phase completes the cashback logic after UX improvements in Phase 7.2B.
+Goal
 
----
+Fix các lỗi integrity (Accounts balance re-sync) và các lỗi UI/logic ở People pages.
 
-## In Scope
+Ship theo PR flow với branch naming story.
 
-### 1. Deterministic Policy Resolution (Final Form)
+Scope (chia nhỏ để dễ merge)
 
-Implement a strict resolution order when multiple rules may apply:
+Vì M1 dài, tách thành M1.1 / M1.2 / M1.3 như sau:
 
-**Resolution order:**
+Story M1.1 — Re-Sync Accounts Balance (PRIO #1)
 
-1. Active Level (by min_total_spend)
-2. Category Rules inside the active Level
+Problem: Edit account balance sau khi có lịch sử giao dịch không trigger tính lại → sai số (ví dụ MSB Online đáng lẽ 27,080,282 nhưng hiển thị 30,000,000).
 
-   * More specific rules win (smaller category set)
-   * If equal specificity, lower index (earlier rule) wins
-3. Level default rate
-4. Program default rate (fallback)
+Requirements
 
-Only ONE policy must be applied per transaction.
+Đổi nút/label “Fix Data Integrity” thành “Re-Sync”.
 
----
+Re-Sync phải recompute lại balance cho mọi account dựa trên lịch sử transactions/transaction_lines (theo cách repo đang tính).
 
-### 2. Rule Priority & Conflict Handling
+Nếu code hiện tại chưa auto-recompute khi update account → thêm logic.
 
-Enhance rule metadata:
+Must be idempotent; chạy nhiều lần ra cùng kết quả.
 
-```ts
-policy: {
-  levelId: string;
-  ruleId?: string;
-  ruleType: 'category' | 'level_default' | 'program_default';
-  priority: number;
-}
-```
+Verify / Test
 
-Rules:
+Case mẫu: MSB Online missing limit ban đầu 0 → sau edit nhập balance 30tr → Re-Sync phải đưa về đúng 27,080,282.
 
-* priority is implicit from order (earlier = higher priority)
-* no manual priority UI yet
-* conflict resolution must be fully deterministic
+Unit/Script test (nếu có harness), hoặc manual: mở account detail trước/sau Re-Sync.
 
----
+Build + typecheck pass.
 
-### 3. Cashback Preview / Simulation
+Story M1.2 — People Cards: Remains vs Repaid (PRIO #2)
 
-Add a preview layer (read-only):
+Problem: People cards đang show DEC 25 (Remains): <amount> nhưng thực tế đó là Total nợ của kỳ chứ không phải remains.
 
-```ts
-simulateCashback({
-  accountId,
-  amount,
-  categoryId,
-  occurredAt
-}) => {
-  rate,
-  maxReward,
-  estimatedReward,
-  appliedLevel,
-  appliedRule
-}
-```
+Requirements
 
-Usage:
+Tách thành 2 hàng/badges:
 
-* Transaction add/edit modal
-* Tooltip in Cashback Analysis table
+Remains (nợ còn lại)
 
-Preview must NOT persist data.
+Repaid (tổng repay)
 
----
+Nếu đã trả hết: Remains row hiển thị Paid + icon check.
 
-### 4. Entry Generation (Final Rules)
+Nếu được: 2 badge khác màu (nhẹ nhàng, theo shadcn).
 
-When persisting:
+Verify
 
-* One transaction → one cashback_entry
-* entry.metadata.policy must fully describe resolution
-* Respect cycle budget and overflow rules
+Person có kỳ đã trả hết → Paid hiển thị đúng.
 
----
+Tổng remains + repaid khớp với dữ liệu tính toán.
 
-### 5. UI Enhancements (Minimal)
+Story M1.3 — People Detail / Unified Transactions Table polish (PRIO #3)
 
-* Cashback Analysis table:
+Problems & Requirements A) Date badge colors
 
-  * Show Policy column (Level + Rule name)
-  * Hover tooltip shows resolution details
+Type Out = đỏ, In = xanh.
 
-* Transaction modal:
+Xóa spacing dư do Type badge cũ.
 
-  * Show preview hint ("Estimated cashback: …")
+B) Notes column image logic
 
-No redesign beyond this.
+Out transactions: shop image trước notes (giữ).
 
----
+Repay transactions không có shop → lấy image của account nhận tiền (ví dụ VPBank) để hiển thị.
 
-## Out of Scope
+C) Rename + fix “Accounts ➜ People” column
 
-* No new database tables
-* No relational refactor of rules
-* No admin dashboard
+Repay example: “Tuan Trả 50k vào VPBank” phải show chiều to Account (không show [TO] Tuan).
 
----
+Đổi tên header cột cho mượt, không dùng “➜” nữa.
 
-## Acceptance Criteria
+Gợi ý tên: “Parties”, hoặc “From / To”, hoặc “Accounts & People” (Agent chọn 1 phương án đẹp).
 
-1. Any transaction resolves to exactly one policy
-2. Conflicting category rules always resolve deterministically
-3. Cashback preview matches persisted result
-4. Editing rules triggers recompute correctly
-5. No NaN / undefined cashback values
+D) Badges sizing + header naming
 
----
+Header không dùng dấu “/”.
 
-## Test Scenarios
+Badges Type/Category đồng size (height/padding/font), không lệch vì text dài/ngắn.
 
-1. Overlapping category rules (same category in 2 rules)
-2. Multi-category transaction
-3. No category (fallback)
-4. Budget exhausted
-5. Preview vs persisted consistency
+E) Refund/Installment icons layering
 
----
+Nếu icon còn tồn tại: phải nằm “sau” avatar/image, không che UI.
 
-## Branch / PR
+Verify
 
-* Branch: phase-7.3-cashback-policy-engine
-* PR title: Phase 7.3 – Cashback Policy Engine (priority, conflicts, preview)
+Repay row hiển thị đúng “to account”.
+
+Badge colors & spacing đúng.
+
+Không regress refund/installment UI.
+
+Out of Scope
+
+Không đổi schema DB.
+
+Không làm redesign toàn trang.
+
+Acceptance Criteria (Milestone-level)
+
+M1.1: Re-Sync recompute account balances đúng và idempotent.
+
+M1.2: People cards hiển thị Remains/Repaid đúng; Paid state đúng.
+
+M1.3: People detail table đúng color, đúng image logic, đúng column semantics, badge đồng nhất.
+
+CI/build/typecheck pass.
+
+Branch / PR Rules
+
+Branch: story-{MILESTONE_ID}-{SCOPE_SLUG}
+
+PR title: Story {MILESTONE_ID}: {TITLE}

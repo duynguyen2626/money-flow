@@ -1,0 +1,19 @@
+Mục đích: tóm luật coding + UI standards mà Agent hay vi phạm.
+
+Cập nhật cần thêm:
+
+Không dùng header có dấu “/” (xấu). Đặt tên header mượt.
+
+Badges trong table: đồng size (height/padding/font), không phụ thuộc độ dài text.
+
+Ở People Transactions table:
+
+Type In/Out color phải rõ (In xanh, Out đỏ).
+
+Không còn “left spacing” do Type badge cũ.
+
+Notes column: nếu repay không có shop image → dùng image của account nhận tiền.
+
+Cột “Accounts ➜ People” đổi tên + logic hiển thị đúng chiều (Repay: to Account, không phải to Person).
+
+Icon refund/installment nếu còn: phải “nằm sau lưng img” (layering), không che avatar.
