@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CheckCircle2, Search, Wallet, X } from 'lucide-react'
+import { CheckCircle2, Search, Wallet, X, Loader2 } from 'lucide-react'
 import { toast } from "sonner"
 import { Account, TransactionWithDetails } from "@/types/moneyflow.types"
 import { confirmRefundAction, getOriginalAccount } from "@/actions/transaction-actions"
@@ -218,6 +218,7 @@ export function ConfirmRefundDialog({
                         disabled={!selectedAccountId || isSubmitting}
                         className="bg-green-600 hover:bg-green-700 text-white"
                     >
+                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {isSubmitting ? 'Confirming...' : 'Confirm Received'}
                     </Button>
                 </div>

@@ -9,6 +9,7 @@ import { FamilyCardGroup } from './family-card-group'
 import { Account, AccountCashbackSnapshot, Category, Person, Shop } from '@/types/moneyflow.types'
 import { updateAccountConfigAction } from '@/actions/account-actions'
 import { computeNextDueDate, getSharedLimitParentId } from '@/lib/account-utils'
+import { getCreditCardAvailableBalance } from '@/lib/account-balance'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { UsageStats, QuickPeopleConfig } from '@/types/settings.types'
@@ -66,7 +67,6 @@ function getDaysUntilDue(account: Account): number {
 }
 
 function getAccountBalance(account: Account, allAccounts: Account[]): number {
-  const creditLimit = account.credit_limit ?? 0
   const netBalance = (account.total_in ?? 0) + (account.total_out ?? 0)
 
   if (account.type !== 'credit_card') return netBalance
@@ -75,18 +75,17 @@ function getAccountBalance(account: Account, allAccounts: Account[]): number {
   if (sharedLimitParentId) {
     const parent = allAccounts.find(a => a.id === sharedLimitParentId)
     if (parent) {
-      const parentNetBalance = (parent.total_in ?? 0) + (parent.total_out ?? 0)
       const siblings = allAccounts.filter(a => getSharedLimitParentId(a.cashback_config) === parent.id)
-      const totalChildDebt = siblings.reduce((sum, child) => {
-        const childNet = (child.total_in ?? 0) + (child.total_out ?? 0)
-        return sum + Math.abs(childNet < 0 ? childNet : 0)
+      const familyMembers = [parent, ...siblings]
+      const totalDebt = familyMembers.reduce((sum, member) => {
+        return sum + (member.current_balance ?? 0)
       }, 0)
-      const parentDebt = Math.abs(parentNetBalance < 0 ? parentNetBalance : 0)
-      return (parent.credit_limit ?? 0) - (parentDebt + totalChildDebt)
+
+      return (parent.credit_limit ?? 0) - totalDebt
     }
   }
 
-  return creditLimit + netBalance
+  return getCreditCardAvailableBalance(account)
 }
 
 // Memoized filter button

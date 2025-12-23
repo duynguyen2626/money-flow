@@ -399,8 +399,52 @@ export function getCashbackCycleTag(
   if (!range) return null;
 
   const end = range.end;
-  const month = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][end.getMonth()];
-  const year = String(end.getFullYear()).slice(2);
+  return formatIsoCycleTag(end);
+}
 
-  return `${month}${year}`;
+const CYCLE_MONTHS = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
+
+export function formatIsoCycleTag(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  return `${year}-${month}`
+}
+
+export function formatLegacyCycleTag(date: Date) {
+  const month = CYCLE_MONTHS[date.getMonth()]
+  const year = String(date.getFullYear()).slice(2)
+  return `${month}${year}`
+}
+
+export function parseCycleTag(tag: string): { year: number; month: number } | null {
+  if (!tag) return null
+
+  const isoMatch = tag.match(/^(\d{4})-(\d{2})$/)
+  if (isoMatch) {
+    const year = Number(isoMatch[1])
+    const month = Number(isoMatch[2])
+    if (Number.isFinite(year) && month >= 1 && month <= 12) {
+      return { year, month }
+    }
+  }
+
+  const dashedLegacyMatch = tag.match(/^([A-Z]{3})-(\d{4})$/)
+  if (dashedLegacyMatch) {
+    const monthIdx = CYCLE_MONTHS.indexOf(dashedLegacyMatch[1])
+    const year = Number(dashedLegacyMatch[2])
+    if (monthIdx >= 0 && Number.isFinite(year)) {
+      return { year, month: monthIdx + 1 }
+    }
+  }
+
+  const legacyMatch = tag.match(/^([A-Z]{3})(\d{2})$/)
+  if (legacyMatch) {
+    const monthIdx = CYCLE_MONTHS.indexOf(legacyMatch[1])
+    const year = 2000 + Number(legacyMatch[2])
+    if (monthIdx >= 0 && Number.isFinite(year)) {
+      return { year, month: monthIdx + 1 }
+    }
+  }
+
+  return null
 }

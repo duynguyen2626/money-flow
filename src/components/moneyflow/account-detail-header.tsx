@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
 import { createClient } from '@/lib/supabase/client'
 import { getAccountTypeLabel, getSharedLimitParentId } from '@/lib/account-utils'
+import { getCreditCardAvailableBalance } from '@/lib/account-balance'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { AccountSpendingStats } from '@/types/cashback.types'
 import { toast } from 'sonner'
@@ -63,7 +64,7 @@ type AccountDetailHeaderProps = {
 
 const computeDisplayBalance = (account: Account, allAccounts: Account[]) => {
   if (account.type === 'credit_card') {
-    return Math.abs(account.current_balance ?? 0)
+    return getCreditCardAvailableBalance(account)
   }
   return account.current_balance ?? 0
 }
@@ -293,7 +294,15 @@ export function AccountDetailHeader({
   }
 
   const displayBalance = computeDisplayBalance(account, allAccounts)
-  const balanceTone = displayBalance < 0 ? 'text-red-600' : 'text-slate-900'
+  const balanceTone = account.type === 'credit_card'
+    ? account.current_balance > 0
+      ? 'text-red-600'
+      : account.current_balance < 0
+        ? 'text-emerald-600'
+        : 'text-slate-900'
+    : displayBalance < 0
+      ? 'text-red-600'
+      : 'text-slate-900'
   const statusBadge = isCurrentlyActive
     ? 'bg-emerald-50 text-emerald-700'
     : 'bg-slate-100 text-slate-600'

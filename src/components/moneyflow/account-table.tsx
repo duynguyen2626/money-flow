@@ -55,6 +55,7 @@ function getAccountIcon(type: Account['type'], className = "h-4 w-4") {
 }
 
 import { getDisplayBalance } from '@/lib/display-balance' // Add import
+import { getCreditCardUsage } from '@/lib/account-balance'
 
 export function AccountTable({
   accounts,
@@ -165,15 +166,17 @@ export function AccountTable({
                     // Parse manually if stats missing or for extra fields
                     const parsedConfig = config ? parseCashbackConfig(config) : null
 
-                    const isNegative = (account.current_balance ?? 0) < 0
                     const isActive = typeof account.is_active === 'boolean' ? account.is_active : true
                     const isPending = pendingId === account.id
                     // Use displayBalance helper for Family Balance column context
                     const balance = getDisplayBalance(account, 'family_tab', allAccounts) // Use 'family_tab' context logic (show parent if child)
+                    const isNegative = balance < 0
                     const limit = account.credit_limit ?? 0
 
                     // Usage % for tooltip
-                    const usage = limit > 0 ? (Math.abs(balance) / limit) * 100 : 0
+                    const usage = account.type === 'credit_card'
+                      ? getCreditCardUsage(account).percent
+                      : limit > 0 ? (Math.abs(balance) / limit) * 100 : 0
                     const usageColor = usage > 80 ? 'text-red-600' : usage > 30 ? 'text-amber-600' : 'text-emerald-600'
 
                     return (

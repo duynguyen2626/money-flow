@@ -8,7 +8,7 @@ import { Account } from '@/types/moneyflow.types'
 import type { Json } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
 import { createAccount } from '@/actions/account-actions'
-import { Plus, Trash2, X, Copy } from 'lucide-react'
+import { Plus, Trash2, X, Copy, Loader2 } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { CustomDropdown, type DropdownOption } from '@/components/ui/custom-dropdown'
 import { ConfirmationModal } from '@/components/ui/confirmation-modal'
@@ -1154,6 +1154,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
                     disabled={isPending}
                     className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
                   >
+                    {isPending && <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" />}
                     {isPending ? 'Creating...' : 'Create Account'}
                   </button>
                 </div>

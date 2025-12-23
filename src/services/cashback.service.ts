@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server';
 import { TransactionWithDetails } from '@/types/moneyflow.types';
 import { CashbackCard, AccountSpendingStats, CashbackTransaction } from '@/types/cashback.types';
-import { calculateBankCashback, parseCashbackConfig, getCashbackCycleRange, getCashbackCycleTag } from '@/lib/cashback';
+import { calculateBankCashback, parseCashbackConfig, getCashbackCycleRange, getCashbackCycleTag, formatIsoCycleTag, formatLegacyCycleTag, parseCycleTag } from '@/lib/cashback';
 import { normalizePolicyMetadata } from '@/lib/cashback-policy';
 import { mapUnifiedTransaction } from '@/lib/transaction-mapper';
 
@@ -26,7 +26,7 @@ function createAdminClient() {
  * Ensures a cashback cycle exists for the given account and tag.
  * Returns the cycle ID.
  */
-async function ensureCycle(accountId: string, cycleTag: string, accountConfig: any) {
+async function ensureCycle(accountId: string, cycleTag: string, accountConfig: any, fallbackTag?: string) {
   const supabase = createClient();
 
   // 1. Try to fetch existing
@@ -37,7 +37,18 @@ async function ensureCycle(accountId: string, cycleTag: string, accountConfig: a
     .eq('cycle_tag', cycleTag)
     .maybeSingle();
 
-  if (existing) return existing.id;
+  if (existing) return { id: existing.id, tag: cycleTag };
+
+  if (fallbackTag && fallbackTag !== cycleTag) {
+    const { data: fallback } = await supabase
+      .from('cashback_cycles')
+      .select('id')
+      .eq('account_id', accountId)
+      .eq('cycle_tag', fallbackTag)
+      .maybeSingle();
+
+    if (fallback) return { id: fallback.id, tag: fallbackTag };
+  }
 
   // 2. Create if not exists
   const config = parseCashbackConfig(accountConfig, accountId);
@@ -67,11 +78,11 @@ async function ensureCycle(accountId: string, cycleTag: string, accountConfig: a
       .eq('cycle_tag', cycleTag)
       .maybeSingle();
 
-    if (retry) return retry.id;
+    if (retry) return { id: retry.id, tag: cycleTag };
     throw error;
   }
 
-  return newCycle.id;
+  return { id: newCycle.id, tag: cycleTag };
 }
 
 /**
@@ -81,9 +92,22 @@ export async function upsertTransactionCashback(
   transaction: TransactionWithDetails
 ) {
   const supabase = createClient();
+  const { data: existingEntries } = await supabase
+    .from('cashback_entries')
+    .select('cycle_id, account_id')
+    .eq('transaction_id', transaction.id);
+
+  const existingCycleIds = Array.from(new Set((existingEntries ?? [])
+    .map((entry: any) => entry.cycle_id)
+    .filter(Boolean)));
 
   if (!['expense', 'debt'].includes(transaction.type ?? '')) {
-    await supabase.from('cashback_entries').delete().eq('transaction_id', transaction.id);
+    if (existingEntries && existingEntries.length > 0) {
+      await supabase.from('cashback_entries').delete().eq('transaction_id', transaction.id);
+      for (const cycleId of existingCycleIds) {
+        await recomputeCashbackCycle(cycleId);
+      }
+    }
     return;
   }
 
@@ -94,7 +118,12 @@ export async function upsertTransactionCashback(
     .single();
 
   if (!account || account.type !== 'credit_card') {
-    await supabase.from('cashback_entries').delete().eq('transaction_id', transaction.id);
+    if (existingEntries && existingEntries.length > 0) {
+      await supabase.from('cashback_entries').delete().eq('transaction_id', transaction.id);
+      for (const cycleId of existingCycleIds) {
+        await recomputeCashbackCycle(cycleId);
+      }
+    }
     return;
   }
 
@@ -120,25 +149,23 @@ export async function upsertTransactionCashback(
   const config = parseCashbackConfig(account.cashback_config, account.id);
   const date = new Date(transaction.occurred_at);
   const cycleRange = getCashbackCycleRange(config, date);
+  const tagDate = cycleRange?.end ?? date;
+  const cycleTag = formatIsoCycleTag(tagDate);
+  const legacyCycleTag = formatLegacyCycleTag(tagDate);
 
-  let cycleTag = transaction.persisted_cycle_tag;
-  if (!cycleTag && cycleRange) {
-    // Determine tag based on cycle END month (for statement cycles, this is the month the statement comes out)
-    const tagDate = cycleRange.end;
-    const month = tagDate.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-    const year = tagDate.getFullYear().toString().slice(-2);
-    cycleTag = `${month}${year}`;
-  } else if (!cycleTag) {
-    const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-    const year = date.getFullYear().toString().slice(-2);
-    cycleTag = `${month}${year}`;
-  }
+  const { id: cycleId, tag: resolvedTag } = await ensureCycle(
+    account.id,
+    cycleTag,
+    account.cashback_config,
+    legacyCycleTag
+  );
 
-  const cycleId = await ensureCycle(account.id, cycleTag, account.cashback_config);
-
-  // MF5.2 FIX: Persist the cycle tag to the transaction so recompute (summing logic) works!
-  if (transaction.persisted_cycle_tag !== cycleTag) {
-    await supabase.from('transactions').update({ persisted_cycle_tag: cycleTag }).eq('id', transaction.id);
+  // Persist the resolved tag to the transaction so recompute (summing logic) works.
+  if (transaction.persisted_cycle_tag !== resolvedTag) {
+    await supabase
+      .from('transactions')
+      .update({ persisted_cycle_tag: resolvedTag })
+      .eq('id', transaction.id);
   }
 
   // Get Cycle Totals for Policy Resolution (MF5.3 preparation)
@@ -219,51 +246,30 @@ export async function upsertTransactionCashback(
     throw upsertError;
   }
 
-  // Handle Cycle Migration (Old Cycle Cleanup)
-  // If transaction MOVED to a new cycle (date change) or account, we must recompute the OLD cycle.
-  // BUT we don't know the old cycle ID here easily without querying BEFORE mutation.
-  // However, `normalizeInput` handles account change.
-  // If we just updated, the OLD entry is overwritten if account same.
-  // If account CHANGED, the OLD entry (with old account_id) needs explicit deletion.
-  // `updateTransaction` in transaction.service calls upsert.
-  // But wait! If account_id changed, the unique constraint (account_id, txn_id) doesn't catch the OLD account_id row.
-  // So we still might have a stale row if account changed?
-  // Ah! `updateTransaction` logic: 
-  // We need to ensure we clean up entries for this txnID on OTHER accounts.
-  // Let's add that safety check.
+  const previousCycleId = (existingEntries ?? [])
+    .find((entry: any) => entry.account_id === account.id)?.cycle_id ?? null
+  const staleEntries = (existingEntries ?? [])
+    .filter((entry: any) => entry.account_id !== account.id)
+  const staleCycleIds = Array.from(new Set(staleEntries.map((entry: any) => entry.cycle_id).filter(Boolean)))
 
-  // Clean up any entries for this txn that do NOT match current account
-  await supabase.from('cashback_entries')
-    .delete()
-    .eq('transaction_id', transaction.id)
-    .neq('account_id', account.id);
+  if (staleEntries.length > 0) {
+    await supabase
+      .from('cashback_entries')
+      .delete()
+      .eq('transaction_id', transaction.id)
+      .neq('account_id', account.id);
 
-  // Trigger Recompute Engine for CURRENT cycle
-  await recomputeCashbackCycle(cycleId);
-
-  // Also, since we don't know the ID of the "Old Cycle" from the "Other Account" we just deleted from,
-  // we should find which cycles were affected.
-  // But `delete` doesn't return the deleted rows' cycle_ids easily without select first.
-  // In `updateTransaction` we can handle this, but better here if we can.
-  // Let's rely on the fact that `recomputeCashbackCycle` runs on `cycleId`.
-  // For the OLD cycle, if we deleted a row, its total will be wrong until recomputed.
-  // Refinement: Query entries to delete first, get their cycle_ids, delete them, then recompute those cycles.
-
-  // Optimization: This cleanup is rare (only on account change).
-  // Query "other entries"
-  const { data: staleEntries } = await supabase
-    .from('cashback_entries')
-    .select('cycle_id')
-    .eq('transaction_id', transaction.id)
-    .neq('account_id', account.id);
-
-  if (staleEntries && staleEntries.length > 0) {
-    const staleCycleIds = Array.from(new Set(staleEntries.map(e => e.cycle_id).filter(Boolean)));
-    await supabase.from('cashback_entries').delete().eq('transaction_id', transaction.id).neq('account_id', account.id);
-    for (const oldCid of staleCycleIds) {
-      if (oldCid) await recomputeCashbackCycle(oldCid);
+    for (const oldCycleId of staleCycleIds) {
+      await recomputeCashbackCycle(oldCycleId);
     }
   }
+
+  if (previousCycleId && previousCycleId !== cycleId) {
+    await recomputeCashbackCycle(previousCycleId);
+  }
+
+  // Trigger recompute for the current cycle.
+  await recomputeCashbackCycle(cycleId);
 }
 
 /**
@@ -379,11 +385,27 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   if (!account || account.type !== 'credit_card') return null;
 
   const config = parseCashbackConfig(account.cashback_config, accountId);
-  const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-  const year = date.getFullYear().toString().slice(-2);
-  const cycleTag = `${month}${year}`;
+  const cycleRange = getCashbackCycleRange(config, date);
+  const tagDate = cycleRange?.end ?? date;
+  const cycleTag = formatIsoCycleTag(tagDate);
+  const legacyTag = formatLegacyCycleTag(tagDate);
 
-  const { data: cycle } = await supabase.from('cashback_cycles').select('*').eq('account_id', accountId).eq('cycle_tag', cycleTag).maybeSingle();
+  let cycle = (await supabase
+    .from('cashback_cycles')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('cycle_tag', cycleTag)
+    .maybeSingle()).data ?? null;
+
+  if (!cycle && legacyTag !== cycleTag) {
+    cycle = (await supabase
+      .from('cashback_cycles')
+      .select('*')
+      .eq('account_id', accountId)
+      .eq('cycle_tag', legacyTag)
+      .maybeSingle()).data ?? null;
+  }
+
   console.log(`[getAccountSpendingStats] AID: ${accountId}, Tag: ${cycleTag}, Found: ${!!cycle}, Real: ${cycle?.real_awarded}`);
 
   let categoryName = undefined;
@@ -413,7 +435,6 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
   const netProfit = virtualProfit - overflowLoss;
   const remainingBudget = cycle && cycleMaxBudget !== null ? Math.max(0, cycleMaxBudget - earnedSoFar) : null;
 
-  const cycleRange = getCashbackCycleRange(config, date);
   const policyMetadata = normalizePolicyMetadata(policy.metadata);
   const isMinSpendMet = cycle?.met_min_spend ?? (typeof minSpendTarget === 'number' ? currentSpend >= minSpendTarget : true);
 
@@ -448,10 +469,6 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
     date.setMonth(date.getMonth() + monthOffset);
   }
 
-  const month = date.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-  const year = date.getFullYear().toString().slice(-2);
-  const cycleTag = `${month}${year}`;
-
   let query = supabase.from('accounts').select('id, name, type, cashback_config, logo_url').eq('type', 'credit_card');
   if (accountIds && accountIds.length > 0) {
     query = query.in('id', accountIds);
@@ -464,12 +481,24 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
   for (const acc of accounts) {
     if (!acc.cashback_config) continue;
     const config = parseCashbackConfig(acc.cashback_config, acc.id);
+    const cycleRange = getCashbackCycleRange(config, date);
+    const tagDate = cycleRange?.end ?? date;
+    const cycleTag = formatIsoCycleTag(tagDate);
+    const legacyTag = formatLegacyCycleTag(tagDate);
 
-    const { data: cycle } = await supabase.from('cashback_cycles')
+    let cycle = (await supabase.from('cashback_cycles')
       .select('*')
       .eq('account_id', acc.id)
       .eq('cycle_tag', cycleTag)
-      .maybeSingle();
+      .maybeSingle()).data ?? null;
+
+    if (!cycle && legacyTag !== cycleTag) {
+      cycle = (await supabase.from('cashback_cycles')
+        .select('*')
+        .eq('account_id', acc.id)
+        .eq('cycle_tag', legacyTag)
+        .maybeSingle()).data ?? null;
+    }
 
     const currentSpend = cycle?.spent_amount ?? 0;
     const realAwarded = cycle?.real_awarded ?? 0;
@@ -487,7 +516,6 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       ? Math.min(100, (earnedSoFar / maxCashback) * 100)
       : 0;
 
-    const cycleRange = getCashbackCycleRange(config, date);
     const metMinSpend = cycle?.met_min_spend ?? (typeof minSpend === 'number' ? currentSpend >= minSpend : true);
     const missingMinSpend = typeof minSpend === 'number' && minSpend > currentSpend ? minSpend - currentSpend : null;
 
@@ -501,20 +529,24 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
     let transactions: CashbackTransaction[] = [];
     if (includeTransactions && cycle) {
       // Use direct relations instead of transaction_lines to fix missing relation error
-      const { data: entries } = await supabase
+      const { data: entries, error: entriesError } = await supabase
         .from('cashback_entries')
         .select(`
           mode, amount, metadata, transaction_id,
           transaction:transactions!inner (
             id, occurred_at, note, amount, account_id,
             cashback_share_percent, cashback_share_fixed,
-            category:categories(name, icon, logo_url),
+            category:categories(name, icon),
             shop:shops(name, logo_url),
             person:profiles!transactions_person_id_fkey(name)
           )
         `)
         .eq('cycle_id', cycle.id)
         .eq('transaction.account_id', acc.id);
+
+      if (entriesError) {
+        console.error('[getCashbackProgress] Failed to load entries:', entriesError);
+      }
 
       if (entries && entries.length > 0) {
         transactions = entries.map((e: any) => {
@@ -658,18 +690,29 @@ export async function simulateCashback(params: {
 
   const config = parseCashbackConfig(account.cashback_config, accountId);
   const cycleRange = getCashbackCycleRange(config, date);
-  const cycleTag = getCashbackCycleTag(date, config);
+  const tagDate = cycleRange?.end ?? date;
+  const cycleTag = formatIsoCycleTag(tagDate);
+  const legacyCycleTag = formatLegacyCycleTag(tagDate);
 
   // 2. Get Current Cycle Totals (Read-Only)
   // We need to find the correct cycle to know the 'spent_amount' so far.
   let spentSoFar = 0;
   if (cycleTag) {
-    const { data: cycle } = await supabase
+    let cycle = (await supabase
       .from('cashback_cycles')
       .select('spent_amount')
       .eq('account_id', accountId)
       .eq('cycle_tag', cycleTag)
-      .maybeSingle();
+      .maybeSingle()).data ?? null;
+
+    if (!cycle && legacyCycleTag !== cycleTag) {
+      cycle = (await supabase
+        .from('cashback_cycles')
+        .select('spent_amount')
+        .eq('account_id', accountId)
+        .eq('cycle_tag', legacyCycleTag)
+        .maybeSingle()).data ?? null;
+    }
 
     spentSoFar = cycle?.spent_amount ?? 0;
   }
@@ -739,7 +782,7 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
   // 3. Fetch ALL entries
   let transactions: CashbackTransaction[] = [];
   // Use direct relations instead of transaction_lines to fix missing relation error
-  const { data: entries } = await supabase
+  const { data: entries, error: entriesError } = await supabase
     .from('cashback_entries')
     .select(`
           mode, amount, metadata, transaction_id, cycle_id,
@@ -747,13 +790,17 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
           transaction:transactions!inner (
             id, occurred_at, note, amount, account_id,
             cashback_share_percent, cashback_share_fixed,
-            category:categories(name, icon, logo_url),
+            category:categories(name, icon),
             shop:shops(name, logo_url),
             person:profiles!transactions_person_id_fkey(name)
           )
         `)
     .eq('transaction.account_id', accountId)
 
+
+  if (entriesError) {
+    console.error('[getAllCashbackHistory] Failed to load entries:', entriesError);
+  }
 
   if (entries && entries.length > 0) {
     console.log(`[getAllCashbackHistory] Found ${entries.length} entries for account ${accountId}`);
@@ -906,12 +953,10 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
 
   // Helper to get sortable value from tag
   const getSortValue = (tag: string) => {
-    if (!tag || tag.length < 5) return 0;
-    const monthStr = tag.slice(0, 3);
-    const yearStr = tag.slice(3);
-    const m = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'].indexOf(monthStr);
-    const y = parseInt(yearStr);
-    return y * 100 + m;
+    if (!tag) return 0;
+    const parsed = parseCycleTag(tag);
+    if (!parsed) return 0;
+    return parsed.year * 100 + parsed.month;
   };
 
   // Sort chronologically (descending)
@@ -922,27 +967,20 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
     let label = tag;
 
     // Reverse engineer date from tag to build label
-    if (tag && tag.length >= 5) {
-      const monthStr = tag.slice(0, 3);
-      const yearStr = tag.slice(3);
-      const monthIdx = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'].indexOf(monthStr);
-      const year = 2000 + parseInt(yearStr);
+    const parsed = parseCycleTag(tag);
+    if (parsed) {
+      const monthIdx = parsed.month - 1;
+      const year = parsed.year;
 
-      if (monthIdx >= 0 && !isNaN(year)) {
-        // Tag Month is END month.
-        // If Statement Day exists (e.g. 15), then End Date is 14th of Tag Month.
-        // Start Date is 15th of Previous Month.
+      if (config.cycleType === 'statement_cycle' && config.statementDay) {
+        const end = new Date(year, monthIdx, config.statementDay - 1);
+        const start = new Date(year, monthIdx - 1, config.statementDay);
 
-        if (config.cycleType === 'statement_cycle' && config.statementDay) {
-          const end = new Date(year, monthIdx, config.statementDay - 1); // e.g. 14th
-          const start = new Date(year, monthIdx - 1, config.statementDay); // e.g. 15th prev month
-
-          const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-          label = `${fmt(start)} - ${fmt(end)}`;
-        } else {
-          // Calendar or default
-          label = tag;
-        }
+        const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
+        label = `${fmt(start)} - ${fmt(end)}`;
+      } else {
+        const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' });
+        label = fmt.format(new Date(year, monthIdx, 1));
       }
     }
 

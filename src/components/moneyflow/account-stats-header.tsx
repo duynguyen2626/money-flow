@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ArrowDownRight, ArrowUpRight, CreditCard, TrendingUp, Wallet, Link2, Archive, RotateCcw, Clock4, CheckCircle2, RefreshCw, Settings } from 'lucide-react'
 
 import { formatCurrency, getAccountTypeLabel } from '@/lib/account-utils'
+import { getCreditCardAvailableBalance } from '@/lib/account-balance'
 import { Account } from '@/types/moneyflow.types'
 import { AccountSpendingStats } from '@/types/cashback.types'
 import { Progress } from '@/components/ui/progress'
@@ -80,7 +81,19 @@ export function AccountStatsHeader({
     }
   }, [account.id])
 
-  const balanceTone = account.current_balance < 0 ? 'text-red-600' : 'text-slate-900'
+  const balanceTone = account.type === 'credit_card'
+    ? account.current_balance > 0
+      ? 'text-red-600'
+      : account.current_balance < 0
+        ? 'text-emerald-600'
+        : 'text-slate-900'
+    : account.current_balance < 0
+      ? 'text-red-600'
+      : 'text-slate-900'
+
+  const displayBalance = account.type === 'credit_card'
+    ? getCreditCardAvailableBalance(account)
+    : account.current_balance
 
   // Removed In/Out stats as requested
   const statItems: {
@@ -210,7 +223,7 @@ export function AccountStatsHeader({
             <div className="mt-1 inline-flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-1">
               <Wallet className="h-4 w-4 text-slate-500" />
               <span className={`text-2xl font-bold tabular-nums ${balanceTone}`}>
-                {formatCurrency(account.current_balance)}
+                {formatCurrency(displayBalance ?? 0)}
               </span>
             </div>
           </div>

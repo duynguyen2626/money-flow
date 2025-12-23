@@ -1,4 +1,5 @@
 import { Account } from "@/types/moneyflow.types"
+import { getCreditCardUsage } from "@/lib/account-balance"
 
 // Helper types for the state
 export type CardActionState = {
@@ -65,15 +66,8 @@ export function getCardActionState(account: Account, hasPendingBatch: boolean = 
     if (account.type === 'credit_card') {
         const stats = account.stats
         const limit = account.credit_limit ?? 0
-        const balance = account.current_balance ?? 0
-
-        // Calculate Debt (Amount Used)
-        // If Limit > 0: Debt = Limit - Balance (Available).
-        // If Limit == 0: Assume 0 debt unless balance is negative.
-        // NOTE: In this app, positive balance usually means available credit? 
-        // Let's stick to the previous implementation: 
-        // "Used = Limit - Balance" if Limit > 0.
-        const debt = limit > 0 ? Math.max(0, limit - balance) : 0
+        const usage = getCreditCardUsage(account)
+        const debt = usage.used
 
         // --- Time State ---
         const daysUntilDue = getDaysUntilDueFromStats(stats)

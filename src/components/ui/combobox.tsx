@@ -15,8 +15,14 @@ export type ComboboxItem = {
   searchValue?: string
 }
 
-type ComboboxProps = {
+export type ComboboxGroup = {
+  label: string
   items: ComboboxItem[]
+}
+
+type ComboboxProps = {
+  items?: ComboboxItem[]
+  groups?: ComboboxGroup[]
   value?: string
   onValueChange: (value: string | undefined) => void
   placeholder?: React.ReactNode
@@ -36,6 +42,7 @@ type ComboboxProps = {
 
 export function Combobox({
   items,
+  groups,
   value,
   onValueChange,
   placeholder = 'Select an item',
@@ -49,7 +56,11 @@ export function Combobox({
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [mounted, setMounted] = React.useState(false)
-  const selectedItem = items.find(item => item.value === value)
+  const flatItems = React.useMemo(
+    () => items ?? groups?.flatMap(group => group.items) ?? [],
+    [items, groups]
+  )
+  const selectedItem = flatItems.find(item => item.value === value)
 
   React.useEffect(() => {
     setMounted(true)
@@ -153,32 +164,62 @@ export function Combobox({
             </div>
           )}
           <CommandList className="max-h-72 overflow-y-auto">
-            {items.length === 0 && !onAddNew && (
+            {flatItems.length === 0 && !onAddNew && (
               <CommandEmpty className="px-3 py-2 text-xs text-slate-500">{emptyState}</CommandEmpty>
             )}
-            {items.map(item => {
-              const isSelected = item.value === value
-              const searchableValue = item.searchValue ?? item.label
-              return (
-                <CommandItem
-                  key={item.value}
-                  value={searchableValue}
-                  onSelect={() => handleSelect(item.value)}
-                  className="flex items-center justify-between px-3 py-2 text-sm transition hover:bg-slate-50"
-                >
-                  <div className="flex items-center gap-2">
-                    {item.icon && <span className="text-slate-500">{item.icon}</span>}
-                    <div className="flex flex-col">
-                      <span className="text-slate-900">{item.label}</span>
-                      {item.description && (
-                        <span className="text-[11px] text-slate-500">{item.description}</span>
-                      )}
+            {groups && groups.length > 0 ? (
+              groups.filter(group => group.items.length > 0).map(group => (
+                <CommandGroup key={group.label} heading={group.label} className="px-1 py-1 text-xs text-slate-500">
+                  {group.items.map(item => {
+                    const isSelected = item.value === value
+                    const searchableValue = item.searchValue ?? item.label
+                    return (
+                      <CommandItem
+                        key={item.value}
+                        value={searchableValue}
+                        onSelect={() => handleSelect(item.value)}
+                        className="flex items-center justify-between px-3 py-2 text-sm transition hover:bg-slate-50"
+                      >
+                        <div className="flex items-center gap-2">
+                          {item.icon && <span className="text-slate-500">{item.icon}</span>}
+                          <div className="flex flex-col">
+                            <span className="text-slate-900">{item.label}</span>
+                            {item.description && (
+                              <span className="text-[11px] text-slate-500">{item.description}</span>
+                            )}
+                          </div>
+                        </div>
+                        {isSelected && <Check className="h-4 w-4 text-blue-600" />}
+                      </CommandItem>
+                    )
+                  })}
+                </CommandGroup>
+              ))
+            ) : (
+              (items ?? []).map(item => {
+                const isSelected = item.value === value
+                const searchableValue = item.searchValue ?? item.label
+                return (
+                  <CommandItem
+                    key={item.value}
+                    value={searchableValue}
+                    onSelect={() => handleSelect(item.value)}
+                    className="flex items-center justify-between px-3 py-2 text-sm transition hover:bg-slate-50"
+                  >
+                    <div className="flex items-center gap-2">
+                      {item.icon && <span className="text-slate-500">{item.icon}</span>}
+                      <div className="flex flex-col">
+                        <span className="text-slate-900">{item.label}</span>
+                        {item.description && (
+                          <span className="text-[11px] text-slate-500">{item.description}</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  {isSelected && <Check className="h-4 w-4 text-blue-600" />}
-                </CommandItem>
-              )
-            })}
+                    {isSelected && <Check className="h-4 w-4 text-blue-600" />}
+                  </CommandItem>
+                )
+              })
+            )}
           </CommandList>
         </Command>
       </PopoverPrimitive.Content>
