@@ -5,7 +5,7 @@ import { format, setDate, subMonths } from 'date-fns';
 import { Database, Json } from '@/types/database.types';
 import { syncTransactionToSheet } from '@/services/sheet.service';
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds';
-import { loadShopInfo, ShopRow, parseMetadata, extractLineMetadata, TransactionRow as MapperTransactionRow, mapUnifiedTransaction } from '@/lib/transaction-mapper';
+import { loadShopInfo, ShopRow, parseMetadata, mapUnifiedTransaction } from '@/lib/transaction-mapper';
 import { TransactionWithDetails } from '@/types/moneyflow.types';
 import { upsertTransactionCashback } from '@/services/cashback.service';
 
@@ -96,102 +96,7 @@ async function resolveCurrentUserId(supabase: ReturnType<typeof createClient>) {
   return user?.id ?? '917455ba-16c0-42f9-9cea-264f81a3db66';
 }
 
-async function buildTransactionLines(
-  supabase: ReturnType<typeof createClient>,
-  input: CreateTransactionInput
-) {
-  const lines: any[] = [];
-  const tag = input.tag;
-
-  if (input.type === 'expense' && input.category_id) {
-    lines.push({
-      account_id: input.source_account_id,
-      amount: -Math.abs(input.amount),
-      type: 'credit',
-    });
-    lines.push({
-      category_id: input.category_id,
-      amount: Math.abs(input.amount),
-      type: 'debit',
-    });
-  } else if (input.type === 'income' && input.category_id) {
-    lines.push({
-      account_id: input.source_account_id,
-      amount: Math.abs(input.amount),
-      type: 'debit',
-    });
-    lines.push({
-      category_id: input.category_id,
-      amount: -Math.abs(input.amount),
-      type: 'credit',
-    });
-  } else if (input.type === 'repayment' && input.debt_account_id) {
-    const repaymentCategoryId = await resolveSystemCategory(supabase, 'Repayment', 'income');
-    if (!repaymentCategoryId) {
-      console.error('FATAL: "Repayment" system category not found.');
-    }
-
-    lines.push({
-      account_id: input.source_account_id,
-      amount: Math.abs(input.amount),
-      type: 'debit',
-      category_id: repaymentCategoryId,
-    });
-    lines.push({
-      account_id: input.debt_account_id,
-      amount: -Math.abs(input.amount),
-      type: 'credit',
-      person_id: input.person_id ?? null,
-    });
-
-  } else if ((input.type === 'debt' || input.type === 'transfer') && input.debt_account_id) {
-    const originalAmount = Math.abs(input.amount);
-    const sharePercentEntry = Math.max(0, Number(input.cashback_share_percent ?? 0));
-    const sharePercentCapped = Math.min(100, sharePercentEntry);
-    const sharePercentRate = sharePercentCapped / 100;
-    const shareFixed = Math.max(0, Number(input.cashback_share_fixed ?? 0));
-    const percentContribution = sharePercentRate * originalAmount;
-    const rawCashback = percentContribution + shareFixed;
-    const cashbackGiven = Math.min(originalAmount, Math.max(0, rawCashback));
-    const debtAmount = Math.max(0, originalAmount - cashbackGiven);
-
-    lines.push({
-      account_id: input.source_account_id,
-      amount: -originalAmount,
-      type: 'credit',
-    });
-    lines.push({
-      account_id: input.debt_account_id,
-      amount: debtAmount,
-      type: 'debit',
-      original_amount: originalAmount,
-      cashback_share_percent: sharePercentRate,
-      cashback_share_fixed: shareFixed,
-      person_id: input.person_id ?? null,
-    });
-
-    if (cashbackGiven > 0) {
-      const discountCategoryId = await resolveDiscountCategoryId(
-        supabase,
-        input.discount_category_id || undefined
-      );
-      if (!discountCategoryId) {
-        console.error('No fallback category found for discount line');
-        return null;
-      }
-      lines.push({
-        category_id: discountCategoryId,
-        amount: cashbackGiven,
-        type: 'debit',
-      });
-    }
-  } else {
-    console.error('Invalid transaction type or missing data');
-    return null;
-  }
-
-  return { lines, tag };
-}
+// buildTransactionLines removed
 
 async function calculatePersistedCycleTag(
   supabase: ReturnType<typeof createClient>,
@@ -262,54 +167,7 @@ function buildSheetPayload(
   };
 }
 
-async function syncRepaymentTransaction(
-  supabase: ReturnType<typeof createClient>,
-  transactionId: string,
-  input: CreateTransactionInput,
-  lines: any[],
-  shopInfo: ShopRow | null
-) {
-  try {
-    const { data: destAccount } = await supabase
-      .from('accounts')
-      .select('name')
-      .eq('id', input.debt_account_id ?? '')
-      .single();
-
-    for (const line of lines) {
-      if (!line.person_id) continue;
-
-      const originalAmount =
-        typeof line.original_amount === 'number' ? line.original_amount : line.amount;
-      const cashbackPercent =
-        typeof line.cashback_share_percent === 'number' ? line.cashback_share_percent : undefined;
-      const cashbackFixed =
-        typeof line.cashback_share_fixed === 'number' ? line.cashback_share_fixed : undefined;
-
-      void syncTransactionToSheet(
-        line.person_id,
-        {
-          id: transactionId,
-          occurred_at: input.occurred_at,
-          note: input.note,
-          tag: input.tag,
-          shop_name: shopInfo?.name ?? (destAccount as any)?.name ?? null,
-          amount: line.amount,
-          original_amount: originalAmount,
-          cashback_share_percent: cashbackPercent,
-          cashback_share_fixed: cashbackFixed,
-        },
-        'create'
-      ).then(() => {
-        console.log(`[Sheet Sync] Triggered for Repayment to Person ${line.person_id}`);
-      }).catch(err => {
-        console.error('Sheet Sync Error (Repayment):', err);
-      });
-    }
-  } catch (error) {
-    console.error("Failed to sync repayment transaction:", error);
-  }
-}
+// syncRepaymentTransaction removed
 
 export async function createTransaction(input: CreateTransactionInput): Promise<boolean> {
   const supabase = createClient();
@@ -317,11 +175,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   const { data: { user } } = await supabase.auth.getUser();
   const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66';
 
-  const built = await buildTransactionLines(supabase, input);
-  if (!built) {
-    return false;
-  }
-  const { tag } = built;
+  const tag = input.tag;
 
   const persistedCycleTag = await calculatePersistedCycleTag(
     supabase,
@@ -775,6 +629,8 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       tag,
       person_id,
       amount,
+      category_id,
+      metadata,
       cashback_share_percent,
       cashback_share_fixed
     `)
@@ -786,12 +642,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     return false;
   }
 
-  const built = await buildTransactionLines(supabase, input);
-  if (!built) {
-    return false;
-  }
-
-  const { lines, tag } = built;
+  const tag = input.tag;
   const shopInfo = await loadShopInfo(supabase, input.shop_id);
 
   const persistedCycleTag = await calculatePersistedCycleTag(
@@ -916,20 +767,18 @@ export async function requestRefund(
   const { data: existing, error: fetchError } = await supabase
     .from('transactions')
     .select(`
-        id,
-        note,
-        tag,
-        shop_id,
-        transaction_lines (
-            id,
-            amount,
-            type,
-            account_id,
-            category_id,
-            metadata,
-            categories ( name )
-        )
-        `)
+      id,
+      occurred_at,
+      note,
+      tag,
+      shop_id,
+      person_id,
+      amount,
+      category_id,
+      metadata,
+      cashback_share_percent,
+      cashback_share_fixed
+    `)
     .eq('id', transactionId)
     .maybeSingle();
 
@@ -938,15 +787,11 @@ export async function requestRefund(
     return { success: false, error: 'Không tìm thấy giao dịch hoặc đã xảy ra lỗi.' }
   }
 
-  const existingMetadata = extractLineMetadata((existing as any).transaction_lines as Array<{ metadata?: Json | null }>)
-
-  const lines = ((existing as any).transaction_lines as RefundTransactionLine[]) ?? []
-  const categoryLine = lines.find(line => line?.category_id)
-  if (!categoryLine) {
+  if (!existing.category_id) {
     return { success: false, error: 'Giao dịch không có danh mục phí để hoàn.' }
   }
 
-  const maxAmount = Math.abs(categoryLine.amount ?? 0)
+  const maxAmount = Math.abs(existing.amount ?? 0)
   if (maxAmount <= 0) {
     return { success: false, error: 'Không thể hoàn tiền cho giao dịch giá trị 0.' }
   }
@@ -960,13 +805,8 @@ export async function requestRefund(
   const userId = await resolveCurrentUserId(supabase)
   const requestNote = `Refund Request for ${(existing as any).note ?? transactionId}`
   const lineMetadata = {
-    refund_status: 'requested',
-    linked_transaction_id: transactionId,
-    refund_amount: safeAmount,
-    partial,
     original_note: (existing as any).note ?? null,
-    original_category_id: categoryLine.category_id,
-    original_category_name: categoryLine.categories?.name ?? null,
+    original_category_id: existing.category_id,
   }
 
   const refundCategoryId = await resolveSystemCategory(supabase, 'Refund', 'expense');
@@ -1003,11 +843,12 @@ export async function requestRefund(
 
   try {
     // Update original transaction metadata
-    const mergedOriginalMeta = mergeMetadata(existingMetadata, {
+    const mergedOriginalMeta = {
+      ...parseMetadata(existing.metadata),
       refund_request_id: requestTxn.id,
       refund_requested_at: new Date().toISOString(),
       has_refund_request: true,
-    })
+    }
 
     // Update directly on transactions table
     await (supabase.from('transactions').update as any)({ metadata: mergedOriginalMeta }).eq(
@@ -1036,13 +877,8 @@ export async function confirmRefund(
         id,
         note,
         tag,
-        transaction_lines (
-            id,
-            amount,
-            type,
-            account_id,
-            metadata
-        )
+        amount,
+        metadata
         `)
     .eq('id', pendingTransactionId)
     .maybeSingle();
@@ -1052,17 +888,7 @@ export async function confirmRefund(
     return { success: false, error: 'Không tìm thấy giao dịch hoàn tiền hoặc đã xảy ra lỗi.' }
   }
 
-  const pendingMetadata = extractLineMetadata((pending as any).transaction_lines as Array<{ metadata?: Json | null }>)
-
-  const pendingLine = ((pending as any).transaction_lines as any[]).find(
-    (line) => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
-  )
-
-  if (!pendingLine) {
-    return { success: false, error: 'Không có dòng ghi sổ treo phù hợp để xác nhận.' }
-  }
-
-  const amountToConfirm = Math.abs(pendingLine.amount ?? 0)
+  const amountToConfirm = Math.abs(pending.amount ?? 0)
   if (amountToConfirm <= 0) {
     return { success: false, error: 'Số tiền xác nhận không hợp lệ.' }
   }
@@ -1102,11 +928,12 @@ export async function confirmRefund(
   // No lines to insert
 
   try {
-    const updatedPendingMeta = mergeMetadata(pendingMetadata, {
+    const updatedPendingMeta = {
+      ...parseMetadata(pending.metadata),
       refund_status: 'confirmed',
       refund_confirmed_transaction_id: confirmTxn.id,
       refunded_at: new Date().toISOString(),
-    })
+    }
 
     // Update Pending Transaction Metadata
     await (supabase.from('transactions').update as any)({ metadata: updatedPendingMeta }).eq(
@@ -1117,9 +944,9 @@ export async function confirmRefund(
     console.error('Failed to update pending refund metadata:', err)
   }
 
-  const pendingMeta = parseMetadata(pendingMetadata)
+  const pendingMeta = parseMetadata(pending.metadata)
   const originalTransactionId =
-    typeof pendingMeta.linked_transaction_id === 'string' ? pendingMeta.linked_transaction_id : null
+    typeof pendingMeta.original_transaction_id === 'string' ? pendingMeta.original_transaction_id : null
 
   if (originalTransactionId) {
     try {

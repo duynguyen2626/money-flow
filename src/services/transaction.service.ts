@@ -5,7 +5,6 @@ import { createClient } from "@/lib/supabase/server";
 import { Json, Database } from "@/types/database.types";
 import {
   TransactionWithDetails,
-  TransactionWithLineRelations,
   AccountRow,
   CashbackMode,
 } from "@/types/moneyflow.types";
@@ -308,94 +307,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
   return { accounts, categories, people, shops };
 }
 
-function buildSyntheticLines(
-  row: FlatTransactionRow,
-  baseType: "income" | "expense" | "transfer",
-  lookups: LookupMaps,
-): TransactionWithLineRelations[] {
-  const lines: TransactionWithLineRelations[] = [];
-  const amountAbs = Math.abs(row.amount);
-  const sourceAccount = lookups.accounts.get(row.account_id) ?? null;
-  const targetAccount = row.target_account_id
-    ? (lookups.accounts.get(row.target_account_id) ?? null)
-    : null;
-  const category = row.category_id
-    ? (lookups.categories.get(row.category_id) ?? null)
-    : null;
-  const person = row.person_id
-    ? (lookups.people.get(row.person_id) ?? null)
-    : null;
-
-  lines.push({
-    id: `${row.id}:source`,
-    transaction_id: row.id,
-    account_id: row.account_id,
-    amount: row.amount,
-    type: row.amount >= 0 ? "debit" : "credit",
-    person_id: row.person_id,
-    metadata: row.metadata,
-    original_amount: amountAbs,
-    accounts: sourceAccount
-      ? {
-        name: sourceAccount.name,
-        image_url: sourceAccount.image_url,
-        type: sourceAccount.type as AccountRow["type"],
-      }
-      : null,
-    categories: null,
-    profiles: person
-      ? { name: person.name, avatar_url: person.avatar_url }
-      : null,
-  });
-
-  if (baseType === "transfer" && row.target_account_id) {
-    lines.push({
-      id: `${row.id}:target`,
-      transaction_id: row.id,
-      account_id: row.target_account_id,
-      amount: amountAbs,
-      type: "debit",
-      person_id: row.person_id,
-      accounts: targetAccount
-        ? {
-          name: targetAccount.name,
-          image_url: targetAccount.image_url,
-          type: targetAccount.type as AccountRow["type"],
-        }
-        : null,
-      categories: null,
-      profiles: person
-        ? { name: person.name, avatar_url: person.avatar_url }
-        : null,
-    });
-  }
-
-  if (row.category_id) {
-    lines.push({
-      id: `${row.id}:category`,
-      transaction_id: row.id,
-      category_id: row.category_id,
-      amount: baseType === "income" ? -amountAbs : amountAbs,
-      type: baseType === "income" ? "credit" : "debit",
-      person_id: row.person_id,
-      metadata: row.metadata,
-      accounts: null,
-      categories: category
-        ? {
-          name: category.name,
-          type: category.type,
-          image_url: category.image_url ?? null,
-          icon: category.icon ?? null,
-        }
-        : null,
-      profiles: person
-        ? { name: person.name, avatar_url: person.avatar_url }
-        : null,
-    });
-  }
-
-  return lines;
-}
+// buildSyntheticLines removed as transaction_lines are deprecated.
 
 function mapTransactionRow(
   row: FlatTransactionRow,
@@ -445,8 +357,6 @@ function mapTransactionRow(
         ? "income"
         : "expense";
 
-  const lines = buildSyntheticLines(row, effectiveBaseType, lookups);
-
   return {
     ...row,
     amount: displayAmount,
@@ -470,7 +380,6 @@ function mapTransactionRow(
     person_avatar_url: person?.avatar_url ?? null,
     shop_name: shop?.name ?? null,
     shop_image_url: shop?.image_url ?? null,
-    transaction_lines: lines,
     persisted_cycle_tag: row.persisted_cycle_tag ?? null,
     installment_plan_id: row.installment_plan_id ?? null,
     is_installment: row.is_installment ?? null,

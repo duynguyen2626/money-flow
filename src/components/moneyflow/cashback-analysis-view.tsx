@@ -248,34 +248,19 @@ export function CashbackAnalysisView({
             const found = allTxns.find(t => t.id === txn.id)
 
             if (found) {
-                // Reconstruct form values
-                const lines = found.transaction_lines || []
-                const creditLine = lines.find(l => l.type === 'credit')
-                const debitLine = lines.find(l => l.type === 'debit')
-                const debtLine = lines.find(l => l.accounts?.type === 'debt')
+                // Reconstruct form values using flat fields
+                let type: TransactionFormValues['type'] = (found.type as any) === 'repayment' ? 'repayment' : found.type as TransactionFormValues['type'] || "expense";
 
-                let type: TransactionFormValues['type'] = 'expense'
-                if (found.type === 'income') type = 'income'
-                if (found.type === 'transfer') type = 'transfer'
-                if (found.type === 'repayment') type = 'repayment'
-                if (found.type === 'debt') type = 'debt'
-                if (debtLine && type !== 'repayment' && type !== 'income') type = 'debt'
-
-                const categoryId = lines.find(l => l.category_id)?.category_id
-                const personId = lines.find(l => l.person_id)?.person_id
-                const sourceId = type === 'income' ? debitLine?.account_id : (creditLine?.account_id || debitLine?.account_id)
-                const destId = (type === 'transfer' || type === 'repayment' || type === 'debt') ? (debtLine?.account_id || debitLine?.account_id) : undefined
-
-                // Share info
-                let sharePercent = found.cashback_share_percent
-                let shareFixed = found.cashback_share_fixed
-                if (sharePercent === undefined && shareFixed === undefined) {
-                    const lineWithShare = lines.find(l => l.cashback_share_percent !== undefined || l.cashback_share_fixed !== undefined)
-                    if (lineWithShare) {
-                        sharePercent = lineWithShare.cashback_share_percent ?? null
-                        shareFixed = lineWithShare.cashback_share_fixed ?? null
+                if (found.person_id) {
+                    if (found.category_name?.toLowerCase().includes('repayment')) {
+                        type = 'repayment';
+                    } else {
+                        type = 'debt';
                     }
                 }
+
+                const sourceId = found.account_id;
+                const destId = (type === 'transfer' || type === 'repayment' || type === 'debt') ? found.target_account_id : undefined;
 
                 setEditInitialValues({
                     occurred_at: new Date(found.occurred_at || new Date()),
@@ -283,13 +268,15 @@ export function CashbackAnalysisView({
                     amount: found.amount,
                     note: found.note || '',
                     tag: found.tag || '',
-                    category_id: categoryId || undefined,
-                    person_id: personId || undefined,
+                    category_id: found.category_id || undefined,
+                    person_id: found.person_id || undefined,
                     source_account_id: sourceId || undefined,
                     debt_account_id: destId || undefined,
                     shop_id: found.shop_id || undefined,
-                    cashback_share_percent: sharePercent ?? undefined,
-                    cashback_share_fixed: shareFixed ?? undefined
+                    cashback_share_percent: found.cashback_share_percent ?? undefined,
+                    cashback_share_fixed: found.cashback_share_fixed ?? undefined,
+                    cashback_mode: (found.cashback_share_percent !== undefined && found.cashback_share_percent !== null && found.cashback_share_percent > 0) ? 'real_percent' :
+                        (typeof found.cashback_share_fixed === "number" && found.cashback_share_fixed > 0) ? 'real_fixed' : 'none_back',
                 })
                 setEditingTxn(txn)
             } else {

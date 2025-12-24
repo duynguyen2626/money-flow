@@ -129,14 +129,6 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 });
 
 function buildEditInitialValues(txn: TransactionWithDetails): Partial<TransactionFormValues> {
-  const lines = (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[];
-  const accountLines = lines.filter(line => line.account_id);
-  const creditLine = accountLines.find(line => line.type === "credit");
-  const debitLine =
-    accountLines.find(line => line.type === "debit" && line.account_id !== creditLine?.account_id) ??
-    accountLines.find(line => line.type === "debit");
-  const categoryLine = lines.find(line => line.category_id);
-  const personLine = lines.find(line => line.person_id);
   const baseAmount =
     typeof txn.original_amount === "number" ? txn.original_amount : txn.amount ?? 0;
   const percentValue =
@@ -144,43 +136,36 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
 
   let derivedType: TransactionFormValues["type"] = (txn.type as any) === 'repayment' ? 'repayment' : txn.type as TransactionFormValues["type"] || "expense";
 
-  const categoryName = categoryLine?.categories?.name?.toLowerCase() ?? txn.category_name?.toLowerCase() ?? '';
+  const categoryName = txn.category_name?.toLowerCase() ?? '';
 
-  if (personLine?.person_id) {
-    if (categoryName.includes('thu ná»£') || categoryName.includes('repayment')) {
+  if (txn.person_id) {
+    if (categoryName.includes('thu nợ') || categoryName.includes('repayment')) {
       derivedType = 'repayment';
     } else {
       derivedType = 'debt';
     }
   } else if (categoryName.includes('cashback') || categoryName.includes('income') || categoryName.includes('refund')) {
     derivedType = 'income';
-  } else if (categoryName.includes('money transfer') || categoryName.includes('chuyá»ƒn tiá»n')) {
+  } else if (categoryName.includes('money transfer') || categoryName.includes('chuyển tiền')) {
     derivedType = 'transfer';
-  } else if (!categoryLine && !txn.category_name) {
+  } else if (!txn.category_id && !txn.category_name) {
     derivedType = 'transfer';
-  } else if (categoryLine?.type === 'debit') {
-    derivedType = 'expense';
-  } else if (categoryLine?.type === 'credit') {
-    derivedType = 'income';
   } else if (txn.type === 'income') {
     derivedType = 'income';
   } else if (txn.type === 'expense') {
     derivedType = 'expense';
   }
 
-  let sourceAccountId = creditLine?.account_id ?? debitLine?.account_id ?? undefined;
-  if (derivedType === 'income') {
-    sourceAccountId = debitLine?.account_id ?? undefined;
-  }
-
+  let sourceAccountId = txn.account_id ?? undefined;
   let destinationAccountId =
     derivedType === "transfer" || derivedType === "debt"
-      ? debitLine?.account_id ?? undefined
+      ? txn.target_account_id ?? undefined
       : undefined;
 
   if (derivedType === 'repayment') {
-    sourceAccountId = debitLine?.account_id ?? undefined;
-    destinationAccountId = creditLine?.account_id ?? undefined;
+    // For repayment: source is bank, destination is debt
+    sourceAccountId = txn.account_id ?? undefined;
+    destinationAccountId = txn.target_account_id ?? undefined;
   }
 
   return {
@@ -190,8 +175,8 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     note: txn.note ?? "",
     tag: txn.tag ?? generateTag(new Date()),
     source_account_id: sourceAccountId,
-    category_id: categoryLine?.category_id ?? undefined,
-    person_id: personLine?.person_id ?? undefined,
+    category_id: txn.category_id ?? undefined,
+    person_id: txn.person_id ?? undefined,
     debt_account_id: destinationAccountId,
     shop_id: txn.shop_id ?? undefined,
     cashback_share_percent:
@@ -748,8 +733,8 @@ export function UnifiedTransactionTable({
         // 2. If Money Received, Confirm it immediately
         if (moneyReceived) {
           // Determine target account (default to source account of original txn)
-          const sourceAccountLine = confirmCancelTarget.transaction_lines?.find(l => l.type === 'credit' && l.account_id)
-          const targetAccountId = sourceAccountLine?.account_id
+          // For an expense (cancel target), account_id is the source.
+          const targetAccountId = confirmCancelTarget.account_id
 
           if (!targetAccountId) {
             throw new Error('Cannot determine target account for immediate refund. Please use manual refund.')
@@ -1768,10 +1753,8 @@ export function UnifiedTransactionTable({
                         typeIcon = <Minus className="h-3 w-3" />;
                       }
 
-                      // 2. Resolve Actual Category Data (Correct Fallback)
-                      const actualCategory = categories.find(c => c.id === txn.category_id) ||
-                        txn.transaction_lines?.find(l => l.category_id)?.categories ||
-                        null;
+                      // 2. Resolve Actual Category Data
+                      const actualCategory = categories.find(c => c.id === txn.category_id) || null;
 
                       const displayCategory = actualCategory?.name || txn.category_name || (txn.type ? txn.type.charAt(0).toUpperCase() + txn.type.slice(1) : "Uncategorized");
                       const metadataImage = (txn.metadata as any)?.image_url ?? null;
@@ -2711,21 +2694,24 @@ export function UnifiedTransactionTable({
       {
         refundFormTxn &&
         (() => {
-          const pendingLine = refundFormTxn.transaction_lines?.find(
-            line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
-          )
+          const isPendingLine = refundFormTxn.account_id === REFUND_PENDING_ACCOUNT_ID;
+          // If confirming, we expect the txn to be the Pending Request.
+
           const baseAmount =
             refundFormStage === 'confirm'
-              ? Math.abs(pendingLine?.amount ?? refundFormTxn.original_amount ?? refundFormTxn.amount ?? 0)
+              ? Math.abs(refundFormTxn.amount ?? 0)
               : Math.abs(refundFormTxn.original_amount ?? refundFormTxn.amount ?? 0)
-          const sourceAccountLine =
-            refundFormTxn.transaction_lines?.find(
-              line => line?.type === 'credit' && line.account_id && line.account_id !== REFUND_PENDING_ACCOUNT_ID
-            ) ??
-            refundFormTxn.transaction_lines?.find(
-              line => line?.type === 'debit' && line.account_id && line.account_id !== REFUND_PENDING_ACCOUNT_ID
-            )
-          const defaultAccountId = sourceAccountLine?.account_id ?? refundAccountOptions[0]?.id ?? null
+
+          // Source account for refund (where money goes back to)
+          // If request, it's the original source (account_id).
+          // If confirm, we might default to the first available account or just null.
+          const sourceAccountId = refundFormTxn.target_account_id ?? refundFormTxn.account_id;
+          // Note: Logic above is approximation. 
+          // Better: If request, use refundFormTxn.account_id.
+          // If confirm, refundFormTxn is the request (on Pending Account). We need a target.
+          // The request doesn't explicitly store the "return to" account until confirmed.
+          // But usually we default to the first real account.
+          const defaultAccountId = (refundFormStage === 'confirm' ? null : refundFormTxn.account_id) ?? refundAccountOptions[0]?.id ?? null
           const initialNote =
             refundFormStage === 'confirm'
               ? refundFormTxn.note ?? 'Confirm refund'
