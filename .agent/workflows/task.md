@@ -1,75 +1,107 @@
-🚨 GRAVITY TASK: M1.1 - REFACTOR CORE ACCOUNT & CASHBACK LOGIC
+---
+description: 
+---
 
-Status: CRITICAL
-Priority: P0 (Stop existing work, fix this first)
-Context: The integration of Cashback Analysis has corrupted the Account Balance logic and introduced RLS blocking issues. The Data Layer is currently unreliable.
+🎨 GRAVITY TASK: M1.2 - PEOPLE UI & UNIFIED TABLE REFINEMENT (ITERATION 3)
+
+Status: REFINING
+Priority: High (UI/UX Polish)
+Context: Iteration 3. Focusing on "Pro" look & feel for the Unified Transaction Table. Eliminate "indentation" ugliness, maximize visual density, and fix spacing issues.
 
 🎯 OBJECTIVES
 
-Restructure the Database Logic and Service Layer to ensure Data Integrity for Accounts and Cashback Cycles.
+Category Column: Create a "Hero" cell layout. No indentation. Big square logos.
+
+Visual Consistency: Text colors must match Badge types.
+
+Flow Column: Fix "floating" badges on the right. Compact layout.
 
 🛠️ SPECIFIC TASKS
 
-1. 🛡️ Fix Database Security & Integrity (RLS)
+1. 📊 Unified Transaction Table (src/components/moneyflow/unified-transaction-table.tsx)
 
-Problem: Failed to sync cashback... new row violates row-level security policy for table "cashback_cycles".
+A. Category Column (The "Hero" Cell)
 
-Action:
+Problem: Ugly indentation, small icons, redundant text.
 
-Audit and Fix RLS policies for cashback_cycles and cashback_entries.
+New Layout: Flex Row, items center, gap-3 (Strictly no left padding/indent).
 
-Ensure the authenticated role can INSERT/UPDATE these tables when triggered by a transaction change.
+Order: [Visual] -> [Type Badge] -> [Category Name]
 
-Verification: Run a script to simulate a transaction insert and ensure cashback_cycles accepts the data.
+Element 1: Visual (Priority Display)
 
-2. 🧮 Fix Account Balance Logic (The "30M Limit" Bug)
+Logic: Check transaction.shop_logo (or metadata.logo) FIRST. If null, use category.icon.
 
-Problem: Limit 30M, Spent ~2.9M, but Balance = 32.9M and Available = 62.9M.
+Style:
 
-Root Cause: The current logic is incorrectly adding Debt to Limit or treating Debt as positive Assets during aggregation.
+Size: w-9 h-9 (Large & Clear).
 
-Action:
+Shape: Square (rounded-none) for Images to show full detail. object-contain.
 
-Refactor: Update calculate_account_balance (SQL or TS Service) to strictly follow the formulas in .agent/context/domain_logic.md.
+Icon Fallback: If using Category Icon, use standard rounded-md background.
 
-Display: Ensure account-card.tsx uses the correct Available formula.
+Element 2: Type Badge (Standardized)
 
-3. 🔄 Refactor Cashback Trigger Logic (The "Cycle" Bug)
+Logic:
 
-Problem: Cashback is pulling wrong tags (DEC25 for debt vs Cashback Cycle), and Edits don't trigger updates.
+debt -> OUT (Red Badge).
 
-Action:
+repay -> IN (Green Badge).
 
-Unify Cycle Logic: Implement the "Cashback Cycle Determination" logic from .agent/context/domain_logic.md.
+transfer -> TF (Blue Badge).
 
-Triggers: Ensure INSERT, UPDATE, and DELETE on transactions table correctly trigger the cashback recalculation.
+Style: Fixed width (e.g., w-[42px]), centered text. Same height as other badges.
 
-Metadata: Ensure year is handled to prevent Year-over-Year collision.
+Element 3: Category Name
 
-4. 🧹 Data Cleanup Script
+Placement: MUST be placed AFTER the Type Badge.
 
-Create a script (scripts/hotfix-m1-integrity.ts) to:
+Style: font-bold.
 
-Recalculate current_balance for all accounts based on actual transaction history using the corrected formulas.
+Color Sync:
 
-Wipe invalid cashback_cycles / cashback_entries.
+If OUT: Text color Red (match badge).
 
-Re-sync Cashback history from transactions table.
+If IN: Text color Green (match badge).
 
-🧪 VERIFICATION (Definition of Done)
+If TF: Text color Blue.
 
-Balance Check: Account with 30M Limit and 2.9M Debt MUST show:
+B. Date Column (Color Sync)
 
-Balance: -2.9M (or 2.9M Debt)
+Style: The Date text (04.12) must inherit the color of the Transaction Type (Red for Debt, Green for Repay) to visually link with the row's context.
 
-Available: ~27.1M
+C. Flow Column (Smart & Compact)
 
-Sync Check: Creating/Editing a Transaction (via UI or SQL) MUST update cashback_cycles.
+Problem: "Pending" badge or content creates large gaps near the right border.
 
-No Console Errors: No RLS 42501 errors in logs.
+Fix:
 
-Instruction for Agent: 1. Read @domain_logic.md carefully.
-2. Fix RLS policies in supabase/migrations.
-3. Fix Balance calculation in src/services/account.service.ts or DB functions.
-4. Fix Cashback triggers in src/services/cashback.service.ts or DB triggers.
-5. Run cleanup script.
+Container: Use flex items-center gap-2 justify-start. Do NOT use justify-between.
+
+Content: [Badge: From] → [Badge: To].
+
+Truncation: Only truncate if it hits the table limit, do not force artificial spacing.
+
+D. Refund Icon Tooltip
+
+Requirement: Wrap the Refund Icon (↩️) in a <Tooltip> component.
+
+Content: "This transaction involves a refund/return."
+
+Placement: Hovering the icon triggers the tooltip.
+
+2. 🧹 Logic & Cleanup
+
+Shopping Category: Ensure no redundant text like "Debt" or "Repayment" is displayed next to the Category Name. The IN/OUT Badge is the sole indicator of direction.
+
+Header Stickiness: Ensure the Table Header remains sticky (top-0 z-10) within the CollapsibleSection container for long lists.
+
+🧪 VERIFICATION
+
+[ ] Category: Big Square Logo + [OUT] Badge + Red Bold Category Name. No "staircase" indentation.
+
+[ ] Date: Red text for expenses, Green for income.
+
+[ ] Flow: Compact, aligned to the left/start. No huge whitespace gap on the right.
+
+[ ] Tooltip: Refund icon has explanation.

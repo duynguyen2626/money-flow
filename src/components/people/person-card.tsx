@@ -106,6 +106,8 @@ function PersonCardComponent({
     // The user explicitly requested to show "Remains" (Balance) instead of Total Debt here.
     const displayCycleBalance = currentDebtDetails ? currentDebtDetails.amount : (person.current_cycle_debt ?? 0)
     const displayCycleRepaid = currentDebtDetails?.total_repaid ?? 0
+    const displayCycleTotal = currentDebtDetails?.total_debt ?? (Math.max(0, displayCycleBalance) + displayCycleRepaid)
+    const hasCycleRemains = displayCycleBalance > 0
 
     return (
         <>
@@ -217,18 +219,32 @@ function PersonCardComponent({
                             )}
                             triggerContent={
                                 <>
-                                    <div className="flex flex-col items-start min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="opacity-70 text-xs font-semibold">{cycleLabel} (Remains):</span>
-                                            <span className="text-base">{numberFormatter.format(displayCycleBalance)}</span>
-                                        </div>
-                                        {currentDebtDetails && (
-                                            <span className="text-[10px] font-medium opacity-80 mt-0.5 text-emerald-600">
+                                    <div className="flex flex-col items-start gap-1.5 min-w-0">
+                                        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">
+                                            {cycleLabel}
+                                        </span>
+                                        <div className="flex flex-wrap items-center gap-1">
+                                            <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                                                Total: {numberFormatter.format(displayCycleTotal)}
+                                            </span>
+                                            <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
                                                 Repaid: {numberFormatter.format(displayCycleRepaid)}
                                             </span>
-                                        )}
+                                        </div>
+                                        <div className="flex items-center">
+                                            {hasCycleRemains ? (
+                                                <span className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                                                    <AlertTriangle className="h-3 w-3" />
+                                                    Remains: {numberFormatter.format(displayCycleBalance)}
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
+                                                    <Check className="h-3 w-3" />
+                                                    Paid
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
-                                    {isSettled ? <Check className="h-4 w-4" /> : hasDebt ? <AlertTriangle className="h-4 w-4" /> : null}
                                 </>
                             }
                         />
