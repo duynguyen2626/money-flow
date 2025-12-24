@@ -26,7 +26,7 @@ export function CollapsibleSection({
             <button
                 type="button"
                 onClick={() => setIsOpen(!isOpen)}
-                className="flex w-full items-center justify-between group"
+                className="flex w-full items-center justify-between group sticky top-0 z-10 bg-white/95 backdrop-blur-sm py-2"
             >
                 <div className="flex items-center gap-2">
                     {isOpen ? (

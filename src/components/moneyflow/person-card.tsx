@@ -158,32 +158,67 @@ export function PersonCard({ person, subscriptions, variant = 'detailed', isSele
             </div>
           </div>
 
-          {/* Metrics */}
-          <div className="grid grid-cols-3 gap-2 text-[10px] text-slate-500 border-t border-slate-100 pt-2">
-            <div className="flex flex-col items-start truncate">
-              <span className="text-slate-400 mb-0.5 text-[9px] uppercase tracking-wider">Debt</span>
-              <span className={cn("font-bold text-sm truncate w-full", debtAmount > 0 ? "text-slate-700" : "text-slate-300")}>
-                {compactNumberFormatter.format(debtAmount)}
-              </span>
+          {/* Metrics - Iteration 2 Layout */}
+          <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 flex-1">
+            {/* Row 1: Cycle Tag + Remains (Hero) */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                {/* Main Cycle Tag */}
+                {monthlyDebts[0] ? (
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      {monthlyDebts[0].tagLabel?.replace('-', ' ') || 'CYCLE'}
+                    </span>
+                    {/* Using formatCycleTag for tooltip if needed, but display raw label for now as per image "DEC 25" */}
+                  </div>
+                ) : (
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">NO DATA</span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* Remains Badge - Hero */}
+                <div className={cn(
+                  "px-3 py-1 rounded-md border text-lg font-extrabold shadow-sm",
+                  debtAmount > 0
+                    ? "bg-amber-50 text-amber-700 border-amber-200"
+                    : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                )}>
+                  <span className="text-[0.6em] text-slate-400 font-normal mr-1 uppercase">Remains:</span>
+                  {numberFormatter.format(debtAmount)}
+                </div>
+              </div>
             </div>
 
-            <div className="flex flex-col items-start truncate pl-2 border-l border-slate-100">
-              <span className="text-slate-400 mb-0.5 text-[9px] uppercase tracking-wider">Back</span>
-              <span className={cn("font-bold text-sm truncate w-full", sumBackAmount > 0 ? "text-slate-700" : "text-slate-300")}>
-                {compactNumberFormatter.format(sumBackAmount)}
-              </span>
-            </div>
+            {/* Row 2: Repaid + Status + Outstanding Badge */}
+            <div className="flex items-center justify-between mt-auto">
+              <div className="flex items-center gap-2">
+                {/* Repaid - Subtle */}
+                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                  Repaid: {compactNumberFormatter.format(sumBackAmount)}
+                </span>
 
-            <div className="flex flex-col items-start truncate pl-2 border-l border-slate-100">
-              <span className="text-slate-400 mb-0.5 text-[9px] uppercase tracking-wider">Repay</span>
-              <span className={cn("font-bold text-sm truncate w-full", repayAmount > 0 ? "text-slate-700" : "text-slate-300")}>
-                {compactNumberFormatter.format(repayAmount)}
-              </span>
+                {/* Status */}
+                {debtAmount === 0 && (
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-600">
+                    Paid <Check className="h-3 w-3" />
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1">
+                {/* Outstanding Cycle Badge (+1) */}
+                {(person.monthly_debts?.length || 0) > 1 && (
+                  <span className="flex h-9 items-center justify-center rounded-md bg-rose-100 px-3 text-sm font-bold text-rose-600">
+                    +{(person.monthly_debts?.length || 0) - 1}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Quick Actions */}
-          <div className="grid grid-cols-2 gap-2 mt-auto pt-2 border-t border-slate-100">
+          <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-slate-100">
             <AddTransactionDialog
               accounts={accounts}
               categories={categories}
@@ -191,10 +226,10 @@ export function PersonCard({ person, subscriptions, variant = 'detailed', isSele
               shops={shops}
               defaultType="debt"
               defaultPersonId={person.id}
-              buttonClassName="flex w-full items-center justify-center gap-1 rounded-md bg-orange-50 px-2 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100 transition-colors"
+              buttonClassName="flex w-full items-center justify-center gap-1.5 rounded-lg bg-orange-50 px-3 py-2 text-sm font-semibold text-orange-700 hover:bg-orange-100 transition-colors border border-orange-100 shadow-sm"
               triggerContent={
                 <>
-                  <ArrowUpRight className="h-3 w-3" /> Lend
+                  <ArrowUpRight className="h-4 w-4" /> Lend
                 </>
               }
             />
@@ -205,10 +240,10 @@ export function PersonCard({ person, subscriptions, variant = 'detailed', isSele
               shops={shops}
               defaultType="repayment"
               defaultPersonId={person.id}
-              buttonClassName="flex w-full items-center justify-center gap-1 rounded-md bg-emerald-50 px-2 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+              buttonClassName="flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 transition-colors border border-emerald-100 shadow-sm"
               triggerContent={
                 <>
-                  <ArrowDownLeft className="h-3 w-3" /> Repay
+                  <ArrowDownLeft className="h-4 w-4" /> Repay
                 </>
               }
             />
@@ -247,7 +282,7 @@ export function PersonCard({ person, subscriptions, variant = 'detailed', isSele
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="relative h-12 w-12 flex-shrink-0 rounded-full overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center">
+            <div className="relative h-12 w-12 flex-shrink-0 bg-slate-100 border border-slate-200 flex items-center justify-center">
               {person.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -309,28 +344,61 @@ export function PersonCard({ person, subscriptions, variant = 'detailed', isSele
           </div>
         </div>
 
-        {/* Balance Section */}
-        <div className="mb-4 p-3 rounded-xl bg-slate-50 border border-slate-100">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
-              Current Balance
-            </span>
-            {isSettled ? (
-              <Badge variant="outline" className="text-slate-500 border-slate-200 bg-white">Settled</Badge>
-            ) : (
-              <Badge variant="outline" className={cn(
-                "bg-white",
-                isPositive ? "text-emerald-700 border-emerald-200" : "text-red-700 border-red-200"
+        {/* Metrics - Iteration 2 Layout (Detailed Card) */}
+        <div className="mb-4 flex flex-col gap-3 rounded-xl bg-slate-50 p-3 border border-slate-100">
+          {/* Row 1: Cycle Tag + Remains (Hero) */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {/* Main Cycle Tag */}
+              {monthlyDebts[0] ? (
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">
+                    {monthlyDebts[0].tagLabel?.replace('-', ' ') || 'CURRENT'}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">NO DATA</span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {/* Remains Badge - Hero */}
+              <div className={cn(
+                "px-4 py-1.5 rounded-lg border text-xl font-extrabold shadow-sm bg-white",
+                balance > 0
+                  ? "bg-amber-50 text-amber-700 border-amber-200"
+                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
               )}>
-                {isPositive ? "Owes You" : "You Owe"}
-              </Badge>
-            )}
+                <span className="text-[0.6em] text-slate-400 font-normal mr-2 uppercase">Remains:</span>
+                {numberFormatter.format(Math.abs(balance))}
+              </div>
+            </div>
           </div>
-          <div className={cn(
-            "text-2xl font-bold tracking-tight",
-            isSettled ? "text-slate-400" : (isPositive ? "text-emerald-600" : "text-red-600")
-          )}>
-            {currencyFormatter.format(Math.abs(balance))}
+
+          {/* Row 2: Repaid + Status + Outstanding Badge */}
+          <div className="flex items-center justify-between mt-1">
+            <div className="flex items-center gap-3">
+              {/* Repaid - Subtle */}
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-500">
+                Repaid: {compactNumberFormatter.format(monthlyDebts.reduce((sum, d) => sum + (d.amount < 0 ? Math.abs(d.amount) : 0), 0))}
+              </span>
+
+              {/* Status */}
+              {balance === 0 && (
+                <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600">
+                  Paid <Check className="h-3.5 w-3.5" />
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1">
+              {/* Outstanding Cycle Badge (+1) */}
+              {(monthlyDebts.length || 0) > 1 && (
+                <span className="flex h-8 items-center justify-center rounded-md bg-rose-100 px-2.5 text-xs font-bold text-rose-600">
+                  +{(monthlyDebts.length || 0) - 1}
+                </span>
+              )}
+            </div>
           </div>
         </div>
 

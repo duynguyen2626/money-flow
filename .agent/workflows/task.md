@@ -1,75 +1,93 @@
-🚨 GRAVITY TASK: M1.1 - REFACTOR CORE ACCOUNT & CASHBACK LOGIC
+---
+description: GRAVITY TASK
+---
 
-Status: CRITICAL
-Priority: P0 (Stop existing work, fix this first)
-Context: The integration of Cashback Analysis has corrupted the Account Balance logic and introduced RLS blocking issues. The Data Layer is currently unreliable.
+📱 GRAVITY TASK: M2 - GLOBAL RESPONSIVENESS REFACTOR
+
+Status: PENDING
+Priority: Critical (UX)
+Context: The app looks broken on Mobile (iPhone) and unbalanced on Large Screens (27"). We need a comprehensive layout refactor to ensure the "Vibe" works across all viewports.
 
 🎯 OBJECTIVES
 
-Restructure the Database Logic and Service Layer to ensure Data Integrity for Accounts and Cashback Cycles.
+Tame the Large Screen: Implement a centralized constraint layout. No more infinite whitespace on the right.
+
+Fix Mobile View: Ensure Tables scroll gracefully (or adapt) and Modals are usable on small screens.
 
 🛠️ SPECIFIC TASKS
 
-1. 🛡️ Fix Database Security & Integrity (RLS)
+1. 🖥️ Large Screen Optimization (The "Constraint" Strategy)
 
-Problem: Failed to sync cashback... new row violates row-level security policy for table "cashback_cycles".
-
-Action:
-
-Audit and Fix RLS policies for cashback_cycles and cashback_entries.
-
-Ensure the authenticated role can INSERT/UPDATE these tables when triggered by a transaction change.
-
-Verification: Run a script to simulate a transaction insert and ensure cashback_cycles accepts the data.
-
-2. 🧮 Fix Account Balance Logic (The "30M Limit" Bug)
-
-Problem: Limit 30M, Spent ~2.9M, but Balance = 32.9M and Available = 62.9M.
-
-Root Cause: The current logic is incorrectly adding Debt to Limit or treating Debt as positive Assets during aggregation.
+Problem: On 27" screens, tables stretch 100%, leaving ugly gaps on the right or stretching columns too wide.
 
 Action:
 
-Refactor: Update calculate_account_balance (SQL or TS Service) to strictly follow the formulas in .agent/context/domain_logic.md.
+Apply a Global Container Constraint in src/app/layout.tsx or the main Dashboard Layout wrapper.
 
-Display: Ensure account-card.tsx uses the correct Available formula.
+Class: mx-auto w-full max-w-[1600px] (or max-w-screen-2xl).
 
-3. 🔄 Refactor Cashback Trigger Logic (The "Cycle" Bug)
+Effect: Content will center on ultra-wide screens, creating a professional dashboard look (like Linear/GitHub) instead of skewed alignment.
 
-Problem: Cashback is pulling wrong tags (DEC25 for debt vs Cashback Cycle), and Edits don't trigger updates.
+2. 📱 Mobile Table Strategy (unified-transaction-table.tsx & others)
+
+Problem: Tables break layout or overflow incorrectly on iPhone.
 
 Action:
 
-Unify Cycle Logic: Implement the "Cashback Cycle Determination" logic from .agent/context/domain_logic.md.
+Wrapper: Wrap all Tables in a div with className="overflow-x-auto w-full".
 
-Triggers: Ensure INSERT, UPDATE, and DELETE on transactions table correctly trigger the cashback recalculation.
+Column Visibility (Responsive Hiding):
 
-Metadata: Ensure year is handled to prevent Year-over-Year collision.
+Mobile (< 640px): Show ONLY "Category/Visual", "Flow", and "Amount".
 
-4. 🧹 Data Cleanup Script
+Hide: "Date" (maybe show date inside Category row text?), "Status", "Note" on mobile.
 
-Create a script (scripts/hotfix-m1-integrity.ts) to:
+Tablet/Desktop: Show all.
 
-Recalculate current_balance for all accounts based on actual transaction history using the corrected formulas.
+Touch Targets: Ensure interactive elements (Delete/Edit buttons) have padding for touch.
 
-Wipe invalid cashback_cycles / cashback_entries.
+3. 🧩 Modal & Dialog Refactor (Global UI)
 
-Re-sync Cashback history from transactions table.
+Problem: "Add Transaction" modal is cut off or zoomed in on mobile.
 
-🧪 VERIFICATION (Definition of Done)
+Action:
 
-Balance Check: Account with 30M Limit and 2.9M Debt MUST show:
+Update DialogContent (in src/components/ui/dialog.tsx or specific implementations):
 
-Balance: -2.9M (or 2.9M Debt)
+Width: w-[95vw] or w-full on mobile. max-w-lg on desktop.
 
-Available: ~27.1M
+Height: max-h-[90vh] with overflow-y-auto for the content body.
 
-Sync Check: Creating/Editing a Transaction (via UI or SQL) MUST update cashback_cycles.
+Close Button: Ensure it's not overlapping content.
 
-No Console Errors: No RLS 42501 errors in logs.
+Transaction Form: Ensure the form inputs stack vertically (flex-col) on mobile and render side-by-side on desktop.
 
-Instruction for Agent: 1. Read @domain_logic.md carefully.
-2. Fix RLS policies in supabase/migrations.
-3. Fix Balance calculation in src/services/account.service.ts or DB functions.
-4. Fix Cashback triggers in src/services/cashback.service.ts or DB triggers.
-5. Run cleanup script.
+4. 🧭 Navigation & Header
+
+Problem: Sidebar might be taking too much space or behaving weirdly.
+
+Action:
+
+Ensure Sidebar behaves as a Sheet/Drawer on Mobile (Hidden by default, toggle via Hamburger menu).
+
+On Desktop: Fixed Sidebar.
+
+🧪 VERIFICATION
+
+27" Screen: App content is centered (mx-auto), not sticking to the left with void space on the right.
+
+iPhone:
+
+Can scroll table horizontally without breaking the page.
+
+"Add Transaction" modal fits the screen, inputs are accessible.
+
+No horizontal scroll on the Body (only inside the table container).
+
+Instruction for Agent:
+
+Start with Step 1 (Layout Constraint) to fix the "Empty Space" issue immediately.
+
+Then apply overflow-x-auto to unified-transaction-table.tsx.
+
+Finally, fix the AddTransactionDialog responsiveness.

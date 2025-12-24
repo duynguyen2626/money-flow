@@ -82,6 +82,7 @@ import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
 import { cn } from "@/lib/utils"
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
+import { formatCycleTag } from '@/lib/cycle-utils'
 import { RefundNoteDisplay } from './refund-note-display'
 import { ConfirmRefundDialog } from "./confirm-refund-dialog"
 import { TransactionHistoryModal } from './transaction-history-modal'
@@ -94,7 +95,7 @@ type ColumnKey =
   | "category"
   | "tag"
   | "note" // Added Note Column
-  | "account" // Merged Account ➜ People
+  | "account" // Merged Flow & Entity
   | "amount"
   | "back_info"
   | "final_price"
@@ -278,12 +279,12 @@ export function UnifiedTransactionTable({
 }: UnifiedTransactionTableProps) {
   const tableData = data ?? transactions ?? []
   const defaultColumns: ColumnConfig[] = [
-    { key: "date", label: "Date", defaultWidth: 70, minWidth: 60 },
+    { key: "date", label: "Date", defaultWidth: 65, minWidth: 55 },
     { key: "shop", label: "Note", defaultWidth: 200, minWidth: 150 },
-    { key: "account", label: "Accounts ➜ People", defaultWidth: 180, minWidth: 180 },
-    { key: "amount", label: "Amount", defaultWidth: 100 },
-    { key: "final_price", label: "Final Price", defaultWidth: 100 },
-    { key: "category", label: "Type / Category", defaultWidth: 120 },
+    { key: "account", label: "Flow & Entity", defaultWidth: 250, minWidth: 200 },
+    { key: "amount", label: "Amount", defaultWidth: 110 },
+    { key: "final_price", label: "Final Price", defaultWidth: 110 },
+    { key: "category", label: "Category", defaultWidth: 160 },
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
   ]
@@ -1479,19 +1480,20 @@ export function UnifiedTransactionTable({
                 switch (key) {
                   case "date": {
                     const d = new Date(txn.occurred_at ?? txn.created_at ?? Date.now())
-                    const dateFormatter = new Intl.DateTimeFormat('en-GB', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      timeZone: 'Asia/Ho_Chi_Minh',
+                    const dd = String(d.getDate()).padStart(2, '0')
+                    const MM = String(d.getMonth() + 1).padStart(2, '0')
+                    const dateStr = `${dd}.${MM}`
+                    const fullDateStr = d.toLocaleDateString('vi-VN', {
+                      weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
                     })
-                    const dateStr = dateFormatter.format(d)
 
-                    // Determine badge color for Date
-                    let dateBadgeColors = "bg-slate-50 text-slate-700 border-slate-200";
-                    if (txn.type === 'transfer') dateBadgeColors = "bg-sky-50 text-sky-700 border-sky-200";
-                    else if (txn.type === 'income') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                    else if (txn.type === 'repayment') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-200";
-                    else if (txn.type === 'expense') dateBadgeColors = "bg-red-50 text-red-700 border-red-200";
+                    // Determine badge color for Date - Using Outline styles for better contrast
+                    let dateBadgeColors = "bg-white text-slate-700 border-slate-200";
+                    if (txn.type === 'debt') dateBadgeColors = "bg-white text-red-700 border-red-200";
+                    else if (txn.type === 'repayment') dateBadgeColors = "bg-white text-emerald-700 border-emerald-200";
+                    else if (txn.type === 'transfer') dateBadgeColors = "bg-white text-sky-700 border-sky-200";
+                    else if (txn.type === 'income') dateBadgeColors = "bg-white text-emerald-700 border-emerald-200";
+                    else if (txn.type === 'expense') dateBadgeColors = "bg-white text-red-700 border-red-200";
 
                     return (
                       <div className="flex items-center gap-1.5 overflow-hidden">
@@ -1499,23 +1501,17 @@ export function UnifiedTransactionTable({
                           type="checkbox"
                           className="rounded border-slate-300 pointer-events-auto"
                           checked={isSelected}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (e.shiftKey) {
-                              handleSelectOne(txn.id, !isSelected, true);
-                            }
-                          }}
-                          onChange={(e) => {
-                            handleSelectOne(txn.id, e.target.checked);
-                          }}
+                          onClick={(e) => { e.stopPropagation(); if (e.shiftKey) handleSelectOne(txn.id, !isSelected, true); }}
+                          onChange={(e) => handleSelectOne(txn.id, e.target.checked)}
                         />
-                        {/* Date Badge */}
-                        <div className={cn("flex flex-col items-center justify-center px-1.5 py-0.5 rounded border min-w-[50px]", dateBadgeColors)}>
-                          <span className="font-bold text-[0.85em] leading-none whitespace-nowrap">{dateStr}</span>
-                          <span className="text-[0.65em] opacity-80 font-medium leading-tight mt-0.5">
-                            {d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}
-                          </span>
+                        {/* Compact Date Badge */}
+                        <div className={cn("flex items-center justify-center px-1.5 py-1 rounded-md border min-w-[50px]", dateBadgeColors)}>
+                          <span className="font-bold text-sm leading-none tracking-tight">{dateStr}</span>
                         </div>
+                        {/* Clock Icon Separated */}
+                        <CustomTooltip content={fullDateStr}>
+                          <Clock className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help" />
+                        </CustomTooltip>
                       </div>
                     )
                   }
@@ -1524,10 +1520,14 @@ export function UnifiedTransactionTable({
                     let shopLogo = txn.shop_logo_url;
                     let shopName = txn.shop_name;
 
+                    const repaymentAccount = txnSourceId ? accounts.find(account => account.id === txnSourceId) : null;
+                    const repaymentLogo = txn.source_logo ?? repaymentAccount?.logo_url ?? null;
+                    const repaymentName = txn.source_name ?? repaymentAccount?.name ?? null;
+
                     // Fallback logic for repayment/service
-                    if (txn.type === 'repayment' && !shopName) {
-                      shopLogo = txn.destination_logo;
-                      shopName = txn.destination_name;
+                    if (txn.type === 'repayment') {
+                      shopLogo = repaymentLogo ?? shopLogo ?? null;
+                      shopName = repaymentName ?? shopName ?? null;
                     }
 
                     const isServicePayment = txn.note?.startsWith('Payment for Service') || (txn.metadata as any)?.type === 'service_payment';
@@ -1535,21 +1535,26 @@ export function UnifiedTransactionTable({
                       shopLogo = txn.source_logo;
                     }
 
+                    const installmentBadge = (txn.is_installment || txn.installment_plan_id) ? (
+                      <CustomTooltip content="TrазЬ gA3p - Click О`апЯ xem">
+                        <Link
+                          href={`/installments?tab=active&highlight=${txn.id}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center justify-center rounded bg-amber-100 border border-amber-400 px-1 py-0.5 text-amber-700 hover:bg-amber-200 transition-colors shrink-0"
+                        >
+                          <Link2 className="h-4 w-4" />
+                        </Link>
+                      </CustomTooltip>
+                    ) : null;
+
+                    const refundBadge = refundSeq > 0 ? (
+                      <span className="inline-flex items-center justify-center rounded-md bg-blue-100 text-blue-700 px-1.5 h-5 text-[10px] font-bold shrink-0 whitespace-nowrap" title={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
+                        {refundSeq}. {shortIdBadge}
+                      </span>
+                    ) : null;
+
                     return (
                       <div className="flex items-center gap-2 w-full overflow-hidden group">
-                        {/* Installment Link - Moved to Start (Before Logo) */}
-                        {(txn.is_installment || txn.installment_plan_id) && (
-                          <CustomTooltip content="Trả góp - Click để xem">
-                            <Link
-                              href={`/installments?tab=active&highlight=${txn.id}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center justify-center rounded bg-amber-100 border border-amber-400 px-1 py-0.5 text-amber-700 hover:bg-amber-200 transition-colors shrink-0"
-                            >
-                              <Link2 className="h-4 w-4" />
-                            </Link>
-                          </CustomTooltip>
-                        )}
-
                         {/* Logo */}
                         {shopLogo ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -1575,27 +1580,30 @@ export function UnifiedTransactionTable({
                           </div>
                         )}
 
-                        {/* Refund Badge - moved after img */}
-                        {refundSeq > 0 && (
-                          <span className="inline-flex items-center justify-center rounded-md bg-blue-100 text-blue-700 px-1.5 h-5 text-[10px] font-bold shrink-0 whitespace-nowrap" title={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
-                            {refundSeq}. {shortIdBadge}
-                          </span>
-                        )}
-
                         <div className="flex flex-col min-w-0 flex-1">
                           {/* Name */}
                           {/* Name - Hidden by default as per user request */}
 
                           {/* Note */}
-                          {txn.note ? (
-                            <CustomTooltip content={txn.note}>
-                              <span className="text-[1em] text-slate-700 font-bold truncate cursor-help block">
-                                {txn.note}
-                              </span>
-                            </CustomTooltip>
-                          ) : (
-                            <span className="text-[1em] text-slate-400 italic block">No note</span>
-                          )}
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="min-w-0 flex-1">
+                              {txn.note ? (
+                                <CustomTooltip content={txn.note}>
+                                  <span className="text-[1em] text-slate-700 font-bold truncate cursor-help block">
+                                    {txn.note}
+                                  </span>
+                                </CustomTooltip>
+                              ) : (
+                                <span className="text-[1em] text-slate-400 italic block">No note</span>
+                              )}
+                            </div>
+                            {(installmentBadge || refundBadge) && (
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {installmentBadge}
+                                {refundBadge}
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         {/* Copy ID Button - Always Show */}
@@ -1672,42 +1680,90 @@ export function UnifiedTransactionTable({
                     );
                   }
                   case "category": {
-                    // Determine badge color by type
-                    let badgeColors = "bg-red-100 text-red-700 ring-red-600/10"; // Default = expense
-                    if (txn.type === 'transfer') badgeColors = "bg-sky-100 text-sky-700 ring-sky-700/10";
-                    else if (txn.type === 'income') badgeColors = "bg-emerald-100 text-emerald-700 ring-emerald-600/20";
-                    else if (txn.type === 'repayment') badgeColors = "bg-emerald-100 text-emerald-700 ring-emerald-600/20";
+                    // 1. Determine Type Badge
+                    let typeLabel = "EXPENSE"; // Default
+                    let typeColor = "bg-red-100 text-red-700 border-red-200";
+                    let typeTextColor = "text-red-700"; // For Name Sync
+                    let typeIcon = <Minus className="h-3 w-3" />;
 
-                    const displayCategory = txn.category_name || (txn.type ? txn.type.charAt(0).toUpperCase() + txn.type.slice(1) : "Uncategorized");
+                    if (txn.type === 'repayment') {
+                      typeLabel = "PAID";
+                      typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200";
+                      typeTextColor = "text-emerald-700";
+                      typeIcon = <Check className="h-3 w-3" />;
+                    } else if (txn.type === 'debt') {
+                      typeLabel = "LEND";
+                      typeColor = "bg-orange-100 text-orange-700 border-orange-200";
+                      typeTextColor = "text-orange-700";
+                      typeIcon = <ArrowUpRight className="h-3 w-3" />;
+                    } else if (txn.type === 'transfer') {
+                      typeLabel = "TF";
+                      typeColor = "bg-sky-100 text-sky-700 border-sky-200";
+                      typeTextColor = "text-sky-700";
+                      typeIcon = <ArrowRightLeft className="h-3 w-3" />;
+                      // Smart Context for Transfer
+                      if (contextId) {
+                        if (contextId == txnSourceId) { typeLabel = "TF OUT"; typeIcon = <ArrowUpRight className="h-3 w-3" />; }
+                        else if (contextId == txnDestId) { typeLabel = "TF IN"; typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200"; typeTextColor = "text-emerald-700"; typeIcon = <ArrowDownLeft className="h-3 w-3" />; }
+                      }
+                    } else if (txn.type === 'income') {
+                      typeLabel = "IN";
+                      typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200";
+                      typeTextColor = "text-emerald-700";
+                      typeIcon = <Plus className="h-3 w-3" />;
+                    } else if (txn.type === 'expense') {
+                      typeLabel = "OUT";
+                      typeIcon = <Minus className="h-3 w-3" />;
+                    }
+
+                    // 2. Resolve Actual Category Data (Correct Fallback)
+                    const actualCategory = categories.find(c => c.id === txn.category_id) ||
+                      txn.transaction_lines?.find(l => l.category_id)?.categories ||
+                      null;
+
+                    const displayCategory = actualCategory?.name || txn.category_name || (txn.type ? txn.type.charAt(0).toUpperCase() + txn.type.slice(1) : "Uncategorized");
+                    const displayLogo = (actualCategory as any)?.image_url || actualCategory?.logo_url || txn.category_logo_url || null;
+
+                    let catBadgeColor = "bg-white border-slate-200";
 
                     return (
-                      <CustomTooltip content={displayCategory}>
-                        <div className="flex items-center gap-2 justify-start">
-                          {/* Category Icon - always show */}
-                          {txn.category_logo_url ? (
-                            <div className="flex h-6 w-6 items-center justify-center shrink-0">
-                              <img src={txn.category_logo_url} alt="" className="h-full w-full object-contain !rounded-none !border-none ring-0 outline-none" />
-                            </div>
-                          ) : (
-                            // Enhanced Icon Logic for Merged Column
-                            txn.category_icon ? (
-                              <span className="text-base shrink-0">{txn.category_icon}</span>
-                            ) : txn.type === 'transfer' ? (
-                              <ArrowRightLeft className="h-4 w-4 text-slate-500" />
-                            ) : txn.type === 'repayment' ? (
-                              <RefreshCw className="h-4 w-4 text-slate-500" />
+                      <div className="flex items-center gap-1.5 justify-start">
+                        {/* 1. Category Icon (Visual) */}
+                        <CustomTooltip content={displayCategory}>
+                          <div className="shrink-0 cursor-help">
+                            {displayLogo ? (
+                              <div className="flex h-8 w-8 items-center justify-center">
+                                <img src={displayLogo} alt="" className="h-full w-full object-contain !rounded-none !border-none ring-0 outline-none" />
+                              </div>
                             ) : (
-                              <span className="flex h-6 w-6 items-center justify-center bg-slate-100 rounded-full text-xs font-semibold text-slate-600 shrink-0">
-                                {displayCategory.charAt(0).toUpperCase()}
-                              </span>
-                            )
-                          )}
-                          {/* Category Badge - Fallback to Type if missing */}
-                          <span className={cn("inline-flex items-center justify-center rounded-md px-2 py-1 text-[0.9em] font-medium ring-1 ring-inset truncate w-[120px]", badgeColors)}>
+                              <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-none text-[10px] font-bold text-slate-500 border border-slate-200 uppercase">
+                                {displayCategory.slice(0, 1)}
+                              </div>
+                            )}
+                          </div>
+                        </CustomTooltip>
+
+                        {/* 2. Type Badge */}
+                        <span className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[50px] justify-center shrink-0", typeColor)}>
+                          {typeIcon} {typeLabel}
+                        </span>
+
+                        {/* 3. Category Name Badge - same style & font as type, with tooltip and consistent width */}
+                        <CustomTooltip content={displayCategory}>
+                          <span className={cn("inline-flex items-center justify-center rounded-md border px-1.5 text-[10px] font-extrabold truncate min-w-[85px] max-w-[120px] h-6 leading-none cursor-help shrink-0", catBadgeColor, typeTextColor)}>
                             {displayCategory}
                           </span>
-                        </div>
-                      </CustomTooltip>
+                        </CustomTooltip>
+
+                        {/* 4. Status Indicators - Separate Tooltip to avoid shadowing */}
+                        {statusIndicator && (
+                          <CustomTooltip content={statusTooltip}>
+                            <div className="ml-0.5 scale-100 origin-left cursor-help">
+                              {statusIndicator}
+                            </div>
+                          </CustomTooltip>
+                        )}
+                      </div>
                     )
                   }
                   case "account": {
@@ -1759,12 +1815,12 @@ export function UnifiedTransactionTable({
 
                     // --- 2. Resolve Context & View Mode ---
                     // "Smart Context"
-                    const isPersonContext = context === 'person' || (Boolean(contextId) && targetType === 'person' && targetId === contextId);
+                    const isPersonContext = context === 'person' || (Boolean(contextId) && personId === contextId);
                     const isAccountContext = context === 'account' || (Boolean(contextId) && !isPersonContext);
 
                     // --- 3. Badges & Tags ---
                     const cycleTag = txn.persisted_cycle_tag
-                    const debtTag = targetType === 'person' ? txn.tag : null
+                    const debtTag = personId ? txn.tag : null
 
                     let cycleLabel = "-"
                     if (sourceId) {
@@ -1798,25 +1854,27 @@ export function UnifiedTransactionTable({
                     }) => {
                       const Content = (
                         <div className="flex items-center gap-2 min-w-0 w-full">
-                          {/* Icon */}
+                          {/* Icon - Increased Size */}
                           {icon ? (
-                            <img src={icon} alt="" className={cn("h-8 w-8 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
+                            <img src={icon} alt="" className={cn("h-9 w-9 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
                           ) : (
-                            <div className={cn("flex h-8 w-8 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
-                              {link?.includes('people') ? <User className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
+                            <div className={cn("flex h-9 w-9 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
+                              {link?.includes('people') ? <User className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
                             </div>
                           )}
 
                           {/* Name & Badges */}
                           <div className="flex flex-col min-w-0 flex-1 justify-center">
-                            <div className="flex items-center gap-1 min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {/* From/To Badge */}
                               {contextBadge}
-                              <span className="text-[0.85em] font-bold text-slate-700 truncate block" title={name}>
+
+                              <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1" title={name}>
                                 {name}
                               </span>
                             </div>
                             {badges.length > 0 && (
-                              <div className="flex flex-wrap gap-0.5 mt-0.5">
+                              <div className="flex flex-wrap gap-1 mt-0.5">
                                 {badges}
                               </div>
                             )}
@@ -1834,60 +1892,66 @@ export function UnifiedTransactionTable({
                       return <div className="block w-full p-0.5 opacity-80">{Content}</div>
                     }
 
-                    // Badges Construction
+                    const personEntity = personId ? {
+                      name: personNameLink || 'Unknown Person',
+                      icon: personAvatar,
+                      link: `/people/${personId}`,
+                    } : null
+                    const accountEntity = {
+                      name: sourceName,
+                      icon: sourceIcon,
+                      link: sourceId ? `/accounts/${sourceId}` : null,
+                    }
+
+                    // Badges Construction - Rounded md and Bold Colors
                     const cycleBadge = (cycleLabel && cycleLabel !== '-') ? (
-                      <span key="cycle" className="inline-flex items-center rounded-sm bg-purple-100 px-1 py-0.5 text-[0.7em] font-bold text-purple-700 whitespace-nowrap leading-none">
+                      <span key="cycle" className="inline-flex items-center rounded-md bg-purple-100 px-1.5 py-0.5 text-[0.7em] font-bold text-purple-700 whitespace-nowrap leading-none border border-purple-200">
                         {cycleLabel}
                       </span>
                     ) : null
 
                     const tagBadge = (cycleTag || debtTag) ? (
-                      <span key="tag" className="inline-flex items-center rounded-sm bg-teal-100 px-1 py-0.5 text-[0.7em] font-bold text-teal-800 whitespace-nowrap leading-none">
+                      <span key="tag" className="inline-flex items-center rounded-md bg-teal-100 px-1.5 py-0.5 text-[0.7em] font-bold text-teal-800 whitespace-nowrap leading-none border border-teal-200">
                         {cycleTag || debtTag}
                       </span>
                     ) : null
 
-                    const fromBadge = <span key="from" className="inline-flex items-center rounded-sm bg-orange-100 px-1.5 py-0.5 text-[0.7em] font-extrabold text-orange-700 border border-orange-200">FROM</span>
-                    const toBadge = <span key="to" className="inline-flex items-center rounded-sm bg-sky-100 px-1.5 py-0.5 text-[0.7em] font-extrabold text-sky-700 border border-sky-200">TO</span>
+                    const fromBadge = <span key="from" className="inline-flex items-center rounded-md bg-orange-100 px-1.5 h-5 text-[0.7em] font-extrabold text-orange-700 border border-orange-200">FROM</span>
+                    const toBadge = <span key="to" className="inline-flex items-center rounded-md bg-sky-100 px-1.5 h-5 text-[0.7em] font-extrabold text-sky-700 border border-sky-200">TO</span>
 
 
                     // --- 5. Main Render Switch ---
 
                     // SCENARIO 1: VIEWING PERSON PAGE (Context = Person)
-                    if (isPersonContext && contextId && personId === contextId) {
-                      // Use Transaction Type to determine direction, strictly.
-                      // Repayment = Person -> Account (Show TO: Account)
-                      // Debt = Account -> Person (Show FROM: Account)
-                      // Note: unified-table logic often defaults Person to Target in parsing, but check names to be sure.
+                    if (isPersonContext && contextId && personEntity && personId === contextId) {
+                      const isRepaymentTxn = txn.type === 'repayment';
+                      // For Repayment: Person -> Account. We hide Person (Context). Show Target (Account).
+                      // For Debt: Account -> Person. We hide Person (Context). Show Source (Account).
 
-                      const isPersonPaying = txn.type === 'repayment' || txn.type === 'income';
-
-                      if (isPersonPaying) {
-                        // Person -> Target (Repayment to Bank)
-                        // Show Target (TO)
+                      if (isRepaymentTxn) {
+                        // REPAY: Show Target Account with TO badge
                         return (
                           <div className="flex items-center w-full">
                             <div className="flex-1 min-w-0">
                               <RenderEntity
-                                name={targetName}
-                                icon={targetIcon}
-                                link={targetLink}
-                                badges={[tagBadge]} // Tags on target
+                                name={accountEntity.name}
+                                icon={accountEntity.icon}
+                                link={accountEntity.link}
+                                badges={[tagBadge, cycleBadge]}
                                 contextBadge={toBadge}
                               />
                             </div>
                           </div>
                         )
                       } else {
-                        // Source -> Person (Lending to Person, or Person Repayment from Bank?)
-                        // Show Source (FROM)
+                        // DEBT: Show Source Account with FROM badge
                         return (
                           <div className="flex items-center w-full">
                             <div className="flex-1 min-w-0">
                               <RenderEntity
-                                name={sourceName}
-                                icon={sourceIcon}
-                                link={sourceId ? `/accounts/${sourceId}` : null}
+                                name={accountEntity.name}
+                                icon={accountEntity.icon}
+                                link={accountEntity.link}
                                 badges={[cycleBadge]}
                                 contextBadge={fromBadge}
                               />
@@ -1980,14 +2044,27 @@ export function UnifiedTransactionTable({
                     )
 
                   }
-                  case "tag":
+                  case "tag": {
+                    // Normalize Tag: 2025-12 -> DEC25
+                    let displayTag = txn.tag || '';
+                    if (displayTag && /^\d{4}-\d{2}$/.test(displayTag)) {
+                      const [y, m] = displayTag.split('-');
+                      const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+                      const mIndex = parseInt(m, 10) - 1;
+                      if (mIndex >= 0 && mIndex < 12) {
+                        displayTag = `${monthNames[mIndex]}${y.slice(2)}`;
+                      }
+                    }
+
+                    // Tooltip: Date Range (if standard tag) or full tag
+                    const dateRangeTooltip = txn.tag ? formatCycleTag(displayTag) : '';
+
                     return (
-                      <div className="flex flex-wrap gap-1 min-w-[180px]">
-                        {/* Removed duplicate cycle label here since it's in Account now */}
+                      <div className="flex flex-wrap gap-1 min-w-[120px] justify-end">
                         {txn.tag && (
-                          <CustomTooltip content={txn.tag}>
-                            <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-1 text-[0.85em] font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20 cursor-help whitespace-normal break-words">
-                              {txn.tag}
+                          <CustomTooltip content={dateRangeTooltip || txn.tag}>
+                            <span className="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-inset ring-amber-600/20 cursor-help whitespace-nowrap">
+                              {displayTag}
                             </span>
                           </CustomTooltip>
                         )}
@@ -2002,9 +2079,10 @@ export function UnifiedTransactionTable({
                             <CreditCard className="h-4 w-4" />
                           </Link>
                         )}
-                        {!txn.tag && !txn.is_installment && !txn.installment_plan_id && <span className="text-slate-400">-</span>}
+                        {!txn.tag && !txn.is_installment && !txn.installment_plan_id && <span className="text-slate-400 opacity-50 text-xs">-</span>}
                       </div>
                     )
+                  }
                   case "amount": {
                     const percentDisp = Number(txn.cashback_share_percent ?? 0)
                     const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
@@ -2182,7 +2260,13 @@ export function UnifiedTransactionTable({
                 >
                   {displayedColumns.map(col => {
                     // Sticky Logic for Cells
-                    let stickyStyle: React.CSSProperties = { width: columnWidths[col.key], maxWidth: columnWidths[col.key], overflow: 'hidden', whiteSpace: 'nowrap' };
+                    // Use a slightly more flexible stickyStyle that respects content if not explicitly date/shop
+                    let stickyStyle: React.CSSProperties = {
+                      width: columnWidths[col.key],
+                      maxWidth: col.key === 'account' ? 'none' : columnWidths[col.key],
+                      overflow: 'hidden',
+                      whiteSpace: 'nowrap'
+                    };
                     let stickyClass = "";
 
                     // Determine sticky cell background color
@@ -2211,7 +2295,8 @@ export function UnifiedTransactionTable({
                         className={cn(
                           `border-r-2 border-slate-300 ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
                           } ${col.key === "amount" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass} truncate`,
-                          stickyClass
+                          stickyClass,
+                          col.key === "date" && "p-1"
                         )}
                         style={stickyStyle}
                       >
