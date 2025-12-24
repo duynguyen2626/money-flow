@@ -168,8 +168,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0">
-        {children}
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0 bg-slate-50">
+        <div className="mx-auto w-full max-w-[1920px] px-4 sm:px-6 lg:px-8 h-full bg-white">
+          {children}
+        </div>
       </main>
     </div>
   )

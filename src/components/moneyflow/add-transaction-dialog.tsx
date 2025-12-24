@@ -142,6 +142,18 @@ export function AddTransactionDialog({
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showCloseWarning, setShowCloseWarning] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const updateIsMobile = () => {
+      if (typeof window !== "undefined") {
+        setIsMobile(window.innerWidth < 640);
+      }
+    };
+    updateIsMobile();
+    window.addEventListener("resize", updateIsMobile);
+    return () => window.removeEventListener("resize", updateIsMobile);
+  }, []);
 
   const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
     // Only close if clicking directly on overlay, not on content
@@ -191,14 +203,40 @@ export function AddTransactionDialog({
             role="dialog"
             aria-modal="true"
             aria-label="Add Transaction"
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-4 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-start md:items-center justify-center bg-black/60 px-0 md:px-4 py-4 backdrop-blur-sm"
             onClick={handleOverlayClick}
           >
             <div
-              className="flex w-full max-w-xl flex-col rounded-2xl bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden"
-              style={{ maxHeight: "90vh" }}
+              className={`flex w-full flex-col bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden ${isMobile ? "h-[100dvh] max-w-none rounded-none" : "max-w-xl md:max-w-2xl rounded-2xl"}`}
+              style={{ maxHeight: isMobile ? "none" : "90vh" }}
               onClick={stopPropagation}
             >
+              {isMobile && (
+                <div className="flex items-center justify-between px-4 py-3 border-b bg-slate-50">
+                  <button
+                    className="text-sm font-semibold text-slate-700"
+                    onClick={() => {
+                      if (hasUnsavedChanges) {
+                        setShowCloseWarning(true);
+                      } else {
+                        closeDialog();
+                      }
+                    }}
+                  >
+                    Close
+                  </button>
+                  <span className="text-sm font-semibold text-slate-900">{mode === "edit" ? "Edit Transaction" : "New Transaction"}</span>
+                  <button
+                    className="rounded-md bg-blue-600 px-3 py-1 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
+                    onClick={() => {
+                      const formEl = document.getElementById("transaction-form") as HTMLFormElement | null;
+                      formEl?.requestSubmit();
+                    }}
+                  >
+                    Save
+                  </button>
+                </div>
+              )}
               <TransactionForm
                 accounts={accounts}
                 categories={categories}

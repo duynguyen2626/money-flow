@@ -288,6 +288,7 @@ export function UnifiedTransactionTable({
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
   ]
+  const mobileColumnOrder: ColumnKey[] = ["category", "amount", "account", "task"]
   const router = useRouter()
   // Internal state removed for activeTab, now using prop with fallback
   const lastSelectedIdRef = useRef<string | null>(null)
@@ -319,6 +320,7 @@ export function UnifiedTransactionTable({
 
     return initial
   })
+  const [isMobile, setIsMobile] = useState(false)
   const [columnWidths, setColumnWidths] = useState<Record<ColumnKey, number>>(() => {
     const map = {} as Record<ColumnKey, number>
     defaultColumns.forEach(col => {
@@ -335,6 +337,14 @@ export function UnifiedTransactionTable({
           next[col] = false
         })
       }
+      next.date = hiddenColumns.includes('date') ? false : !isMobile
+      next.shop = hiddenColumns.includes('shop') ? false : !isMobile
+      next.final_price = hiddenColumns.includes('final_price') ? false : !isMobile
+      next.category = hiddenColumns.includes('category') ? false : true
+      next.account = hiddenColumns.includes('account') ? false : true
+      next.amount = hiddenColumns.includes('amount') ? false : true
+      next.task = hiddenColumns.includes('task') ? false : true
+      next.id = hiddenColumns.includes('id') ? false : false
       // Simple deep equality check to prevent infinite loop
       if (JSON.stringify(prev) === JSON.stringify(next)) {
         return prev
@@ -342,7 +352,18 @@ export function UnifiedTransactionTable({
       return next
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(hiddenColumns)])
+  }, [JSON.stringify(hiddenColumns), isMobile])
+
+  useEffect(() => {
+    const updateIsMobile = () => {
+      if (typeof window !== 'undefined') {
+        setIsMobile(window.innerWidth < 640)
+      }
+    }
+    updateIsMobile()
+    window.addEventListener('resize', updateIsMobile)
+    return () => window.removeEventListener('resize', updateIsMobile)
+  }, [])
 
   // Realtime Subscription
   useEffect(() => {
@@ -989,7 +1010,7 @@ export function UnifiedTransactionTable({
 
 
   const isAllSelected = displayedTransactions.length > 0 && selection.size >= displayedTransactions.length
-  const displayedColumns = defaultColumns.filter(col => visibleColumns[col.key])
+  const displayedColumns = (isMobile ? mobileColumnOrder.map(key => defaultColumns.find(col => col.key === key)).filter(Boolean) as ColumnConfig[] : defaultColumns).filter(col => visibleColumns[col.key])
 
   return (
     <div className="relative flex flex-col h-full overflow-hidden">
@@ -997,8 +1018,8 @@ export function UnifiedTransactionTable({
         "relative w-full border rounded-md bg-white shadow-sm transition-colors duration-300 flex-1 overflow-auto",
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )} style={{ ['--table-font-size' as string]: `${fontSize}px` } as React.CSSProperties}>
-        <Table className="min-w-[1000px] [&_td]:text-[length:var(--table-font-size)] [&_th]:text-[length:var(--table-font-size)]" wrapperClassName="overflow-visible" style={{ fontSize: `${fontSize}px` }}>
-          <TableHeader className="sticky top-0 z-30 bg-slate-100 backdrop-blur text-foreground font-bold shadow-sm">
+        <Table className={cn(isMobile ? "min-w-full" : "min-w-[1000px]", "[&_td]:text-[length:var(--table-font-size)] [&_th]:text-[length:var(--table-font-size)]")} wrapperClassName="overflow-x-auto w-full" style={{ fontSize: `${fontSize}px` }}>
+          <TableHeader className="sticky top-0 z-40 bg-white backdrop-blur text-foreground font-bold shadow-sm">
             <TableRow className="hover:bg-transparent border-b-2 border-slate-300">
               {displayedColumns.map(col => {
                 if (col.key === "task") {
@@ -1021,9 +1042,11 @@ export function UnifiedTransactionTable({
                 let stickyStyle: React.CSSProperties = { width: columnWidths[col.key] };
                 let stickyClass = "";
 
-                if (col.key === 'date') {
+                if (isMobile && col.key === 'category') {
                   stickyClass = "sticky left-0 z-40 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
-                } else if (col.key === 'shop') {
+                } else if (!isMobile && col.key === 'date') {
+                  stickyClass = "sticky left-0 z-40 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
+                } else if (!isMobile && col.key === 'shop') {
                   // Shop (Notes) column is sticky after Date column
                   let left = 0;
                   if (visibleColumns.date) left += columnWidths.date;
@@ -1032,6 +1055,8 @@ export function UnifiedTransactionTable({
                   stickyClass = "sticky z-40 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
                   stickyStyle.left = left;
                 }
+
+                const columnLabel = isMobile && col.key === 'category' ? 'Category / Date' : col.label
 
                 return (
                   <TableHead
@@ -1076,7 +1101,7 @@ export function UnifiedTransactionTable({
                           setSortState({ key: col.key as SortKey, dir: nextDir })
                         }}
                       >
-                        {col.label}
+                        {columnLabel}
                         {sortState.key === col.key ? (
                           sortState.dir === 'asc' ? (
                             <ArrowUp className="h-3 w-3 text-blue-600" />
@@ -1088,7 +1113,7 @@ export function UnifiedTransactionTable({
                         )}
                       </button>
                     ) : (
-                      col.label
+                      columnLabel
                     )}
                   </TableHead>
                 )
@@ -1517,11 +1542,11 @@ export function UnifiedTransactionTable({
                   }
                   // Note: 'type' column was removed - it's now merged into the 'date' column
                   case "shop": {
-                    let shopLogo = txn.shop_logo_url;
+                    let shopLogo = txn.shop_image_url;
                     let shopName = txn.shop_name;
 
                     const repaymentAccount = txnSourceId ? accounts.find(account => account.id === txnSourceId) : null;
-                    const repaymentLogo = txn.source_logo ?? repaymentAccount?.logo_url ?? null;
+                    const repaymentLogo = txn.source_image ?? repaymentAccount?.image_url ?? null;
                     const repaymentName = txn.source_name ?? repaymentAccount?.name ?? null;
 
                     // Fallback logic for repayment/service
@@ -1532,7 +1557,7 @@ export function UnifiedTransactionTable({
 
                     const isServicePayment = txn.note?.startsWith('Payment for Service') || (txn.metadata as any)?.type === 'service_payment';
                     if (isServicePayment && !shopLogo) {
-                      shopLogo = txn.source_logo;
+                      shopLogo = txn.source_image;
                     }
 
                     const installmentBadge = (txn.is_installment || txn.installment_plan_id) ? (
@@ -1558,15 +1583,15 @@ export function UnifiedTransactionTable({
                         {/* Logo */}
                         {shopLogo ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={shopLogo} alt="" className="h-6 w-6 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none" />
+                          <img src={shopLogo} alt="" className="h-9 w-9 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none" />
                         ) : (
                           // Replaced ShoppingBasket with Status/Refund Indicator
                           // Enforce Bank Icon for Repayments without logo
                           <div className={cn(
-                            "flex items-center justify-center h-8 w-8 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0",
+                            "flex items-center justify-center h-9 w-9 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0",
                             !statusIndicator && ""
                           )}>
-                            {statusIndicator ? (
+                            {!isMobile && statusIndicator ? (
                               <CustomTooltip content={statusTooltip}>
                                 <span className="text-xl cursor-help font-bold text-slate-800" suppressHydrationWarning>{statusIndicator}</span>
                               </CustomTooltip>
@@ -1722,46 +1747,68 @@ export function UnifiedTransactionTable({
                       null;
 
                     const displayCategory = actualCategory?.name || txn.category_name || (txn.type ? txn.type.charAt(0).toUpperCase() + txn.type.slice(1) : "Uncategorized");
-                    const displayLogo = (actualCategory as any)?.image_url || actualCategory?.logo_url || txn.category_logo_url || null;
+                    const metadataImage = (txn.metadata as any)?.image_url ?? null;
+                    const shopImage = txn.shop_image_url ?? null;
+                    const categoryImage = (actualCategory as any)?.image_url || actualCategory?.image_url || txn.category_image_url || null;
+                    const categoryIcon = (actualCategory as any)?.icon || txn.category_icon || null;
+                    const displayImage = metadataImage || shopImage || categoryImage;
+                    const occurredDate = txn.occurred_at ?? txn.created_at ?? null;
+                    const mobileDateLabel = isMobile && occurredDate
+                      ? new Date(occurredDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                      : null;
 
                     let catBadgeColor = "bg-white border-slate-200";
 
                     return (
-                      <div className="flex items-center gap-1.5 justify-start">
-                        {/* 1. Category Icon (Visual) */}
-                        <CustomTooltip content={displayCategory}>
-                          <div className="shrink-0 cursor-help">
-                            {displayLogo ? (
-                              <div className="flex h-8 w-8 items-center justify-center">
-                                <img src={displayLogo} alt="" className="h-full w-full object-contain !rounded-none !border-none ring-0 outline-none" />
-                              </div>
-                            ) : (
-                              <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-none text-[10px] font-bold text-slate-500 border border-slate-200 uppercase">
-                                {displayCategory.slice(0, 1)}
-                              </div>
-                            )}
-                          </div>
-                        </CustomTooltip>
-
-                        {/* 2. Type Badge */}
-                        <span className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[50px] justify-center shrink-0", typeColor)}>
-                          {typeIcon} {typeLabel}
-                        </span>
-
-                        {/* 3. Category Name Badge - same style & font as type, with tooltip and consistent width */}
-                        <CustomTooltip content={displayCategory}>
-                          <span className={cn("inline-flex items-center justify-center rounded-md border px-1.5 text-[10px] font-extrabold truncate min-w-[85px] max-w-[120px] h-6 leading-none cursor-help shrink-0", catBadgeColor, typeTextColor)}>
-                            {displayCategory}
-                          </span>
-                        </CustomTooltip>
-
-                        {/* 4. Status Indicators - Separate Tooltip to avoid shadowing */}
-                        {statusIndicator && (
-                          <CustomTooltip content={statusTooltip}>
-                            <div className="ml-0.5 scale-100 origin-left cursor-help">
-                              {statusIndicator}
+                      <div className="flex w-full flex-col gap-1">
+                        <div className="flex items-center gap-1.5 justify-start">
+                          {/* 1. Category Icon (Visual) */}
+                          <CustomTooltip content={displayCategory}>
+                            <div className="shrink-0 cursor-help">
+                              {displayImage ? (
+                                <div className="flex h-9 w-9 items-center justify-center">
+                                  <img src={displayImage} alt="" className="h-full w-full object-contain rounded-none ring-0 outline-none" />
+                                </div>
+                              ) : categoryIcon ? (
+                                <div className="flex h-9 w-9 items-center justify-center bg-slate-50 rounded-sm text-lg border border-slate-200">
+                                  {categoryIcon}
+                                </div>
+                              ) : (
+                                <div className="flex h-9 w-9 items-center justify-center bg-slate-100 rounded-sm text-[10px] font-bold text-slate-500 border border-slate-200 uppercase">
+                                  {displayCategory.slice(0, 1)}
+                                </div>
+                              )}
                             </div>
                           </CustomTooltip>
+
+                          {/* 2. Type Badge */}
+                          <span className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[50px] justify-center shrink-0", typeColor)}>
+                            {typeIcon} {typeLabel}
+                          </span>
+
+                          {/* 3. Category Name Badge - same style & font as type, with tooltip and consistent width */}
+                          <CustomTooltip content={displayCategory}>
+                            <span className={cn("inline-flex items-center justify-center rounded-md border px-1.5 text-[10px] font-extrabold truncate min-w-[85px] max-w-[120px] h-6 leading-none cursor-help shrink-0", catBadgeColor, typeTextColor)}>
+                              {displayCategory}
+                            </span>
+                          </CustomTooltip>
+
+                          {/* 4. Status Indicators - Separate Tooltip to avoid shadowing */}
+                          {!isMobile && statusIndicator && (
+                            <CustomTooltip content={statusTooltip}>
+                              <div className="ml-0.5 scale-100 origin-left cursor-help">
+                                {statusIndicator}
+                              </div>
+                            </CustomTooltip>
+                          )}
+                          {!isMobile && mobileDateLabel && (
+                            <span className="text-[10px] text-slate-500 leading-tight">{mobileDateLabel}</span>
+                          )}
+                        </div>
+                        {isMobile && mobileDateLabel && (
+                          <div className="flex w-full justify-start">
+                            <span className="text-[11px] text-slate-500 leading-tight block pl-11">{mobileDateLabel}</span>
+                          </div>
                         )}
                       </div>
                     )
@@ -1769,13 +1816,13 @@ export function UnifiedTransactionTable({
                   case "account": {
                     // --- 1. Resolve Entities (Source & Target) ---
                     const sourceName = txn.source_name || txn.account_name || 'Unknown'
-                    const sourceIcon = txn.source_logo
+                    const sourceIcon = txn.source_image
                     const sourceId = txnSourceId
                     // In single-table mode, account_id is the source.
 
                     // Target Parsing
                     let targetName = destNameRaw
-                    let targetIcon = txn.destination_logo
+                    let targetIcon = txn.destination_image
                     let targetId = txnDestId
                     let targetType: 'account' | 'person' | 'none' = 'account'
                     let targetLink = targetId ? `/accounts/${targetId}` : null
@@ -1797,7 +1844,7 @@ export function UnifiedTransactionTable({
                         const foundAcc = accounts.find(a => a.id === targetId)
                         if (foundAcc) {
                           targetName = foundAcc.name
-                          targetIcon = foundAcc.logo_url
+                          targetIcon = foundAcc.image_url
                         }
                       }
                       targetLink = `/accounts/${targetId}`
@@ -1856,9 +1903,9 @@ export function UnifiedTransactionTable({
                         <div className="flex items-center gap-2 min-w-0 w-full">
                           {/* Icon - Increased Size */}
                           {icon ? (
-                            <img src={icon} alt="" className={cn("h-9 w-9 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
+                            <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
                           ) : (
-                            <div className={cn("flex h-9 w-9 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
+                            <div className={cn("flex h-12 w-12 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
                               {link?.includes('people') ? <User className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
                             </div>
                           )}
@@ -2278,9 +2325,11 @@ export function UnifiedTransactionTable({
                     };
                     const stickyBg = getStickyBg();
 
-                    if (col.key === 'date') {
+                    if (isMobile && col.key === 'category') {
                       stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
-                    } else if (col.key === 'shop') {
+                    } else if (!isMobile && col.key === 'date') {
+                      stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
+                    } else if (!isMobile && col.key === 'shop') {
                       // Shop (Notes) column sticky positioning
                       let left = 0;
                       if (visibleColumns.date) left += columnWidths.date;

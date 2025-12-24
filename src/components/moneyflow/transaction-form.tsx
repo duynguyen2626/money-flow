@@ -1005,10 +1005,10 @@ export function TransactionForm({
           label: refundCat?.name ?? "Refund",
           description: refundCat?.type === "income" ? "Income" : "Expense",
           searchValue: refundCat?.name ?? "Refund",
-          icon: refundCat?.logo_url ? (
+          icon: refundCat?.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={refundCat.logo_url}
+              src={refundCat.image_url}
               alt={refundCat.name}
               className="h-5 w-5 object-contain rounded-none"
             />
@@ -1071,10 +1071,10 @@ export function TransactionForm({
           label: cat.name,
           description: description,
           searchValue: `${cat.name} ${typeLabel}`,
-          icon: cat.logo_url ? (
+          icon: cat.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={cat.logo_url}
+              src={cat.image_url}
               alt={cat.name}
               className="h-5 w-5 object-contain rounded-full"
             />
@@ -1161,10 +1161,10 @@ export function TransactionForm({
         label: acc.name,
         description: `${typeLabel} - ${numberFormatter.format(displayBalance)}`,
         searchValue: `${acc.name} ${typeLabel} ${displayBalance}`,
-        icon: acc.logo_url ? (
+        icon: acc.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={acc.logo_url}
+            src={acc.image_url}
             alt={acc.name}
             className="h-5 w-5 object-contain rounded-none"
           />
@@ -1255,10 +1255,10 @@ export function TransactionForm({
         label: acc.name,
         description: numberFormatter.format(displayBalance),
         searchValue: `${acc.name} ${acc.type.replace("_", " ")} ${displayBalance}`,
-        icon: acc.logo_url ? (
+        icon: acc.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={acc.logo_url}
+            src={acc.image_url}
             alt={acc.name}
             className="h-5 w-5 object-contain rounded-none"
           />
@@ -1315,10 +1315,10 @@ export function TransactionForm({
       value: s.id,
       label: s.name,
       searchValue: s.name,
-      // Add icon if logo_url exists
-      icon: s.logo_url ? (
+      // Add icon if image_url exists
+      icon: s.image_url ? (
         <img
-          src={s.logo_url}
+          src={s.image_url}
           alt=""
           className="w-5 h-5 rounded-full object-cover"
         />
@@ -2461,7 +2461,7 @@ export function TransactionForm({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">% Back</label>
           <Controller
@@ -2827,7 +2827,7 @@ export function TransactionForm({
       {(watchedCashbackMode === "real_fixed" ||
         watchedCashbackMode === "real_percent") && (
           <div className="space-y-3 animate-in fade-in slide-in-from-top-1 bg-white p-3 rounded-md border border-slate-100 shadow-sm">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Percent Input */}
               <div className="space-y-1">
                 <div className="flex justify-between items-baseline">
@@ -3126,7 +3126,7 @@ export function TransactionForm({
       {/* Voluntary Mode: Decoupled Logic with Total Validated against Amount */}
       {watchedCashbackMode === "voluntary" && (
         <div className="space-y-3 animate-in fade-in slide-in-from-top-1 bg-amber-50/50 p-3 rounded-md border border-amber-100 shadow-sm">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Voluntary Percent */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-amber-700">
@@ -3372,6 +3372,7 @@ export function TransactionForm({
         </div>
       ) : (
         <form
+          id="transaction-form"
           onSubmit={handleSubmit(onSubmit, (errors) => {
             console.error(
               "[Form Validation Error]",
@@ -3632,7 +3633,7 @@ export function TransactionForm({
             secured_by_account_id: undefined,
             is_active: true,
             owner_id: "",
-            logo_url: null,
+            image_url: null,
           } as Account
         }
         open={isAccountDialogOpen}
