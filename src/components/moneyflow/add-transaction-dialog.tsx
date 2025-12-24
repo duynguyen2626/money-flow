@@ -145,6 +145,13 @@ export function AddTransactionDialog({
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
+    if (open) {
+      setHasUnsavedChanges(false);
+      setShowCloseWarning(false);
+    }
+  }, [open]);
+
+  useEffect(() => {
     const updateIsMobile = () => {
       if (typeof window !== "undefined") {
         setIsMobile(window.innerWidth < 640);

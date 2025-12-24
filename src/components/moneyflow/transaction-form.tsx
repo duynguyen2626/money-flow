@@ -529,11 +529,7 @@ export function TransactionForm({
       console.log(
         "[TransactionForm] Resetting form with new values (Clone/Edit update)",
       );
-      form.reset(newValues);
-      // CRITICAL FIX: Reset dirty state after form reset to prevent false "unsaved changes" prompt
-      setTimeout(() => {
-        form.formState.isDirty = false;
-      }, 0);
+      form.reset(newValues, { keepDirty: false });
       setManualTagMode(true);
       setTransactionType(newValues.type);
       setIsInstallment(Boolean(initialValues.is_installment));
@@ -548,10 +544,11 @@ export function TransactionForm({
 
   useEffect(() => {
     if (!isRefundMode) return;
-    form.setValue("type", "income");
+    form.setValue("type", "income", { shouldDirty: false });
     setTransactionType("income");
     form.setValue("category_id", refundCategoryId ?? REFUND_CATEGORY_ID, {
       shouldValidate: true,
+      shouldDirty: false,
     });
     const currentNote = form.getValues("note");
     if (!currentNote || currentNote.trim().length === 0) {
@@ -565,7 +562,7 @@ export function TransactionForm({
 
       // Build the refund note with just the original note
       const nextNote = baseNote ? `Refund: ${baseNote}` : "Refund";
-      form.setValue("note", nextNote);
+      form.setValue("note", nextNote, { shouldDirty: false });
     }
   }, [form, initialValues?.note, isRefundMode, refundCategoryId]);
 
@@ -1361,7 +1358,7 @@ export function TransactionForm({
         shop.name,
         shop.default_category_id,
       );
-      form.setValue("category_id", shop.default_category_id);
+      form.setValue("category_id", shop.default_category_id, { shouldDirty: false });
     }
   }, [watchedShopId, shops, form, isEditMode]);
 
@@ -1370,6 +1367,7 @@ export function TransactionForm({
     if (refundStatus === "pending") {
       form.setValue("source_account_id", REFUND_PENDING_ACCOUNT_ID, {
         shouldValidate: true,
+        shouldDirty: false,
       });
       return;
     }
@@ -1384,6 +1382,7 @@ export function TransactionForm({
     if (preferredAccount) {
       form.setValue("source_account_id", preferredAccount, {
         shouldValidate: true,
+        shouldDirty: false,
       });
     }
   }, [
@@ -1430,13 +1429,13 @@ export function TransactionForm({
       return;
     }
     if (!watchedPersonId) {
-      form.setValue("debt_account_id", undefined);
+      form.setValue("debt_account_id", undefined, { shouldDirty: false });
       setDebtEnsureError(null);
       return;
     }
     setDebtEnsureError(null);
     const linkedAccountId = debtAccountByPerson.get(watchedPersonId);
-    form.setValue("debt_account_id", linkedAccountId ?? undefined);
+    form.setValue("debt_account_id", linkedAccountId ?? undefined, { shouldDirty: false });
   }, [transactionType, watchedPersonId, debtAccountByPerson, form]);
 
   useEffect(() => {
@@ -1445,7 +1444,7 @@ export function TransactionForm({
       transactionType !== "debt" &&
       transactionType !== "repayment"
     ) {
-      form.setValue("shop_id", undefined);
+      form.setValue("shop_id", undefined, { shouldDirty: false });
     }
   }, [transactionType, form]);
 
@@ -1455,7 +1454,7 @@ export function TransactionForm({
       transactionType === "transfer" &&
       selectedAccount?.type === "credit_card"
     ) {
-      form.setValue("source_account_id", "");
+      form.setValue("source_account_id", "", { shouldDirty: false });
     }
   }, [transactionType, selectedAccount, form]);
 
@@ -1467,7 +1466,7 @@ export function TransactionForm({
         console.log(
           "[Lending Auto-Set] Switching cashback mode to real_fixed for Lending on CC",
         );
-        form.setValue("cashback_mode", "real_fixed");
+        form.setValue("cashback_mode", "real_fixed", { shouldDirty: false });
       }
     }
   }, [transactionType, selectedAccount, form]);
@@ -1698,15 +1697,15 @@ export function TransactionForm({
 
   useEffect(() => {
     if (amountValue <= 0) {
-      form.setValue("cashback_share_percent", undefined);
-      form.setValue("cashback_share_fixed", undefined);
+      form.setValue("cashback_share_percent", undefined, { shouldDirty: false });
+      form.setValue("cashback_share_fixed", undefined, { shouldDirty: false });
       return;
     }
     if (
       typeof watchedCashbackFixed === "number" &&
       watchedCashbackFixed > amountValue
     ) {
-      form.setValue("cashback_share_fixed", amountValue);
+      form.setValue("cashback_share_fixed", amountValue, { shouldDirty: false });
     }
   }, [amountValue, form, watchedCashbackFixed]);
 
@@ -1736,7 +1735,7 @@ export function TransactionForm({
 
   useEffect(() => {
     if (!manualTagMode && watchedDate) {
-      form.setValue("tag", generateTag(watchedDate));
+      form.setValue("tag", generateTag(watchedDate), { shouldDirty: false });
     }
   }, [watchedDate, manualTagMode, form]);
 
@@ -1745,7 +1744,7 @@ export function TransactionForm({
       return;
     }
     if (typeof defaultTag === "string") {
-      form.setValue("tag", defaultTag);
+      form.setValue("tag", defaultTag, { shouldDirty: false });
       setManualTagMode(true);
     }
   }, [defaultTag, form, initialValues?.tag, isEditMode]);
@@ -1753,14 +1752,14 @@ export function TransactionForm({
   useEffect(() => {
     if (isEditMode || isRefundMode) return;
     if (defaultType) {
-      form.setValue("type", defaultType);
+      form.setValue("type", defaultType, { shouldDirty: false });
       setTransactionType(defaultType);
     }
   }, [defaultType, form, isEditMode, isRefundMode]);
 
   useEffect(() => {
     if (isRefundMode) {
-      form.setValue("type", "income");
+      form.setValue("type", "income", { shouldDirty: false });
       setTransactionType("income");
     }
   }, [form, isRefundMode]);
@@ -1768,7 +1767,7 @@ export function TransactionForm({
   useEffect(() => {
     if (isEditMode && initialValues?.source_account_id) return;
     if (defaultSourceAccountId) {
-      form.setValue("source_account_id", defaultSourceAccountId);
+      form.setValue("source_account_id", defaultSourceAccountId, { shouldDirty: false });
     }
   }, [
     defaultSourceAccountId,
@@ -1782,12 +1781,12 @@ export function TransactionForm({
     // Only reset if we are not in edit mode loading phase
     if (!form.formState.isLoading && !isEditMode) {
       // If account changes, reset query logic resets stats, but we should reset inputs
-      form.setValue("cashback_share_fixed", 0);
-      form.setValue("cashback_share_percent", 0);
+      form.setValue("cashback_share_fixed", 0, { shouldDirty: false });
+      form.setValue("cashback_share_percent", 0, { shouldDirty: false });
       // If amount is cleared, also reset
       if (!amountValue) {
-        form.setValue("cashback_share_fixed", 0);
-        form.setValue("cashback_share_percent", 0);
+        form.setValue("cashback_share_fixed", 0, { shouldDirty: false });
+        form.setValue("cashback_share_percent", 0, { shouldDirty: false });
       }
     }
   }, [selectedAccount?.id, amountValue, form]);
@@ -1795,7 +1794,7 @@ export function TransactionForm({
   useEffect(() => {
     if (isEditMode && initialValues?.debt_account_id) return;
     if (defaultDebtAccountId) {
-      form.setValue("debt_account_id", defaultDebtAccountId);
+      form.setValue("debt_account_id", defaultDebtAccountId, { shouldDirty: false });
     }
   }, [defaultDebtAccountId, form, initialValues?.debt_account_id, isEditMode]);
 
