@@ -28,43 +28,45 @@ export async function createAccount(payload: {
   }
 
   // Ensure profile exists
-  const { data: existingProfile } = await supabase.from('profiles').select('id').eq('id', user.id).single()
+  const { data: existingProfile, error: profileCheckError } = await supabase.from('profiles').select('id').eq('id', user.id).single()
 
-  if (!existingProfile) {
-    return { error: { message: `User profile missing. Please sign out and sign in again to sync your profile.` } }
+  if (profileCheckError || !existingProfile) {
+    console.error('[createAccount] Profile missing or check failed:', profileCheckError)
+    return { error: { message: `User profile missing. Please sign out and sign in again.` } }
   }
 
+  try {
+    const insertPayload: Database['public']['Tables']['accounts']['Insert'] = {
+      name: payload.name,
+      current_balance: payload.balance ?? 0,
+      owner_id: user.id,
+      type: payload.type ?? 'bank',
+      is_active: true,
+      credit_limit: payload.creditLimit,
+      cashback_config: payload.cashbackConfig,
+      secured_by_account_id: payload.securedByAccountId,
+      image_url: payload.imageUrl,
+      annual_fee: payload.annualFee ?? 0,
+      parent_account_id: payload.parentAccountId ?? null,
+    } as any
 
-
-  const insertPayload: Database['public']['Tables']['accounts']['Insert'] = {
-    name: payload.name,
-    current_balance: payload.balance ?? 0,
-    owner_id: user.id,
-    type: payload.type ?? 'bank',
-    is_active: true,
-    credit_limit: payload.creditLimit,
-    cashback_config: payload.cashbackConfig,
-    secured_by_account_id: payload.securedByAccountId,
-    image_url: payload.imageUrl,
-    annual_fee: payload.annualFee ?? 0,
-    parent_account_id: payload.parentAccountId ?? null,
-  } as any // Cast to any since parent_account_id may not be in generated types yet
-
-  const executeInsert = (data: typeof insertPayload) =>
-    supabase
+    const { data, error } = await supabase
       .from('accounts')
-      .insert([data] as any)
+      .insert([insertPayload])
       .select()
 
-  const { data, error } = await executeInsert(insertPayload)
+    if (error) {
+      console.error('[createAccount] Supabase Insert Error:', error)
+      return { error: { message: error.message || 'Database error during account creation.' } }
+    }
 
-  if (error) {
-    console.error('Error creating account:', error)
-    return { error }
+    revalidatePath('/accounts')
+    return { data }
+
+  } catch (err: any) {
+    console.error('[createAccount] Unexpected Exception:', err)
+    return { error: { message: err.message || 'An unexpected error occurred.' } }
   }
-
-  revalidatePath('/accounts')
-  return { data }
 }
 
 export type UpdateAccountPayload = {

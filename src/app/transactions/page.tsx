@@ -22,7 +22,7 @@ export default async function TransactionsPage() {
     <TagFilterProvider>
       <div className="flex h-full overflow-hidden overflow-x-hidden">
         <div className="flex-1 overflow-hidden">
-          <div className="h-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="h-full w-full mx-auto px-4 sm:px-6 lg:px-8">
             <FilterableTransactions
               transactions={recentTransactions}
               categories={categories}

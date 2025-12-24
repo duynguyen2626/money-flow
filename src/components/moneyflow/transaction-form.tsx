@@ -362,6 +362,7 @@ export function TransactionForm({
   const [isShopDialogOpen, setIsShopDialogOpen] = useState(false);
   const [isPersonDialogOpen, setIsPersonDialogOpen] = useState(false);
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
+  const [accountDialogContext, setAccountDialogContext] = useState<'source' | 'debt' | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [debtEnsureError, setDebtEnsureError] = useState<string | null>(null);
@@ -2377,7 +2378,10 @@ export function TransactionForm({
                   onClick: () => setAccountFilter("all"),
                 },
               ]}
-              onAddNew={() => setIsAccountDialogOpen(true)}
+              onAddNew={() => {
+                setAccountDialogContext('source');
+                setIsAccountDialogOpen(true);
+              }}
               addLabel="New Account"
             />
           )}
@@ -3612,7 +3616,7 @@ export function TransactionForm({
         preselectedCategoryId={watchedCategoryId}
         onShopCreated={(shop) => {
           console.log("Shop created, auto-selecting:", shop);
-          form.setValue("shop_id", shop.id);
+          form.setValue("shop_id", shop.id, { shouldDirty: false });
           // We rely on local state update if needed, or if shopOptions recomputes
           // Assuming the parent component will re-fetch data or we need to optimistic update
           // For now, we trust router.refresh() in AddShopDialog combined with our Reset Protection
@@ -3629,7 +3633,7 @@ export function TransactionForm({
           {
             id: "new",
             name: "",
-            type: "bank",
+            type: accountFilter === 'credit' ? 'credit_card' : 'bank',
             current_balance: 0,
             credit_limit: undefined,
             cashback_config: null,
@@ -3642,6 +3646,13 @@ export function TransactionForm({
         open={isAccountDialogOpen}
         onOpenChange={setIsAccountDialogOpen}
         accounts={allAccounts}
+        onSuccess={(newAccount) => {
+          if (accountDialogContext === 'source') {
+            form.setValue('source_account_id', newAccount.id, { shouldValidate: true, shouldDirty: true });
+          }
+          // Reset context? optional, but good practice
+          setAccountDialogContext(null);
+        }}
       />
     </>
   );

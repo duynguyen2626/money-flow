@@ -3,7 +3,8 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ListFilter, X, Trash2, Undo, FileSpreadsheet, ArrowLeft, RotateCcw, RefreshCw } from 'lucide-react'
+import { ListFilter, X, Trash2, Undo, FileSpreadsheet, ArrowLeft, RotateCcw, RefreshCw, History, ChevronDown, Search, Calendar as CalendarIcon } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { toast } from "sonner"
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
@@ -605,6 +606,7 @@ export function FilterableTransactions({
     }
 
     const [fontSize, setFontSize] = useState(14)
+    const [isSummaryOpen, setIsSummaryOpen] = useState(false)
 
     // Reset to page 1 when filters change
     useEffect(() => {
@@ -623,54 +625,191 @@ export function FilterableTransactions({
     }, [sortedTransactions, currentPage, pageSize])
 
     return (
-        <div className="flex flex-col h-full overflow-hidden space-y-0">
+        <div className="flex flex-col h-full overflow-hidden bg-slate-50/50">
             {!onSearchChange && (
-                <div className="flex-none border-b bg-background">
-                    <div className="flex flex-col gap-5 py-5">
-                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div className="space-y-1">
-                                <h1 className="text-2xl font-semibold text-slate-900">Transactions</h1>
-                                <p className="text-xs font-medium text-slate-500">History</p>
+                <div className="flex-none px-4 sm:px-6 lg:px-8 py-4 space-y-4">
+                    {/* Header Row */}
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+
+                        {/* LEFT: Title + Search + Financial Summary */}
+                        <div className="flex flex-col lg:flex-row lg:items-center gap-4 flex-1 min-w-0">
+                            <div className="hidden lg:block shrink-0 mr-2">
+                                <h1 className="text-lg font-bold tracking-tight text-slate-900">Transactions</h1>
                             </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                {isMobile ? (
+
+                            {/* Search Bar - Compact */}
+                            <div className="relative w-full lg:w-auto lg:flex-1 lg:max-w-md shrink-0">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Search..."
+                                    value={searchTerm}
+                                    onChange={e => setSearchTerm(e.target.value)}
+                                    className="h-9 w-full rounded-md border border-slate-200 pl-9 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                />
+                                {searchTerm && (
                                     <button
-                                        className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                                        onClick={() => setIsMobileFilterOpen(true)}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                                        onClick={() => setSearchTerm('')}
                                     >
-                                        <ListFilter className="h-4 w-4" />
-                                        Filter &amp; Search
+                                        <X className="h-3.5 w-3.5" />
                                     </button>
-                                ) : (
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <button
-                                                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                                                title="Filter options"
-                                            >
-                                                <ListFilter className="h-4 w-4" />
-                                                Filter &amp; Search
-                                            </button>
-                                        </PopoverTrigger>
-                                        <PopoverContent align="end" className="w-72 p-3 z-50 shadow-xl">
-                                            {filterPopoverContent}
-                                        </PopoverContent>
-                                    </Popover>
                                 )}
+                            </div>
 
+                            {/* Divider for Desktop */}
+                            <div className="hidden lg:block h-6 w-px bg-slate-200 shrink-0" />
+
+                            {/* Smart Filter Bar - Aligned & No Scroll */}
+                            <div className="flex-none hidden lg:block">
+                                <SmartFilterBar
+                                    transactions={searchedTransactions}
+                                    selectedType={selectedType}
+                                    onSelectType={setSelectedType}
+                                    className="w-auto flex-wrap gap-2"
+                                />
+                            </div>
+                            {/* Mobile: Keep Scrollable */}
+                            <div className="lg:hidden flex-1 overflow-x-auto no-scrollbar mask-gradient-right pb-1">
+                                <SmartFilterBar
+                                    transactions={searchedTransactions}
+                                    selectedType={selectedType}
+                                    onSelectType={setSelectedType}
+                                    className="w-full whitespace-nowrap"
+                                />
+                            </div>
+                        </div>
+
+                        {/* RIGHT: Actions & Controls */}
+                        <div className="flex items-center gap-2 shrink-0 overflow-x-auto pb-1 lg:pb-0">
+
+                            {/* Tabs Switcher - Compact */}
+                            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg shrink-0 mr-2">
+                                {(['active', 'void', 'pending'] as const).map((tab) => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={cn(
+                                            "px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all capitalize",
+                                            activeTab === tab
+                                                ? cn(
+                                                    "bg-white shadow-sm ring-1 ring-black/5",
+                                                    tab === 'active' && "bg-blue-50 text-blue-700 ring-blue-700/10",
+                                                    // Fix: Ensure distinct colors for active states as requested
+                                                    tab === 'void' && "bg-red-50 text-red-700 ring-red-700/10",
+                                                    tab === 'pending' && "bg-amber-50 text-amber-700 ring-amber-700/10"
+                                                )
+                                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                                        )}
+                                    >
+                                        {tab}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Date Range Popover */}
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <button
+                                        className={cn(
+                                            "relative inline-flex items-center justify-center p-2 rounded-md border text-sm font-medium shadow-sm transition-colors",
+                                            dateFrom || dateTo
+                                                ? "bg-blue-50 border-blue-200 text-blue-700"
+                                                : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                        )}
+                                        title="Select Date Range"
+                                    >
+                                        <CalendarIcon className="h-4 w-4" />
+                                        {(dateFrom || dateTo) && (
+                                            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600 shadow-sm border border-white"></span>
+                                            </span>
+                                        )}
+                                    </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-4 space-y-3" align="end">
+                                    <div className="space-y-1">
+                                        <h4 className="font-semibold text-sm text-slate-900">Date Range</h4>
+                                        <p className="text-xs text-slate-500">Filter transactions by date.</p>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-slate-600">From</label>
+                                            <input
+                                                type="date"
+                                                value={dateFrom}
+                                                onChange={(e) => setDateFrom(e.target.value)}
+                                                className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-slate-600">To</label>
+                                            <input
+                                                type="date"
+                                                value={dateTo}
+                                                onChange={(e) => setDateTo(e.target.value)}
+                                                className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
+                                            />
+                                        </div>
+                                    </div>
+                                    {(dateFrom || dateTo) && (
+                                        <div className="flex justify-end pt-2 border-t border-slate-100">
+                                            <button
+                                                onClick={() => { setDateFrom(''); setDateTo('') }}
+                                                className="text-xs text-red-600 hover:underline font-medium"
+                                            >
+                                                Clear Dates
+                                            </button>
+                                        </div>
+                                    )}
+                                </PopoverContent>
+                            </Popover>
+
+                            {/* Excel Mode Toggle */}
+                            <button
+                                onClick={() => setIsExcelMode(prev => !prev)}
+                                className={cn(
+                                    "inline-flex items-center justify-center p-2 rounded-md border text-sm font-medium shadow-sm transition-colors",
+                                    isExcelMode
+                                        ? "bg-emerald-50 border-emerald-500 text-emerald-700"
+                                        : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                                )}
+                                title={isExcelMode ? "Exit Excel Mode" : "Enter Excel Mode"}
+                            >
+                                <FileSpreadsheet className="h-4 w-4" />
+                            </button>
+
+                            {/* Filters (Desktop Popover) */}
+                            {!isMobile && (
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <button
+                                            className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                                        >
+                                            <ListFilter className="h-4 w-4" />
+                                            <span className="hidden xl:inline">Filters</span>
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent align="end" className="w-80 p-4 z-50 shadow-xl">
+                                        {filterPopoverContent}
+                                    </PopoverContent>
+                                </Popover>
+                            )}
+
+                            {/* Mobile Filters Trigger */}
+                            {isMobile && (
                                 <button
-                                    onClick={() => setIsExcelMode(prev => !prev)}
-                                    className={`inline-flex items-center gap-1 rounded-md border px-3 py-2 text-sm font-semibold shadow-sm transition-colors ${isExcelMode
-                                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
-                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                                        }`}
-                                    title={isExcelMode ? "Exit Excel Mode" : "Enter Excel Mode"}
+                                    className="inline-flex items-center justify-center p-2 rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
+                                    onClick={() => setIsMobileFilterOpen(true)}
                                 >
-                                    <FileSpreadsheet className="h-4 w-4" />
-                                    Excel Mode
+                                    <ListFilter className="h-4 w-4" />
                                 </button>
+                            )}
 
-                                {!context && !isExcelMode && (
+                            {/* Add Transaction */}
+                            {!context && !isExcelMode && (
+                                <div className="ml-1">
                                     <AddTransactionDialog
                                         accounts={accounts}
                                         categories={categories}
@@ -678,195 +817,81 @@ export function FilterableTransactions({
                                         shops={shops}
                                         listenToUrlParams={true}
                                     />
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Financial Summary</p>
-                                {selectedType !== 'all' && (
-                                    <button
-                                        className="text-xs font-semibold text-slate-500 hover:text-slate-700"
-                                        onClick={() => setSelectedType('all')}
-                                    >
-                                        Show All
-                                    </button>
-                                )}
-                            </div>
-                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                                {summaryItems.map(item => {
-                                    const isActive = selectedType === item.key
-                                    const styles = summaryStyleMap[item.key]
-                                    return (
-                                        <button
-                                            key={item.key}
-                                            type="button"
-                                            onClick={() => setSelectedType(selectedType === item.key ? 'all' : item.key)}
-                                            className={`flex flex-col gap-1 rounded-lg border px-3 py-3 text-left transition-colors ${isActive
-                                                ? styles.active
-                                                : 'border-slate-200 bg-white hover:bg-slate-50'
-                                                }`}
-                                            aria-pressed={isActive}
-                                        >
-                                            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</span>
-                                            <span className={`text-lg font-semibold ${styles.text}`}>
-                                                {numberFormatter.format(item.value)}
-                                            </span>
-                                        </button>
-                                    )
-                                })}
-                            </div>
-                        </div>
-
-                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                                <span className="text-xs font-semibold text-slate-600">Date Range</span>
-                                <div className="flex items-center gap-2">
-                                    <input
-                                        type="date"
-                                        value={dateFrom}
-                                        onChange={(e) => setDateFrom(e.target.value)}
-                                        className="w-full min-w-[140px] rounded-md border border-slate-200 px-2 py-2 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
-                                    />
-                                    <span className="text-xs text-slate-400">to</span>
-                                    <input
-                                        type="date"
-                                        value={dateTo}
-                                        onChange={(e) => setDateTo(e.target.value)}
-                                        className="w-full min-w-[140px] rounded-md border border-slate-200 px-2 py-2 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
-                                    />
                                 </div>
-                            </div>
+                            )}
                         </div>
-
-                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div className="flex flex-1 items-center gap-2">
-                                <div className="relative flex-1">
-                                    <input
-                                        type="text"
-                                        placeholder="Search by note, category, or entity..."
-                                        value={searchTerm}
-                                        onChange={e => setSearchTerm(e.target.value)}
-                                        className="w-full rounded-md border border-gray-300 px-3 py-2 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                    />
-                                    {searchTerm && (
-                                        <button
-                                            className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:text-slate-600"
-                                            onClick={() => setSearchTerm('')}
-                                            title="Clear search"
-                                        >
-                                            <X className="h-3 w-3" />
-                                        </button>
-                                    )}
-                                </div>
-                                {!isMobile && (
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <button
-                                                className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
-                                                title="Filter options"
-                                            >
-                                                <ListFilter className="h-4 w-4" />
-                                                Filters
-                                            </button>
-                                        </PopoverTrigger>
-                                        <PopoverContent align="end" className="w-72 p-3 z-50 shadow-xl">
-                                            {filterPopoverContent}
-                                        </PopoverContent>
-                                    </Popover>
-                                )}
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                                <button
-                                    className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'active' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-                                    onClick={() => setActiveTab('active')}
-                                >
-                                    All
-                                </button>
-                                <button
-                                    className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'void' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-                                    onClick={() => setActiveTab('void')}
-                                >
-                                    Void
-                                </button>
-                                <button
-                                    className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-                                    onClick={() => setActiveTab('pending')}
-                                >
-                                    Pending
-                                </button>
-                            </div>
-                        </div>
-
-                        {selectedTxnIds.size > 0 && (
-                            <div className="flex flex-wrap items-center gap-2">
-                                <button
-                                    className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap shadow-sm text-white transition-colors ${currentBulkTab === 'void'
-                                        ? 'bg-green-600 hover:bg-green-500'
-                                        : 'bg-red-600 hover:bg-red-500'
-                                        }`}
-                                    onClick={() => bulkActionHandler?.()}
-                                    disabled={bulkActionDisabled}
-                                >
-                                    {currentBulkTab === 'void' ? <Undo className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
-                                    {bulkActionBusy ? 'Working...' : `${bulkActionLabel} (${selectedTxnIds.size})`}
-                                </button>
-                                {currentBulkTab === 'void' && (
-                                    <button
-                                        className="px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap shadow-sm bg-red-700 text-white hover:bg-red-800"
-                                        onClick={() => bulkActions?.onDeleteSelected?.()}
-                                        disabled={!bulkActions?.onDeleteSelected || bulkActions?.isDeleting}
-                                    >
-                                        {bulkActions?.isDeleting ? 'Deleting...' : `Delete Forever (${selectedTxnIds.size})`}
-                                    </button>
-                                )}
-                                <button
-                                    className="px-3 py-2 rounded-md text-xs font-medium bg-gray-200 text-gray-800 hover:bg-gray-300 whitespace-nowrap"
-                                    onClick={() => { setSelectedTxnIds(new Set()); setShowSelectedOnly(false) }}
-                                >
-                                    Deselect ({selectedTxnIds.size})
-                                </button>
-                                <button
-                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 whitespace-nowrap"
-                                    onClick={async () => {
-                                        const ids = Array.from(selectedTxnIds)
-                                        const toastId = toast.loading(`Recalculating cashback for ${ids.length} transactions...`)
-                                        let successCount = 0
-                                        let failCount = 0
-                                        for (const id of ids) {
-                                            try {
-                                                const res = await fetch(`/api/debug/recalc-cashback?id=${id}`)
-                                                if (res.ok) successCount++
-                                                else failCount++
-                                            } catch (e) {
-                                                console.error(e)
-                                                failCount++
-                                            }
-                                        }
-                                        toast.dismiss(toastId)
-                                        if (failCount === 0) {
-                                            toast.success(`Recalculated ${successCount} items.`)
-                                        } else {
-                                            toast.warning(`Done with ${successCount} successes and ${failCount} failures.`)
-                                        }
-                                        router.refresh()
-                                        setSelectedTxnIds(new Set())
-                                    }}
-                                >
-                                    <RefreshCw className="h-4 w-4" />
-                                    Recalc Cashback
-                                </button>
-                                <button
-                                    className={`px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap ${showSelectedOnly ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
-                                    onClick={() => setShowSelectedOnly(prev => !prev)}
-                                >
-                                    {showSelectedOnly ? 'Show All' : 'Show Selected'}
-                                </button>
-                            </div>
-                        )}
                     </div>
+
+                    {/* Bulk Actions Bar (if any selected) */}
+                    {selectedTxnIds.size > 0 && (
+                        <div className="flex flex-wrap items-center gap-2 pt-2 animate-in fade-in slide-in-from-top-1">
+                            <button
+                                className={cn(
+                                    "flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap shadow-sm text-white transition-colors",
+                                    currentBulkTab === 'void' ? 'bg-green-600 hover:bg-green-500' : 'bg-red-600 hover:bg-red-500'
+                                )}
+                                onClick={() => bulkActionHandler?.()}
+                                disabled={bulkActionDisabled}
+                            >
+                                {currentBulkTab === 'void' ? <Undo className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                {bulkActionBusy ? 'Working...' : `${bulkActionLabel} (${selectedTxnIds.size})`}
+                            </button>
+                            {currentBulkTab === 'void' && (
+                                <button
+                                    className="px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap shadow-sm bg-red-700 text-white hover:bg-red-800"
+                                    onClick={() => bulkActions?.onDeleteSelected?.()}
+                                    disabled={!bulkActions?.onDeleteSelected || bulkActions?.isDeleting}
+                                >
+                                    {bulkActions?.isDeleting ? 'Deleting...' : `Delete Forever (${selectedTxnIds.size})`}
+                                </button>
+                            )}
+                            <button
+                                className="px-3 py-2 rounded-md text-xs font-medium bg-slate-200 text-slate-800 hover:bg-slate-300 whitespace-nowrap"
+                                onClick={() => { setSelectedTxnIds(new Set()); setShowSelectedOnly(false) }}
+                            >
+                                Deselect ({selectedTxnIds.size})
+                            </button>
+                            <button
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 whitespace-nowrap"
+                                onClick={async () => {
+                                    const ids = Array.from(selectedTxnIds)
+                                    const toastId = toast.loading(`Recalculating cashback for ${ids.length} transactions...`)
+                                    let successCount = 0
+                                    let failCount = 0
+                                    for (const id of ids) {
+                                        try {
+                                            const res = await fetch(`/api/debug/recalc-cashback?id=${id}`)
+                                            if (res.ok) successCount++
+                                            else failCount++
+                                        } catch (e) {
+                                            console.error(e)
+                                            failCount++
+                                        }
+                                    }
+                                    toast.dismiss(toastId)
+                                    if (failCount === 0) {
+                                        toast.success(`Recalculated ${successCount} items.`)
+                                    } else {
+                                        toast.warning(`Done with ${successCount} successes and ${failCount} failures.`)
+                                    }
+                                    router.refresh()
+                                    setSelectedTxnIds(new Set())
+                                }}
+                            >
+                                <RefreshCw className="h-4 w-4" />
+                                Recalc Cashback
+                            </button>
+                            <button
+                                className={cn(
+                                    "px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap transition-colors",
+                                    showSelectedOnly ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                )}
+                                onClick={() => setShowSelectedOnly(prev => !prev)}
+                            >
+                                {showSelectedOnly ? 'Show All' : 'Show Selected'}
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -1019,90 +1044,109 @@ export function FilterableTransactions({
                 </div>
             )}
 
-            {/* 2. Table Container - Flexible & Scrollable */}
-            <div className="flex-1 overflow-hidden bg-white border-t relative">
-                <UnifiedTransactionTable
-                    transactions={paginatedTransactions}
-                    accountType={accountType}
-                    accountId={accountId}
-                    contextId={contextId ?? accountId}
-                    accounts={accounts}
-                    categories={categories}
-                    people={people}
-                    shops={shops}
-                    selectedTxnIds={selectedTxnIds}
-                    onSelectionChange={setSelectedTxnIds}
-                    activeTab={activeTab}
-                    context={context}
-                    onBulkActionStateChange={handleBulkActionStateChange}
-                    sortState={sortState}
-                    onSortChange={setSortState}
-                    hiddenColumns={[]}
-                    isExcelMode={isExcelMode}
-                    showPagination={false}
-                    currentPage={1} // FORCE 1 to prevent double slicing
-                    pageSize={pageSize}
-                    onPageChange={setCurrentPage}
-                    onPageSizeChange={setPageSize}
-                />
-            </div>
-
-            {/* 3. Footer Pagination - Static */}
-            <div className="flex-none p-4 bg-background z-10 border-t sticky bottom-0">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-1">
-                            <button
-                                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                                disabled={currentPage <= 1}
-                                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                            >
-                                <ArrowLeft className="h-4 w-4 text-slate-600" />
-                            </button>
-                            <div className="flex items-center gap-1">
-                                <span className="rounded px-2 py-1 text-xs font-semibold bg-blue-600 text-white">{currentPage}</span>
-                                <span className="text-xs text-slate-500">/ {Math.max(1, totalPages)}</span>
-                            </div>
-                            <button
-                                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                                disabled={currentPage >= totalPages}
-                                onClick={() => setCurrentPage(currentPage + 1)}
-                            >
-                                <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
-                            </button>
-                        </div>
-                        <div className="h-4 w-px bg-slate-200" />
-                        <select
-                            value={pageSize}
-                            onChange={(e) => {
-                                setPageSize(Number(e.target.value));
-                                setCurrentPage(1);
-                            }}
-                            className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
-                        >
-                            <option value={10}>10 / p</option>
-                            <option value={20}>20 / p</option>
-                            <option value={50}>50 / p</option>
-                            <option value={100}>100 / p</option>
-                        </select>
-                        <div className="h-4 w-px bg-slate-200" />
-                        <button
-                            onClick={() => {
-                                setSortState({ key: 'date', dir: 'desc' });
-                                setSelectedTxnIds(new Set());
-                                setCurrentPage(1);
-                            }}
-                            className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
-                        >
-                            <RotateCcw className="h-3.5 w-3.5" />
-                            <span className="text-xs font-medium">Reset</span>
-                        </button>
+            {/* 2. Table & Footer Card Container */}
+            <div className={cn(
+                "flex-1 overflow-hidden relative",
+                isMobile ? "bg-white border-t" : "px-4 pb-4 bg-slate-50/50"
+            )}>
+                <div className={cn(
+                    "flex flex-col h-full overflow-hidden",
+                    isMobile ? "" : "bg-white rounded-2xl border border-slate-200 shadow-sm"
+                )}>
+                    {/* Table Region */}
+                    <div className="flex-1 overflow-hidden relative">
+                        <UnifiedTransactionTable
+                            transactions={paginatedTransactions}
+                            accountType={accountType}
+                            accountId={accountId}
+                            contextId={contextId ?? accountId}
+                            accounts={accounts}
+                            categories={categories}
+                            people={people}
+                            shops={shops}
+                            selectedTxnIds={selectedTxnIds}
+                            onSelectionChange={setSelectedTxnIds}
+                            activeTab={activeTab}
+                            context={context}
+                            onBulkActionStateChange={handleBulkActionStateChange}
+                            sortState={sortState}
+                            onSortChange={setSortState}
+                            hiddenColumns={[]}
+                            isExcelMode={isExcelMode}
+                            showPagination={false}
+                            currentPage={1}
+                            pageSize={pageSize}
+                            onPageChange={setCurrentPage}
+                            onPageSizeChange={setPageSize}
+                        />
                     </div>
 
-                    <div className="flex items-center gap-4">
-                        <p className="text-slate-500 font-medium text-xs">
-                            Showing <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, sortedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, sortedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{sortedTransactions.length}</span> rows
-                        </p>
+                    {/* Footer Region - Inside Card */}
+                    <div className="flex-none p-3 bg-white border-t border-slate-100 z-10 sticky bottom-0">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-1">
+                                    <button
+                                        className="rounded p-1 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                                        disabled={currentPage <= 1}
+                                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                                    >
+                                        <ArrowLeft className="h-4 w-4 text-slate-600" />
+                                    </button>
+                                    <div className="flex items-center gap-1 px-1">
+                                        <span className="min-w-[1.5rem] text-center text-xs font-bold text-slate-700">{currentPage}</span>
+                                        <span className="text-xs text-slate-400">/ {Math.max(1, totalPages)}</span>
+                                    </div>
+                                    <button
+                                        className="rounded p-1 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                                        disabled={currentPage >= totalPages}
+                                        onClick={() => setCurrentPage(currentPage + 1)}
+                                    >
+                                        <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
+                                    </button>
+                                </div>
+
+                                {!isMobile && <div className="h-4 w-px bg-slate-200" />}
+
+                                {!isMobile && (
+                                    <select
+                                        value={pageSize}
+                                        onChange={(e) => {
+                                            setPageSize(Number(e.target.value));
+                                            setCurrentPage(1);
+                                        }}
+                                        className="h-8 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer hover:bg-slate-100"
+                                    >
+                                        <option value={10}>10 rows</option>
+                                        <option value={20}>20 rows</option>
+                                        <option value={50}>50 rows</option>
+                                        <option value={100}>100 rows</option>
+                                    </select>
+                                )}
+
+                                {!isMobile && <div className="h-4 w-px bg-slate-200" />}
+
+                                <button
+                                    onClick={() => {
+                                        setSortState({ key: 'date', dir: 'desc' });
+                                        setSelectedTxnIds(new Set());
+                                        setCurrentPage(1);
+                                    }}
+                                    className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
+                                >
+                                    <RotateCcw className="h-3.5 w-3.5" />
+                                    <span className="text-xs font-medium">Reset</span>
+                                </button>
+                            </div>
+
+                            <div className="flex items-center gap-4">
+                                <p className="text-slate-500 font-medium text-xs">
+                                    <span className="hidden sm:inline">Showing </span>
+                                    <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, sortedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, sortedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{sortedTransactions.length}</span>
+                                    <span className="hidden sm:inline"> rows</span>
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

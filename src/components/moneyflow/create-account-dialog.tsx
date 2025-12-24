@@ -644,7 +644,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
       })
 
       if (error) {
-        setStatus({ text: 'Could not create account. Please try again.', variant: 'error' })
+        setStatus({ text: error.message || 'Could not create account. Please try again.', variant: 'error' })
         return
       }
 

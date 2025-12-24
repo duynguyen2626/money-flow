@@ -105,7 +105,7 @@ export function SmartFilterBar({
     ] as const
 
     return (
-        <div className={cn("flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide", className)}>
+        <div className={cn("flex items-center gap-2", className)}>
             {filters.map((filter) => {
                 if (!filter.show) return null
                 const isActive = selectedType === filter.id

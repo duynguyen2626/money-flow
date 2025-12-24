@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom'
 import { parseCashbackConfig, CashbackCycleType, CashbackLevel, normalizeCashbackConfig, CashbackCategoryRule } from '@/lib/cashback'
 import { getSharedLimitParentId } from '@/lib/account-utils'
 import { Account } from '@/types/moneyflow.types'
-import { updateAccountConfigAction } from '@/actions/account-actions'
+import { updateAccountConfigAction, createAccount } from '@/actions/account-actions'
 import type { Json } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, Trash2, X, Copy, Info, Loader2 } from 'lucide-react'
@@ -558,6 +558,7 @@ type EditAccountDialogProps = {
   onOpen?: () => void
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  onSuccess?: (account: Account) => void
 }
 
 type StatusMessage = {
@@ -615,6 +616,7 @@ export function EditAccountDialog({
   onOpen,
   open: externalOpen,
   onOpenChange: externalOnOpenChange,
+  onSuccess
 }: EditAccountDialogProps) {
   const router = useRouter()
   const [internalOpen, setInternalOpen] = useState(false)
@@ -877,28 +879,65 @@ export function EditAccountDialog({
 
     const securedBy = isCreditCard && isSecured ? (securedByAccountId || null) : null
 
+    // Import createAccount dynamically if needed, or assume it's imported at top (it's not, I will need to add import)
+    // Actually, I should add the import first. But I can't do two replaces in one step unless I use multi_replace.
+    // I'll use multi_replace for this file.
+
     startTransition(async () => {
       setStatus(null)
-      const success = await updateAccountConfigAction({
-        id: account.id,
-        name: trimmedName,
-        creditLimit: nextCreditLimit,
-        annualFee: nextAnnualFee,
-        cashbackConfig: configPayload,
-        type: accountType,
-        securedByAccountId: securedBy,
-        imageUrl: cleanedLogoUrl,
-        parentAccountId: parentAccountId || null,
-      })
 
-      if (!success) {
-        setStatus({ text: 'Could not update account. Please try again.', variant: 'error' })
-        return
+      try {
+        if (account.id === 'new' || account.id === 'new-account' || !account.id) {
+          // CREATE MODE
+          const result = await createAccount({
+            name: trimmedName,
+            type: accountType,
+            creditLimit: nextCreditLimit,
+            annualFee: nextAnnualFee,
+            cashbackConfig: configPayload,
+            securedByAccountId: securedBy,
+            imageUrl: cleanedLogoUrl,
+            parentAccountId: parentAccountId || null,
+            balance: 0  // Default, as dialog doesn't currently support balance input
+          })
+
+          if (result?.error) {
+            console.error('Create account failed:', result.error)
+            setStatus({ text: result.error.message || 'Could not create account.', variant: 'error' })
+            return
+          }
+
+          if (onSuccess && result.data && result.data[0]) {
+            onSuccess(result.data[0] as unknown as Account)
+          }
+        } else {
+          // UPDATE MODE
+          const success = await updateAccountConfigAction({
+            id: account.id,
+            name: trimmedName,
+            creditLimit: nextCreditLimit,
+            annualFee: nextAnnualFee,
+            cashbackConfig: configPayload,
+            type: accountType,
+            securedByAccountId: securedBy,
+            imageUrl: cleanedLogoUrl,
+            parentAccountId: parentAccountId || null,
+          })
+
+          if (!success) {
+            console.error("Update account action returned false (failure).")
+            setStatus({ text: 'Could not update account. Please try again.', variant: 'error' })
+            return
+          }
+        }
+
+        setOpen(false)
+        setIsDirty(false)
+        router.refresh()
+      } catch (error: any) {
+        console.error('Account save error:', error)
+        setStatus({ text: error.message || 'An unexpected error occurred.', variant: 'error' })
       }
-
-      setOpen(false)
-      setIsDirty(false)
-      router.refresh()
     })
   }
 
@@ -1448,14 +1487,14 @@ export function EditAccountDialog({
                   >
                     Cancel
                   </button>
-                    <button
-                      type="submit"
-                      disabled={isPending}
-                      className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isPending && <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" />}
-                      {isPending ? 'Saving...' : 'Save changes'}
-                    </button>
+                  <button
+                    type="submit"
+                    disabled={isPending}
+                    className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {isPending && <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" />}
+                    {isPending ? 'Saving...' : 'Save changes'}
+                  </button>
                 </div>
               </form>
             </div>
