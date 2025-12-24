@@ -17,7 +17,7 @@ import { NumberInputWithSuggestions } from '@/components/ui/number-input-suggest
 import { CategoryDialog } from '@/components/moneyflow/category-dialog'
 import { cn } from '@/lib/utils'
 
-type CategoryOption = { id: string; name: string; type: string; icon?: string | null; logo_url?: string | null }
+type CategoryOption = { id: string; name: string; type: string; icon?: string | null; image_url?: string | null }
 
 const toNumericString = (value: number | null | undefined) =>
   typeof value === 'number' ? String(value) : ''
@@ -267,7 +267,7 @@ function CategoryMultiSelect({ options, selected, onChange, onAddNew }: { option
       value: opt.id,
       label: opt.name,
       icon: opt.icon || undefined,
-      logo_url: opt.logo_url || undefined
+      image_url: opt.image_url || undefined
     }))
     , [expenseOptions])
 
@@ -279,8 +279,8 @@ function CategoryMultiSelect({ options, selected, onChange, onAddNew }: { option
           const label = cat ? cat.name : catId
           return (
             <span key={catId} className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-100 px-2.5 py-1 text-xs text-blue-700 font-medium">
-              {cat?.logo_url ? (
-                <img src={cat.logo_url} alt="" className="h-3 w-3 object-contain rounded-none mr-0.5" />
+              {cat?.image_url ? (
+                <img src={cat.image_url} alt="" className="h-3 w-3 object-contain rounded-none mr-0.5" />
               ) : cat?.icon ? (
                 <span className="text-[10px] mr-0.5">{cat.icon}</span>
               ) : null}
@@ -427,7 +427,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
 
   const [name, setName] = useState('')
   const [accountType, setAccountType] = useState<Account['type']>('credit_card')
-  const [logoUrl, setLogoUrl] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
   const [creditLimit, setCreditLimit] = useState('')
   const [annualFee, setAnnualFee] = useState('')
   const [isSecured, setIsSecured] = useState(false)
@@ -453,7 +453,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
   useEffect(() => {
     const fetchCategories = async () => {
       const supabase = createClient()
-      const { data } = await supabase.from('categories').select('id, name, type, icon, logo_url').order('name')
+      const { data } = await supabase.from('categories').select('id, name, type, icon, image_url').order('name')
       if (data) setCategoryOptions(data as any)
     }
     fetchCategories()
@@ -480,7 +480,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
   const isDirty = useMemo(() => {
     return name !== '' ||
       accountType !== 'credit_card' ||
-      logoUrl !== '' ||
+      imageUrl !== '' ||
       creditLimit !== '' ||
       annualFee !== '' ||
       isSecured !== false ||
@@ -496,7 +496,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
       interestRate !== '' ||
       termMonths !== '' ||
       maturityDate !== ''
-  }, [name, accountType, logoUrl, creditLimit, annualFee, isSecured, securedByAccountId, parentAccountId, rate, maxAmount, minSpend, cycleType, statementDay, dueDate, levels, interestRate, termMonths, maturityDate])
+  }, [name, accountType, imageUrl, creditLimit, annualFee, isSecured, securedByAccountId, parentAccountId, rate, maxAmount, minSpend, cycleType, statementDay, dueDate, levels, interestRate, termMonths, maturityDate])
 
   useUnsavedChanges(isDirty)
 
@@ -511,7 +511,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
   const resetForm = () => {
     setName('')
     setAccountType('credit_card')
-    setLogoUrl('')
+    setImageUrl('')
     setCreditLimit('')
     setAnnualFee('')
     setIsSecured(false)
@@ -591,7 +591,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
 
     const nextCreditLimit = isCreditCard ? parseOptionalNumber(creditLimit) : null
     const nextAnnualFee = isCreditCard ? parseOptionalNumber(annualFee) : null
-    const cleanedLogoUrl = logoUrl.trim() || null
+    const cleanedLogoUrl = imageUrl.trim() || null
 
     const rateValue = parseOptionalNumber(rate) ?? 0
     let configPayload: Json | undefined
@@ -638,7 +638,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
         creditLimit: nextCreditLimit,
         cashbackConfig: configPayload,
         securedByAccountId: securedBy,
-        logoUrl: cleanedLogoUrl,
+        imageUrl: cleanedLogoUrl,
         annualFee: nextAnnualFee,
         parentAccountId: parentAccountId || null,
       })
@@ -876,14 +876,14 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
                       <div className="flex gap-3">
                         <input
                           type="text"
-                          value={logoUrl}
-                          onChange={e => setLogoUrl(e.target.value)}
+                          value={imageUrl}
+                          onChange={e => setImageUrl(e.target.value)}
                           className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                           placeholder="https://example.com/logo.png"
                         />
                         <div className="h-10 w-10 shrink-0 rounded border border-slate-100 bg-slate-50 flex items-center justify-center overflow-hidden">
-                          {logoUrl ? (
-                            <img src={logoUrl} alt="Preview" className="h-full w-full object-contain rounded-none" />
+                          {imageUrl ? (
+                            <img src={imageUrl} alt="Preview" className="h-full w-full object-contain rounded-none" />
                           ) : (
                             <span className="text-[10px] text-slate-400">No img</span>
                           )}
@@ -1183,7 +1183,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
           console.log('🟡 [DEBUG] CategoryDialog onSuccess called with ID:', newCategoryId)
           // Refresh category list
           const supabase = createClient()
-          const { data } = await supabase.from('categories').select('id, name, type, icon, logo_url').order('name')
+          const { data } = await supabase.from('categories').select('id, name, type, icon, image_url').order('name')
           console.log('🟡 [DEBUG] Refreshed categories, count:', data?.length)
           if (data) setCategoryOptions(data as any)
 

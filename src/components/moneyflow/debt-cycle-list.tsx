@@ -11,7 +11,7 @@ interface DebtCycleListProps {
     people: Person[]
     shops: Shop[]
     personId: string
-    filterType: 'all' | 'income' | 'expense' | 'lend' | 'repay'
+    filterType: 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer'
     searchTerm: string
 }
 

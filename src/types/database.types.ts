@@ -25,7 +25,7 @@ export type Database = {
           current_balance: number | null
           id: string
           is_active: boolean | null
-          logo_url: string | null
+          image_url: string | null
           name: string
           owner_id: string | null
           parent_account_id: string | null
@@ -44,7 +44,7 @@ export type Database = {
           current_balance?: number | null
           id?: string
           is_active?: boolean | null
-          logo_url?: string | null
+          image_url?: string | null
           name: string
           owner_id?: string | null
           parent_account_id?: string | null
@@ -63,7 +63,7 @@ export type Database = {
           current_balance?: number | null
           id?: string
           is_active?: boolean | null
-          logo_url?: string | null
+          image_url?: string | null
           name: string
           owner_id?: string | null
           parent_account_id?: string | null
@@ -100,6 +100,7 @@ export type Database = {
         Row: {
           bank_code: string
           bank_name: string
+          image_url: string | null
           created_at: string | null
           id: string
           source_name_pattern: string
@@ -108,6 +109,7 @@ export type Database = {
         Insert: {
           bank_code: string
           bank_name: string
+          image_url?: string | null
           created_at?: string | null
           id?: string
           source_name_pattern: string
@@ -116,6 +118,7 @@ export type Database = {
         Update: {
           bank_code?: string
           bank_name?: string
+          image_url?: string | null
           created_at?: string | null
           id?: string
           source_name_pattern?: string
@@ -454,7 +457,7 @@ export type Database = {
           icon: string | null
           id: string
           is_system: boolean | null
-          logo_url: string | null
+          image_url: string | null
           name: string
           parent_id: string | null
           type: string
@@ -466,7 +469,7 @@ export type Database = {
           icon?: string | null
           id?: string
           is_system?: boolean | null
-          logo_url?: string | null
+          image_url?: string | null
           name: string
           parent_id?: string | null
           type: string
@@ -478,7 +481,7 @@ export type Database = {
           icon?: string | null
           id?: string
           is_system?: boolean | null
-          logo_url?: string | null
+          image_url?: string | null
           name?: string
           parent_id?: string | null
           type?: string
@@ -756,7 +759,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           is_online: boolean | null
-          logo_url: string | null
+          image_url: string | null
           name: string
           website: string | null
         }
@@ -766,7 +769,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_online?: boolean | null
-          logo_url?: string | null
+          image_url?: string | null
           name: string
           website?: string | null
         }
@@ -776,7 +779,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_online?: boolean | null
-          logo_url?: string | null
+          image_url?: string | null
           name?: string
           website?: string | null
         }

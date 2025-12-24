@@ -288,7 +288,7 @@ export function UnifiedTransactionTable({
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
   ]
-  const mobileColumnOrder: ColumnKey[] = ["category", "amount", "account", "task"]
+  const mobileColumnOrder: ColumnKey[] = ["date", "shop", "account", "amount", "task"]
   const router = useRouter()
   // Internal state removed for activeTab, now using prop with fallback
   const lastSelectedIdRef = useRef<string | null>(null)
@@ -337,10 +337,10 @@ export function UnifiedTransactionTable({
           next[col] = false
         })
       }
-      next.date = hiddenColumns.includes('date') ? false : !isMobile
-      next.shop = hiddenColumns.includes('shop') ? false : !isMobile
+      next.date = hiddenColumns.includes('date') ? false : true
+      next.shop = hiddenColumns.includes('shop') ? false : true
       next.final_price = hiddenColumns.includes('final_price') ? false : !isMobile
-      next.category = hiddenColumns.includes('category') ? false : true
+      next.category = hiddenColumns.includes('category') ? false : !isMobile
       next.account = hiddenColumns.includes('account') ? false : true
       next.amount = hiddenColumns.includes('amount') ? false : true
       next.task = hiddenColumns.includes('task') ? false : true
@@ -1020,7 +1020,7 @@ export function UnifiedTransactionTable({
       )} style={{ ['--table-font-size' as string]: `${fontSize}px` } as React.CSSProperties}>
         <Table className={cn(isMobile ? "min-w-full" : "min-w-[1000px]", "[&_td]:text-[length:var(--table-font-size)] [&_th]:text-[length:var(--table-font-size)]")} wrapperClassName="overflow-x-auto w-full" style={{ fontSize: `${fontSize}px` }}>
           <TableHeader className="sticky top-0 z-40 bg-white backdrop-blur text-foreground font-bold shadow-sm">
-            <TableRow className="hover:bg-transparent border-b-2 border-slate-300">
+            <TableRow className="hover:bg-transparent border-b border-slate-200">
               {displayedColumns.map(col => {
                 if (col.key === "task") {
                   return (
@@ -1042,8 +1042,8 @@ export function UnifiedTransactionTable({
                 let stickyStyle: React.CSSProperties = { width: columnWidths[col.key] };
                 let stickyClass = "";
 
-                if (isMobile && col.key === 'category') {
-                  stickyClass = "sticky left-0 z-40 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
+                if (isMobile && col.key === 'date') {
+                  stickyClass = "sticky left-0 z-45 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
                 } else if (!isMobile && col.key === 'date') {
                   stickyClass = "sticky left-0 z-40 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
                 } else if (!isMobile && col.key === 'shop') {
@@ -1061,7 +1061,7 @@ export function UnifiedTransactionTable({
                 return (
                   <TableHead
                     key={col.key}
-                    className={cn("border-r-2 border-slate-300 bg-slate-200 font-semibold text-slate-700 whitespace-nowrap", stickyClass)}
+                    className={cn("border-r border-slate-200 bg-slate-200 font-semibold text-slate-700 whitespace-nowrap", stickyClass)}
                     style={stickyStyle}
                   >
                     {col.key === 'date' ? (
@@ -2300,7 +2300,7 @@ export function UnifiedTransactionTable({
                 <TableRow
                   key={txn.id}
                   className={cn(
-                    "border-b-2 border-slate-300 transition-colors text-base",
+                    "border-b border-slate-200 transition-colors text-base",
                     isMenuOpen ? "bg-blue-50" : rowBgColor,
                     !isExcelMode && "hover:bg-slate-50/50"
                   )}
@@ -2325,7 +2325,7 @@ export function UnifiedTransactionTable({
                     };
                     const stickyBg = getStickyBg();
 
-                    if (isMobile && col.key === 'category') {
+                    if (isMobile && col.key === 'date') {
                       stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
                     } else if (!isMobile && col.key === 'date') {
                       stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
@@ -2342,7 +2342,7 @@ export function UnifiedTransactionTable({
                       <TableCell
                         key={`${txn.id}-${col.key}`}
                         className={cn(
-                          `border-r-2 border-slate-300 ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
+                          `border-r border-slate-200 ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
                           } ${col.key === "amount" ? amountClass : ""} ${col.key === "task" ? "" : voidedTextClass} truncate`,
                           stickyClass,
                           col.key === "date" && "p-1"
@@ -2393,88 +2393,121 @@ export function UnifiedTransactionTable({
       {/* Footer - Outside scroll container */}
       {showPagination && (
         <div className="sticky bottom-0 z-20 flex-none flex items-center justify-between border-t border-slate-200 bg-white px-4 py-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] text-sm">
-          <div className="flex items-center gap-4">
-            {/* Pagination */}
-            <div className="flex items-center gap-1">
-              <button
-                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                disabled={currentPage <= 1}
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                title="Previous Page"
-              >
-                <ArrowLeft className="h-4 w-4 text-slate-600" />
-              </button>
-              <div className="flex items-center gap-1">
-                <span className="rounded px-2 py-1 text-xs font-semibold bg-blue-600 text-white">{currentPage}</span>
-                <span className="text-xs text-slate-500">/ {Math.max(1, Math.ceil(displayedTransactions.length / pageSize))}</span>
+          {isMobile ? (
+            // Mobile Compact Footer
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold text-slate-700">
+                  {displayedTransactions.length} rows
+                </span>
               </div>
-              <button
-                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                disabled={currentPage >= Math.ceil(displayedTransactions.length / pageSize)}
-                onClick={() => setCurrentPage(currentPage + 1)}
-                title="Next Page"
-              >
-                <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
-              </button>
-            </div>
-            <div className="h-4 w-px bg-slate-200" />
-            {/* Page Size Selector */}
-            <select
-              value={pageSize}
-              onChange={(e) => {
-                setPageSize(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
-            >
-              <option value={10}>10 / p</option>
-              <option value={20}>20 / p</option>
-              <option value={50}>50 / p</option>
-              <option value={100}>100 / p</option>
-            </select>
-            <div className="h-4 w-px bg-slate-200" />
 
-            {/* Font Size Controls */}
-            <div className="flex items-center gap-1">
-              <span className="text-xs text-slate-500 mr-1">Text:</span>
-              <button
-                onClick={() => setFontSize(Math.max(10, fontSize - 1))}
-                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                title="Decrease font size"
-                disabled={fontSize <= 10}
-              >
-                <Minus className="h-3.5 w-3.5 text-slate-600" />
-              </button>
-              <span className="text-xs font-semibold w-10 text-center tabular-nums">{fontSize}px</span>
-              <button
-                onClick={() => setFontSize(Math.min(20, fontSize + 1))}
-                className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                title="Increase font size"
-                disabled={fontSize >= 20}
-              >
-                <Plus className="h-3.5 w-3.5 text-slate-600" />
-              </button>
-            </div>
-            <div className="h-4 w-px bg-slate-200" />
+              <div className="flex items-center gap-1">
+                <button
+                  className="rounded p-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 transition-colors"
+                  disabled={currentPage <= 1}
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                >
+                  <ArrowLeft className="h-4 w-4 text-slate-600" />
+                </button>
+                <div className="bg-slate-100 rounded px-2 py-1 min-w-[3rem] text-center">
+                  <span className="text-xs font-bold text-blue-700">{currentPage}</span>
+                  <span className="text-xs text-slate-400">/</span>
+                  <span className="text-xs text-slate-600">{Math.max(1, Math.ceil(displayedTransactions.length / pageSize))}</span>
+                </div>
+                <button
+                  className="rounded p-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 transition-colors"
+                  disabled={currentPage >= Math.ceil(displayedTransactions.length / pageSize)}
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                >
+                  <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
+                </button>
+              </div>
+            </>
+          ) : (
+            // Desktop Footer (Original)
+            <>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-1">
+                  <button
+                    className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+                    disabled={currentPage <= 1}
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    title="Previous Page"
+                  >
+                    <ArrowLeft className="h-4 w-4 text-slate-600" />
+                  </button>
+                  <div className="flex items-center gap-1">
+                    <span className="rounded px-2 py-1 text-xs font-semibold bg-blue-600 text-white">{currentPage}</span>
+                    <span className="text-xs text-slate-500">/ {Math.max(1, Math.ceil(displayedTransactions.length / pageSize))}</span>
+                  </div>
+                  <button
+                    className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+                    disabled={currentPage >= Math.ceil(displayedTransactions.length / pageSize)}
+                    onClick={() => setCurrentPage(currentPage + 1)}
+                    title="Next Page"
+                  >
+                    <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
+                  </button>
+                </div>
+                <div className="h-4 w-px bg-slate-200" />
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
+                >
+                  <option value={10}>10 / p</option>
+                  <option value={20}>20 / p</option>
+                  <option value={50}>50 / p</option>
+                  <option value={100}>100 / p</option>
+                </select>
+                <div className="h-4 w-px bg-slate-200" />
 
-            <button
-              onClick={() => {
-                setSortState({ key: 'date', dir: 'desc' });
-                updateSelection(new Set());
-                resetColumns();
-                setCurrentPage(1);
-              }}
-              className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              <span className="text-xs font-medium">Reset</span>
-            </button>
-          </div>
-          <div className="flex items-center gap-4">
-            <p className="text-slate-500 font-medium text-xs">
-              Showing <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, displayedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, displayedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{displayedTransactions.length}</span> rows
-            </p>
-          </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-slate-500 mr-1">Text:</span>
+                  <button
+                    onClick={() => setFontSize(Math.max(10, fontSize - 1))}
+                    className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+                    title="Decrease font size"
+                    disabled={fontSize <= 10}
+                  >
+                    <Minus className="h-3.5 w-3.5 text-slate-600" />
+                  </button>
+                  <span className="text-xs font-semibold w-10 text-center tabular-nums">{fontSize}px</span>
+                  <button
+                    onClick={() => setFontSize(Math.min(20, fontSize + 1))}
+                    className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
+                    title="Increase font size"
+                    disabled={fontSize >= 20}
+                  >
+                    <Plus className="h-3.5 w-3.5 text-slate-600" />
+                  </button>
+                </div>
+                <div className="h-4 w-px bg-slate-200" />
+
+                <button
+                  onClick={() => {
+                    setSortState({ key: 'date', dir: 'desc' });
+                    updateSelection(new Set());
+                    resetColumns();
+                    setCurrentPage(1);
+                  }}
+                  className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  <span className="text-xs font-medium">Reset</span>
+                </button>
+              </div>
+              <div className="flex items-center gap-4">
+                <p className="text-slate-500 font-medium text-xs">
+                  Showing <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, displayedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, displayedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{displayedTransactions.length}</span> rows
+                </p>
+              </div>
+            </>
+          )}
         </div>
       )}
 

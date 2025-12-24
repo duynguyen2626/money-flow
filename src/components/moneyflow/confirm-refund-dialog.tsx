@@ -102,9 +102,9 @@ export function ConfirmRefundDialog({
                 }
       `}
         >
-            {account.logo_url ? (
+            {account.image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={account.logo_url} alt="" className="h-8 w-8 object-contain" />
+                <img src={account.image_url} alt="" className="h-8 w-8 object-contain" />
             ) : (
                 <div className="flex h-8 w-8 items-center justify-center bg-slate-200 rounded-full text-xs font-bold text-slate-600">
                     {account.name.charAt(0)}

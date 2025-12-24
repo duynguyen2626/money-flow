@@ -469,7 +469,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
     date.setMonth(date.getMonth() + monthOffset);
   }
 
-  let query = supabase.from('accounts').select('id, name, type, cashback_config, logo_url').eq('type', 'credit_card');
+  let query = supabase.from('accounts').select('id, name, type, cashback_config, image_url').eq('type', 'credit_card');
   if (accountIds && accountIds.length > 0) {
     query = query.in('id', accountIds);
   }
@@ -537,7 +537,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
             id, occurred_at, note, amount, account_id,
             cashback_share_percent, cashback_share_fixed,
             category:categories(name, icon),
-            shop:shops(name, logo_url),
+            shop:shops(name, image_url),
             person:profiles!transactions_person_id_fkey(name)
           )
         `)
@@ -576,10 +576,10 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
             sharePercent: t.cashback_share_percent,
             shareFixed: t.cashback_share_fixed,
             shopName: shop?.name,
-            shopLogoUrl: shop?.logo_url,
+            shopLogoUrl: shop?.image_url,
             categoryName: category?.name,
             categoryIcon: category?.icon,
-            categoryLogoUrl: category?.logo_url,
+            categoryLogoUrl: category?.image_url,
             personName: person?.name,
             policyMetadata,
           } as CashbackTransaction;
@@ -610,7 +610,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
     results.push({
       accountId: acc.id,
       accountName: acc.name,
-      accountLogoUrl: acc.logo_url,
+      accountLogoUrl: acc.image_url,
       cycleLabel: cycleTag,
       cycleStart: cycleRange?.start.toISOString() ?? null,
       cycleEnd: cycleRange?.end.toISOString() ?? null,
@@ -758,7 +758,7 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
   const supabase = createAdminClient();
 
   // 1. Get Account
-  const { data: account } = await supabase.from('accounts').select('id, name, logo_url, cashback_config').eq('id', accountId).single();
+  const { data: account } = await supabase.from('accounts').select('id, name, image_url, cashback_config').eq('id', accountId).single();
   if (!account) return null;
 
   console.log(`[getAllCashbackHistory] Raw Config for ${accountId}:`, JSON.stringify(account.cashback_config));
@@ -791,7 +791,7 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
             id, occurred_at, note, amount, account_id,
             cashback_share_percent, cashback_share_fixed,
             category:categories(name, icon),
-            shop:shops(name, logo_url),
+            shop:shops(name, image_url),
             person:profiles!transactions_person_id_fkey(name)
           )
         `)
@@ -831,10 +831,10 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
         sharePercent: t.cashback_share_percent,
         shareFixed: t.cashback_share_fixed,
         shopName: shop?.name,
-        shopLogoUrl: shop?.logo_url,
+        shopLogoUrl: shop?.image_url,
         categoryName: category?.name,
         categoryIcon: category?.icon,
-        categoryLogoUrl: category?.logo_url,
+        categoryLogoUrl: category?.image_url,
         personName: person?.name,
         policyMetadata,
         cycleTag: (e.cycle as any)?.cycle_tag
@@ -849,7 +849,7 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
   return {
     accountId: account.id,
     accountName: account.name,
-    accountLogoUrl: account.logo_url,
+    accountLogoUrl: account.image_url,
     cycleLabel: 'ALL TIME',
     cycleStart: null,
     cycleEnd: null,

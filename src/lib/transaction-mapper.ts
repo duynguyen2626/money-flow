@@ -35,12 +35,12 @@ export type TransactionRow = {
         accounts?: {
             name: string
             type: string
-            logo_url?: string | null
+            image_url?: string | null
         } | null
         categories?: {
             name: string
             type: 'income' | 'expense'
-            logo_url?: string | null
+            image_url?: string | null
             icon?: string | null
         } | null
         metadata?: Json | null
@@ -84,7 +84,7 @@ export async function loadShopInfo(
 
     const { data, error } = await supabase
         .from('shops')
-        .select('id, name, logo_url')
+        .select('id, name, image_url')
         .eq('id', shopId)
         .maybeSingle();
 
@@ -128,13 +128,13 @@ function resolveAccountMovementInfo(
     }
 
     const fallbackName = txn.shops?.name ?? fallbackCategoryName ?? null
-    const fallbackLogo = txn.shops?.logo_url ?? null
+    const fallbackLogo = txn.shops?.image_url ?? null
 
     return {
         source_name: sourceLine?.accounts?.name ?? null,
-        source_logo: sourceLine?.accounts?.logo_url ?? null,
+        source_image: sourceLine?.accounts?.image_url ?? null,
         destination_name: destinationLine?.accounts?.name ?? fallbackName,
-        destination_logo: destinationLine?.accounts?.logo_url ?? fallbackLogo ?? null,
+        destination_image: destinationLine?.accounts?.image_url ?? fallbackLogo ?? null,
     }
 }
 
@@ -242,7 +242,7 @@ export function mapTransactionRow(
         if (categoryLine && categoryLine.categories) {
             categoryName = categoryLine.categories.name
             categoryIcon = categoryLine.categories.icon ?? undefined
-            categoryLogoUrl = categoryLine.categories.logo_url ?? undefined
+            categoryLogoUrl = categoryLine.categories.image_url ?? undefined
         }
     } else if (context?.primaryLineId && accountLine) {
         // A. If we are in Split View (primaryLineId present), we trust the primary line.
@@ -257,7 +257,7 @@ export function mapTransactionRow(
         if (accountLine.categories) {
             categoryName = accountLine.categories.name
             categoryIcon = accountLine.categories.icon ?? undefined
-            categoryLogoUrl = accountLine.categories.logo_url ?? undefined
+            categoryLogoUrl = accountLine.categories.image_url ?? undefined
             if (accountLine.categories.type) {
                 type = accountLine.categories.type as any;
             }
@@ -265,7 +265,7 @@ export function mapTransactionRow(
     } else if (categoryLine && categoryLine.categories) {
         categoryName = categoryLine.categories.name
         categoryIcon = categoryLine.categories.icon ?? undefined
-        categoryLogoUrl = categoryLine.categories.logo_url ?? undefined
+        categoryLogoUrl = categoryLine.categories.image_url ?? undefined
 
         if (categoryLine.categories.type === 'expense') {
             type = 'expense'
@@ -344,36 +344,36 @@ export function mapTransactionRow(
         personLine = accountLine
     }
     let categoryId = categoryLine?.category_id ?? null
-    const { source_name: resolvedSourceName, source_logo: resolvedSourceLogo, destination_name: resolvedDestinationName, destination_logo: resolvedDestinationLogo } =
+    const { source_name: resolvedSourceName, source_image: resolvedSourceLogo, destination_name: resolvedDestinationName, destination_image: resolvedDestinationLogo } =
         resolveAccountMovementInfo(txn.transaction_lines, txn, type, categoryName ?? null)
 
     const shopDefaultCategory = ((txn as any).shops?.categories as {
         id?: string
         name?: string | null
-        logo_url?: string | null
+        image_url?: string | null
         icon?: string | null
     } | null) ?? null
 
     if (!categoryName && shopDefaultCategory) {
         categoryName = shopDefaultCategory.name ?? undefined
         categoryIcon = shopDefaultCategory.icon ?? undefined
-        categoryLogoUrl = shopDefaultCategory.logo_url ?? undefined
+        categoryLogoUrl = shopDefaultCategory.image_url ?? undefined
         categoryId = shopDefaultCategory.id ?? categoryId
     }
 
     let source_name = resolvedSourceName
-    let source_logo = resolvedSourceLogo
+    let source_image = resolvedSourceLogo
     let destination_name = resolvedDestinationName
-    let destination_logo = resolvedDestinationLogo
+    let destination_image = resolvedDestinationLogo
 
     if (isPersonContext) {
         if (displayType === 'expense' && nonDebtCreditLine?.accounts) {
             source_name = nonDebtCreditLine.accounts.name ?? source_name
-            source_logo = nonDebtCreditLine.accounts.logo_url ?? source_logo ?? null
+            source_image = nonDebtCreditLine.accounts.image_url ?? source_image ?? null
         }
         if (displayType === 'income' && nonDebtDebitLine?.accounts) {
             destination_name = nonDebtDebitLine.accounts.name ?? destination_name
-            destination_logo = nonDebtDebitLine.accounts.logo_url ?? destination_logo ?? null
+            destination_image = nonDebtDebitLine.accounts.image_url ?? destination_image ?? null
         }
     }
 
@@ -393,10 +393,10 @@ export function mapTransactionRow(
                 source_name = `⬅️ ${partnerName}`
                 destination_name = null
             }
-            if (otherLine?.accounts?.logo_url) {
-                source_logo = otherLine.accounts.logo_url
+            if (otherLine?.accounts?.image_url) {
+                source_image = otherLine.accounts.image_url
             } else {
-                source_logo = null
+                source_image = null
             }
         }
     }
@@ -460,14 +460,14 @@ export function mapTransactionRow(
         display_type: display_direction,
         category_name: categoryName,
         category_icon: categoryIcon ?? null,
-        category_logo_url: categoryLogoUrl ?? null,
+        category_image_url: categoryLogoUrl ?? null,
         account_name: accountName,
         source_account_name: creditAccountLine?.accounts?.name ?? null,
         destination_account_name: debitAccountLine?.accounts?.name ?? null,
         source_name,
-        source_logo,
+        source_image,
         destination_name,
-        destination_logo,
+        destination_image,
         category_id: categoryId,
         cashback_share_percent: percentRaw ?? null,
         cashback_share_fixed: txn.cashback_share_fixed ?? cashbackFromLines.cashback_share_fixed ?? null,
@@ -480,7 +480,7 @@ export function mapTransactionRow(
         person_avatar_url: personLine?.profiles?.avatar_url ?? null,
         shop_id: txn.shop_id ?? null,
         shop_name: txn.shops?.name ?? null,
-        shop_logo_url: txn.shops?.logo_url ?? null,
+        shop_image_url: txn.shops?.image_url ?? null,
         metadata: extractLineMetadata(txn.transaction_lines),
         transaction_lines: (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[],
         bank_back: bankBack,
@@ -519,9 +519,9 @@ export function mapUnifiedTransaction(txn: any, contextAccountId?: string): Tran
         account_name: txn.accounts?.name,
         category_name: txn.categories?.name,
         category_icon: txn.categories?.icon,
-        category_logo_url: txn.categories?.logo_url,
+        category_image_url: txn.categories?.image_url,
         shop_name: txn.shops?.name,
-        shop_logo_url: txn.shops?.logo_url,
+        shop_image_url: txn.shops?.image_url,
 
         // Ensure numeric amount
         amount: txn.amount,

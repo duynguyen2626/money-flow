@@ -34,7 +34,7 @@ const formSchema = z.object({
     name: z.string().min(1, "Name is required"),
     type: z.enum(["expense", "income", "transfer"]),
     icon: z.string().optional(),
-    logo_url: z.string().optional(),
+    image_url: z.string().optional(),
     mcc_codes: z.string().optional(),
     kind: z.enum(["internal", "external"]).optional(),
 })
@@ -62,7 +62,7 @@ export function CategoryDialog({
             name: "",
             type: defaultType,
             icon: "",
-            logo_url: "",
+            image_url: "",
             mcc_codes: "",
             kind: "internal", // Default to internal
         },
@@ -77,7 +77,7 @@ export function CategoryDialog({
                 name: category.name,
                 type: category.type,
                 icon: category.icon || "",
-                logo_url: category.logo_url || "",
+                image_url: category.image_url || "",
                 mcc_codes: mccCodesStr,
                 kind: category.kind || (category.type === 'transfer' ? 'internal' : 'external'),
             })
@@ -86,7 +86,7 @@ export function CategoryDialog({
                 name: "",
                 type: defaultType,
                 icon: "",
-                logo_url: "",
+                image_url: "",
                 mcc_codes: "",
                 kind: 'internal', // Default to internal
             })
@@ -105,7 +105,7 @@ export function CategoryDialog({
                 name: values.name,
                 type: values.type,
                 icon: values.icon,
-                logo_url: values.logo_url,
+                image_url: values.image_url,
                 mcc_codes: mccCodesArray.length > 0 ? mccCodesArray : undefined,
                 kind: values.kind,
             };
@@ -202,7 +202,7 @@ export function CategoryDialog({
                             />
                             <FormField
                                 control={form.control}
-                                name="logo_url"
+                                name="image_url"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Image URL</FormLabel>

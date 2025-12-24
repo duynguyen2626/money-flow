@@ -23,7 +23,7 @@ export type Category = {
   type: 'expense' | 'income' | 'transfer'
   parent_id?: string | null
   icon?: string | null
-  logo_url?: string | null
+  image_url?: string | null
   mcc_codes?: string[] | null
   kind?: 'internal' | 'external' | null
 }
@@ -31,7 +31,7 @@ export type Category = {
 export type Shop = {
   id: string
   name: string
-  logo_url?: string | null
+  image_url?: string | null
   default_category_id?: string | null
 }
 
@@ -70,7 +70,7 @@ export type Account = {
   cashback_config_version?: number;
   secured_by_account_id?: string | null;
   is_active?: boolean | null;
-  logo_url?: string | null;
+  image_url?: string | null;
   total_in?: number;
   total_out?: number;
   annual_fee?: number | null;
@@ -130,7 +130,7 @@ export type Person = {
   is_archived?: boolean | null
   subscription_ids?: string[]
   subscription_count?: number
-  subscription_details?: { id: string; name: string; slots: number; logo_url?: string | null }[]
+  subscription_details?: { id: string; name: string; slots: number; image_url?: string | null }[]
   monthly_debts?: MonthlyDebtSummary[]
   current_cycle_debt?: number | null
   outstanding_debt?: number | null
@@ -173,8 +173,8 @@ export type TransactionLine = {
 }
 
 export type TransactionWithLineRelations = TransactionLineRow & {
-  accounts: Pick<AccountRow, 'name' | 'logo_url' | 'type'> | null;
-  categories: Pick<CategoryRow, 'name' | 'type'> & { logo_url?: string | null; icon?: string | null } | null;
+  accounts: Pick<AccountRow, 'name' | 'image_url' | 'type'> | null;
+  categories: Pick<CategoryRow, 'name' | 'type'> & { image_url?: string | null; icon?: string | null } | null;
   profiles?: { name?: string | null; avatar_url?: string | null } | null;
   people?: { name?: string | null; avatar_url?: string | null } | null;
   person_id?: string | null;
@@ -195,12 +195,12 @@ export type TransactionWithDetails = TransactionRow & {
   displayAccountName?: string;
   category_name?: string;
   category_icon?: string | null;
-  category_logo_url?: string | null;
+  category_image_url?: string | null;
   account_name?: string;
   source_name?: string | null;
   destination_name?: string | null;
-  source_logo?: string | null;
-  destination_logo?: string | null;
+  source_image?: string | null;
+  destination_image?: string | null;
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
   cashback_share_amount?: number | null;
@@ -217,7 +217,7 @@ export type TransactionWithDetails = TransactionRow & {
   persisted_cycle_tag?: string | null;
   shop_id?: string | null;
   shop_name?: string | null;
-  shop_logo_url?: string | null;
+  shop_image_url?: string | null;
   metadata?: Json | null;
   source_account_name?: string | null;
   destination_account_name?: string | null;
@@ -245,5 +245,5 @@ export type CashbackCard = {
   earnedSoFar: number
   remainingBudget: number
   rate: number
-  logo_url?: string | null
+  image_url?: string | null
 }

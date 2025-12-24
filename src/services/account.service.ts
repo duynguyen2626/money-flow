@@ -270,13 +270,13 @@ export async function getAccounts(): Promise<Account[]> {
       child_accounts: childRows.map(c => ({
         id: c.id,
         name: c.name,
-        avatar_url: c.logo_url
+        avatar_url: c.image_url
       })),
       parent_info: parentRow ? {
         id: parentRow.id,
         name: parentRow.name,
         type: parentRow.type,
-        avatar_url: parentRow.logo_url
+        avatar_url: parentRow.image_url
       } : null
     }
 
@@ -292,7 +292,7 @@ export async function getAccounts(): Promise<Account[]> {
       secured_by_account_id: item.secured_by_account_id ?? null,
       cashback_config: normalizeCashbackConfig(item.cashback_config),
       is_active: typeof item.is_active === 'boolean' ? item.is_active : null,
-      logo_url: typeof item.logo_url === 'string' ? item.logo_url : null,
+      image_url: typeof item.image_url === 'string' ? item.image_url : null,
       total_in: item.total_in ?? 0,
       total_out: item.total_out ?? 0,
       stats,
@@ -385,7 +385,7 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
     secured_by_account_id: row.secured_by_account_id ?? null,
     cashback_config: normalizeCashbackConfig(row.cashback_config),
     is_active: typeof row.is_active === 'boolean' ? row.is_active : null,
-    logo_url: typeof row.logo_url === 'string' ? row.logo_url : null,
+    image_url: typeof row.image_url === 'string' ? row.image_url : null,
     total_in: row.total_in ?? 0,
     total_out: row.total_out ?? 0,
   }
@@ -424,7 +424,7 @@ async function fetchTransactions(
       status,
       created_at,
       shop_id,
-      shops ( id, name, logo_url ),
+      shops ( id, name, image_url ),
       amount,
       type,
       account_id,
@@ -437,8 +437,8 @@ async function fetchTransactions(
       cashback_mode,
       created_by,
       currency,
-      accounts (name, type, logo_url),
-      categories (name, logo_url, icon)
+      accounts (name, type, image_url),
+      categories (name, image_url, icon)
     `)
     .eq('account_id', accountId)
     .order('occurred_at', { ascending: false })
@@ -472,7 +472,7 @@ export async function updateAccountConfig(
     type?: Account['type']
     secured_by_account_id?: string | null
     is_active?: boolean | null
-    logo_url?: string | null
+    image_url?: string | null
     annual_fee?: number | null
     parent_account_id?: string | null
   }
@@ -536,8 +536,8 @@ export async function updateAccountConfig(
     payload.parent_account_id = data.parent_account_id ?? null
   }
 
-  if (typeof data.logo_url === 'string') {
-    payload.logo_url = data.logo_url
+  if (typeof data.image_url === 'string') {
+    payload.image_url = data.image_url
   }
 
   if (Object.keys(payload).length === 0) {

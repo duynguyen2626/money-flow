@@ -3,7 +3,7 @@ INSERT INTO "public"."categories" ("id",
                                    "type",
                                    "icon",
                                    "mcc_codes",
-                                   "logo_url",
+                                   "image_url",
                                    "kind")
 VALUES ('e0000000-0000-0000-0000-000000000089', 'Lending', 'expense', '💸', NULL, 'https://img.icons8.com/color/48/borrow-book.png', ARRAY["ex"]),
        ('e0000000-0000-0000-0000-000000000095', 'Refund', 'income', '↩️', NULL, 'https://cdn-icons-png.flaticon.com/128/1585/1585145.png', ARRAY["ex"]),

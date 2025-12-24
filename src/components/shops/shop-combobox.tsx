@@ -24,7 +24,7 @@ import { getShopsAction } from '@/actions/shop-actions'
 type Shop = {
     id: string
     name: string
-    logo_url: string | null
+    image_url: string | null
 }
 
 interface ShopComboboxProps {
@@ -65,9 +65,9 @@ export function ShopCombobox({ value, onChange }: ShopComboboxProps) {
                 >
                     {selectedShop ? (
                         <div className="flex items-center gap-2">
-                            {selectedShop.logo_url && (
+                            {selectedShop.image_url && (
                                 <img
-                                    src={selectedShop.logo_url}
+                                    src={selectedShop.image_url}
                                     alt={selectedShop.name}
                                     className="h-4 w-4 rounded-full object-cover"
                                 />
@@ -107,9 +107,9 @@ export function ShopCombobox({ value, onChange }: ShopComboboxProps) {
                                         )}
                                     />
                                     <div className="flex items-center gap-2">
-                                        {shop.logo_url && (
+                                        {shop.image_url && (
                                             <img
-                                                src={shop.logo_url}
+                                                src={shop.image_url}
                                                 alt={shop.name}
                                                 className="h-4 w-4 rounded-full object-cover"
                                             />

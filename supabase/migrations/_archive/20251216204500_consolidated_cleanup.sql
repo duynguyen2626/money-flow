@@ -83,7 +83,7 @@ CREATE TABLE IF NOT EXISTS bank_mappings (
   bank_code TEXT NOT NULL UNIQUE, -- e.g., "970436", "970422"
   bank_name TEXT NOT NULL, -- e.g., "Vietcombank", "MB Bank"
   short_name TEXT NOT NULL, -- e.g., "VCB", "MSB" (for note generation)
-  logo_url TEXT, -- Optional bank logo
+  image_url TEXT, -- Optional bank logo
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -108,7 +108,7 @@ CREATE POLICY "Allow authenticated users to manage bank mappings"
   WITH CHECK (true);
 
 -- Insert common Vietnamese banks
-INSERT INTO bank_mappings (bank_code, bank_name, short_name, logo_url) VALUES
+INSERT INTO bank_mappings (bank_code, bank_name, short_name, image_url) VALUES
   ('970436', 'Ngân hàng TMCP Ngoại thương Việt Nam', 'VCB', null),
   ('970422', 'Ngân hàng TMCP Quân đội', 'MSB', null),
   ('970415', 'Ngân hàng TMCP Công thương Việt Nam', 'VietinBank', null),
@@ -135,7 +135,7 @@ CREATE TABLE bank_mappings (
   bank_code TEXT NOT NULL UNIQUE, -- e.g., "970436", "970422", "314", "203"
   bank_name TEXT NOT NULL, -- e.g., "Ngân hàng TMCP Ngoại thương Việt Nam"
   short_name TEXT NOT NULL, -- e.g., "VCB", "MSB" (for note generation)
-  logo_url TEXT, -- Optional bank logo
+  image_url TEXT, -- Optional bank logo
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -238,19 +238,21 @@ begin
     end if;
 end $$;
 
--- Migration: 20251129183000_unify_logo_url.sql
+-- Migration: 20251129183000_unify_image_url.sql
 
 DO $$
 BEGIN
     -- Check if img_url column exists
     IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'accounts' AND column_name = 'img_url') THEN
-        -- Migrate data
-        UPDATE accounts
-        SET logo_url = img_url
-        WHERE logo_url IS NULL AND img_url IS NOT NULL;
-
-        -- Drop column
-        ALTER TABLE accounts DROP COLUMN img_url;
+        -- If target column already exists, merge data; otherwise rename in place
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'accounts' AND column_name = 'image_url') THEN
+            UPDATE accounts
+            SET image_url = img_url
+            WHERE image_url IS NULL AND img_url IS NOT NULL;
+            ALTER TABLE accounts DROP COLUMN img_url;
+        ELSE
+            ALTER TABLE accounts RENAME COLUMN img_url TO image_url;
+        END IF;
     END IF;
 END $$;
 

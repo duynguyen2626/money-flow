@@ -5,7 +5,7 @@ import { createShop, updateShop, getShops } from '@/services/shop.service'
 
 export async function createShopAction(payload: {
   name: string
-  logo_url?: string | null
+  image_url?: string | null
   default_category_id?: string | null
 }) {
   const result = await createShop(payload)
@@ -20,7 +20,7 @@ export async function createShopAction(payload: {
 
 export async function updateShopAction(
   id: string,
-  payload: { name?: string; logo_url?: string | null; default_category_id?: string | null }
+  payload: { name?: string; image_url?: string | null; default_category_id?: string | null }
 ) {
   const ok = await updateShop(id, payload)
   if (ok) {

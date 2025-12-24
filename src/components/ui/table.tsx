@@ -4,7 +4,7 @@ const cn = (...classes: (string | undefined)[]) => classes.filter(Boolean).join(
 
 const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement> & { wrapperClassName?: string }>(
   ({ className, wrapperClassName, ...props }, ref) => (
-    <div className={cn("relative w-full overflow-auto", wrapperClassName)}>
+    <div className={cn("relative w-full overflow-x-auto", wrapperClassName)}>
       <table ref={ref} className={cn('w-full caption-bottom text-sm', className)} {...props} />
     </div>
   )

@@ -123,9 +123,9 @@ export function AddItemDialog({ batchId, batchName, accounts }: { batchId: strin
             value: a.id,
             label: a.name,
             description: a.account_number || 'No account number',
-            icon: a.logo_url ? (
+            icon: a.image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={a.logo_url} alt="" className="h-6 w-6 rounded-none object-contain" />
+                <img src={a.image_url} alt="" className="h-6 w-6 rounded-none object-contain" />
             ) : (
                 <div className="flex h-6 w-6 items-center justify-center rounded-none bg-slate-200 text-[10px] font-semibold text-slate-700">
                     {a.name?.[0]?.toUpperCase() ?? '?'}

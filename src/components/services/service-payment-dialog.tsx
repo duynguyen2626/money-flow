@@ -108,9 +108,9 @@ export function ServicePaymentDialog({ open, onOpenChange, service, onConfirm }:
                                 >
                                     {selectedAccountId ? (
                                         <div className="flex items-center gap-2">
-                                            {selectedAccount?.logo_url ? (
+                                            {selectedAccount?.image_url ? (
                                                 <img
-                                                    src={selectedAccount.logo_url}
+                                                    src={selectedAccount.image_url}
                                                     alt={selectedAccount.name}
                                                     className="h-4 w-4 object-contain"
                                                 />
@@ -152,9 +152,9 @@ export function ServicePaymentDialog({ open, onOpenChange, service, onConfirm }:
                                                         )}
                                                     />
                                                     <div className="flex items-center gap-2">
-                                                        {account.logo_url ? (
+                                                        {account.image_url ? (
                                                             <img
-                                                                src={account.logo_url}
+                                                                src={account.image_url}
                                                                 alt={account.name}
                                                                 className="h-5 w-5 object-contain"
                                                             />

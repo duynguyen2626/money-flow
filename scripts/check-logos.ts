@@ -19,19 +19,19 @@ async function checkLogos() {
 
     const { data: missingShop } = await supabase
         .from('shops')
-        .select('name, logo_url')
+        .select('name, image_url')
         .eq('id', shopId)
         .single()
 
     const { data: icloudShop } = await supabase
         .from('shops')
-        .select('name, logo_url')
+        .select('name, image_url')
         .ilike('name', '%iCloud%')
         .single()
 
     const { data: youtubeShop } = await supabase
         .from('shops')
-        .select('name, logo_url')
+        .select('name, image_url')
         .ilike('name', '%Youtube%')
         .single()
 

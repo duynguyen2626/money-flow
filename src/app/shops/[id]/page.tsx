@@ -41,10 +41,10 @@ export default async function ShopDetailsPage({ params }: ShopDetailsPageProps) 
         <div>
           <p className="text-xs uppercase tracking-wider text-slate-500">Shop Details</p>
           <div className="flex items-center gap-3 mt-1">
-            {displayShop?.logo_url ? (
+            {displayShop?.image_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={displayShop.logo_url}
+                src={displayShop.image_url}
                 alt={displayShop.name}
                 className="h-8 w-8 rounded-full object-cover"
               />

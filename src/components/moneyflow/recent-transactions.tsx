@@ -721,10 +721,10 @@ export function RecentTransactions({
                     <div className="flex flex-col gap-1">
                       {txn.shop_name && (
                         <div className="flex items-center gap-2">
-                          {txn.shop_logo_url ? (
+                          {txn.shop_image_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={txn.shop_logo_url}
+                              src={txn.shop_image_url}
                               alt={txn.shop_name}
                               className="h-5 w-5 rounded-full object-cover"
                             />

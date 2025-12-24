@@ -27,7 +27,7 @@ type EditShopDialogProps = {
 export function EditShopDialog({ shop, categories = [] }: EditShopDialogProps) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(shop.name)
-  const [logoUrl, setLogoUrl] = useState(shop.logo_url ?? '')
+  const [imageUrl, setImageUrl] = useState(shop.image_url ?? '')
   const [defaultCategoryId, setDefaultCategoryId] = useState<string | null>(shop.default_category_id ?? null)
   const [error, setError] = useState<string | null>(null)
   const router = useRouter()
@@ -53,7 +53,7 @@ export function EditShopDialog({ shop, categories = [] }: EditShopDialogProps) {
     startTransition(async () => {
       const result = await updateShopAction(shop.id, {
         name: trimmedName,
-        logo_url: logoUrl.trim() || null,
+        image_url: imageUrl.trim() || null,
         default_category_id: defaultCategoryId
       })
 
@@ -119,8 +119,8 @@ export function EditShopDialog({ shop, categories = [] }: EditShopDialogProps) {
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Logo URL (optional)</label>
             <Input
-              value={logoUrl}
-              onChange={event => setLogoUrl(event.target.value)}
+              value={imageUrl}
+              onChange={event => setImageUrl(event.target.value)}
               placeholder="https://example.com/logo.png"
             />
           </div>
