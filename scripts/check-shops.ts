@@ -17,7 +17,7 @@ const supabase = createClient(supabaseUrl, supabaseKey)
 async function checkShops() {
     const { data: shops, error } = await supabase
         .from('shops')
-        .select('name, logo_url')
+        .select('name, image_url')
         .or('name.ilike.%Youtube%,name.ilike.%iCloud%')
 
     if (error) {
@@ -27,7 +27,7 @@ async function checkShops() {
 
     console.log('Shops found:')
     shops?.forEach(shop => {
-        console.log(`${shop.name}: ${shop.logo_url}`)
+        console.log(`${shop.name}: ${shop.image_url}`)
     })
 }
 

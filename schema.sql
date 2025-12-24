@@ -386,7 +386,7 @@ CREATE TABLE public.accounts (
     is_active boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
     secured_by_account_id uuid,
-    logo_url text,
+    image_url text,
     parent_account_id uuid,
     total_in numeric(15,2) DEFAULT 0,
     total_out numeric(15,2) DEFAULT 0,
@@ -422,7 +422,7 @@ CREATE TABLE public.bank_mappings (
     bank_code text NOT NULL,
     bank_name text NOT NULL,
     short_name text NOT NULL,
-    logo_url text,
+    image_url text,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now()
 );
@@ -523,7 +523,7 @@ CREATE TABLE public.categories (
     type text NOT NULL,
     icon text,
     mcc_codes text[],
-    logo_url text
+    image_url text
 );
 
 
@@ -610,7 +610,7 @@ ALTER TABLE public.sheet_webhook_links OWNER TO postgres;
 CREATE TABLE public.shops (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name text NOT NULL,
-    logo_url text,
+    image_url text,
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL,
     default_category_id uuid
 );
@@ -1734,4 +1734,3 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON T
 --
 
 \unrestrict nkZJPhpeK5hag2VLsqxdemfWn7NU1U2gBfBtPOJEpo9wGEj0HOMv1inMXFlhpMY
-

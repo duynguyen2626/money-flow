@@ -19,11 +19,11 @@ async function updateYoutubeLogo() {
     // 'https://img.icons8.com/color/48/youtube-play.png' -> 'https://img.icons8.com/color/48/youtube--v1.png'
     // Or 'https://img.icons8.com/fluency/48/youtube-play.png'
 
-    const newLogoUrl = 'https://img.icons8.com/color/48/youtube--v1.png'
+    const newImageUrl = 'https://img.icons8.com/color/48/youtube--v1.png'
 
     const { data, error } = await supabase
         .from('shops')
-        .update({ logo_url: newLogoUrl })
+        .update({ image_url: newImageUrl })
         .ilike('name', '%Youtube%')
         .select()
 

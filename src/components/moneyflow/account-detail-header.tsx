@@ -206,11 +206,11 @@ export function AccountDetailHeader({
     rewardBg = 'bg-rose-50 border-rose-200'
   }
 
-  const avatar = account.logo_url ? (
+  const avatar = account.image_url ? (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={account.logo_url} alt="" className="h-16 w-20 object-contain rounded-none" />
+    <img src={account.image_url} alt="" className="h-16 w-16 object-cover rounded-none" />
   ) : (
-    <div className="flex h-16 w-20 items-center justify-center bg-slate-200 text-base font-semibold text-slate-700 rounded-none">
+    <div className="flex h-16 w-16 items-center justify-center bg-slate-200 text-base font-semibold text-slate-700 rounded-none">
       {account.name.charAt(0).toUpperCase()}
     </div>
   )
@@ -457,9 +457,9 @@ export function AccountDetailHeader({
                   {/* Collateral Asset Info */}
                   <div className="flex items-center gap-1.5">
                     <div className="relative w-5 h-5 flex-shrink-0 bg-white rounded-full overflow-hidden border border-amber-200">
-                      {collateralAccount.logo_url ? (
+                      {collateralAccount.image_url ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={collateralAccount.logo_url} alt="" className="w-full h-full object-contain p-0.5" />
+                        <img src={collateralAccount.image_url} alt="" className="w-full h-full object-contain p-0.5" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-500">
                           {collateralAccount.name.charAt(0)}

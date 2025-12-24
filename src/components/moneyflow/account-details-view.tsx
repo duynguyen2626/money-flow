@@ -359,7 +359,7 @@ export function AccountDetailsView({
                         </div>
 
                         {/* Type Filters */}
-                        <div className="flex items-center gap-2 shrink-0 overflow-x-auto">
+                        <div className="hidden md:flex items-center gap-2 shrink-0 overflow-x-auto">
                             <button
                                 className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${selectedType === 'all' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
                                 onClick={() => setSelectedType('all')}
@@ -456,6 +456,20 @@ export function AccountDetailsView({
                                                 inputPlaceholder="Search person..."
                                                 emptyState="No people"
                                             />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <p className="text-[11px] font-semibold text-slate-700">Transaction Type</p>
+                                            <select
+                                                className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                                value={selectedType}
+                                                onChange={e => setSelectedType(e.target.value as any)}
+                                            >
+                                                <option value="all">All Types</option>
+                                                <option value="income">Income</option>
+                                                <option value="expense">Expense</option>
+                                                <option value="lend">Lend</option>
+                                                <option value="repay">Repay</option>
+                                            </select>
                                         </div>
                                         <div className="flex items-center justify-between gap-2 border-t pt-2">
                                             <button

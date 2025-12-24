@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { TransactionWithDetails } from '@/types/moneyflow.types'
 import { cn } from '@/lib/utils'
 
-type FilterType = 'all' | 'income' | 'expense' | 'lend' | 'repay'
+type FilterType = 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer'
 
 interface SmartFilterBarProps {
     transactions: TransactionWithDetails[]

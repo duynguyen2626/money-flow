@@ -78,7 +78,7 @@ type NormalizedTransaction = Omit<FlatTransactionRow, "id" | "created_at">;
 type LookupMaps = {
   accounts: Map<
     string,
-    { id: string; name: string; logo_url: string | null; type: string | null }
+    { id: string; name: string; image_url: string | null; type: string | null }
   >;
   categories: Map<
     string,
@@ -86,12 +86,12 @@ type LookupMaps = {
       id: string;
       name: string;
       type: "income" | "expense";
-      logo_url?: string | null;
+      image_url?: string | null;
       icon?: string | null;
     }
   >;
   people: Map<string, { id: string; name: string; avatar_url: string | null }>;
-  shops: Map<string, { id: string; name: string; logo_url: string | null }>;
+  shops: Map<string, { id: string; name: string; image_url: string | null }>;
 };
 
 function resolveBaseType(
@@ -220,13 +220,13 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
     accountIds.size
       ? supabase
         .from("accounts")
-        .select("id, name, logo_url, type")
+        .select("id, name, image_url, type")
         .in("id", Array.from(accountIds))
       : Promise.resolve({ data: [] as any[], error: null }),
     categoryIds.size
       ? supabase
         .from("categories")
-        .select("id, name, type, logo_url, icon")
+        .select("id, name, type, image_url, icon")
         .in("id", Array.from(categoryIds))
       : Promise.resolve({ data: [] as any[], error: null }),
     personIds.size
@@ -238,14 +238,14 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
     shopIds.size
       ? supabase
         .from("shops")
-        .select("id, name, logo_url")
+        .select("id, name, image_url")
         .in("id", Array.from(shopIds))
       : Promise.resolve({ data: [] as any[], error: null }),
   ]);
 
   const accounts = new Map<
     string,
-    { id: string; name: string; logo_url: string | null; type: string | null }
+    { id: string; name: string; image_url: string | null; type: string | null }
   >();
   const categories = new Map<
     string,
@@ -253,7 +253,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
       id: string;
       name: string;
       type: "income" | "expense";
-      logo_url?: string | null;
+      image_url?: string | null;
       icon?: string | null;
     }
   >();
@@ -263,7 +263,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
   >();
   const shops = new Map<
     string,
-    { id: string; name: string; logo_url: string | null }
+    { id: string; name: string; image_url: string | null }
   >();
 
   (accountsRes.data ?? []).forEach((row: any) => {
@@ -271,7 +271,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
     accounts.set(row.id, {
       id: row.id,
       name: row.name,
-      logo_url: row.logo_url ?? null,
+      image_url: row.image_url ?? null,
       type: row.type ?? null,
     });
   });
@@ -282,7 +282,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
       id: row.id,
       name: row.name,
       type: row.type,
-      logo_url: row.logo_url ?? null,
+      image_url: row.image_url ?? null,
       icon: row.icon ?? null,
     });
   });
@@ -301,7 +301,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
     shops.set(row.id, {
       id: row.id,
       name: row.name,
-      logo_url: row.logo_url ?? null,
+      image_url: row.image_url ?? null,
     });
   });
 
@@ -338,7 +338,7 @@ function buildSyntheticLines(
     accounts: sourceAccount
       ? {
         name: sourceAccount.name,
-        logo_url: sourceAccount.logo_url,
+        image_url: sourceAccount.image_url,
         type: sourceAccount.type as AccountRow["type"],
       }
       : null,
@@ -359,7 +359,7 @@ function buildSyntheticLines(
       accounts: targetAccount
         ? {
           name: targetAccount.name,
-          logo_url: targetAccount.logo_url,
+          image_url: targetAccount.image_url,
           type: targetAccount.type as AccountRow["type"],
         }
         : null,
@@ -384,7 +384,7 @@ function buildSyntheticLines(
         ? {
           name: category.name,
           type: category.type,
-          logo_url: category.logo_url ?? null,
+          image_url: category.image_url ?? null,
           icon: category.icon ?? null,
         }
         : null,
@@ -460,16 +460,16 @@ function mapTransactionRow(
           : "TRANSFER",
     category_name: category?.name,
     category_icon: category?.icon ?? null,
-    category_logo_url: category?.logo_url ?? null,
+    category_image_url: category?.image_url ?? null,
     account_name: account?.name,
     source_name: account?.name ?? null,
     destination_name: target?.name ?? (person ? person.name : null),
-    source_logo: account?.logo_url ?? null,
-    destination_logo: target?.logo_url ?? null,
+    source_image: account?.image_url ?? null,
+    destination_image: target?.image_url ?? null,
     person_name: person?.name ?? null,
     person_avatar_url: person?.avatar_url ?? null,
     shop_name: shop?.name ?? null,
-    shop_logo_url: shop?.logo_url ?? null,
+    shop_image_url: shop?.image_url ?? null,
     transaction_lines: lines,
     persisted_cycle_tag: row.persisted_cycle_tag ?? null,
     installment_plan_id: row.installment_plan_id ?? null,

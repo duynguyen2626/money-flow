@@ -11,7 +11,7 @@ type ServiceEditDialogProps = {
     name: string;
     price: number | null;
     shop_id?: string | null;
-    shop?: { id: string; name: string; logo_url: string | null } | null;
+    shop?: { id: string; name: string; image_url: string | null } | null;
   }
   open?: boolean
   onOpenChange?: (open: boolean) => void

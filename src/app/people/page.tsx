@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 export default async function PeoplePage() {
   // getPeople() now returns all required data including:
   // - current_cycle_debt, outstanding_debt, current_cycle_label
-  // - subscription_details with logo_url
+  // - subscription_details with image_url
   // - monthly_debts for outstanding display
   const [people, shops, accounts, categories, subscriptions] = await Promise.all([
     getPeople({ includeArchived: true }),

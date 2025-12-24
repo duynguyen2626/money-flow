@@ -15,7 +15,7 @@ export async function createAccount(payload: {
   creditLimit?: number | null;
   cashbackConfig?: Json | null;
   securedByAccountId?: string | null;
-  logoUrl?: string | null;
+  imageUrl?: string | null;
   annualFee?: number | null;
   parentAccountId?: string | null;
 }) {
@@ -45,7 +45,7 @@ export async function createAccount(payload: {
     credit_limit: payload.creditLimit,
     cashback_config: payload.cashbackConfig,
     secured_by_account_id: payload.securedByAccountId,
-    logo_url: payload.logoUrl,
+    image_url: payload.imageUrl,
     annual_fee: payload.annualFee ?? 0,
     parent_account_id: payload.parentAccountId ?? null,
   } as any // Cast to any since parent_account_id may not be in generated types yet
@@ -75,7 +75,7 @@ export type UpdateAccountPayload = {
   type?: Account['type']
   securedByAccountId?: string | null
   isActive?: boolean | null
-  logoUrl?: string | null
+  imageUrl?: string | null
   annualFee?: number | null
   parentAccountId?: string | null
 }
@@ -88,7 +88,7 @@ export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
     type?: Account['type']
     secured_by_account_id?: string | null
     is_active?: boolean | null
-    logo_url?: string | null
+    image_url?: string | null
     annual_fee?: number | null
     parent_account_id?: string | null
   } = {}
@@ -120,8 +120,8 @@ export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
     updatePayload.is_active = payload.isActive
   }
 
-  if ('logoUrl' in payload) {
-    updatePayload.logo_url = payload.logoUrl ?? null
+  if ('imageUrl' in payload) {
+    updatePayload.image_url = payload.imageUrl ?? null
   }
 
   if ('parentAccountId' in payload) {
@@ -149,7 +149,7 @@ export async function getAccountsAction() {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('accounts')
-    .select('id, name, type, logo_url')
+    .select('id, name, type, image_url')
     .eq('is_active', true)
     .order('name')
 

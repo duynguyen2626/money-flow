@@ -38,7 +38,7 @@ export type DashboardStats = {
     name: string
     value: number
     icon?: string | null
-    logo_url?: string | null
+    image_url?: string | null
   }>
   topDebtors: Array<{
     id: string
@@ -180,7 +180,7 @@ export async function getDashboardStats(
         name: string
         value: number
         icon?: string | null
-        logo_url?: string | null
+        image_url?: string | null
       }
     >()
 
@@ -193,7 +193,7 @@ export async function getDashboardStats(
         const categoryId = cat.id
         const categoryName = cat.name || 'Uncategorized'
         const categoryIcon = cat.icon
-        const categoryLogoUrl = cat.logo_url ?? null
+        const categoryLogoUrl = cat.image_url ?? null
         const amount = Math.abs(tx.amount || 0)
 
         if (categoryMap.has(categoryId)) {
@@ -204,7 +204,7 @@ export async function getDashboardStats(
             name: categoryName,
             value: amount,
             icon: categoryIcon,
-            logo_url: categoryLogoUrl,
+            image_url: categoryLogoUrl,
           })
         }
       })

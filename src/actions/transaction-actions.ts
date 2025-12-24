@@ -1165,7 +1165,7 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
       status,
       created_at,
       shop_id,
-      shops ( id, name, logo_url ),
+      shops ( id, name, image_url ),
       amount,
       type,
       account_id,
@@ -1175,8 +1175,8 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
       metadata,
       cashback_share_percent,
       cashback_share_fixed,
-      accounts (name, type, logo_url),
-      categories (name, logo_url, icon)
+      accounts (name, type, image_url),
+      categories (name, image_url, icon)
     `)
     .order('occurred_at', { ascending: false })
     .limit(limit);

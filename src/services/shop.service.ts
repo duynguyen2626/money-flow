@@ -11,7 +11,7 @@ export async function getShops(): Promise<ShopRow[]> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('shops')
-    .select('id, name, logo_url, default_category_id')
+    .select('id, name, image_url, default_category_id')
     .order('name', { ascending: true })
 
   if (error) {
@@ -26,7 +26,7 @@ export async function getShopById(id: string): Promise<ShopRow | null> {
   const supabase = createClient()
   const { data, error } = await supabase
     .from('shops')
-    .select('id, name, logo_url, default_category_id')
+    .select('id, name, image_url, default_category_id')
     .eq('id', id)
     .single()
 
@@ -40,7 +40,7 @@ export async function getShopById(id: string): Promise<ShopRow | null> {
 
 export async function createShop(input: {
   name: string;
-  logo_url?: string | null;
+  image_url?: string | null;
   default_category_id?: string | null
 }): Promise<ShopRow | null> {
   const supabase = createClient()
@@ -51,7 +51,7 @@ export async function createShop(input: {
 
   const payload: ShopInsert = {
     name: input.name.trim(),
-    logo_url: input.logo_url ?? null,
+    image_url: input.image_url ?? null,
     default_category_id: input.default_category_id ?? null,
   }
 
@@ -63,15 +63,15 @@ export async function createShop(input: {
   return data as ShopRow
 }
 
-export async function updateShop(id: string, input: { name?: string; logo_url?: string | null; default_category_id?: string | null }): Promise<boolean> {
+export async function updateShop(id: string, input: { name?: string; image_url?: string | null; default_category_id?: string | null }): Promise<boolean> {
   const supabase = createClient()
   const payload: Partial<ShopUpdate> = {}
 
   if (input.name) {
     payload.name = input.name.trim()
   }
-  if (typeof input.logo_url !== 'undefined') {
-    payload.logo_url = input.logo_url
+  if (typeof input.image_url !== 'undefined') {
+    payload.image_url = input.image_url
   }
   if (typeof input.default_category_id !== 'undefined') {
     payload.default_category_id = input.default_category_id

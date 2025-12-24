@@ -25,7 +25,7 @@ export default function NewAccountPage() {
     secured_by_account_id: undefined,
     is_active: true,
     owner_id: '',
-    logo_url: null
+    image_url: null
   } as Account
 
   const handleSuccess = () => {

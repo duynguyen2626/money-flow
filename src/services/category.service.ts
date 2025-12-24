@@ -9,7 +9,7 @@ type CategoryRow = {
   type: Category['type']
   parent_id: string | null
   icon: string | null
-  logo_url: string | null
+  image_url: string | null
   kind: Category['kind']
 }
 
@@ -40,7 +40,7 @@ export async function getCategories(): Promise<Category[]> {
     type: item.type,
     parent_id: item.parent_id ?? undefined,
     icon: item.icon,
-    logo_url: item.logo_url,
+    image_url: item.image_url,
     kind: item.kind,
   }))
 }
@@ -56,7 +56,7 @@ export async function createCategory(category: Omit<Category, 'id'>): Promise<Ca
       name: category.name,
       type: category.type,
       icon: category.icon ?? null,
-      logo_url: category.logo_url ?? null,
+      image_url: category.image_url ?? null,
       kind: category.kind ?? null,
       mcc_codes: (category as any).mcc_codes ?? null,
     } as any)
@@ -83,7 +83,7 @@ export async function updateCategory(id: string, updates: Partial<Category>): Pr
       name: updates.name,
       type: updates.type,
       icon: updates.icon,
-      logo_url: updates.logo_url,
+      image_url: updates.image_url,
       kind: updates.kind,
       mcc_codes: (updates as any).mcc_codes,
     } as any)

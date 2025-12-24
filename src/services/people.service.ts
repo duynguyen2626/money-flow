@@ -176,7 +176,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
           profile_id, 
           service_id, 
           slots,
-          subscriptions ( name, shop_id, shops ( logo_url ) )
+          subscriptions ( name, shop_id, shops ( image_url ) )
         `),
     ])
 
@@ -478,7 +478,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     monthlyDebtsByPerson.set(personId, entries)
   })
 
-  const subscriptionMap = new Map<string, Array<{ id: string; name: string; slots: number; logo_url?: string | null }>>()
+  const subscriptionMap = new Map<string, Array<{ id: string; name: string; slots: number; image_url?: string | null }>>()
   if (Array.isArray(subscriptionMembers)) {
     (subscriptionMembers as any[]).forEach(row => {
       if (!row.profile_id) return
@@ -486,13 +486,13 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         subscriptionMap.set(row.profile_id, [])
       }
       if (row.service_id) {
-        // Extract logo_url from nested shops relation
-        const logoUrl = row.subscriptions?.shops?.logo_url ?? null
+        // Extract image_url from nested shops relation
+        const imageUrl = row.subscriptions?.shops?.image_url ?? null
         subscriptionMap.get(row.profile_id)?.push({
           id: row.service_id,
           name: row.subscriptions?.name ?? 'Unknown',
           slots: row.slots ?? 1,
-          logo_url: logoUrl,
+          image_url: imageUrl,
         })
       }
     })
@@ -521,7 +521,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       current_cycle_label: currentCycleLabel,
       subscription_count: subs.length,
       subscription_ids: subs.map(s => s.id), // Keep for backward compatibility if needed
-      subscription_details: subs, // Now includes logo_url
+      subscription_details: subs, // Now includes image_url
       monthly_debts: monthlyDebtsByPerson.get(person.id) ?? [],
     }
   }) ?? []

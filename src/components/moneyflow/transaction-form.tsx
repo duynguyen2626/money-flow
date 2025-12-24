@@ -452,19 +452,19 @@ export function TransactionForm({
     }
     const direct = personMap.get(defaultPersonId);
     if (direct) {
-      form.setValue("person_id", direct.id);
-      form.setValue("debt_account_id", direct.debt_account_id ?? undefined);
+      form.setValue("person_id", direct.id, { shouldDirty: false });
+      form.setValue("debt_account_id", direct.debt_account_id ?? undefined, { shouldDirty: false });
       return;
     }
     const fromDebt = peopleState.find(
       (person) => person.debt_account_id === defaultPersonId,
     );
     if (fromDebt) {
-      form.setValue("person_id", fromDebt.id);
-      form.setValue("debt_account_id", fromDebt.debt_account_id ?? undefined);
+      form.setValue("person_id", fromDebt.id, { shouldDirty: false });
+      form.setValue("debt_account_id", fromDebt.debt_account_id ?? undefined, { shouldDirty: false });
       return;
     }
-    form.setValue("debt_account_id", defaultPersonId);
+    form.setValue("debt_account_id", defaultPersonId, { shouldDirty: false });
   }, [defaultPersonId, form, peopleState, personMap]);
 
   useEffect(() => {
@@ -530,11 +530,15 @@ export function TransactionForm({
         "[TransactionForm] Resetting form with new values (Clone/Edit update)",
       );
       form.reset(newValues);
+      // CRITICAL FIX: Reset dirty state after form reset to prevent false "unsaved changes" prompt
+      setTimeout(() => {
+        form.formState.isDirty = false;
+      }, 0);
       setManualTagMode(true);
       setTransactionType(newValues.type);
       setIsInstallment(Boolean(initialValues.is_installment));
       if (initialValues.installment_plan_id) {
-        form.setValue("installment_plan_id", initialValues.installment_plan_id);
+        form.setValue("installment_plan_id", initialValues.installment_plan_id, { shouldDirty: false });
       }
       initialValuesRef.current = initialValues;
     }
@@ -811,11 +815,11 @@ export function TransactionForm({
         console.log(
           "[Category Auto-Set] Setting category to People Shopping/Shopping for debt type",
         );
-        form.setValue("category_id", peopleShoppingCat.id);
+        form.setValue("category_id", peopleShoppingCat.id, { shouldDirty: false });
       }
       const shopeeShop = shops.find((s) => s.name === "Shopee");
       if (shopeeShop) {
-        form.setValue("shop_id", shopeeShop.id);
+        form.setValue("shop_id", shopeeShop.id, { shouldDirty: false });
       }
     } else if (transactionType === "repayment" && !currentCategoryId) {
       const repaymentCatId = "e0000000-0000-0000-0000-000000000097";
@@ -823,7 +827,7 @@ export function TransactionForm({
         console.log(
           "[Category Auto-Set] Setting category to Repayment for repayment type",
         );
-        form.setValue("category_id", repaymentCatId);
+        form.setValue("category_id", repaymentCatId, { shouldDirty: false });
       } else {
         const repaymentCat = categories.find(
           (c) => c.name === "Thu nợ người khác" || c.name === "Repayment",
@@ -832,13 +836,13 @@ export function TransactionForm({
           console.log(
             "[Category Auto-Set] Setting category to Thu nợ người khác for repayment type",
           );
-          form.setValue("category_id", repaymentCat.id);
+          form.setValue("category_id", repaymentCat.id, { shouldDirty: false });
         }
       }
     } else if (transactionType === "transfer" && !currentCategoryId) {
       // Auto-set Money Transfer category
       const moneyTransferId = "e0000000-0000-0000-0000-000000000080";
-      form.setValue("category_id", moneyTransferId);
+      form.setValue("category_id", moneyTransferId, { shouldDirty: false });
     }
   }, [transactionType, categories, shops, form, isEditMode]);
 
@@ -1005,10 +1009,10 @@ export function TransactionForm({
           label: refundCat?.name ?? "Refund",
           description: refundCat?.type === "income" ? "Income" : "Expense",
           searchValue: refundCat?.name ?? "Refund",
-          icon: refundCat?.logo_url ? (
+          icon: refundCat?.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={refundCat.logo_url}
+              src={refundCat.image_url}
               alt={refundCat.name}
               className="h-5 w-5 object-contain rounded-none"
             />
@@ -1071,10 +1075,10 @@ export function TransactionForm({
           label: cat.name,
           description: description,
           searchValue: `${cat.name} ${typeLabel}`,
-          icon: cat.logo_url ? (
+          icon: cat.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={cat.logo_url}
+              src={cat.image_url}
               alt={cat.name}
               className="h-5 w-5 object-contain rounded-full"
             />
@@ -1102,8 +1106,8 @@ export function TransactionForm({
           "[Auto Reset] Clearing invalid category for type:",
           transactionType,
         );
-        form.setValue("category_id", "");
-        form.setValue("shop_id", ""); // Also clear shop as it depends on category
+        form.setValue("category_id", "", { shouldDirty: false });
+        form.setValue("shop_id", "", { shouldDirty: false }); // Also clear shop as it depends on category
       }
     }
   }, [transactionType, categoryOptions, form]);
@@ -1161,10 +1165,10 @@ export function TransactionForm({
         label: acc.name,
         description: `${typeLabel} - ${numberFormatter.format(displayBalance)}`,
         searchValue: `${acc.name} ${typeLabel} ${displayBalance}`,
-        icon: acc.logo_url ? (
+        icon: acc.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={acc.logo_url}
+            src={acc.image_url}
             alt={acc.name}
             className="h-5 w-5 object-contain rounded-none"
           />
@@ -1255,10 +1259,10 @@ export function TransactionForm({
         label: acc.name,
         description: numberFormatter.format(displayBalance),
         searchValue: `${acc.name} ${acc.type.replace("_", " ")} ${displayBalance}`,
-        icon: acc.logo_url ? (
+        icon: acc.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={acc.logo_url}
+            src={acc.image_url}
             alt={acc.name}
             className="h-5 w-5 object-contain rounded-none"
           />
@@ -1315,10 +1319,10 @@ export function TransactionForm({
       value: s.id,
       label: s.name,
       searchValue: s.name,
-      // Add icon if logo_url exists
-      icon: s.logo_url ? (
+      // Add icon if image_url exists
+      icon: s.image_url ? (
         <img
-          src={s.logo_url}
+          src={s.image_url}
           alt=""
           className="w-5 h-5 rounded-full object-cover"
         />
@@ -2461,7 +2465,7 @@ export function TransactionForm({
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         <div className="space-y-1">
           <label className="text-xs font-medium text-slate-600">% Back</label>
           <Controller
@@ -2827,7 +2831,7 @@ export function TransactionForm({
       {(watchedCashbackMode === "real_fixed" ||
         watchedCashbackMode === "real_percent") && (
           <div className="space-y-3 animate-in fade-in slide-in-from-top-1 bg-white p-3 rounded-md border border-slate-100 shadow-sm">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Percent Input */}
               <div className="space-y-1">
                 <div className="flex justify-between items-baseline">
@@ -3126,7 +3130,7 @@ export function TransactionForm({
       {/* Voluntary Mode: Decoupled Logic with Total Validated against Amount */}
       {watchedCashbackMode === "voluntary" && (
         <div className="space-y-3 animate-in fade-in slide-in-from-top-1 bg-amber-50/50 p-3 rounded-md border border-amber-100 shadow-sm">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {/* Voluntary Percent */}
             <div className="space-y-1">
               <label className="text-xs font-medium text-amber-700">
@@ -3372,6 +3376,7 @@ export function TransactionForm({
         </div>
       ) : (
         <form
+          id="transaction-form"
           onSubmit={handleSubmit(onSubmit, (errors) => {
             console.error(
               "[Form Validation Error]",
@@ -3448,7 +3453,7 @@ export function TransactionForm({
             <div className="px-5 py-6 space-y-6">
               {RefundStatusInput}
 
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
                 {transactionType === "debt" ||
                   transactionType === "repayment" ? (
                   <>
@@ -3632,7 +3637,7 @@ export function TransactionForm({
             secured_by_account_id: undefined,
             is_active: true,
             owner_id: "",
-            logo_url: null,
+            image_url: null,
           } as Account
         }
         open={isAccountDialogOpen}

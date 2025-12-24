@@ -18,6 +18,7 @@ import {
 import {
     Select,
 } from "@/components/ui/select"
+import { SmartFilterBar } from './smart-filter-bar'
 
 type SortKey = 'date' | 'amount'
 type SortDir = 'asc' | 'desc'
@@ -84,7 +85,6 @@ export function FilterableTransactions({
     const [showSelectedOnly, setShowSelectedOnly] = useState(false)
     const currentYear = String(new Date().getFullYear())
     const [selectedYear, setSelectedYear] = useState<string>('')
-    const [moreTagsOpen, setMoreTagsOpen] = useState(false)
     const [selectedCycle, setSelectedCycle] = useState<string | null>(null)
     const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
     const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string | null>(null)
@@ -94,6 +94,11 @@ export function FilterableTransactions({
     // removed local selectedType state definition as it's now handled above
     const [sortState, setSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
     const [isExcelMode, setIsExcelMode] = useState(false)
+    const [isMobile, setIsMobile] = useState(false)
+    const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
+    const [dateFrom, setDateFrom] = useState<string>('')
+    const [dateTo, setDateTo] = useState<string>('')
+    const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
 
     const handleBulkActionStateChange = useCallback((next: BulkActionState) => {
         setBulkActions(next);
@@ -124,6 +129,17 @@ export function FilterableTransactions({
     }, [router])
 
     // ... (memoized values remain same)
+
+    useEffect(() => {
+        const updateIsMobile = () => {
+            if (typeof window !== 'undefined') {
+                setIsMobile(window.innerWidth < 640)
+            }
+        }
+        updateIsMobile()
+        window.addEventListener('resize', updateIsMobile)
+        return () => window.removeEventListener('resize', updateIsMobile)
+    }, [])
 
     const categoryById = useMemo(() => {
         const map = new Map<string, Category>()
@@ -234,6 +250,11 @@ export function FilterableTransactions({
         [topLevelCategories]
     )
 
+    const accountItems = useMemo(
+        () => accounts.map(acc => ({ value: acc.id, label: acc.name })),
+        [accounts]
+    )
+
     const peopleItems = useMemo(
         () => people.map(person => ({ value: person.id, label: person.name })),
         [people]
@@ -253,10 +274,27 @@ export function FilterableTransactions({
         ? filteredByYear.filter(txn => getDisplayTag(txn) === effectiveTag)
         : filteredByYear
 
+    const filteredByDate = useMemo(() => {
+        if (!dateFrom && !dateTo) return filteredByTag
+        const fromTs = dateFrom ? new Date(dateFrom).getTime() : null
+        const toTs = dateTo ? new Date(dateTo).getTime() : null
+        return filteredByTag.filter(txn => {
+            const rawDate = txn.occurred_at ?? (txn as { created_at?: string }).created_at
+            const parsed = rawDate ? new Date(rawDate) : null
+            if (!parsed || Number.isNaN(parsed.getTime())) {
+                return false
+            }
+            const ts = parsed.getTime()
+            if (fromTs && ts < fromTs) return false
+            if (toTs && ts > toTs) return false
+            return true
+        })
+    }, [filteredByTag, dateFrom, dateTo])
+
     const filteredByPerson = useMemo(() => {
-        if (!selectedPersonId) return filteredByTag
-        return filteredByTag.filter(txn => ((txn as any).person_id ?? txn.person_id) === selectedPersonId)
-    }, [filteredByTag, selectedPersonId])
+        if (!selectedPersonId) return filteredByDate
+        return filteredByDate.filter(txn => ((txn as any).person_id ?? txn.person_id) === selectedPersonId)
+    }, [filteredByDate, selectedPersonId])
 
     const filteredByCategory = useMemo(() => {
         if (!selectedCategoryId) {
@@ -280,14 +318,27 @@ export function FilterableTransactions({
             }
             return txnCategoryId ? subSet.has(txnCategoryId) : false
         })
-    }, [availableSubcategories, categoryById, filteredByTag, parentLookup, selectedCategoryId, selectedSubcategoryId])
+    }, [availableSubcategories, categoryById, filteredByPerson, parentLookup, selectedCategoryId, selectedSubcategoryId])
+
+    const filteredByAccount = useMemo(() => {
+        if (!selectedAccountId) return filteredByCategory
+        return filteredByCategory.filter(txn => {
+            const candidates = [
+                (txn as any).account_id ?? (txn as any).source_account_id ?? null,
+                (txn as any).source_account_id ?? null,
+                (txn as any).destination_account_id ?? null,
+                (txn as any).target_account_id ?? null,
+            ].filter(Boolean) as string[]
+            return candidates.includes(selectedAccountId)
+        })
+    }, [filteredByCategory, selectedAccountId])
 
     const searchedTransactions = useMemo(() => {
         if (!searchTerm) {
-            return filteredByCategory;
+            return filteredByAccount;
         }
         const lowerTerm = searchTerm.toLowerCase();
-        return filteredByCategory.filter(txn =>
+        return filteredByAccount.filter(txn =>
             txn.note?.toLowerCase().includes(lowerTerm) ||
             txn.id.toLowerCase().includes(lowerTerm) ||
             // Search in metadata for linked IDs
@@ -297,7 +348,7 @@ export function FilterableTransactions({
                 (typeof (txn.metadata as any).linked_transaction_id === 'string' && (txn.metadata as any).linked_transaction_id.toLowerCase().includes(lowerTerm))
             ))
         );
-    }, [filteredByCategory, searchTerm]);
+    }, [filteredByAccount, searchTerm]);
 
     const filteredByType = useMemo(() => {
         if (selectedType === 'all') return searchedTransactions
@@ -400,8 +451,6 @@ export function FilterableTransactions({
         setSelectedSubcategoryId(null)
     }
 
-    const isSortActive = sortState.key !== 'date' || sortState.dir !== 'desc'
-
     // Sort Logic
     const sortedTransactions = useMemo(() => {
         const data = [...finalTransactions]
@@ -446,7 +495,7 @@ export function FilterableTransactions({
         contextId, searchTerm, selectedType, selectedTag,
         selectedCategoryId, selectedSubcategoryId,
         selectedPersonId, selectedTxnIds.size, activeTab,
-        selectedYear, sortState
+        selectedYear, sortState, dateFrom, dateTo, selectedAccountId
     ])
 
     const totalPages = Math.ceil(sortedTransactions.length / pageSize)
@@ -459,20 +508,73 @@ export function FilterableTransactions({
         <div className="flex flex-col h-full overflow-hidden space-y-0">
             {/* 1. Header Toolbar - Static */}
             {!onSearchChange && (
-                <div className="flex-none flex flex-col gap-3 md:flex-row md:items-center bg-slate-100 py-3 px-1 z-10 border-b shadow-sm transition-all duration-200">
-                    {!context && (
-                        <div className="order-first md:order-last shrink-0">
-                            {!isExcelMode && (
-                                <AddTransactionDialog
-                                    accounts={accounts}
-                                    categories={categories}
-                                    people={people}
-                                    shops={shops}
-                                    listenToUrlParams={true}
-                                />
-                            )}
+                <>
+                    {isMobile && (
+                        <div className="flex-none flex flex-col gap-2 bg-slate-100 py-3 px-3 z-10 border-b shadow-sm transition-all duration-200">
+                            <div className="flex items-center gap-2">
+                                {!context && (
+                                    <div className="shrink-0">
+                                        {!isExcelMode && (
+                                            <AddTransactionDialog
+                                                accounts={accounts}
+                                                categories={categories}
+                                                people={people}
+                                                shops={shops}
+                                            />
+                                        )}
+                                    </div>
+                                )}
+                                <button
+                                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
+                                    onClick={() => setIsMobileFilterOpen(true)}
+                                >
+                                    <ListFilter className="h-4 w-4" />
+                                    Filter &amp; Search
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                                <button
+                                    className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'active' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
+                                    onClick={() => setActiveTab('active')}
+                                >
+                                    All
+                                </button>
+                                <button
+                                    className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'void' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
+                                    onClick={() => setActiveTab('void')}
+                                >
+                                    Void
+                                </button>
+                                <button
+                                    className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
+                                    onClick={() => setActiveTab('pending')}
+                                >
+                                    Pending
+                                </button>
+                                <button
+                                    className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${showSelectedOnly ? 'bg-blue-600 text-white' : 'bg-white border-slate-200 text-slate-500 hover:bg-blue-50 hover:text-blue-700'}`}
+                                    onClick={() => setShowSelectedOnly(prev => !prev)}
+                                >
+                                    {showSelectedOnly ? 'Show All' : 'Show Selected'}
+                                </button>
+                            </div>
                         </div>
                     )}
+                    {!isMobile && (
+                        <div className="flex-none flex flex-col gap-3 md:flex-row md:items-center bg-slate-100 py-3 px-1 z-10 border-b shadow-sm transition-all duration-200">
+                            {!context && (
+                                <div className="order-first md:order-last shrink-0">
+                                    {!isExcelMode && (
+                                        <AddTransactionDialog
+                                            accounts={accounts}
+                                            categories={categories}
+                                            people={people}
+                                            shops={shops}
+                                            listenToUrlParams={true}
+                                        />
+                                    )}
+                                </div>
+                            )}
                     <div className="flex flex-1 items-center gap-2">
                         {/* Quick Filters (All/Void/Pending) */}
                         <div className="flex items-center gap-2 shrink-0 overflow-visible">
@@ -688,6 +790,34 @@ export function FilterableTransactions({
                                             emptyState="No people"
                                         />
                                     </div>
+                                    <div className="space-y-2">
+                                        <p className="text-[11px] font-semibold text-slate-700">Account</p>
+                                        <Combobox
+                                            items={accountItems}
+                                            value={selectedAccountId ?? undefined}
+                                            onValueChange={val => setSelectedAccountId(val ?? null)}
+                                            placeholder="All accounts"
+                                            inputPlaceholder="Search account..."
+                                            emptyState="No accounts"
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <p className="text-[11px] font-semibold text-slate-700">Date Range</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <input
+                                                type="date"
+                                                value={dateFrom}
+                                                onChange={(e) => setDateFrom(e.target.value)}
+                                                className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                            />
+                                            <input
+                                                type="date"
+                                                value={dateTo}
+                                                onChange={(e) => setDateTo(e.target.value)}
+                                                className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                            />
+                                        </div>
+                                    </div>
                                     <div className="flex items-center justify-between gap-2 border-t pt-2">
                                         <button
                                             className="text-xs font-semibold text-blue-600 hover:text-blue-800"
@@ -698,6 +828,10 @@ export function FilterableTransactions({
                                                 setSelectedPersonId(null)
                                                 setSelectedYear(currentYear)
                                                 setSelectedType('all')
+                                                setDateFrom('')
+                                                setDateTo('')
+                                                setSelectedAccountId(null)
+                                                setSearchTerm('')
                                             }}
                                         >
                                             Reset All
@@ -733,8 +867,169 @@ export function FilterableTransactions({
                         </button>
                     </div>
                 </div>
+                )}
+                </>
             )}
 
+
+            {isMobile && isMobileFilterOpen && (
+                <div className="fixed inset-0 z-40 flex flex-col">
+                    <div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileFilterOpen(false)} />
+                    <div className="relative mt-auto bg-white rounded-t-2xl shadow-2xl max-h-[90dvh] w-full overflow-hidden">
+                        <div className="sticky top-0 flex items-center justify-between px-4 py-3 border-b bg-white">
+                            <p className="text-sm font-semibold text-slate-900">Filter &amp; Search</p>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    className="text-xs font-semibold text-blue-600"
+                                    onClick={() => {
+                                        setSelectedTag(null)
+                                        setSelectedCycle(null)
+                                        clearCategoryFilters()
+                                        setSelectedPersonId(null)
+                                        setSelectedYear(currentYear)
+                                        setSelectedType('all')
+                                        setDateFrom('')
+                                        setDateTo('')
+                                        setSelectedAccountId(null)
+                                        setSearchTerm('')
+                                    }}
+                                >
+                                    Reset
+                                </button>
+                                <button
+                                    className="rounded-md border px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                                    onClick={() => setIsMobileFilterOpen(false)}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                        <div className="overflow-y-auto px-4 py-4 space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-slate-700">Search</label>
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Search by note or ID"
+                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-slate-700">Date Range</label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <input
+                                        type="date"
+                                        value={dateFrom}
+                                        onChange={(e) => setDateFrom(e.target.value)}
+                                        className="w-full rounded-md border border-slate-200 px-2 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                    />
+                                    <input
+                                        type="date"
+                                        value={dateTo}
+                                        onChange={(e) => setDateTo(e.target.value)}
+                                        className="w-full rounded-md border border-slate-200 px-2 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-slate-700">Type</label>
+                                <SmartFilterBar
+                                    transactions={sortedTransactions}
+                                    selectedType={selectedType}
+                                    onSelectType={setSelectedType}
+                                    className="w-full"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-slate-700">Account</label>
+                                <Combobox
+                                    items={accountItems}
+                                    value={selectedAccountId ?? undefined}
+                                    onValueChange={val => setSelectedAccountId(val ?? null)}
+                                    placeholder="All accounts"
+                                    inputPlaceholder="Search account..."
+                                    emptyState="No accounts"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-slate-700">Tag / Cycle</label>
+                                <Combobox
+                                    items={tagOptions}
+                                    value={selectedTag ?? undefined}
+                                    onValueChange={value => {
+                                        const next = value ?? null
+                                        setSelectedTag(next)
+                                        if (accountType === 'credit_card') {
+                                            setSelectedCycle(next)
+                                        }
+                                    }}
+                                    placeholder="Select Tag..."
+                                    inputPlaceholder="Search tag..."
+                                    emptyState="No tags found"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-slate-700">Category</label>
+                                <Combobox
+                                    items={categoryItems}
+                                    value={selectedCategoryId ?? undefined}
+                                    onValueChange={value => {
+                                        const next = value ?? null
+                                        setSelectedCategoryId(next)
+                                        setSelectedSubcategoryId(null)
+                                    }}
+                                    placeholder="All categories"
+                                    inputPlaceholder="Search category..."
+                                    emptyState="No categories"
+                                />
+                                {selectedCategoryId && availableSubcategories.length > 0 && (
+                                    <Combobox
+                                        items={subcategoryItems}
+                                        value={selectedSubcategoryId ?? undefined}
+                                        onValueChange={value => setSelectedSubcategoryId(value ?? null)}
+                                        placeholder="Subcategory"
+                                        inputPlaceholder="Search subcategory..."
+                                        emptyState="No subcategories"
+                                    />
+                                )}
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-slate-700">People</label>
+                                <Combobox
+                                    items={peopleItems}
+                                    value={selectedPersonId ?? undefined}
+                                    onValueChange={val => setSelectedPersonId(val ?? null)}
+                                    placeholder="All people"
+                                    inputPlaceholder="Search person..."
+                                    emptyState="No people"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-semibold text-slate-700">Year</label>
+                                <Select
+                                    value={selectedYear || "all"}
+                                    onValueChange={(val) => setSelectedYear(val === "all" ? "" : val || "")}
+                                    items={[
+                                        { value: "all", label: "All years" },
+                                        ...availableYears.map(year => ({ value: String(year), label: String(year) }))
+                                    ]}
+                                    placeholder="Year"
+                                    className="w-full"
+                                />
+                            </div>
+                            <div className="flex items-center justify-end gap-2">
+                                <button
+                                    className="rounded-md border px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100"
+                                    onClick={() => setIsMobileFilterOpen(false)}
+                                >
+                                    Apply
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* 2. Table Container - Flexible & Scrollable */}
             <div className="flex-1 overflow-hidden bg-white border-t relative">

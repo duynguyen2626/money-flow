@@ -49,10 +49,10 @@ export default async function ShopsPage() {
               >
                 <div className="flex w-full items-center justify-between">
                   <div className="flex items-center gap-3">
-                    {shop.logo_url ? (
+                    {shop.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={shop.logo_url}
+                        src={shop.image_url}
                         alt={shop.name}
                         className="h-10 w-10 rounded-full object-cover"
                       />

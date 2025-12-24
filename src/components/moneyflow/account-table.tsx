@@ -185,9 +185,9 @@ export function AccountTable({
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <div className="h-10 w-16 shrink-0 overflow-hidden flex items-center justify-center rounded-none bg-white">
-                              {account.logo_url ? (
+                              {account.image_url ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img src={account.logo_url} alt={account.name} className="h-full w-full object-contain" />
+                                <img src={account.image_url} alt={account.name} className="h-full w-full object-contain" />
                               ) : (
                                 <div className="text-slate-300">
                                   {getAccountIcon(account.type, "h-5 w-5")}

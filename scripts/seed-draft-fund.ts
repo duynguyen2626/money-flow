@@ -62,7 +62,7 @@ async function seedDraftFundAccount() {
         is_active: true,
         cashback_config: null,
         // Logo Icon: General Ledger / Money Bag style
-        logo_url: 'https://img.icons8.com/fluency/48/general-ledger.png',
+        image_url: 'https://img.icons8.com/fluency/48/general-ledger.png',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
     };
@@ -80,7 +80,7 @@ async function seedDraftFundAccount() {
         console.log('-------------------------------------------');
         console.log(`🆔 ID:   ${data.id}`);
         console.log(`📛 Name: ${data.name}`);
-        console.log(`🖼️ Logo: ${data.logo_url}`);
+        console.log(`🖼️ Logo: ${data.image_url}`);
         console.log('-------------------------------------------');
     }
 }

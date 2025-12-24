@@ -29,6 +29,12 @@ import {
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { CustomTooltip } from "@/components/ui/custom-tooltip"
+import {
+  Sheet,
+  SheetContent,
+  SheetTrigger,
+  SheetTitle,
+} from "@/components/ui/sheet"
 
 interface NavItem {
   title: string
@@ -100,7 +106,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         )}
       >
         {/* Header / Logo Area */}
-        <div suppressHydrationWarning className={cn("flex items-center mb-8", sidebarCollapsed ? "justify-center" : "justify-between")}>
+        <div suppressHydrationWarning className={cn("sticky top-0 z-50 flex items-center mb-8 bg-card/80 backdrop-blur-md py-4 -mt-4 transition-all", sidebarCollapsed ? "justify-center" : "justify-between")}>
           {!sidebarCollapsed && (
             <span className="text-xl font-bold text-slate-800 tracking-tight">
               Money Flow <span className="text-blue-600">3</span>
@@ -168,8 +174,69 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0">
-        {children}
+      <main className="flex-1 flex flex-col h-full overflow-hidden relative min-w-0 bg-slate-50">
+        {/* Mobile Header */}
+        <div className="md:hidden sticky top-0 z-30 flex items-center justify-between border-b bg-white px-4 py-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="-ml-2 text-slate-600">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="w-64 p-0">
+                <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+                <div className="flex h-full flex-col bg-card py-6">
+                  {/* Mobile Logo */}
+                  <div className="flex items-center px-6 mb-8">
+                    <span className="text-xl font-bold text-slate-800 tracking-tight">
+                      Money Flow <span className="text-blue-600">3</span>
+                    </span>
+                  </div>
+
+                  {/* Mobile Nav */}
+                  <nav className="flex-1 space-y-1 px-3">
+                    {navItems.map((item) => {
+                      const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          className={cn(
+                            "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                            isActive
+                              ? "bg-blue-50 text-blue-700"
+                              : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                          )}
+                        >
+                          {item.icon}
+                          <span>{item.title}</span>
+                        </Link>
+                      )
+                    })}
+                  </nav>
+
+                  {/* Mobile Footer */}
+                  <div className="mt-auto px-6 pt-6 border-t">
+                    <div className="flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold">
+                        U
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-slate-700">User</span>
+                        <span className="text-xs text-slate-500">Admin</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </SheetContent>
+            </Sheet>
+            <span className="text-lg font-bold text-slate-800">Money Flow <span className="text-blue-600">3</span></span>
+          </div>
+        </div>
+        <div className="mx-auto w-full max-w-[1920px] px-4 sm:px-6 lg:px-8 h-full bg-white">
+          {children}
+        </div>
       </main>
     </div>
   )

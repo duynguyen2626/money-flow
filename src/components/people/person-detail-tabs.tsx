@@ -33,7 +33,7 @@ export function PersonDetailTabs({
     transactions,
 }: PersonDetailTabsProps) {
     const [activeTab, setActiveTab] = useState<'details' | 'sheet' | 'history'>('details')
-    const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'lend' | 'repay'>('all')
+    const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer'>('all')
     const [searchTerm, setSearchTerm] = useState('')
 
     const tabs = [

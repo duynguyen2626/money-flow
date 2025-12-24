@@ -177,9 +177,9 @@ export function AccountStatsHeader({
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="flex items-start gap-3">
-          {account.logo_url ? (
+          {account.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={account.logo_url} alt="" className="h-12 w-12 object-contain" />
+            <img src={account.image_url} alt="" className="h-12 w-12 object-contain" />
           ) : (
             <div className="flex h-12 w-12 items-center justify-center bg-slate-200 text-base font-semibold text-slate-700">
               {account.name.charAt(0).toUpperCase()}

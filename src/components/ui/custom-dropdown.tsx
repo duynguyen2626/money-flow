@@ -8,7 +8,7 @@ export type DropdownOption = {
     label: string
     disabled?: boolean
     icon?: string
-    logo_url?: string
+    image_url?: string
 }
 
 type CustomDropdownProps = {
@@ -76,10 +76,10 @@ export function CustomDropdown({
     }
 
     const renderOptionIcon = (opt: DropdownOption) => {
-        if (opt.logo_url) {
+        if (opt.image_url) {
             return (
                 <div className="h-4 w-4 shrink-0 overflow-hidden rounded bg-slate-50 flex items-center justify-center border border-slate-100 mr-2">
-                    <img src={opt.logo_url} alt="" className="h-full w-full object-contain" />
+                    <img src={opt.image_url} alt="" className="h-full w-full object-contain" />
                 </div>
             )
         }

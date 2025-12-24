@@ -37,7 +37,7 @@ export function AddShopDialog({
   const setOpen = isControlled ? setControlledOpen : setInternalOpen
 
   const [name, setName] = useState('')
-  const [logoUrl, setLogoUrl] = useState('')
+  const [imageUrl, setImageUrl] = useState('')
   const [defaultCategoryId, setDefaultCategoryId] = useState<string | null>(preselectedCategoryId ?? null)
   const [selectedKind, setSelectedKind] = useState<string[]>(['ex']) // Default to External
   const [error, setError] = useState<string | null>(null)
@@ -76,7 +76,7 @@ export function AddShopDialog({
     startTransition(async () => {
       const result = await createShopAction({
         name: trimmedName,
-        logo_url: logoUrl.trim() || null,
+        image_url: imageUrl.trim() || null,
         default_category_id: defaultCategoryId
       })
 
@@ -86,7 +86,7 @@ export function AddShopDialog({
       }
 
       setName('')
-      setLogoUrl('')
+      setImageUrl('')
       setDefaultCategoryId(null)
       setSelectedKind(['ex'])
 
@@ -206,8 +206,8 @@ export function AddShopDialog({
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Logo URL (optional)</label>
             <Input
-              value={logoUrl}
-              onChange={event => setLogoUrl(event.target.value)}
+              value={imageUrl}
+              onChange={event => setImageUrl(event.target.value)}
               placeholder="https://example.com/logo.png"
             />
           </div>

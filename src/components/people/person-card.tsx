@@ -155,9 +155,9 @@ function PersonCardComponent({
                             <div className="mt-1 flex flex-col items-end gap-1.5">
                                 {services.map(service => (
                                     <div key={service.id} className="inline-flex items-center gap-1 bg-white/80 border border-slate-200 rounded px-1.5 py-0.5 text-xs shadow-sm" title={service.name}>
-                                        {service.logo_url ? (
+                                        {service.image_url ? (
                                             // eslint-disable-next-line @next/next/no-img-element
-                                            <img src={service.logo_url} alt="" className="h-3.5 w-3.5 object-cover rounded-sm" />
+                                            <img src={service.image_url} alt="" className="h-3.5 w-3.5 object-cover rounded-sm" />
                                         ) : (
                                             <span className="text-[8px] font-bold text-slate-500 bg-slate-100 px-0.5 rounded">{service.name.substring(0, 1)}</span>
                                         )}

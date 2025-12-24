@@ -314,10 +314,10 @@ function AccountCardComponent({
       <div className="relative h-full w-[160px] sm:w-[180px] bg-muted/5 group-hover/card:bg-muted/10 transition-colors border-r border-slate-100 z-10">
         {/* Image Container - Fills entire portrait strip - Overflow Hidden HERE */}
         <div className="absolute inset-0 w-full h-full overflow-hidden bg-slate-100 rounded-l-xl">
-          {account.logo_url ? (
+          {account.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={account.logo_url}
+              src={account.image_url}
               alt={account.name}
               onLoad={handleImageLoad}
               className={cn(
@@ -846,9 +846,9 @@ function AccountCardComponent({
                           <>
                             <div className="relative w-10 h-6 flex-shrink-0 bg-slate-100 rounded-sm overflow-hidden border border-slate-200">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
-                              {securedAsset.logo_url && (
+                              {securedAsset.image_url && (
                                 <img
-                                  src={securedAsset.logo_url}
+                                  src={securedAsset.image_url}
                                   className="w-full h-full object-contain p-1"
                                   alt=""
                                 />
