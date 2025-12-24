@@ -629,10 +629,10 @@ export function FilterableTransactions({
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 <div className="w-full px-4 lg:px-10 py-4 space-y-4 flex flex-col min-h-0">
                     {/* Header Row */}
-                    <div className="flex flex-row items-center justify-between gap-4">
+                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
 
                         {/* LEFT: Title + Search + Financial Summary */}
-                        <div className="flex flex-row items-center gap-2 flex-1 min-w-0">
+                        <div className="flex flex-row items-center gap-2 flex-1 min-w-0 w-full lg:w-auto">
                             <div className="hidden xl:block shrink-0 mr-1">
                                 <h1 className="text-lg font-bold tracking-tight text-slate-900">Transactions</h1>
                             </div>
@@ -667,7 +667,7 @@ export function FilterableTransactions({
                             </Popover>
 
                             {/* Search Bar - Compact */}
-                            <div className="relative flex-1 min-w-[100px] max-w-[200px] transition-all">
+                            <div className="relative w-full lg:w-auto lg:flex-1 min-w-[100px] max-w-full lg:max-w-[200px] transition-all">
                                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
                                 <input
                                     type="text"
@@ -727,7 +727,7 @@ export function FilterableTransactions({
                         </div>
 
                         {/* RIGHT: Actions & Controls */}
-                        <div className="flex items-center gap-2 shrink-0 overflow-x-auto pb-1 lg:pb-0">
+                        <div className="flex items-center gap-2 shrink-0 overflow-x-auto pb-1 lg:pb-0 w-full lg:w-auto">
 
                             {/* Tabs Switcher - Compact */}
                             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg shrink-0 mr-2">

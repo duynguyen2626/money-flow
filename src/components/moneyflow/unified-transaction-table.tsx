@@ -280,7 +280,7 @@ export function UnifiedTransactionTable({
     { key: "category", label: "Category", defaultWidth: 180 },
     { key: "id", label: "ID", defaultWidth: 100 },
   ]
-  const mobileColumnOrder: ColumnKey[] = ["category", "account", "amount", "final_price"]
+  const mobileColumnOrder: ColumnKey[] = ["date", "shop", "category", "account", "amount", "final_price"]
   const router = useRouter()
   // Internal state removed for activeTab, now using prop with fallback
   const lastSelectedIdRef = useRef<string | null>(null)
@@ -452,8 +452,8 @@ export function UnifiedTransactionTable({
           next[col] = false
         })
       }
-      next.date = hiddenColumns.includes('date') ? false : !isMobile
-      next.shop = hiddenColumns.includes('shop') ? false : !isMobile
+      next.date = hiddenColumns.includes('date') ? false : true
+      next.shop = hiddenColumns.includes('shop') ? false : true
       next.final_price = hiddenColumns.includes('final_price') ? false : true
       next.category = hiddenColumns.includes('category') ? false : true
       next.account = hiddenColumns.includes('account') ? false : true
@@ -1052,14 +1052,14 @@ export function UnifiedTransactionTable({
                   let stickyClass = "";
 
                   if (isMobile && col.key === 'category') {
-                    stickyClass = "sticky left-0 z-50 bg-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] border-r border-slate-300";
+                    stickyClass = "sticky left-0 z-50 bg-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] border-r border-slate-300";
                   } else if (!isMobile && col.key === 'date') {
-                    stickyClass = "sticky left-0 z-40 bg-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] border-r border-slate-300";
+                    stickyClass = "sticky left-0 z-40 bg-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] border-r border-slate-300";
                   } else if (!isMobile && col.key === 'shop') {
                     // Shop (Notes) column is sticky after Date column
                     let left = 0;
                     if (visibleColumns.date) left += columnWidths.date;
-                    stickyClass = "sticky z-40 bg-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] border-r border-slate-300";
+                    stickyClass = "sticky z-40 bg-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] border-r border-slate-300";
                     stickyStyle.left = left;
                   }
 
