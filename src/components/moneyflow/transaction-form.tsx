@@ -291,9 +291,17 @@ export function TransactionForm({
   onCancel,
   onFormChange,
 }: TransactionFormProps) {
-  const sourceAccounts = useMemo(() => allAccounts, [allAccounts]);
-
+  const [sourceAccountsState, setSourceAccountsState] = useState<Account[]>(allAccounts);
+  const [shopsState, setShopsState] = useState<Shop[]>(shops);
   const [peopleState, setPeopleState] = useState<Person[]>(people);
+
+  useEffect(() => {
+    setSourceAccountsState(allAccounts);
+  }, [allAccounts]);
+
+  useEffect(() => {
+    setShopsState(shops);
+  }, [shops]);
 
   useEffect(() => {
     setPeopleState(people);
@@ -428,10 +436,10 @@ export function TransactionForm({
       ...initialValues,
       cashback_mode: (initialValues?.cashback_mode as any) ?? "none_back",
       occurred_at: initialValues?.occurred_at
-        ? initialValues.occurred_at instanceof Date
+        ? (initialValues.occurred_at instanceof Date
           ? initialValues.occurred_at
-          : new Date(initialValues.occurred_at)
-        : new Date(),
+          : new Date(initialValues.occurred_at))
+        : baseDefaults.occurred_at,
       amount: initialValues?.amount ? Math.abs(initialValues.amount) : 0,
       cashback_share_percent: initialValues?.cashback_share_percent
         ? initialValues.cashback_share_percent * 100
@@ -1108,7 +1116,7 @@ export function TransactionForm({
         form.setValue("shop_id", "", { shouldDirty: false }); // Also clear shop as it depends on category
       }
     }
-  }, [transactionType, categoryOptions, form]);
+  }, [transactionType, categoryOptions, form, shopsState, isEditMode]);
 
   const debugCategoryClick = useCallback(() => {
     console.log("[Refund Category Debug]", {
@@ -1138,7 +1146,7 @@ export function TransactionForm({
       return true;
     };
 
-    const eligibleAccounts = sourceAccounts.filter((acc) => {
+    const eligibleAccounts = sourceAccountsState.filter((acc) => {
       if (acc.type === "system" || acc.type === "debt") return false;
       if (!matchesFilter(acc)) return false;
 
@@ -1155,7 +1163,7 @@ export function TransactionForm({
     const buildItem = (acc: Account) => {
       const displayBalance =
         acc.type === "credit_card"
-          ? getDisplayBalance(acc, "family_tab", sourceAccounts)
+          ? getDisplayBalance(acc, "family_tab", sourceAccountsState)
           : acc.current_balance ?? 0;
       const typeLabel = acc.type.replace("_", " ");
       return {
@@ -1232,7 +1240,7 @@ export function TransactionForm({
 
     return { accountOptions: items, accountOptionGroups: filteredGroups };
   }, [
-    sourceAccounts,
+    sourceAccountsState,
     recentAccountIds,
     accountFilter,
     isRefundMode,
@@ -1302,11 +1310,11 @@ export function TransactionForm({
     // User request: "Sửa shop dropdowns: nó chỉ show tương ứng với category đã match" -> Strict filter implied.
     const selectedCategoryId = watch("category_id");
 
-    let filteredShops = shops;
+    let filteredShops = shopsState;
     if (selectedCategoryId) {
       // Optional: include shops with NO default category too? Or strictly match?
       // Usually 'match' means match.
-      filteredShops = shops.filter(
+      filteredShops = shopsState.filter(
         (s) =>
           !s.default_category_id ||
           s.default_category_id === selectedCategoryId,
@@ -1328,11 +1336,11 @@ export function TransactionForm({
         <Store className="w-4 h-4 text-slate-400" />
       ),
     }));
-  }, [shops, watch("category_id")]);
+  }, [shopsState, watch("category_id")]);
 
   const selectedAccount = useMemo(
-    () => sourceAccounts.find((acc) => acc.id === watchedAccountId),
-    [sourceAccounts, watchedAccountId],
+    () => sourceAccountsState.find((acc) => acc.id === watchedAccountId),
+    [sourceAccountsState, watchedAccountId],
   );
 
   useEffect(() => {
@@ -1352,7 +1360,7 @@ export function TransactionForm({
       return; // User already selected a category, don't override!
     }
 
-    const shop = shops.find((s) => s.id === watchedShopId);
+    const shop = shopsState.find((s) => s.id === watchedShopId);
     if (shop?.default_category_id) {
       console.log(
         "[Shop Category] Auto-setting category from shop:",
@@ -1361,7 +1369,7 @@ export function TransactionForm({
       );
       form.setValue("category_id", shop.default_category_id, { shouldDirty: false });
     }
-  }, [watchedShopId, shops, form, isEditMode]);
+  }, [watchedShopId, shopsState, form, isEditMode]);
 
   useEffect(() => {
     if (!isRefundMode) return;
@@ -1378,7 +1386,7 @@ export function TransactionForm({
         : undefined) ??
       defaultSourceAccountId ??
       initialValues?.source_account_id ??
-      sourceAccounts.find((acc) => acc.id !== REFUND_PENDING_ACCOUNT_ID)?.id;
+      sourceAccountsState.find((acc) => acc.id !== REFUND_PENDING_ACCOUNT_ID)?.id;
 
     if (preferredAccount) {
       form.setValue("source_account_id", preferredAccount, {
@@ -1392,7 +1400,7 @@ export function TransactionForm({
     initialValues?.source_account_id,
     isRefundMode,
     refundStatus,
-    sourceAccounts,
+    sourceAccountsState,
     watchedAccountId,
   ]);
 
@@ -3374,7 +3382,7 @@ export function TransactionForm({
             {TypeInput}
           </div>
           <div className="flex-1 overflow-auto px-6 py-6">
-            <QuickPeopleSettings people={people} />
+            <QuickPeopleSettings people={peopleState} />
           </div>
         </div>
       ) : (
@@ -3460,49 +3468,49 @@ export function TransactionForm({
                 {transactionType === "debt" ||
                   transactionType === "repayment" ? (
                   <>
-                    <div className="col-span-2">{PersonInput}</div>
-                    <div className="col-span-1">{DateInput}</div>
-                    <div className="col-span-1">{TagInput}</div>
+                    <div className="md:col-span-2">{PersonInput}</div>
+                    <div className="md:col-span-1">{DateInput}</div>
+                    <div className="md:col-span-1">{TagInput}</div>
                     {/* Always show Category Input for Repayment now */}
-                    <div className="col-span-1">{CategoryInput}</div>
+                    <div className="md:col-span-1">{CategoryInput}</div>
                     <div
                       className={
                         transactionType === "repayment"
-                          ? "col-span-1"
-                          : "col-span-1"
+                          ? "md:col-span-1"
+                          : "md:col-span-1"
                       }
                     >
                       {ShopInput}
                     </div>
-                    <div className="col-span-1">{SourceAccountInput}</div>
-                    <div className="col-span-1">{AmountInput}</div>
+                    <div className="md:col-span-1">{SourceAccountInput}</div>
+                    <div className="md:col-span-1">{AmountInput}</div>
                   </>
                 ) : (
                   <>
-                    <div className="col-span-2">{DateInput}</div>
+                    <div className="md:col-span-2">{DateInput}</div>
                     {transactionType === "transfer" ? (
                       <>
-                        <div className="col-span-2">{CategoryInput}</div>
-                        <div className="col-span-1">{SourceAccountInput}</div>
-                        <div className="col-span-1">
+                        <div className="md:col-span-2">{CategoryInput}</div>
+                        <div className="md:col-span-1">{SourceAccountInput}</div>
+                        <div className="md:col-span-1">
                           {DestinationAccountInput}
                         </div>
-                        <div className="col-span-2">{AmountInput}</div>
+                        <div className="md:col-span-2">{AmountInput}</div>
                       </>
                     ) : transactionType === "income" ? (
                       <>
-                        <div className="col-span-1">{CategoryInput}</div>
-                        <div className="col-span-1">{SourceAccountInput}</div>
-                        <div className="col-span-1">{AmountInput}</div>
-                        <div className="col-span-1">{PersonInput}</div>
+                        <div className="md:col-span-1">{CategoryInput}</div>
+                        <div className="md:col-span-1">{SourceAccountInput}</div>
+                        <div className="md:col-span-1">{AmountInput}</div>
+                        <div className="md:col-span-1">{PersonInput}</div>
                       </>
                     ) : (
                       <>
-                        <div className="col-span-1">{CategoryInput}</div>
-                        <div className="col-span-1">{ShopInput}</div>
-                        <div className="col-span-1">{SourceAccountInput}</div>
-                        <div className="col-span-1">{AmountInput}</div>
-                        <div className="col-span-2">{PersonInput}</div>
+                        <div className="md:col-span-1">{CategoryInput}</div>
+                        <div className="md:col-span-1">{ShopInput}</div>
+                        <div className="md:col-span-1">{SourceAccountInput}</div>
+                        <div className="md:col-span-1">{AmountInput}</div>
+                        <div className="md:col-span-2">{PersonInput}</div>
                       </>
                     )}
                   </>
@@ -3572,16 +3580,7 @@ export function TransactionForm({
                 type="submit"
                 disabled={isSubmitting || cashbackExceedsAmount}
                 className={cn(
-                  "rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed",
-                  transactionType === "expense"
-                    ? "bg-rose-600 hover:bg-rose-700"
-                    : transactionType === "income"
-                      ? "bg-emerald-600 hover:bg-emerald-700"
-                      : transactionType === "transfer"
-                        ? "bg-blue-600 hover:bg-blue-700"
-                        : transactionType === "debt"
-                          ? "bg-purple-600 hover:bg-purple-700"
-                          : "bg-orange-600 hover:bg-orange-700",
+                  "rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-700",
                 )}
                 title={
                   cashbackExceedsAmount
@@ -3616,10 +3615,11 @@ export function TransactionForm({
         preselectedCategoryId={watchedCategoryId}
         onShopCreated={(shop) => {
           console.log("Shop created, auto-selecting:", shop);
-          form.setValue("shop_id", shop.id, { shouldDirty: false });
-          // We rely on local state update if needed, or if shopOptions recomputes
-          // Assuming the parent component will re-fetch data or we need to optimistic update
-          // For now, we trust router.refresh() in AddShopDialog combined with our Reset Protection
+          setShopsState(prev => [...prev, shop]);
+          form.setValue("shop_id", shop.id, {
+            shouldValidate: true,
+            shouldDirty: true,
+          });
         }}
       />
 
@@ -3647,10 +3647,11 @@ export function TransactionForm({
         onOpenChange={setIsAccountDialogOpen}
         accounts={allAccounts}
         onSuccess={(newAccount) => {
+          console.log("Account created, auto-selecting:", newAccount);
+          setSourceAccountsState(prev => [...prev, newAccount]);
           if (accountDialogContext === 'source') {
             form.setValue('source_account_id', newAccount.id, { shouldValidate: true, shouldDirty: true });
           }
-          // Reset context? optional, but good practice
           setAccountDialogContext(null);
         }}
       />

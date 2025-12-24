@@ -625,58 +625,104 @@ export function FilterableTransactions({
     }, [sortedTransactions, currentPage, pageSize])
 
     return (
-        <div className="flex flex-col h-full overflow-hidden bg-slate-50/50">
-            {!onSearchChange && (
-                <div className="flex-none px-4 sm:px-6 lg:px-8 py-4 space-y-4">
+        <div className="flex flex-col h-full overflow-hidden bg-slate-50/50 w-full">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div className="w-full px-4 lg:px-10 py-4 space-y-4 flex flex-col min-h-0">
                     {/* Header Row */}
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div className="flex flex-row items-center justify-between gap-4">
 
                         {/* LEFT: Title + Search + Financial Summary */}
-                        <div className="flex flex-col lg:flex-row lg:items-center gap-4 flex-1 min-w-0">
-                            <div className="hidden lg:block shrink-0 mr-2">
+                        <div className="flex flex-row items-center gap-2 flex-1 min-w-0">
+                            <div className="hidden xl:block shrink-0 mr-1">
                                 <h1 className="text-lg font-bold tracking-tight text-slate-900">Transactions</h1>
                             </div>
 
+                            {/* Financial Summary Dropdown (Desktop) */}
+                            <Popover open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
+                                <PopoverTrigger asChild>
+                                    <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 transition-all">
+                                        Financial Summary
+                                        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isSummaryOpen && "rotate-180")} />
+                                    </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-64 p-3 space-y-2 z-50">
+                                    <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">Global Summary</h4>
+                                    <div className="grid gap-1">
+                                        {summaryItems.map((item) => (
+                                            <div
+                                                key={item.key}
+                                                className={cn(
+                                                    "flex items-center justify-between p-2 rounded-lg border transition-colors",
+                                                    selectedType === item.key ? summaryStyleMap[item.key].active : "bg-white border-slate-100"
+                                                )}
+                                            >
+                                                <span className="text-xs font-medium text-slate-600">{item.label}</span>
+                                                <span className={cn("text-xs font-bold", summaryStyleMap[item.key].text)}>
+                                                    {numberFormatter.format(item.value)}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+
                             {/* Search Bar - Compact */}
-                            <div className="relative w-full lg:w-auto lg:flex-1 lg:max-w-md shrink-0">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <div className="relative flex-1 min-w-[100px] max-w-[200px] transition-all">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
                                 <input
                                     type="text"
                                     placeholder="Search..."
                                     value={searchTerm}
                                     onChange={e => setSearchTerm(e.target.value)}
-                                    className="h-9 w-full rounded-md border border-slate-200 pl-9 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                    className="h-8 w-full rounded-md border border-slate-200 pl-8 pr-8 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
                                 />
                                 {searchTerm && (
                                     <button
                                         className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
                                         onClick={() => setSearchTerm('')}
                                     >
-                                        <X className="h-3.5 w-3.5" />
+                                        <X className="h-3 w-3" />
                                     </button>
                                 )}
                             </div>
 
-                            {/* Divider for Desktop */}
-                            <div className="hidden lg:block h-6 w-px bg-slate-200 shrink-0" />
-
-                            {/* Smart Filter Bar - Aligned & No Scroll */}
-                            <div className="flex-none hidden lg:block">
-                                <SmartFilterBar
-                                    transactions={searchedTransactions}
-                                    selectedType={selectedType}
-                                    onSelectType={setSelectedType}
-                                    className="w-auto flex-wrap gap-2"
-                                />
+                            {/* Smart Filter Bar - Now purely for type switching on mobile, hidden or secondary on desktop if summary exists */}
+                            {/* But let's keep it as clean type tabs for quick switching */}
+                            <div className="hidden lg:flex items-center gap-1 bg-slate-100/50 p-1 rounded-lg shrink-0">
+                                {(['all', 'income', 'expense', 'lend', 'repay'] as const).map(type => (
+                                    <button
+                                        key={type}
+                                        onClick={() => setSelectedType(type)}
+                                        className={cn(
+                                            "px-2.5 py-1 text-[11px] font-bold rounded-md transition-all capitalize",
+                                            selectedType === type
+                                                ? "bg-white text-slate-900 shadow-sm ring-1 ring-black/5"
+                                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                                        )}
+                                    >
+                                        {type}
+                                    </button>
+                                ))}
                             </div>
-                            {/* Mobile: Keep Scrollable */}
-                            <div className="lg:hidden flex-1 overflow-x-auto no-scrollbar mask-gradient-right pb-1">
-                                <SmartFilterBar
-                                    transactions={searchedTransactions}
-                                    selectedType={selectedType}
-                                    onSelectType={setSelectedType}
-                                    className="w-full whitespace-nowrap"
-                                />
+
+                            {/* Mobile: Scrollable Filter Bar */}
+                            <div className="lg:hidden flex-1 overflow-x-auto no-scrollbar mask-gradient-right">
+                                <div className="flex items-center gap-1 min-w-max pb-1">
+                                    {summaryItems.map(item => (
+                                        <button
+                                            key={item.key}
+                                            onClick={() => setSelectedType(item.key)}
+                                            className={cn(
+                                                "px-3 py-1.5 rounded-full border text-[11px] font-bold transition-all whitespace-nowrap",
+                                                selectedType === item.key
+                                                    ? summaryStyleMap[item.key].active + " " + summaryStyleMap[item.key].text + " border-current"
+                                                    : "bg-white border-slate-200 text-slate-500"
+                                            )}
+                                        >
+                                            {item.label}: {numberFormatter.format(item.value)}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
 
@@ -893,258 +939,258 @@ export function FilterableTransactions({
                         </div>
                     )}
                 </div>
-            )}
 
 
-            {isMobile && isMobileFilterOpen && (
-                <div className="fixed inset-0 z-40 flex flex-col">
-                    <div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileFilterOpen(false)} />
-                    <div className="relative mt-auto bg-white rounded-t-2xl shadow-2xl max-h-[90dvh] w-full overflow-hidden">
-                        <div className="sticky top-0 flex items-center justify-between px-4 py-3 border-b bg-white">
-                            <p className="text-sm font-semibold text-slate-900">Filter &amp; Search</p>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    className="text-xs font-semibold text-blue-600"
-                                    onClick={resetAllFilters}
-                                >
-                                    Reset
-                                </button>
-                                <button
-                                    className="rounded-md border px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                                    onClick={() => setIsMobileFilterOpen(false)}
-                                >
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-                        <div className="overflow-y-auto px-4 py-4 space-y-4">
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-700">Search</label>
-                                <input
-                                    type="text"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Search by note, category, or entity..."
-                                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-700">Date Range</label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <input
-                                        type="date"
-                                        value={dateFrom}
-                                        onChange={(e) => setDateFrom(e.target.value)}
-                                        className="w-full rounded-md border border-slate-200 px-2 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
-                                    />
-                                    <input
-                                        type="date"
-                                        value={dateTo}
-                                        onChange={(e) => setDateTo(e.target.value)}
-                                        className="w-full rounded-md border border-slate-200 px-2 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
-                                    />
+                {isMobile && isMobileFilterOpen && (
+                    <div className="fixed inset-0 z-40 flex flex-col">
+                        <div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileFilterOpen(false)} />
+                        <div className="relative mt-auto bg-white rounded-t-2xl shadow-2xl max-h-[90dvh] w-full overflow-hidden">
+                            <div className="sticky top-0 flex items-center justify-between px-4 py-3 border-b bg-white">
+                                <p className="text-sm font-semibold text-slate-900">Filter &amp; Search</p>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        className="text-xs font-semibold text-blue-600"
+                                        onClick={resetAllFilters}
+                                    >
+                                        Reset
+                                    </button>
+                                    <button
+                                        className="rounded-md border px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                                        onClick={() => setIsMobileFilterOpen(false)}
+                                    >
+                                        Close
+                                    </button>
                                 </div>
                             </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-700">Type</label>
-                                <SmartFilterBar
-                                    transactions={sortedTransactions}
-                                    selectedType={selectedType}
-                                    onSelectType={setSelectedType}
-                                    className="w-full"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-700">Account</label>
-                                <Combobox
-                                    items={accountItems}
-                                    value={selectedAccountId ?? undefined}
-                                    onValueChange={val => setSelectedAccountId(val ?? null)}
-                                    placeholder="All accounts"
-                                    inputPlaceholder="Search account..."
-                                    emptyState="No accounts"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-700">Tag / Cycle</label>
-                                <Combobox
-                                    items={tagOptions}
-                                    value={selectedTag ?? undefined}
-                                    onValueChange={value => {
-                                        const next = value ?? null
-                                        setSelectedTag(next)
-                                        if (accountType === 'credit_card') {
-                                            setSelectedCycle(next)
-                                        }
-                                    }}
-                                    placeholder="Select Tag..."
-                                    inputPlaceholder="Search tag..."
-                                    emptyState="No tags found"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-700">Category</label>
-                                <Combobox
-                                    items={categoryItems}
-                                    value={selectedCategoryId ?? undefined}
-                                    onValueChange={value => {
-                                        const next = value ?? null
-                                        setSelectedCategoryId(next)
-                                        setSelectedSubcategoryId(null)
-                                    }}
-                                    placeholder="All categories"
-                                    inputPlaceholder="Search category..."
-                                    emptyState="No categories"
-                                />
-                                {selectedCategoryId && availableSubcategories.length > 0 && (
-                                    <Combobox
-                                        items={subcategoryItems}
-                                        value={selectedSubcategoryId ?? undefined}
-                                        onValueChange={value => setSelectedSubcategoryId(value ?? null)}
-                                        placeholder="Subcategory"
-                                        inputPlaceholder="Search subcategory..."
-                                        emptyState="No subcategories"
+                            <div className="overflow-y-auto px-4 py-4 space-y-4">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-slate-700">Search</label>
+                                    <input
+                                        type="text"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        placeholder="Search by note, category, or entity..."
+                                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                                     />
-                                )}
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-700">People</label>
-                                <Combobox
-                                    items={peopleItems}
-                                    value={selectedPersonId ?? undefined}
-                                    onValueChange={val => setSelectedPersonId(val ?? null)}
-                                    placeholder="All people"
-                                    inputPlaceholder="Search person..."
-                                    emptyState="No people"
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-semibold text-slate-700">Year</label>
-                                <Select
-                                    value={selectedYear || "all"}
-                                    onValueChange={(val) => setSelectedYear(val === "all" ? "" : val || "")}
-                                    items={[
-                                        { value: "all", label: "All years" },
-                                        ...availableYears.map(year => ({ value: String(year), label: String(year) }))
-                                    ]}
-                                    placeholder="Year"
-                                    className="w-full"
-                                />
-                            </div>
-                            <div className="flex items-center justify-end gap-2">
-                                <button
-                                    className="rounded-md border px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100"
-                                    onClick={() => setIsMobileFilterOpen(false)}
-                                >
-                                    Apply
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* 2. Table & Footer Card Container */}
-            <div className={cn(
-                "flex-1 overflow-hidden relative",
-                isMobile ? "bg-white border-t" : "px-4 pb-4 bg-slate-50/50"
-            )}>
-                <div className={cn(
-                    "flex flex-col h-full overflow-hidden",
-                    isMobile ? "" : "bg-white rounded-2xl border border-slate-200 shadow-sm"
-                )}>
-                    {/* Table Region */}
-                    <div className="flex-1 overflow-hidden relative">
-                        <UnifiedTransactionTable
-                            transactions={paginatedTransactions}
-                            accountType={accountType}
-                            accountId={accountId}
-                            contextId={contextId ?? accountId}
-                            accounts={accounts}
-                            categories={categories}
-                            people={people}
-                            shops={shops}
-                            selectedTxnIds={selectedTxnIds}
-                            onSelectionChange={setSelectedTxnIds}
-                            activeTab={activeTab}
-                            context={context}
-                            onBulkActionStateChange={handleBulkActionStateChange}
-                            sortState={sortState}
-                            onSortChange={setSortState}
-                            hiddenColumns={[]}
-                            isExcelMode={isExcelMode}
-                            showPagination={false}
-                            currentPage={1}
-                            pageSize={pageSize}
-                            onPageChange={setCurrentPage}
-                            onPageSizeChange={setPageSize}
-                        />
-                    </div>
-
-                    {/* Footer Region - Inside Card */}
-                    <div className="flex-none p-3 bg-white border-t border-slate-100 z-10 sticky bottom-0">
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-1">
-                                    <button
-                                        className="rounded p-1 hover:bg-slate-100 disabled:opacity-50 transition-colors"
-                                        disabled={currentPage <= 1}
-                                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                                    >
-                                        <ArrowLeft className="h-4 w-4 text-slate-600" />
-                                    </button>
-                                    <div className="flex items-center gap-1 px-1">
-                                        <span className="min-w-[1.5rem] text-center text-xs font-bold text-slate-700">{currentPage}</span>
-                                        <span className="text-xs text-slate-400">/ {Math.max(1, totalPages)}</span>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-slate-700">Date Range</label>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <input
+                                            type="date"
+                                            value={dateFrom}
+                                            onChange={(e) => setDateFrom(e.target.value)}
+                                            className="w-full rounded-md border border-slate-200 px-2 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                        />
+                                        <input
+                                            type="date"
+                                            value={dateTo}
+                                            onChange={(e) => setDateTo(e.target.value)}
+                                            className="w-full rounded-md border border-slate-200 px-2 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                        />
                                     </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-slate-700">Type</label>
+                                    <SmartFilterBar
+                                        transactions={sortedTransactions}
+                                        selectedType={selectedType}
+                                        onSelectType={setSelectedType}
+                                        className="w-full"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-slate-700">Account</label>
+                                    <Combobox
+                                        items={accountItems}
+                                        value={selectedAccountId ?? undefined}
+                                        onValueChange={val => setSelectedAccountId(val ?? null)}
+                                        placeholder="All accounts"
+                                        inputPlaceholder="Search account..."
+                                        emptyState="No accounts"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-slate-700">Tag / Cycle</label>
+                                    <Combobox
+                                        items={tagOptions}
+                                        value={selectedTag ?? undefined}
+                                        onValueChange={value => {
+                                            const next = value ?? null
+                                            setSelectedTag(next)
+                                            if (accountType === 'credit_card') {
+                                                setSelectedCycle(next)
+                                            }
+                                        }}
+                                        placeholder="Select Tag..."
+                                        inputPlaceholder="Search tag..."
+                                        emptyState="No tags found"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-slate-700">Category</label>
+                                    <Combobox
+                                        items={categoryItems}
+                                        value={selectedCategoryId ?? undefined}
+                                        onValueChange={value => {
+                                            const next = value ?? null
+                                            setSelectedCategoryId(next)
+                                            setSelectedSubcategoryId(null)
+                                        }}
+                                        placeholder="All categories"
+                                        inputPlaceholder="Search category..."
+                                        emptyState="No categories"
+                                    />
+                                    {selectedCategoryId && availableSubcategories.length > 0 && (
+                                        <Combobox
+                                            items={subcategoryItems}
+                                            value={selectedSubcategoryId ?? undefined}
+                                            onValueChange={value => setSelectedSubcategoryId(value ?? null)}
+                                            placeholder="Subcategory"
+                                            inputPlaceholder="Search subcategory..."
+                                            emptyState="No subcategories"
+                                        />
+                                    )}
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-slate-700">People</label>
+                                    <Combobox
+                                        items={peopleItems}
+                                        value={selectedPersonId ?? undefined}
+                                        onValueChange={val => setSelectedPersonId(val ?? null)}
+                                        placeholder="All people"
+                                        inputPlaceholder="Search person..."
+                                        emptyState="No people"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-slate-700">Year</label>
+                                    <Select
+                                        value={selectedYear || "all"}
+                                        onValueChange={(val) => setSelectedYear(val === "all" ? "" : val || "")}
+                                        items={[
+                                            { value: "all", label: "All years" },
+                                            ...availableYears.map(year => ({ value: String(year), label: String(year) }))
+                                        ]}
+                                        placeholder="Year"
+                                        className="w-full"
+                                    />
+                                </div>
+                                <div className="flex items-center justify-end gap-2">
                                     <button
-                                        className="rounded p-1 hover:bg-slate-100 disabled:opacity-50 transition-colors"
-                                        disabled={currentPage >= totalPages}
-                                        onClick={() => setCurrentPage(currentPage + 1)}
+                                        className="rounded-md border px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100"
+                                        onClick={() => setIsMobileFilterOpen(false)}
                                     >
-                                        <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
+                                        Apply
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
-                                {!isMobile && <div className="h-4 w-px bg-slate-200" />}
+                {/* 2. Table & Footer Card Container */}
+                <div className={cn(
+                    "flex-1 min-h-0 overflow-hidden relative",
+                    isMobile ? "bg-white border-t" : "w-full px-4 lg:px-10 pb-4 bg-slate-50/50"
+                )}>
+                    <div className={cn(
+                        "flex flex-col h-full overflow-hidden",
+                        isMobile ? "" : "bg-white rounded-2xl border border-slate-200 shadow-sm"
+                    )}>
+                        {/* Table Region */}
+                        <div className="flex-1 overflow-hidden relative">
+                            <UnifiedTransactionTable
+                                transactions={paginatedTransactions}
+                                accountType={accountType}
+                                accountId={accountId}
+                                contextId={contextId ?? accountId}
+                                accounts={accounts}
+                                categories={categories}
+                                people={people}
+                                shops={shops}
+                                selectedTxnIds={selectedTxnIds}
+                                onSelectionChange={setSelectedTxnIds}
+                                activeTab={activeTab}
+                                context={context}
+                                onBulkActionStateChange={handleBulkActionStateChange}
+                                sortState={sortState}
+                                onSortChange={setSortState}
+                                hiddenColumns={[]}
+                                isExcelMode={isExcelMode}
+                                showPagination={false}
+                                currentPage={1}
+                                pageSize={pageSize}
+                                onPageChange={setCurrentPage}
+                                onPageSizeChange={setPageSize}
+                            />
+                        </div>
 
-                                {!isMobile && (
-                                    <select
-                                        value={pageSize}
-                                        onChange={(e) => {
-                                            setPageSize(Number(e.target.value));
+                        {/* Footer Region - Inside Card */}
+                        <div className="flex-none p-3 bg-white border-t border-slate-100 z-10 sticky bottom-0">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-1">
+                                        <button
+                                            className="rounded p-1 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                                            disabled={currentPage <= 1}
+                                            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                                        >
+                                            <ArrowLeft className="h-4 w-4 text-slate-600" />
+                                        </button>
+                                        <div className="flex items-center gap-1 px-1">
+                                            <span className="min-w-[1.5rem] text-center text-xs font-bold text-slate-700">{currentPage}</span>
+                                            <span className="text-xs text-slate-400">/ {Math.max(1, totalPages)}</span>
+                                        </div>
+                                        <button
+                                            className="rounded p-1 hover:bg-slate-100 disabled:opacity-50 transition-colors"
+                                            disabled={currentPage >= totalPages}
+                                            onClick={() => setCurrentPage(currentPage + 1)}
+                                        >
+                                            <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
+                                        </button>
+                                    </div>
+
+                                    {!isMobile && <div className="h-4 w-px bg-slate-200" />}
+
+                                    {!isMobile && (
+                                        <select
+                                            value={pageSize}
+                                            onChange={(e) => {
+                                                setPageSize(Number(e.target.value));
+                                                setCurrentPage(1);
+                                            }}
+                                            className="h-8 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer hover:bg-slate-100"
+                                        >
+                                            <option value={10}>10 rows</option>
+                                            <option value={20}>20 rows</option>
+                                            <option value={50}>50 rows</option>
+                                            <option value={100}>100 rows</option>
+                                        </select>
+                                    )}
+
+                                    {!isMobile && <div className="h-4 w-px bg-slate-200" />}
+
+                                    <button
+                                        onClick={() => {
+                                            setSortState({ key: 'date', dir: 'desc' });
+                                            setSelectedTxnIds(new Set());
                                             setCurrentPage(1);
                                         }}
-                                        className="h-8 rounded-lg border border-slate-200 bg-slate-50 px-2 text-xs font-semibold text-slate-600 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all cursor-pointer hover:bg-slate-100"
+                                        className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
                                     >
-                                        <option value={10}>10 rows</option>
-                                        <option value={20}>20 rows</option>
-                                        <option value={50}>50 rows</option>
-                                        <option value={100}>100 rows</option>
-                                    </select>
-                                )}
+                                        <RotateCcw className="h-3.5 w-3.5" />
+                                        <span className="text-xs font-medium">Reset</span>
+                                    </button>
+                                </div>
 
-                                {!isMobile && <div className="h-4 w-px bg-slate-200" />}
-
-                                <button
-                                    onClick={() => {
-                                        setSortState({ key: 'date', dir: 'desc' });
-                                        setSelectedTxnIds(new Set());
-                                        setCurrentPage(1);
-                                    }}
-                                    className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
-                                >
-                                    <RotateCcw className="h-3.5 w-3.5" />
-                                    <span className="text-xs font-medium">Reset</span>
-                                </button>
-                            </div>
-
-                            <div className="flex items-center gap-4">
-                                <p className="text-slate-500 font-medium text-xs">
-                                    <span className="hidden sm:inline">Showing </span>
-                                    <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, sortedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, sortedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{sortedTransactions.length}</span>
-                                    <span className="hidden sm:inline"> rows</span>
-                                </p>
+                                <div className="flex items-center gap-4">
+                                    <p className="text-slate-500 font-medium text-xs">
+                                        <span className="hidden sm:inline">Showing </span>
+                                        <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, sortedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, sortedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{sortedTransactions.length}</span>
+                                        <span className="hidden sm:inline"> rows</span>
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>

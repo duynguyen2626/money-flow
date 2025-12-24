@@ -289,10 +289,10 @@ export function UnifiedTransactionTable({
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 65, minWidth: 55 },
     { key: "shop", label: "Note", defaultWidth: 200, minWidth: 150 },
-    { key: "account", label: "Flow & Entity", defaultWidth: 250, minWidth: 200 },
+    { key: "account", label: "Flow & Entity", defaultWidth: 280, minWidth: 200 },
     { key: "amount", label: "Amount", defaultWidth: 110 },
     { key: "final_price", label: "Final Price", defaultWidth: 110 },
-    { key: "category", label: "Category", defaultWidth: 160 },
+    { key: "category", label: "Category", defaultWidth: 180 },
     { key: "id", label: "ID", defaultWidth: 100 },
   ]
   const mobileColumnOrder: ColumnKey[] = ["category", "account", "amount", "final_price"]
@@ -1055,11 +1055,11 @@ export function UnifiedTransactionTable({
   return (
     <div className="relative flex flex-col h-full overflow-hidden">
       <div className={cn(
-        "relative w-full border rounded-md bg-white shadow-sm transition-colors duration-300 flex-1 overflow-hidden",
+        "relative w-full rounded-xl border border-slate-200 bg-card shadow-sm transition-colors duration-300 flex-1 overflow-hidden",
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )} style={{ ['--table-font-size' as string]: `${fontSize}px` } as React.CSSProperties}>
-        <div className="flex-1 overflow-auto bg-slate-50/50 pb-20 scrollbar-visible h-full" style={{ scrollbarGutter: 'stable' }}>
-          <table className="w-full caption-bottom text-sm">
+        <div className="flex-1 overflow-auto w-full pb-10 scrollbar-visible h-full" style={{ scrollbarGutter: 'stable' }}>
+          <table className="w-full caption-bottom text-sm border-collapse">
             <TableHeader className="sticky top-0 z-40 bg-white backdrop-blur text-foreground font-bold shadow-sm">
               <TableRow className="hover:bg-transparent border-b border-slate-200">
                 {displayedColumns.map(col => {
@@ -1067,16 +1067,14 @@ export function UnifiedTransactionTable({
                   let stickyClass = "";
 
                   if (isMobile && col.key === 'category') {
-                    stickyClass = "sticky left-0 z-45 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
+                    stickyClass = "sticky left-0 z-50 bg-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] border-r border-slate-300";
                   } else if (!isMobile && col.key === 'date') {
-                    stickyClass = "sticky left-0 z-40 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
+                    stickyClass = "sticky left-0 z-40 bg-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] border-r border-slate-300";
                   } else if (!isMobile && col.key === 'shop') {
                     // Shop (Notes) column is sticky after Date column
                     let left = 0;
                     if (visibleColumns.date) left += columnWidths.date;
-                    // Note: 'type' column was removed, it's now merged into date
-
-                    stickyClass = "sticky z-40 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
+                    stickyClass = "sticky z-40 bg-slate-100 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] border-r border-slate-300";
                     stickyStyle.left = left;
                   }
 
@@ -1608,7 +1606,7 @@ export function UnifiedTransactionTable({
                       ) : null;
 
                       return (
-                        <div className="flex items-center gap-2 w-full overflow-hidden group">
+                        <div className="flex items-center gap-1.5 w-full overflow-hidden group">
                           {/* Logo */}
                           {shopLogo ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -1639,7 +1637,7 @@ export function UnifiedTransactionTable({
                             {/* Name - Hidden by default as per user request */}
 
                             {/* Note */}
-                            <div className="flex items-center gap-2 min-w-0">
+                            <div className="flex items-center gap-1.5 min-w-0">
                               <div className="min-w-0 flex-1">
                                 {txn.note ? (
                                   <CustomTooltip content={txn.note}>
@@ -1652,7 +1650,7 @@ export function UnifiedTransactionTable({
                                 )}
                               </div>
                               {(installmentBadge || refundBadge) && (
-                                <div className="flex items-center gap-1.5 shrink-0">
+                                <div className="flex items-center gap-1 shrink-0">
                                   {installmentBadge}
                                   {refundBadge}
                                 </div>
@@ -2373,16 +2371,15 @@ export function UnifiedTransactionTable({
                       const stickyBg = getStickyBg();
 
                       if (isMobile && col.key === 'category') {
-                        stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
+                        stickyClass = cn("sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)]", stickyBg);
                       } else if (!isMobile && col.key === 'date') {
-                        stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
+                        stickyClass = cn("sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)]", stickyBg);
                       } else if (!isMobile && col.key === 'shop') {
                         // Shop (Notes) column sticky positioning
                         let left = 0;
                         if (visibleColumns.date) left += columnWidths.date;
-                        // Note: 'type' column was removed, it's now merged into date
                         stickyStyle.left = left;
-                        stickyClass = cn("sticky z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
+                        stickyClass = cn("sticky z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)]", stickyBg);
                       }
 
                       return (

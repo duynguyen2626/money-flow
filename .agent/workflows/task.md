@@ -60,8 +60,12 @@ Do NOT use 1600px if it causes the “two sides empty and ugly” look.
 
 ### 4) Date range placement
 
-* Desktop: Date range control sits in the same toolbar row (like mockup), not as a huge standalone section.
-* Mobile: date range lives inside the Filter & Search sheet/panel.
+* Desktop:- [x] Step 3: Implement fixes strictly following Milestone 3 contract <!-- id: 3 -->
+    - [/] Fix scrollbar visibility and container <!-- id: 4 -->
+    - [/] Fix mobile column overlap and visibility <!-- id: 5 -->
+    - [/] Fix header horizontal scroll requirement <!-- id: 6 -->
+    - [/] Fix modal mobile layout (1 column) <!-- id: 7 -->
+    - [/] Fix modal unsaved warning (dirty-state) <!-- id: 8 -->
 
 ### 5) Toolbar compactness
 
