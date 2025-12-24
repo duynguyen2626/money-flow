@@ -1,7 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { Account, AccountRelationships, AccountStats, TransactionLine, TransactionWithDetails, TransactionWithLineRelations, AccountRow } from '@/types/moneyflow.types'
+import { Account, AccountRelationships, AccountStats, TransactionWithDetails, AccountRow } from '@/types/moneyflow.types'
 import {
   parseCashbackConfig,
   getCashbackCycleRange,
@@ -13,8 +13,6 @@ import { computeAccountTotals, getCreditCardAvailableBalance, getCreditCardUsage
 import {
   TransactionRow,
   mapTransactionRow,
-  extractCashbackFromLines,
-  extractLineMetadata,
   mapUnifiedTransaction
 } from '@/lib/transaction-mapper'
 import { Database, Json } from '@/types/database.types'
@@ -394,13 +392,7 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
 
 
 
-type GroupedTransactionLines = {
-  transaction_lines: {
-    amount: number
-    type: string
-    account_id: string
-  }[]
-}
+// GroupedTransactionLines removed as lines are deprecated
 
 
 
@@ -582,36 +574,7 @@ export async function getAccountStats(accountId: string) {
   }
 }
 
-export async function getAccountTransactionDetails(
-  accountId: string,
-  limit = 20
-): Promise<GroupedTransactionLines[]> {
-  const supabase = createClient()
-
-  const { data, error } = await supabase
-    .from('transactions')
-    .select('id, amount, type, account_id')
-    .eq('account_id', accountId)
-    .order('occurred_at', { ascending: false })
-    .limit(limit)
-
-  if (error) {
-    console.error('Error fetching transaction details for account:', {
-      accountId,
-      message: error?.message ?? 'unknown error',
-      code: error?.code,
-    })
-    return []
-  }
-
-  return (data || []).map(txn => ({
-    transaction_lines: [{
-      amount: txn.amount,
-      type: txn.type === 'income' ? 'credit' : 'debit',
-      account_id: txn.account_id
-    }]
-  }))
-}
+// getAccountTransactionDetails removed
 
 // New implementation of recalculateBalance using single transactions table
 export async function recalculateBalance(accountId: string): Promise<boolean> {

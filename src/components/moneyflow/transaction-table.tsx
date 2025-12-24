@@ -6,7 +6,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
 import { CustomTooltip } from "@/components/ui/custom-tooltip"
-import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
+import { Account, Category, Person, Shop, TransactionWithDetails } from "@/types/moneyflow.types"
 import {
   Table,
   TableBody,
@@ -50,66 +50,25 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 });
 
 function buildEditInitialValues(txn: TransactionWithDetails): Partial<TransactionFormValues> {
-  const lines = (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[];
-  const accountLines = lines.filter(line => line.account_id);
-  const creditLine = accountLines.find(line => line.type === "credit");
-  const debitLine =
-    accountLines.find(line => line.type === "debit" && line.account_id !== creditLine?.account_id) ??
-    accountLines.find(line => line.type === "debit");
-  const categoryLine = lines.find(line => line.category_id);
-  const personLine = lines.find(line => line.person_id);
   const baseAmount =
     typeof txn.original_amount === "number" ? txn.original_amount : txn.amount ?? 0;
   const percentValue =
     typeof txn.cashback_share_percent === "number" ? txn.cashback_share_percent : undefined;
 
-  // Determine Type
-  let derivedType: TransactionFormValues["type"] = txn.type as TransactionFormValues["type"] || "expense";
+  let derivedType: TransactionFormValues["type"] = (txn.type as any) === 'repayment' ? 'repayment' : txn.type as TransactionFormValues["type"] || "expense";
 
-  if (personLine?.person_id) {
-    // If person involved, could be debt lending or repayment.
-    // Check for repayment clues.
-    if (categoryLine?.categories?.name?.toLowerCase().includes('thu nợ')
-      || categoryLine?.categories?.name?.toLowerCase().includes('repayment')) {
+  if (txn.person_id) {
+    if (txn.category_name?.toLowerCase().includes('repayment')) {
       derivedType = 'repayment';
     } else {
-      derivedType = 'debt'; // Lending
+      derivedType = 'debt';
     }
-  } else if (!categoryLine) {
-    derivedType = 'transfer';
-  } else if (categoryLine.type === 'debit') {
-    derivedType = 'expense';
-  } else {
-    derivedType = 'income';
   }
 
-  // Account Mapping
-  // For Repayment: source = Bank (Debit line), dest = Debt (Credit line)
-  // For Transfer: source = From (Credit), dest = To (Debit)
-  // For Debt Lending: source = From (Credit), dest = Debt (Debit)
-  // For Expense: source = From (Credit)
-  // For Income: source = To (Debit)
-
-  // Default Source (usually Credit line, unless Income)
-  let sourceAccountId = creditLine?.account_id ?? debitLine?.account_id ?? undefined;
-  if (derivedType === 'income') {
-    sourceAccountId = debitLine?.account_id ?? undefined;
-  }
-
-  // Destination for Debt/Transfer
-  let destinationAccountId =
-    derivedType === "transfer" || derivedType === "debt"
-      ? debitLine?.account_id ?? undefined
+  const destinationAccountId =
+    derivedType === "transfer" || derivedType === "debt" || derivedType === "repayment"
+      ? txn.target_account_id ?? undefined
       : undefined;
-
-  // Special handling for Repayment
-  if (derivedType === 'repayment') {
-    // Repayment: Debit Bank, Credit Debt.
-    // Form expects: Source = Bank, Dest = Debt.
-    // debitLine = Bank, creditLine = Debt.
-    sourceAccountId = debitLine?.account_id ?? undefined;
-    destinationAccountId = creditLine?.account_id ?? undefined;
-  }
 
   return {
     occurred_at: txn.occurred_at ? new Date(txn.occurred_at) : new Date(),
@@ -117,9 +76,9 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     amount: Math.abs(baseAmount ?? 0),
     note: txn.note ?? "",
     tag: txn.tag ?? generateTag(new Date()),
-    source_account_id: sourceAccountId,
-    category_id: categoryLine?.category_id ?? undefined,
-    person_id: personLine?.person_id ?? undefined,
+    source_account_id: txn.account_id ?? undefined,
+    category_id: txn.category_id ?? undefined,
+    person_id: txn.person_id ?? undefined,
     debt_account_id: destinationAccountId,
     shop_id: txn.shop_id ?? undefined,
     cashback_share_percent:
@@ -333,10 +292,7 @@ export function TransactionTable({
 
   const openRefundDialog = (txn: TransactionWithDetails) => {
     const baseAmount = Math.abs(txn.original_amount ?? txn.amount ?? 0)
-    const sourceAccountLine = txn.transaction_lines?.find(
-      line => line?.type === "credit" && line.account_id
-    ) ?? txn.transaction_lines?.find(line => line?.type === "debit" && line.account_id)
-    const defaultAccountId = sourceAccountLine?.account_id ?? refundAccountOptions[0]?.id ?? null
+    const defaultAccountId = txn.account_id ?? refundAccountOptions[0]?.id ?? null
 
     setRefundAmount(baseAmount)
     setRefundInstant(false)
@@ -348,10 +304,7 @@ export function TransactionTable({
   }
 
   const openConfirmRefundDialog = (txn: TransactionWithDetails) => {
-    const pendingLine = txn.transaction_lines?.find(
-      line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
-    )
-    const amount = Math.abs(pendingLine?.amount ?? 0)
+    const amount = Math.abs(txn.amount ?? 0)
     const defaultAccountId = refundAccountOptions[0]?.id ?? null
 
     setRefundAmount(amount)
@@ -1219,9 +1172,7 @@ export function TransactionTable({
                   <p className="text-lg font-semibold text-slate-900">
                     {numberFormatter.format(
                       Math.abs(
-                        refundDialogTxn.transaction_lines
-                          ?.find(line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit')
-                          ?.amount ?? 0
+                        Math.abs(refundDialogTxn.amount ?? 0)
                       )
                     )}
                   </p>

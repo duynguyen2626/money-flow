@@ -29,6 +29,24 @@ If you encounter missing cycle data or incorrect caps in the Cashback Analysis v
 3. Uncomment the debug `div` block.
 4. Refresh and check the Red Debug Box for internal state (Tag, Opts, Net, Cap).
 
+## Recent Updates (Phase 6)
+
+### 1. Schema Drift Cleanup
+- Removed dependency on deprecated `transaction_lines` table.
+- Aligned codebase with actual Supabase schema (Flat Transaction Model).
+- Simplified `transaction.service.ts` and `transaction-actions.ts`.
+
+### 2. Mobile UI Refinement
+- **New Mobile Transaction Row**: Extracted complex mobile rendering logic to `MobileTransactionRow.tsx`.
+- **Improved Header**: 2-row layout for `FilterableTransactions` (Tabs/Filter + Search/Add).
+- **Sticky Footer Component**: Fixed footer visibility and added "Rows per page" selector for mobile.
+- **Refund Icons**: enhancing visibility with `RefreshCcw` icon and better placement.
+
+### 3. Pagination Logic
+- Refactored `UnifiedTransactionTable` to use props-driven pagination.
+- Centralized state control in `filterable-transactions.tsx`.
+- Resolved "double-pagination" issues.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

@@ -35,6 +35,7 @@ import {
   History,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Download,
   Edit,
   ExternalLink,
@@ -48,13 +49,20 @@ import {
   ArrowRightLeft,
   ArrowUpRight,
   ArrowDownLeft,
+  CornerUpLeft,
   Notebook,
   HelpCircle,
   User,
+  RefreshCcw,
+  Maximize2,
+  Minimize2,
+  ListFilter,
   Eraser,
   Undo2,
   EllipsisVertical
-} from 'lucide-react'
+} from "lucide-react"
+
+import { MobileTransactionRow } from "./mobile-transaction-row"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
@@ -129,14 +137,6 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 });
 
 function buildEditInitialValues(txn: TransactionWithDetails): Partial<TransactionFormValues> {
-  const lines = (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[];
-  const accountLines = lines.filter(line => line.account_id);
-  const creditLine = accountLines.find(line => line.type === "credit");
-  const debitLine =
-    accountLines.find(line => line.type === "debit" && line.account_id !== creditLine?.account_id) ??
-    accountLines.find(line => line.type === "debit");
-  const categoryLine = lines.find(line => line.category_id);
-  const personLine = lines.find(line => line.person_id);
   const baseAmount =
     typeof txn.original_amount === "number" ? txn.original_amount : txn.amount ?? 0;
   const percentValue =
@@ -144,43 +144,36 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
 
   let derivedType: TransactionFormValues["type"] = (txn.type as any) === 'repayment' ? 'repayment' : txn.type as TransactionFormValues["type"] || "expense";
 
-  const categoryName = categoryLine?.categories?.name?.toLowerCase() ?? txn.category_name?.toLowerCase() ?? '';
+  const categoryName = txn.category_name?.toLowerCase() ?? '';
 
-  if (personLine?.person_id) {
-    if (categoryName.includes('thu ná»£') || categoryName.includes('repayment')) {
+  if (txn.person_id) {
+    if (categoryName.includes('thu nợ') || categoryName.includes('repayment')) {
       derivedType = 'repayment';
     } else {
       derivedType = 'debt';
     }
   } else if (categoryName.includes('cashback') || categoryName.includes('income') || categoryName.includes('refund')) {
     derivedType = 'income';
-  } else if (categoryName.includes('money transfer') || categoryName.includes('chuyá»ƒn tiá»n')) {
+  } else if (categoryName.includes('money transfer') || categoryName.includes('chuyển tiền')) {
     derivedType = 'transfer';
-  } else if (!categoryLine && !txn.category_name) {
+  } else if (!txn.category_id && !txn.category_name) {
     derivedType = 'transfer';
-  } else if (categoryLine?.type === 'debit') {
-    derivedType = 'expense';
-  } else if (categoryLine?.type === 'credit') {
-    derivedType = 'income';
   } else if (txn.type === 'income') {
     derivedType = 'income';
   } else if (txn.type === 'expense') {
     derivedType = 'expense';
   }
 
-  let sourceAccountId = creditLine?.account_id ?? debitLine?.account_id ?? undefined;
-  if (derivedType === 'income') {
-    sourceAccountId = debitLine?.account_id ?? undefined;
-  }
-
+  let sourceAccountId = txn.account_id ?? undefined;
   let destinationAccountId =
     derivedType === "transfer" || derivedType === "debt"
-      ? debitLine?.account_id ?? undefined
+      ? txn.target_account_id ?? undefined
       : undefined;
 
   if (derivedType === 'repayment') {
-    sourceAccountId = debitLine?.account_id ?? undefined;
-    destinationAccountId = creditLine?.account_id ?? undefined;
+    // For repayment: source is bank, destination is debt
+    sourceAccountId = txn.account_id ?? undefined;
+    destinationAccountId = txn.target_account_id ?? undefined;
   }
 
   return {
@@ -190,8 +183,8 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     note: txn.note ?? "",
     tag: txn.tag ?? generateTag(new Date()),
     source_account_id: sourceAccountId,
-    category_id: categoryLine?.category_id ?? undefined,
-    person_id: personLine?.person_id ?? undefined,
+    category_id: txn.category_id ?? undefined,
+    person_id: txn.person_id ?? undefined,
     debt_account_id: destinationAccountId,
     shop_id: txn.shop_id ?? undefined,
     cashback_share_percent:
@@ -219,6 +212,8 @@ interface UnifiedTransactionTableProps {
   contextId?: string // NEW: Context entity ID (account or person) for smart display
   selectedTxnIds?: Set<string>
   onSelectionChange?: (selectedIds: Set<string>) => void
+  onSelectTxn?: (id: string, selected: boolean) => void
+  onSelectAll?: (selected: boolean) => void
   accounts?: Account[]
   categories?: Category[]
   people?: Person[]
@@ -233,6 +228,7 @@ interface UnifiedTransactionTableProps {
   // Pagination Props
   showPagination?: boolean
   currentPage?: number
+  totalPages?: number
   pageSize?: number
   onPageChange?: (page: number) => void
   onPageSizeChange?: (size: number) => void
@@ -266,6 +262,8 @@ export function UnifiedTransactionTable({
   contextId,
   selectedTxnIds,
   onSelectionChange,
+  onSelectTxn,
+  onSelectAll,
   accounts = [],
   categories = [],
   people = [],
@@ -278,8 +276,9 @@ export function UnifiedTransactionTable({
   context,
   isExcelMode = false,
   showPagination = true,
-  currentPage: externalPage,
-  pageSize: externalPageSize,
+  currentPage: propCurrentPage,
+  totalPages,
+  pageSize: propPageSize,
   onPageChange,
   onPageSizeChange,
   fontSize: externalFontSize,
@@ -289,13 +288,13 @@ export function UnifiedTransactionTable({
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 65, minWidth: 55 },
     { key: "shop", label: "Note", defaultWidth: 200, minWidth: 150 },
-    { key: "account", label: "Flow & Entity", defaultWidth: 250, minWidth: 200 },
+    { key: "account", label: "Flow & Entity", defaultWidth: 280, minWidth: 200 },
     { key: "amount", label: "Amount", defaultWidth: 110 },
     { key: "final_price", label: "Final Price", defaultWidth: 110 },
-    { key: "category", label: "Category", defaultWidth: 160 },
+    { key: "category", label: "Category", defaultWidth: 180 },
     { key: "id", label: "ID", defaultWidth: 100 },
   ]
-  const mobileColumnOrder: ColumnKey[] = ["category", "account", "amount", "final_price"]
+  const mobileColumnOrder: ColumnKey[] = ["date", "shop", "category", "account", "amount", "final_price"]
   const router = useRouter()
   // Internal state removed for activeTab, now using prop with fallback
   const lastSelectedIdRef = useRef<string | null>(null)
@@ -467,8 +466,8 @@ export function UnifiedTransactionTable({
           next[col] = false
         })
       }
-      next.date = hiddenColumns.includes('date') ? false : !isMobile
-      next.shop = hiddenColumns.includes('shop') ? false : !isMobile
+      next.date = hiddenColumns.includes('date') ? false : true
+      next.shop = hiddenColumns.includes('shop') ? false : true
       next.final_price = hiddenColumns.includes('final_price') ? false : true
       next.category = hiddenColumns.includes('category') ? false : true
       next.account = hiddenColumns.includes('account') ? false : true
@@ -548,8 +547,8 @@ export function UnifiedTransactionTable({
   const [internalPageSize, setInternalPageSize] = useState(20)
   const [internalCurrentPage, setInternalCurrentPage] = useState(1)
 
-  const pageSize = externalPageSize ?? internalPageSize
-  const currentPage = externalPage ?? internalCurrentPage
+  const pageSize = propPageSize ?? internalPageSize
+  const currentPage = propCurrentPage ?? internalCurrentPage
 
   const setPageSize = (size: number) => {
     setInternalPageSize(size)
@@ -565,7 +564,7 @@ export function UnifiedTransactionTable({
   const setSortState = onSortChange ?? setInternalSortState
 
   useEffect(() => {
-    if (!externalPage) {
+    if (!propCurrentPage) {
       setCurrentPage(1)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -748,8 +747,8 @@ export function UnifiedTransactionTable({
         // 2. If Money Received, Confirm it immediately
         if (moneyReceived) {
           // Determine target account (default to source account of original txn)
-          const sourceAccountLine = confirmCancelTarget.transaction_lines?.find(l => l.type === 'credit' && l.account_id)
-          const targetAccountId = sourceAccountLine?.account_id
+          // For an expense (cancel target), account_id is the source.
+          const targetAccountId = confirmCancelTarget.account_id
 
           if (!targetAccountId) {
             throw new Error('Cannot determine target account for immediate refund. Please use manual refund.')
@@ -1055,30 +1054,18 @@ export function UnifiedTransactionTable({
   return (
     <div className="relative flex flex-col h-full overflow-hidden">
       <div className={cn(
-        "relative w-full border rounded-md bg-white shadow-sm transition-colors duration-300 flex-1 overflow-hidden",
+        "relative w-full rounded-xl border border-slate-200 bg-card shadow-sm transition-colors duration-300 flex-1 overflow-hidden",
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )} style={{ ['--table-font-size' as string]: `${fontSize}px` } as React.CSSProperties}>
-        <div className="flex-1 overflow-auto bg-slate-50/50 pb-20 scrollbar-visible h-full" style={{ scrollbarGutter: 'stable' }}>
-          <table className="w-full caption-bottom text-sm">
-            <TableHeader className="sticky top-0 z-40 bg-white backdrop-blur text-foreground font-bold shadow-sm">
+        <div className="flex-1 overflow-auto w-full scrollbar-visible h-full bg-white relative" style={{ scrollbarGutter: 'stable' }}>
+          <table className="w-full caption-bottom text-sm border-collapse min-w-[800px] lg:min-w-0">
+            <TableHeader className="sticky top-0 z-40 bg-white backdrop-blur text-foreground font-bold shadow-sm ring-1 ring-slate-200">
               <TableRow className="hover:bg-transparent border-b border-slate-200">
                 {displayedColumns.map(col => {
-                  let stickyStyle: React.CSSProperties = { width: columnWidths[col.key] };
-                  let stickyClass = "";
-
-                  if (isMobile && col.key === 'category') {
-                    stickyClass = "sticky left-0 z-45 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
-                  } else if (!isMobile && col.key === 'date') {
-                    stickyClass = "sticky left-0 z-40 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
-                  } else if (!isMobile && col.key === 'shop') {
-                    // Shop (Notes) column is sticky after Date column
-                    let left = 0;
-                    if (visibleColumns.date) left += columnWidths.date;
-                    // Note: 'type' column was removed, it's now merged into date
-
-                    stickyClass = "sticky z-40 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
-                    stickyStyle.left = left;
-                  }
+                  // Sticky Logic Removed Personally by User Request
+                  // "Mobile Layout bỏ freeze cột (bỏ cả Web luôn)" -> remove sticky classes
+                  const stickyClass = "";
+                  const stickyStyle: React.CSSProperties = { width: columnWidths[col.key] };
 
                   const isMobileCategoryDate = isMobile && col.key === 'category'
                   const columnLabel = isMobileCategoryDate ? 'Category / Date' : col.label
@@ -1602,13 +1589,16 @@ export function UnifiedTransactionTable({
                       ) : null;
 
                       const refundBadge = refundSeq > 0 ? (
-                        <span className="inline-flex items-center justify-center rounded-md bg-blue-100 text-blue-700 px-1.5 h-5 text-[10px] font-bold shrink-0 whitespace-nowrap" title={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
-                          {refundSeq}. {shortIdBadge}
-                        </span>
+                        <CustomTooltip content={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
+                          <div className="flex items-center justify-center rounded bg-purple-100 border border-purple-400 text-purple-700 px-1 py-0.5 shrink-0 transition-colors hover:bg-purple-200">
+                            <RefreshCcw className="h-3 w-3" />
+                            <span className="text-[10px] font-bold ml-1">{refundSeq}</span>
+                          </div>
+                        </CustomTooltip>
                       ) : null;
 
                       return (
-                        <div className="flex items-center gap-2 w-full overflow-hidden group">
+                        <div className="flex items-center gap-1.5 w-full overflow-hidden group">
                           {/* Logo */}
                           {shopLogo ? (
                             // eslint-disable-next-line @next/next/no-img-element
@@ -1617,20 +1607,14 @@ export function UnifiedTransactionTable({
                             // Replaced ShoppingBasket with Status/Refund Indicator
                             // Enforce Bank Icon for Repayments without logo
                             <div className={cn(
-                              "flex items-center justify-center h-12 w-12 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0",
-                              !statusIndicator && ""
+                              "flex items-center justify-center h-12 w-12 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0"
                             )}>
-                              {!isMobile && statusIndicator ? (
-                                <CustomTooltip content={statusTooltip}>
-                                  <span className="text-xl cursor-help font-bold text-slate-800" suppressHydrationWarning>{statusIndicator}</span>
-                                </CustomTooltip>
+                              {txn.type === 'repayment' ? (
+                                <Wallet className="h-6 w-6 text-orange-600" />
                               ) : (
-                                txn.type === 'repayment' ? (
-                                  <Wallet className="h-6 w-6 text-orange-600" />
-                                ) : (
-                                  <ShoppingBasket className="h-6 w-6 text-slate-500" />
-                                )
-                              )}
+                                <ShoppingBasket className="h-6 w-6 text-slate-500" />
+                              )
+                              }
                             </div>
                           )}
 
@@ -1639,8 +1623,8 @@ export function UnifiedTransactionTable({
                             {/* Name - Hidden by default as per user request */}
 
                             {/* Note */}
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1.5 min-w-0 flex-1">
+                              <div className="min-w-0">
                                 {txn.note ? (
                                   <CustomTooltip content={txn.note}>
                                     <span className="text-[1em] text-slate-700 font-bold truncate cursor-help block">
@@ -1651,10 +1635,17 @@ export function UnifiedTransactionTable({
                                   <span className="text-[1em] text-slate-400 italic block">No note</span>
                                 )}
                               </div>
-                              {(installmentBadge || refundBadge) && (
-                                <div className="flex items-center gap-1.5 shrink-0">
+                              {(installmentBadge || refundBadge || statusIndicator) && (
+                                <div className="flex items-center gap-1 shrink-0 ml-auto">
                                   {installmentBadge}
                                   {refundBadge}
+                                  {statusIndicator && (
+                                    <CustomTooltip content={statusTooltip}>
+                                      <div className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 border border-slate-200">
+                                        <span className="text-xs font-bold leading-none">{statusIndicator}</span>
+                                      </div>
+                                    </CustomTooltip>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1770,10 +1761,8 @@ export function UnifiedTransactionTable({
                         typeIcon = <Minus className="h-3 w-3" />;
                       }
 
-                      // 2. Resolve Actual Category Data (Correct Fallback)
-                      const actualCategory = categories.find(c => c.id === txn.category_id) ||
-                        txn.transaction_lines?.find(l => l.category_id)?.categories ||
-                        null;
+                      // 2. Resolve Actual Category Data
+                      const actualCategory = categories.find(c => c.id === txn.category_id) || null;
 
                       const displayCategory = actualCategory?.name || txn.category_name || (txn.type ? txn.type.charAt(0).toUpperCase() + txn.type.slice(1) : "Uncategorized");
                       const metadataImage = (txn.metadata as any)?.image_url ?? null;
@@ -1832,13 +1821,7 @@ export function UnifiedTransactionTable({
                             </CustomTooltip>
 
                             {/* 4. Status Indicators - Separate Tooltip to avoid shadowing */}
-                            {!isMobile && statusIndicator && (
-                              <CustomTooltip content={statusTooltip}>
-                                <div className="ml-auto pr-2 scale-100 origin-left cursor-help">
-                                  {statusIndicator}
-                                </div>
-                              </CustomTooltip>
-                            )}
+
                             {!isMobile && mobileDateLabel && (
                               <span className="text-[10px] text-slate-500 leading-tight">{mobileDateLabel}</span>
                             )}
@@ -2187,7 +2170,7 @@ export function UnifiedTransactionTable({
                       return (
                         <div
                           className={cn(
-                            "flex flex-col items-end p-1 rounded transition-colors",
+                            "flex flex-col items-end p-1 pr-2 lg:pr-1 rounded transition-colors",
                             amountClass,
                             isExcelMode ? "cursor-cell select-none" : "",
                             isExcelMode && selectedCells.has(txn.id) && selectedColumn === 'amount' && "bg-blue-100 ring-1 ring-blue-300"
@@ -2343,6 +2326,23 @@ export function UnifiedTransactionTable({
 
 
 
+                if (isMobile) {
+                  return (
+                    <MobileTransactionRow
+                      key={txn.id}
+                      txn={txn}
+                      accounts={accounts}
+                      categories={categories}
+                      isSelected={selection.has(txn.id)}
+                      isExcelMode={isExcelMode}
+                      onSelect={onSelectTxn ?? (() => { })}
+                      onRowClick={(item) => onSelectTxn?.(item.id, !selection.has(item.id))}
+                      formatters={{ currency: (val) => numberFormatter.format(val) }}
+                      helpers={{ parseCashbackConfig, getCashbackCycleRange }}
+                    />
+                  )
+                }
+
                 return (
                   <TableRow
                     key={txn.id}
@@ -2351,8 +2351,12 @@ export function UnifiedTransactionTable({
                       isMenuOpen ? "bg-blue-50" : rowBgColor,
                       !isExcelMode && "hover:bg-slate-50/50"
                     )}
+                    onClick={(e) => {
+                      // Click handler if needed
+                    }}
                   >
                     {displayedColumns.map(col => {
+                      // ... column rendering ...
                       // Sticky Logic for Cells
                       // Use a slightly more flexible stickyStyle that respects content if not explicitly date/shop
                       let stickyStyle: React.CSSProperties = {
@@ -2371,19 +2375,6 @@ export function UnifiedTransactionTable({
                         return "bg-white";
                       };
                       const stickyBg = getStickyBg();
-
-                      if (isMobile && col.key === 'category') {
-                        stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
-                      } else if (!isMobile && col.key === 'date') {
-                        stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
-                      } else if (!isMobile && col.key === 'shop') {
-                        // Shop (Notes) column sticky positioning
-                        let left = 0;
-                        if (visibleColumns.date) left += columnWidths.date;
-                        // Note: 'type' column was removed, it's now merged into date
-                        stickyStyle.left = left;
-                        stickyClass = cn("sticky z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
-                      }
 
                       return (
                         <TableCell
@@ -2439,124 +2430,81 @@ export function UnifiedTransactionTable({
       </div>
 
       {/* Footer - Outside scroll container */}
+      {/* Footer - Outside scroll container */}
+
+      {/* Pagination moved OUTSIDE the scrollable container to ensure visibility */}
       {
-        showPagination && (
-          <div className="sticky bottom-0 z-20 flex-none flex items-center justify-between border-t border-slate-200 bg-white px-4 py-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] text-sm">
-            {isMobile ? (
-              // Mobile Compact Footer
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-slate-700">
-                    {displayedTransactions.length} rows
-                  </span>
-                </div>
+        !isExcelMode && (
+          <div className="flex-none bg-white border-t border-slate-200 p-3 pb-6 lg:p-4 flex flex-col sm:flex-row items-center justify-between gap-4 z-30 relative shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
 
-                <div className="flex items-center gap-1">
-                  <button
-                    className="rounded p-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 transition-colors"
-                    disabled={currentPage <= 1}
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  >
-                    <ArrowLeft className="h-4 w-4 text-slate-600" />
-                  </button>
-                  <div className="bg-slate-100 rounded px-2 py-1 min-w-[3rem] text-center">
-                    <span className="text-xs font-bold text-blue-700">{currentPage}</span>
-                    <span className="text-xs text-slate-400">/</span>
-                    <span className="text-xs text-slate-600">{Math.max(1, Math.ceil(displayedTransactions.length / pageSize))}</span>
-                  </div>
-                  <button
-                    className="rounded p-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 transition-colors"
-                    disabled={currentPage >= Math.ceil(displayedTransactions.length / pageSize)}
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                  >
-                    <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
-                  </button>
-                </div>
-              </>
-            ) : (
-              // Desktop Footer (Original)
-              <>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1">
-                    <button
-                      className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                      disabled={currentPage <= 1}
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      title="Previous Page"
-                    >
-                      <ArrowLeft className="h-4 w-4 text-slate-600" />
-                    </button>
-                    <div className="flex items-center gap-1">
-                      <span className="rounded px-2 py-1 text-xs font-semibold bg-blue-600 text-white">{currentPage}</span>
-                      <span className="text-xs text-slate-500">/ {Math.max(1, Math.ceil(displayedTransactions.length / pageSize))}</span>
-                    </div>
-                    <button
-                      className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                      disabled={currentPage >= Math.ceil(displayedTransactions.length / pageSize)}
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                      title="Next Page"
-                    >
-                      <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
-                    </button>
-                  </div>
-                  <div className="h-4 w-px bg-slate-200" />
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                    className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
-                  >
-                    <option value={10}>10 / p</option>
-                    <option value={20}>20 / p</option>
-                    <option value={50}>50 / p</option>
-                    <option value={100}>100 / p</option>
-                  </select>
-                  <div className="h-4 w-px bg-slate-200" />
+            {/* Left: Items per Page */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 font-medium whitespace-nowrap hidden sm:inline">Rows per page</span>
+              <select
+                className="h-8 w-16 rounded-md border border-slate-200 text-xs font-semibold focus:border-blue-500 focus:outline-none bg-white"
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+              >
+                {[10, 20, 50, 100, 200, 500].map(size => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </div>
 
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-slate-500 mr-1">Text:</span>
-                    <button
-                      onClick={() => setFontSize(Math.max(10, fontSize - 1))}
-                      className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                      title="Decrease font size"
-                      disabled={fontSize <= 10}
-                    >
-                      <Minus className="h-3.5 w-3.5 text-slate-600" />
-                    </button>
-                    <span className="text-xs font-semibold w-10 text-center tabular-nums">{fontSize}px</span>
-                    <button
-                      onClick={() => setFontSize(Math.min(20, fontSize + 1))}
-                      className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                      title="Increase font size"
-                      disabled={fontSize >= 20}
-                    >
-                      <Plus className="h-3.5 w-3.5 text-slate-600" />
-                    </button>
-                  </div>
-                  <div className="h-4 w-px bg-slate-200" />
+            {/* Center: Pagination */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <div className="text-sm font-medium whitespace-nowrap">
+                Page {currentPage} <span className="text-slate-400">/ {totalPages ?? 1}</span>
+              </div>
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages ?? 1, currentPage + 1))}
+                disabled={currentPage >= (totalPages ?? 1)}
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
 
-                  <button
-                    onClick={() => {
-                      setSortState({ key: 'date', dir: 'desc' });
-                      updateSelection(new Set());
-                      resetColumns();
-                      setCurrentPage(1);
-                    }}
-                    className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    <span className="text-xs font-medium">Reset</span>
-                  </button>
-                </div>
-                <div className="flex items-center gap-4">
-                  <p className="text-slate-500 font-medium text-xs">
-                    Showing <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, displayedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, displayedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{displayedTransactions.length}</span> rows
-                  </p>
-                </div>
-              </>
-            )}
+            {/* Font Size & Reset - Mobile Optimized */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1 bg-slate-100 rounded-md p-0.5">
+                <button
+                  onClick={() => setFontSize(Math.max(10, fontSize - 1))}
+                  className="rounded p-1 hover:bg-slate-200 disabled:opacity-50"
+                  disabled={fontSize <= 10}
+                >
+                  <Minus className="h-3 w-3 text-slate-600" />
+                </button>
+                <span className="text-[10px] font-bold w-6 text-center">{fontSize}</span>
+                <button
+                  onClick={() => setFontSize(Math.min(20, fontSize + 1))}
+                  className="rounded p-1 hover:bg-slate-200 disabled:opacity-50"
+                  disabled={fontSize >= 20}
+                >
+                  <Plus className="h-3 w-3 text-slate-600" />
+                </button>
+              </div>
+
+              <button
+                onClick={() => {
+                  setSortState({ key: 'date', dir: 'desc' });
+                  updateSelection(new Set());
+                  resetColumns();
+                  setCurrentPage(1);
+                }}
+                className="p-1.5 text-slate-400 hover:text-red-600 transition-colors"
+                title="Reset View"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         )
       }
@@ -2714,21 +2662,24 @@ export function UnifiedTransactionTable({
       {
         refundFormTxn &&
         (() => {
-          const pendingLine = refundFormTxn.transaction_lines?.find(
-            line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
-          )
+          const isPendingLine = refundFormTxn.account_id === REFUND_PENDING_ACCOUNT_ID;
+          // If confirming, we expect the txn to be the Pending Request.
+
           const baseAmount =
             refundFormStage === 'confirm'
-              ? Math.abs(pendingLine?.amount ?? refundFormTxn.original_amount ?? refundFormTxn.amount ?? 0)
+              ? Math.abs(refundFormTxn.amount ?? 0)
               : Math.abs(refundFormTxn.original_amount ?? refundFormTxn.amount ?? 0)
-          const sourceAccountLine =
-            refundFormTxn.transaction_lines?.find(
-              line => line?.type === 'credit' && line.account_id && line.account_id !== REFUND_PENDING_ACCOUNT_ID
-            ) ??
-            refundFormTxn.transaction_lines?.find(
-              line => line?.type === 'debit' && line.account_id && line.account_id !== REFUND_PENDING_ACCOUNT_ID
-            )
-          const defaultAccountId = sourceAccountLine?.account_id ?? refundAccountOptions[0]?.id ?? null
+
+          // Source account for refund (where money goes back to)
+          // If request, it's the original source (account_id).
+          // If confirm, we might default to the first available account or just null.
+          const sourceAccountId = refundFormTxn.target_account_id ?? refundFormTxn.account_id;
+          // Note: Logic above is approximation. 
+          // Better: If request, use refundFormTxn.account_id.
+          // If confirm, refundFormTxn is the request (on Pending Account). We need a target.
+          // The request doesn't explicitly store the "return to" account until confirmed.
+          // But usually we default to the first real account.
+          const defaultAccountId = (refundFormStage === 'confirm' ? null : refundFormTxn.account_id) ?? refundAccountOptions[0]?.id ?? null
           const initialNote =
             refundFormStage === 'confirm'
               ? refundFormTxn.note ?? 'Confirm refund'

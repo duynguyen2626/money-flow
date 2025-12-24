@@ -1,169 +1,150 @@
 ---
-description: Milestone 3 – Transactions Ui Refactor (agent Prompt)
+description: Side Cleanup – Schema Drift Trash Sweep Prompt
 ---
 
-# Milestone 3 — Transactions UI Refactor (Locked Design Contract)
+# Side Cleanup (“Dọn Rác bên lề”) — Schema Drift Trash Sweep
 
-## Status
+## Purpose
 
-The Agent implementation diverged from the intended UX.
-This document **locks the design contract** so the Agent cannot improvise.
-If the UI does not match the contract, revert / adjust until it does.
+Stop recurring runtime errors caused by **stale schema references** across the repo.
+Unify all image fields to **`image_url`** and remove legacy references to:
 
----
+* `shops.logo_url` (no longer exists)
+* `transaction_lines` table + FK relationships (no longer exists)
 
-## Golden References (DO NOT IGNORE)
-
-1. **Mockup (Desktop)**: Financial Summary is a **dropdown** (not a separate always-visible block).
-2. **People / Debt Transactions page**: clean, compact, centered, no excessive whitespace.
-3. **Mockup (Mobile)**: compact header, no redundant Financial Summary block on the page.
+This is a **cross-cutting cleanup** task. Goal: the app must not query non-existent columns/tables.
 
 ---
 
-## Non‑Negotiable Layout Rules
+## Ground Truth (DB)
 
-### 1) Page width + gutters (CRITICAL)
+Use `schema.sql` as the authoritative reference.
+Key facts:
 
-Transactions page must visually match People/Debt pages:
-
-* Centered content
-* Tight, pleasant gutters
-* No huge empty space on left/right
-
-Use ONE of these (pick the best match to People page):
-
-* `max-w-[1280px] mx-auto w-full px-4 sm:px-6 lg:px-8`
-* or `max-w-screen-xl mx-auto w-full px-4 sm:px-6 lg:px-8`
-
-Do NOT use 1600px if it causes the “two sides empty and ugly” look.
-
-### 2) Header must be sticky and stable
-
-* Top header area (title + primary actions) must remain visible when scrolling the table.
-* Use `sticky top-0 z-30 bg-background/95 backdrop-blur` (or equivalent) with a subtle border.
-* The TABLE region scrolls; the page header does not disappear.
-
-### 3) Financial Summary MUST be in a dropdown (Desktop)
-
-**Required behavior**:
-
-* In the top toolbar row, show a control like: `Financial Summary ▾`
-* Clicking opens a dropdown/popover that contains:
-
-  * Income / Expenses / Lend / Repay totals
-* Summary cards must NOT be always visible as a separate row.
-
-**Mobile**:
-
-* Do NOT render a big summary block by default.
-* Summary must be accessible via the same dropdown/panel only.
-
-### 4) Date range placement
-
-* Desktop: Date range control sits in the same toolbar row (like mockup), not as a huge standalone section.
-* Mobile: date range lives inside the Filter & Search sheet/panel.
-
-### 5) Toolbar compactness
-
-Target: “People/Debt page compactness”.
-
-* Avoid multiple rows of chips and redundant controls.
-* If `Filter & Search` exists, remove extra chips that duplicate it.
-* Keep: Tabs (All/Void/Pending) + Search + Filters + Excel + Add.
-
-### 6) Table containment + edges (CRITICAL)
-
-The table must look like a contained card (nice edges), not a raw spreadsheet stuck on the page.
-Required:
-
-* Wrap table in a card container with rounded corners and border.
-* Example: `rounded-xl border bg-card overflow-hidden`
-* Inside: `overflow-x-auto w-full` for horizontal scroll.
-
-No horizontal scroll on `<body>`.
-
-### 7) Sticky columns (Mobile)
-
-* Sticky header row always.
-* Sticky left column should be **Checkbox + Category/Date** (as in mobile mockup).
-* If desktop has separate Date column, mobile must merge Date into the Category/Date cell.
-
-### 8) Icon sizing consistency (IMPORTANT)
-
-Problem: rectangular bank/card logos look shorter than square avatars.
-Required:
-
-* Normalize icon box: `h-12 w-12` for both logos and avatars.
-* Logos: `object-contain` inside the box.
-* Avatars: `object-cover` or current avatar rules.
-* If needed, shift text right (padding) but do NOT shrink logos.
-
-### 9) Add/Edit Transaction modal (Mobile) — SINGLE COLUMN
-
-The Agent did not fix this.
-Required:
-
-* Mobile must render form as **one column only**:
-
-  * `grid-cols-1` on base
-  * `sm:grid-cols-2` only on >= sm
-* Modal must be usable: header sticky, body scrollable, footer fixed (per rules).
-
-### 10) Unsaved Changes dialog — only if truly dirty
-
-The Agent did not fix this.
-Required behavior:
-
-* Opening the modal and closing immediately (X / outside click / Close) must NOT show Unsaved warning.
-* Warning appears ONLY if the user actually changed any field.
-  Implementation must rely on **true dirty state**.
+* `public.shops` contains `image_url` (NOT `logo_url`).
+* There is NO `public.transaction_lines` table.
+* There IS `public.transaction_history`.
 
 ---
 
-## Extra bug to fix (BLOCKER)
+## Non-goals
 
-### Account creation from Add‑Txn modal fails
-
-* From Add Transaction → Create Account (inside account select), creating a new account fails.
-* Also reproduce from `/accounts` page.
-
-Required debugging steps:
-
-1. Reproduce in `/accounts` create flow.
-2. In browser DevTools → Network: verify the POST request fires.
-3. If request fails, log:
-
-   * status code
-   * response body
-   * any thrown error
-4. Ensure the UI shows an explicit error toast/message if creation fails.
-5. Confirm the created account appears in the list AND becomes selectable in Add‑Txn modal.
-
-Note: a CORS error to `dc.services.visualstudio.com/v2/track` is telemetry noise; do not confuse it with app API failures.
+* Do NOT redesign UI.
+* Do NOT change business logic semantics.
+* Do NOT introduce new tables.
+* Keep PR focused: schema-alignment and dead-code removal.
 
 ---
 
-## Acceptance Criteria (what you must screenshot)
+## Success Criteria
 
-Provide screenshots after changes:
+* No runtime logs referencing:
 
-* Desktop Transactions: toolbar matches mockup style (Financial Summary dropdown), compact, centered, table card edges nice.
-* Desktop scroll: header stays; table scrolls.
-* Mobile Transactions: compact, no big summary blocks, table sticky left Category/Date.
-* Mobile Add/Edit modal: one column, usable.
-* Unsaved dialog: NOT shown when untouched.
-* Account creation: success on `/accounts` and from Add‑Txn modal.
+  * `shops.logo_url`
+  * `transaction_lines`
+  * PostgREST relationship errors between `transactions` and `transaction_lines`
+* `/transactions`, `/accounts`, `/people` pages load without the listed errors.
+* `npm run build` passes.
 
 ---
 
-## Allowed files to change
+## Required Workflow
 
-Keep scope tight. Prefer edits here:
+1. Read `.agent/workflows/gemini.md`, `.agent/rules/gravityrules.md`, `.agent/workflows/task.md`.
+2. Use **search-first** approach to locate all stale references.
+3. Make the smallest safe refactor:
 
-* `src/components/moneyflow/filterable-transactions.tsx`
-* `src/components/moneyflow/unified-transaction-table.tsx`
-* `src/components/moneyflow/transaction-form.tsx`
-* `src/components/moneyflow/add-transaction-dialog.tsx`
-* (if needed) shared UI primitives: `dialog.tsx`, `sheet.tsx`, `table.tsx`
+   * Replace `logo_url` → `image_url`
+   * Replace `transaction_lines` → correct source (usually `transaction_history` or `transactions` alone)
+4. Verify via dev + build.
 
-Do NOT change backend contracts or transaction computation logic.
+---
+
+## Implementation Tasks
+
+### Task A — Unify image fields to `image_url`
+
+1. Find all uses of `logo_url`:
+
+   * Supabase select strings (e.g. `select('..., logo_url, ...')`)
+   * Types/interfaces (Shop type)
+   * UI components that expect `logo_url`
+
+2. Replace with `image_url` everywhere.
+
+3. Introduce ONE canonical helper (optional but recommended):
+   Create `src/lib/image-url.ts`:
+
+* `export function pickImageUrl(entity: { image_url?: string | null } | null | undefined): string | null`
+  Use it wherever rendering an image.
+
+4. Ensure no component still references `logo_url`.
+
+### Task B — Remove all `transaction_lines` references
+
+1. Find all occurrences of `transaction_lines`:
+
+   * Supabase selects like `transactions(..., transaction_lines(...))`
+   * Relationship hints / embedded queries
+   * Types and DTOs
+
+2. Replace query logic with the correct table(s):
+
+Rules:
+
+* If the code used `transaction_lines` to fetch itemized records, the closest replacement is usually `transaction_history`.
+* If the code only needed recent transactions, query `transactions` directly without embedding lines.
+* If debt/monthly lines logic relied on `transaction_lines`, update it to derive from:
+
+  * `transactions` + filters
+  * `transaction_history` for historical snapshots
+
+3. Ensure all PostgREST embedded relationship selects are valid.
+
+   * Do NOT embed a relationship that doesn’t exist in schema.
+
+### Task C — Fix account/shop creation flows impacted by schema drift
+
+* Confirm `/accounts` create/update uses `image_url` and not `logo_url`.
+* Confirm “Create account” from Add Transaction modal uses the same API and succeeds.
+
+### Task D — Delete dead types / dead code
+
+* Remove legacy interfaces/types:
+
+  * `logo_url` fields
+  * `TransactionLine` models that map to `transaction_lines`
+* Remove unused helpers to reduce confusion.
+
+---
+
+## Verification Checklist
+
+### Runtime verification
+
+* Run dev server, open:
+
+  * `/transactions`
+  * `/accounts`
+  * (debt/people pages if they use monthly lines)
+* Confirm console/server logs no longer show:
+
+  * `column shops.logo_url does not exist`
+  * `Could not find table public.transaction_lines`
+  * `Could not find relationship between transactions and transaction_lines`
+
+### Build verification
+
+* `npm run build` must pass.
+
+---
+
+## Deliverables
+
+* One PR titled: `chore: schema drift cleanup (image_url, transaction_history)`
+* Small commits:
+
+  1. `fix: replace logo_url with image_url`
+  2. `fix: remove transaction_lines usage`
+  3. `chore: delete dead types`
+* Final comment listing all removed legacy references.

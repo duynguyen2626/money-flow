@@ -4,7 +4,7 @@ import { useMemo, useState } from "react"
 import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
-import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
+import { Account, Category, Person, Shop, TransactionWithDetails } from "@/types/moneyflow.types"
 import {
   Table,
   TableBody,
@@ -46,27 +46,24 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 });
 
 function buildEditInitialValues(txn: TransactionWithDetails): Partial<TransactionFormValues> {
-  const lines = (txn.transaction_lines ?? []).filter(Boolean) as TransactionWithLineRelations[];
-  const accountLines = lines.filter(line => line.account_id);
-  const creditLine = accountLines.find(line => line.type === "credit");
-  const debitLine =
-    accountLines.find(line => line.type === "debit" && line.account_id !== creditLine?.account_id) ??
-    accountLines.find(line => line.type === "debit");
-  const categoryLine = lines.find(line => line.category_id);
-  const personLine = lines.find(line => line.person_id);
   const baseAmount =
     typeof txn.original_amount === "number" ? txn.original_amount : txn.amount ?? 0;
   const percentValue =
     typeof txn.cashback_share_percent === "number" ? txn.cashback_share_percent : undefined;
-  const derivedType: TransactionFormValues["type"] =
-    personLine?.person_id
-      ? "debt"
-      : categoryLine
-        ? ((txn.type ?? "expense") as TransactionFormValues["type"])
-        : "transfer";
+
+  let derivedType: TransactionFormValues["type"] = (txn.type as any) === 'repayment' ? 'repayment' : txn.type as TransactionFormValues["type"] || "expense";
+
+  if (txn.person_id) {
+    if (txn.category_name?.toLowerCase().includes('repayment')) {
+      derivedType = 'repayment';
+    } else {
+      derivedType = 'debt';
+    }
+  }
+
   const destinationAccountId =
-    derivedType === "transfer" || derivedType === "debt"
-      ? debitLine?.account_id ?? undefined
+    derivedType === "transfer" || derivedType === "debt" || derivedType === "repayment"
+      ? txn.target_account_id ?? undefined
       : undefined;
 
   return {
@@ -75,9 +72,9 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     amount: Math.abs(baseAmount ?? 0),
     note: txn.note ?? "",
     tag: txn.tag ?? generateTag(new Date()),
-    source_account_id: creditLine?.account_id ?? debitLine?.account_id ?? undefined,
-    category_id: categoryLine?.category_id ?? undefined,
-    person_id: personLine?.person_id ?? undefined,
+    source_account_id: txn.account_id ?? undefined,
+    category_id: txn.category_id ?? undefined,
+    person_id: txn.person_id ?? undefined,
     debt_account_id: destinationAccountId,
     shop_id: txn.shop_id ?? undefined,
     cashback_share_percent:
@@ -289,10 +286,7 @@ export function RecentTransactions({
 
   const openRefundDialog = (txn: TransactionWithDetails) => {
     const baseAmount = Math.abs(txn.original_amount ?? txn.amount ?? 0)
-    const sourceAccountLine = txn.transaction_lines?.find(
-      line => line?.type === "credit" && line.account_id
-    ) ?? txn.transaction_lines?.find(line => line?.type === "debit" && line.account_id)
-    const defaultAccountId = sourceAccountLine?.account_id ?? refundAccountOptions[0]?.id ?? null
+    const defaultAccountId = txn.account_id ?? refundAccountOptions[0]?.id ?? null
 
     setRefundAmount(baseAmount)
     setRefundInstant(false)
@@ -304,10 +298,7 @@ export function RecentTransactions({
   }
 
   const openConfirmRefundDialog = (txn: TransactionWithDetails) => {
-    const pendingLine = txn.transaction_lines?.find(
-      line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit'
-    )
-    const amount = Math.abs(pendingLine?.amount ?? 0)
+    const amount = Math.abs(txn.amount ?? 0)
     const defaultAccountId = refundAccountOptions[0]?.id ?? null
 
     setRefundAmount(amount)
@@ -694,17 +685,9 @@ export function RecentTransactions({
             // If person_id is present, it's likely a debt-related transaction (Lending or Repayment)
             // In this case, we want to show the REAL source (Bank) if possible.
             if (txn.person_id) {
-              const accountLines = (txn.transaction_lines ?? []).filter(l => l && l.account_id);
-              // Find the Bank/Cash account (not the debt account)
-              // Usually Debt transaction: Credit Bank, Debit DebtAccount.
-              // Repayment: Debit Bank, Credit DebtAccount.
-              // We look for an account that does NOT have "Nợ" or "Debt" in its name.
-              // This is a heuristic, but often debt accounts are named specially.
-              // Or we can check account type if we had it in line relations, but we only have 'accounts' name.
-              const bankLine = accountLines.find(l => l.account_id && !l.accounts?.name?.toLowerCase().includes('nợ') && !l.accounts?.name?.toLowerCase().includes('debt'));
-              if (bankLine && bankLine.accounts?.name) {
-                displayAccountName = bankLine.accounts.name;
-              }
+              // For debt/repayment transactions, we show the main account name.
+              // Since it's flatted, txn.account_name is likely already what we want.
+              // No need to search in lines.
             }
 
             const renderCell = (key: ColumnKey) => {
@@ -1054,9 +1037,7 @@ export function RecentTransactions({
                   <p className="text-lg font-semibold text-slate-900">
                     {numberFormatter.format(
                       Math.abs(
-                        refundDialogTxn.transaction_lines
-                          ?.find(line => line?.account_id === REFUND_PENDING_ACCOUNT_ID && line.type === 'debit')
-                          ?.amount ?? 0
+                        Math.abs(refundDialogTxn.amount ?? 0)
                       )
                     )}
                   </p>

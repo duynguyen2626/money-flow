@@ -1,18 +1,5 @@
 import { Json, Database } from '@/types/database.types'
 
-export type TransactionLineRow = {
-  id: string
-  transaction_id?: string
-  account_id?: string | null
-  category_id?: string | null
-  person_id?: string | null
-  amount: number
-  type: 'debit' | 'credit'
-  original_amount?: number | null
-  cashback_share_percent?: number | null
-  cashback_share_fixed?: number | null
-  metadata?: Json | null
-}
 export type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"]
 export type AccountRow = Database["public"]["Tables"]["accounts"]["Row"]
 export type CategoryRow = Database["public"]["Tables"]["categories"]["Row"]
@@ -158,26 +145,24 @@ export type Subscription = {
   shop_id?: string | null
 }
 
-export type TransactionLine = {
+// TransactionLine type removed as it is no longer supported by the schema.
+
+export type TransactionWithLineRelations = {
   id: string;
-  transaction_id: string;
-  account_id?: string;
-  category_id?: string;
-  metadata?: Json | null;
+  transaction_id?: string;
+  account_id?: string | null;
+  category_id?: string | null;
+  person_id?: string | null;
+  amount: number;
+  type: 'debit' | 'credit';
   original_amount?: number | null;
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
-  amount: number;
-  type: 'debit' | 'credit';
-  description?: string;
-}
-
-export type TransactionWithLineRelations = TransactionLineRow & {
+  metadata?: Json | null;
   accounts: Pick<AccountRow, 'name' | 'image_url' | 'type'> | null;
   categories: Pick<CategoryRow, 'name' | 'type'> & { image_url?: string | null; icon?: string | null } | null;
   profiles?: { name?: string | null; avatar_url?: string | null } | null;
   people?: { name?: string | null; avatar_url?: string | null } | null;
-  person_id?: string | null;
 }
 
 export type CashbackMode = 'none_back' | 'real_fixed' | 'real_percent' | 'voluntary'
@@ -187,7 +172,6 @@ export type CashbackCycle = Database['public']['Tables']['cashback_cycles']['Row
 
 export type TransactionWithDetails = TransactionRow & {
   amount: number
-  transaction_lines?: TransactionWithLineRelations[];
   totalAmount?: number; // For aggregated display
   displayType?: 'income' | 'expense' | 'transfer';
   display_type?: 'IN' | 'OUT' | 'TRANSFER';
