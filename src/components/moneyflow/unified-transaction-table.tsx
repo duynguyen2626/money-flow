@@ -288,7 +288,7 @@ export function UnifiedTransactionTable({
     { key: "id", label: "ID", defaultWidth: 100 },
     { key: "task", label: "", defaultWidth: 48, minWidth: 48 },
   ]
-  const mobileColumnOrder: ColumnKey[] = ["date", "shop", "account", "amount", "task"]
+  const mobileColumnOrder: ColumnKey[] = ["category", "account", "amount", "final_price", "task"]
   const router = useRouter()
   // Internal state removed for activeTab, now using prop with fallback
   const lastSelectedIdRef = useRef<string | null>(null)
@@ -337,10 +337,10 @@ export function UnifiedTransactionTable({
           next[col] = false
         })
       }
-      next.date = hiddenColumns.includes('date') ? false : true
-      next.shop = hiddenColumns.includes('shop') ? false : true
-      next.final_price = hiddenColumns.includes('final_price') ? false : !isMobile
-      next.category = hiddenColumns.includes('category') ? false : !isMobile
+      next.date = hiddenColumns.includes('date') ? false : !isMobile
+      next.shop = hiddenColumns.includes('shop') ? false : !isMobile
+      next.final_price = hiddenColumns.includes('final_price') ? false : true
+      next.category = hiddenColumns.includes('category') ? false : true
       next.account = hiddenColumns.includes('account') ? false : true
       next.amount = hiddenColumns.includes('amount') ? false : true
       next.task = hiddenColumns.includes('task') ? false : true
@@ -1042,7 +1042,7 @@ export function UnifiedTransactionTable({
                 let stickyStyle: React.CSSProperties = { width: columnWidths[col.key] };
                 let stickyClass = "";
 
-                if (isMobile && col.key === 'date') {
+                if (isMobile && col.key === 'category') {
                   stickyClass = "sticky left-0 z-45 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
                 } else if (!isMobile && col.key === 'date') {
                   stickyClass = "sticky left-0 z-40 bg-slate-200 shadow-[1px_0_0_0_rgba(0,0,0,0.1)] border-r border-slate-300";
@@ -1056,7 +1056,8 @@ export function UnifiedTransactionTable({
                   stickyStyle.left = left;
                 }
 
-                const columnLabel = isMobile && col.key === 'category' ? 'Category / Date' : col.label
+                const isMobileCategoryDate = isMobile && col.key === 'category'
+                const columnLabel = isMobileCategoryDate ? 'Category / Date' : col.label
 
                 return (
                   <TableHead
@@ -1064,7 +1065,7 @@ export function UnifiedTransactionTable({
                     className={cn("border-r border-slate-200 bg-slate-200 font-semibold text-slate-700 whitespace-nowrap", stickyClass)}
                     style={stickyStyle}
                   >
-                    {col.key === 'date' ? (
+                    {col.key === 'date' || isMobileCategoryDate ? (
                       <div className="flex items-center gap-2">
                         <input
                           type="checkbox"
@@ -1076,12 +1077,12 @@ export function UnifiedTransactionTable({
                           className="flex items-center gap-1 group"
                           onClick={() => {
                             const nextDir =
-                              sortState.key === col.key ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
-                            setSortState({ key: col.key as SortKey, dir: nextDir })
+                              sortState.key === 'date' ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
+                            setSortState({ key: 'date', dir: nextDir })
                           }}
                         >
-                          {col.label}
-                          {sortState.key === col.key ? (
+                          {columnLabel}
+                          {sortState.key === 'date' ? (
                             sortState.dir === 'asc' ? (
                               <ArrowUp className="h-3 w-3 text-blue-600" />
                             ) : (
@@ -1583,12 +1584,12 @@ export function UnifiedTransactionTable({
                         {/* Logo */}
                         {shopLogo ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={shopLogo} alt="" className="h-9 w-9 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none" />
+                          <img src={shopLogo} alt="" className="h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none" />
                         ) : (
                           // Replaced ShoppingBasket with Status/Refund Indicator
                           // Enforce Bank Icon for Repayments without logo
                           <div className={cn(
-                            "flex items-center justify-center h-9 w-9 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0",
+                            "flex items-center justify-center h-12 w-12 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0",
                             !statusIndicator && ""
                           )}>
                             {!isMobile && statusIndicator ? (
@@ -1597,9 +1598,9 @@ export function UnifiedTransactionTable({
                               </CustomTooltip>
                             ) : (
                               txn.type === 'repayment' ? (
-                                <Wallet className="h-5 w-5 text-orange-600" />
+                                <Wallet className="h-6 w-6 text-orange-600" />
                               ) : (
-                                <ShoppingBasket className="h-5 w-5 text-slate-500" />
+                                <ShoppingBasket className="h-6 w-6 text-slate-500" />
                               )
                             )}
                           </div>
@@ -1762,19 +1763,28 @@ export function UnifiedTransactionTable({
                     return (
                       <div className="flex w-full flex-col gap-1">
                         <div className="flex items-center gap-1.5 justify-start">
+                          {isMobile && (
+                            <input
+                              type="checkbox"
+                              className="rounded border-slate-300 pointer-events-auto"
+                              checked={isSelected}
+                              onClick={(e) => { e.stopPropagation(); if (e.shiftKey) handleSelectOne(txn.id, !isSelected, true); }}
+                              onChange={(e) => handleSelectOne(txn.id, e.target.checked)}
+                            />
+                          )}
                           {/* 1. Category Icon (Visual) */}
                           <CustomTooltip content={displayCategory}>
                             <div className="shrink-0 cursor-help">
                               {displayImage ? (
-                                <div className="flex h-9 w-9 items-center justify-center">
+                                <div className="flex h-12 w-12 items-center justify-center">
                                   <img src={displayImage} alt="" className="h-full w-full object-contain rounded-none ring-0 outline-none" />
                                 </div>
                               ) : categoryIcon ? (
-                                <div className="flex h-9 w-9 items-center justify-center bg-slate-50 rounded-sm text-lg border border-slate-200">
+                                <div className="flex h-12 w-12 items-center justify-center bg-slate-50 rounded-sm text-xl border border-slate-200">
                                   {categoryIcon}
                                 </div>
                               ) : (
-                                <div className="flex h-9 w-9 items-center justify-center bg-slate-100 rounded-sm text-[10px] font-bold text-slate-500 border border-slate-200 uppercase">
+                                <div className="flex h-12 w-12 items-center justify-center bg-slate-100 rounded-sm text-xs font-bold text-slate-500 border border-slate-200 uppercase">
                                   {displayCategory.slice(0, 1)}
                                 </div>
                               )}
@@ -1807,7 +1817,7 @@ export function UnifiedTransactionTable({
                         </div>
                         {isMobile && mobileDateLabel && (
                           <div className="flex w-full justify-start">
-                            <span className="text-[11px] text-slate-500 leading-tight block pl-11">{mobileDateLabel}</span>
+                            <span className="text-[11px] text-slate-500 leading-tight block pl-14">{mobileDateLabel}</span>
                           </div>
                         )}
                       </div>
@@ -2325,7 +2335,7 @@ export function UnifiedTransactionTable({
                     };
                     const stickyBg = getStickyBg();
 
-                    if (isMobile && col.key === 'date') {
+                    if (isMobile && col.key === 'category') {
                       stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
                     } else if (!isMobile && col.key === 'date') {
                       stickyClass = cn("sticky left-0 z-20 shadow-[1px_0_0_0_rgba(0,0,0,0.05)]", stickyBg);
