@@ -1,107 +1,93 @@
 ---
-description: 
+description: GRAVITY TASK
 ---
 
-🎨 GRAVITY TASK: M1.2 - PEOPLE UI & UNIFIED TABLE REFINEMENT (ITERATION 3)
+📱 GRAVITY TASK: M2 - GLOBAL RESPONSIVENESS REFACTOR
 
-Status: REFINING
-Priority: High (UI/UX Polish)
-Context: Iteration 3. Focusing on "Pro" look & feel for the Unified Transaction Table. Eliminate "indentation" ugliness, maximize visual density, and fix spacing issues.
+Status: PENDING
+Priority: Critical (UX)
+Context: The app looks broken on Mobile (iPhone) and unbalanced on Large Screens (27"). We need a comprehensive layout refactor to ensure the "Vibe" works across all viewports.
 
 🎯 OBJECTIVES
 
-Category Column: Create a "Hero" cell layout. No indentation. Big square logos.
+Tame the Large Screen: Implement a centralized constraint layout. No more infinite whitespace on the right.
 
-Visual Consistency: Text colors must match Badge types.
-
-Flow Column: Fix "floating" badges on the right. Compact layout.
+Fix Mobile View: Ensure Tables scroll gracefully (or adapt) and Modals are usable on small screens.
 
 🛠️ SPECIFIC TASKS
 
-1. 📊 Unified Transaction Table (src/components/moneyflow/unified-transaction-table.tsx)
+1. 🖥️ Large Screen Optimization (The "Constraint" Strategy)
 
-A. Category Column (The "Hero" Cell)
+Problem: On 27" screens, tables stretch 100%, leaving ugly gaps on the right or stretching columns too wide.
 
-Problem: Ugly indentation, small icons, redundant text.
+Action:
 
-New Layout: Flex Row, items center, gap-3 (Strictly no left padding/indent).
+Apply a Global Container Constraint in src/app/layout.tsx or the main Dashboard Layout wrapper.
 
-Order: [Visual] -> [Type Badge] -> [Category Name]
+Class: mx-auto w-full max-w-[1600px] (or max-w-screen-2xl).
 
-Element 1: Visual (Priority Display)
+Effect: Content will center on ultra-wide screens, creating a professional dashboard look (like Linear/GitHub) instead of skewed alignment.
 
-Logic: Check transaction.shop_logo (or metadata.logo) FIRST. If null, use category.icon.
+2. 📱 Mobile Table Strategy (unified-transaction-table.tsx & others)
 
-Style:
+Problem: Tables break layout or overflow incorrectly on iPhone.
 
-Size: w-9 h-9 (Large & Clear).
+Action:
 
-Shape: Square (rounded-none) for Images to show full detail. object-contain.
+Wrapper: Wrap all Tables in a div with className="overflow-x-auto w-full".
 
-Icon Fallback: If using Category Icon, use standard rounded-md background.
+Column Visibility (Responsive Hiding):
 
-Element 2: Type Badge (Standardized)
+Mobile (< 640px): Show ONLY "Category/Visual", "Flow", and "Amount".
 
-Logic:
+Hide: "Date" (maybe show date inside Category row text?), "Status", "Note" on mobile.
 
-debt -> OUT (Red Badge).
+Tablet/Desktop: Show all.
 
-repay -> IN (Green Badge).
+Touch Targets: Ensure interactive elements (Delete/Edit buttons) have padding for touch.
 
-transfer -> TF (Blue Badge).
+3. 🧩 Modal & Dialog Refactor (Global UI)
 
-Style: Fixed width (e.g., w-[42px]), centered text. Same height as other badges.
+Problem: "Add Transaction" modal is cut off or zoomed in on mobile.
 
-Element 3: Category Name
+Action:
 
-Placement: MUST be placed AFTER the Type Badge.
+Update DialogContent (in src/components/ui/dialog.tsx or specific implementations):
 
-Style: font-bold.
+Width: w-[95vw] or w-full on mobile. max-w-lg on desktop.
 
-Color Sync:
+Height: max-h-[90vh] with overflow-y-auto for the content body.
 
-If OUT: Text color Red (match badge).
+Close Button: Ensure it's not overlapping content.
 
-If IN: Text color Green (match badge).
+Transaction Form: Ensure the form inputs stack vertically (flex-col) on mobile and render side-by-side on desktop.
 
-If TF: Text color Blue.
+4. 🧭 Navigation & Header
 
-B. Date Column (Color Sync)
+Problem: Sidebar might be taking too much space or behaving weirdly.
 
-Style: The Date text (04.12) must inherit the color of the Transaction Type (Red for Debt, Green for Repay) to visually link with the row's context.
+Action:
 
-C. Flow Column (Smart & Compact)
+Ensure Sidebar behaves as a Sheet/Drawer on Mobile (Hidden by default, toggle via Hamburger menu).
 
-Problem: "Pending" badge or content creates large gaps near the right border.
-
-Fix:
-
-Container: Use flex items-center gap-2 justify-start. Do NOT use justify-between.
-
-Content: [Badge: From] → [Badge: To].
-
-Truncation: Only truncate if it hits the table limit, do not force artificial spacing.
-
-D. Refund Icon Tooltip
-
-Requirement: Wrap the Refund Icon (↩️) in a <Tooltip> component.
-
-Content: "This transaction involves a refund/return."
-
-Placement: Hovering the icon triggers the tooltip.
-
-2. 🧹 Logic & Cleanup
-
-Shopping Category: Ensure no redundant text like "Debt" or "Repayment" is displayed next to the Category Name. The IN/OUT Badge is the sole indicator of direction.
-
-Header Stickiness: Ensure the Table Header remains sticky (top-0 z-10) within the CollapsibleSection container for long lists.
+On Desktop: Fixed Sidebar.
 
 🧪 VERIFICATION
 
-[ ] Category: Big Square Logo + [OUT] Badge + Red Bold Category Name. No "staircase" indentation.
+27" Screen: App content is centered (mx-auto), not sticking to the left with void space on the right.
 
-[ ] Date: Red text for expenses, Green for income.
+iPhone:
 
-[ ] Flow: Compact, aligned to the left/start. No huge whitespace gap on the right.
+Can scroll table horizontally without breaking the page.
 
-[ ] Tooltip: Refund icon has explanation.
+"Add Transaction" modal fits the screen, inputs are accessible.
+
+No horizontal scroll on the Body (only inside the table container).
+
+Instruction for Agent:
+
+Start with Step 1 (Layout Constraint) to fix the "Empty Space" issue immediately.
+
+Then apply overflow-x-auto to unified-transaction-table.tsx.
+
+Finally, fix the AddTransactionDialog responsiveness.
