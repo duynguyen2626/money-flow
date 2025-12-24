@@ -35,6 +35,7 @@ import {
   History,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   Download,
   Edit,
   ExternalLink,
@@ -48,13 +49,20 @@ import {
   ArrowRightLeft,
   ArrowUpRight,
   ArrowDownLeft,
+  CornerUpLeft,
   Notebook,
   HelpCircle,
   User,
+  RefreshCcw,
+  Maximize2,
+  Minimize2,
+  ListFilter,
   Eraser,
   Undo2,
   EllipsisVertical
-} from 'lucide-react'
+} from "lucide-react"
+
+import { MobileTransactionRow } from "./mobile-transaction-row"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
@@ -204,6 +212,8 @@ interface UnifiedTransactionTableProps {
   contextId?: string // NEW: Context entity ID (account or person) for smart display
   selectedTxnIds?: Set<string>
   onSelectionChange?: (selectedIds: Set<string>) => void
+  onSelectTxn?: (id: string, selected: boolean) => void
+  onSelectAll?: (selected: boolean) => void
   accounts?: Account[]
   categories?: Category[]
   people?: Person[]
@@ -218,6 +228,7 @@ interface UnifiedTransactionTableProps {
   // Pagination Props
   showPagination?: boolean
   currentPage?: number
+  totalPages?: number
   pageSize?: number
   onPageChange?: (page: number) => void
   onPageSizeChange?: (size: number) => void
@@ -251,6 +262,8 @@ export function UnifiedTransactionTable({
   contextId,
   selectedTxnIds,
   onSelectionChange,
+  onSelectTxn,
+  onSelectAll,
   accounts = [],
   categories = [],
   people = [],
@@ -263,8 +276,9 @@ export function UnifiedTransactionTable({
   context,
   isExcelMode = false,
   showPagination = true,
-  currentPage: externalPage,
-  pageSize: externalPageSize,
+  currentPage: propCurrentPage,
+  totalPages,
+  pageSize: propPageSize,
   onPageChange,
   onPageSizeChange,
   fontSize: externalFontSize,
@@ -533,8 +547,8 @@ export function UnifiedTransactionTable({
   const [internalPageSize, setInternalPageSize] = useState(20)
   const [internalCurrentPage, setInternalCurrentPage] = useState(1)
 
-  const pageSize = externalPageSize ?? internalPageSize
-  const currentPage = externalPage ?? internalCurrentPage
+  const pageSize = propPageSize ?? internalPageSize
+  const currentPage = propCurrentPage ?? internalCurrentPage
 
   const setPageSize = (size: number) => {
     setInternalPageSize(size)
@@ -550,7 +564,7 @@ export function UnifiedTransactionTable({
   const setSortState = onSortChange ?? setInternalSortState
 
   useEffect(() => {
-    if (!externalPage) {
+    if (!propCurrentPage) {
       setCurrentPage(1)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1043,25 +1057,15 @@ export function UnifiedTransactionTable({
         "relative w-full rounded-xl border border-slate-200 bg-card shadow-sm transition-colors duration-300 flex-1 overflow-hidden",
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )} style={{ ['--table-font-size' as string]: `${fontSize}px` } as React.CSSProperties}>
-        <div className="flex-1 overflow-auto w-full pb-10 scrollbar-visible h-full" style={{ scrollbarGutter: 'stable' }}>
-          <table className="w-full caption-bottom text-sm border-collapse">
-            <TableHeader className="sticky top-0 z-40 bg-white backdrop-blur text-foreground font-bold shadow-sm">
+        <div className="flex-1 overflow-auto w-full scrollbar-visible h-full bg-white relative" style={{ scrollbarGutter: 'stable' }}>
+          <table className="w-full caption-bottom text-sm border-collapse min-w-[800px] lg:min-w-0">
+            <TableHeader className="sticky top-0 z-40 bg-white backdrop-blur text-foreground font-bold shadow-sm ring-1 ring-slate-200">
               <TableRow className="hover:bg-transparent border-b border-slate-200">
                 {displayedColumns.map(col => {
-                  let stickyStyle: React.CSSProperties = { width: columnWidths[col.key] };
-                  let stickyClass = "";
-
-                  if (isMobile && col.key === 'category') {
-                    stickyClass = "sticky left-0 z-50 bg-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] border-r border-slate-300";
-                  } else if (!isMobile && col.key === 'date') {
-                    stickyClass = "sticky left-0 z-40 bg-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] border-r border-slate-300";
-                  } else if (!isMobile && col.key === 'shop') {
-                    // Shop (Notes) column is sticky after Date column
-                    let left = 0;
-                    if (visibleColumns.date) left += columnWidths.date;
-                    stickyClass = "sticky z-40 bg-slate-200 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)] border-r border-slate-300";
-                    stickyStyle.left = left;
-                  }
+                  // Sticky Logic Removed Personally by User Request
+                  // "Mobile Layout bỏ freeze cột (bỏ cả Web luôn)" -> remove sticky classes
+                  const stickyClass = "";
+                  const stickyStyle: React.CSSProperties = { width: columnWidths[col.key] };
 
                   const isMobileCategoryDate = isMobile && col.key === 'category'
                   const columnLabel = isMobileCategoryDate ? 'Category / Date' : col.label
@@ -1585,9 +1589,12 @@ export function UnifiedTransactionTable({
                       ) : null;
 
                       const refundBadge = refundSeq > 0 ? (
-                        <span className="inline-flex items-center justify-center rounded-md bg-blue-100 text-blue-700 px-1.5 h-5 text-[10px] font-bold shrink-0 whitespace-nowrap" title={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
-                          {refundSeq}. {shortIdBadge}
-                        </span>
+                        <CustomTooltip content={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
+                          <div className="flex items-center justify-center rounded bg-purple-100 border border-purple-400 text-purple-700 px-1 py-0.5 shrink-0 transition-colors hover:bg-purple-200">
+                            <RefreshCcw className="h-3 w-3" />
+                            <span className="text-[10px] font-bold ml-1">{refundSeq}</span>
+                          </div>
+                        </CustomTooltip>
                       ) : null;
 
                       return (
@@ -1600,20 +1607,14 @@ export function UnifiedTransactionTable({
                             // Replaced ShoppingBasket with Status/Refund Indicator
                             // Enforce Bank Icon for Repayments without logo
                             <div className={cn(
-                              "flex items-center justify-center h-12 w-12 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0",
-                              !statusIndicator && ""
+                              "flex items-center justify-center h-12 w-12 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0"
                             )}>
-                              {!isMobile && statusIndicator ? (
-                                <CustomTooltip content={statusTooltip}>
-                                  <span className="text-xl cursor-help font-bold text-slate-800" suppressHydrationWarning>{statusIndicator}</span>
-                                </CustomTooltip>
+                              {txn.type === 'repayment' ? (
+                                <Wallet className="h-6 w-6 text-orange-600" />
                               ) : (
-                                txn.type === 'repayment' ? (
-                                  <Wallet className="h-6 w-6 text-orange-600" />
-                                ) : (
-                                  <ShoppingBasket className="h-6 w-6 text-slate-500" />
-                                )
-                              )}
+                                <ShoppingBasket className="h-6 w-6 text-slate-500" />
+                              )
+                              }
                             </div>
                           )}
 
@@ -1622,8 +1623,8 @@ export function UnifiedTransactionTable({
                             {/* Name - Hidden by default as per user request */}
 
                             {/* Note */}
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-1.5 min-w-0 flex-1">
+                              <div className="min-w-0">
                                 {txn.note ? (
                                   <CustomTooltip content={txn.note}>
                                     <span className="text-[1em] text-slate-700 font-bold truncate cursor-help block">
@@ -1634,10 +1635,17 @@ export function UnifiedTransactionTable({
                                   <span className="text-[1em] text-slate-400 italic block">No note</span>
                                 )}
                               </div>
-                              {(installmentBadge || refundBadge) && (
-                                <div className="flex items-center gap-1 shrink-0">
+                              {(installmentBadge || refundBadge || statusIndicator) && (
+                                <div className="flex items-center gap-1 shrink-0 ml-auto">
                                   {installmentBadge}
                                   {refundBadge}
+                                  {statusIndicator && (
+                                    <CustomTooltip content={statusTooltip}>
+                                      <div className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 border border-slate-200">
+                                        <span className="text-xs font-bold leading-none">{statusIndicator}</span>
+                                      </div>
+                                    </CustomTooltip>
+                                  )}
                                 </div>
                               )}
                             </div>
@@ -1813,13 +1821,7 @@ export function UnifiedTransactionTable({
                             </CustomTooltip>
 
                             {/* 4. Status Indicators - Separate Tooltip to avoid shadowing */}
-                            {!isMobile && statusIndicator && (
-                              <CustomTooltip content={statusTooltip}>
-                                <div className="ml-auto pr-2 scale-100 origin-left cursor-help">
-                                  {statusIndicator}
-                                </div>
-                              </CustomTooltip>
-                            )}
+
                             {!isMobile && mobileDateLabel && (
                               <span className="text-[10px] text-slate-500 leading-tight">{mobileDateLabel}</span>
                             )}
@@ -2168,7 +2170,7 @@ export function UnifiedTransactionTable({
                       return (
                         <div
                           className={cn(
-                            "flex flex-col items-end p-1 rounded transition-colors",
+                            "flex flex-col items-end p-1 pr-2 lg:pr-1 rounded transition-colors",
                             amountClass,
                             isExcelMode ? "cursor-cell select-none" : "",
                             isExcelMode && selectedCells.has(txn.id) && selectedColumn === 'amount' && "bg-blue-100 ring-1 ring-blue-300"
@@ -2324,6 +2326,23 @@ export function UnifiedTransactionTable({
 
 
 
+                if (isMobile) {
+                  return (
+                    <MobileTransactionRow
+                      key={txn.id}
+                      txn={txn}
+                      accounts={accounts}
+                      categories={categories}
+                      isSelected={selection.has(txn.id)}
+                      isExcelMode={isExcelMode}
+                      onSelect={onSelectTxn ?? (() => { })}
+                      onRowClick={(item) => onSelectTxn?.(item.id, !selection.has(item.id))}
+                      formatters={{ currency: (val) => numberFormatter.format(val) }}
+                      helpers={{ parseCashbackConfig, getCashbackCycleRange }}
+                    />
+                  )
+                }
+
                 return (
                   <TableRow
                     key={txn.id}
@@ -2332,8 +2351,12 @@ export function UnifiedTransactionTable({
                       isMenuOpen ? "bg-blue-50" : rowBgColor,
                       !isExcelMode && "hover:bg-slate-50/50"
                     )}
+                    onClick={(e) => {
+                      // Click handler if needed
+                    }}
                   >
                     {displayedColumns.map(col => {
+                      // ... column rendering ...
                       // Sticky Logic for Cells
                       // Use a slightly more flexible stickyStyle that respects content if not explicitly date/shop
                       let stickyStyle: React.CSSProperties = {
@@ -2352,18 +2375,6 @@ export function UnifiedTransactionTable({
                         return "bg-white";
                       };
                       const stickyBg = getStickyBg();
-
-                      if (isMobile && col.key === 'category') {
-                        stickyClass = cn("sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)]", stickyBg);
-                      } else if (!isMobile && col.key === 'date') {
-                        stickyClass = cn("sticky left-0 z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)]", stickyBg);
-                      } else if (!isMobile && col.key === 'shop') {
-                        // Shop (Notes) column sticky positioning
-                        let left = 0;
-                        if (visibleColumns.date) left += columnWidths.date;
-                        stickyStyle.left = left;
-                        stickyClass = cn("sticky z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.15)]", stickyBg);
-                      }
 
                       return (
                         <TableCell
@@ -2419,124 +2430,81 @@ export function UnifiedTransactionTable({
       </div>
 
       {/* Footer - Outside scroll container */}
+      {/* Footer - Outside scroll container */}
+
+      {/* Pagination moved OUTSIDE the scrollable container to ensure visibility */}
       {
-        showPagination && (
-          <div className="sticky bottom-0 z-20 flex-none flex items-center justify-between border-t border-slate-200 bg-white px-4 py-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] text-sm">
-            {isMobile ? (
-              // Mobile Compact Footer
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-semibold text-slate-700">
-                    {displayedTransactions.length} rows
-                  </span>
-                </div>
+        !isExcelMode && (
+          <div className="flex-none bg-white border-t border-slate-200 p-3 pb-6 lg:p-4 flex flex-col sm:flex-row items-center justify-between gap-4 z-30 relative shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
 
-                <div className="flex items-center gap-1">
-                  <button
-                    className="rounded p-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 transition-colors"
-                    disabled={currentPage <= 1}
-                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  >
-                    <ArrowLeft className="h-4 w-4 text-slate-600" />
-                  </button>
-                  <div className="bg-slate-100 rounded px-2 py-1 min-w-[3rem] text-center">
-                    <span className="text-xs font-bold text-blue-700">{currentPage}</span>
-                    <span className="text-xs text-slate-400">/</span>
-                    <span className="text-xs text-slate-600">{Math.max(1, Math.ceil(displayedTransactions.length / pageSize))}</span>
-                  </div>
-                  <button
-                    className="rounded p-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 transition-colors"
-                    disabled={currentPage >= Math.ceil(displayedTransactions.length / pageSize)}
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                  >
-                    <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
-                  </button>
-                </div>
-              </>
-            ) : (
-              // Desktop Footer (Original)
-              <>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-1">
-                    <button
-                      className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                      disabled={currentPage <= 1}
-                      onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                      title="Previous Page"
-                    >
-                      <ArrowLeft className="h-4 w-4 text-slate-600" />
-                    </button>
-                    <div className="flex items-center gap-1">
-                      <span className="rounded px-2 py-1 text-xs font-semibold bg-blue-600 text-white">{currentPage}</span>
-                      <span className="text-xs text-slate-500">/ {Math.max(1, Math.ceil(displayedTransactions.length / pageSize))}</span>
-                    </div>
-                    <button
-                      className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                      disabled={currentPage >= Math.ceil(displayedTransactions.length / pageSize)}
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                      title="Next Page"
-                    >
-                      <ArrowLeft className="h-4 w-4 text-slate-600 rotate-180" />
-                    </button>
-                  </div>
-                  <div className="h-4 w-px bg-slate-200" />
-                  <select
-                    value={pageSize}
-                    onChange={(e) => {
-                      setPageSize(Number(e.target.value));
-                      setCurrentPage(1);
-                    }}
-                    className="h-7 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
-                  >
-                    <option value={10}>10 / p</option>
-                    <option value={20}>20 / p</option>
-                    <option value={50}>50 / p</option>
-                    <option value={100}>100 / p</option>
-                  </select>
-                  <div className="h-4 w-px bg-slate-200" />
+            {/* Left: Items per Page */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-500 font-medium whitespace-nowrap hidden sm:inline">Rows per page</span>
+              <select
+                className="h-8 w-16 rounded-md border border-slate-200 text-xs font-semibold focus:border-blue-500 focus:outline-none bg-white"
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+              >
+                {[10, 20, 50, 100, 200, 500].map(size => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </div>
 
-                  <div className="flex items-center gap-1">
-                    <span className="text-xs text-slate-500 mr-1">Text:</span>
-                    <button
-                      onClick={() => setFontSize(Math.max(10, fontSize - 1))}
-                      className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                      title="Decrease font size"
-                      disabled={fontSize <= 10}
-                    >
-                      <Minus className="h-3.5 w-3.5 text-slate-600" />
-                    </button>
-                    <span className="text-xs font-semibold w-10 text-center tabular-nums">{fontSize}px</span>
-                    <button
-                      onClick={() => setFontSize(Math.min(20, fontSize + 1))}
-                      className="rounded p-1 hover:bg-slate-100 disabled:opacity-50"
-                      title="Increase font size"
-                      disabled={fontSize >= 20}
-                    >
-                      <Plus className="h-3.5 w-3.5 text-slate-600" />
-                    </button>
-                  </div>
-                  <div className="h-4 w-px bg-slate-200" />
+            {/* Center: Pagination */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <div className="text-sm font-medium whitespace-nowrap">
+                Page {currentPage} <span className="text-slate-400">/ {totalPages ?? 1}</span>
+              </div>
+              <button
+                onClick={() => setCurrentPage(Math.min(totalPages ?? 1, currentPage + 1))}
+                disabled={currentPage >= (totalPages ?? 1)}
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
 
-                  <button
-                    onClick={() => {
-                      setSortState({ key: 'date', dir: 'desc' });
-                      updateSelection(new Set());
-                      resetColumns();
-                      setCurrentPage(1);
-                    }}
-                    className="flex items-center gap-1 text-slate-600 hover:text-red-600 transition-colors pointer-events-auto"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    <span className="text-xs font-medium">Reset</span>
-                  </button>
-                </div>
-                <div className="flex items-center gap-4">
-                  <p className="text-slate-500 font-medium text-xs">
-                    Showing <span className="text-slate-900 font-bold">{Math.min((currentPage - 1) * pageSize + 1, displayedTransactions.length)}</span> - <span className="text-slate-900 font-bold">{Math.min(currentPage * pageSize, displayedTransactions.length)}</span> of <span className="text-slate-900 font-bold">{displayedTransactions.length}</span> rows
-                  </p>
-                </div>
-              </>
-            )}
+            {/* Font Size & Reset - Mobile Optimized */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1 bg-slate-100 rounded-md p-0.5">
+                <button
+                  onClick={() => setFontSize(Math.max(10, fontSize - 1))}
+                  className="rounded p-1 hover:bg-slate-200 disabled:opacity-50"
+                  disabled={fontSize <= 10}
+                >
+                  <Minus className="h-3 w-3 text-slate-600" />
+                </button>
+                <span className="text-[10px] font-bold w-6 text-center">{fontSize}</span>
+                <button
+                  onClick={() => setFontSize(Math.min(20, fontSize + 1))}
+                  className="rounded p-1 hover:bg-slate-200 disabled:opacity-50"
+                  disabled={fontSize >= 20}
+                >
+                  <Plus className="h-3 w-3 text-slate-600" />
+                </button>
+              </div>
+
+              <button
+                onClick={() => {
+                  setSortState({ key: 'date', dir: 'desc' });
+                  updateSelection(new Set());
+                  resetColumns();
+                  setCurrentPage(1);
+                }}
+                className="p-1.5 text-slate-400 hover:text-red-600 transition-colors"
+                title="Reset View"
+              >
+                <RotateCcw className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         )
       }
