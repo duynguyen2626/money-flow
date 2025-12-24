@@ -20,19 +20,17 @@ export default async function TransactionsPage() {
 
   return (
     <TagFilterProvider>
-      <div className="flex flex-col h-full overflow-hidden">
-        <div className="flex-none flex flex-col gap-1 px-6 pt-6 pb-4 bg-background border-b">
-          <h1 className="text-2xl font-semibold text-slate-900">Transactions</h1>
-        </div>
-
+      <div className="flex h-full overflow-hidden overflow-x-hidden">
         <div className="flex-1 overflow-hidden">
-          <FilterableTransactions
-            transactions={recentTransactions}
-            categories={categories}
-            accounts={accounts}
-            people={people}
-            shops={shops}
-          />
+          <div className="h-full max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8">
+            <FilterableTransactions
+              transactions={recentTransactions}
+              categories={categories}
+              accounts={accounts}
+              people={people}
+              shops={shops}
+            />
+          </div>
         </div>
       </div>
     </TagFilterProvider>

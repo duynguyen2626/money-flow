@@ -338,9 +338,15 @@ export function FilterableTransactions({
             return filteredByAccount;
         }
         const lowerTerm = searchTerm.toLowerCase();
+        const matches = (value?: string | null) => value?.toLowerCase().includes(lowerTerm);
         return filteredByAccount.filter(txn =>
-            txn.note?.toLowerCase().includes(lowerTerm) ||
-            txn.id.toLowerCase().includes(lowerTerm) ||
+            matches(txn.note) ||
+            matches(txn.id) ||
+            matches(txn.category_name) ||
+            matches(txn.shop_name) ||
+            matches((txn as any).person_name) ||
+            matches(txn.source_name) ||
+            matches(txn.destination_name) ||
             // Search in metadata for linked IDs
             (txn.metadata && (
                 (typeof (txn.metadata as any).original_transaction_id === 'string' && (txn.metadata as any).original_transaction_id.toLowerCase().includes(lowerTerm)) ||
@@ -433,6 +439,128 @@ export function FilterableTransactions({
         )
     }, [searchedTransactions, selectedTxnIds, activeTab])
 
+    const clearCategoryFilters = () => {
+        setSelectedCategoryId(null)
+        setSelectedSubcategoryId(null)
+    }
+
+    const resetAllFilters = () => {
+        setSelectedTag(null)
+        setSelectedCycle(null)
+        clearCategoryFilters()
+        setSelectedPersonId(null)
+        setSelectedYear(currentYear)
+        setSelectedType('all')
+        setDateFrom('')
+        setDateTo('')
+        setSelectedAccountId(null)
+        setSearchTerm('')
+    }
+
+    const filterPopoverContent = (
+        <div className="space-y-3">
+            <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-slate-700">Tag / Cycle</p>
+                <Combobox
+                    items={tagOptions}
+                    value={selectedTag ?? undefined}
+                    onValueChange={value => {
+                        const next = value ?? null
+                        setSelectedTag(next)
+                        if (accountType === 'credit_card') {
+                            setSelectedCycle(next)
+                        }
+                    }}
+                    placeholder="Select Tag..."
+                    inputPlaceholder="Search tag..."
+                    emptyState="No tags found"
+                />
+            </div>
+            <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-slate-700">Category</p>
+                <Combobox
+                    items={categoryItems}
+                    value={selectedCategoryId ?? undefined}
+                    onValueChange={value => {
+                        const next = value ?? null
+                        setSelectedCategoryId(next)
+                        setSelectedSubcategoryId(null)
+                    }}
+                    placeholder="All categories"
+                    inputPlaceholder="Search category..."
+                    emptyState="No categories"
+                />
+                {selectedCategoryId && availableSubcategories.length > 0 && (
+                    <Combobox
+                        items={subcategoryItems}
+                        value={selectedSubcategoryId ?? undefined}
+                        onValueChange={value => setSelectedSubcategoryId(value ?? null)}
+                        placeholder="Subcategory"
+                        inputPlaceholder="Search subcategory..."
+                        emptyState="No subcategories"
+                    />
+                )}
+            </div>
+            <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-slate-700">People</p>
+                <Combobox
+                    items={peopleItems}
+                    value={selectedPersonId ?? undefined}
+                    onValueChange={val => setSelectedPersonId(val ?? null)}
+                    placeholder="All people"
+                    inputPlaceholder="Search person..."
+                    emptyState="No people"
+                />
+            </div>
+            <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-slate-700">Account</p>
+                <Combobox
+                    items={accountItems}
+                    value={selectedAccountId ?? undefined}
+                    onValueChange={val => setSelectedAccountId(val ?? null)}
+                    placeholder="All accounts"
+                    inputPlaceholder="Search account..."
+                    emptyState="No accounts"
+                />
+            </div>
+            <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-slate-700">Year</p>
+                <Select
+                    value={selectedYear || "all"}
+                    onValueChange={(val) => setSelectedYear(val === "all" ? "" : val || "")}
+                    items={[
+                        { value: "all", label: "All years" },
+                        ...availableYears.map(year => ({ value: String(year), label: String(year) }))
+                    ]}
+                    placeholder="Year"
+                    className="w-full"
+                />
+            </div>
+            <div className="flex items-center justify-between gap-2 border-t pt-2">
+                <button
+                    className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+                    onClick={resetAllFilters}
+                >
+                    Reset All
+                </button>
+            </div>
+        </div>
+    )
+
+    const summaryStyleMap = {
+        income: { active: 'border-emerald-200 bg-emerald-50', text: 'text-emerald-700' },
+        expense: { active: 'border-rose-200 bg-rose-50', text: 'text-rose-700' },
+        lend: { active: 'border-amber-200 bg-amber-50', text: 'text-amber-700' },
+        repay: { active: 'border-indigo-200 bg-indigo-50', text: 'text-indigo-700' },
+    }
+
+    const summaryItems: Array<{ key: 'income' | 'expense' | 'lend' | 'repay'; label: string; value: number }> = [
+        { key: 'income', label: 'Income', value: totals.income },
+        { key: 'expense', label: 'Expenses', value: totals.expense },
+        { key: 'lend', label: 'Lend', value: totals.lend },
+        { key: 'repay', label: 'Repay', value: totals.collect },
+    ]
+
     const currentBulkTab = bulkActions?.currentTab ?? activeTab
     const bulkActionLabel = currentBulkTab === 'void' ? 'Restore Selected' : 'Void Selected'
     const bulkActionHandler =
@@ -440,16 +568,6 @@ export function FilterableTransactions({
     const bulkActionBusy = currentBulkTab === 'void' ? bulkActions?.isRestoring : bulkActions?.isVoiding
     const bulkActionDisabled =
         !bulkActionHandler || (bulkActions?.selectionCount ?? 0) === 0 || !!bulkActionBusy
-
-    const clearTagFilter = () => {
-        setSelectedTag(null)
-        setSelectedCycle(null)
-    }
-
-    const clearCategoryFilters = () => {
-        setSelectedCategoryId(null)
-        setSelectedSubcategoryId(null)
-    }
 
     // Sort Logic
     const sortedTransactions = useMemo(() => {
@@ -506,33 +624,161 @@ export function FilterableTransactions({
 
     return (
         <div className="flex flex-col h-full overflow-hidden space-y-0">
-            {/* 1. Header Toolbar - Static */}
             {!onSearchChange && (
-                <>
-                    {isMobile && (
-                        <div className="flex-none flex flex-col gap-2 bg-slate-100 py-3 px-3 z-10 border-b shadow-sm transition-all duration-200">
-                            <div className="flex items-center gap-2">
-                                {!context && (
-                                    <div className="shrink-0">
-                                        {!isExcelMode && (
-                                            <AddTransactionDialog
-                                                accounts={accounts}
-                                                categories={categories}
-                                                people={people}
-                                                shops={shops}
-                                            />
-                                        )}
-                                    </div>
-                                )}
-                                <button
-                                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500"
-                                    onClick={() => setIsMobileFilterOpen(true)}
-                                >
-                                    <ListFilter className="h-4 w-4" />
-                                    Filter &amp; Search
-                                </button>
+                <div className="flex-none border-b bg-background">
+                    <div className="flex flex-col gap-5 py-5">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div className="space-y-1">
+                                <h1 className="text-2xl font-semibold text-slate-900">Transactions</h1>
+                                <p className="text-xs font-medium text-slate-500">History</p>
                             </div>
-                            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                                {isMobile ? (
+                                    <button
+                                        className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                                        onClick={() => setIsMobileFilterOpen(true)}
+                                    >
+                                        <ListFilter className="h-4 w-4" />
+                                        Filter &amp; Search
+                                    </button>
+                                ) : (
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <button
+                                                className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                                                title="Filter options"
+                                            >
+                                                <ListFilter className="h-4 w-4" />
+                                                Filter &amp; Search
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent align="end" className="w-72 p-3 z-50 shadow-xl">
+                                            {filterPopoverContent}
+                                        </PopoverContent>
+                                    </Popover>
+                                )}
+
+                                <button
+                                    onClick={() => setIsExcelMode(prev => !prev)}
+                                    className={`inline-flex items-center gap-1 rounded-md border px-3 py-2 text-sm font-semibold shadow-sm transition-colors ${isExcelMode
+                                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                    title={isExcelMode ? "Exit Excel Mode" : "Enter Excel Mode"}
+                                >
+                                    <FileSpreadsheet className="h-4 w-4" />
+                                    Excel Mode
+                                </button>
+
+                                {!context && !isExcelMode && (
+                                    <AddTransactionDialog
+                                        accounts={accounts}
+                                        categories={categories}
+                                        people={people}
+                                        shops={shops}
+                                        listenToUrlParams={true}
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Financial Summary</p>
+                                {selectedType !== 'all' && (
+                                    <button
+                                        className="text-xs font-semibold text-slate-500 hover:text-slate-700"
+                                        onClick={() => setSelectedType('all')}
+                                    >
+                                        Show All
+                                    </button>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                                {summaryItems.map(item => {
+                                    const isActive = selectedType === item.key
+                                    const styles = summaryStyleMap[item.key]
+                                    return (
+                                        <button
+                                            key={item.key}
+                                            type="button"
+                                            onClick={() => setSelectedType(selectedType === item.key ? 'all' : item.key)}
+                                            className={`flex flex-col gap-1 rounded-lg border px-3 py-3 text-left transition-colors ${isActive
+                                                ? styles.active
+                                                : 'border-slate-200 bg-white hover:bg-slate-50'
+                                                }`}
+                                            aria-pressed={isActive}
+                                        >
+                                            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">{item.label}</span>
+                                            <span className={`text-lg font-semibold ${styles.text}`}>
+                                                {numberFormatter.format(item.value)}
+                                            </span>
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                                <span className="text-xs font-semibold text-slate-600">Date Range</span>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="date"
+                                        value={dateFrom}
+                                        onChange={(e) => setDateFrom(e.target.value)}
+                                        className="w-full min-w-[140px] rounded-md border border-slate-200 px-2 py-2 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                    />
+                                    <span className="text-xs text-slate-400">to</span>
+                                    <input
+                                        type="date"
+                                        value={dateTo}
+                                        onChange={(e) => setDateTo(e.target.value)}
+                                        className="w-full min-w-[140px] rounded-md border border-slate-200 px-2 py-2 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div className="flex flex-1 items-center gap-2">
+                                <div className="relative flex-1">
+                                    <input
+                                        type="text"
+                                        placeholder="Search by note, category, or entity..."
+                                        value={searchTerm}
+                                        onChange={e => setSearchTerm(e.target.value)}
+                                        className="w-full rounded-md border border-gray-300 px-3 py-2 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                                    />
+                                    {searchTerm && (
+                                        <button
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:text-slate-600"
+                                            onClick={() => setSearchTerm('')}
+                                            title="Clear search"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    )}
+                                </div>
+                                {!isMobile && (
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <button
+                                                className="inline-flex h-10 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50"
+                                                title="Filter options"
+                                            >
+                                                <ListFilter className="h-4 w-4" />
+                                                Filters
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent align="end" className="w-72 p-3 z-50 shadow-xl">
+                                            {filterPopoverContent}
+                                        </PopoverContent>
+                                    </Popover>
+                                )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2">
                                 <button
                                     className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'active' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
                                     onClick={() => setActiveTab('active')}
@@ -551,324 +797,77 @@ export function FilterableTransactions({
                                 >
                                     Pending
                                 </button>
+                            </div>
+                        </div>
+
+                        {selectedTxnIds.size > 0 && (
+                            <div className="flex flex-wrap items-center gap-2">
                                 <button
-                                    className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${showSelectedOnly ? 'bg-blue-600 text-white' : 'bg-white border-slate-200 text-slate-500 hover:bg-blue-50 hover:text-blue-700'}`}
+                                    className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap shadow-sm text-white transition-colors ${currentBulkTab === 'void'
+                                        ? 'bg-green-600 hover:bg-green-500'
+                                        : 'bg-red-600 hover:bg-red-500'
+                                        }`}
+                                    onClick={() => bulkActionHandler?.()}
+                                    disabled={bulkActionDisabled}
+                                >
+                                    {currentBulkTab === 'void' ? <Undo className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                    {bulkActionBusy ? 'Working...' : `${bulkActionLabel} (${selectedTxnIds.size})`}
+                                </button>
+                                {currentBulkTab === 'void' && (
+                                    <button
+                                        className="px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap shadow-sm bg-red-700 text-white hover:bg-red-800"
+                                        onClick={() => bulkActions?.onDeleteSelected?.()}
+                                        disabled={!bulkActions?.onDeleteSelected || bulkActions?.isDeleting}
+                                    >
+                                        {bulkActions?.isDeleting ? 'Deleting...' : `Delete Forever (${selectedTxnIds.size})`}
+                                    </button>
+                                )}
+                                <button
+                                    className="px-3 py-2 rounded-md text-xs font-medium bg-gray-200 text-gray-800 hover:bg-gray-300 whitespace-nowrap"
+                                    onClick={() => { setSelectedTxnIds(new Set()); setShowSelectedOnly(false) }}
+                                >
+                                    Deselect ({selectedTxnIds.size})
+                                </button>
+                                <button
+                                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 whitespace-nowrap"
+                                    onClick={async () => {
+                                        const ids = Array.from(selectedTxnIds)
+                                        const toastId = toast.loading(`Recalculating cashback for ${ids.length} transactions...`)
+                                        let successCount = 0
+                                        let failCount = 0
+                                        for (const id of ids) {
+                                            try {
+                                                const res = await fetch(`/api/debug/recalc-cashback?id=${id}`)
+                                                if (res.ok) successCount++
+                                                else failCount++
+                                            } catch (e) {
+                                                console.error(e)
+                                                failCount++
+                                            }
+                                        }
+                                        toast.dismiss(toastId)
+                                        if (failCount === 0) {
+                                            toast.success(`Recalculated ${successCount} items.`)
+                                        } else {
+                                            toast.warning(`Done with ${successCount} successes and ${failCount} failures.`)
+                                        }
+                                        router.refresh()
+                                        setSelectedTxnIds(new Set())
+                                    }}
+                                >
+                                    <RefreshCw className="h-4 w-4" />
+                                    Recalc Cashback
+                                </button>
+                                <button
+                                    className={`px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap ${showSelectedOnly ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
                                     onClick={() => setShowSelectedOnly(prev => !prev)}
                                 >
                                     {showSelectedOnly ? 'Show All' : 'Show Selected'}
                                 </button>
                             </div>
-                        </div>
-                    )}
-                    {!isMobile && (
-                        <div className="flex-none flex flex-col gap-3 md:flex-row md:items-center bg-slate-100 py-3 px-1 z-10 border-b shadow-sm transition-all duration-200">
-                            {!context && (
-                                <div className="order-first md:order-last shrink-0">
-                                    {!isExcelMode && (
-                                        <AddTransactionDialog
-                                            accounts={accounts}
-                                            categories={categories}
-                                            people={people}
-                                            shops={shops}
-                                            listenToUrlParams={true}
-                                        />
-                                    )}
-                                </div>
-                            )}
-                    <div className="flex flex-1 items-center gap-2">
-                        {/* Quick Filters (All/Void/Pending) */}
-                        <div className="flex items-center gap-2 shrink-0 overflow-visible">
-                            <button
-                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'active' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-                                onClick={() => setActiveTab('active')}
-                            >
-                                All
-                            </button>
-                            <button
-                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'void' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-                                onClick={() => setActiveTab('void')}
-                            >
-                                Void
-                            </button>
-                            <button
-                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-                                onClick={() => setActiveTab('pending')}
-                            >
-                                Pending
-                            </button>
-                        </div>
-
-                        {selectedTxnIds.size > 0 && (
-                            <button
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap shadow-sm text-white transition-colors ${currentBulkTab === 'void'
-                                    ? 'bg-green-600 hover:bg-green-500'
-                                    : 'bg-red-600 hover:bg-red-500'
-                                    }`}
-                                onClick={() => bulkActionHandler?.()}
-                                disabled={bulkActionDisabled}
-                            >
-                                {currentBulkTab === 'void' ? <Undo className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
-                                {bulkActionBusy ? 'Working...' : `${bulkActionLabel} (${selectedTxnIds.size})`}
-                            </button>
                         )}
-
-                        <div className="relative flex-1 flex items-center gap-2">
-                            <div className="relative flex-1">
-                                <input
-                                    type="text"
-                                    placeholder="Search by note..."
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                    className="w-full rounded-md border border-gray-300 px-3 py-2 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                />
-                                {searchTerm && (
-                                    <button
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-5 w-5 items-center justify-center rounded-full text-slate-400 hover:text-slate-600"
-                                        onClick={() => setSearchTerm('')}
-                                        title="Clear search"
-                                    >
-                                        <X className="h-3 w-3" />
-                                    </button>
-                                )}
-                            </div>
-                            {selectedTxnIds.size > 0 && (
-                                <>
-                                    {currentBulkTab === 'void' && (
-                                        <button
-                                            className="px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap shadow-sm bg-red-700 text-white hover:bg-red-800"
-                                            onClick={() => bulkActions?.onDeleteSelected?.()}
-                                            disabled={!bulkActions?.onDeleteSelected || bulkActions?.isDeleting}
-                                        >
-                                            {bulkActions?.isDeleting ? 'Deleting...' : `Delete Forever (${selectedTxnIds.size})`}
-                                        </button>
-                                    )}
-                                    <button
-                                        className="px-3 py-2 rounded-md text-sm font-medium bg-gray-200 text-gray-800 hover:bg-gray-300 whitespace-nowrap"
-                                        onClick={() => { setSelectedTxnIds(new Set()); setShowSelectedOnly(false) }}
-                                    >
-                                        Deselect ({selectedTxnIds.size})
-                                    </button>
-                                    <button
-                                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 whitespace-nowrap"
-                                        onClick={async () => {
-                                            const ids = Array.from(selectedTxnIds)
-                                            const toastId = toast.loading(`Recalculating cashback for ${ids.length} transactions...`)
-                                            let successCount = 0
-                                            let failCount = 0
-                                            for (const id of ids) {
-                                                try {
-                                                    const res = await fetch(`/api/debug/recalc-cashback?id=${id}`)
-                                                    if (res.ok) successCount++
-                                                    else failCount++
-                                                } catch (e) {
-                                                    console.error(e)
-                                                    failCount++
-                                                }
-                                            }
-                                            toast.dismiss(toastId)
-                                            if (failCount === 0) {
-                                                toast.success(`Recalculated ${successCount} items.`)
-                                            } else {
-                                                toast.warning(`Done with ${successCount} successes and ${failCount} failures.`)
-                                            }
-                                            router.refresh()
-                                            setSelectedTxnIds(new Set())
-                                        }}
-                                    >
-                                        <RefreshCw className="h-4 w-4" />
-                                        Recalc Cashback
-                                    </button>
-                                    <button
-                                        className={`px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap ${showSelectedOnly ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
-                                        onClick={() => setShowSelectedOnly(prev => !prev)}
-                                    >
-                                        {showSelectedOnly ? 'Show All' : 'Show Selected'}
-                                    </button>
-                                </>
-                            )}
-                        </div>
-
-                        {/* Type Filters */}
-                        <div className="flex items-center gap-2 shrink-0 overflow-visible">
-                            <button
-                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${selectedType === 'all' ? 'bg-slate-100 border-slate-300 text-slate-900 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-900'}`}
-                                onClick={() => setSelectedType('all')}
-                            >
-                                All Types
-                            </button>
-                            <button
-                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${selectedType === 'income' ? 'bg-emerald-50 border-emerald-200 text-emerald-700 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-emerald-50 hover:text-emerald-700'}`}
-                                onClick={() => setSelectedType('income')}
-                            >
-                                My Income: {numberFormatter.format(totals.income)}
-                            </button>
-                            <button
-                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${selectedType === 'expense' ? 'bg-rose-50 border-rose-200 text-rose-700 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-rose-50 hover:text-rose-700'}`}
-                                onClick={() => setSelectedType('expense')}
-                            >
-                                My Expenses: {numberFormatter.format(totals.expense)}
-                            </button>
-
-                            <button
-                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${selectedType === 'lend' ? 'bg-amber-50 border-amber-200 text-amber-700 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-amber-50 hover:text-amber-700'}`}
-                                onClick={() => setSelectedType('lend')}
-                            >
-                                Lend: {numberFormatter.format(totals.lend)}
-                            </button>
-                            <button
-                                className={`rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap ${selectedType === 'repay' ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-semibold' : 'bg-white border-slate-200 text-slate-500 hover:bg-indigo-50 hover:text-indigo-700'}`}
-                                onClick={() => setSelectedType('repay')}
-                            >
-                                Repay: {numberFormatter.format(totals.collect)}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-2 overflow-visible">
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <button
-                                    className="relative z-20 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 shrink-0"
-                                    title="Filter options"
-                                >
-                                    <ListFilter className="h-4 w-4" />
-                                    Filters
-                                </button>
-                            </PopoverTrigger>
-                            <PopoverContent align="end" className="w-72 p-3 z-50 shadow-xl">
-                                <div className="space-y-3">
-                                    <div className="space-y-2">
-                                        <p className="text-[11px] font-semibold text-slate-700">Tag / Cycle</p>
-                                        <Combobox
-                                            items={tagOptions}
-                                            value={selectedTag ?? undefined}
-                                            onValueChange={value => {
-                                                const next = value ?? null
-                                                setSelectedTag(next)
-                                                if (accountType === 'credit_card') {
-                                                    setSelectedCycle(next)
-                                                }
-                                            }}
-                                            placeholder="Select Tag..."
-                                            inputPlaceholder="Search tag..."
-                                            emptyState="No tags found"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <p className="text-[11px] font-semibold text-slate-700">Category</p>
-                                        <Combobox
-                                            items={categoryItems}
-                                            value={selectedCategoryId ?? undefined}
-                                            onValueChange={value => {
-                                                const next = value ?? null
-                                                setSelectedCategoryId(next)
-                                                setSelectedSubcategoryId(null)
-                                            }}
-                                            placeholder="All categories"
-                                            inputPlaceholder="Search category..."
-                                            emptyState="No categories"
-                                        />
-                                        {selectedCategoryId && availableSubcategories.length > 0 && (
-                                            <Combobox
-                                                items={subcategoryItems}
-                                                value={selectedSubcategoryId ?? undefined}
-                                                onValueChange={value => setSelectedSubcategoryId(value ?? null)}
-                                                placeholder="Subcategory"
-                                                inputPlaceholder="Search subcategory..."
-                                                emptyState="No subcategories"
-                                            />
-                                        )}
-                                    </div>
-                                    <div className="space-y-2">
-                                        <p className="text-[11px] font-semibold text-slate-700">People</p>
-                                        <Combobox
-                                            items={peopleItems}
-                                            value={selectedPersonId ?? undefined}
-                                            onValueChange={val => setSelectedPersonId(val ?? null)}
-                                            placeholder="All people"
-                                            inputPlaceholder="Search person..."
-                                            emptyState="No people"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <p className="text-[11px] font-semibold text-slate-700">Account</p>
-                                        <Combobox
-                                            items={accountItems}
-                                            value={selectedAccountId ?? undefined}
-                                            onValueChange={val => setSelectedAccountId(val ?? null)}
-                                            placeholder="All accounts"
-                                            inputPlaceholder="Search account..."
-                                            emptyState="No accounts"
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <p className="text-[11px] font-semibold text-slate-700">Date Range</p>
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <input
-                                                type="date"
-                                                value={dateFrom}
-                                                onChange={(e) => setDateFrom(e.target.value)}
-                                                className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
-                                            />
-                                            <input
-                                                type="date"
-                                                value={dateTo}
-                                                onChange={(e) => setDateTo(e.target.value)}
-                                                className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-200"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center justify-between gap-2 border-t pt-2">
-                                        <button
-                                            className="text-xs font-semibold text-blue-600 hover:text-blue-800"
-                                            onClick={() => {
-                                                setSelectedTag(null)
-                                                setSelectedCycle(null)
-                                                clearCategoryFilters()
-                                                setSelectedPersonId(null)
-                                                setSelectedYear(currentYear)
-                                                setSelectedType('all')
-                                                setDateFrom('')
-                                                setDateTo('')
-                                                setSelectedAccountId(null)
-                                                setSearchTerm('')
-                                            }}
-                                        >
-                                            Reset All
-                                        </button>
-                                    </div>
-                                </div>
-                            </PopoverContent>
-                        </Popover>
-
-                        <Select
-                            value={selectedYear || "all"}
-                            onValueChange={(val) => setSelectedYear(val === "all" ? "" : val || "")}
-                            items={[
-                                { value: "all", label: "All years" },
-                                ...availableYears.map(year => ({ value: String(year), label: String(year) }))
-                            ]}
-                            placeholder="Year"
-                            className="w-[120px]"
-                        />
-
-                        <div className="h-6 w-px bg-slate-300 mx-1" />
-
-                        <button
-                            onClick={() => setIsExcelMode(prev => !prev)}
-                            className={`relative z-20 inline-flex items-center gap-1 rounded-md border px-3 py-2 text-sm font-medium shadow-sm shrink-0 transition-colors ${isExcelMode
-                                ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
-                                : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
-                                }`}
-                            title={isExcelMode ? "Exit Excel Mode" : "Enter Excel Mode"}
-                        >
-                            <FileSpreadsheet className="h-4 w-4" />
-                            {isExcelMode ? 'Excel Mode' : 'Excel Mode'}
-                        </button>
                     </div>
                 </div>
-                )}
-                </>
             )}
 
 
@@ -881,18 +880,7 @@ export function FilterableTransactions({
                             <div className="flex items-center gap-2">
                                 <button
                                     className="text-xs font-semibold text-blue-600"
-                                    onClick={() => {
-                                        setSelectedTag(null)
-                                        setSelectedCycle(null)
-                                        clearCategoryFilters()
-                                        setSelectedPersonId(null)
-                                        setSelectedYear(currentYear)
-                                        setSelectedType('all')
-                                        setDateFrom('')
-                                        setDateTo('')
-                                        setSelectedAccountId(null)
-                                        setSearchTerm('')
-                                    }}
+                                    onClick={resetAllFilters}
                                 >
                                     Reset
                                 </button>
@@ -911,7 +899,7 @@ export function FilterableTransactions({
                                     type="text"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Search by note or ID"
+                                    placeholder="Search by note, category, or entity..."
                                     className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                                 />
                             </div>
