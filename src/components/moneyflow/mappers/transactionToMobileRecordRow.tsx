@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { Ban, CheckCircle2, Clock, FileText, Wallet } from "lucide-react"
+import { Ban, CheckCircle2, Clock, FileText, Wallet, ArrowRight, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { MobileRecordBadge, MobileRecordRowProps } from "@/components/app/mobile/types"
 import type { Category, TransactionWithDetails } from "@/types/moneyflow.types"
@@ -78,12 +78,57 @@ export function transactionToMobileRecordRow({
     categories,
     formatCurrency,
 }: TransactionToMobileRecordRowArgs): MobileRecordRowProps {
+    // 1. Title strategy: Note > Shop > Source > Unknown
+    const note = txn.note?.trim()
+    const shopName = txn.shop_name?.trim()
     const sourceName = txn.source_name || txn.account_name || "Unknown"
-    const displayImage = txn.shop_image_url || txn.source_image
-    const note = txn.note?.trim() ?? ""
-    const title = txn.shop_name || note || sourceName
-    const subtitle = note && title !== note ? note : undefined
 
+    // If note exists, use it. Else shop, else source.
+    const title = note || shopName || sourceName
+
+    // 2. Subtitle: Short ID + Tooltip
+    // We can't render Tooltip here easily without changing MobileRecordRow or passing a ReactNode subtitle.
+    // MobileRecordRow props says subtitle?: string.
+    // So we just use string text. "ID: ...1234"
+    const shortId = txn.id.slice(-4)
+    const subtitle = `...${shortId}`
+
+    // 3. Flow Visuals (Source -> Dest)
+    // We hijack 'icon' to show this flow.
+    // Left: Source Image/Icon
+    // Right: Person/Target Image/Icon (if transfer/debt/repay)
+    const sourceImage = txn.source_image || txn.shop_image_url
+    const targetImage = (txn as any).person_avatar_url || (txn as any).destination_image_url
+
+    // Determine if we need flow
+    const isTransfer = txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment'
+    const showFlow = isTransfer && (targetImage || (txn as any).destination_name)
+
+    const SourceVisual = sourceImage ? (
+        <img src={sourceImage} alt="" className="h-6 w-6 object-contain rounded-full bg-white border border-slate-100" />
+    ) : (
+        <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+            <Wallet className="h-3 w-3 text-slate-400" />
+        </div>
+    )
+
+    const TargetVisual = targetImage ? (
+        <img src={targetImage} alt="" className="h-6 w-6 object-contain rounded-full bg-white border border-slate-100" />
+    ) : (
+        <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+            <Wallet className="h-3 w-3 text-slate-400" />
+        </div>
+    )
+
+    const FlowIcon = showFlow ? (
+        <div className="flex items-center gap-0.5">
+            {SourceVisual}
+            <ArrowRight className="h-3 w-3 text-slate-300" />
+            {TargetVisual}
+        </div>
+    ) : SourceVisual
+
+    // 4. Badges
     const categoryName = categories.find(cat => cat.id === txn.category_id)?.name || txn.category_name
     const badges: MobileRecordBadge[] = []
 
@@ -91,7 +136,7 @@ export function transactionToMobileRecordRow({
         badges.push({
             label: categoryName,
             variant: "outline",
-            className: "text-[10px] text-slate-500 bg-slate-100 border-slate-200 max-w-[140px]",
+            className: "text-[10px] text-slate-600 bg-slate-50 border-slate-200 py-0 h-5",
             title: categoryName,
         })
     }
@@ -100,45 +145,77 @@ export function transactionToMobileRecordRow({
         badges.push({
             label: "Inst",
             variant: "outline",
-            className: "text-amber-700 bg-amber-100 border-amber-200 text-[9px] px-1",
+            className: "text-amber-700 bg-amber-50 border-amber-200 text-[9px] px-1 h-5",
             title: "Installment",
         })
     }
 
     const statusBadge = buildStatusBadge(txn)
-    if (statusBadge) {
-        badges.push(statusBadge)
+    if (statusBadge) badges.push(statusBadge)
+
+    // 5. Meta: Date + Time
+    const occurredAt = txn.occurred_at ?? txn.created_at
+    const d = occurredAt ? new Date(occurredAt) : null
+    let meta: { label: string }[] = []
+    if (d && !Number.isNaN(d.getTime())) {
+        const dateStr = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`
+        const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+        meta = [{ label: `${dateStr} ${timeStr}` }]
     }
 
-    const occurredAt = txn.occurred_at ?? txn.created_at
-    const occurredDate = occurredAt ? new Date(occurredAt) : null
-    const dateStr = occurredDate && !Number.isNaN(occurredDate.getTime())
-        ? `${String(occurredDate.getDate()).padStart(2, "0")}.${String(occurredDate.getMonth() + 1).padStart(2, "0")}`
-        : ""
-
-    const meta = dateStr ? [{ label: dateStr }] : []
-
+    // 6. Amount logic
     const visualType = (txn as { displayType?: string }).displayType ?? txn.type
     const isRepayment = txn.type === "repayment"
     const amountTone =
         visualType === "income" || isRepayment ? "positive" : visualType === "expense" ? "negative" : "neutral"
 
     const rawAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount ?? 0
-    const amountValue = Math.abs(rawAmount)
+    const absRaw = Math.abs(rawAmount)
+
+    // Cashback logic
+    const percentRaw = Number(txn.cashback_share_percent ?? 0)
+    const fixedRaw = Number(txn.cashback_share_fixed ?? 0)
+    const rate = percentRaw > 1 ? percentRaw / 100 : percentRaw
+    const cashbackCalc = (absRaw * rate) + fixedRaw
+    const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0)
+    const hasCashback = cashbackAmount > 0
+
+    const baseAmount = absRaw
+    const finalPrice = (typeof txn.final_price === 'number')
+        ? Math.abs(txn.final_price)
+        : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount))
+
+    const primaryStr = formatCurrency(absRaw)
+    const secondaryStr = hasCashback ? `Final: ${formatCurrency(finalPrice)}` : undefined
+
+    // Inject Cashback badge into badges? Or handle in Amount?
+    // Plan: "cashback badges (%/fixed) smaller".
+    // We can add to Badges.
+    if (hasCashback) {
+        if (percentRaw > 0) {
+            badges.push({
+                label: `${percentRaw}%`,
+                className: "text-[9px] text-emerald-700 bg-emerald-50 border-emerald-200 px-1 h-4",
+            })
+        }
+        if (fixedRaw > 0) {
+            badges.push({
+                label: `+${formatCurrency(fixedRaw)}`,
+                className: "text-[9px] text-emerald-700 bg-emerald-50 border-emerald-200 px-1 h-4",
+            })
+        }
+    }
 
     return {
         title,
         subtitle,
-        icon: displayImage ? (
-            <img src={displayImage} alt="" className="h-8 w-8 object-contain rounded-none" />
-        ) : (
-            <Wallet className="h-4 w-4" />
-        ),
-        iconClassName: displayImage ? "bg-transparent" : undefined,
+        icon: FlowIcon,
+        iconClassName: showFlow ? "w-auto px-1 bg-transparent" : "bg-transparent",
         badges,
         meta,
         amount: {
-            primary: formatCurrency(amountValue),
+            primary: primaryStr,
+            secondary: secondaryStr,
             tone: amountTone,
         },
     }
