@@ -3,7 +3,7 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
 import { useRouter, useSearchParams, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ListFilter, Filter, X, Trash2, Undo, FileSpreadsheet, ArrowLeft, RotateCcw, RefreshCw, History, ChevronDown, Search, Calendar as CalendarIcon } from 'lucide-react'
+import { Filter, X, Trash2, Undo, ArrowLeft, RotateCcw, RefreshCw, History, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from "sonner"
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
@@ -20,6 +20,11 @@ import {
     Select,
 } from "@/components/ui/select"
 import { SmartFilterBar } from './smart-filter-bar'
+import { SummaryDropdown } from './toolbar/SummaryDropdown'
+import { SearchBox } from './toolbar/SearchBox'
+import { QuickTabs } from './toolbar/QuickTabs'
+import { ToolbarActions } from './toolbar/ToolbarActions'
+import { DateRangeControl } from './toolbar/DateRangeControl'
 
 type SortKey = 'date' | 'amount'
 type SortDir = 'asc' | 'desc'
@@ -629,7 +634,6 @@ export function FilterableTransactions({
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                 <div className="w-full px-4 lg:px-10 py-4 space-y-4 flex flex-col min-h-0">
                     {/* Header Row */}
-                    {/* Header Row - REPLACED */}
                     <div className="hidden lg:flex flex-row items-center justify-between gap-4">
                         {/* LEFT: Title + Search + Financial Summary */}
                         <div className="flex flex-row items-center gap-2 flex-1 min-w-0">
@@ -637,52 +641,17 @@ export function FilterableTransactions({
                                 <h1 className="text-lg font-bold tracking-tight text-slate-900">Transactions</h1>
                             </div>
 
-                            <Popover open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
-                                <PopoverTrigger asChild>
-                                    <button className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 transition-all">
-                                        Financial Summary
-                                        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isSummaryOpen && "rotate-180")} />
-                                    </button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-64 p-3 space-y-2 z-50">
-                                    <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">Global Summary</h4>
-                                    <div className="grid gap-1">
-                                        {summaryItems.map((item) => (
-                                            <div
-                                                key={item.key}
-                                                className={cn(
-                                                    "flex items-center justify-between p-2 rounded-lg border transition-colors",
-                                                    selectedType === item.key ? summaryStyleMap[item.key].active : "bg-white border-slate-100"
-                                                )}
-                                            >
-                                                <span className="text-xs font-medium text-slate-600">{item.label}</span>
-                                                <span className={cn("text-xs font-bold", summaryStyleMap[item.key].text)}>
-                                                    {numberFormatter.format(item.value)}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
+                            <SummaryDropdown
+                                isOpen={isSummaryOpen}
+                                onOpenChange={setIsSummaryOpen}
+                                items={summaryItems}
+                                selectedType={selectedType}
+                            />
 
-                            <div className="relative flex-1 min-w-[100px] max-w-sm transition-all">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Search..."
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                    className="h-8 w-full rounded-md border border-slate-200 pl-8 pr-8 text-xs shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                                {searchTerm && (
-                                    <button
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                                        onClick={() => setSearchTerm('')}
-                                    >
-                                        <X className="h-3 w-3" />
-                                    </button>
-                                )}
-                            </div>
+                            <SearchBox
+                                value={searchTerm}
+                                onChange={setSearchTerm}
+                            />
 
                             <div className="hidden lg:flex items-center gap-1 bg-slate-100/50 p-1 rounded-lg shrink-0">
                                 {(['all', 'income', 'expense', 'lend', 'repay'] as const).map(type => (
@@ -704,117 +673,38 @@ export function FilterableTransactions({
 
                         {/* RIGHT: Actions & Controls */}
                         <div className="flex items-center gap-2 shrink-0">
-                            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg shrink-0 mr-2">
-                                {(['active', 'void', 'pending'] as const).map((tab) => (
-                                    <button
-                                        key={tab}
-                                        onClick={() => setActiveTab(tab)}
-                                        className={cn(
-                                            "px-2.5 py-1 text-[11px] font-semibold rounded-md transition-all capitalize",
-                                            activeTab === tab
-                                                ? cn(
-                                                    "bg-white shadow-sm ring-1 ring-black/5",
-                                                    tab === 'active' && "bg-blue-50 text-blue-700 ring-blue-700/10",
-                                                    tab === 'void' && "bg-red-50 text-red-700 ring-red-700/10",
-                                                    tab === 'pending' && "bg-amber-50 text-amber-700 ring-amber-700/10"
-                                                )
-                                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-                                        )}
-                                    >
-                                        {tab}
-                                    </button>
-                                ))}
-                            </div>
-
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <button
-                                        className={cn(
-                                            "relative inline-flex items-center justify-center p-2 rounded-md border text-sm font-medium shadow-sm transition-colors",
-                                            dateFrom || dateTo
-                                                ? "bg-blue-50 border-blue-200 text-blue-700"
-                                                : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
-                                        )}
-                                        title="Select Date Range"
-                                    >
-                                        <CalendarIcon className="h-4 w-4" />
-                                        {(dateFrom || dateTo) && (
-                                            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-600 shadow-sm border border-white"></span>
-                                            </span>
-                                        )}
-                                    </button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-4 space-y-3" align="end">
-                                    <div className="space-y-1">
-                                        <h4 className="font-semibold text-sm text-slate-900">Date Range</h4>
-                                        <p className="text-xs text-slate-500">Filter transactions by date.</p>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div className="space-y-1">
-                                            <label className="text-xs font-medium text-slate-600">From</label>
-                                            <input
-                                                type="date"
-                                                value={dateFrom}
-                                                onChange={(e) => setDateFrom(e.target.value)}
-                                                className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
-                                            />
-                                        </div>
-                                        <div className="space-y-1">
-                                            <label className="text-xs font-medium text-slate-600">To</label>
-                                            <input
-                                                type="date"
-                                                value={dateTo}
-                                                onChange={(e) => setDateTo(e.target.value)}
-                                                className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
-                                            />
-                                        </div>
-                                        <div className="col-span-2 flex justify-end gap-2 pt-2">
-                                            <button
-                                                onClick={() => { setDateFrom(''); setDateTo(''); }}
-                                                className="text-xs text-slate-500 hover:text-slate-700"
-                                            >
-                                                Clear
-                                            </button>
-                                        </div>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
-
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <button
-                                        className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
-                                    >
-                                        <ListFilter className="h-4 w-4" />
-                                        <span className="hidden xl:inline">Filters</span>
-                                    </button>
-                                </PopoverTrigger>
-                                <PopoverContent align="end" className="w-80 p-4 z-50 shadow-xl">
-                                    {filterPopoverContent}
-                                </PopoverContent>
-                            </Popover>
-
-                            <button
-                                onClick={() => setIsExcelMode(!isExcelMode)}
-                                className={cn(
-                                    "hidden sm:flex inline-flex items-center justify-center p-2 rounded-md border text-sm font-medium shadow-sm transition-colors",
-                                    isExcelMode
-                                        ? "bg-emerald-50 border-emerald-200 text-emerald-700 ring-1 ring-emerald-700/10"
-                                        : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
-                                )}
-                                title="Toggle Excel Mode"
-                            >
-                                <FileSpreadsheet className="h-4 w-4" />
-                            </button>
-
-                            <AddTransactionDialog
-                                accounts={accounts}
-                                categories={categories}
-                                people={people}
-                                shops={shops}
+                            <QuickTabs
+                                activeTab={activeTab}
+                                onTabChange={setActiveTab}
+                                className="mr-2"
                             />
+
+                            <DateRangeControl
+                                dateFrom={dateFrom}
+                                dateTo={dateTo}
+                                onDateFromChange={setDateFrom}
+                                onDateToChange={setDateTo}
+                                onClear={() => { setDateFrom(''); setDateTo(''); }}
+                            />
+
+                            <ToolbarActions
+                                isExcelMode={isExcelMode}
+                                onExcelModeChange={setIsExcelMode}
+                                filterContent={filterPopoverContent}
+                            >
+                                {/* Add Transaction (Desktop) */}
+                                {!context && !isExcelMode && (
+                                    <div className="ml-1">
+                                        <AddTransactionDialog
+                                            accounts={accounts}
+                                            categories={categories}
+                                            people={people}
+                                            shops={shops}
+                                            listenToUrlParams={true}
+                                        />
+                                    </div>
+                                )}
+                            </ToolbarActions>
                         </div>
                     </div>
 
@@ -822,84 +712,23 @@ export function FilterableTransactions({
                     <div className="flex lg:hidden flex-col gap-3">
                         {/* Row 1: Tabs + Icons */}
                         <div className="flex items-center justify-between gap-2">
-                            {/* Tabs Switcher - Compact */}
-                            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg shrink-0">
-                                {(['active', 'void', 'pending'] as const).map((tab) => (
-                                    <button
-                                        key={tab}
-                                        onClick={() => setActiveTab(tab)}
-                                        className={cn(
-                                            "px-2 py-1 text-[10px] font-bold rounded-md transition-all capitalize",
-                                            activeTab === tab
-                                                ? cn(
-                                                    "bg-white shadow-sm ring-1 ring-black/5",
-                                                    tab === 'active' && "bg-blue-50 text-blue-700 ring-blue-700/10",
-                                                    tab === 'void' && "bg-red-50 text-red-700 ring-red-700/10",
-                                                    tab === 'pending' && "bg-amber-50 text-amber-700 ring-amber-700/10"
-                                                )
-                                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-                                        )}
-                                    >
-                                        {tab}
-                                    </button>
-                                ))}
-                            </div>
+                            <QuickTabs
+                                activeTab={activeTab}
+                                onTabChange={setActiveTab}
+                                size="xs"
+                            />
 
                             <div className="flex items-center gap-1.5">
-                                {/* Date Icon */}
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <button
-                                            className={cn(
-                                                "relative inline-flex items-center justify-center p-1.5 rounded-md border text-sm font-medium shadow-sm transition-colors h-8 w-8",
-                                                dateFrom || dateTo
-                                                    ? "bg-blue-50 border-blue-200 text-blue-700"
-                                                    : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
-                                            )}
-                                        >
-                                            <CalendarIcon className="h-4 w-4" />
-                                            {(dateFrom || dateTo) && (
-                                                <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
-                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600 shadow-sm border border-white"></span>
-                                                </span>
-                                            )}
-                                        </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-4 space-y-3" align="end">
-                                        {/* Simplified Date Content for Mobile */}
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <div className="space-y-1">
-                                                <label className="text-xs font-medium text-slate-600">From</label>
-                                                <input
-                                                    type="date"
-                                                    value={dateFrom}
-                                                    onChange={(e) => setDateFrom(e.target.value)}
-                                                    className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <label className="text-xs font-medium text-slate-600">To</label>
-                                                <input
-                                                    type="date"
-                                                    value={dateTo}
-                                                    onChange={(e) => setDateTo(e.target.value)}
-                                                    className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs focus:border-blue-500 focus:outline-none"
-                                                />
-                                            </div>
-                                            <div className="col-span-2 flex justify-end gap-2 pt-2">
-                                                <button
-                                                    onClick={() => { setDateFrom(''); setDateTo(''); }}
-                                                    className="text-xs text-slate-500 hover:text-slate-700"
-                                                >
-                                                    Clear
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
+                                <DateRangeControl
+                                    dateFrom={dateFrom}
+                                    dateTo={dateTo}
+                                    onDateFromChange={setDateFrom}
+                                    onDateToChange={setDateTo}
+                                    onClear={() => { setDateFrom(''); setDateTo(''); }}
+                                    variant="mobile"
+                                />
 
-                                {/* Filter (Category/Type etc) */}
+                                {/* Filter (Category/Type etc) - Kept inline as it has distinct mobile behavior */}
                                 <Popover open={isMobileFilterOpen} onOpenChange={setIsMobileFilterOpen}>
                                     <PopoverTrigger asChild>
                                         <button
@@ -934,56 +763,23 @@ export function FilterableTransactions({
                                     </PopoverContent>
                                 </Popover>
 
-                                {/* Summary Dropdown */}
-                                <Popover open={isSummaryOpen} onOpenChange={setIsSummaryOpen}>
-                                    <PopoverTrigger asChild>
-                                        <button className="inline-flex items-center justify-center p-1.5 h-8 w-8 rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 transition-all">
-                                            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isSummaryOpen && "rotate-180")} />
-                                        </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-64 p-3 space-y-2 z-50" align="end">
-                                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-1">Global Summary</h4>
-                                        <div className="grid gap-1">
-                                            {summaryItems.map((item) => (
-                                                <div
-                                                    key={item.key}
-                                                    className={cn(
-                                                        "flex items-center justify-between p-2 rounded-lg border transition-colors",
-                                                        selectedType === item.key ? summaryStyleMap[item.key].active : "bg-white border-slate-100"
-                                                    )}
-                                                >
-                                                    <span className="text-xs font-medium text-slate-600">{item.label}</span>
-                                                    <span className={cn("text-xs font-bold", summaryStyleMap[item.key].text)}>
-                                                        {numberFormatter.format(item.value)}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
+                                <SummaryDropdown
+                                    isOpen={isSummaryOpen}
+                                    onOpenChange={setIsSummaryOpen}
+                                    items={summaryItems}
+                                    selectedType={selectedType}
+                                    variant="mobile"
+                                />
                             </div>
                         </div>
 
                         {/* Row 2: Search + Add Button */}
                         <div className="flex items-center gap-2 w-full">
-                            <div className="relative flex-1">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                <input
-                                    type="text"
-                                    placeholder="Search..."
-                                    value={searchTerm}
-                                    onChange={e => setSearchTerm(e.target.value)}
-                                    className="h-10 w-full rounded-md border border-slate-200 pl-9 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                />
-                                {searchTerm && (
-                                    <button
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-                                        onClick={() => setSearchTerm('')}
-                                    >
-                                        <X className="h-3.5 w-3.5" />
-                                    </button>
-                                )}
-                            </div>
+                            <SearchBox
+                                value={searchTerm}
+                                onChange={setSearchTerm}
+                                variant="mobile"
+                            />
                             <AddTransactionDialog
                                 accounts={accounts}
                                 categories={categories}
@@ -992,21 +788,6 @@ export function FilterableTransactions({
                             />
                         </div>
                     </div>
-
-
-
-                    {/* Add Transaction (Desktop, hidden in mobile section) */}
-                    {!isMobile && !context && !isExcelMode && (
-                        <div className="ml-1">
-                            <AddTransactionDialog
-                                accounts={accounts}
-                                categories={categories}
-                                people={people}
-                                shops={shops}
-                                listenToUrlParams={true}
-                            />
-                        </div>
-                    )}
                     {selectedTxnIds.size > 0 && (
                         <div className="flex flex-wrap items-center gap-2 pt-2 animate-in fade-in slide-in-from-top-1">
                             <button

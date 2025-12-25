@@ -2331,14 +2331,12 @@ export function UnifiedTransactionTable({
                     <MobileTransactionRow
                       key={txn.id}
                       txn={txn}
-                      accounts={accounts}
                       categories={categories}
                       isSelected={selection.has(txn.id)}
-                      isExcelMode={isExcelMode}
                       onSelect={onSelectTxn ?? (() => { })}
                       onRowClick={(item) => onSelectTxn?.(item.id, !selection.has(item.id))}
+                      colSpan={displayedColumns.length}
                       formatters={{ currency: (val) => numberFormatter.format(val) }}
-                      helpers={{ parseCashbackConfig, getCashbackCycleRange }}
                     />
                   )
                 }
