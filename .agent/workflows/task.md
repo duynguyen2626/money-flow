@@ -1,150 +1,86 @@
 ---
-description: Side Cleanup – Schema Drift Trash Sweep Prompt
+description: Prompt P4 (Updated) — Transactions UI Rebuild to New Mock (ENG 100%)
 ---
 
-# Side Cleanup (“Dọn Rác bên lề”) — Schema Drift Trash Sweep
+PHASE 4 — Transactions UI Rebuild to NEW Mock (Locked)
 
-## Purpose
+ROLE
+You are implementing a UI rebuild for the Transactions table layout based on the NEW mock screenshot provided by the user.
+This is NOT a free redesign. The screenshot is the single source of truth.
 
-Stop recurring runtime errors caused by **stale schema references** across the repo.
-Unify all image fields to **`image_url`** and remove legacy references to:
+INPUTS
+- The user will provide:
+  1) NEW mock screenshot (authoritative)
+  2) Optional: current broken UI screenshot (for diff)
 
-* `shops.logo_url` (no longer exists)
-* `transaction_lines` table + FK relationships (no longer exists)
+NON-NEGOTIABLE RULES
+- Keep all existing data logic: filtering, pagination, selection, totals, actions, fetch calls.
+- Only change presentation/layout and small UI rendering behaviors described below.
+- Do not change DB schema, API routes, or business rules.
+- Do not introduce new pages.
+- Maintain responsiveness (27” desktop, 13” laptop, iPad, mobile).
 
-This is a **cross-cutting cleanup** task. Goal: the app must not query non-existent columns/tables.
+TARGET STRUCTURE (match the mock)
+A) Top area
+- Move/ensure the main navigation is anchored at the very top so the layout does not “shift” when nav collapses.
+- The table area must stay visually stable in viewport.
 
----
+B) Table columns & rendering requirements
 
-## Ground Truth (DB)
+1) DATE column (calendar tile style)
+- Render date like a mini calendar card (month label + day number).
+- Place time next to it (not below).
+- Include a quick action icon next to time (wrench icon), matching mock placement.
 
-Use `schema.sql` as the authoritative reference.
-Key facts:
+2) NOTE column
+- Primary: note title text.
+- Secondary: show the transaction ID below (short format like ABCD-123...).
+- The ID should be truncated; on hover show tooltip with full ID.
+- Refund flow icon must look like the legacy one (do not invent new refund icon style).
 
-* `public.shops` contains `image_url` (NOT `logo_url`).
-* There is NO `public.transaction_lines` table.
-* There IS `public.transaction_history`.
+3) FLOW & ENTITY column
+- Preserve the “source -> person” structure.
+- Source image (cards) must have the same height as person avatar (square).
+- Cards must always render in portrait orientation:
+  - If original image is landscape/standing wrongly, rotate it so it appears portrait.
+  - Do NOT round the card image (no rounded-full).
+- Person avatar remains square/consistent as in mock.
 
----
+4) AMOUNT / FINAL PRICE merged into one column (VALUE column)
+- Show Amount on top (primary).
+- Show cashback badges on the same row as Amount:
+  - percent back and/or fixed back, smaller size badge.
+- Show Final Price below Amount.
+- Add an info icon next to Final Price.
+  - Hover shows a tooltip “Price Breakdown” with formula details (amount, percent/fixed, final).
+  - Tooltip content must be computed from existing fields; do not change calculations.
 
-## Non-goals
+5) CATEGORY column
+- Match mock: compact category cell (icon + type chips).
 
-* Do NOT redesign UI.
-* Do NOT change business logic semantics.
-* Do NOT introduce new tables.
-* Keep PR focused: schema-alignment and dead-code removal.
+C) Interaction / regressions to fix
+- Checkbox selection must work reliably.
+- Row click/hover behavior must remain consistent (no broken pointer events).
+- No unexpected rounding on images.
+- No converting numeric values into pills unless mock shows it.
 
----
+IMPLEMENTATION GUIDANCE
+- Prefer making changes inside:
+  - src/components/moneyflow/unified-transaction-table.tsx
+  - src/components/moneyflow/desktop row renderer (wherever row JSX is)
+  - src/components/moneyflow/mobile-transaction-row.tsx (only if mobile is also updated)
+- If TableShell or MobileRecordRow blocks the mock, adjust them minimally but do not redesign them.
 
-## Success Criteria
+STRICT ENFORCEMENT
+- Do not add “extra” UI sections.
+- Do not move Financial Summary out of its current control unless mock shows it.
+- Do not create horizontal scrolling for top toolbar.
+- Any style change must move toward matching the mock exactly.
 
-* No runtime logs referencing:
+DELIVERABLES
+- Updated Transactions table UI matching the mock.
+- Build must pass: npm run build
+- Provide before/after screenshots for desktop and mobile.
 
-  * `shops.logo_url`
-  * `transaction_lines`
-  * PostgREST relationship errors between `transactions` and `transaction_lines`
-* `/transactions`, `/accounts`, `/people` pages load without the listed errors.
-* `npm run build` passes.
-
----
-
-## Required Workflow
-
-1. Read `.agent/workflows/gemini.md`, `.agent/rules/gravityrules.md`, `.agent/workflows/task.md`.
-2. Use **search-first** approach to locate all stale references.
-3. Make the smallest safe refactor:
-
-   * Replace `logo_url` → `image_url`
-   * Replace `transaction_lines` → correct source (usually `transaction_history` or `transactions` alone)
-4. Verify via dev + build.
-
----
-
-## Implementation Tasks
-
-### Task A — Unify image fields to `image_url`
-
-1. Find all uses of `logo_url`:
-
-   * Supabase select strings (e.g. `select('..., logo_url, ...')`)
-   * Types/interfaces (Shop type)
-   * UI components that expect `logo_url`
-
-2. Replace with `image_url` everywhere.
-
-3. Introduce ONE canonical helper (optional but recommended):
-   Create `src/lib/image-url.ts`:
-
-* `export function pickImageUrl(entity: { image_url?: string | null } | null | undefined): string | null`
-  Use it wherever rendering an image.
-
-4. Ensure no component still references `logo_url`.
-
-### Task B — Remove all `transaction_lines` references
-
-1. Find all occurrences of `transaction_lines`:
-
-   * Supabase selects like `transactions(..., transaction_lines(...))`
-   * Relationship hints / embedded queries
-   * Types and DTOs
-
-2. Replace query logic with the correct table(s):
-
-Rules:
-
-* If the code used `transaction_lines` to fetch itemized records, the closest replacement is usually `transaction_history`.
-* If the code only needed recent transactions, query `transactions` directly without embedding lines.
-* If debt/monthly lines logic relied on `transaction_lines`, update it to derive from:
-
-  * `transactions` + filters
-  * `transaction_history` for historical snapshots
-
-3. Ensure all PostgREST embedded relationship selects are valid.
-
-   * Do NOT embed a relationship that doesn’t exist in schema.
-
-### Task C — Fix account/shop creation flows impacted by schema drift
-
-* Confirm `/accounts` create/update uses `image_url` and not `logo_url`.
-* Confirm “Create account” from Add Transaction modal uses the same API and succeeds.
-
-### Task D — Delete dead types / dead code
-
-* Remove legacy interfaces/types:
-
-  * `logo_url` fields
-  * `TransactionLine` models that map to `transaction_lines`
-* Remove unused helpers to reduce confusion.
-
----
-
-## Verification Checklist
-
-### Runtime verification
-
-* Run dev server, open:
-
-  * `/transactions`
-  * `/accounts`
-  * (debt/people pages if they use monthly lines)
-* Confirm console/server logs no longer show:
-
-  * `column shops.logo_url does not exist`
-  * `Could not find table public.transaction_lines`
-  * `Could not find relationship between transactions and transaction_lines`
-
-### Build verification
-
-* `npm run build` must pass.
-
----
-
-## Deliverables
-
-* One PR titled: `chore: schema drift cleanup (image_url, transaction_history)`
-* Small commits:
-
-  1. `fix: replace logo_url with image_url`
-  2. `fix: remove transaction_lines usage`
-  3. `chore: delete dead types`
-* Final comment listing all removed legacy references.
+STOP
+Stop after completing this UI rebuild. Do not start any DB/date-format migration or sheet sync work.
