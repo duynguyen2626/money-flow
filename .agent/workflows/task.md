@@ -1,86 +1,132 @@
 ---
-description: Prompt P4 (Updated) — Transactions UI Rebuild to New Mock (ENG 100%)
+description: PHASE 5 — Mobile UI Fix (Transactions) + Standardize MobileRecordRow for Reuse
 ---
 
-PHASE 4 — Transactions UI Rebuild to NEW Mock (Locked)
+PHASE 5 — Mobile UI Fix (Transactions) + Standardize MobileRecordRow for Reuse
 
 ROLE
-You are implementing a UI rebuild for the Transactions table layout based on the NEW mock screenshot provided by the user.
-This is NOT a free redesign. The screenshot is the single source of truth.
+You are fixing broken mobile Transactions UI and standardizing a reusable mobile row component (MobileRecordRow)
+so that later we can reuse the same pattern for /accounts and /people without rewriting UI.
 
-INPUTS
-- The user will provide:
-  1) NEW mock screenshot (authoritative)
-  2) Optional: current broken UI screenshot (for diff)
+ABSOLUTE RULES
+- NO DB / API / query / calculation changes.
+- NO desktop UI changes. Desktop is already correct (Phase 4).
+- Mobile must be readable without horizontal scrolling.
+- Do not add new toolbar sections. Keep existing UX controls.
+- Refactor incrementally in small commits. Keep backwards compatibility.
 
-NON-NEGOTIABLE RULES
-- Keep all existing data logic: filtering, pagination, selection, totals, actions, fetch calls.
-- Only change presentation/layout and small UI rendering behaviors described below.
-- Do not change DB schema, API routes, or business rules.
-- Do not introduce new pages.
-- Maintain responsiveness (27” desktop, 13” laptop, iPad, mobile).
+SOURCE OF TRUTH
+- User-provided mobile screenshot shows the current broken layout (wrong fields in wrong places).
+- Desktop layout is correct; mobile must not affect desktop.
 
-TARGET STRUCTURE (match the mock)
-A) Top area
-- Move/ensure the main navigation is anchored at the very top so the layout does not “shift” when nav collapses.
-- The table area must stay visually stable in viewport.
+FILES IN SCOPE
+Primary:
+- src/components/moneyflow/unified-transaction-table.tsx
+- src/components/moneyflow/mobile/mobile-transaction-row.tsx
+- src/components/moneyflow/mappers/transactionToMobileRecordRow.ts
+- src/components/moneyflow/mobile/MobileRecordRow.tsx
+- src/components/moneyflow/mobile/types.ts (or existing types)
 
-B) Table columns & rendering requirements
+Allowed NEW files:
+- src/components/moneyflow/mobile/MobileTransactionsList.tsx
+- src/components/app/mobile/MobileRecordRow.tsx (optional relocation, only if it reduces future duplication)
+- src/components/app/mobile/types.ts (shared types, optional)
 
-1) DATE column (calendar tile style)
-- Render date like a mini calendar card (month label + day number).
-- Place time next to it (not below).
-- Include a quick action icon next to time (wrench icon), matching mock placement.
+Non-goals (DO NOT DO)
+- Do not refactor Accounts/People pages in this phase.
+- Do not implement date-format migrations or sheet sync (Phase 6).
+- Do not redesign desktop or change column order desktop.
 
-2) NOTE column
-- Primary: note title text.
-- Secondary: show the transaction ID below (short format like ABCD-123...).
-- The ID should be truncated; on hover show tooltip with full ID.
-- Refund flow icon must look like the legacy one (do not invent new refund icon style).
+GOALS
 
-3) FLOW & ENTITY column
-- Preserve the “source -> person” structure.
-- Source image (cards) must have the same height as person avatar (square).
-- Cards must always render in portrait orientation:
-  - If original image is landscape/standing wrongly, rotate it so it appears portrait.
-  - Do NOT round the card image (no rounded-full).
-- Person avatar remains square/consistent as in mock.
+A) FIX MOBILE TRANSACTIONS
+Mobile /transactions must render as a vertical list (NOT multi-column table).
+Each row must show the correct data in a stable order:
 
-4) AMOUNT / FINAL PRICE merged into one column (VALUE column)
-- Show Amount on top (primary).
-- Show cashback badges on the same row as Amount:
-  - percent back and/or fixed back, smaller size badge.
-- Show Final Price below Amount.
-- Add an info icon next to Final Price.
-  - Hover shows a tooltip “Price Breakdown” with formula details (amount, percent/fixed, final).
-  - Tooltip content must be computed from existing fields; do not change calculations.
+1) Selection checkbox (tap-friendly)
+2) Title: Note
+3) Subtitle: short transaction ID (truncated) + tooltip with full ID
+4) Meta: Date + Time (readable)
+5) Flow: source -> person (icons/images), consistent sizing, no accidental rounding
+6) Value block: Amount (primary) + cashback badges (%/fixed) smaller; Final Price below; info tooltip for breakdown
+7) Category badges (compact)
 
-5) CATEGORY column
-- Match mock: compact category cell (icon + type chips).
+No horizontal scroll required.
 
-C) Interaction / regressions to fix
-- Checkbox selection must work reliably.
-- Row click/hover behavior must remain consistent (no broken pointer events).
-- No unexpected rounding on images.
-- No converting numeric values into pills unless mock shows it.
+B) STANDARDIZE MobileRecordRow API (Reusable Foundation)
+MobileRecordRow must become a stable generic component to be reused later.
 
-IMPLEMENTATION GUIDANCE
-- Prefer making changes inside:
-  - src/components/moneyflow/unified-transaction-table.tsx
-  - src/components/moneyflow/desktop row renderer (wherever row JSX is)
-  - src/components/moneyflow/mobile-transaction-row.tsx (only if mobile is also updated)
-- If TableShell or MobileRecordRow blocks the mock, adjust them minimally but do not redesign them.
+Define a single contract:
+- leading: checkbox + optional left icon/avatar
+- header: title + subtitle
+- meta: small meta chips/lines (date/time/status)
+- badges: array of small badges (status/category/debt/cycle)
+- value: right-side block (top line + optional small badges + bottom line)
+- actions: optional action button/menu
 
-STRICT ENFORCEMENT
-- Do not add “extra” UI sections.
-- Do not move Financial Summary out of its current control unless mock shows it.
-- Do not create horizontal scrolling for top toolbar.
-- Any style change must move toward matching the mock exactly.
+Constraints:
+- Component must accept render props or typed slots, but keep it simple.
+- Must NOT embed transaction-specific knowledge inside MobileRecordRow.
+- All transaction-specific mapping must live in transactionToMobileRecordRow.ts.
 
-DELIVERABLES
-- Updated Transactions table UI matching the mock.
-- Build must pass: npm run build
-- Provide before/after screenshots for desktop and mobile.
+Implementation detail:
+- Create a type `MobileRowModel` (generic) in shared types file:
+  - id: string
+  - isSelected: boolean
+  - onSelect(): void
+  - title: string
+  - subtitle?: { text: string; tooltip?: string }
+  - meta?: Array<{ icon?: ReactNode; text: string }>
+  - leadingVisual?: { kind: "img"|"icon"|"text"; src?: string; icon?: ReactNode; text?: string; className?: string }
+  - flow?: { left?: LeadingVisual; arrow?: boolean; right?: LeadingVisual; labels?: string[] }
+  - value?: { top: string; topBadges?: string[]; bottom?: string; infoTooltip?: ReactNode }
+  - badges?: Array<{ text: string; variant?: "default"|"secondary"|"success"|"warning"|"danger" }>
+  - actions?: { onMore?: () => void; onEdit?: () => void; onDelete?: () => void }
+
+MobileRecordRow renders ONLY based on MobileRowModel.
+
+C) PRESERVE SELECTION & ACTIONS
+- checkbox must work (no pointer-events issues)
+- actions menu must work on mobile (compact)
+- do not break keyboard or accessibility basics (aria labels on checkbox & actions)
+
+INCREMENTAL COMMITS (MANDATORY)
+
+Commit A — Mobile rendering switch (no redesign)
+- In unified-transaction-table.tsx:
+  - For mobile breakpoint, do NOT render the desktop table.
+  - Render <MobileTransactionsList .../> (new) using existing selection state & handlers.
+  - Desktop table path remains unchanged.
+
+Commit B — MobileTransactionsList (thin list renderer)
+- Add MobileTransactionsList.tsx:
+  - maps transactions => <MobileTransactionRow .../>
+  - passes selection + actions handlers
+  - no business logic changes, only wiring
+
+Commit C — Fix mapper (root cause)
+- Update transactionToMobileRecordRow.ts to generate correct MobileRowModel:
+  - correct NOTE/CATEGORY/VALUE mapping (never swapped)
+  - value block includes amount + cashback badges + final price + tooltip breakdown
+  - flow block includes left source visual + arrow + right person visual, sized consistently
+  - avoid rounded styles unless explicitly asked
+
+Commit D — Standardize MobileRecordRow API (backward compatible)
+- Update MobileRecordRow.tsx to fully render MobileRowModel.
+- Ensure current transaction mobile row becomes a very thin adapter.
+- If any existing usage breaks, provide a small adapter or default values.
+
+Commit E — Remove mobile horizontal scroll sources
+- Ensure mobile list container does not use overflow-x-auto.
+- Long text truncates with ellipsis; full info via tooltip.
+
+REQUIRED VERIFICATION
+- npm run build passes.
+- Mobile /transactions at 375px: no horizontal scroll, rows readable, fields correct.
+- Checkbox selection works.
+- Actions work.
+- Desktop /transactions unchanged visually.
 
 STOP
-Stop after completing this UI rebuild. Do not start any DB/date-format migration or sheet sync work.
+Stop after Phase 5 is complete.
+Do not start Phase 6.

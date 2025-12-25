@@ -65,6 +65,7 @@ import {
 } from "lucide-react"
 
 import { MobileTransactionRow } from "./mobile-transaction-row"
+import { MobileTransactionsList } from "./mobile/MobileTransactionsList"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
@@ -1059,7 +1060,21 @@ export function UnifiedTransactionTable({
         "relative w-full rounded-xl border border-slate-200 bg-card shadow-sm transition-colors duration-300 flex-1 overflow-hidden",
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )} style={{ ['--table-font-size' as string]: `${fontSize}px` } as React.CSSProperties}>
-        <div className="flex-1 overflow-auto w-full scrollbar-visible h-full bg-white relative" style={{ scrollbarGutter: 'stable' }}>
+        <MobileTransactionsList
+          transactions={paginatedTransactions}
+          categories={categories}
+          selectedTxnIds={selection}
+          onSelectTxn={(id, selected) => handleSelectOne(id, selected)}
+          onRowClick={(txn) => {
+            if (isExcelMode) return;
+            setEditingTxn(txn);
+          }}
+          formatters={{
+            currency: (val) => numberFormatter.format(val),
+            date: formattedDate
+          }}
+        />
+        <div className="hidden md:block flex-1 overflow-auto w-full scrollbar-visible h-full bg-white relative" style={{ scrollbarGutter: 'stable' }}>
           <table
             className="w-full caption-bottom text-sm border-collapse min-w-[800px] lg:min-w-0"
             onMouseUp={handleCellMouseUp}
