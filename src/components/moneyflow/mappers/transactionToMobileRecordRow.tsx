@@ -1,7 +1,8 @@
 import type { ReactNode } from "react"
 import { Ban, CheckCircle2, Clock, FileText, Wallet, ArrowRight, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { MobileRecordBadge, MobileRecordRowProps } from "@/components/app/mobile/types"
+// MobileRecordRowProps is now MobileRowModel
+import type { MobileRecordBadge, MobileRecordRowProps, MobileLeadingVisual } from "@/components/app/mobile/types"
 import type { Category, TransactionWithDetails } from "@/types/moneyflow.types"
 
 type TransactionToMobileRecordRowArgs = {
@@ -87,16 +88,10 @@ export function transactionToMobileRecordRow({
     const title = note || shopName || sourceName
 
     // 2. Subtitle: Short ID + Tooltip
-    // We can't render Tooltip here easily without changing MobileRecordRow or passing a ReactNode subtitle.
-    // MobileRecordRow props says subtitle?: string.
-    // So we just use string text. "ID: ...1234"
     const shortId = txn.id.slice(-4)
-    const subtitle = `...${shortId}`
+    const subtitleObj = { text: `...${shortId}`, tooltip: `Transaction ID: ${txn.id}` }
 
     // 3. Flow Visuals (Source -> Dest)
-    // We hijack 'icon' to show this flow.
-    // Left: Source Image/Icon
-    // Right: Person/Target Image/Icon (if transfer/debt/repay)
     const sourceImage = txn.source_image || txn.shop_image_url
     const targetImage = (txn as any).person_avatar_url || (txn as any).destination_image_url
 
@@ -104,29 +99,15 @@ export function transactionToMobileRecordRow({
     const isTransfer = txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment'
     const showFlow = isTransfer && (targetImage || (txn as any).destination_name)
 
-    const SourceVisual = sourceImage ? (
-        <img src={sourceImage} alt="" className="h-6 w-6 object-contain rounded-full bg-white border border-slate-100" />
-    ) : (
-        <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
-            <Wallet className="h-3 w-3 text-slate-400" />
-        </div>
-    )
+    const flowObj = showFlow ? {
+        left: sourceImage ? { kind: "img", src: sourceImage, className: "bg-white border-slate-100" } as const : { kind: "icon", icon: <Wallet className="h-3 w-3 text-slate-400" />, className: "bg-slate-100 border-slate-200" } as const,
+        arrow: true,
+        right: targetImage ? { kind: "img", src: targetImage, className: "bg-white border-slate-100" } as const : { kind: "icon", icon: <Wallet className="h-3 w-3 text-slate-400" />, className: "bg-slate-100 border-slate-200" } as const,
+    } : undefined
 
-    const TargetVisual = targetImage ? (
-        <img src={targetImage} alt="" className="h-6 w-6 object-contain rounded-full bg-white border border-slate-100" />
-    ) : (
-        <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
-            <Wallet className="h-3 w-3 text-slate-400" />
-        </div>
-    )
-
-    const FlowIcon = showFlow ? (
-        <div className="flex items-center gap-0.5">
-            {SourceVisual}
-            <ArrowRight className="h-3 w-3 text-slate-300" />
-            {TargetVisual}
-        </div>
-    ) : SourceVisual
+    const leadingVisualObj = !showFlow ? (
+        sourceImage ? { kind: "img", src: sourceImage, className: "bg-transparent h-8 w-8 object-contain rounded-none text-slate-400" } as const : { kind: "icon", icon: <Wallet className="h-4 w-4" />, className: "bg-transparent" } as const
+    ) : undefined
 
     // 4. Badges
     const categoryName = categories.find(cat => cat.id === txn.category_id)?.name || txn.category_name
@@ -163,10 +144,10 @@ export function transactionToMobileRecordRow({
         meta = [{ label: `${dateStr} ${timeStr}` }]
     }
 
-    // 6. Amount logic
+    // 6. Value Logic
     const visualType = (txn as { displayType?: string }).displayType ?? txn.type
     const isRepayment = txn.type === "repayment"
-    const amountTone =
+    const amountTone: "positive" | "negative" | "neutral" =
         visualType === "income" || isRepayment ? "positive" : visualType === "expense" ? "negative" : "neutral"
 
     const rawAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount ?? 0
@@ -186,37 +167,46 @@ export function transactionToMobileRecordRow({
         : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount))
 
     const primaryStr = formatCurrency(absRaw)
-    const secondaryStr = hasCashback ? `Final: ${formatCurrency(finalPrice)}` : undefined
+    const topBadges: MobileRecordBadge[] = []
 
-    // Inject Cashback badge into badges? Or handle in Amount?
-    // Plan: "cashback badges (%/fixed) smaller".
-    // We can add to Badges.
     if (hasCashback) {
         if (percentRaw > 0) {
-            badges.push({
+            topBadges.push({
                 label: `${percentRaw}%`,
-                className: "text-[9px] text-emerald-700 bg-emerald-50 border-emerald-200 px-1 h-4",
+                className: "text-emerald-700 bg-emerald-50 border-emerald-200",
             })
         }
         if (fixedRaw > 0) {
-            badges.push({
+            topBadges.push({
                 label: `+${formatCurrency(fixedRaw)}`,
-                className: "text-[9px] text-emerald-700 bg-emerald-50 border-emerald-200 px-1 h-4",
+                className: "text-emerald-700 bg-emerald-50 border-emerald-200",
             })
         }
     }
 
+    const valueBlock = {
+        top: primaryStr,
+        topBadges,
+        bottom: hasCashback ? `Final: ${formatCurrency(finalPrice)}` : undefined,
+        tone: amountTone,
+        infoTooltip: hasCashback ? (
+            <div className="space-y-1">
+                <div>Original: {formatCurrency(baseAmount)}</div>
+                <div className="text-emerald-600">Cashback: -{formatCurrency(cashbackAmount)}</div>
+                <div className="font-bold border-t pt-1">Final: {formatCurrency(finalPrice)}</div>
+            </div>
+        ) : undefined
+    }
+
+    // Return using the new MobileRowModel properties
     return {
         title,
-        subtitle,
-        icon: FlowIcon,
-        iconClassName: showFlow ? "w-auto px-1 bg-transparent" : "bg-transparent",
+        subtitle: subtitleObj,
+        // use leadingVisual and flow instead of hijacked icon
+        leadingVisual: leadingVisualObj,
+        flow: flowObj,
         badges,
         meta,
-        amount: {
-            primary: primaryStr,
-            secondary: secondaryStr,
-            tone: amountTone,
-        },
+        value: valueBlock,
     }
 }
