@@ -25,6 +25,8 @@ import { SearchBox } from './toolbar/SearchBox'
 import { QuickTabs } from './toolbar/QuickTabs'
 import { ToolbarActions } from './toolbar/ToolbarActions'
 import { DateRangeControl } from './toolbar/DateRangeControl'
+import { ColumnKey, defaultColumns } from "@/components/app/table/transactionColumns"
+import { TableViewOptions } from './toolbar/TableViewOptions'
 
 type SortKey = 'date' | 'amount'
 type SortDir = 'asc' | 'desc'
@@ -105,6 +107,21 @@ export function FilterableTransactions({
     const [dateFrom, setDateFrom] = useState<string>('')
     const [dateTo, setDateTo] = useState<string>('')
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
+    const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
+        const initial: Record<ColumnKey, boolean> = {
+            date: true,
+            shop: true,
+            note: false,
+            category: true,
+            tag: false,
+            account: true,
+            amount: true,
+            back_info: false,
+            final_price: true,
+            id: false,
+        }
+        return initial
+    })
 
     const handleBulkActionStateChange = useCallback((next: BulkActionState) => {
         setBulkActions(next);
@@ -692,6 +709,10 @@ export function FilterableTransactions({
                                 onExcelModeChange={setIsExcelMode}
                                 filterContent={filterPopoverContent}
                             >
+                                <TableViewOptions
+                                    visibleColumns={visibleColumns}
+                                    onVisibilityChange={setVisibleColumns}
+                                />
                                 {/* Add Transaction (Desktop) */}
                                 {!context && !isExcelMode && (
                                     <div className="ml-1">
@@ -788,73 +809,80 @@ export function FilterableTransactions({
                             />
                         </div>
                     </div>
+
+                    {/* Floating Action Bar (Replaces Mobile/Inline Actions) */}
                     {selectedTxnIds.size > 0 && (
-                        <div className="flex flex-wrap items-center gap-2 pt-2 animate-in fade-in slide-in-from-top-1">
-                            <button
-                                className={cn(
-                                    "flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap shadow-sm text-white transition-colors",
-                                    currentBulkTab === 'void' ? 'bg-green-600 hover:bg-green-500' : 'bg-red-600 hover:bg-red-500'
-                                )}
-                                onClick={() => bulkActionHandler?.()}
-                                disabled={bulkActionDisabled}
-                            >
-                                {currentBulkTab === 'void' ? <Undo className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
-                                {bulkActionBusy ? 'Working...' : `${bulkActionLabel} (${selectedTxnIds.size})`}
-                            </button>
-                            {currentBulkTab === 'void' && (
+                        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4">
+                            <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-full shadow-xl border border-slate-200 ring-1 ring-slate-100">
+                                {/* Void/Restore Button */}
                                 <button
-                                    className="px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap shadow-sm bg-red-700 text-white hover:bg-red-800"
-                                    onClick={() => bulkActions?.onDeleteSelected?.()}
-                                    disabled={!bulkActions?.onDeleteSelected || bulkActions?.isDeleting}
+                                    className={cn(
+                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white shadow-sm transition-all active:scale-95",
+                                        currentBulkTab === 'void'
+                                            ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700'
+                                            : 'bg-gradient-to-r from-rose-500 to-rose-600 hover:from-rose-600 hover:to-rose-700'
+                                    )}
+                                    onClick={() => bulkActionHandler?.()}
+                                    disabled={bulkActionDisabled}
                                 >
-                                    {bulkActions?.isDeleting ? 'Deleting...' : `Delete Forever (${selectedTxnIds.size})`}
+                                    {currentBulkTab === 'void' ? <Undo className="h-3.5 w-3.5" /> : <Trash2 className="h-3.5 w-3.5" />}
+                                    <span>{bulkActionLabel} ({selectedTxnIds.size})</span>
                                 </button>
-                            )}
-                            <button
-                                className="px-3 py-2 rounded-md text-xs font-medium bg-slate-200 text-slate-800 hover:bg-slate-300 whitespace-nowrap"
-                                onClick={() => { setSelectedTxnIds(new Set()); setShowSelectedOnly(false) }}
-                            >
-                                Deselect ({selectedTxnIds.size})
-                            </button>
-                            <button
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 whitespace-nowrap"
-                                onClick={async () => {
-                                    const ids = Array.from(selectedTxnIds)
-                                    const toastId = toast.loading(`Recalculating cashback for ${ids.length} transactions...`)
-                                    let successCount = 0
-                                    let failCount = 0
-                                    for (const id of ids) {
-                                        try {
-                                            const res = await fetch(`/api/debug/recalc-cashback?id=${id}`)
-                                            if (res.ok) successCount++
-                                            else failCount++
-                                        } catch (e) {
-                                            console.error(e)
-                                            failCount++
+
+                                <div className="h-4 w-px bg-slate-200 mx-1" />
+
+                                {/* Deselect Button */}
+                                <button
+                                    className="px-3 py-1.5 rounded-full text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+                                    onClick={() => { setSelectedTxnIds(new Set()); setShowSelectedOnly(false) }}
+                                >
+                                    Deselect ({selectedTxnIds.size})
+                                </button>
+
+                                <div className="h-4 w-px bg-slate-200 mx-1" />
+
+                                {/* Recalc Cashback Button */}
+                                <button
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                    onClick={async () => {
+                                        const ids = Array.from(selectedTxnIds)
+                                        const toastId = toast.loading(`Recalculating cashback for ${ids.length} transactions...`)
+                                        let successCount = 0
+                                        let failCount = 0
+                                        for (const id of ids) {
+                                            try {
+                                                const res = await fetch(`/api/debug/recalc-cashback?id=${id}`)
+                                                if (res.ok) successCount++
+                                                else failCount++
+                                            } catch (e) {
+                                                failCount++
+                                            }
                                         }
-                                    }
-                                    toast.dismiss(toastId)
-                                    if (failCount === 0) {
-                                        toast.success(`Recalculated ${successCount} items.`)
-                                    } else {
-                                        toast.warning(`Done with ${successCount} successes and ${failCount} failures.`)
-                                    }
-                                    router.refresh()
-                                    setSelectedTxnIds(new Set())
-                                }}
-                            >
-                                <RefreshCw className="h-4 w-4" />
-                                Recalc Cashback
-                            </button>
-                            <button
-                                className={cn(
-                                    "px-3 py-2 rounded-md text-xs font-medium whitespace-nowrap transition-colors",
-                                    showSelectedOnly ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-                                )}
-                                onClick={() => setShowSelectedOnly(prev => !prev)}
-                            >
-                                {showSelectedOnly ? 'Show All' : 'Show Selected'}
-                            </button>
+                                        toast.dismiss(toastId)
+                                        if (successCount > 0) toast.success(`Recalculated ${successCount} transactions`)
+                                        if (failCount > 0) toast.error(`Failed to recalculate ${failCount} transactions`)
+                                        router.refresh()
+                                    }}
+                                >
+                                    <RefreshCw className="h-3.5 w-3.5" />
+                                    <span>Recalc Cashback</span>
+                                </button>
+
+                                <div className="h-4 w-px bg-slate-200 mx-1" />
+
+                                {/* Show Selected Only Toggle */}
+                                <button
+                                    className={cn(
+                                        "px-3 py-1.5 rounded-full text-xs font-semibold transition-colors",
+                                        showSelectedOnly
+                                            ? "bg-blue-100 text-blue-700"
+                                            : "text-slate-600 hover:bg-slate-100"
+                                    )}
+                                    onClick={() => setShowSelectedOnly(!showSelectedOnly)}
+                                >
+                                    Show Selected
+                                </button>
+                            </div>
                         </div>
                     )}
                 </div>
@@ -1037,7 +1065,7 @@ export function FilterableTransactions({
                                 onSortChange={setSortState}
                                 hiddenColumns={[]}
                                 isExcelMode={isExcelMode}
-                                showPagination={true}
+
                                 currentPage={currentPage}
                                 totalPages={totalPages}
                                 onPageChange={setCurrentPage}

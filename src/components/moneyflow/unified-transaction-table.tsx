@@ -59,7 +59,9 @@ import {
   ListFilter,
   Eraser,
   Undo2,
-  EllipsisVertical
+  EllipsisVertical,
+  MoveRight,
+  Wrench
 } from "lucide-react"
 
 import { MobileTransactionRow } from "./mobile-transaction-row"
@@ -113,9 +115,8 @@ type ColumnKey =
   | "tag"
   | "note" // Added Note Column
   | "account" // Merged Flow & Entity
-  | "amount"
+  | "amount" // VALUE column (merged Amount + Final Price)
   | "back_info"
-  | "final_price"
   | "id"
 
 type SortKey = 'date' | 'amount'
@@ -286,15 +287,14 @@ export function UnifiedTransactionTable({
 }: UnifiedTransactionTableProps) {
   const tableData = data ?? transactions ?? []
   const defaultColumns: ColumnConfig[] = [
-    { key: "date", label: "Date", defaultWidth: 65, minWidth: 55 },
-    { key: "shop", label: "Note", defaultWidth: 200, minWidth: 150 },
-    { key: "account", label: "Flow & Entity", defaultWidth: 280, minWidth: 200 },
-    { key: "amount", label: "Amount", defaultWidth: 110 },
-    { key: "final_price", label: "Final Price", defaultWidth: 110 },
+    { key: "date", label: "Date", defaultWidth: 160, minWidth: 140 },
+    { key: "shop", label: "Note", defaultWidth: 250, minWidth: 180 },
+    { key: "account", label: "Flow & Entity", defaultWidth: 280, minWidth: 220 },
+    { key: "amount", label: "Value", defaultWidth: 140, minWidth: 120 },
     { key: "category", label: "Category", defaultWidth: 180 },
     { key: "id", label: "ID", defaultWidth: 100 },
   ]
-  const mobileColumnOrder: ColumnKey[] = ["date", "shop", "category", "account", "amount", "final_price"]
+  const mobileColumnOrder: ColumnKey[] = ["date", "shop", "category", "account", "amount"]
   const router = useRouter()
   // Internal state removed for activeTab, now using prop with fallback
   const lastSelectedIdRef = useRef<string | null>(null)
@@ -311,9 +311,8 @@ export function UnifiedTransactionTable({
       category: true,
       tag: false, // Merged into Account column (not in defaultColumns)
       account: true,
-      amount: true,
+      amount: true, // VALUE column (merged Amount + Final Price)
       back_info: false, // Merged into Amount column (not in defaultColumns)
-      final_price: true,
       id: false,
     }
 
@@ -343,8 +342,8 @@ export function UnifiedTransactionTable({
   const handleCellMouseDown = (txnId: string, colKey: ColumnKey, e: React.MouseEvent) => {
     if (!isExcelMode) return
 
-    // Determine strict target (amount or final_price)
-    if (colKey !== 'amount' && colKey !== 'final_price') return
+    // Only allow selection on amount (VALUE) column
+    if (colKey !== 'amount') return
 
     if (!e.shiftKey && !e.ctrlKey) {
       // Clear previous if not multi-select modifier
@@ -377,6 +376,9 @@ export function UnifiedTransactionTable({
       setSelectionStartId(txnId)
       setSelectedColumn(colKey)
     }
+
+    // PREVENT NATIVE TEXT SELECTION
+    e.preventDefault()
   }
 
   const handleCellMouseEnter = (txnId: string, colKey: ColumnKey) => {
@@ -417,31 +419,32 @@ export function UnifiedTransactionTable({
       if (txn) {
         let val = 0;
         if (selectedColumn === 'amount') {
-          val = txn.amount ?? 0
-        } else if (selectedColumn === 'final_price') {
-          // Approximate logic for final_price calc matching render
+          // Use final price if has cashback, otherwise use original amount
           const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount
-
           const percentDisp = Number(txn.cashback_share_percent ?? 0)
           const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
-          const rate = percentDisp > 1 ? percentDisp / 100 : percentDisp // Fix rate calc in Stats
-          // Logic: If original > 0 (Income), Final = Original - Cashback. 
-          // If original < 0 (Expense), Final = Abs(Original) - Cashback (Positive Cost).
+          const hasCashback = percentDisp > 0 || fixedDisp > 0
 
-          // But here we want the signed value to sum correctly?
-          // Usually Excel sum just sums the displayed values.
-          // Displayed values are usually absolute for Final Price?
+          if (hasCashback) {
+            const rate = percentDisp > 1 ? percentDisp / 100 : percentDisp
+            const cashbackCalc = (Math.abs(Number(originalAmount ?? 0)) * rate) + fixedDisp
+            const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0)
+            const baseAmount = Math.abs(Number(originalAmount ?? 0))
+            const finalDisp = (typeof txn.final_price === 'number')
+              ? Math.abs(txn.final_price)
+              : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount))
 
-          const cashbackCalc = (Math.abs(Number(originalAmount ?? 0)) * rate) + fixedDisp
-          const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
-          const baseAmount = Math.abs(Number(originalAmount ?? 0));
-          const finalDisp = (typeof txn.final_price === 'number')
-            ? Math.abs(txn.final_price)
-            : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount));
-
-          // If original was negative (Expense), treat final cost as negative for "Total Out"
-          if ((originalAmount ?? 0) < 0) val = -finalDisp
-          else val = finalDisp
+            // Force sign based on type if available, otherwise trust amount
+            if (['expense', 'debt', 'transfer'].includes(txn.type)) val = -finalDisp
+            else if (['income', 'repayment'].includes(txn.type)) val = finalDisp
+            else val = (originalAmount ?? 0) < 0 ? -finalDisp : finalDisp
+          } else {
+            // Force sign based on type 
+            const absVal = Math.abs(originalAmount ?? 0)
+            if (['expense', 'debt', 'transfer'].includes(txn.type)) val = -absVal
+            else if (['income', 'repayment'].includes(txn.type)) val = absVal
+            else val = originalAmount ?? 0
+          }
         }
 
         if (val > 0) totalIn += val
@@ -468,7 +471,6 @@ export function UnifiedTransactionTable({
       }
       next.date = hiddenColumns.includes('date') ? false : true
       next.shop = hiddenColumns.includes('shop') ? false : true
-      next.final_price = hiddenColumns.includes('final_price') ? false : true
       next.category = hiddenColumns.includes('category') ? false : true
       next.account = hiddenColumns.includes('account') ? false : true
       next.amount = hiddenColumns.includes('amount') ? false : true
@@ -1058,7 +1060,11 @@ export function UnifiedTransactionTable({
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )} style={{ ['--table-font-size' as string]: `${fontSize}px` } as React.CSSProperties}>
         <div className="flex-1 overflow-auto w-full scrollbar-visible h-full bg-white relative" style={{ scrollbarGutter: 'stable' }}>
-          <table className="w-full caption-bottom text-sm border-collapse min-w-[800px] lg:min-w-0">
+          <table
+            className="w-full caption-bottom text-sm border-collapse min-w-[800px] lg:min-w-0"
+            onMouseUp={handleCellMouseUp}
+            onMouseLeave={handleCellMouseUp}
+          >
             <TableHeader className="sticky top-0 z-40 bg-white backdrop-blur text-foreground font-bold shadow-sm ring-1 ring-slate-200">
               <TableRow className="hover:bg-transparent border-b border-slate-200">
                 {displayedColumns.map(col => {
@@ -1082,43 +1088,7 @@ export function UnifiedTransactionTable({
                       style={stickyStyle}
                     >
                       {col.key === 'category' ? (
-                        <div className="flex items-center justify-between w-full">
-                          <span>{columnLabel}</span>
-                          <Popover open={isCustomizerOpen} onOpenChange={setIsCustomizerOpen}>
-                            <PopoverTrigger asChild>
-                              <button
-                                className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-medium text-slate-600 shadow-sm hover:bg-slate-50 ml-2"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <SlidersHorizontal className="h-3 w-3" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent align="start" className="w-[200px] p-3">
-                              <div className="space-y-3">
-                                <h4 className="font-medium leading-none text-sm text-slate-900">View Options</h4>
-                                <div className="space-y-2">
-                                  {defaultColumns.map((colConfig) => {
-                                    if (['task', 'id'].includes(colConfig.key)) return null
-                                    return (
-                                      <div key={colConfig.key} className="flex items-center justify-between">
-                                        <Label htmlFor={`col-${colConfig.key}`} className="text-xs text-slate-600">{colConfig.label}</Label>
-                                        <Switch
-                                          id={`col-${colConfig.key}`}
-                                          checked={visibleColumns[colConfig.key]}
-                                          onCheckedChange={(checked) => {
-                                            if (!checked && Object.values(visibleColumns).filter(Boolean).length <= 1) return; // Prevent hiding all
-                                            setVisibleColumns(prev => ({ ...prev, [colConfig.key]: checked }))
-                                          }}
-                                          className="scale-75 origin-right"
-                                        />
-                                      </div>
-                                    )
-                                  })}
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
+                        <span>{columnLabel}</span>
                       ) : col.key === 'date' || isMobileCategoryDate ? (
                         <div className="flex items-center gap-2">
                           <input
@@ -1126,6 +1096,7 @@ export function UnifiedTransactionTable({
                             className="rounded border-gray-300"
                             checked={isAllSelected}
                             onChange={e => handleSelectAll(e.target.checked)}
+                            disabled={isExcelMode}
                           />
                           <button
                             className="flex items-center gap-1 group"
@@ -1402,40 +1373,46 @@ export function UnifiedTransactionTable({
                   switch (key) {
                     case "date": {
                       const d = new Date(txn.occurred_at ?? txn.created_at ?? Date.now())
-                      const dd = String(d.getDate()).padStart(2, '0')
-                      const MM = String(d.getMonth() + 1).padStart(2, '0')
-                      const dateStr = `${dd}.${MM}`
+                      const day = String(d.getDate()).padStart(2, '0')
+                      const monthShort = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
+                      const year = d.getFullYear()
+                      const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
                       const fullDateStr = d.toLocaleDateString('vi-VN', {
-                        weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                        weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
                       })
 
-                      // Determine badge color for Date - Using Outline styles for better contrast
-                      let dateBadgeColors = "bg-white text-slate-700 border-slate-200";
-                      if (txn.type === 'debt') dateBadgeColors = "bg-white text-red-700 border-red-200";
-                      else if (txn.type === 'repayment') dateBadgeColors = "bg-white text-emerald-700 border-emerald-200";
-                      else if (txn.type === 'transfer') dateBadgeColors = "bg-white text-sky-700 border-sky-200";
-                      else if (txn.type === 'income') dateBadgeColors = "bg-white text-emerald-700 border-emerald-200";
-                      else if (txn.type === 'expense') dateBadgeColors = "bg-white text-red-700 border-red-200";
+                      // Determine badge color for Date - Match Type Badge Style
+                      let dateBadgeColors = "bg-slate-50 text-slate-700 border-slate-300";
+                      if (txn.type === 'debt') dateBadgeColors = "bg-amber-50 text-amber-700 border-amber-300";
+                      else if (txn.type === 'repayment') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-300";
+                      else if (txn.type === 'transfer') dateBadgeColors = "bg-sky-50 text-sky-700 border-sky-300";
+                      else if (txn.type === 'income') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-300";
+                      else if (txn.type === 'expense') dateBadgeColors = "bg-red-50 text-red-700 border-red-300";
 
                       return (
-                        <div className="flex items-center gap-1.5 overflow-hidden">
+                        <div className="flex items-center gap-2 overflow-hidden">
                           <input
                             type="checkbox"
                             className="rounded border-slate-300 pointer-events-auto"
                             checked={isSelected}
                             onClick={(e) => { e.stopPropagation(); if (e.shiftKey) handleSelectOne(txn.id, !isSelected, true); }}
                             onChange={(e) => handleSelectOne(txn.id, e.target.checked)}
+                            disabled={isExcelMode}
                           />
-                          {/* Compact Date Badge */}
-                          <div className={cn("flex items-center justify-center px-1.5 py-1 rounded-md border min-w-[50px]", dateBadgeColors)}>
-                            <span className="font-bold text-sm leading-none tracking-tight">{dateStr}</span>
+                          {/* Calendar Tile with Year */}
+                          <div className={cn("flex flex-col items-center justify-center px-2 py-1 rounded-md border min-w-[70px]", dateBadgeColors)}>
+                            <span className="text-[9px] font-bold leading-none tracking-wide">{monthShort} {year}</span>
+                            <span className="text-lg font-bold leading-none mt-0.5">{day}</span>
                           </div>
-                          {/* Clock Icon Separated */}
+                          {/* Time with Clock Icon */}
                           <CustomTooltip content={fullDateStr}>
-                            <Clock className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help" />
+                            <div className="flex items-center gap-1 text-slate-500 cursor-help">
+                              <Clock className="h-3 w-3" />
+                              <span className="text-xs font-medium">{timeStr}</span>
+                            </div>
                           </CustomTooltip>
 
-                          {/* Action Menu (Merged from Task Column) */}
+                          {/* Action Menu (Wrench Icon) */}
                           <div className="relative flex ml-auto">
                             <Popover open={isMenuOpen} onOpenChange={(open) => setActionMenuOpen(open ? txn.id : null)}>
                               <PopoverTrigger asChild>
@@ -1445,10 +1422,9 @@ export function UnifiedTransactionTable({
                                   disabled={isExcelMode}
                                   onClick={event => {
                                     event.stopPropagation()
-                                    // PopoverTrigger handles click, but we want to prevent row selection
                                   }}
                                 >
-                                  <EllipsisVertical className="h-4 w-4" />
+                                  <Wrench className="h-4 w-4" />
                                 </button>
                               </PopoverTrigger>
                               <PopoverContent
@@ -1577,7 +1553,7 @@ export function UnifiedTransactionTable({
                       }
 
                       const installmentBadge = (txn.is_installment || txn.installment_plan_id) ? (
-                        <CustomTooltip content="TrазЬ gA3p - Click О`апЯ xem">
+                        <CustomTooltip content="Trả góp - Click để xem">
                           <Link
                             href={`/installments?tab=active&highlight=${txn.id}`}
                             onClick={(e) => e.stopPropagation()}
@@ -1597,76 +1573,72 @@ export function UnifiedTransactionTable({
                         </CustomTooltip>
                       ) : null;
 
+                      // Transaction ID display - No prefix, just truncated ID
+                      const txnIdShort = txn.id.slice(0, 4) + '...';
+                      const txnIdFull = txn.id;
+
                       return (
-                        <div className="flex items-center gap-1.5 w-full overflow-hidden group">
+                        <div className="flex items-center gap-2 w-full overflow-hidden group">
                           {/* Logo */}
                           {shopLogo ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={shopLogo} alt="" className="h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none" />
+                            <img src={shopLogo} alt="" className="h-10 w-10 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none" />
                           ) : (
-                            // Replaced ShoppingBasket with Status/Refund Indicator
-                            // Enforce Bank Icon for Repayments without logo
                             <div className={cn(
-                              "flex items-center justify-center h-12 w-12 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0"
+                              "flex items-center justify-center h-10 w-10 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0"
                             )}>
                               {txn.type === 'repayment' ? (
-                                <Wallet className="h-6 w-6 text-orange-600" />
+                                <Wallet className="h-5 w-5 text-orange-600" />
                               ) : (
-                                <ShoppingBasket className="h-6 w-6 text-slate-500" />
-                              )
-                              }
+                                <ShoppingBasket className="h-5 w-5 text-slate-500" />
+                              )}
                             </div>
                           )}
 
                           <div className="flex flex-col min-w-0 flex-1">
-                            {/* Name */}
-                            {/* Name - Hidden by default as per user request */}
-
-                            {/* Note */}
-                            <div className="flex items-center justify-between gap-1.5 min-w-0 flex-1">
-                              <div className="min-w-0">
-                                {txn.note ? (
-                                  <CustomTooltip content={txn.note}>
-                                    <span className="text-[1em] text-slate-700 font-bold truncate cursor-help block">
-                                      {txn.note}
-                                    </span>
-                                  </CustomTooltip>
-                                ) : (
-                                  <span className="text-[1em] text-slate-400 italic block">No note</span>
-                                )}
-                              </div>
-                              {(installmentBadge || refundBadge || statusIndicator) && (
-                                <div className="flex items-center gap-1 shrink-0 ml-auto">
-                                  {installmentBadge}
-                                  {refundBadge}
-                                  {statusIndicator && (
-                                    <CustomTooltip content={statusTooltip}>
-                                      <div className="flex items-center justify-center h-5 w-5 rounded-full bg-slate-100 border border-slate-200">
-                                        <span className="text-xs font-bold leading-none">{statusIndicator}</span>
-                                      </div>
-                                    </CustomTooltip>
-                                  )}
-                                </div>
+                            {/* Note with tooltip */}
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {txn.note ? (
+                                <CustomTooltip content={txn.note}>
+                                  <span className="text-sm text-slate-900 font-semibold truncate cursor-help">
+                                    {txn.note}
+                                  </span>
+                                </CustomTooltip>
+                              ) : (
+                                <span className="text-sm text-slate-400 italic">No note</span>
                               )}
                             </div>
-                          </div>
 
-                          {/* Copy ID Button - Always Show */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigator.clipboard.writeText(txn.id);
-                              setCopiedId(txn.id);
-                              setTimeout(() => setCopiedId(null), 2000);
-                            }}
-                            className={cn(
-                              "flex-shrink-0 ml-auto transition-colors p-1",
-                              copiedId === txn.id ? "text-emerald-500" : "text-slate-300 hover:text-slate-500"
-                            )}
-                            title="Copy ID"
-                          >
-                            {copiedId === txn.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                          </button>
+                            {/* Transaction ID Badge + Refund/Installment Badges (all clickable to copy) */}
+                            <div className="flex items-center gap-1 mt-0.5">
+                              {/* ID Badge - Clickable */}
+                              <CustomTooltip content={`Click to copy: ${txnIdFull}`}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigator.clipboard.writeText(txn.id);
+                                    setCopiedId(txn.id);
+                                    setTimeout(() => setCopiedId(null), 2000);
+                                  }}
+                                  className={cn(
+                                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors",
+                                    copiedId === txn.id
+                                      ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
+                                      : "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200"
+                                  )}
+                                >
+                                  {txnIdShort}
+                                  {copiedId === txn.id ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
+                                </button>
+                              </CustomTooltip>
+
+                              {/* Installment Badge */}
+                              {installmentBadge}
+
+                              {/* Refund Badge - Clickable to copy refund ID */}
+                              {refundBadge}
+                            </div>
+                          </div>
                         </div>
                       );
                     }
@@ -1911,16 +1883,47 @@ export function UnifiedTransactionTable({
                         link,
                         isSquare = true,
                         badges = [],
-                        contextBadge = null
+                        contextBadge = null,
+                        isTarget = false // New prop for right-aligned target entities
                       }: {
                         name: string,
                         icon?: string | null,
                         link: string | null,
                         isSquare?: boolean,
                         badges?: React.ReactNode[],
-                        contextBadge?: React.ReactNode
+                        contextBadge?: React.ReactNode,
+                        isTarget?: boolean
                       }) => {
-                        const Content = (
+                        const Content = isTarget ? (
+                          // Target Entity: Right-aligned with Image After Text
+                          <div className="flex items-center gap-2 min-w-0 w-full justify-end">
+                            {/* Name & Badges */}
+                            <div className="flex flex-col min-w-0 flex-1 justify-center items-end">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1 text-right" title={name}>
+                                  {name}
+                                </span>
+                                {/* From/To Badge */}
+                                {contextBadge}
+                              </div>
+                              {badges.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-0.5 justify-end">
+                                  {badges}
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Icon - After Text */}
+                            {icon ? (
+                              <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
+                            ) : (
+                              <div className={cn("flex h-12 w-12 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
+                                {link?.includes('people') ? <User className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          // Source Entity: Default layout with Icon Before Text
                           <div className="flex items-center gap-2 min-w-0 w-full">
                             {/* Icon - Increased Size */}
                             {icon ? (
@@ -2007,6 +2010,7 @@ export function UnifiedTransactionTable({
                                   link={accountEntity.link}
                                   badges={[tagBadge, cycleBadge]}
                                   contextBadge={toBadge}
+                                  isTarget={true}
                                 />
                               </div>
                             </div>
@@ -2049,6 +2053,7 @@ export function UnifiedTransactionTable({
                                   link={targetLink}
                                   badges={[tagBadge]} // Tags on target
                                   contextBadge={toBadge}
+                                  isTarget={true}
                                 />
                               </div>
                             </div>
@@ -2107,7 +2112,7 @@ export function UnifiedTransactionTable({
 
                           {/* Center: Arrow (Only if Target exists) */}
                           <div className="shrink-0 flex justify-center text-slate-400">
-                            <ArrowRight className="h-4 w-4" />
+                            <MoveRight className="h-5 w-5" />
                           </div>
 
                           {/* Right: Target */}
@@ -2117,6 +2122,7 @@ export function UnifiedTransactionTable({
                               icon={targetIcon}
                               link={targetLink}
                               badges={[tagBadge]}
+                              isTarget={true}
                             />
                           </div>
                         </div>
@@ -2163,33 +2169,95 @@ export function UnifiedTransactionTable({
                       )
                     }
                     case "amount": {
+                      const amount = typeof txn.amount === "number" ? txn.amount : 0
+                      const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : amount
+                      // Amount logic: if >= 0 income/in, < 0 expense/out
+                      const isIncome = amount >= 0
+
+                      // Calculate Cashback/Fee for display
+                      const cashbackVal = txn.cashback_share_amount ?? 0
                       const percentDisp = Number(txn.cashback_share_percent ?? 0)
                       const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
-                      const displayPercent = percentDisp < 1 && percentDisp > 0 ? percentDisp * 100 : percentDisp
+
+                      // Calculate final price
+                      const rate = percentDisp > 1 ? percentDisp / 100 : percentDisp
+                      const cashbackCalc = (Math.abs(Number(originalAmount ?? 0)) * rate) + fixedDisp
+                      const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
+                      const baseAmount = Math.abs(Number(originalAmount ?? 0));
+                      const finalDisp = (typeof txn.final_price === 'number')
+                        ? Math.abs(txn.final_price)
+                        : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount));
+
+                      const hasCashback = cashbackVal > 0 || percentDisp > 0 || fixedDisp > 0
+
+                      // Price breakdown tooltip content
+                      const priceBreakdown = hasCashback ? (
+                        <div className="text-xs space-y-1">
+                          <div className="font-semibold border-b border-slate-200 pb-1 mb-1">💰 Price Breakdown</div>
+                          <div className="flex justify-between gap-4">
+                            <span>Original Amount:</span>
+                            <span className="font-mono">{numberFormatter.format(Math.abs(originalAmount))}</span>
+                          </div>
+                          {percentDisp > 0 && (
+                            <div className="flex justify-between gap-4 text-emerald-600">
+                              <span>Discount ({percentDisp > 1 ? percentDisp : percentDisp * 100}%):</span>
+                              <span className="font-mono">-{numberFormatter.format(Math.abs(originalAmount) * rate)}</span>
+                            </div>
+                          )}
+                          {fixedDisp > 0 && (
+                            <div className="flex justify-between gap-4 text-emerald-600">
+                              <span>Fixed Discount:</span>
+                              <span className="font-mono">-{numberFormatter.format(fixedDisp)}</span>
+                            </div>
+                          )}
+                          <div className="flex justify-between gap-4 font-bold border-t border-slate-200 pt-1 mt-1">
+                            <span>Final Price:</span>
+                            <span className="font-mono">{numberFormatter.format(finalDisp)}</span>
+                          </div>
+                        </div>
+                      ) : null;
 
                       return (
-                        <div
-                          className={cn(
-                            "flex flex-col items-end p-1 pr-2 lg:pr-1 rounded transition-colors",
-                            amountClass,
-                            isExcelMode ? "cursor-cell select-none" : "",
-                            isExcelMode && selectedCells.has(txn.id) && selectedColumn === 'amount' && "bg-blue-100 ring-1 ring-blue-300"
-                          )}
-                          onMouseDown={(e) => handleCellMouseDown(txn.id, 'amount', e)}
-                          onMouseEnter={() => handleCellMouseEnter(txn.id, 'amount')}
-                          onMouseUp={handleCellMouseUp}
-                        >
-                          <span className={cn("font-bold text-[1.25em]", amountClass)}>{amountValue}</span>
-                          {(displayPercent > 0 || fixedDisp > 0) && (
-                            <div className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-[0.85em] font-bold text-emerald-600 border border-emerald-100 gap-1 mt-0.5 whitespace-nowrap">
-                              {displayPercent > 0 && <span>{Number(displayPercent.toFixed(2))}%</span>}
-                              {displayPercent > 0 && fixedDisp > 0 && <span>+</span>}
-                              {fixedDisp > 0 && <span>{numberFormatter.format(fixedDisp)}</span>}
-                              <span className="text-emerald-400 font-medium">Back</span>
+                        <div className="flex flex-col items-end gap-1 w-full">
+                          {/* Amount with Cashback Badges - NO +/- signs */}
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={cn(
+                                "font-bold tabular-nums tracking-tight text-base",
+                                isIncome ? "text-emerald-600" : "text-red-600"
+                              )}
+                            >
+                              {numberFormatter.format(Math.abs(amount))}
+                            </span>
+                            {/* Cashback Badges */}
+                            {percentDisp > 0 && (
+                              <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                -{percentDisp > 1 ? percentDisp : percentDisp * 100}%
+                              </span>
+                            )}
+                            {fixedDisp > 0 && (
+                              <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                -{numberFormatter.format(fixedDisp)}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Final Price - only show if has cashback */}
+                          {hasCashback && (
+                            <div className="flex items-center gap-1">
+                              <span className="text-xs text-slate-400">=</span>
+                              <span className="text-xs font-semibold text-slate-700">
+                                {numberFormatter.format(finalDisp)}
+                              </span>
+                              {priceBreakdown && (
+                                <CustomTooltip content={priceBreakdown}>
+                                  <Info className="h-3 w-3 text-slate-400 hover:text-slate-600 cursor-help" />
+                                </CustomTooltip>
+                              )}
                             </div>
                           )}
                         </div>
-                      );
+                      )
                     }
                     case "back_info": {
                       // Cashback Info Display (merged initial_back + people_back)
@@ -2228,74 +2296,6 @@ export function UnifiedTransactionTable({
                       )
                     }
                     // Note: 'initial_back' and 'people_back' columns removed - merged into 'back_info'
-                    case "final_price":
-                      const percentDisp = Number(txn.cashback_share_percent ?? 0)
-                      const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
-                      // Display Percent: if rate 0.02 -> 2. If > 1 -> keep as is.
-                      const displayPercent = percentDisp < 1 && percentDisp > 0 ? percentDisp * 100 : percentDisp
-                      const rate = percentDisp < 1 && percentDisp > 0 ? percentDisp : percentDisp / 100
-                      const percentAmount = Math.abs(Number(originalAmount ?? 0)) * rate
-
-                      const finalDisp = Math.round(finalPrice);
-                      const hasBack = Math.abs(Number(originalAmount ?? 0)) > finalDisp
-
-                      return (
-                        <div
-                          className={cn(
-                            "flex flex-col items-end p-1 rounded transition-colors",
-                            amountClass,
-                            isExcelMode ? "cursor-cell select-none" : "",
-                            isExcelMode && selectedCells.has(txn.id) && selectedColumn === 'final_price' && "bg-blue-100 ring-1 ring-blue-300"
-                          )}
-                          onMouseDown={(e) => handleCellMouseDown(txn.id, 'final_price', e)}
-                          onMouseEnter={() => handleCellMouseEnter(txn.id, 'final_price')}
-                          onMouseUp={handleCellMouseUp}
-                        >
-                          <CustomTooltip content={
-                            <div className="flex flex-col gap-1">
-                              <span className="font-bold underline">Equation</span>
-                              <span>{numberFormatter.format(baseAmount)} (Amount)</span>
-                              <span>- {numberFormatter.format(cashbackAmount)} (Cashback)</span>
-                              <hr className="border-slate-500" />
-                              <span className="font-bold">= {numberFormatter.format(finalDisp)} (Final Price)</span>
-                            </div>
-                          }>
-                            <span className={cn("font-bold text-[1.25em] cursor-help", amountClass, isVoided && "line-through opacity-50")}>
-                              {numberFormatter.format(finalDisp)}
-                            </span>
-                          </CustomTooltip>
-
-                          {/* Show badges if any logic exists (Percent, Fixed, Profit, BankBack) */}
-                          {true && (
-                            <div className="flex items-center gap-1 mt-0.5">
-                              {/* Profit */}
-                              {typeof txn.profit === 'number' && txn.profit !== 0 && (
-                                <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-[0.85em] font-bold text-emerald-600 border border-emerald-100">
-                                  🤑 {numberFormatter.format(txn.profit)}
-                                </span>
-                              )}
-                              {/* Bank Back */}
-                              {typeof txn.bank_back === 'number' && txn.bank_back > 0 && (
-                                <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-1 text-[0.85em] font-bold text-blue-600 border border-blue-100">
-                                  🏦 {numberFormatter.format(txn.bank_back)}
-                                </span>
-                              )}
-                              {/* Cashback Info */}
-                              {(displayPercent > 0 || fixedDisp > 0) && (
-                                <div className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-1 text-[0.85em] font-bold text-emerald-600 border border-emerald-100 whitespace-nowrap">
-                                  {displayPercent > 0 && fixedDisp > 0 ? (
-                                    <span>{numberFormatter.format(percentAmount)} + {numberFormatter.format(fixedDisp)}</span>
-                                  ) : displayPercent > 0 ? (
-                                    <span>{displayPercent}% Back</span>
-                                  ) : (
-                                    <span>Fix {numberFormatter.format(fixedDisp)}</span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      )
                     case "id":
                       const isCopied = copiedId === txn.id
                       return (
@@ -2377,11 +2377,15 @@ export function UnifiedTransactionTable({
                       return (
                         <TableCell
                           key={`${txn.id}-${col.key}`}
+                          onMouseDown={(e) => handleCellMouseDown(txn.id, col.key, e)}
+                          onMouseEnter={() => handleCellMouseEnter(txn.id, col.key)}
                           className={cn(
                             `border-r border-slate-200 ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
                             } ${col.key === "amount" ? amountClass : ""} ${voidedTextClass} truncate`,
                             stickyClass,
-                            col.key === "date" && "p-1"
+                            col.key === "date" && "p-1",
+                            isExcelMode && "select-none cursor-crosshair active:cursor-crosshair",
+                            isExcelMode && selectedCells.has(txn.id) && col.key === 'amount' && "bg-blue-100 ring-2 ring-inset ring-blue-500 z-10" // ADDED: Visual feedback for selected cells
                           )}
                           style={stickyStyle}
                         >
@@ -2392,37 +2396,42 @@ export function UnifiedTransactionTable({
                   </TableRow>
                 )
               })}
+              {
+                selection.size > 0 && (
+                  <>
+                    {summary.incomeSummary.sumAmount > 0 && (
+                      <TableRow className="bg-slate-50 border-t border-slate-200 hover:bg-slate-50">
+                        {displayedColumns.findIndex(c => c.key === 'amount') > 1 && (
+                          <TableCell colSpan={displayedColumns.findIndex(c => c.key === 'amount') - 1} />
+                        )}
+                        <TableCell className="font-bold text-emerald-700 text-right pr-4">
+                          Total Income:
+                        </TableCell>
+                        <TableCell className="font-bold text-emerald-700 text-right">
+                          {numberFormatter.format(summary.incomeSummary.sumAmount)}
+                        </TableCell>
+                        <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')} />
+                      </TableRow>
+                    )}
+                    {summary.expenseSummary.sumAmount > 0 && (
+                      <TableRow className="bg-slate-50 border-t border-slate-200 hover:bg-slate-50">
+                        {displayedColumns.findIndex(c => c.key === 'amount') > 1 && (
+                          <TableCell colSpan={displayedColumns.findIndex(c => c.key === 'amount') - 1} />
+                        )}
+                        <TableCell className="font-bold text-red-600 text-right pr-4">
+                          Total Expense:
+                        </TableCell>
+                        <TableCell className="font-bold text-red-600 text-right">
+                          {numberFormatter.format(summary.expenseSummary.sumAmount)}
+                        </TableCell>
+                        <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')}></TableCell>
+                      </TableRow>
+                    )}
+                  </>
+                )
+              }
             </TableBody >
-            {
-              selection.size > 0 && (
-                <TableFooter>
-                  {summary.incomeSummary.sumAmount > 0 && (
-                    <TableRow className="bg-emerald-50">
-                      <TableCell
-                        colSpan={1 + displayedColumns.findIndex(c => c.key === 'amount')}
-                        className="font-bold text-emerald-700 border-r text-right"
-                      >
-                        Total Income
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-emerald-700 border-r">{numberFormatter.format(summary.incomeSummary.sumAmount)}</TableCell>
-                      <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')}></TableCell>
-                    </TableRow>
-                  )}
-                  {summary.expenseSummary.sumAmount > 0 && (
-                    <TableRow className="bg-red-50">
-                      <TableCell
-                        colSpan={1 + displayedColumns.findIndex(c => c.key === 'amount')}
-                        className="font-bold text-red-500 border-r text-right"
-                      >
-                        Total Expense
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-red-500 border-r">{numberFormatter.format(summary.expenseSummary.sumAmount)}</TableCell>
-                      <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')}></TableCell>
-                    </TableRow>
-                  )}
-                </TableFooter>
-              )
-            }
+
           </table>
         </div>
       </div>

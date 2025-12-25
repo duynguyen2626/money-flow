@@ -42,6 +42,7 @@ export function ToolbarActions({ isExcelMode, onExcelModeChange, filterContent, 
                 title="Toggle Excel Mode"
             >
                 <FileSpreadsheet className="h-4 w-4" />
+                <span className="hidden sm:inline">Excel</span>
             </button>
 
             {children}

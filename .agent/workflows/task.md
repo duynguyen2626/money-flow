@@ -1,110 +1,86 @@
 ---
-description: Prompt 2 (Phase 2) — Split Toolbar/Header incrementally (Reusable for other pages)
+description: Prompt P4 (Updated) — Transactions UI Rebuild to New Mock (ENG 100%)
 ---
 
-PHASE 3 — Table Shell Refactor (Reusable, No Redesign)
+PHASE 4 — Transactions UI Rebuild to NEW Mock (Locked)
 
 ROLE
-You are continuing incremental refactor after Phase 2 toolbar extraction.
-Phase 3 focuses on extracting a reusable “TableShell” (card container + scrolling + sticky header + footer/pagination slot)
-and establishing stable column contracts so mobile/desktop don’t mismatch.
+You are implementing a UI rebuild for the Transactions table layout based on the NEW mock screenshot provided by the user.
+This is NOT a free redesign. The screenshot is the single source of truth.
 
-STRICT: This is a REFACTOR, not a redesign. Preserve current visuals.
+INPUTS
+- The user will provide:
+  1) NEW mock screenshot (authoritative)
+  2) Optional: current broken UI screenshot (for diff)
 
-READ FIRST (MANDATORY)
-- .agent/workflows/gemini.md
-- .agent/rules/gravityrules.md
-- .agent/workflows/task.md
-- Review Phase 2 walkthrough and new toolbar components (do not change them).
+NON-NEGOTIABLE RULES
+- Keep all existing data logic: filtering, pagination, selection, totals, actions, fetch calls.
+- Only change presentation/layout and small UI rendering behaviors described below.
+- Do not change DB schema, API routes, or business rules.
+- Do not introduce new pages.
+- Maintain responsiveness (27” desktop, 13” laptop, iPad, mobile).
 
-SCOPE (PHASE 3 ONLY)
-Primary targets:
-- src/components/moneyflow/unified-transaction-table.tsx
-- src/components/ui/table.tsx (only if needed for a tiny prop/typing improvement)
+TARGET STRUCTURE (match the mock)
+A) Top area
+- Move/ensure the main navigation is anchored at the very top so the layout does not “shift” when nav collapses.
+- The table area must stay visually stable in viewport.
 
-Allowed to add NEW reusable UI pieces:
-- src/components/app/table/
-  - TableShell.tsx
-  - TableShellHeader.tsx (optional)
-  - TableShellFooter.tsx (optional)
-  - StickyTable.tsx (optional helper, but keep minimal)
-  - types.ts
+B) Table columns & rendering requirements
 
-Non-goals:
-- Do NOT touch filterable-transactions.tsx except wiring a new wrapper component if required.
-- Do NOT change business logic (selection, totals, actions, pagination logic).
-- Do NOT change column meaning, ordering, or labels.
-- Do NOT attempt to “fix” UI issues unless it’s strictly a bug caused by refactor.
+1) DATE column (calendar tile style)
+- Render date like a mini calendar card (month label + day number).
+- Place time next to it (not below).
+- Include a quick action icon next to time (wrench icon), matching mock placement.
 
-MAIN PROBLEMS WE’RE SOLVING
-- unified-transaction-table.tsx is large and mixes concerns:
-  - layout container + overflow rules
-  - sticky header/left column
-  - desktop vs mobile rendering
-  - footer/pagination
-  - row selection + totals UI
-We want to reduce file size and improve reuse for Accounts/People tables later.
+2) NOTE column
+- Primary: note title text.
+- Secondary: show the transaction ID below (short format like ABCD-123...).
+- The ID should be truncated; on hover show tooltip with full ID.
+- Refund flow icon must look like the legacy one (do not invent new refund icon style).
 
-REFRACTOR STRATEGY (INCREMENTAL — small commits)
-Commit A — Introduce TableShell (render-neutral)
-1) Create TableShell.tsx as a presentational wrapper:
-   - Provides the “card edges” container: rounded + border + bg
-   - Controls overflow: inner scroll areas
-   - Accepts slots:
-     - headerSlot (optional)
-     - tableSlot (required)
-     - footerSlot (optional)
-   - IMPORTANT: Use EXACT Tailwind classes copied from current Transactions table container.
-   - This component must NOT import Transactions types.
+3) FLOW & ENTITY column
+- Preserve the “source -> person” structure.
+- Source image (cards) must have the same height as person avatar (square).
+- Cards must always render in portrait orientation:
+  - If original image is landscape/standing wrongly, rotate it so it appears portrait.
+  - Do NOT round the card image (no rounded-full).
+- Person avatar remains square/consistent as in mock.
 
-2) Replace the outer container markup in unified-transaction-table.tsx with <TableShell>.
-   - No behavioral changes.
-   - Visual output must remain identical.
+4) AMOUNT / FINAL PRICE merged into one column (VALUE column)
+- Show Amount on top (primary).
+- Show cashback badges on the same row as Amount:
+  - percent back and/or fixed back, smaller size badge.
+- Show Final Price below Amount.
+- Add an info icon next to Final Price.
+  - Hover shows a tooltip “Price Breakdown” with formula details (amount, percent/fixed, final).
+  - Tooltip content must be computed from existing fields; do not change calculations.
 
-Commit B — Extract Table Footer block (render-neutral)
-1) If unified-transaction-table contains footer UI (selected totals / pagination / rows-per-page):
-   - Extract to TableShellFooter.tsx or a local component in /app/table.
-   - Keep props minimal: selectedCount, totals, pagination props, etc.
-   - No logic changes, just move JSX.
+5) CATEGORY column
+- Match mock: compact category cell (icon + type chips).
 
-Commit C — Column contracts (prevent mobile mismatch)
-1) Add a small “column contract” file (Transactions-specific but structured):
-   - src/components/moneyflow/table/transactionColumns.ts (or similar)
-   - Export constants describing:
-     - desktop columns order + keys
-     - mobile essential columns order + keys
-     - which columns are hidden on mobile
-   - This is NOT a big refactor; it’s a small config to reduce accidental mismatches.
+C) Interaction / regressions to fix
+- Checkbox selection must work reliably.
+- Row click/hover behavior must remain consistent (no broken pointer events).
+- No unexpected rounding on images.
+- No converting numeric values into pills unless mock shows it.
 
-2) Update unified-transaction-table.tsx to refer to these constants
-   - Instead of hardcoding “hidden” / “mobile colSpan” scattered in multiple places.
+IMPLEMENTATION GUIDANCE
+- Prefer making changes inside:
+  - src/components/moneyflow/unified-transaction-table.tsx
+  - src/components/moneyflow/desktop row renderer (wherever row JSX is)
+  - src/components/moneyflow/mobile-transaction-row.tsx (only if mobile is also updated)
+- If TableShell or MobileRecordRow blocks the mock, adjust them minimally but do not redesign them.
 
-Commit D — Optional: Extract StickyTable helper (ONLY if it shrinks code meaningfully)
-If sticky logic is repeated or messy:
-- Create a small helper component that ONLY wraps:
-  - <Table> with sticky header
-  - sticky left column support
-But do this ONLY if it reduces complexity without changing behavior.
+STRICT ENFORCEMENT
+- Do not add “extra” UI sections.
+- Do not move Financial Summary out of its current control unless mock shows it.
+- Do not create horizontal scrolling for top toolbar.
+- Any style change must move toward matching the mock exactly.
 
-ENFORCEMENT (NO REDESIGN)
-- Do not change padding/margins/spacing colors.
-- Do not change typography sizes.
-- Do not reorder columns.
-- Do not change mobile layout behavior.
-- Any new wrapper must be CSS-neutral (copy exact existing classes).
+DELIVERABLES
+- Updated Transactions table UI matching the mock.
+- Build must pass: npm run build
+- Provide before/after screenshots for desktop and mobile.
 
-VERIFICATION (REQUIRED)
-- npm run build must pass.
-- User visual checklist:
-  - Desktop table looks identical.
-  - Sticky header still works.
-  - Selection checkboxes + totals footer still work.
-  - Mobile table still matches current behavior (no new scroll changes).
-STRICT UI ENFORCEMENT:
-This is a refactor only. You may only move JSX into new components and pass props.
-If the UI looks different after this PR (except for explicitly requested bug fixes), the refactor is wrong.
-Do not add or change Tailwind classes except copying existing ones into the extracted components.
-
-STOP RULE
-Stop after Commit A + B + C (and optionally D only if clearly justified).
-Do NOT start Phase 4.
+STOP
+Stop after completing this UI rebuild. Do not start any DB/date-format migration or sheet sync work.
