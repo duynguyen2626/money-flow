@@ -2341,20 +2341,7 @@ export function UnifiedTransactionTable({
 
 
 
-                if (isMobile) {
-                  return (
-                    <MobileTransactionRow
-                      key={txn.id}
-                      txn={txn}
-                      categories={categories}
-                      isSelected={selection.has(txn.id)}
-                      onSelect={onSelectTxn ?? (() => { })}
-                      onRowClick={(item) => onSelectTxn?.(item.id, !selection.has(item.id))}
-                      colSpan={displayedColumns.length}
-                      formatters={{ currency: (val) => numberFormatter.format(val) }}
-                    />
-                  )
-                }
+
 
                 return (
                   <TableRow
