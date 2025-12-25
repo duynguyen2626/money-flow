@@ -65,7 +65,7 @@ import {
 } from "lucide-react"
 
 import { MobileTransactionRow } from "./mobile-transaction-row"
-import { MobileTransactionsList } from "./mobile/MobileTransactionsList"
+import { MobileTransactionsSimpleList } from "./mobile/MobileTransactionsSimpleList"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
@@ -1060,7 +1060,7 @@ export function UnifiedTransactionTable({
         "relative w-full rounded-xl border border-slate-200 bg-card shadow-sm transition-colors duration-300 flex-1 overflow-hidden",
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )} style={{ ['--table-font-size' as string]: `${fontSize}px` } as React.CSSProperties}>
-        <MobileTransactionsList
+        <MobileTransactionsSimpleList
           transactions={paginatedTransactions}
           categories={categories}
           selectedTxnIds={selection}

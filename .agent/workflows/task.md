@@ -2,131 +2,76 @@
 description: PHASE 5 — Mobile UI Fix (Transactions) + Standardize MobileRecordRow for Reuse
 ---
 
-PHASE 5 — Mobile UI Fix (Transactions) + Standardize MobileRecordRow for Reuse
+PHASE 5B — Mobile Transactions: Simple Raw Renderer (Fix Missing/Wrong Columns)
 
-ROLE
-You are fixing broken mobile Transactions UI and standardizing a reusable mobile row component (MobileRecordRow)
-so that later we can reuse the same pattern for /accounts and /people without rewriting UI.
+PROBLEM
+Mobile Transactions UI is still broken: columns missing/blank, swapped content, empty table sections.
+This is caused by desktop-style complex UI (badges/icons/sticky/overflow table) leaking into mobile.
 
-ABSOLUTE RULES
-- NO DB / API / query / calculation changes.
-- NO desktop UI changes. Desktop is already correct (Phase 4).
-- Mobile must be readable without horizontal scrolling.
-- Do not add new toolbar sections. Keep existing UX controls.
-- Refactor incrementally in small commits. Keep backwards compatibility.
+GOAL
+Create a dedicated mobile-only renderer for /transactions that displays simple RAW data only.
+No fancy badges, no complex breakdown tooltips, no desktop column system on mobile.
 
-SOURCE OF TRUTH
-- User-provided mobile screenshot shows the current broken layout (wrong fields in wrong places).
-- Desktop layout is correct; mobile must not affect desktop.
+STRICT RULES
+- Keep all existing data fetching, filtering, search, pagination, and selection logic.
+- Do not change desktop UI at all.
+- Do not touch DB/API.
+- Mobile must show these columns/sections clearly:
+  Date | Note | Flow & Entity | Value | Category
+- Mobile must NOT use horizontal scroll to reveal essential columns.
+- Keep actions (Edit/Delete/More) available, but minimal.
 
-FILES IN SCOPE
-Primary:
-- src/components/moneyflow/unified-transaction-table.tsx
-- src/components/moneyflow/mobile/mobile-transaction-row.tsx
-- src/components/moneyflow/mappers/transactionToMobileRecordRow.ts
-- src/components/moneyflow/mobile/MobileRecordRow.tsx
-- src/components/moneyflow/mobile/types.ts (or existing types)
+MOBILE DISPLAY SPEC (RAW)
+1) Date:
+- Show only "dd-mm" (VN order). No badges, no time, no calendar tile.
 
-Allowed NEW files:
-- src/components/moneyflow/mobile/MobileTransactionsList.tsx
-- src/components/app/mobile/MobileRecordRow.tsx (optional relocation, only if it reduces future duplication)
-- src/components/app/mobile/types.ts (shared types, optional)
+2) Note:
+- Show shop image (if available) + note text.
+- No ID displayed.
+- Keep search working as-is.
+- Keep copy icon (copy transaction ID) available.
 
-Non-goals (DO NOT DO)
-- Do not refactor Accounts/People pages in this phase.
-- Do not implement date-format migrations or sheet sync (Phase 6).
-- Do not redesign desktop or change column order desktop.
+3) Flow & Entity:
+- Show source image + arrow + target image.
+- No cycle/debt badges, no extra tags.
 
-GOALS
+4) Value:
+- Show raw amount only (one line).
+- No final price, no formula tooltip, no cashback computation.
+- Keep number formatting consistent with existing formatter.
 
-A) FIX MOBILE TRANSACTIONS
-Mobile /transactions must render as a vertical list (NOT multi-column table).
-Each row must show the correct data in a stable order:
+5) Category:
+- Show category name only (plain text).
+- No chips, no icons.
 
-1) Selection checkbox (tap-friendly)
-2) Title: Note
-3) Subtitle: short transaction ID (truncated) + tooltip with full ID
-4) Meta: Date + Time (readable)
-5) Flow: source -> person (icons/images), consistent sizing, no accidental rounding
-6) Value block: Amount (primary) + cashback badges (%/fixed) smaller; Final Price below; info tooltip for breakdown
-7) Category badges (compact)
+LAYOUT REQUIREMENT
+- Implement as a simple vertical list of rows/cards.
+- Each row is a compact grid:
+  Left: checkbox
+  Middle: Date + Note + Flow
+  Right: Value and Category stacked or aligned
+- Must be readable at 360–430px width without horizontal scroll.
 
-No horizontal scroll required.
-
-B) STANDARDIZE MobileRecordRow API (Reusable Foundation)
-MobileRecordRow must become a stable generic component to be reused later.
-
-Define a single contract:
-- leading: checkbox + optional left icon/avatar
-- header: title + subtitle
-- meta: small meta chips/lines (date/time/status)
-- badges: array of small badges (status/category/debt/cycle)
-- value: right-side block (top line + optional small badges + bottom line)
-- actions: optional action button/menu
-
-Constraints:
-- Component must accept render props or typed slots, but keep it simple.
-- Must NOT embed transaction-specific knowledge inside MobileRecordRow.
-- All transaction-specific mapping must live in transactionToMobileRecordRow.ts.
-
-Implementation detail:
-- Create a type `MobileRowModel` (generic) in shared types file:
-  - id: string
-  - isSelected: boolean
-  - onSelect(): void
-  - title: string
-  - subtitle?: { text: string; tooltip?: string }
-  - meta?: Array<{ icon?: ReactNode; text: string }>
-  - leadingVisual?: { kind: "img"|"icon"|"text"; src?: string; icon?: ReactNode; text?: string; className?: string }
-  - flow?: { left?: LeadingVisual; arrow?: boolean; right?: LeadingVisual; labels?: string[] }
-  - value?: { top: string; topBadges?: string[]; bottom?: string; infoTooltip?: ReactNode }
-  - badges?: Array<{ text: string; variant?: "default"|"secondary"|"success"|"warning"|"danger" }>
-  - actions?: { onMore?: () => void; onEdit?: () => void; onDelete?: () => void }
-
-MobileRecordRow renders ONLY based on MobileRowModel.
-
-C) PRESERVE SELECTION & ACTIONS
-- checkbox must work (no pointer-events issues)
-- actions menu must work on mobile (compact)
-- do not break keyboard or accessibility basics (aria labels on checkbox & actions)
-
-INCREMENTAL COMMITS (MANDATORY)
-
-Commit A — Mobile rendering switch (no redesign)
+IMPLEMENTATION APPROACH
 - In unified-transaction-table.tsx:
-  - For mobile breakpoint, do NOT render the desktop table.
-  - Render <MobileTransactionsList .../> (new) using existing selection state & handlers.
-  - Desktop table path remains unchanged.
+  - For mobile breakpoint, bypass desktop table rendering entirely.
+  - Render <MobileTransactionsSimpleList .../> only.
 
-Commit B — MobileTransactionsList (thin list renderer)
-- Add MobileTransactionsList.tsx:
-  - maps transactions => <MobileTransactionRow .../>
-  - passes selection + actions handlers
-  - no business logic changes, only wiring
+- Create new file:
+  - src/components/moneyflow/mobile/MobileTransactionsSimpleList.tsx
+  - Optional: src/components/moneyflow/mobile/MobileTransactionsSimpleRow.tsx
 
-Commit C — Fix mapper (root cause)
-- Update transactionToMobileRecordRow.ts to generate correct MobileRowModel:
-  - correct NOTE/CATEGORY/VALUE mapping (never swapped)
-  - value block includes amount + cashback badges + final price + tooltip breakdown
-  - flow block includes left source visual + arrow + right person visual, sized consistently
-  - avoid rounded styles unless explicitly asked
+- Do NOT use MobileRecordRow for this phase. Keep it simple.
 
-Commit D — Standardize MobileRecordRow API (backward compatible)
-- Update MobileRecordRow.tsx to fully render MobileRowModel.
-- Ensure current transaction mobile row becomes a very thin adapter.
-- If any existing usage breaks, provide a small adapter or default values.
+SELECTION + ACTIONS
+- Checkbox must work.
+- Provide a small "..." actions menu or swipe actions if already available.
+- Keep Edit/Delete/More behavior the same as desktop.
 
-Commit E — Remove mobile horizontal scroll sources
-- Ensure mobile list container does not use overflow-x-auto.
-- Long text truncates with ellipsis; full info via tooltip.
-
-REQUIRED VERIFICATION
+STOP CONDITIONS
 - npm run build passes.
-- Mobile /transactions at 375px: no horizontal scroll, rows readable, fields correct.
-- Checkbox selection works.
-- Actions work.
-- Desktop /transactions unchanged visually.
+- On mobile, all 5 sections are visible and correct.
+- No horizontal scroll needed for core info.
 
 STOP
-Stop after Phase 5 is complete.
-Do not start Phase 6.
+Stop after mobile simple renderer is working.
