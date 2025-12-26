@@ -35,7 +35,7 @@ NEVER add Limit to Balance.
 
 2. 🔄 Cashback Cycle Logic
 
-Current Issue: Cycles are confused with Debt Tags (DEC25) and lack Year context.
+Current Issue: Cycles are confused with Debt Tags (legacy month tags) and lack Year context.
 
 Cycle Determination Rule
 
@@ -55,7 +55,7 @@ Year Handling:
 
 The Cycle Tag MUST include the Year context to avoid collision (e.g., DEC-2025 or 2025-12).
 
-Do NOT rely on simple strings like "DEC25" if "25" is ambiguous (Day 25 vs Year 25).
+Do NOT rely on abbreviated month tags like "MMMYY" (ambiguous and error-prone).
 
 Trigger Rules
 
@@ -68,3 +68,11 @@ If amount changed: Re-calc old amount vs new amount in Cycle.
 If occurred_at changed: Remove from Old Cycle -> Add to New Cycle.
 
 DELETE: Remove amount from Cycle.
+
+Update text to:
+
+Canonical cycle tag MUST be YYYY-MM (e.g. 2025-12)
+
+Legacy formats like MMMYY are forbidden for persistence and display
+
+If legacy exists in DB: normalize at read; migrate to canonical ASAP
