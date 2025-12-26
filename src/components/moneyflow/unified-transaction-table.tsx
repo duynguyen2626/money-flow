@@ -111,6 +111,7 @@ import { generateTag } from "@/lib/tag"
 import { cn } from "@/lib/utils"
 import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
 import { formatCycleTag } from '@/lib/cycle-utils'
+import { normalizeMonthTag } from '@/lib/month-tag'
 import { RefundNoteDisplay } from './refund-note-display'
 import { ConfirmRefundDialog } from "./confirm-refund-dialog"
 import { TransactionHistoryModal } from './transaction-history-modal'
@@ -2268,24 +2269,15 @@ export function UnifiedTransactionTable({
 
                     }
                     case "tag": {
-                      // Normalize Tag: 2025-12 -> DEC25
-                      let displayTag = txn.tag || '';
-                      if (displayTag && /^\d{4}-\d{2}$/.test(displayTag)) {
-                        const [y, m] = displayTag.split('-');
-                        const monthNames = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-                        const mIndex = parseInt(m, 10) - 1;
-                        if (mIndex >= 0 && mIndex < 12) {
-                          displayTag = `${monthNames[mIndex]}${y.slice(2)}`;
-                        }
-                      }
+                      const displayTag = normalizeMonthTag(txn.tag) ?? txn.tag ?? ''
 
-                      // Tooltip: Date Range (if standard tag) or full tag
-                      const dateRangeTooltip = txn.tag ? formatCycleTag(displayTag) : '';
+                      // Tooltip: Date Range (if recognized) or full tag
+                      const dateRangeTooltip = displayTag ? formatCycleTag(displayTag) : ''
 
                       return (
                         <div className="flex flex-wrap gap-1 min-w-[120px] justify-end">
-                          {txn.tag && (
-                            <CustomTooltip content={dateRangeTooltip || txn.tag}>
+                          {displayTag && (
+                            <CustomTooltip content={dateRangeTooltip || displayTag}>
                               <span className="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-inset ring-amber-600/20 cursor-help whitespace-nowrap">
                                 {displayTag}
                               </span>

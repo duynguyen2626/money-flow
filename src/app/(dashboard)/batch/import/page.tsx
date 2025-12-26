@@ -144,7 +144,7 @@ export default function BatchImportPage() {
                                     <Label htmlFor="batchTag">Batch Tag (Optional)</Label>
                                     <Input
                                         id="batchTag"
-                                        placeholder="e.g., NOV25"
+                                        placeholder="e.g., 2025-11"
                                         value={batchTag}
                                         onChange={(e) => setBatchTag(e.target.value)}
                                     />

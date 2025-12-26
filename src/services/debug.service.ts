@@ -1,10 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
+import { toYYYYMMFromDate } from '@/lib/month-tag'
 
 export async function debugYoutube() {
   const logs: string[] = []
   const log = (msg: any) => logs.push(typeof msg === 'object' ? JSON.stringify(msg, null, 2) : String(msg))
 
   const supabase = createClient()
+  const monthTag = toYYYYMMFromDate(new Date())
 
   // 1. Find Youtube Service
   const { data: services } = await supabase
@@ -36,10 +38,10 @@ export async function debugYoutube() {
   const { data: txs } = await supabase
     .from('transactions')
     .select('id, note, amount, type, person_id, created_at, metadata')
-    .eq('tag', 'DEC25')
+    .eq('tag', monthTag)
     .ilike('note', '%youtube%')
 
-  log('\n--- Transactions DEC25 Youtube ---')
+  log(`\n--- Transactions ${monthTag} Youtube ---`)
     ; (txs as any[])?.forEach(t => {
       log(`ID: ${t.id} | Note: ${t.note} | Amount: ${t.amount} | Type: ${t.type} | PersonID: ${t.person_id} `)
     })

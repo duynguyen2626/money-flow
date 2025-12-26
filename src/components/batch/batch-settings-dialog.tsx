@@ -208,7 +208,7 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
                             <div className="space-y-0.5">
                                 <FormLabel>Batch Note Mode</FormLabel>
                                 <FormDescription>
-                                    Bulk update transaction notes (e.g. NOV24 ↔ DEC24)
+                                    Bulk update transaction notes (e.g. 2024-11 ↔ 2024-12)
                                 </FormDescription>
                             </div>
                             <div className="flex gap-2">

@@ -7,6 +7,7 @@ import { TransactionForm } from './transaction-form'
 import { Account, Category, DebtAccount, Person, Shop } from '@/types/moneyflow.types'
 import type { DebtByTagAggregatedResult } from '@/services/debt.service'
 import { Check, Plus } from 'lucide-react'
+import { isYYYYMM, normalizeMonthTag } from '@/lib/month-tag'
 
 type DebtCycle = DebtByTagAggregatedResult
 
@@ -20,15 +21,13 @@ function formatCurrency(value: number) {
 
 function getYearFromTag(tag: string | null): number {
     if (!tag || tag === 'UNTAGGED') return new Date().getFullYear();
-    const match = tag.match(/(\d{2})$/);
-    if (match) {
-        return 2000 + parseInt(match[1], 10);
-    }
-    // Try to parse YYYY if possible, though format is mostly MMMyy
-    const matchFull = tag.match(/(\d{4})$/);
-    if (matchFull) {
-        return parseInt(matchFull[1], 10);
-    }
+
+    const normalized = normalizeMonthTag(tag) ?? tag
+    if (isYYYYMM(normalized)) return Number.parseInt(normalized.slice(0, 4), 10)
+
+    const matchYY = normalized.match(/(\d{2})$/);
+    if (matchYY) return 2000 + parseInt(matchYY[1], 10);
+
     return new Date().getFullYear();
 }
 

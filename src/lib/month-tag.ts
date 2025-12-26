@@ -15,6 +15,10 @@ const legacyMonthMap: Record<string, string> = {
   DEC: '12',
 }
 
+const reverseLegacyMonthMap: Record<string, string> = Object.fromEntries(
+  Object.entries(legacyMonthMap).map(([month, num]) => [num, month]),
+)
+
 export function isYYYYMM(value: string): boolean {
   return /^\d{4}-(0[1-9]|1[0-2])$/.test(value)
 }
@@ -52,4 +56,20 @@ export function normalizeMonthTag(value: string | null | undefined): string | nu
 
 export function toYYYYMMFromDate(date: Date): string {
   return format(date, 'yyyy-MM')
+}
+
+export function yyyyMMToLegacyMMMYY(value: string): string | null {
+  if (!isYYYYMM(value)) return null
+
+  const [year, month] = value.split('-')
+  if (!year || !month) return null
+
+  const monthAbbrev = reverseLegacyMonthMap[month]
+  if (!monthAbbrev) return null
+
+  return `${monthAbbrev}${year.slice(2)}`
+}
+
+export function toLegacyMMMYYFromDate(date: Date): string {
+  return yyyyMMToLegacyMMMYY(toYYYYMMFromDate(date)) ?? ''
 }

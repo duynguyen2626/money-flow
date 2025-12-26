@@ -6,6 +6,7 @@ import { useTagFilter } from '@/context/tag-filter-context'
 import { cn } from '@/lib/utils'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { AddTransactionDialog } from './add-transaction-dialog'
+import { isYYYYMM, normalizeMonthTag } from '@/lib/month-tag'
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
@@ -49,16 +50,16 @@ export function DebtCycleTabs({
     const yearsData = useMemo(() => {
         const yearMap = new Map<string, { total: number; outstanding: number }>()
         allCycles.forEach(cycle => {
-            const match = cycle.tag.match(/(\d{2})$/)
-            if (match) {
-                const year = parseInt(match[1]) >= 90 ? `19${match[1]}` : `20${match[1]}`
-                const existing = yearMap.get(year) ?? { total: 0, outstanding: 0 }
-                existing.total++
-                if (cycle.status !== 'settled' && Math.abs(cycle.balance) >= 1) {
-                    existing.outstanding++
-                }
-                yearMap.set(year, existing)
+            const normalized = normalizeMonthTag(cycle.tag) ?? cycle.tag
+            if (!isYYYYMM(normalized)) return
+
+            const year = normalized.slice(0, 4)
+            const existing = yearMap.get(year) ?? { total: 0, outstanding: 0 }
+            existing.total++
+            if (cycle.status !== 'settled' && Math.abs(cycle.balance) >= 1) {
+                existing.outstanding++
             }
+            yearMap.set(year, existing)
         })
         return Array.from(yearMap.entries())
             .map(([year, data]) => ({ year, ...data }))
@@ -82,8 +83,10 @@ export function DebtCycleTabs({
 
     const filteredCycles = useMemo(() => {
         if (!selectedYear) return allCycles
-        const yearSuffix = selectedYear.slice(-2)
-        return allCycles.filter(cycle => cycle.tag.includes(yearSuffix))
+        return allCycles.filter(cycle => {
+            const normalized = normalizeMonthTag(cycle.tag) ?? cycle.tag
+            return isYYYYMM(normalized) && normalized.startsWith(selectedYear)
+        })
     }, [allCycles, selectedYear])
 
     const toggleExpand = (tag: string, e: React.MouseEvent) => {

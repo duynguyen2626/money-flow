@@ -2315,7 +2315,7 @@ export function TransactionForm({
                 }
               }}
               className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="Enter tag (e.g., NOV25)"
+              placeholder="Enter tag (e.g., 2025-11)"
             />
           )}
         />

@@ -1,11 +1,10 @@
 'use server'
 
 import { randomUUID } from 'crypto'
-import { format } from 'date-fns'
-import { enUS } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { MonthlyDebtSummary, Person } from '@/types/moneyflow.types'
+import { normalizeMonthTag, toYYYYMMFromDate } from '@/lib/month-tag'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type ProfileInsert = Database['public']['Tables']['profiles']['Insert']
@@ -142,7 +141,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   // Calculate current month boundaries for cycle debt
   const now = new Date()
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const currentCycleLabel = format(now, 'MMM yy', { locale: enUS }).toUpperCase() // e.g., "DEC 24"
+  const currentCycleLabel = toYYYYMMFromDate(now)
 
   const profileSelect = async () => {
     const attempt = await supabase
@@ -224,8 +223,9 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     } else {
       (txns as any[])?.forEach(txn => {
         const txnDate = txn.occurred_at ? new Date(txn.occurred_at) : null
-        const currentMonthTag = format(new Date(), 'MMMyy').toUpperCase()
-        const isCurrentCycle = (txnDate && txnDate >= currentMonthStart) || (txn.tag === currentMonthTag)
+        const currentMonthTag = toYYYYMMFromDate(new Date())
+        const normalizedTag = normalizeMonthTag(txn.tag) ?? txn.tag
+        const isCurrentCycle = (txnDate && txnDate >= currentMonthStart) || (normalizedTag === currentMonthTag)
 
         // Determine which person this debt belongs to
         let personId: string | null = null
@@ -264,7 +264,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
           // Track current cycle debt separately
           // STRICTER LOGIC: If tag exists, it MUST match. If no tag, check date.
           const isStrictlyCurrentCycle = txn.tag
-            ? txn.tag === currentMonthTag
+            ? normalizedTag === currentMonthTag
             : (txnDate && txnDate >= currentMonthStart)
 
           if (isStrictlyCurrentCycle) {
@@ -350,14 +350,13 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
 
         if (!ownerId) return
 
-        const tagValue = txn.tag ?? null
+        const tagValue = normalizeMonthTag(txn.tag) ?? txn.tag ?? null
         const occurredAt = txn.occurred_at ?? null
         const parsedDate = occurredAt ? new Date(occurredAt) : null
         const validDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null
-        const fallbackKey = validDate ? format(validDate, 'yyyy-MM') : 'unknown'
-        const groupingKey = tagValue ?? fallbackKey
-        const label =
-          tagValue ?? (validDate ? format(validDate, 'MMM yy', { locale: enUS }).toUpperCase() : 'Debt')
+        const fallbackKey = validDate ? toYYYYMMFromDate(validDate) : null
+        const groupingKey = tagValue ?? fallbackKey ?? 'unknown'
+        const label = groupingKey === 'unknown' ? 'Debt' : groupingKey
 
         // Calculate final price using DB column if available
         let finalPrice = 0
@@ -417,19 +416,20 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
 
         const ownerId = txn.person_id
         const amount = Math.abs(txn.amount)
-        const tagValue = txn.tag ?? null
+        const tagValue = normalizeMonthTag(txn.tag) ?? txn.tag ?? null
         const occurredAt = txn.occurred_at ?? null
         const parsedDate = occurredAt ? new Date(occurredAt) : null
         const validDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null
-        const fallbackKey = validDate ? format(validDate, 'yyyy-MM') : 'unknown'
+        const fallbackKey = validDate ? toYYYYMMFromDate(validDate) : null
         // Repayments should match the tag of the debt if possible, or fallback to date
         // Ideally repayments have the SAME TAG as the debt they are repaying.
-        const groupingKey = tagValue ?? fallbackKey
-        const label = tagValue ?? (validDate ? format(validDate, 'MMM yy', { locale: enUS }).toUpperCase() : 'Repayment')
+        const groupingKey = tagValue ?? fallbackKey ?? 'unknown'
+        const label = groupingKey === 'unknown' ? 'Repayment' : groupingKey
 
         // Update current cycle debt if repayment is in current cycle
-        const currentMonthTag = format(new Date(), 'MMMyy').toUpperCase()
-        const isCurrentCycle = (validDate && validDate >= currentMonthStart) || (txn.tag === currentMonthTag)
+        const currentMonthTag = toYYYYMMFromDate(new Date())
+        const normalizedTag = normalizeMonthTag(txn.tag) ?? txn.tag
+        const isCurrentCycle = (validDate && validDate >= currentMonthStart) || (normalizedTag === currentMonthTag)
 
         if (isCurrentCycle) {
           const currentCycle = currentCycleDebtByPerson.get(ownerId) ?? 0
