@@ -6,10 +6,10 @@ function doPost(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var data = JSON.parse(e.postData.contents);
 
-    // 1. CHỌN ĐÚNG TÊN SHEET
-    var sheetName = "Danh sách chuyển tiền"; 
+    // 1. Chọn đúng tên sheet
+    var sheetName = "Danh sách chuyển tiền";
     var sheet = ss.getSheetByName(sheetName);
-    
+
     // Nếu chưa có thì tạo mới
     if (!sheet) {
       sheet = ss.insertSheet(sheetName);
@@ -17,13 +17,13 @@ function doPost(e) {
       sheet.getRange("A4:F4").setValues([["STT", "Tên người nhận", "Số tài khoản nhận", "Số tiền chuyển", "Nội dung giao dịch", "Tên ngân hàng nhận"]]);
     }
 
-    // 2. XÓA DỮ LIỆU CŨ (Từ dòng 5 trở xuống) - Clear sạch để paste mới
+    // 2. Xóa dữ liệu cũ (từ dòng 5 trở xuống) - Clear sạch để paste mới
     var lastRow = sheet.getLastRow();
     if (lastRow >= 5) {
       sheet.getRange(5, 1, lastRow - 4, 6).clearContent();
     }
 
-    // 3. MAP DỮ LIỆU (Mapping đúng cột A->F)
+    // 3. Map dữ liệu (A->F)
     var items = data.items;
     if (items && items.length > 0) {
       var rows = [];
@@ -34,18 +34,20 @@ function doPost(e) {
           item.receiver_name,     // B: Tên người nhận
           "'" + item.bank_number, // C: Số TK (Thêm ' để giữ số 0)
           item.amount,            // D: Số tiền
-          item.note,              // E: Nội dung (Đã xử lý ở App: VCB NOV25)
+          item.note,              // E: Nội dung (đã xử lý ở App: VCB 2025-11)
           item.bank_name          // F: Tên ngân hàng
         ]);
       }
-      // 4. GHI TỪ DÒNG 5
+      // 4. Ghi từ dòng 5
       sheet.getRange(5, 1, rows.length, rows[0].length).setValues(rows);
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ "result": "success" })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ "result": "success" }))
+      .setMimeType(ContentService.MimeType.JSON);
 
   } catch (e) {
-    return ContentService.createTextOutput(JSON.stringify({ "result": "error", "error": e.toString() })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ "result": "error", "error": e.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
   }

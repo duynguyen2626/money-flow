@@ -12,7 +12,7 @@ ALTER TABLE batch_items ADD COLUMN IF NOT EXISTS card_name TEXT;
 
 - Adds a new optional `card_name` column to the `batch_items` table
 - This allows users to specify a card name (e.g., "Amex", "Visa") for each batch item
-- The note will be automatically generated as: `BankName CardName MMMYY` (e.g., "VCB Amex NOV25")
+- The note will be automatically generated as: `BankName CardName YYYY-MM` (e.g., "VCB Amex 2025-11")
 
 ## Changes Made
 
@@ -24,5 +24,5 @@ ALTER TABLE batch_items ADD COLUMN IF NOT EXISTS card_name TEXT;
    - Updated Items Table to display card name alongside bank name
 4. **Business Logic**:
    - Fixed note generation to use the part BEFORE the dash (e.g., "VCB" from "VCB - Ngoại Thương")
-   - Updated note generation to include card name: `BankName [CardName] MMMYY`
+   - Updated note generation to include card name: `BankName [CardName] YYYY-MM`
    - Updated batch cloning to preserve card_name field

@@ -59,7 +59,7 @@ async function cleanup() {
     console.log('Starting cleanup...')
 
     // 1. Find transactions to delete
-    // Criteria: Tag = 'DEC25' OR Note starts with 'Auto:'
+    // Criteria: Tag matches legacy MMMYY OR Note starts with 'Auto:'
     const { data: transactions, error } = await supabase
         .from('transactions')
         .select(`
@@ -75,21 +75,29 @@ async function cleanup() {
         type
       )
     `)
-        .or('tag.eq.DEC25,note.ilike.Auto:%')
+        .or('tag.like._____,note.ilike.Auto:%')
 
     if (error) {
         console.error('Error fetching transactions:', error)
         return
     }
 
-    if (!transactions || transactions.length === 0) {
+    const isLegacyMonthTag = (value: unknown) =>
+        typeof value === 'string' && /^[A-Z]{3}[0-9]{2}$/.test(value.trim())
+
+    const transactionsToDelete = (transactions ?? []).filter((txn: any) => {
+        const note = typeof txn.note === 'string' ? txn.note : ''
+        return isLegacyMonthTag(txn.tag) || note.startsWith('Auto:')
+    })
+
+    if (!transactionsToDelete || transactionsToDelete.length === 0) {
         console.log('No transactions found to cleanup.')
         return
     }
 
-    console.log(`Found ${transactions.length} transactions to delete.`)
+    console.log(`Found ${transactionsToDelete.length} transactions to delete.`)
 
-    for (const txn of transactions) {
+    for (const txn of transactionsToDelete) {
         console.log(`Processing deletion for txn: ${txn.id} (${txn.note})`)
 
         // 2. Sync delete to Sheet

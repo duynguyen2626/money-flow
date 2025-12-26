@@ -30,7 +30,7 @@ CREATE TABLE "public"."transactions" (
     "shop_id" UUID REFERENCES "public"."shops"("id"),
     
     -- Advanced Tracking
-    "tag" TEXT, -- Cycle Tag (NOV25)
+    "tag" TEXT, -- Cycle Tag (YYYY-MM, e.g. 2025-11)
     "linked_transaction_id" UUID, -- Dùng cho Refund link về gốc
     
     -- Metadata (JSON) cho các thứ linh tinh (Slot, Batch ID, etc)

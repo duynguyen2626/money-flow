@@ -1105,7 +1105,7 @@ CREATE TABLE IF NOT EXISTS public.cashback_cycles (
     updated_at timestamptz DEFAULT now(),
 
     account_id uuid REFERENCES public.accounts(id) NOT NULL,
-    cycle_tag text NOT NULL, -- e.g. "DEC25"
+    cycle_tag text NOT NULL, -- e.g. "2025-12"
 
     -- Snapshots from account config at time of creation/update
     max_budget numeric DEFAULT 0,
