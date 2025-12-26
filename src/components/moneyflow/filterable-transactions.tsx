@@ -104,6 +104,7 @@ export function FilterableTransactions({
     const [isExcelMode, setIsExcelMode] = useState(false)
     const [isMobile, setIsMobile] = useState(false)
     const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false)
+    const [isTypePopoverOpen, setIsTypePopoverOpen] = useState(false)
     const [dateFrom, setDateFrom] = useState<string>('')
     const [dateTo, setDateTo] = useState<string>('')
     const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null)
@@ -750,7 +751,13 @@ export function FilterableTransactions({
                                 />
 
                                 {/* Filter (Category/Type etc) - Kept inline as it has distinct mobile behavior */}
-                                <Popover open={isMobileFilterOpen} onOpenChange={setIsMobileFilterOpen}>
+                                <Popover
+                                    open={isTypePopoverOpen}
+                                    onOpenChange={(open) => {
+                                        setIsTypePopoverOpen(open)
+                                        if (open) setIsMobileFilterOpen(false) // Close filter when type opens
+                                    }}
+                                >
                                     <PopoverTrigger asChild>
                                         <button
                                             className={cn(
@@ -768,7 +775,7 @@ export function FilterableTransactions({
                                                 {(['all', 'income', 'expense', 'lend', 'repay'] as const).map(type => (
                                                     <button
                                                         key={type}
-                                                        onClick={() => { setSelectedType(type); setIsMobileFilterOpen(false); }}
+                                                        onClick={() => { setSelectedType(type); setIsTypePopoverOpen(false); }}
                                                         className={cn(
                                                             "px-2 py-1.5 text-[10px] font-bold rounded-md border transition-all capitalize text-center",
                                                             selectedType === type
@@ -890,7 +897,10 @@ export function FilterableTransactions({
 
                 {isMobile && isMobileFilterOpen && (
                     <div className="fixed inset-0 z-40 flex flex-col">
-                        <div className="absolute inset-0 bg-black/50" onClick={() => setIsMobileFilterOpen(false)} />
+                        <div className="absolute inset-0 bg-black/50" onClick={() => {
+                            setIsMobileFilterOpen(false)
+                            setIsTypePopoverOpen(false) // Close type popover when clicking backdrop
+                        }} />
                         <div className="relative mt-auto bg-white rounded-t-2xl shadow-2xl max-h-[90dvh] w-full overflow-hidden">
                             <div className="sticky top-0 flex items-center justify-between px-4 py-3 border-b bg-white">
                                 <p className="text-sm font-semibold text-slate-900">Filter &amp; Search</p>
@@ -903,7 +913,10 @@ export function FilterableTransactions({
                                     </button>
                                     <button
                                         className="rounded-md border px-3 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                                        onClick={() => setIsMobileFilterOpen(false)}
+                                        onClick={() => {
+                                            setIsMobileFilterOpen(false)
+                                            setIsTypePopoverOpen(false) // Close type popover when filter closes
+                                        }}
                                     >
                                         Close
                                     </button>
@@ -1026,7 +1039,10 @@ export function FilterableTransactions({
                                 <div className="flex items-center justify-end gap-2">
                                     <button
                                         className="rounded-md border px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100"
-                                        onClick={() => setIsMobileFilterOpen(false)}
+                                        onClick={() => {
+                                            setIsMobileFilterOpen(false)
+                                            setIsTypePopoverOpen(false) // Close type popover when applying
+                                        }}
                                     >
                                         Apply
                                     </button>

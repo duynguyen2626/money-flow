@@ -2444,13 +2444,13 @@ export function UnifiedTransactionTable({
       {/* Pagination moved OUTSIDE the scrollable container to ensure visibility */}
       {
         !isExcelMode && (
-          <div className="flex-none bg-white border-t border-slate-200 p-3 pb-6 lg:p-4 flex flex-col sm:flex-row items-center justify-between gap-4 z-30 relative shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+          <div className="flex-none bg-white border-t border-slate-200 p-2 lg:p-3 flex items-center justify-between gap-2 z-30 relative shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
 
             {/* Left: Items per Page */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-medium whitespace-nowrap hidden sm:inline">Rows per page</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap hidden sm:inline">Rows</span>
               <select
-                className="h-8 w-16 rounded-md border border-slate-200 text-xs font-semibold focus:border-blue-500 focus:outline-none bg-white"
+                className="h-7 w-14 rounded-md border border-slate-200 text-[11px] font-semibold focus:border-blue-500 focus:outline-none bg-white px-1"
                 value={pageSize}
                 onChange={(e) => setPageSize(Number(e.target.value))}
               >
@@ -2461,28 +2461,28 @@ export function UnifiedTransactionTable({
             </div>
 
             {/* Center: Pagination */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
                 disabled={currentPage === 1}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
               >
-                <ChevronLeft className="h-4 w-4" />
+                <ChevronLeft className="h-3.5 w-3.5" />
               </button>
-              <div className="text-sm font-medium whitespace-nowrap">
-                Page {currentPage} <span className="text-slate-400">/ {totalPages ?? 1}</span>
+              <div className="text-[11px] font-medium whitespace-nowrap">
+                <span className="hidden sm:inline">Page </span>{currentPage} <span className="text-slate-400">/ {totalPages ?? 1}</span>
               </div>
               <button
                 onClick={() => setCurrentPage(Math.min(totalPages ?? 1, currentPage + 1))}
                 disabled={currentPage >= (totalPages ?? 1)}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
               >
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-3.5 w-3.5" />
               </button>
             </div>
 
-            {/* Font Size & Reset - Mobile Optimized */}
-            <div className="flex items-center gap-4">
+            {/* Right: Font Size & Reset - Hidden on Mobile */}
+            <div className="hidden lg:flex items-center gap-3">
               <div className="flex items-center gap-1 bg-slate-100 rounded-md p-0.5">
                 <button
                   onClick={() => setFontSize(Math.max(10, fontSize - 1))}
@@ -2508,10 +2508,11 @@ export function UnifiedTransactionTable({
                   resetColumns();
                   setCurrentPage(1);
                 }}
-                className="p-1.5 text-slate-400 hover:text-red-600 transition-colors"
-                title="Reset View"
+                className="flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+                title="Reset view"
               >
-                <RotateCcw className="h-4 w-4" />
+                <RotateCcw className="h-3 w-3" />
+                <span className="hidden xl:inline">Reset</span>
               </button>
             </div>
           </div>
