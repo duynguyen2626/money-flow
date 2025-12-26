@@ -3,7 +3,7 @@
 import { randomUUID } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
-import { MonthlyDebtSummary, Person } from '@/types/moneyflow.types'
+import { MonthlyDebtSummary, Person, PersonCycleSheet } from '@/types/moneyflow.types'
 import { normalizeMonthTag, toYYYYMMFromDate } from '@/lib/month-tag'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
@@ -198,6 +198,20 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   const personIds = (profiles as ProfileRow[])?.map(p => p.id) ?? []
   const debtBalanceByPerson = new Map<string, number>()
   const currentCycleDebtByPerson = new Map<string, number>()
+
+  let cycleSheets: PersonCycleSheet[] = []
+  if (personIds.length > 0) {
+    const { data, error } = await (supabase as any)
+      .from('person_cycle_sheets')
+      .select('id, person_id, cycle_tag, sheet_id, sheet_url, created_at, updated_at')
+      .in('person_id', personIds)
+
+    if (error) {
+      console.warn('Unable to load person cycle sheets:', error)
+    } else if (Array.isArray(data)) {
+      cycleSheets = data as PersonCycleSheet[]
+    }
+  }
 
   // Build mapping from debt account to person
   const debtAccountToPersonMap = new Map<string, string>()
@@ -498,6 +512,15 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     })
   }
 
+  const cycleSheetMap = new Map<string, PersonCycleSheet[]>()
+  if (cycleSheets.length > 0) {
+    cycleSheets.forEach((sheet) => {
+      const existing = cycleSheetMap.get(sheet.person_id) ?? []
+      existing.push(sheet)
+      cycleSheetMap.set(sheet.person_id, existing)
+    })
+  }
+
   const mapped = (profiles as ProfileRow[] | null)?.map(person => {
     const debtInfo = debtAccountMap.get(person.id)
     const subs = subscriptionMap.get(person.id) ?? []
@@ -523,6 +546,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       subscription_ids: subs.map(s => s.id), // Keep for backward compatibility if needed
       subscription_details: subs, // Now includes image_url
       monthly_debts: monthlyDebtsByPerson.get(person.id) ?? [],
+      cycle_sheets: cycleSheetMap.get(person.id) ?? [],
     }
   }) ?? []
 

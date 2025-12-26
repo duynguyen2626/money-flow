@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { LayoutDashboard, Link as LinkIcon, ChevronDown, ChevronUp, History } from 'lucide-react'
+import { LayoutDashboard, Link as LinkIcon, History } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
+import { Account, Category, Person, PersonCycleSheet, Shop } from '@/types/moneyflow.types'
 import { SmartFilterBar } from '@/components/moneyflow/smart-filter-bar'
 import { DebtCycleList } from '@/components/moneyflow/debt-cycle-list'
 import { SheetSyncControls } from '@/components/people/sheet-sync-controls'
@@ -19,6 +19,7 @@ interface PersonDetailTabsProps {
     sheetLink?: string | null
     googleSheetUrl?: string | null
     transactions: any[]
+    cycleSheets?: PersonCycleSheet[]
 }
 
 export function PersonDetailTabs({
@@ -31,6 +32,7 @@ export function PersonDetailTabs({
     sheetLink,
     googleSheetUrl,
     transactions,
+    cycleSheets = [],
 }: PersonDetailTabsProps) {
     const [activeTab, setActiveTab] = useState<'details' | 'sheet' | 'history'>('details')
     const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer'>('all')
@@ -106,6 +108,8 @@ export function PersonDetailTabs({
                                 people={people}
                                 shops={shops}
                                 personId={personId}
+                                sheetProfileId={sheetProfileId}
+                                cycleSheets={cycleSheets}
                                 filterType={filterType}
                                 searchTerm={searchTerm}
                             />

@@ -7,21 +7,20 @@ import { createClient } from '@/lib/supabase/client'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
 
 import { CreatePersonDialog } from './create-person-dialog'
-import { PersonCard } from './person-card'
-import { Account, Category, Person, Shop, Subscription } from '@/types/moneyflow.types'
+import { PeopleDirectoryDesktop } from '@/components/people/people-directory-desktop'
+import { PeopleDirectoryMobile } from '@/components/people/people-directory-mobile'
+import { buildPeopleDirectoryItems } from '@/components/people/people-directory-data'
+import { Person, Subscription } from '@/types/moneyflow.types'
 import { cn } from '@/lib/utils'
 
 type PeopleGridProps = {
   people: Person[]
   subscriptions: Subscription[]
-  shops: Shop[]
-  accounts: Account[]
-  categories: Category[]
 }
 
 type FilterTab = 'debt' | 'settled' | 'archived'
 
-export function PeopleGrid({ people, subscriptions, shops, accounts, categories }: PeopleGridProps) {
+export function PeopleGrid({ people, subscriptions }: PeopleGridProps) {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<FilterTab>('debt')
@@ -52,9 +51,9 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
     }
   }, [router])
 
-  const handleSelect = (person: Person) => {
-    setSelectedId(person.id)
-    router.push(`/people/${person.id}`)
+  const handleSelect = (personId: string) => {
+    setSelectedId(personId)
+    router.push(`/people/${personId}`)
   }
 
   // Group people by status
@@ -66,6 +65,26 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
   const currentPeople = activeTab === 'debt' ? activePeople
     : activeTab === 'settled' ? settledPeople
       : archivedPeople
+
+  const recentPeople = useMemo(() => {
+    if (searchQuery.trim() !== '' || activeTab !== 'debt') return []
+    return [...filteredPeople]
+      .filter((p) => !p.is_archived)
+      .map((p) => {
+        const createdAt = p.created_at ? new Date(p.created_at).getTime() : 0
+        const latestDebt = p.monthly_debts?.[0]
+        const lastActivity = latestDebt?.last_activity
+          ? new Date(latestDebt.last_activity).getTime()
+          : (latestDebt?.occurred_at ? new Date(latestDebt.occurred_at).getTime() : 0)
+        return { ...p, _sortRes: Math.max(createdAt, lastActivity) }
+      })
+      .filter((p) => p._sortRes > 0)
+      .sort((a, b) => b._sortRes - a._sortRes)
+      .slice(0, 2)
+  }, [activeTab, filteredPeople, searchQuery])
+
+  const recentItems = useMemo(() => buildPeopleDirectoryItems(recentPeople), [recentPeople])
+  const currentItems = useMemo(() => buildPeopleDirectoryItems(currentPeople), [currentPeople])
 
   const tabs: { id: FilterTab; label: string; icon: React.ReactNode; count: number; color: string }[] = [
     {
@@ -153,55 +172,21 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
         </div>
 
         {/* Recent Section */}
-        {searchQuery.trim() === '' && activeTab === 'debt' && (
-          (() => {
-            // Find recent people (Limit 2)
-            const recentPeople = [...filteredPeople]
-              .filter((p) => !p.is_archived) // Only active
-              .map((p) => {
-                // Logic: Hybrid Sort - specific request for "Date Added", but fallback to "Last Activity" if created_at is missing/old
-                // This ensures existing users (who have null created_at) still show up based on activity if relevant
-                const createdAt = p.created_at ? new Date(p.created_at).getTime() : 0;
-
-                // Also get last activity
-                const latestDebt = p.monthly_debts?.[0];
-                const lastActivity = latestDebt?.last_activity
-                  ? new Date(latestDebt.last_activity).getTime()
-                  : (latestDebt?.occurred_at ? new Date(latestDebt.occurred_at).getTime() : 0);
-
-                // Priority: Creation Date (if within last 7 days?) OR just Max(Created, LastActivity)?
-                // User said "recently added" is the issue. If I strictly use created_at, old users disappear.
-                // Let's use MAX to be safe, but prioritize created_at for NEW users.
-
-                return { ...p, _sortRes: Math.max(createdAt, lastActivity) };
-              })
-              .filter((p) => p._sortRes > 0)
-              .sort((a, b) => b._sortRes - a._sortRes)
-              .slice(0, 2);
-
-            if (recentPeople.length === 0) return null;
-
-            return (
-              <div className="mb-6">
-                <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Recent</h3>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-                  {recentPeople.map(person => (
-                    <PersonCard
-                      key={`recent-${person.id}`}
-                      person={person}
-                      subscriptions={subscriptions}
-                      isSelected={selectedId === person.id}
-                      onSelect={() => handleSelect(person)}
-                      accounts={accounts}
-                      categories={categories}
-                      shops={shops}
-                    />
-                  ))}
-                </div>
-                <div className="mt-6 border-t border-slate-100" />
-              </div>
-            );
-          })()
+        {recentItems.length > 0 && (
+          <div className="mb-6">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Recent</h3>
+            <PeopleDirectoryDesktop
+              items={recentItems}
+              selectedId={selectedId}
+              onSelect={(id) => handleSelect(id)}
+            />
+            <PeopleDirectoryMobile
+              items={recentItems}
+              selectedId={selectedId}
+              onSelect={(id) => handleSelect(id)}
+            />
+            <div className="mt-6 border-t border-slate-100" />
+          </div>
         )}
 
         {/* People Grid */}
@@ -225,20 +210,18 @@ export function PeopleGrid({ people, subscriptions, shops, accounts, categories 
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-            {currentPeople.map(person => (
-              <PersonCard
-                key={person.id}
-                person={person}
-                subscriptions={subscriptions}
-                isSelected={selectedId === person.id}
-                onSelect={() => handleSelect(person)}
-                accounts={accounts}
-                categories={categories}
-                shops={shops}
-              />
-            ))}
-          </div>
+          <>
+            <PeopleDirectoryDesktop
+              items={currentItems}
+              selectedId={selectedId}
+              onSelect={(id) => handleSelect(id)}
+            />
+            <PeopleDirectoryMobile
+              items={currentItems}
+              selectedId={selectedId}
+              onSelect={(id) => handleSelect(id)}
+            />
+          </>
         )}
       </div>
     </>

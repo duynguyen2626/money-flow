@@ -1,8 +1,5 @@
 import { getPeople } from '@/services/people.service'
 import { PeopleGrid } from '@/components/people/people-grid'
-import { getAccounts } from '@/services/account.service'
-import { getCategories } from '@/services/category.service'
-import { getShops } from '@/services/shop.service'
 import { getServices } from '@/services/service-manager'
 
 export const dynamic = 'force-dynamic'
@@ -12,11 +9,8 @@ export default async function PeoplePage() {
   // - current_cycle_debt, outstanding_debt, current_cycle_label
   // - subscription_details with image_url
   // - monthly_debts for outstanding display
-  const [people, shops, accounts, categories, subscriptions] = await Promise.all([
+  const [people, subscriptions] = await Promise.all([
     getPeople({ includeArchived: true }),
-    getShops(),
-    getAccounts(),
-    getCategories(),
     getServices(),
   ])
 
@@ -26,9 +20,6 @@ export default async function PeoplePage() {
         <PeopleGrid
           people={people}
           subscriptions={subscriptions}
-          shops={shops}
-          accounts={accounts}
-          categories={categories}
         />
       </div>
     </div>

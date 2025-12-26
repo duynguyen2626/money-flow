@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
+import { Account, Category, Person, PersonCycleSheet, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { isYYYYMM, normalizeMonthTag } from '@/lib/month-tag'
 import { DebtCycleGroup } from './debt-cycle-group'
 
@@ -12,6 +12,8 @@ interface DebtCycleListProps {
     people: Person[]
     shops: Shop[]
     personId: string
+    sheetProfileId: string
+    cycleSheets: PersonCycleSheet[]
     filterType: 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer'
     searchTerm: string
 }
@@ -23,6 +25,8 @@ export function DebtCycleList({
     people,
     shops,
     personId,
+    sheetProfileId,
+    cycleSheets,
     filterType,
     searchTerm
 }: DebtCycleListProps) {
@@ -207,6 +211,8 @@ export function DebtCycleList({
                     people={people}
                     shops={shops}
                     personId={personId}
+                    sheetProfileId={sheetProfileId}
+                    cycleSheet={cycleSheets.find(sheet => normalizeMonthTag(sheet.cycle_tag) === group.tag) ?? null}
                     isExpanded={group.tag === activeTag}
                     onToggleExpand={() => handleToggle(group.tag)}
                 />

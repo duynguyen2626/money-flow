@@ -47,6 +47,11 @@ If you encounter missing cycle data or incorrect caps in the Cashback Analysis v
 - Centralized state control in `filterable-transactions.tsx`.
 - Resolved "double-pagination" issues.
 
+## Current Status (Phase 7)
+- People directory + detail UI refresh is in progress with per-cycle "Manage Sheet" support.
+- Requires `person_cycle_sheets` table; apply migration `supabase/migrations/20251226193000_create_person_cycle_sheets.sql` to remove the PGRST205 warning and enable sheet storage.
+- Sheet create/sync runs server-side via `POST /api/sheets/manage` (apps script must support `create_cycle_sheet` action).
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
