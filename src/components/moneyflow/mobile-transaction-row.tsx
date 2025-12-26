@@ -1,5 +1,4 @@
 
-import { TableCell, TableRow } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 import type { Category, TransactionWithDetails } from "@/types/moneyflow.types"
 import { MobileRecordRow } from "@/components/app/mobile/MobileRecordRow"
@@ -34,24 +33,23 @@ export function MobileTransactionRow({
     })
 
     return (
-        <TableRow
+        <div
             className={cn(
-                "border-b border-slate-200 transition-colors text-base relative",
-                isSelected ? "bg-blue-50" : "bg-white"
+                "border border-slate-200 rounded-lg transition-colors text-base relative overflow-hidden shadow-sm",
+                isSelected ? "bg-blue-50 border-blue-200" : "bg-white",
+                "active:scale-[0.99] transition-transform duration-100"
             )}
             onClick={() => onRowClick && onRowClick(txn)}
         >
-            <TableCell className="p-0 align-top" colSpan={colSpan}>
-                <MobileRecordRow
-                    {...recordProps}
-                    checkbox={{
-                        checked: isSelected,
-                        onChange: (checked) => onSelect(txn.id, checked),
-                        ariaLabel: "Select transaction",
-                    }}
-                    className="px-3 py-3 w-full max-w-[calc(100vw-2rem)] sm:max-w-full"
-                />
-            </TableCell>
-        </TableRow>
+            <MobileRecordRow
+                {...recordProps}
+                checkbox={{
+                    checked: isSelected,
+                    onChange: (checked) => onSelect(txn.id, checked),
+                    ariaLabel: "Select transaction",
+                }}
+                className="px-3 py-3 w-full"
+            />
+        </div>
     );
 }

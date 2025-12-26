@@ -29,15 +29,45 @@ export type MobileRecordCheckbox = {
     disabled?: boolean
 }
 
-export type MobileRecordRowProps = {
+export type MobileLeadingVisual = {
+    kind: "img" | "icon" | "text"
+    src?: string
+    icon?: ReactNode
+    text?: string
+    className?: string
+}
+
+export type MobileFlow = {
+    left?: MobileLeadingVisual
+    arrow?: boolean
+    right?: MobileLeadingVisual
+    labels?: string[]
+}
+
+export type MobileValueBlock = {
+    top: string
+    topBadges?: MobileRecordBadge[]
+    bottom?: string
+    infoTooltip?: ReactNode
+    tone?: "positive" | "negative" | "neutral"
+}
+
+export interface MobileRowModel {
+    id?: string
     title: string
-    subtitle?: string
+    subtitle?: { text: string; tooltip?: string } | string
+    leadingVisual?: MobileLeadingVisual
+    flow?: MobileFlow
+    badges?: MobileRecordBadge[]
+    meta?: MobileRecordMeta[]
+    value?: MobileValueBlock
+    actions?: ReactNode // Kept as ReactNode for flexibility or object structure
+    className?: string
+    // Legacy support or direct prop usage
     icon?: ReactNode
     iconClassName?: string
     checkbox?: MobileRecordCheckbox
-    badges?: MobileRecordBadge[]
-    meta?: MobileRecordMeta[]
     amount?: MobileRecordAmount
-    actions?: ReactNode
-    className?: string
 }
+
+export type MobileRecordRowProps = MobileRowModel

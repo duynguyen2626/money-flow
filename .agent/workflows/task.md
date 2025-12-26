@@ -1,86 +1,77 @@
 ---
-description: Prompt P4 (Updated) — Transactions UI Rebuild to New Mock (ENG 100%)
+description: PHASE 5 — Mobile UI Fix (Transactions) + Standardize MobileRecordRow for Reuse
 ---
 
-PHASE 4 — Transactions UI Rebuild to NEW Mock (Locked)
+PHASE 5B — Mobile Transactions: Simple Raw Renderer (Fix Missing/Wrong Columns)
 
-ROLE
-You are implementing a UI rebuild for the Transactions table layout based on the NEW mock screenshot provided by the user.
-This is NOT a free redesign. The screenshot is the single source of truth.
+PROBLEM
+Mobile Transactions UI is still broken: columns missing/blank, swapped content, empty table sections.
+This is caused by desktop-style complex UI (badges/icons/sticky/overflow table) leaking into mobile.
 
-INPUTS
-- The user will provide:
-  1) NEW mock screenshot (authoritative)
-  2) Optional: current broken UI screenshot (for diff)
+GOAL
+Create a dedicated mobile-only renderer for /transactions that displays simple RAW data only.
+No fancy badges, no complex breakdown tooltips, no desktop column system on mobile.
 
-NON-NEGOTIABLE RULES
-- Keep all existing data logic: filtering, pagination, selection, totals, actions, fetch calls.
-- Only change presentation/layout and small UI rendering behaviors described below.
-- Do not change DB schema, API routes, or business rules.
-- Do not introduce new pages.
-- Maintain responsiveness (27” desktop, 13” laptop, iPad, mobile).
+STRICT RULES
+- Keep all existing data fetching, filtering, search, pagination, and selection logic.
+- Do not change desktop UI at all.
+- Do not touch DB/API.
+- Mobile must show these columns/sections clearly:
+  Date | Note | Flow & Entity | Value | Category
+- Mobile must NOT use horizontal scroll to reveal essential columns.
+- Keep actions (Edit/Delete/More) available, but minimal.
 
-TARGET STRUCTURE (match the mock)
-A) Top area
-- Move/ensure the main navigation is anchored at the very top so the layout does not “shift” when nav collapses.
-- The table area must stay visually stable in viewport.
+MOBILE DISPLAY SPEC (RAW)
+1) Date:
+- Show only "dd-mm" (VN order). No badges, no time, no calendar tile.
 
-B) Table columns & rendering requirements
+2) Note:
+- Show shop image (if available) + note text.
+- No ID displayed.
+- Keep search working as-is.
+- Keep copy icon (copy transaction ID) available.
 
-1) DATE column (calendar tile style)
-- Render date like a mini calendar card (month label + day number).
-- Place time next to it (not below).
-- Include a quick action icon next to time (wrench icon), matching mock placement.
+3) Flow & Entity:
+- Show source image + arrow + target image.
+- No cycle/debt badges, no extra tags.
 
-2) NOTE column
-- Primary: note title text.
-- Secondary: show the transaction ID below (short format like ABCD-123...).
-- The ID should be truncated; on hover show tooltip with full ID.
-- Refund flow icon must look like the legacy one (do not invent new refund icon style).
+4) Value:
+- Show raw amount only (one line).
+- No final price, no formula tooltip, no cashback computation.
+- Keep number formatting consistent with existing formatter.
 
-3) FLOW & ENTITY column
-- Preserve the “source -> person” structure.
-- Source image (cards) must have the same height as person avatar (square).
-- Cards must always render in portrait orientation:
-  - If original image is landscape/standing wrongly, rotate it so it appears portrait.
-  - Do NOT round the card image (no rounded-full).
-- Person avatar remains square/consistent as in mock.
+5) Category:
+- Show category name only (plain text).
+- No chips, no icons.
 
-4) AMOUNT / FINAL PRICE merged into one column (VALUE column)
-- Show Amount on top (primary).
-- Show cashback badges on the same row as Amount:
-  - percent back and/or fixed back, smaller size badge.
-- Show Final Price below Amount.
-- Add an info icon next to Final Price.
-  - Hover shows a tooltip “Price Breakdown” with formula details (amount, percent/fixed, final).
-  - Tooltip content must be computed from existing fields; do not change calculations.
+LAYOUT REQUIREMENT
+- Implement as a simple vertical list of rows/cards.
+- Each row is a compact grid:
+  Left: checkbox
+  Middle: Date + Note + Flow
+  Right: Value and Category stacked or aligned
+- Must be readable at 360–430px width without horizontal scroll.
 
-5) CATEGORY column
-- Match mock: compact category cell (icon + type chips).
+IMPLEMENTATION APPROACH
+- In unified-transaction-table.tsx:
+  - For mobile breakpoint, bypass desktop table rendering entirely.
+  - Render <MobileTransactionsSimpleList .../> only.
 
-C) Interaction / regressions to fix
-- Checkbox selection must work reliably.
-- Row click/hover behavior must remain consistent (no broken pointer events).
-- No unexpected rounding on images.
-- No converting numeric values into pills unless mock shows it.
+- Create new file:
+  - src/components/moneyflow/mobile/MobileTransactionsSimpleList.tsx
+  - Optional: src/components/moneyflow/mobile/MobileTransactionsSimpleRow.tsx
 
-IMPLEMENTATION GUIDANCE
-- Prefer making changes inside:
-  - src/components/moneyflow/unified-transaction-table.tsx
-  - src/components/moneyflow/desktop row renderer (wherever row JSX is)
-  - src/components/moneyflow/mobile-transaction-row.tsx (only if mobile is also updated)
-- If TableShell or MobileRecordRow blocks the mock, adjust them minimally but do not redesign them.
+- Do NOT use MobileRecordRow for this phase. Keep it simple.
 
-STRICT ENFORCEMENT
-- Do not add “extra” UI sections.
-- Do not move Financial Summary out of its current control unless mock shows it.
-- Do not create horizontal scrolling for top toolbar.
-- Any style change must move toward matching the mock exactly.
+SELECTION + ACTIONS
+- Checkbox must work.
+- Provide a small "..." actions menu or swipe actions if already available.
+- Keep Edit/Delete/More behavior the same as desktop.
 
-DELIVERABLES
-- Updated Transactions table UI matching the mock.
-- Build must pass: npm run build
-- Provide before/after screenshots for desktop and mobile.
+STOP CONDITIONS
+- npm run build passes.
+- On mobile, all 5 sections are visible and correct.
+- No horizontal scroll needed for core info.
 
 STOP
-Stop after completing this UI rebuild. Do not start any DB/date-format migration or sheet sync work.
+Stop after mobile simple renderer is working.
