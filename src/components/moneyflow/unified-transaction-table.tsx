@@ -1059,7 +1059,7 @@ export function UnifiedTransactionTable({
       <div className={cn(
         "relative w-full rounded-xl border border-slate-200 bg-card shadow-sm transition-colors duration-300 flex-1 overflow-hidden",
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
-      )} style={{ ['--table-font-size' as string]: `${fontSize}px` } as React.CSSProperties}>
+      )} style={{} as React.CSSProperties}>
         <MobileTransactionsSimpleList
           transactions={paginatedTransactions}
           categories={categories}
@@ -1615,7 +1615,10 @@ export function UnifiedTransactionTable({
                             <div className="flex items-center gap-1.5 min-w-0">
                               {txn.note ? (
                                 <CustomTooltip content={txn.note}>
-                                  <span className="text-sm text-slate-900 font-semibold truncate cursor-help">
+                                  <span
+                                    className="text-slate-900 font-semibold truncate cursor-help"
+                                    style={{ fontSize: `${fontSize}px` }}
+                                  >
                                     {txn.note}
                                   </span>
                                 </CustomTooltip>
@@ -1682,7 +1685,11 @@ export function UnifiedTransactionTable({
 
                           {/* Note Content */}
                           <div className="flex items-center gap-2 truncate flex-1">
-                            <span className="truncate text-slate-700 font-medium" title={txn.note ?? ''}>
+                            <span
+                              className="truncate text-slate-700 font-medium"
+                              title={txn.note ?? ''}
+                              style={{ fontSize: `${fontSize}px` }}
+                            >
                               {txn.note}
                             </span>
                             {txn.note && (
@@ -1802,7 +1809,10 @@ export function UnifiedTransactionTable({
 
                             {/* 3. Category Name Badge - same style & font as type, with tooltip and consistent width */}
                             <CustomTooltip content={displayCategory}>
-                              <span className={cn("inline-flex items-center justify-center rounded-md border px-1.5 text-[10px] font-extrabold truncate w-[85px] h-6 leading-none cursor-help shrink-0", catBadgeColor, typeTextColor)}>
+                              <span
+                                className={cn("inline-flex items-center justify-center rounded-md border px-1.5 font-extrabold truncate w-[85px] h-6 leading-none cursor-help shrink-0", catBadgeColor, typeTextColor)}
+                                style={{ fontSize: `${fontSize}px` }}
+                              >
                                 {displayCategory}
                               </span>
                             </CustomTooltip>
@@ -2238,9 +2248,10 @@ export function UnifiedTransactionTable({
                           <div className="flex items-center gap-1.5">
                             <span
                               className={cn(
-                                "font-bold tabular-nums tracking-tight text-base",
+                                "font-bold tabular-nums tracking-tight",
                                 isIncome ? "text-emerald-600" : "text-red-600"
                               )}
+                              style={{ fontSize: `${fontSize}px` }}
                             >
                               {numberFormatter.format(Math.abs(amount))}
                             </span>

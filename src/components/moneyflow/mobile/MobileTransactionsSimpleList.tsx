@@ -49,10 +49,6 @@ export function MobileTransactionsSimpleList({
                     const targetImage = (txn as any).person_avatar_url || (txn as any).destination_image_url
                     const showFlow = txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment'
 
-                    // Cycle and People tags
-                    const cycleTag = (txn as any).persisted_cycle_tag
-                    const personName = (txn as any).person_name
-
                     // Value: raw amount only
                     const rawAmount = typeof txn.original_amount === 'number' ? txn.original_amount : txn.amount ?? 0
                     const absAmount = Math.abs(rawAmount)
@@ -107,48 +103,26 @@ export function MobileTransactionsSimpleList({
                                         </div>
                                     </div>
 
-                                    {/* Flow & Entity with badges */}
+                                    {/* Flow & Entity - Simple arrow display */}
                                     {showFlow && (
-                                        <div className="flex items-center gap-1.5 text-xs">
-                                            {/* Cycle/People badges */}
-                                            <div className="flex items-center gap-1">
-                                                {cycleTag && (
-                                                    <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[10px] font-medium">
-                                                        {cycleTag}
-                                                    </span>
-                                                )}
-                                                {personName && (
-                                                    <span className="px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded text-[10px] font-medium">
-                                                        {personName}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            {/* Flow visualization */}
-                                            <div className="flex items-center gap-1 text-slate-600">
-                                                {sourceImage && (
-                                                    <img
-                                                        src={sourceImage}
-                                                        alt=""
-                                                        className="h-4 w-4 object-contain"
-                                                    />
-                                                )}
-
-                                                {/* Conditional arrow or "From" text */}
-                                                {isRepayment ? (
-                                                    <span className="text-[10px] text-slate-500">From</span>
-                                                ) : targetImage ? (
+                                        <div className="flex items-center gap-1 text-xs text-slate-600">
+                                            {sourceImage && (
+                                                <img
+                                                    src={sourceImage}
+                                                    alt=""
+                                                    className="h-4 w-4 rounded-full object-cover"
+                                                />
+                                            )}
+                                            {targetImage && (
+                                                <>
                                                     <ArrowRight className="h-3 w-3 text-slate-400" />
-                                                ) : null}
-
-                                                {targetImage && (
                                                     <img
                                                         src={targetImage}
                                                         alt=""
-                                                        className="h-4 w-4 object-contain"
+                                                        className="h-4 w-4 rounded-full object-cover"
                                                     />
-                                                )}
-                                            </div>
+                                                </>
+                                            )}
                                         </div>
                                     )}
                                 </div>
