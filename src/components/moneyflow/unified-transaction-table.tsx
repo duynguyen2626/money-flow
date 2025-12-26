@@ -4,12 +4,8 @@ import { useCallback, useEffect, useMemo, useState, useRef } from "react"
 import { createPortal } from "react-dom"
 import {
   ArrowUpDown,
-  Calendar,
-  MoreHorizontal,
   Plus,
   Minus,
-  Search,
-  SlidersHorizontal,
   X,
   CreditCard,
   Check,
@@ -18,75 +14,43 @@ import {
   Sigma,
   Link2,
   Info,
-  ArrowLeft,
-  ArrowRight,
   ShoppingBasket,
   Wallet,
   ArrowUp,
   ArrowDown,
   Trash2,
-  Tag,
   RotateCcw,
-  Pencil,
   Ban,
   Loader2,
-  Store,
-  CheckCircle2,
   History,
-  ChevronDown,
   ChevronRight,
   ChevronLeft,
-  Download,
   Edit,
-  ExternalLink,
-  Eye,
-  FileText,
-  Filter,
-  RefreshCw,
   Clock,
-  AlertCircle,
-  Banknote,
   ArrowRightLeft,
   ArrowUpRight,
   ArrowDownLeft,
-  CornerUpLeft,
-  Notebook,
-  HelpCircle,
   User,
   RefreshCcw,
-  Maximize2,
-  Minimize2,
-  ListFilter,
-  Eraser,
-  Undo2,
-  EllipsisVertical,
   MoveRight,
   Wrench
 } from "lucide-react"
 
-import { MobileTransactionRow } from "./mobile-transaction-row"
 import { MobileTransactionsSimpleList } from "./mobile/MobileTransactionsSimpleList"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
 import { toast } from "sonner"
-import { CustomTooltip, Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/custom-tooltip'
+import { CustomTooltip } from '@/components/ui/custom-tooltip'
 import { createClient } from '@/lib/supabase/client'
-import { Account, Category, Person, Shop, TransactionWithDetails, TransactionWithLineRelations } from "@/types/moneyflow.types"
+import { Account, Category, Person, Shop, TransactionWithDetails } from "@/types/moneyflow.types"
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
-  TableFooter,
 } from "@/components/ui/table"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
 import {
   Sheet,
   SheetContent,
@@ -95,9 +59,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { TransactionForm, TransactionFormValues } from "./transaction-form"
 import {
   restoreTransaction,
@@ -109,10 +70,9 @@ import {
 import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
 import { cn } from "@/lib/utils"
-import { parseCashbackConfig, getCashbackCycleRange, ParsedCashbackConfig } from '@/lib/cashback'
+import { parseCashbackConfig, getCashbackCycleRange } from '@/lib/cashback'
 import { formatCycleTag } from '@/lib/cycle-utils'
 import { normalizeMonthTag } from '@/lib/month-tag'
-import { RefundNoteDisplay } from './refund-note-display'
 import { ConfirmRefundDialog } from "./confirm-refund-dialog"
 import { TransactionHistoryModal } from './transaction-history-modal'
 import { AddTransactionDialog } from "./add-transaction-dialog"
@@ -295,7 +255,7 @@ export function UnifiedTransactionTable({
   fontSize: externalFontSize,
   onFontSizeChange,
 }: UnifiedTransactionTableProps) {
-  const tableData = data ?? transactions ?? []
+  const tableData = useMemo(() => data ?? transactions ?? [], [data, transactions])
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 160, minWidth: 140 },
     { key: "shop", label: "Note", defaultWidth: 250, minWidth: 180 },
@@ -309,9 +269,6 @@ export function UnifiedTransactionTable({
   // Internal state removed for activeTab, now using prop with fallback
   const lastSelectedIdRef = useRef<string | null>(null)
   const [showSelectedOnly, setShowSelectedOnly] = useState(false)
-
-
-
   const [internalSelection, setInternalSelection] = useState<Set<string>>(new Set())
   const [visibleColumns, setVisibleColumns] = useState<Record<ColumnKey, boolean>>(() => {
     const initial: Record<ColumnKey, boolean> = {
@@ -521,8 +478,6 @@ export function UnifiedTransactionTable({
   }, [router])
 
   // State for actions
-  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false)
-  // fontSize state moved up
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null)
   const [editingTxn, setEditingTxn] = useState<TransactionWithDetails | null>(null)
   const [confirmVoidTarget, setConfirmVoidTarget] = useState<TransactionWithDetails | null>(null)
@@ -532,7 +487,7 @@ export function UnifiedTransactionTable({
   const [isDeleting, setIsDeleting] = useState(false)
   const [voidError, setVoidError] = useState<string | null>(null)
   const [confirmRefundOpen, setConfirmRefundOpen] = useState(false)
-  const [confirmRefundTxn, setConfirmRefundTxn] = useState<TransactionWithDetails | null>(null)
+  const [confirmRefundTxn] = useState<TransactionWithDetails | null>(null)
   const [historyTarget, setHistoryTarget] = useState<TransactionWithDetails | null>(null)
   const [cloningTxn, setCloningTxn] = useState<TransactionWithDetails | null>(null)
   const [confirmDeletingTarget, setConfirmDeletingTarget] = useState<TransactionWithDetails | null>(null)
@@ -549,15 +504,10 @@ export function UnifiedTransactionTable({
     return () => document.removeEventListener('mousedown', handleOutsideClick)
   }, [actionMenuOpen])
 
-  const handleOpenConfirmRefund = (txn: TransactionWithDetails) => {
-    setConfirmRefundTxn(txn)
-    setConfirmRefundOpen(true)
-    setActionMenuOpen(null)
-  }
   const [statusOverrides, setStatusOverrides] = useState<Record<string, TransactionWithDetails['status']>>({})
   const [refundFormTxn, setRefundFormTxn] = useState<TransactionWithDetails | null>(null)
   const [copiedId, setCopiedId] = useState<string | null>(null)
-  const [refundFormStage, setRefundFormStage] = useState<'request' | 'confirm'>('request')
+  const [refundFormStage] = useState<'request' | 'confirm'>('request')
   const [internalSortState, setInternalSortState] = useState<{ key: SortKey; dir: SortDir }>({ key: 'date', dir: 'desc' })
   const [bulkDialog, setBulkDialog] = useState<{ mode: 'void' | 'restore' | 'delete'; open: boolean } | null>(null)
   const stopBulk = useRef(false)
@@ -620,15 +570,6 @@ export function UnifiedTransactionTable({
     }
   }, [selection.size, showSelectedOnly])
 
-  const toggleColumnVisibility = (key: ColumnKey) => {
-    setVisibleColumns(prev => ({ ...prev, [key]: !prev[key] }))
-  }
-
-  const updateColumnWidth = (key: ColumnKey, value: number) => {
-    const min = defaultColumns.find(col => col.key === key)?.minWidth ?? 80
-    setColumnWidths(prev => ({ ...prev, [key]: Math.max(min, value) }))
-  }
-
   const resetColumns = () => {
     const map = {} as Record<ColumnKey, number>
     defaultColumns.forEach(col => {
@@ -654,39 +595,6 @@ export function UnifiedTransactionTable({
     setIsVoiding(false)
   }
 
-  const handleRecalcSelections = async () => {
-    if (!selection.size) return
-    const ids = Array.from(selection)
-    const toastId = toast.loading(`Recalculating cashback for ${ids.length} transactions...`)
-
-    let successCount = 0
-    let failCount = 0
-
-    for (const id of ids) {
-      try {
-        const res = await fetch(`/api/debug/recalc-cashback?id=${id}`)
-        if (res.ok) {
-          successCount++
-        } else {
-          failCount++
-        }
-      } catch (e) {
-        console.error(e)
-        failCount++
-      }
-    }
-
-    toast.dismiss(toastId)
-    if (failCount === 0) {
-      toast.success(`Successfully recalculated ${successCount} transactions.`)
-    } else {
-      toast.warning(`Finished with ${successCount} successes and ${failCount} failures.`)
-    }
-    router.refresh()
-    // Clear selection after action
-    updateSelection(new Set())
-  }
-
   const handleRestore = (txn: TransactionWithDetails) => {
     setIsRestoring(true)
     void restoreTransaction(txn.id)
@@ -705,12 +613,6 @@ export function UnifiedTransactionTable({
         setVoidError('Unable to restore transaction. Please try again.')
       })
       .finally(() => setIsRestoring(false))
-  }
-
-  const openRefundForm = (txn: TransactionWithDetails, stage: 'request' | 'confirm') => {
-    setRefundFormStage(stage)
-    setRefundFormTxn(txn)
-    setActionMenuOpen(null)
   }
 
   const handleRefundFormSuccess = useCallback(() => {
@@ -836,11 +738,6 @@ export function UnifiedTransactionTable({
     selection.size,
   ])
 
-  const handleEditSuccess = () => {
-    setEditingTxn(null)
-    router.refresh()
-  }
-
   const handleDuplicate = (txn: TransactionWithDetails) => {
     setCloningTxn(txn);
     setActionMenuOpen(null);
@@ -884,7 +781,7 @@ export function UnifiedTransactionTable({
           } else {
             errorCount++
           }
-        } catch (error) {
+        } catch {
           errorCount++
         }
         processedCount++
@@ -998,6 +895,7 @@ export function UnifiedTransactionTable({
     } else {
       updateSelection(new Set())
     }
+    onSelectAll?.(checked)
   }
 
   const handleSelectOne = (txnId: string, checked: boolean, shiftKey: boolean = false) => {
@@ -1027,6 +925,7 @@ export function UnifiedTransactionTable({
 
     lastSelectedIdRef.current = txnId
     updateSelection(newSet)
+    onSelectTxn?.(txnId, checked)
   }
 
   // --- Summary Calculation ---
@@ -1392,7 +1291,6 @@ export function UnifiedTransactionTable({
               {paginatedTransactions.map(txn => {
                 const isRepayment = txn.type === 'repayment';
                 const visualType = (txn as any).displayType ?? txn.type;
-                const displayDirection = (txn as any).display_type as string | undefined;
                 const amountClass =
                   visualType === "income" || isRepayment
                     ? "text-emerald-700"
@@ -1404,42 +1302,11 @@ export function UnifiedTransactionTable({
                 const txnSourceId = txn.source_account_id || txn.account_id
                 const destNameRaw = txn.destination_name || 'Unknown'
                 const txnDestId = txn.destination_account_id || ((txn as any).target_account_id) || (destNameRaw !== 'Unknown' ? accounts.find(a => a.name === destNameRaw)?.id : undefined)
-                const txnPersonId = (txn as any).person_id
-                const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : txn.amount
-                const amountValue = numberFormatter.format(Math.abs(originalAmount ?? 0))
-
-                const isExcelSelected = isExcelMode && selectedCells.has(txn.id)
-
                 const isSelected = selection.has(txn.id)
                 const effectiveStatus = statusOverrides[txn.id] ?? txn.status
                 const isVoided = effectiveStatus === 'void'
                 const isMenuOpen = actionMenuOpen === txn.id
                 const txnMetadata = parseMetadata(txn.metadata)
-                const refundStatusMeta = typeof txnMetadata?.refund_status === "string" ? txnMetadata.refund_status : null
-                const refundedAmount = typeof txnMetadata?.refunded_amount === "number" ? Math.abs(txnMetadata.refunded_amount) : 0
-                const effectiveOriginalAmount = Math.abs(originalAmount ?? 0)
-                const refundStatus =
-                  refundStatusMeta === 'full' || refundStatusMeta === 'partial'
-                    ? refundStatusMeta
-                    : refundedAmount > 0
-                      ? refundedAmount >= effectiveOriginalAmount && effectiveOriginalAmount > 0
-                        ? 'full'
-                        : 'partial'
-                      : refundStatusMeta
-                const isPendingRefund = refundStatusMeta === 'requested'
-                const categoryLabel = txn.category_name ?? ''
-                const hasShoppingCategory = categoryLabel.toLowerCase().includes('shopping')
-                const isFullyRefunded =
-                  refundStatus === 'full' ||
-                  (refundedAmount > 0 && effectiveOriginalAmount > 0 && refundedAmount >= effectiveOriginalAmount)
-                const isPartialRefund =
-                  !isFullyRefunded &&
-                  refundedAmount > 0
-                const canRequestRefund =
-                  (visualType === 'expense' || txn.type === 'expense') &&
-                  (Boolean(txn.shop_id) || hasShoppingCategory) &&
-                  !isFullyRefunded
-
                 // Refund SEQ Logic (Global for row)
                 let refundSeq = 0;
                 if (txnMetadata?.has_refund_request || txn.status === 'waiting_refund') refundSeq = 1;
@@ -1450,115 +1317,6 @@ export function UnifiedTransactionTable({
                 if (refundSeq === 2 || refundSeq === 3) {
                   displayIdForBadge = (txnMetadata?.original_transaction_id as string) || txn.id;
                 }
-                const shortIdBadge = displayIdForBadge.length > 4
-                  ? `[${displayIdForBadge.slice(0, 2)}..${displayIdForBadge.slice(-2)}]`
-                  : '';
-
-                // --- Type Logic ---
-                let typeBadge = null;
-                if (txn.type === 'repayment') {
-                  typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">REPAY</span>;
-                } else if (txn.type === 'transfer') {
-                  if (contextId) {
-                    // Smart Context Type Logic
-                    if (contextId == txnSourceId) {
-                      typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-blue-100 px-2 py-1 text-xs font-bold text-blue-700 h-6">TF OUT</span>
-                    } else if (contextId == txnDestId || contextId == txnPersonId) {
-                      typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">TF IN</span>
-                    } else {
-                      // Context exists but doesn't match source/dest (e.g. searching global table with filter?)
-                      // Fallback to amount logic
-                      if (txn.amount >= 0) {
-                        typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">TF IN</span>
-                      } else {
-
-                        typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-blue-100 px-2 py-1 text-xs font-bold text-blue-700 h-6">TF OUT</span>
-                      }
-                    }
-                  } else if (accountId) {
-                    if (txn.amount >= 0) {
-                      typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">TF IN</span>
-                    } else {
-                      typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-blue-100 px-2 py-1 text-xs font-bold text-blue-700 h-6">TF OUT</span>
-                    }
-                  } else {
-                    // Standard Transfer -> Blue
-                    typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-blue-100 px-2 py-1 text-xs font-bold text-blue-700 h-6">TF</span>
-                  }
-                } else if (visualType === 'expense') {
-                  typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-red-100 px-2 py-1 text-xs font-bold text-red-700 h-6">OUT</span>
-                } else if (visualType === 'income') {
-                  typeBadge = <span className="inline-flex items-center justify-center w-[60px] rounded-md bg-emerald-200 px-2 py-1 text-xs font-bold text-emerald-900 h-6">IN</span>
-                } else {
-                  typeBadge = <span className="inline-flex items-center rounded-md bg-blue-200 px-2 py-1 text-xs font-bold text-blue-900 h-6">TF</span>
-                }
-
-
-                // --- Status Logic ---
-                let statusIndicator = null;
-                let statusTooltip = "";
-                const meta = (txn.metadata as any) || {};
-                const isRefundConfirmation = meta?.is_refund_confirmation === true;
-                const metaRefundStatus = meta?.refund_status;
-
-                const statusBadgeStyle = "flex items-center justify-center rounded p-0.5 w-5 h-5 transition-colors border";
-
-                if (isVoided) {
-                  statusIndicator = <Ban className="h-4 w-4 text-slate-400" />;
-                  statusTooltip = "Voided";
-                }
-                else if (effectiveStatus === 'pending') {
-                  statusIndicator = (
-                    <div className={cn(statusBadgeStyle, "bg-amber-100 border-amber-300 text-amber-700")}>
-                      <Clock className="h-3 w-3" />
-                    </div>
-                  );
-                  statusTooltip = "Pending Refund";
-                }
-                else if (effectiveStatus === 'waiting_refund' || metaRefundStatus === 'waiting_refund') {
-                  statusIndicator = (
-                    <div className={cn(statusBadgeStyle, "bg-amber-100 border-amber-300 text-amber-700")}>
-                      <Clock className="h-3 w-3" />
-                    </div>
-                  );
-                  statusTooltip = "Waiting Refund";
-                }
-                else if (effectiveStatus === 'completed') {
-                  statusIndicator = (
-                    <div className={cn(statusBadgeStyle, "bg-emerald-100 border-emerald-300 text-emerald-700")}>
-                      <CheckCircle2 className="h-3 w-3" />
-                    </div>
-                  );
-                  statusTooltip = "Refund Completed";
-                }
-                else if (effectiveStatus === 'refunded' || metaRefundStatus === 'refunded') {
-                  statusIndicator = (
-                    <div className={cn(statusBadgeStyle, "bg-emerald-100 border-emerald-300 text-emerald-700")}>
-                      <CheckCircle2 className="h-3 w-3" />
-                    </div>
-                  );
-                  statusTooltip = "Refund Received";
-                }
-                // GD3: Refund confirmation with posted status
-                else if (isRefundConfirmation && effectiveStatus === 'posted') {
-                  statusIndicator = (
-                    <div className={cn(statusBadgeStyle, "bg-emerald-100 border-emerald-300 text-emerald-700")}>
-                      <CheckCircle2 className="h-3 w-3" />
-                    </div>
-                  );
-                  statusTooltip = "Money Received";
-                }
-                // GD1: Has pending refund request (not yet confirmed)
-                else if (meta?.has_refund_request && !metaRefundStatus) {
-                  statusIndicator = (
-                    <div className={cn(statusBadgeStyle, "bg-blue-100 border-blue-300 text-blue-700")}>
-                      <FileText className="h-3 w-3" />
-                    </div>
-                  );
-                  statusTooltip = "Refund Requested";
-                }
-
-                const isInstallmentRow = txn.is_installment || txn.installment_plan_id;
 
 
 
@@ -1575,40 +1333,6 @@ export function UnifiedTransactionTable({
                   else if (refundSeqCheck > 0) rowBgColor = "bg-purple-50" // Refund shading
                   else if (txn.type === 'repayment') rowBgColor = "bg-slate-50"
                   else if (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') rowBgColor = "bg-emerald-50/50"
-                }
-
-                // Final Price Logic
-                // Rename calculatedSum -> cashbackAmount for clarity
-                // If cashback > 0, we subtract it.
-                const percentRaw = Number(txn.cashback_share_percent ?? 0)
-                const fixedRaw = Number(txn.cashback_share_fixed ?? 0)
-                // Normalize: if > 1, assume percent (e.g. 2 -> 2% = 0.02 rate), else rate
-                const rate = percentRaw > 1 ? percentRaw / 100 : percentRaw
-                const cashbackCalc = (Math.abs(Number(originalAmount ?? 0)) * rate) + fixedRaw
-                const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
-
-                // Final Price: original - cashback. Use Math.max to prevent negative, but only if cashback is reasonable
-                // If cashback > amount, it's likely a configuration error - show the original amount instead
-                const baseAmount = Math.abs(Number(originalAmount ?? 0));
-                const finalPrice = (typeof txn.final_price === 'number')
-                  ? Math.abs(txn.final_price)
-                  : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount));
-
-                // Cycle Logic - Use account_id directly (single-table mode)
-                let cycleLabel = "-"
-                // In single-table mode, use txn.account_id directly instead of transaction_lines
-                const sourceAccountId = txn.account_id;
-
-                if (sourceAccountId) {
-                  const acc = accounts.find(a => a.id === sourceAccountId)
-                  if (acc && acc.cashback_config) {
-                    const config = parseCashbackConfig(acc.cashback_config)
-                    const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
-                    if (range) {
-                      const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}`
-                      cycleLabel = `${fmt(range.start)} to ${fmt(range.end)}`
-                    }
-                  }
                 }
 
                 const renderCell = (key: ColumnKey) => {
@@ -1664,16 +1388,13 @@ export function UnifiedTransactionTable({
                     // Note: 'type' column was removed - it's now merged into the 'date' column
                     case "shop": {
                       let shopLogo = txn.shop_image_url;
-                      let shopName = txn.shop_name;
 
                       const repaymentAccount = txnSourceId ? accounts.find(account => account.id === txnSourceId) : null;
                       const repaymentLogo = txn.source_image ?? repaymentAccount?.image_url ?? null;
-                      const repaymentName = txn.source_name ?? repaymentAccount?.name ?? null;
 
                       // Fallback logic for repayment/service
                       if (txn.type === 'repayment') {
                         shopLogo = repaymentLogo ?? shopLogo ?? null;
-                        shopName = repaymentName ?? shopName ?? null;
                       }
 
                       const isServicePayment = txn.note?.startsWith('Payment for Service') || (txn.metadata as any)?.type === 'service_payment';
@@ -1710,8 +1431,10 @@ export function UnifiedTransactionTable({
                         <div className="flex items-center gap-2 w-full overflow-hidden group">
                           {/* Logo */}
                           {shopLogo ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={shopLogo} alt="" className="h-10 w-10 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none" />
+                            <>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={shopLogo} alt="" className="h-10 w-10 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none" />
+                            </>
                           ) : (
                             <div className={cn(
                               "flex items-center justify-center h-10 w-10 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0"
@@ -1902,6 +1625,7 @@ export function UnifiedTransactionTable({
                               <div className="shrink-0 cursor-help">
                                 {displayImage ? (
                                   <div className="flex h-12 w-12 items-center justify-center">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
                                     <img src={displayImage} alt="" className="h-full w-full object-contain rounded-none ring-0 outline-none" />
                                   </div>
                                 ) : categoryIcon ? (
@@ -2054,7 +1778,10 @@ export function UnifiedTransactionTable({
 
                             {/* Icon - After Text */}
                             {icon ? (
-                              <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
+                              <>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
+                              </>
                             ) : (
                               <div className={cn("flex h-12 w-12 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
                                 {link?.includes('people') ? <User className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
@@ -2066,7 +1793,10 @@ export function UnifiedTransactionTable({
                           <div className="flex items-center gap-2 min-w-0 w-full">
                             {/* Icon - Increased Size */}
                             {icon ? (
-                              <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
+                              <>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
+                              </>
                             ) : (
                               <div className={cn("flex h-12 w-12 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
                                 {link?.includes('people') ? <User className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
@@ -2467,9 +2197,6 @@ export function UnifiedTransactionTable({
                       isMenuOpen ? "bg-blue-50" : rowBgColor,
                       !isExcelMode && "hover:bg-slate-50/50"
                     )}
-                    onClick={(e) => {
-                      // Click handler if needed
-                    }}
                   >
                     {displayedColumns.map(col => {
                       // ... column rendering ...
@@ -2483,15 +2210,6 @@ export function UnifiedTransactionTable({
                         whiteSpace: allowOverflow ? 'nowrap' : 'nowrap'
                       };
                       const stickyClass = "";
-
-                      // Determine sticky cell background color
-                      const getStickyBg = () => {
-                        if (isMenuOpen) return "bg-blue-50";
-                        if (isInstallmentRow && !isVoided) return "bg-amber-50";
-                        if ((effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') && !isVoided) return "bg-emerald-50";
-                        return "bg-white";
-                      };
-                      const stickyBg = getStickyBg();
 
                       return (
                         <TableCell
@@ -2830,9 +2548,6 @@ export function UnifiedTransactionTable({
       {
         refundFormTxn &&
         (() => {
-          const isPendingLine = refundFormTxn.account_id === REFUND_PENDING_ACCOUNT_ID;
-          // If confirming, we expect the txn to be the Pending Request.
-
           const baseAmount =
             refundFormStage === 'confirm'
               ? Math.abs(refundFormTxn.amount ?? 0)
@@ -2841,7 +2556,6 @@ export function UnifiedTransactionTable({
           // Source account for refund (where money goes back to)
           // If request, it's the original source (account_id).
           // If confirm, we might default to the first available account or just null.
-          const sourceAccountId = refundFormTxn.target_account_id ?? refundFormTxn.account_id;
           // Note: Logic above is approximation. 
           // Better: If request, use refundFormTxn.account_id.
           // If confirm, refundFormTxn is the request (on Pending Account). We need a target.
