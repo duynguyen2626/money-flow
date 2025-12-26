@@ -1,5 +1,5 @@
 "use client"
-
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback, useEffect, useMemo, useState, useRef } from "react"
 import { createPortal } from "react-dom"
 import {
@@ -1605,8 +1605,8 @@ export function UnifiedTransactionTable({
                     const config = parseCashbackConfig(acc.cashback_config)
                     const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
                     if (range) {
-                      const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
-                      cycleLabel = `${fmt(range.start)} - ${fmt(range.end)}`
+                      const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                      cycleLabel = `${fmt(range.start)} to ${fmt(range.end)}`
                     }
                   }
                 }
@@ -1883,7 +1883,7 @@ export function UnifiedTransactionTable({
                         ? new Date(occurredDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
                         : null;
 
-                      let catBadgeColor = "bg-white border-slate-200";
+                      const catBadgeColor = "bg-white border-slate-200";
 
                       return (
                         <div className="flex w-full flex-col gap-1">
@@ -1998,8 +1998,8 @@ export function UnifiedTransactionTable({
                       const isAccountContext = context === 'account' || (Boolean(contextId) && !isPersonContext);
 
                       // --- 3. Badges & Tags ---
-                      const cycleTag = txn.persisted_cycle_tag
-                      const debtTag = personId ? txn.tag : null
+                      const cycleTag = normalizeMonthTag(txn.persisted_cycle_tag) ?? txn.persisted_cycle_tag
+                      const debtTag = personId ? (normalizeMonthTag(txn.tag) ?? txn.tag) : null
 
                       let cycleLabel = "-"
                       if (sourceId) {
@@ -2008,8 +2008,8 @@ export function UnifiedTransactionTable({
                           const config = parseCashbackConfig(acc.cashback_config)
                           const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
                           if (range) {
-                            const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`
-                            cycleLabel = `${fmt(range.start)} - ${fmt(range.end)}`
+                            const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                            cycleLabel = `${fmt(range.start)} to ${fmt(range.end)}`
                           }
                         }
                       }
@@ -2039,11 +2039,11 @@ export function UnifiedTransactionTable({
                             {/* Name & Badges */}
                             <div className="flex flex-col min-w-0 flex-1 justify-center items-end">
                               <div className="flex items-center gap-1.5 min-w-0">
+                                {/* From/To Badge */}
+                                {contextBadge}
                                 <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1 text-right" title={name}>
                                   {name}
                                 </span>
-                                {/* From/To Badge */}
-                                {contextBadge}
                               </div>
                               {badges.length > 0 && (
                                 <div className="flex flex-wrap gap-1 mt-0.5 justify-end">
@@ -2476,13 +2476,13 @@ export function UnifiedTransactionTable({
                       // Sticky Logic for Cells
                       // Use a slightly more flexible stickyStyle that respects content if not explicitly date/shop
                       const allowOverflow = col.key === "date"
-                      let stickyStyle: React.CSSProperties = {
+                      const stickyStyle: React.CSSProperties = {
                         width: columnWidths[col.key],
                         maxWidth: col.key === 'account' ? 'none' : columnWidths[col.key],
                         overflow: allowOverflow ? 'visible' : 'hidden',
                         whiteSpace: allowOverflow ? 'nowrap' : 'nowrap'
                       };
-                      let stickyClass = "";
+                      const stickyClass = "";
 
                       // Determine sticky cell background color
                       const getStickyBg = () => {
@@ -2752,7 +2752,7 @@ export function UnifiedTransactionTable({
                 This will request a full refund of {numberFormatter.format(Math.abs(confirmCancelTarget.original_amount ?? confirmCancelTarget.amount ?? 0))} and mark the order as cancelled.
               </p>
               <p className="mt-2 text-xs text-amber-600">
-                Money will stay in "Pending" account until you confirm receipt.
+                Money will stay in &quot;Pending&quot; account until you confirm receipt.
               </p>
               {voidError && (
                 <div className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-800">

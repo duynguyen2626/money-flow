@@ -1,4 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { format, subMonths, parseISO } from "date-fns";
 import { Controller, Resolver, useForm, useWatch } from "react-hook-form";
 import {
@@ -209,12 +210,14 @@ function getCycleLabelForDate(
 }
 
 function parseDateInput(value: string): Date | null {
-  const match = value.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-  if (!match) return null;
+  const trimmed = value.trim();
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const legacyMatch = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!isoMatch && !legacyMatch) return null;
 
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
+  const year = Number(isoMatch ? isoMatch[1] : legacyMatch![3]);
+  const month = Number(isoMatch ? isoMatch[2] : legacyMatch![2]);
+  const day = Number(isoMatch ? isoMatch[3] : legacyMatch![1]);
 
   if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) {
     return null;
@@ -923,7 +926,7 @@ export function TransactionForm({
       setDateInputValue("");
       return;
     }
-    setDateInputValue(format(watchedDate, "dd.MM.yyyy"));
+    setDateInputValue(format(watchedDate, "yyyy-MM-dd"));
   }, [watchedDate]);
 
   const watchedPersonId = useWatch({
@@ -2087,7 +2090,7 @@ export function TransactionForm({
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                 />
                 <p className="text-xs text-slate-500">
-                  This will be appended to the note as "(paid by [name])"
+                  This will be appended to the note as &quot;(paid by [name])&quot;
                 </p>
               </div>
             ) : null;
@@ -2184,7 +2187,7 @@ export function TransactionForm({
             <input
               type="text"
               inputMode="numeric"
-              placeholder="dd.mm.yyyy"
+              placeholder="yyyy-mm-dd"
               value={dateInputValue}
               onChange={(event) => {
                 const nextValue = event.target.value;
@@ -2197,7 +2200,7 @@ export function TransactionForm({
               onBlur={() => {
                 const parsed = parseDateInput(dateInputValue);
                 if (!parsed && field.value) {
-                  setDateInputValue(format(field.value, "dd.MM.yyyy"));
+                  setDateInputValue(format(field.value, "yyyy-MM-dd"));
                 }
               }}
               className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 pr-10 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
