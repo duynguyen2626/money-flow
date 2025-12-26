@@ -10,9 +10,10 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Copy, Loader2 } from 'lucide-react'
-import { format, addMonths, parse } from 'date-fns'
+import { format, addMonths } from 'date-fns'
 import { cloneBatchAction } from '@/actions/batch.actions'
 import { useRouter } from 'next/navigation'
+import { isLegacyMMMYY, isYYYYMM, toYYYYMMFromDate } from '@/lib/month-tag'
 
 interface CloneBatchDialogProps {
     batchId: string
@@ -33,34 +34,21 @@ export function CloneBatchDialog({ batchId, batchName }: CloneBatchDialogProps) 
     }, [open, mode])
 
     function calculatePreview() {
-        // Try to find a date tag in the name (e.g., NOV25)
         const nameParts = batchName.split(' ')
         const potentialTag = nameParts[nameParts.length - 1]
 
-        try {
-            // If we can parse the tag, we can calculate the new tag
-            // But wait, the logic is: 
-            // If mode is 'current', we assume we are cloning TO current month
-            // If mode is 'last', we assume we are cloning TO last month (maybe for backfilling)
+        const targetDate = mode === 'current' ? new Date() : addMonths(new Date(), -1)
+        const newTag = toYYYYMMFromDate(targetDate)
 
-            // Actually, the requirement says:
-            // "Clone Batch" dialog to select Target Month (Current/Last).
-            // It implies we want to generate a batch for THIS month or LAST month.
+        const hasMonthTagAtEnd = isYYYYMM(potentialTag) || isLegacyMMMYY(potentialTag)
 
-            const targetDate = mode === 'current' ? new Date() : addMonths(new Date(), -1)
-            const newTag = format(targetDate, 'MMMyy').toUpperCase()
-
-            // If the old name has a tag, replace it. Otherwise append.
-            const parsedDate = parse(potentialTag, 'MMMyy', new Date())
-            if (!isNaN(parsedDate.getTime())) {
-                nameParts[nameParts.length - 1] = newTag
-                setPreviewName(nameParts.join(' '))
-            } else {
-                setPreviewName(`${batchName} ${newTag}`)
-            }
-        } catch (e) {
-            setPreviewName(`${batchName} (Copy)`)
+        if (hasMonthTagAtEnd) {
+            nameParts[nameParts.length - 1] = newTag
+            setPreviewName(nameParts.join(' '))
+            return
         }
+
+        setPreviewName(`${batchName} ${newTag}`)
     }
 
     async function handleClone() {
@@ -76,7 +64,7 @@ export function CloneBatchDialog({ batchId, batchName }: CloneBatchDialogProps) 
             // The user wants to select "Target Month".
 
             const targetDate = mode === 'current' ? new Date() : addMonths(new Date(), -1)
-            const newTag = format(targetDate, 'MMMyy').toUpperCase()
+            const newTag = toYYYYMMFromDate(targetDate)
 
             const newBatch = await cloneBatchAction(batchId, newTag)
             setOpen(false)

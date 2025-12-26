@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
+import { isYYYYMM, normalizeMonthTag } from '@/lib/month-tag'
 import { DebtCycleGroup } from './debt-cycle-group'
 
 interface DebtCycleListProps {
@@ -65,7 +66,8 @@ export function DebtCycleList({
         const groups = new Map<string, TransactionWithDetails[]>()
 
         filteredTransactions.forEach(txn => {
-            const tag = txn.tag || 'Untagged'
+            const normalizedTag = normalizeMonthTag(txn.tag)
+            const tag = normalizedTag?.trim() ? normalizedTag.trim() : (txn.tag?.trim() ? txn.tag.trim() : 'Untagged')
             if (!groups.has(tag)) {
                 groups.set(tag, [])
             }
@@ -81,21 +83,13 @@ export function DebtCycleList({
                 return d > max ? d : max
             }, 0)
 
-            // Try to parse Tag: "MMMyy" (e.g. NOV25, DEC25)
-            // If tag is valid MMMyy, we prioritize it for sorting.
             let tagDateVal = 0
-            if (tag.length === 5) { // Simple check before regex/parse
-                const monthStr = tag.substring(0, 3)
-                const yearStr = tag.substring(3)
-                const months: Record<string, number> = {
-                    'JAN': 0, 'FEB': 1, 'MAR': 2, 'APR': 3, 'MAY': 4, 'JUN': 5,
-                    'JUL': 6, 'AUG': 7, 'SEP': 8, 'OCT': 9, 'NOV': 10, 'DEC': 11
-                }
-                const m = months[monthStr.toUpperCase()]
-                const y = parseInt(yearStr, 10)
-                if (m !== undefined && !isNaN(y)) {
-                    // Year 25 -> 2025
-                    tagDateVal = new Date(2000 + y, m, 1).getTime()
+            if (isYYYYMM(tag)) {
+                const [yearStr, monthStr] = tag.split('-')
+                const year = Number(yearStr)
+                const month = Number(monthStr)
+                if (Number.isFinite(year) && Number.isFinite(month) && month >= 1 && month <= 12) {
+                    tagDateVal = new Date(year, month - 1, 1).getTime()
                 }
             }
 

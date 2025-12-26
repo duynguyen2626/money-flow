@@ -49,7 +49,6 @@ Important rules:
 Voluntary cashback means:
 
 * User gives cashback manually even when:
-
   * Account has no cashback
   * Cashback budget for the cycle is exhausted
 
@@ -57,7 +56,6 @@ Rules:
 
 * Voluntary cashback is allowed
 * It must NOT affect:
-
   * Min spend
   * Cashback budget
 * These values will be persisted separately in MF5
@@ -67,7 +65,7 @@ Rules:
 * Transaction modal uses sticky header + fixed footer
 * Transaction type tabs are visually dominant
 * Due / cashback logic clarity > compactness
-* Mobile experience is first‑class
+* Mobile experience is first-class
 
 ## Agent Operating Mode
 
@@ -88,6 +86,7 @@ MF5 will handle:
 * Cashback tables
 * Budget aggregation
 * Profit / loss reporting
+
 Cashback is now persisted in:
 
 cashback_cycles (per account per cycle)
@@ -106,16 +105,29 @@ voluntary = overflow/loss (does not count)
 * `overflow_loss` must include real overflow when cap is exceeded.
 * Missing config should be stored as NULL, not 0.
 
-
-
 ## Cashback Percent Rules
+
 * DB stores decimal [0..1] (e.g. 0.05)
 * UI shows percent [0..100] (e.g. 5)
 * Sheet Export sends raw percent [0..100] (e.g. 5)
 * Transactions must ALWAYS update `cashback_entries` and recompute `cashback_cycles` (including old cycle if moved).
 
 MF5 cashback model:
+
 - transactions = source of intent
 - cashback_entries = ledger (per transaction)
 - cashback_cycles = single source of truth for UI hints & budgets
+
 UI must never recompute budget independently.
+
+## Tag & Month-Key Standard (CRITICAL)
+
+We use ONE month-key format across the entire system: `YYYY-MM` (e.g. `2025-12`).
+
+- Debt period tags: `YYYY-MM`
+- Cashback cycle tags: `YYYY-MM`
+- Any persisted transaction cycle tag must be `YYYY-MM`
+
+Back-compat:
+- If legacy data contains an `MMMYY` month tag, normalize to `YYYY-MM` during reads/migrations (temporary).
+- Never write legacy month tags.

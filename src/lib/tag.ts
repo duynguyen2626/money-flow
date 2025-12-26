@@ -1,5 +1,5 @@
-import { format } from 'date-fns'
+import { toYYYYMMFromDate } from './month-tag'
 
 export function generateTag(date: Date) {
-  return format(date, 'MMMyy').toUpperCase()
+  return toYYYYMMFromDate(date)
 }

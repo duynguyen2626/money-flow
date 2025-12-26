@@ -26,6 +26,7 @@ import {
 } from "@/services/transaction.service"
 import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
+import { normalizeMonthTag, toYYYYMMFromDate } from "@/lib/month-tag"
 import { ConvertInstallmentDialog } from "@/components/installments/convert-installment-dialog"
 
 type ColumnKey =
@@ -464,27 +465,19 @@ export function TransactionTable({
   }, [transactions, selection, showSelectedOnly, activeTab, statusOverrides])
 
   const getCycleLabel = (txn: TransactionWithDetails) => {
-    if (txn.persisted_cycle_tag) {
-      try {
-        const date = new Date(txn.persisted_cycle_tag);
-        // Add 1 day to handle timezone issues where it might be the day before
-        date.setDate(date.getDate() + 1);
-        const month = String(date.getMonth() + 1).padStart(2, "0");
-        const year = date.getFullYear();
-        return `${month}-${year}`;
-      } catch (e) {
-        return txn.persisted_cycle_tag; // fallback to raw value
-      }
-    }
+    const persisted = normalizeMonthTag(txn.persisted_cycle_tag) ?? txn.persisted_cycle_tag
+    if (persisted?.trim()) return persisted
+
     if (accountType === "credit_card") {
       const rawDate = txn.occurred_at ?? (txn as { created_at?: string }).created_at;
       const parsed = rawDate ? new Date(rawDate) : null;
       if (parsed && !Number.isNaN(parsed.getTime())) {
-        const month = String(parsed.getMonth() + 1).padStart(2, "0");
-        return `${month}-${parsed.getFullYear()}`;
+        return toYYYYMMFromDate(parsed)
       }
     }
-    return txn.tag ?? "-";
+
+    const tag = normalizeMonthTag(txn.tag) ?? txn.tag
+    return tag?.trim() ? tag : "-"
   }
 
   const formattedDate = (value: string | number | Date) => {

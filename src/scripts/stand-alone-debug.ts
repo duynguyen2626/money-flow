@@ -2,6 +2,7 @@
 import dotenv from 'dotenv'
 import { createClient } from '@supabase/supabase-js'
 import path from 'path'
+import { normalizeMonthTag, toYYYYMMFromDate, yyyyMMToLegacyMMMYY } from '../lib/month-tag'
 
 // Load .env.local
 dotenv.config({ path: path.resolve(process.cwd(), '.env.local') })
@@ -11,6 +12,9 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 
 async function run() {
     console.log('--- DEEP INSPECTION ---')
+
+    const monthTag = normalizeMonthTag(process.env.MONTH_TAG ?? toYYYYMMFromDate(new Date())) ?? toYYYYMMFromDate(new Date())
+    const legacyMonthTag = yyyyMMToLegacyMMMYY(monthTag)
 
     // 1. Check Subscriptions
     const { data: services } = await supabase
@@ -40,7 +44,7 @@ async function run() {
     const { data: txs } = await supabase
         .from('transactions')
         .select('id, status, created_at, person_id, metadata, account_id, target_account_id, type, is_installment')
-        .eq('tag', 'DEC25')
+        .in('tag', Array.from(new Set([monthTag, legacyMonthTag].filter(Boolean))) as string[])
         .ilike('note', '%youtube%')
 
     console.log(`\nTransactions (Count: ${txs?.length}):`)

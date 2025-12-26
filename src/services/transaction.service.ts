@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { Json, Database } from "@/types/database.types";
+import { normalizeMonthTag } from "@/lib/month-tag";
 import {
   TransactionWithDetails,
   AccountRow,
@@ -359,6 +360,7 @@ function mapTransactionRow(
 
   return {
     ...row,
+    tag: normalizeMonthTag(row.tag) ?? row.tag ?? null,
     amount: displayAmount,
     original_amount: Math.abs(row.amount),
     displayType,
@@ -380,7 +382,8 @@ function mapTransactionRow(
     person_avatar_url: person?.avatar_url ?? null,
     shop_name: shop?.name ?? null,
     shop_image_url: shop?.image_url ?? null,
-    persisted_cycle_tag: row.persisted_cycle_tag ?? null,
+    persisted_cycle_tag:
+      normalizeMonthTag(row.persisted_cycle_tag) ?? row.persisted_cycle_tag ?? null,
     installment_plan_id: row.installment_plan_id ?? null,
     is_installment: row.is_installment ?? null,
     created_by: row.created_by ?? null,
