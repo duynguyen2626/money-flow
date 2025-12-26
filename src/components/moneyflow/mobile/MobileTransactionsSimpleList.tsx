@@ -1,5 +1,6 @@
+import type { ReactNode } from "react"
 import { Category, TransactionWithDetails } from "@/types/moneyflow.types"
-import { ArrowRight } from "lucide-react"
+import { ArrowRight, Copy, Wrench } from "lucide-react"
 
 interface MobileTransactionsSimpleListProps {
     transactions: TransactionWithDetails[]
@@ -7,6 +8,8 @@ interface MobileTransactionsSimpleListProps {
     selectedTxnIds: Set<string>
     onSelectTxn: (id: string, selected: boolean) => void
     onRowClick?: (txn: TransactionWithDetails) => void
+    onCopyId?: (id: string) => void
+    renderActions?: (txn: TransactionWithDetails) => ReactNode
     formatters: {
         currency: (val: number) => string
         date: (date: string | number | Date) => string
@@ -19,6 +22,8 @@ export function MobileTransactionsSimpleList({
     selectedTxnIds,
     onSelectTxn,
     onRowClick,
+    onCopyId,
+    renderActions,
     formatters,
 }: MobileTransactionsSimpleListProps) {
     if (!transactions.length) {
@@ -29,27 +34,30 @@ export function MobileTransactionsSimpleList({
         )
     }
 
+    // Note: Parent container handles scrolling (flex-1 overflow-y-auto on mobile)
     return (
-        <div className="block md:hidden flex-1 overflow-y-auto h-full bg-slate-50/50 pb-20">
+        <div className="block md:hidden pb-24">
             <div className="space-y-2 p-3">
                 {transactions.map((txn) => {
                     const isSelected = selectedTxnIds.has(txn.id)
 
-                    // Date: dd-mm format only
+                    // Line 1: Date & Note
+                    // Date: dd-mm format
                     const dateValue = txn.occurred_at || txn.created_at
                     const date = dateValue ? new Date(dateValue) : new Date()
                     const dateStr = `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}`
 
-                    // Note: shop image + note text
-                    const shopImage = txn.shop_image_url || txn.source_image
                     const noteText = txn.note || txn.shop_name || 'No note'
+                    // Shop Image logic: Square (rounded-none) and Contain (not cropped)
+                    const shopImage = txn.shop_image_url || txn.source_image
+                    const isShop = !!txn.shop_image_url
 
-                    // Flow & Entity: source -> target
+                    // Line 2: Flow (Left) - Amount (Right)
+                    const showFlow = txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment'
                     const sourceImage = txn.source_image || txn.shop_image_url
                     const targetImage = (txn as any).person_avatar_url || (txn as any).destination_image_url
-                    const showFlow = txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment'
 
-                    // Value: raw amount only
+                    // Value
                     const rawAmount = typeof txn.original_amount === 'number' ? txn.original_amount : txn.amount ?? 0
                     const absAmount = Math.abs(rawAmount)
                     const amountStr = formatters.currency(absAmount)
@@ -64,8 +72,12 @@ export function MobileTransactionsSimpleList({
                                 ? 'text-red-500'
                                 : 'text-slate-600'
 
-                    // Category: plain text only
+                    // Line 3: Badges (Cycle, Tag) & Category
+                    // Category
                     const categoryName = categories.find(cat => cat.id === txn.category_id)?.name || txn.category_name || 'Uncategorized'
+                    // Badges
+                    const cycleTag = (txn as any).persisted_cycle_tag
+                    const tag = (txn as any).tag // e.g. debt tag
 
                     return (
                         <div
@@ -74,68 +86,108 @@ export function MobileTransactionsSimpleList({
                                 }`}
                             onClick={() => onRowClick && onRowClick(txn)}
                         >
-                            <div className="flex items-start gap-3">
-                                {/* Checkbox */}
-                                <input
-                                    type="checkbox"
-                                    className="mt-1 rounded border-slate-300 h-4 w-4"
-                                    checked={isSelected}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onChange={(e) => onSelectTxn(txn.id, e.target.checked)}
-                                />
+                            <div className="flex flex-col gap-2">
+                                {/* Line 1: Checkbox - Date - Note */}
+                                <div className="flex items-center gap-2">
+                                    {renderActions ? (
+                                        <div className="flex items-center" onClick={(e) => e.stopPropagation()}>
+                                            {renderActions(txn)}
+                                        </div>
+                                    ) : (
+                                        <button
+                                            type="button"
+                                            className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                                            onClick={(e) => {
+                                                e.stopPropagation()
+                                                onSelectTxn(txn.id, !isSelected)
+                                            }}
+                                            title="Quick actions"
+                                        >
+                                            <Wrench className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
+                                    <span className="text-xs text-slate-500 whitespace-nowrap">{dateStr}</span>
 
-                                {/* Middle: Date + Note + Flow */}
-                                <div className="flex-1 min-w-0">
-                                    {/* Date */}
-                                    <div className="text-xs text-slate-500 mb-1">{dateStr}</div>
-
-                                    {/* Note with shop image */}
-                                    <div className="flex items-center gap-2 mb-2">
-                                        {shopImage && (
+                                    {/* Note with Shop Image if available */}
+                                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                        {shopImage && !showFlow && (
                                             <img
                                                 src={shopImage}
                                                 alt=""
-                                                className="h-6 w-6 object-contain flex-shrink-0"
+                                                className={`h-5 w-5 object-contain flex-shrink-0 ${isShop ? 'rounded-none' : 'rounded-full'}`}
                                             />
                                         )}
-                                        <div className="text-sm font-medium text-slate-900 truncate">
+                                        <span className="text-sm font-medium text-slate-900 truncate">
                                             {noteText}
-                                        </div>
+                                        </span>
                                     </div>
-
-                                    {/* Flow & Entity - Simple arrow display */}
-                                    {showFlow && (
-                                        <div className="flex items-center gap-1 text-xs text-slate-600">
-                                            {sourceImage && (
-                                                <img
-                                                    src={sourceImage}
-                                                    alt=""
-                                                    className="h-4 w-4 rounded-full object-cover"
-                                                />
-                                            )}
-                                            {targetImage && (
-                                                <>
-                                                    <ArrowRight className="h-3 w-3 text-slate-400" />
-                                                    <img
-                                                        src={targetImage}
-                                                        alt=""
-                                                        className="h-4 w-4 rounded-full object-cover"
-                                                    />
-                                                </>
-                                            )}
-                                        </div>
-                                    )}
                                 </div>
 
-                                {/* Right: Value and Category */}
-                                <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                                    {/* Value */}
-                                    <div className={`text-sm font-semibold ${amountColor}`}>
-                                        {amountStr}
+                                {/* Line 2: Flow (Left) - Amount (Right) */}
+                                <div className="flex items-center justify-between gap-4">
+                                    {/* Left: Flow */}
+                                    <div className="flex items-center gap-1 min-w-0">
+                                        {showFlow ? (
+                                            <div className="flex items-center gap-1 text-xs text-slate-600">
+                                                {sourceImage && (
+                                                    <img
+                                                        src={sourceImage}
+                                                        alt=""
+                                                        className="max-h-5 max-w-5 h-auto w-auto rounded-none object-contain"
+                                                    />
+                                                )}
+                                                {targetImage && (
+                                                    <>
+                                                        <ArrowRight className="h-3 w-3 text-slate-400" />
+                                                        <img
+                                                            src={targetImage}
+                                                            alt=""
+                                                            className="max-h-5 max-w-5 h-auto w-auto rounded-none object-contain"
+                                                        />
+                                                    </>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div />
+                                        )}
                                     </div>
 
-                                    {/* Category */}
-                                    <div className="text-xs text-slate-500">
+                                    {/* Right: Copy Icon + Amount */}
+                                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onCopyId?.(txn.id);
+                                            }}
+                                            className="text-slate-400 hover:text-slate-600 p-0.5 active:bg-slate-100 rounded"
+                                            title="Copy ID"
+                                        >
+                                            <Copy className="h-3 w-3" />
+                                        </button>
+                                        <div className={`text-sm font-bold ${amountColor}`}>
+                                            {amountStr}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Line 3: Badges (Left) - Category (Right) */}
+                                <div className="flex items-center justify-between gap-2 mt-1">
+                                    {/* Left: Badges (Cycle, Tag) */}
+                                    <div className="flex items-center gap-1.5 overflow-hidden">
+                                        {cycleTag && (
+                                            <span className="inline-flex items-center rounded-md bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10 whitespace-nowrap">
+                                                {cycleTag}
+                                            </span>
+                                        )}
+                                        {tag && (
+                                            <span className="inline-flex items-center rounded-md bg-teal-50 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 ring-1 ring-inset ring-teal-700/10 whitespace-nowrap">
+                                                {tag}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Right: Category */}
+                                    <div className="text-xs text-slate-500 font-medium truncate max-w-[150px]">
                                         {categoryName}
                                     </div>
                                 </div>

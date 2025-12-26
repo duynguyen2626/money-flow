@@ -629,7 +629,8 @@ export function FilterableTransactions({
     }
 
     const [fontSize, setFontSize] = useState(14)
-    const [isSummaryOpen, setIsSummaryOpen] = useState(false)
+    const [isSummaryOpenDesktop, setIsSummaryOpenDesktop] = useState(false)
+    const [isSummaryOpenMobile, setIsSummaryOpenMobile] = useState(false)
 
     // Reset to page 1 when filters change
     useEffect(() => {
@@ -660,8 +661,8 @@ export function FilterableTransactions({
                             </div>
 
                             <SummaryDropdown
-                                isOpen={isSummaryOpen}
-                                onOpenChange={setIsSummaryOpen}
+                                isOpen={isSummaryOpenDesktop}
+                                onOpenChange={setIsSummaryOpenDesktop}
                                 items={summaryItems}
                                 selectedType={selectedType}
                             />
@@ -792,8 +793,8 @@ export function FilterableTransactions({
                                 </Popover>
 
                                 <SummaryDropdown
-                                    isOpen={isSummaryOpen}
-                                    onOpenChange={setIsSummaryOpen}
+                                    isOpen={isSummaryOpenMobile}
+                                    onOpenChange={setIsSummaryOpenMobile}
                                     items={summaryItems}
                                     selectedType={selectedType}
                                     variant="mobile"

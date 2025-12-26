@@ -38,7 +38,11 @@ export function SummaryDropdown({ isOpen, onOpenChange, items, selectedType, var
         <Popover open={isOpen} onOpenChange={onOpenChange}>
             <PopoverTrigger asChild>
                 {isMobile ? (
-                    <button className="inline-flex items-center justify-center p-1.5 h-8 w-8 rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 transition-all">
+                    <button
+                        className="inline-flex items-center justify-center p-1.5 h-8 w-8 rounded-md border border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50 transition-all"
+                        aria-label="Financial summary"
+                        title="Financial summary"
+                    >
                         <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-180")} />
                     </button>
                 ) : (

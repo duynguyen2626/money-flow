@@ -3516,7 +3516,7 @@ export function TransactionForm({
                   </>
                 )}
 
-                <div className="col-span-2 space-y-4 pt-2 border-t border-slate-100">
+                <div className="col-span-1 md:col-span-2 space-y-4 pt-2 border-t border-slate-100">
                   {/* Phase 7X: Explicit Installment Toggle */}
                   {(transactionType === "repayment" || transactionType === "expense" || transactionType === "income") && installments.length > 0 && (
                     <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">

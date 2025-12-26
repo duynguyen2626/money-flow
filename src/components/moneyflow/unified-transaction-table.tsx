@@ -87,6 +87,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetClose,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -488,7 +496,7 @@ export function UnifiedTransactionTable({
   useEffect(() => {
     const updateIsMobile = () => {
       if (typeof window !== 'undefined') {
-        setIsMobile(window.innerWidth < 640)
+        setIsMobile(window.innerWidth < 768)
       }
     }
     updateIsMobile()
@@ -527,6 +535,18 @@ export function UnifiedTransactionTable({
   const [historyTarget, setHistoryTarget] = useState<TransactionWithDetails | null>(null)
   const [cloningTxn, setCloningTxn] = useState<TransactionWithDetails | null>(null)
   const [confirmDeletingTarget, setConfirmDeletingTarget] = useState<TransactionWithDetails | null>(null)
+
+  useEffect(() => {
+    if (!actionMenuOpen) return
+    const handleOutsideClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null
+      if (!target) return
+      if (target.closest('[data-action-menu]') || target.closest('[data-action-trigger]')) return
+      setActionMenuOpen(null)
+    }
+    document.addEventListener('mousedown', handleOutsideClick)
+    return () => document.removeEventListener('mousedown', handleOutsideClick)
+  }, [actionMenuOpen])
 
   const handleOpenConfirmRefund = (txn: TransactionWithDetails) => {
     setConfirmRefundTxn(txn)
@@ -1039,6 +1059,206 @@ export function UnifiedTransactionTable({
     return { incomeSummary, expenseSummary }
   }, [selection, tableData])
 
+  const renderActionMenuItems = (
+    txn: TransactionWithDetails,
+    isVoided: boolean,
+    variant: 'popover' | 'sheet'
+  ) => {
+    const isSheet = variant === 'sheet'
+    const baseItemClass = isSheet
+      ? "flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700"
+      : "flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
+    const dangerItemClass = isSheet
+      ? `${baseItemClass} text-rose-600 hover:bg-rose-50`
+      : `${baseItemClass} text-red-600 hover:bg-red-50`
+    const successItemClass = isSheet
+      ? `${baseItemClass} text-emerald-700 hover:bg-emerald-50`
+      : `${baseItemClass} text-green-700 hover:bg-green-50`
+    const neutralItemClass = isSheet
+      ? `${baseItemClass} text-slate-700 hover:bg-slate-50`
+      : `${baseItemClass} text-slate-600 hover:bg-slate-50`
+    const divider = isSheet
+      ? <div className="h-px bg-slate-100" />
+      : <hr className="my-1 border-slate-200" />
+
+    if (currentTab === 'void' || isVoided) {
+      return (
+        <>
+          <button
+            className={`${successItemClass} disabled:cursor-not-allowed disabled:opacity-60`}
+            disabled={isRestoring}
+            onClick={event => {
+              event.stopPropagation();
+              handleRestore(txn);
+              setActionMenuOpen(null);
+            }}
+          >
+            <RotateCcw className="h-4 w-4" />
+            <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
+          </button>
+
+          {divider}
+
+          {(txn.history_count || 0) > 0 && (
+            <button
+              className={neutralItemClass}
+              onClick={event => {
+                event.stopPropagation();
+                setHistoryTarget(txn);
+                setActionMenuOpen(null);
+              }}
+            >
+              <History className="h-4 w-4" />
+              <span>View History</span>
+            </button>
+          )}
+        </>
+      )
+    }
+
+    return (
+      <>
+        <button
+          className={baseItemClass}
+          onClick={event => {
+            event.stopPropagation();
+            setEditingTxn(txn);
+            setActionMenuOpen(null);
+          }}
+        >
+          <Edit className="h-4 w-4" />
+          <span>Edit</span>
+        </button>
+        <button
+          className={baseItemClass}
+          onClick={event => {
+            event.stopPropagation();
+            handleDuplicate(txn);
+            setActionMenuOpen(null);
+          }}
+        >
+          <Copy className="h-4 w-4" />
+          <span>Duplicate</span>
+        </button>
+        <button
+          className={dangerItemClass}
+          onClick={event => {
+            event.stopPropagation();
+            setConfirmVoidTarget(txn);
+            setActionMenuOpen(null);
+          }}
+        >
+          <Ban className="h-4 w-4" />
+          <span>Void</span>
+        </button>
+        <button
+          className={dangerItemClass}
+          onClick={event => {
+            event.stopPropagation();
+            setConfirmDeletingTarget(txn);
+            setActionMenuOpen(null);
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+          <span>Delete</span>
+        </button>
+
+        {divider}
+
+        {(txn.history_count || 0) > 0 && (
+          <button
+            className={neutralItemClass}
+            onClick={event => {
+              event.stopPropagation();
+              setHistoryTarget(txn);
+              setActionMenuOpen(null);
+            }}
+          >
+            <History className="h-4 w-4" />
+            <span>View History</span>
+          </button>
+        )}
+      </>
+    )
+  }
+
+  const renderRowActions = (txn: TransactionWithDetails, isVoided: boolean) => {
+    const isMenuOpen = actionMenuOpen === txn.id
+
+    if (isMobile) {
+      return (
+        <Sheet open={isMenuOpen} onOpenChange={(open) => setActionMenuOpen(open ? txn.id : null)}>
+          <SheetTrigger asChild>
+            <button
+              id={`action-btn-${txn.id}`}
+              type="button"
+              data-action-trigger
+              className="inline-flex items-center justify-center rounded-md p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              disabled={isExcelMode}
+              onClick={event => {
+                event.stopPropagation()
+                setActionMenuOpen(isMenuOpen ? null : txn.id)
+              }}
+            >
+              <Wrench className="h-4 w-4 pointer-events-none" />
+            </button>
+          </SheetTrigger>
+          <SheetContent
+            side="bottom"
+            className="p-0 rounded-t-2xl w-full"
+            showClose={false}
+            data-action-menu
+            onPointerDownOutside={() => setActionMenuOpen(null)}
+            onEscapeKeyDown={() => setActionMenuOpen(null)}
+          >
+            <SheetHeader className="flex-row items-center justify-between gap-2 space-y-0 px-4 py-3 border-b border-slate-200 text-left">
+              <SheetTitle className="text-sm font-semibold text-slate-900">Quick actions</SheetTitle>
+              <SheetClose asChild>
+                <button
+                  type="button"
+                  className="rounded-full p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </SheetClose>
+            </SheetHeader>
+            <div className="flex flex-col">
+              {renderActionMenuItems(txn, isVoided, 'sheet')}
+            </div>
+          </SheetContent>
+        </Sheet>
+      )
+    }
+
+    return (
+      <div className="relative flex" data-action-menu-wrapper>
+        <button
+          id={`action-btn-${txn.id}`}
+          type="button"
+          data-action-trigger
+          className="inline-flex items-center justify-center rounded-md p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+          disabled={isExcelMode}
+          onClick={event => {
+            event.stopPropagation()
+            setActionMenuOpen(isMenuOpen ? null : txn.id)
+          }}
+        >
+          <Wrench className="h-4 w-4 pointer-events-none" />
+        </button>
+        {isMenuOpen && (
+          <div
+            data-action-menu
+            className="absolute right-0 top-7 z-50 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {renderActionMenuItems(txn, isVoided, 'popover')}
+          </div>
+        )}
+      </div>
+    )
+  }
+
 
 
   if (tableData.length === 0 && activeTab === 'active') {
@@ -1057,7 +1277,7 @@ export function UnifiedTransactionTable({
   return (
     <div className="relative flex flex-col h-full overflow-hidden">
       <div className={cn(
-        "relative w-full rounded-xl border border-slate-200 bg-card shadow-sm transition-colors duration-300 flex-1 overflow-hidden",
+        "relative w-full rounded-xl border border-slate-200 bg-card shadow-sm transition-colors duration-300 flex-1 overflow-y-auto md:overflow-hidden",
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )} style={{} as React.CSSProperties}>
         <MobileTransactionsSimpleList
@@ -1065,16 +1285,22 @@ export function UnifiedTransactionTable({
           categories={categories}
           selectedTxnIds={selection}
           onSelectTxn={(id, selected) => handleSelectOne(id, selected)}
+          renderActions={isMobile ? (txn) => renderRowActions(txn, (statusOverrides[txn.id] ?? txn.status) === 'void') : undefined}
           onRowClick={(txn) => {
             if (isExcelMode) return;
             setEditingTxn(txn);
+          }}
+          onCopyId={(id) => {
+            navigator.clipboard.writeText(id)
+            toast.success("Transaction ID copied")
           }}
           formatters={{
             currency: (val) => numberFormatter.format(val),
             date: formattedDate
           }}
         />
-        <div className="hidden md:block flex-1 overflow-auto w-full scrollbar-visible h-full bg-white relative" style={{ scrollbarGutter: 'stable' }}>
+        {!isMobile && (
+          <div className="hidden md:block flex-1 overflow-auto w-full scrollbar-visible h-full bg-white relative" style={{ scrollbarGutter: 'stable' }}>
           <table
             className="w-full caption-bottom text-sm border-collapse min-w-[800px] lg:min-w-0"
             onMouseUp={handleCellMouseUp}
@@ -1405,7 +1631,7 @@ export function UnifiedTransactionTable({
                       else if (txn.type === 'expense') dateBadgeColors = "bg-red-50 text-red-700 border-red-300";
 
                       return (
-                        <div className="flex items-center gap-2 overflow-hidden">
+                        <div className="flex items-center gap-2 overflow-visible">
                           <input
                             type="checkbox"
                             className="rounded border-slate-300 pointer-events-auto"
@@ -1421,128 +1647,15 @@ export function UnifiedTransactionTable({
                           </div>
                           {/* Time with Clock Icon */}
                           <CustomTooltip content={fullDateStr}>
-                            <div className="flex items-center gap-1 text-slate-500 cursor-help">
-                              <Clock className="h-3 w-3" />
-                              <span className="text-xs font-medium">{timeStr}</span>
+                            <div className="flex items-center gap-1 text-slate-500 cursor-help min-w-0 flex-1">
+                              <Clock className="h-3 w-3 flex-shrink-0" />
+                              <span className="text-xs font-medium truncate">{timeStr}</span>
                             </div>
                           </CustomTooltip>
 
                           {/* Action Menu (Wrench Icon) */}
-                          <div className="relative flex ml-auto">
-                            <Popover open={isMenuOpen} onOpenChange={(open) => setActionMenuOpen(open ? txn.id : null)}>
-                              <PopoverTrigger asChild>
-                                <button
-                                  id={`action-btn-${txn.id}`}
-                                  className="inline-flex items-center justify-center rounded-md p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-                                  disabled={isExcelMode}
-                                  onClick={event => {
-                                    event.stopPropagation()
-                                  }}
-                                >
-                                  <Wrench className="h-4 w-4" />
-                                </button>
-                              </PopoverTrigger>
-                              <PopoverContent
-                                align="end"
-                                className="w-48 p-1 text-sm bg-white border border-slate-200 shadow-lg z-[70]"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {currentTab === 'void' || isVoided ? (
-                                  <>
-                                    <button
-                                      className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:opacity-60"
-                                      disabled={isRestoring}
-                                      onClick={event => {
-                                        event.stopPropagation();
-                                        handleRestore(txn);
-                                      }}
-                                    >
-                                      <RotateCcw className="h-4 w-4" />
-                                      <span>{isRestoring ? 'Restoring...' : 'Restore'}</span>
-                                    </button>
-
-                                    <hr className="my-1 border-slate-200" />
-
-                                    {(txn.history_count || 0) > 0 && (
-                                      <button
-                                        className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-slate-600 hover:bg-slate-50"
-                                        onClick={event => {
-                                          event.stopPropagation();
-                                          setHistoryTarget(txn);
-                                          setActionMenuOpen(null);
-                                        }}
-                                      >
-                                        <History className="h-4 w-4" />
-                                        <span>View History</span>
-                                      </button>
-                                    )}
-                                  </>
-                                ) : (
-                                  <>
-                                    <button
-                                      className="flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
-                                      onClick={event => {
-                                        event.stopPropagation();
-                                        setEditingTxn(txn);
-                                        setActionMenuOpen(null);
-                                      }}
-                                    >
-                                      <Edit className="h-4 w-4" />
-                                      <span>Edit</span>
-                                    </button>
-                                    <button
-                                      className="flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
-                                      onClick={event => {
-                                        event.stopPropagation();
-                                        handleDuplicate(txn);
-                                        setActionMenuOpen(null);
-                                      }}
-                                    >
-                                      <Copy className="h-4 w-4" />
-                                      <span>Duplicate</span>
-                                    </button>
-                                    <button
-                                      className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-red-600 hover:bg-red-50"
-                                      onClick={event => {
-                                        event.stopPropagation();
-                                        setConfirmVoidTarget(txn);
-                                        setActionMenuOpen(null);
-                                      }}
-                                    >
-                                      <Ban className="h-4 w-4" />
-                                      <span>Void</span>
-                                    </button>
-                                    <button
-                                      className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-red-600 hover:bg-red-50"
-                                      onClick={event => {
-                                        event.stopPropagation();
-                                        setConfirmDeletingTarget(txn);
-                                        setActionMenuOpen(null);
-                                      }}
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                      <span>Delete</span>
-                                    </button>
-
-                                    <hr className="my-1 border-slate-200" />
-
-                                    {(txn.history_count || 0) > 0 && (
-                                      <button
-                                        className="flex w-full items-center gap-2 rounded px-3 py-1 text-left text-slate-600 hover:bg-slate-50"
-                                        onClick={event => {
-                                          event.stopPropagation();
-                                          setHistoryTarget(txn);
-                                          setActionMenuOpen(null);
-                                        }}
-                                      >
-                                        <History className="h-4 w-4" />
-                                        <span>View History</span>
-                                      </button>
-                                    )}
-                                  </>
-                                )}
-                              </PopoverContent>
-                            </Popover>
+                          <div className="relative flex ml-auto flex-shrink-0">
+                            {renderRowActions(txn, isVoided)}
                           </div>
                         </div>
                       )
@@ -2370,11 +2483,12 @@ export function UnifiedTransactionTable({
                       // ... column rendering ...
                       // Sticky Logic for Cells
                       // Use a slightly more flexible stickyStyle that respects content if not explicitly date/shop
+                      const allowOverflow = col.key === "date"
                       let stickyStyle: React.CSSProperties = {
                         width: columnWidths[col.key],
                         maxWidth: col.key === 'account' ? 'none' : columnWidths[col.key],
-                        overflow: 'hidden',
-                        whiteSpace: 'nowrap'
+                        overflow: allowOverflow ? 'visible' : 'hidden',
+                        whiteSpace: allowOverflow ? 'nowrap' : 'nowrap'
                       };
                       let stickyClass = "";
 
@@ -2397,6 +2511,7 @@ export function UnifiedTransactionTable({
                             } ${col.key === "amount" ? amountClass : ""} ${voidedTextClass} truncate`,
                             stickyClass,
                             col.key === "date" && "p-1",
+                            col.key === "date" && "relative overflow-visible",
                             isExcelMode && "select-none cursor-crosshair active:cursor-crosshair",
                             isExcelMode && selectedCells.has(txn.id) && col.key === 'amount' && "bg-blue-100 ring-2 ring-inset ring-blue-500 z-10" // ADDED: Visual feedback for selected cells
                           )}
@@ -2446,7 +2561,8 @@ export function UnifiedTransactionTable({
             </TableBody >
 
           </table>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Footer - Outside scroll container */}
@@ -2454,79 +2570,118 @@ export function UnifiedTransactionTable({
 
       {/* Pagination moved OUTSIDE the scrollable container to ensure visibility */}
       {
-        !isExcelMode && (
-          <div className="flex-none bg-white border-t border-slate-200 p-2 lg:p-3 flex items-center justify-between gap-2 z-30 relative shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+        !isExcelMode && showPagination && (
+          <>
+            {typeof document !== 'undefined' && createPortal(
+              <div className="fixed bottom-0 left-0 right-0 flex md:hidden bg-white border-t border-slate-200 px-3 py-2 items-center justify-between gap-2 z-40 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap hidden sm:inline">Rows</span>
+                  <select
+                    className="h-7 w-14 rounded-md border border-slate-200 text-[11px] font-semibold focus:border-blue-500 focus:outline-none bg-white px-1"
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                  >
+                    {[10, 20, 50, 100, 200, 500].map(size => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* Left: Items per Page */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap hidden sm:inline">Rows</span>
-              <select
-                className="h-7 w-14 rounded-md border border-slate-200 text-[11px] font-semibold focus:border-blue-500 focus:outline-none bg-white px-1"
-                value={pageSize}
-                onChange={(e) => setPageSize(Number(e.target.value))}
-              >
-                {[10, 20, 50, 100, 200, 500].map(size => (
-                  <option key={size} value={size}>{size}</option>
-                ))}
-              </select>
-            </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="text-[11px] font-medium whitespace-nowrap">
+                    {currentPage} <span className="text-slate-400">/ {totalPages ?? 1}</span>
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages ?? 1, currentPage + 1))}
+                    disabled={currentPage >= (totalPages ?? 1)}
+                    className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>,
+              document.body
+            )}
 
-            {/* Center: Pagination */}
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                disabled={currentPage === 1}
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              <div className="text-[11px] font-medium whitespace-nowrap">
-                <span className="hidden sm:inline">Page </span>{currentPage} <span className="text-slate-400">/ {totalPages ?? 1}</span>
-              </div>
-              <button
-                onClick={() => setCurrentPage(Math.min(totalPages ?? 1, currentPage + 1))}
-                disabled={currentPage >= (totalPages ?? 1)}
-                className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
-
-            {/* Right: Font Size & Reset - Hidden on Mobile */}
-            <div className="hidden lg:flex items-center gap-3">
-              <div className="flex items-center gap-1 bg-slate-100 rounded-md p-0.5">
-                <button
-                  onClick={() => setFontSize(Math.max(10, fontSize - 1))}
-                  className="rounded p-1 hover:bg-slate-200 disabled:opacity-50"
-                  disabled={fontSize <= 10}
+            <div className="hidden md:flex flex-none bg-white border-t border-slate-200 p-2 lg:p-3 items-center justify-between gap-2 z-30 relative shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+              {/* Left: Items per Page */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap hidden sm:inline">Rows</span>
+                <select
+                  className="h-7 w-14 rounded-md border border-slate-200 text-[11px] font-semibold focus:border-blue-500 focus:outline-none bg-white px-1"
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
                 >
-                  <Minus className="h-3 w-3 text-slate-600" />
-                </button>
-                <span className="text-[10px] font-bold w-6 text-center">{fontSize}</span>
-                <button
-                  onClick={() => setFontSize(Math.min(20, fontSize + 1))}
-                  className="rounded p-1 hover:bg-slate-200 disabled:opacity-50"
-                  disabled={fontSize >= 20}
-                >
-                  <Plus className="h-3 w-3 text-slate-600" />
-                </button>
+                  {[10, 20, 50, 100, 200, 500].map(size => (
+                    <option key={size} value={size}>{size}</option>
+                  ))}
+                </select>
               </div>
 
-              <button
-                onClick={() => {
-                  setSortState({ key: 'date', dir: 'desc' });
-                  updateSelection(new Set());
-                  resetColumns();
-                  setCurrentPage(1);
-                }}
-                className="flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
-                title="Reset view"
-              >
-                <RotateCcw className="h-3 w-3" />
-                <span className="hidden xl:inline">Reset</span>
-              </button>
+              {/* Center: Pagination */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <div className="text-[11px] font-medium whitespace-nowrap">
+                  <span className="hidden sm:inline">Page </span>{currentPage} <span className="text-slate-400">/ {totalPages ?? 1}</span>
+                </div>
+                <button
+                  onClick={() => setCurrentPage(Math.min(totalPages ?? 1, currentPage + 1))}
+                  disabled={currentPage >= (totalPages ?? 1)}
+                  className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* Right: Font Size & Reset - Hidden on Mobile */}
+              <div className="hidden lg:flex items-center gap-3">
+                <div className="flex items-center gap-1 bg-slate-100 rounded-md p-0.5">
+                  <button
+                    onClick={() => setFontSize(Math.max(10, fontSize - 1))}
+                    className="rounded p-1 hover:bg-slate-200 disabled:opacity-50"
+                    disabled={fontSize <= 10}
+                  >
+                    <Minus className="h-3 w-3 text-slate-600" />
+                  </button>
+                  <span className="text-[10px] font-bold w-6 text-center">{fontSize}</span>
+                  <button
+                    onClick={() => setFontSize(Math.min(20, fontSize + 1))}
+                    className="rounded p-1 hover:bg-slate-200 disabled:opacity-50"
+                    disabled={fontSize >= 20}
+                  >
+                    <Plus className="h-3 w-3 text-slate-600" />
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setSortState({ key: 'date', dir: 'desc' });
+                    updateSelection(new Set());
+                    resetColumns();
+                    setCurrentPage(1);
+                  }}
+                  className="flex h-7 items-center gap-1 rounded-md border border-slate-200 bg-white px-2 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+                  title="Reset view"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  <span className="hidden xl:inline">Reset</span>
+                </button>
+              </div>
             </div>
-          </div>
+          </>
         )
       }
 
