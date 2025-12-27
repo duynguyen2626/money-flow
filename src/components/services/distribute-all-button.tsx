@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { toYYYYMMFromDate } from '@/lib/month-tag'
 
 export function DistributeAllButton() {
     const [isLoading, setIsLoading] = useState(false)
@@ -77,7 +78,7 @@ export function DistributeAllButton() {
                                 className="w-full"
                             />
                             <p className="text-[0.8rem] text-muted-foreground mt-2">
-                                Transactions will be created with the month tag of this date (e.g., {new Date(date).toLocaleString('en-US', { month: 'short' }).toUpperCase()}{new Date(date).getFullYear().toString().slice(-2)}).
+                                Transactions will be created with the month tag of this date (e.g., {toYYYYMMFromDate(new Date(date))}).
                             </p>
                         </div>
                     </div>

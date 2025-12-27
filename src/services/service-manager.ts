@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants'
+import { toLegacyMMMYYFromDate, toYYYYMMFromDate } from '@/lib/month-tag'
 
 // TODO: The 'service_members' table is not in database.types.ts. 
 // This is a temporary type definition.
@@ -129,11 +130,10 @@ export async function distributeService(serviceId: string, customDate?: string, 
 
   const transactionDate = customDate ? new Date(customDate).toISOString() : new Date().toISOString()
 
-  // [M2-SP2] Tag Format: MMMYY (e.g., DEC25)
+  // [M2-SP2] Tag Format: YYYY-MM (e.g., 2025-12)
   const dateObj = new Date(transactionDate)
-  const monthStr = dateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase()
-  const yearStr = dateObj.getFullYear().toString().slice(-2)
-  const monthTag = `${monthStr}${yearStr}`
+  const monthTag = toYYYYMMFromDate(dateObj)
+  const legacyMonthTag = toLegacyMMMYYFromDate(dateObj)
 
   for (const member of members) {
     const cost = unitCost * member.slots
@@ -156,16 +156,24 @@ export async function distributeService(serviceId: string, customDate?: string, 
         .replace('{initialPrice}', initialPrice.toLocaleString())
         .replace('{total_slots}', totalSlots.toString());
     } else {
-      // Default: MemberName DEC25 Slot: 1 (35,571)/7
+      // Default: MemberName 2025-12 Slot: 1 (35,571)/7
       note = `${member.profiles.name} ${monthTag} Slot: ${member.slots} (${pricePerSlot.toLocaleString()})/${totalSlots}`
     }
 
     // [M2-SP1] Idempotency Check: Use metadata to find existing transaction
-    const metadata = {
+    const canonicalMetadata = {
       service_id: serviceId,
       member_id: member.profile_id,
       month_tag: monthTag
     };
+
+    const legacyMetadata = legacyMonthTag
+      ? {
+        service_id: serviceId,
+        member_id: member.profile_id,
+        month_tag: legacyMonthTag,
+      }
+      : null
 
     // Construct Payload for Single Table
     // Rule:
@@ -183,7 +191,7 @@ export async function distributeService(serviceId: string, customDate?: string, 
     const payload = {
       occurred_at: transactionDate,
       note: note,
-      metadata: metadata,
+      metadata: canonicalMetadata,
       tag: monthTag,
       shop_id: (service as any).shop_id,
       amount: -cost, // Expense is negative
@@ -196,16 +204,26 @@ export async function distributeService(serviceId: string, customDate?: string, 
     };
 
     // Query existing transaction
-    const { data: existingTx } = await supabase
+    const { data: existingCanonicalTx } = await supabase
       .from('transactions')
       .select('id')
-      .contains('metadata', metadata)
+      .contains('metadata', canonicalMetadata)
       .maybeSingle();
 
-    let transactionId = (existingTx as any)?.id;
+    let transactionId = (existingCanonicalTx as any)?.id;
 
     let isUpdate = false;
-    if (existingTx) {
+    if (!transactionId && legacyMetadata) {
+      const { data: existingLegacyTx } = await supabase
+        .from('transactions')
+        .select('id')
+        .contains('metadata', legacyMetadata)
+        .maybeSingle()
+
+      transactionId = (existingLegacyTx as any)?.id
+    }
+
+    if (transactionId) {
       console.log('Updating existing transaction:', transactionId);
       const { error: updateError } = await supabase
         .from('transactions')

@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { format, subMonths, parseISO } from "date-fns";
-import { Controller, Resolver, useForm, useWatch } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import {
   useCallback,
   useEffect,
@@ -18,17 +19,11 @@ import {
   requestRefund,
   confirmRefund,
 } from "@/services/transaction.service";
-import { convertTransactionToInstallment } from "@/services/installment.service";
 import {
   previewCashbackAction,
   CashbackPreviewResult,
 } from "@/actions/cashback-preview.action";
 import { Account, Category, Person, Shop } from "@/types/moneyflow.types";
-import {
-  parseCashbackConfig,
-  getCashbackCycleRange,
-  ParsedCashbackConfig,
-} from "@/lib/cashback";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { getDisplayBalance } from "@/lib/display-balance";
 import {
@@ -42,25 +37,19 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { generateTag } from "@/lib/tag";
 import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds";
 import {
-  Lock,
   Wallet,
-  User,
   Store,
   Tag,
   Calendar,
   FileText,
   Percent,
-  DollarSign,
   ArrowRightLeft,
   ArrowDownLeft,
   ArrowUpRight,
-  CreditCard,
   RotateCcw,
   ChevronLeft,
   ExternalLink,
   X,
-  UploadCloud,
-  Clock,
   Sparkles,
   Loader2,
 } from "lucide-react";
@@ -177,44 +166,15 @@ const REFUND_CATEGORY_ID = "e0000000-0000-0000-0000-000000000095";
 
 export type TransactionFormValues = z.infer<typeof formSchema>;
 
-function formatRangeLabel(range: { start: Date; end: Date }) {
-  const fmt = (date: Date) => {
-    const day = String(date.getDate()).padStart(2, "0");
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    return `${day}.${month}`;
-  };
-
-  return `${fmt(range.start)} - ${fmt(range.end)}`;
-}
-
-function formatCycleRangeFromIso(start?: string | null, end?: string | null) {
-  if (!start || !end) return "";
-  return formatRangeLabel({ start: new Date(start), end: new Date(end) });
-}
-
-function getCycleLabelForDate(
-  targetDate: Date | undefined,
-  config: ParsedCashbackConfig | null,
-): string {
-  if (!config) {
-    return "";
-  }
-
-  const referenceDate = targetDate ?? new Date();
-  const range = getCashbackCycleRange(config, referenceDate);
-  if (!range) {
-    return "--";
-  }
-  return formatRangeLabel(range);
-}
-
 function parseDateInput(value: string): Date | null {
-  const match = value.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-  if (!match) return null;
+  const trimmed = value.trim();
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const legacyMatch = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!isoMatch && !legacyMatch) return null;
 
-  const day = Number(match[1]);
-  const month = Number(match[2]);
-  const year = Number(match[3]);
+  const year = Number(isoMatch ? isoMatch[1] : legacyMatch![3]);
+  const month = Number(isoMatch ? isoMatch[2] : legacyMatch![2]);
+  const day = Number(isoMatch ? isoMatch[3] : legacyMatch![1]);
 
   if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) {
     return null;
@@ -346,7 +306,7 @@ export function TransactionForm({
     return byName?.id ?? REFUND_CATEGORY_ID;
   }, [categories]);
 
-  const [status, setStatus] = useState<StatusMessage>(null);
+  const [, setStatus] = useState<StatusMessage>(null);
   const [cashbackProgress, setCashbackProgress] = useState<CashbackCard | null>(
     null,
   );
@@ -371,8 +331,8 @@ export function TransactionForm({
   const [isPersonDialogOpen, setIsPersonDialogOpen] = useState(false);
   const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
   const [accountDialogContext, setAccountDialogContext] = useState<'source' | 'debt' | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
-  const [statsError, setStatsError] = useState<string | null>(null);
+  const [, setStatsLoading] = useState(false);
+  const [, setStatsError] = useState<string | null>(null);
   const [debtEnsureError, setDebtEnsureError] = useState<string | null>(null);
   const [isEnsuringDebt, startEnsuringDebt] = useTransition();
   const [persistedMetadata, setPersistedMetadata] =
@@ -398,7 +358,7 @@ export function TransactionForm({
   // Force update ref if transactionId changes (switching to another txn)
   useEffect(() => {
     initialValuesRef.current = initialValues;
-  }, [transactionId]);
+  }, [initialValues, transactionId]);
 
   const baseDefaults = useMemo(
     () => ({
@@ -698,17 +658,7 @@ export function TransactionForm({
         return;
       }
 
-      const percentLimit =
-        typeof cashbackProgress?.rate === "number"
-          ? cashbackProgress.rate * 100
-          : null;
       const rawPercent = Number(values.cashback_share_percent ?? 0);
-      const rawFixed = Number(values.cashback_share_fixed ?? 0);
-      const sanitizedPercent =
-        percentLimit !== null
-          ? Math.min(percentLimit, Math.max(0, rawPercent))
-          : Math.max(0, rawPercent);
-      const sanitizedFixed = Math.max(0, rawFixed);
 
       // Check if this is a group debt repayment and append payer name to note
       const selectedPerson = values.person_id
@@ -923,7 +873,7 @@ export function TransactionForm({
       setDateInputValue("");
       return;
     }
-    setDateInputValue(format(watchedDate, "dd.MM.yyyy"));
+    setDateInputValue(format(watchedDate, "yyyy-MM-dd"));
   }, [watchedDate]);
 
   const watchedPersonId = useWatch({
@@ -976,6 +926,7 @@ export function TransactionForm({
     watchedDate,
     transactionType,
     allAccounts,
+    form,
   ]);
 
   const watchedDebtAccountId = useWatch({
@@ -1027,14 +978,6 @@ export function TransactionForm({
           ),
         },
       ];
-    }
-
-    // MERGED LOGIC: Filter based on transaction type
-    let filterType = "expense";
-    if (transactionType === "income" || transactionType === "repayment") {
-      filterType = "income";
-    } else if (transactionType === "transfer") {
-      filterType = "all"; // Allow all for transfer
     }
 
     return categories
@@ -1308,7 +1251,7 @@ export function TransactionForm({
     // Filter shops: if category is selected, only show shops with that default_category_id
     // But user might want to see all shops?
     // User request: "Sửa shop dropdowns: nó chỉ show tương ứng với category đã match" -> Strict filter implied.
-    const selectedCategoryId = watch("category_id");
+    const selectedCategoryId = watchedCategoryId;
 
     let filteredShops = shopsState;
     if (selectedCategoryId) {
@@ -1327,6 +1270,7 @@ export function TransactionForm({
       searchValue: s.name,
       // Add icon if image_url exists
       icon: s.image_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
         <img
           src={s.image_url}
           alt=""
@@ -1336,7 +1280,7 @@ export function TransactionForm({
         <Store className="w-4 h-4 text-slate-400" />
       ),
     }));
-  }, [shopsState, watch("category_id")]);
+  }, [shopsState, watchedCategoryId]);
 
   const selectedAccount = useMemo(
     () => sourceAccountsState.find((acc) => acc.id === watchedAccountId),
@@ -1403,22 +1347,6 @@ export function TransactionForm({
     sourceAccountsState,
     watchedAccountId,
   ]);
-
-  const cashbackMeta = useMemo(
-    () =>
-      selectedAccount
-        ? parseCashbackConfig(
-          selectedAccount.cashback_config,
-          selectedAccount.id,
-        )
-        : null,
-    [selectedAccount],
-  );
-
-  const selectedCycleLabel = useMemo(
-    () => getCycleLabelForDate(watchedDate, cashbackMeta),
-    [watchedDate, cashbackMeta],
-  );
 
   useEffect(() => {
     if (!defaultPersonId) {
@@ -1673,25 +1601,6 @@ export function TransactionForm({
     typeof cashbackProgress?.remainingBudget === "number"
       ? Math.max(0, cashbackProgress.remainingBudget)
       : null;
-  const budgetLimitedShare =
-    typeof remainingBudget === "number"
-      ? Math.min(rawShareTotal, remainingBudget)
-      : rawShareTotal;
-  const totalBackGiven = Math.min(amountValue, budgetLimitedShare);
-  const budgetExceeded =
-    typeof remainingBudget === "number" && rawShareTotal > remainingBudget;
-  const budgetMaxed =
-    typeof remainingBudget === "number" && remainingBudget <= 0;
-  const suggestedPercent =
-    typeof remainingBudget === "number" && amountValue > 0
-      ? Math.max(
-        0,
-        Math.min(
-          rateLimitPercent ?? Infinity,
-          ((remainingBudget - fixedEntry) / amountValue) * 100,
-        ),
-      )
-      : null;
   const showCashbackInputs =
     (transactionType === "expense" ||
       (transactionType === "debt" &&
@@ -1798,7 +1707,7 @@ export function TransactionForm({
         form.setValue("cashback_share_percent", 0, { shouldDirty: false });
       }
     }
-  }, [selectedAccount?.id, amountValue, form]);
+  }, [selectedAccount?.id, amountValue, form, isEditMode]);
 
   useEffect(() => {
     if (isEditMode && initialValues?.debt_account_id) return;
@@ -2087,7 +1996,7 @@ export function TransactionForm({
                   className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                 />
                 <p className="text-xs text-slate-500">
-                  This will be appended to the note as "(paid by [name])"
+                  This will be appended to the note as &quot;(paid by [name])&quot;
                 </p>
               </div>
             ) : null;
@@ -2184,7 +2093,7 @@ export function TransactionForm({
             <input
               type="text"
               inputMode="numeric"
-              placeholder="dd.mm.yyyy"
+              placeholder="yyyy-mm-dd"
               value={dateInputValue}
               onChange={(event) => {
                 const nextValue = event.target.value;
@@ -2197,7 +2106,7 @@ export function TransactionForm({
               onBlur={() => {
                 const parsed = parseDateInput(dateInputValue);
                 if (!parsed && field.value) {
-                  setDateInputValue(format(field.value, "dd.MM.yyyy"));
+                  setDateInputValue(format(field.value, "yyyy-MM-dd"));
                 }
               }}
               className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 pr-10 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
@@ -2315,7 +2224,7 @@ export function TransactionForm({
                 }
               }}
               className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              placeholder="Enter tag (e.g., NOV25)"
+              placeholder="Enter tag (e.g., 2025-11)"
             />
           )}
         />
@@ -2444,215 +2353,6 @@ export function TransactionForm({
       )}
     </div>
   );
-
-  const showVoluntaryToggle =
-    (transactionType === "expense" || transactionType === "debt") &&
-    selectedAccount &&
-    // Case 1: Not a credit card or No cashback config
-    (selectedAccount.type !== "credit_card" ||
-      !selectedAccount.cashback_config ||
-      // Case 2: Has cashback but budget is exhausted
-      (selectedAccount.cashback_config &&
-        (cashbackProgress?.remainingBudget ?? 1) <= 0));
-
-  // Standard Cashback Input Condition: Only if config exists AND budget is POSITIVE
-  const showStandardCashback =
-    selectedAccount?.cashback_config &&
-    transactionType === "expense" &&
-    selectedAccount.type === "credit_card" &&
-    (cashbackProgress?.remainingBudget ?? 1) > 0;
-
-  const CashbackInputs = showStandardCashback ? (
-    <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2 space-y-2">
-      <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium text-slate-900 flex items-center gap-2">
-          <Percent className="h-4 w-4 text-blue-500" />
-          Cashback Details
-        </h4>
-        {spendingStats && spendingStats.cycle && (
-          <span className="text-xs text-slate-500">
-            Cycle: {formatCycleRangeFromIso(spendingStats.cycle.start, spendingStats.cycle.end) || spendingStats.cycle.label}
-          </span>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-600">% Back</label>
-          <Controller
-            control={control}
-            name="cashback_share_percent"
-            render={({ field }) => (
-              <SmartAmountInput
-                value={field.value}
-                onChange={(val) => {
-                  if (val === undefined) {
-                    field.onChange(undefined);
-                    return;
-                  }
-                  // Clamp to rateLimitPercent if available, else max 100
-                  const max =
-                    rateLimitPercent !== null
-                      ? Math.min(50, rateLimitPercent)
-                      : 100;
-                  const clamped = Math.min(val, max);
-                  field.onChange(clamped);
-                }}
-                disabled={budgetMaxed}
-                className="w-full"
-                placeholder="Enter percentage"
-              />
-            )}
-          />
-          {rateLimitPercent !== null && (
-            <p className="text-xs text-slate-500">
-              Max {Math.min(50, rateLimitPercent).toFixed(2)}% according to card
-              policy
-            </p>
-          )}
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-slate-600">
-            Fixed Back
-          </label>
-          <Controller
-            control={control}
-            name="cashback_share_fixed"
-            render={({ field }) => (
-              <SmartAmountInput
-                value={field.value}
-                onChange={(val) => {
-                  if (val === undefined) {
-                    field.onChange(undefined);
-                    return;
-                  }
-                  const clamped =
-                    amountValue > 0 ? Math.min(val, amountValue) : val;
-                  field.onChange(clamped);
-                }}
-                disabled={budgetMaxed}
-                placeholder="Enter fixed amount"
-                label="Fixed Amount"
-                className="w-full"
-              />
-            )}
-          />
-          {budgetMaxed && (
-            <p className="text-xs text-rose-600">
-              Budget exhausted, cannot add fixed amount.
-            </p>
-          )}
-        </div>
-      </div>
-      <div className="flex items-center justify-between text-xs font-medium text-slate-500">
-        <span>Total shared with person</span>
-        <span className="font-semibold text-slate-900">
-          {numberFormatter.format(totalBackGiven)}
-        </span>
-      </div>
-      {budgetExceeded && remainingBudget !== null && (
-        <p className="text-xs text-amber-600">
-          Cashback budget only has {numberFormatter.format(remainingBudget)}{" "}
-          remaining.
-        </p>
-      )}
-      {suggestedPercent !== null && budgetExceeded && (
-        <p className="text-xs text-amber-600">
-          Suggest lowering percentage to {suggestedPercent.toFixed(2)}% to not
-          exceed budget.
-        </p>
-      )}
-      {/* Validation: Cashback >= Amount Warning */}
-      {cashbackExceedsAmount && (
-        <p className="text-xs text-rose-600 font-semibold">
-          ⚠️ Total cashback ({numberFormatter.format(rawShareTotal)}) must be
-          less than amount ({numberFormatter.format(amountValue)}). Please
-          reduce % or fixed amount.
-        </p>
-      )}
-      <div className="border-t border-indigo-200/80 pt-2 text-slate-500 space-y-1">
-        <p className="text-xs">
-          <span className="font-semibold text-slate-700">Cycle:</span>{" "}
-          {selectedCycleLabel || "N/A"}
-        </p>
-
-        {/* Smart Hint Display */}
-        {spendingStats && spendingStats.matchReason && (
-          <p className="text-xs">
-            <span className="font-semibold text-slate-700">Applied Rate:</span>{" "}
-            <span className="text-emerald-600 font-bold">
-              {(
-                (spendingStats.potentialRate ?? spendingStats.rate) * 100
-              ).toFixed(2)}
-              %
-            </span>{" "}
-            ({spendingStats.matchReason})
-          </p>
-        )}
-        {spendingStats &&
-          spendingStats.maxReward &&
-          spendingStats.maxReward > 0 && (
-            <p className="text-xs">
-              <span className="font-semibold text-slate-700">
-                Max Reward (Category):
-              </span>{" "}
-              <span className="text-blue-600 font-bold">
-                {numberFormatter.format(spendingStats.maxReward)}đ
-              </span>
-            </p>
-          )}
-        {potentialCashback > 0 && (
-          <p className="text-xs">
-            <span className="font-semibold text-slate-700">
-              Estimated Cashback:
-            </span>{" "}
-            <span className="text-emerald-600 font-bold">
-              {numberFormatter.format(potentialCashback)}
-            </span>
-          </p>
-        )}
-
-        {statsLoading && <p>Loading min spend...</p>}
-        {statsError && <p className="text-rose-600">{statsError}</p>}
-        {spendingStats &&
-          spendingStats.minSpend &&
-          spendingStats.minSpend > 0 && (
-            <p>
-              <span className="font-semibold text-slate-700">Min Spend:</span>
-              {projectedSpend >= spendingStats.minSpend ? (
-                <span className="text-emerald-600">
-                  {" "}
-                  Met ({numberFormatter.format(projectedSpend)} /{" "}
-                  {numberFormatter.format(spendingStats.minSpend)})
-                </span>
-              ) : (
-                <span className="text-amber-600">
-                  {" "}
-                  Pending ({numberFormatter.format(projectedSpend)} /{" "}
-                  {numberFormatter.format(spendingStats.minSpend)})
-                </span>
-              )}
-            </p>
-          )}
-        {spendingStats &&
-          spendingStats.maxCashback &&
-          spendingStats.maxCashback > 0 && (
-            <p>
-              <span className="font-semibold text-slate-700">Budget:</span>
-              {numberFormatter.format(
-                Math.max(
-                  0,
-                  spendingStats.maxCashback -
-                  spendingStats.earnedSoFar -
-                  currentImpact,
-                ),
-              )}{" "}
-              remaining
-            </p>
-          )}
-      </div>
-    </div>
-  ) : null;
 
   const INSTALLMENT_MIN_AMOUNT = 3_000_000; // 3 million VND threshold
   const showInstallmentToggle =
@@ -3452,7 +3152,7 @@ export function TransactionForm({
               <Controller
                 control={control}
                 name="type"
-                render={({ field }) => <>{TypeInput}</>}
+                render={() => <>{TypeInput}</>}
               />
             </div>
 

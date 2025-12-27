@@ -2,6 +2,7 @@ import dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '../types/database.types'
+import { normalizeMonthTag, yyyyMMToLegacyMMMYY } from '../lib/month-tag'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -43,15 +44,24 @@ async function debugAccount() {
         is_exhausted: c.is_exhausted
     })))
 
-    // 3. Entries for DEC25
-    const dec25Cycle = cycles?.find(c => c.cycle_tag === 'DEC25')
-    if (dec25Cycle) {
+    const requestedTag = process.env.CYCLE_TAG ? normalizeMonthTag(process.env.CYCLE_TAG) : null
+    const latestTag = cycles?.[0]?.cycle_tag ? (normalizeMonthTag(cycles?.[0]?.cycle_tag) ?? cycles?.[0]?.cycle_tag) : null
+    const cycleTag = requestedTag ?? latestTag
+
+    if (!cycleTag) {
+        console.log('No cycle tag found. Set CYCLE_TAG to target a specific cycle.')
+        return
+    }
+
+    // 3. Entries for selected cycle
+    const selectedCycle = cycles?.find(c => (normalizeMonthTag(c.cycle_tag) ?? c.cycle_tag) === cycleTag)
+    if (selectedCycle) {
         const { data: entries } = await supabase
             .from('cashback_entries')
             .select('amount, mode, counts_to_budget, transaction_id, transactions(note)')
-            .eq('cycle_id', dec25Cycle.id)
+            .eq('cycle_id', selectedCycle.id)
 
-        console.log('--- Entries for DEC25 ---')
+        console.log(`--- Entries for ${cycleTag} ---`)
         console.table(entries?.map(e => ({
             note: (e.transactions as any)?.note,
             amount: e.amount,
@@ -59,17 +69,20 @@ async function debugAccount() {
             counts: e.counts_to_budget
         })))
     } else {
-        console.log('No DEC25 cycle found.')
+        console.log(`No cycle found for ${cycleTag}.`)
     }
 
-    // 4. Transactions for DEC25
+    // 4. Transactions for selected cycle
+    const legacyCycleTag = yyyyMMToLegacyMMMYY(cycleTag)
+    const cycleTagsToQuery = Array.from(new Set([cycleTag, legacyCycleTag].filter(Boolean))) as string[]
+
     const { data: txns } = await supabase
         .from('transactions')
         .select('id, amount, note, cashback_mode, cashback_share_fixed, persisted_cycle_tag')
         .eq('account_id', aid)
-        .eq('persisted_cycle_tag', 'DEC25')
+        .in('persisted_cycle_tag', cycleTagsToQuery)
 
-    console.log('--- Transactions for DEC25 ---')
+    console.log(`--- Transactions for ${cycleTag} ---`)
     console.table(txns)
 }
 

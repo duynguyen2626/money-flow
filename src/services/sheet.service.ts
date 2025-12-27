@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { yyyyMMToLegacyMMMYY } from '@/lib/month-tag'
 
 type SheetSyncTransaction = {
   id: string
@@ -63,6 +64,12 @@ function calculateTotals(txn: SheetSyncTransaction) {
   }
 }
 
+function extractSheetId(sheetUrl: string | null | undefined): string | null {
+  if (!sheetUrl) return null
+  const match = sheetUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
+  return match?.[1] ?? null
+}
+
 async function getProfileSheetLink(personId: string): Promise<string | null> {
   const supabase = createClient()
   const { data: profile, error } = await supabase
@@ -120,14 +127,74 @@ async function getProfileSheetLink(personId: string): Promise<string | null> {
   return null
 }
 
-async function postToSheet(sheetLink: string, payload: Record<string, unknown>) {
-  await fetch(sheetLink, {
+async function getProfileSheetInfo(personId: string): Promise<{ sheetUrl: string | null; sheetId: string | null }> {
+  const supabase = createClient()
+  const attempt = await supabase
+    .from('profiles')
+    .select('id, google_sheet_url')
+    .eq('id', personId)
+    .maybeSingle()
+
+  if (attempt.error?.code === '42703' || attempt.error?.code === 'PGRST204') {
+    return { sheetUrl: null, sheetId: null }
+  }
+
+  if (!attempt.error && attempt.data?.google_sheet_url) {
+    const sheetUrl = attempt.data.google_sheet_url?.trim() ?? null
+    return { sheetUrl, sheetId: extractSheetId(sheetUrl) }
+  }
+
+  const { data: accountRow } = await supabase
+    .from('accounts')
+    .select('owner_id, profiles (id, google_sheet_url)')
+    .eq('id', personId)
+    .eq('type', 'debt')
+    .maybeSingle()
+
+  const ownerProfile = (accountRow as any)?.profiles as { id?: string; google_sheet_url?: string | null } | null
+  const sheetUrl = ownerProfile?.google_sheet_url?.trim() ?? null
+  return { sheetUrl, sheetId: extractSheetId(sheetUrl) }
+}
+
+type SheetPostResult = {
+  success: boolean
+  json?: Record<string, any> | null
+  message?: string
+}
+
+async function postToSheet(sheetLink: string, payload: Record<string, unknown>): Promise<SheetPostResult> {
+  const response = await fetch(sheetLink, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(payload),
   })
+
+  let json: Record<string, any> | null = null
+  try {
+    json = (await response.json()) as Record<string, any>
+  } catch (error) {
+    json = null
+  }
+
+  if (!response.ok) {
+    return {
+      success: false,
+      json,
+      message: json?.error ?? `Sheet response ${response.status}`,
+    }
+  }
+
+  if (json && json.ok === false) {
+    return {
+      success: false,
+      json,
+      message: json.error ?? 'Sheet returned error',
+    }
+  }
+
+  return { success: true, json }
 }
 
 function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete' | 'update') {
@@ -165,9 +232,16 @@ export async function syncTransactionToSheet(
   try {
     const sheetLink = await getProfileSheetLink(personId)
     if (!sheetLink) return
-    const payload = buildPayload(txn, action)
+    const payload = {
+      ...buildPayload(txn, action),
+      person_id: personId,
+      cycle_tag: txn.tag ?? undefined,
+    }
     console.log('Syncing to sheet for Person:', personId, 'Payload:', payload)
-    await postToSheet(sheetLink, payload)
+    const result = await postToSheet(sheetLink, payload)
+    if (!result.success) {
+      console.error('Sheet sync failed:', result.message ?? 'Sheet sync failed')
+    }
   } catch (err) {
     console.error('Sheet sync failed:', err)
   }
@@ -190,7 +264,10 @@ export async function testConnection(personId: string) {
       date: today,
     }
 
-    await postToSheet(sheetLink, payload)
+    const result = await postToSheet(sheetLink, payload)
+    if (!result.success) {
+      return { success: false, message: result.message ?? 'Sheet create failed' }
+    }
     return { success: true }
   } catch (err) {
     console.error('Test connection failed:', err)
@@ -207,7 +284,7 @@ export async function syncAllTransactions(personId: string) {
 
     const supabase = createClient()
 
-    // Query transactions table directly - no more transaction_lines
+    // Query transactions table directly - legacy line items removed
     const { data, error } = await supabase
       .from('transactions')
       .select(`
@@ -272,7 +349,14 @@ export async function syncAllTransactions(personId: string) {
         'create'
       )
 
-      await postToSheet(sheetLink, payload)
+      const result = await postToSheet(sheetLink, {
+        ...payload,
+        person_id: personId,
+        cycle_tag: txn.tag ?? undefined,
+      })
+      if (!result.success) {
+        return { success: false, message: result.message ?? 'Sheet sync failed' }
+      }
       sent += 1
 
       // Gentle pacing to avoid rate limiting
@@ -284,6 +368,143 @@ export async function syncAllTransactions(personId: string) {
     return { success: true, count: sent }
   } catch (err) {
     console.error('Sync all transactions failed:', err)
+    return { success: false, message: 'Sync failed' }
+  }
+}
+
+type CycleSheetResult = {
+  success: boolean
+  sheetUrl?: string | null
+  sheetId?: string | null
+  message?: string
+}
+
+export async function createCycleSheet(personId: string, cycleTag: string): Promise<CycleSheetResult> {
+  try {
+    const sheetLink = await getProfileSheetLink(personId)
+    if (!sheetLink) {
+      return { success: false, message: 'No valid sheet link configured' }
+    }
+    const sheetInfo = await getProfileSheetInfo(personId)
+
+    const response = await postToSheet(sheetLink, {
+      action: 'create_cycle_sheet',
+      person_id: personId,
+      cycle_tag: cycleTag,
+      sheet_id: sheetInfo.sheetId ?? undefined,
+      sheet_url: sheetInfo.sheetUrl ?? undefined,
+    })
+
+    if (!response.success) {
+      return { success: false, message: response.message ?? 'Failed to create cycle sheet' }
+    }
+
+    const json = response.json ?? null
+    const sheetUrl = (json?.sheetUrl ?? json?.sheet_url ?? null) as string | null
+    const sheetId = (json?.sheetId ?? json?.sheet_id ?? null) as string | null
+
+    return { success: true, sheetUrl, sheetId }
+  } catch (error) {
+    console.error('Create cycle sheet failed:', error)
+    return { success: false, message: 'Failed to create cycle sheet' }
+  }
+}
+
+export async function syncCycleTransactions(
+  personId: string,
+  cycleTag: string,
+  sheetId?: string | null
+) {
+  try {
+    const sheetLink = await getProfileSheetLink(personId)
+    if (!sheetLink) {
+      return { success: false, message: 'No valid sheet link configured' }
+    }
+
+    const supabase = createClient()
+    const legacyTag = yyyyMMToLegacyMMMYY(cycleTag)
+    const tags = legacyTag ? [cycleTag, legacyTag] : [cycleTag]
+
+    const { data, error } = await supabase
+      .from('transactions')
+      .select(`
+        id,
+        occurred_at,
+        note,
+        status,
+        tag,
+        type,
+        amount,
+        cashback_share_percent,
+        cashback_share_fixed,
+        shop_id,
+        shops ( name )
+      `)
+      .eq('person_id', personId)
+      .in('tag', tags)
+      .neq('status', 'void')
+      .order('occurred_at', { ascending: true })
+
+    if (error) {
+      console.error('Failed to load cycle transactions:', error)
+      return { success: false, message: 'Failed to load transactions' }
+    }
+
+    const rows = (data ?? []) as {
+      id: string
+      occurred_at: string
+      note: string | null
+      status: string
+      tag: string | null
+      type: string | null
+      amount: number
+      cashback_share_percent?: number | null
+      cashback_share_fixed?: number | null
+      shop_id: string | null
+      shops: { name: string | null } | null
+    }[]
+
+    let sent = 0
+    for (const txn of rows) {
+      const shopData = txn.shops as any
+      const shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
+      const syncType = txn.type === 'repayment' ? 'In' : 'Debt'
+
+      const payload = {
+        ...buildPayload(
+          {
+            id: txn.id,
+            occurred_at: txn.occurred_at,
+            note: txn.note,
+            shop_name: shopName ?? '',
+            tag: txn.tag ?? undefined,
+            amount: txn.amount,
+            original_amount: Math.abs(txn.amount),
+            cashback_share_percent: txn.cashback_share_percent ?? undefined,
+            cashback_share_fixed: txn.cashback_share_fixed ?? undefined,
+            type: syncType,
+          },
+          'create'
+        ),
+        person_id: personId,
+        cycle_tag: cycleTag,
+        sheet_id: sheetId ?? undefined,
+      }
+
+      const result = await postToSheet(sheetLink, payload)
+      if (!result.success) {
+        return { success: false, message: result.message ?? 'Sheet sync failed' }
+      }
+      sent += 1
+
+      if (rows.length > 1) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+    }
+
+    return { success: true, count: sent }
+  } catch (error) {
+    console.error('Sync cycle transactions failed:', error)
     return { success: false, message: 'Sync failed' }
   }
 }

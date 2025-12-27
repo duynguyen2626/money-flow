@@ -6,7 +6,6 @@
 BEGIN;
 
 -- 1. XÓA BẢNG CŨ (DANGER ZONE)
-DROP TABLE IF EXISTS "public"."transaction_lines" CASCADE; -- Xóa bảng lines phức tạp
 DROP TABLE IF EXISTS "public"."transactions" CASCADE;
 DROP TABLE IF EXISTS "public"."batch_items" CASCADE;
 DROP TABLE IF EXISTS "public"."batches" CASCADE;
@@ -30,7 +29,7 @@ CREATE TABLE "public"."transactions" (
     "shop_id" UUID REFERENCES "public"."shops"("id"),
     
     -- Advanced Tracking
-    "tag" TEXT, -- Cycle Tag (NOV25)
+    "tag" TEXT, -- Cycle Tag (YYYY-MM, e.g. 2025-11)
     "linked_transaction_id" UUID, -- Dùng cho Refund link về gốc
     
     -- Metadata (JSON) cho các thứ linh tinh (Slot, Batch ID, etc)

@@ -38,6 +38,7 @@ import { Switch } from '@/components/ui/switch'
 import { CollapsibleSection } from '@/components/ui/collapsible-section'
 import { getShopsAction } from '@/actions/shop-actions'
 import { Select } from '@/components/ui/select'
+import { toYYYYMMFromDate } from '@/lib/month-tag'
 
 // TODO: These types should be properly defined and imported
 type Service = {
@@ -100,11 +101,9 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
   const [paymentStatus, setPaymentStatus] = useState<{ confirmed: boolean, amount: number }>({ confirmed: false, amount: 0 })
   const [checkingPayment, setCheckingPayment] = useState(false)
 
-  // [M2-SP2] Tag Format: MMMYY (e.g., DEC25)
+  // [M2-SP2] Tag Format: YYYY-MM (e.g., 2025-12)
   const dateObj = new Date()
-  const monthStr = dateObj.toLocaleString('en-US', { month: 'short' }).toUpperCase()
-  const yearStr = dateObj.getFullYear().toString().slice(-2)
-  const monthTag = `${monthStr}${yearStr}`
+  const monthTag = toYYYYMMFromDate(dateObj)
 
   useEffect(() => {
     setWatchedMembers(members)

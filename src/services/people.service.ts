@@ -1,11 +1,10 @@
 'use server'
 
 import { randomUUID } from 'crypto'
-import { format } from 'date-fns'
-import { enUS } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
-import { MonthlyDebtSummary, Person } from '@/types/moneyflow.types'
+import { MonthlyDebtSummary, Person, PersonCycleSheet } from '@/types/moneyflow.types'
+import { normalizeMonthTag, toYYYYMMFromDate } from '@/lib/month-tag'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type ProfileInsert = Database['public']['Tables']['profiles']['Insert']
@@ -142,7 +141,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   // Calculate current month boundaries for cycle debt
   const now = new Date()
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const currentCycleLabel = format(now, 'MMM yy', { locale: enUS }).toUpperCase() // e.g., "DEC 24"
+  const currentCycleLabel = toYYYYMMFromDate(now)
 
   const profileSelect = async () => {
     const attempt = await supabase
@@ -200,6 +199,20 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   const debtBalanceByPerson = new Map<string, number>()
   const currentCycleDebtByPerson = new Map<string, number>()
 
+  let cycleSheets: PersonCycleSheet[] = []
+  if (personIds.length > 0) {
+    const { data, error } = await (supabase as any)
+      .from('person_cycle_sheets')
+      .select('id, person_id, cycle_tag, sheet_id, sheet_url, created_at, updated_at')
+      .in('person_id', personIds)
+
+    if (error) {
+      console.warn('Unable to load person cycle sheets:', error)
+    } else if (Array.isArray(data)) {
+      cycleSheets = data as PersonCycleSheet[]
+    }
+  }
+
   // Build mapping from debt account to person
   const debtAccountToPersonMap = new Map<string, string>()
   if (Array.isArray(debtAccounts)) {
@@ -224,8 +237,9 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     } else {
       (txns as any[])?.forEach(txn => {
         const txnDate = txn.occurred_at ? new Date(txn.occurred_at) : null
-        const currentMonthTag = format(new Date(), 'MMMyy').toUpperCase()
-        const isCurrentCycle = (txnDate && txnDate >= currentMonthStart) || (txn.tag === currentMonthTag)
+        const currentMonthTag = toYYYYMMFromDate(new Date())
+        const normalizedTag = normalizeMonthTag(txn.tag) ?? txn.tag
+        const isCurrentCycle = (txnDate && txnDate >= currentMonthStart) || (normalizedTag === currentMonthTag)
 
         // Determine which person this debt belongs to
         let personId: string | null = null
@@ -264,7 +278,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
           // Track current cycle debt separately
           // STRICTER LOGIC: If tag exists, it MUST match. If no tag, check date.
           const isStrictlyCurrentCycle = txn.tag
-            ? txn.tag === currentMonthTag
+            ? normalizedTag === currentMonthTag
             : (txnDate && txnDate >= currentMonthStart)
 
           if (isStrictlyCurrentCycle) {
@@ -350,14 +364,13 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
 
         if (!ownerId) return
 
-        const tagValue = txn.tag ?? null
+        const tagValue = normalizeMonthTag(txn.tag) ?? txn.tag ?? null
         const occurredAt = txn.occurred_at ?? null
         const parsedDate = occurredAt ? new Date(occurredAt) : null
         const validDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null
-        const fallbackKey = validDate ? format(validDate, 'yyyy-MM') : 'unknown'
-        const groupingKey = tagValue ?? fallbackKey
-        const label =
-          tagValue ?? (validDate ? format(validDate, 'MMM yy', { locale: enUS }).toUpperCase() : 'Debt')
+        const fallbackKey = validDate ? toYYYYMMFromDate(validDate) : null
+        const groupingKey = tagValue ?? fallbackKey ?? 'unknown'
+        const label = groupingKey === 'unknown' ? 'Debt' : groupingKey
 
         // Calculate final price using DB column if available
         let finalPrice = 0
@@ -417,19 +430,20 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
 
         const ownerId = txn.person_id
         const amount = Math.abs(txn.amount)
-        const tagValue = txn.tag ?? null
+        const tagValue = normalizeMonthTag(txn.tag) ?? txn.tag ?? null
         const occurredAt = txn.occurred_at ?? null
         const parsedDate = occurredAt ? new Date(occurredAt) : null
         const validDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null
-        const fallbackKey = validDate ? format(validDate, 'yyyy-MM') : 'unknown'
+        const fallbackKey = validDate ? toYYYYMMFromDate(validDate) : null
         // Repayments should match the tag of the debt if possible, or fallback to date
         // Ideally repayments have the SAME TAG as the debt they are repaying.
-        const groupingKey = tagValue ?? fallbackKey
-        const label = tagValue ?? (validDate ? format(validDate, 'MMM yy', { locale: enUS }).toUpperCase() : 'Repayment')
+        const groupingKey = tagValue ?? fallbackKey ?? 'unknown'
+        const label = groupingKey === 'unknown' ? 'Repayment' : groupingKey
 
         // Update current cycle debt if repayment is in current cycle
-        const currentMonthTag = format(new Date(), 'MMMyy').toUpperCase()
-        const isCurrentCycle = (validDate && validDate >= currentMonthStart) || (txn.tag === currentMonthTag)
+        const currentMonthTag = toYYYYMMFromDate(new Date())
+        const normalizedTag = normalizeMonthTag(txn.tag) ?? txn.tag
+        const isCurrentCycle = (validDate && validDate >= currentMonthStart) || (normalizedTag === currentMonthTag)
 
         if (isCurrentCycle) {
           const currentCycle = currentCycleDebtByPerson.get(ownerId) ?? 0
@@ -498,6 +512,15 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     })
   }
 
+  const cycleSheetMap = new Map<string, PersonCycleSheet[]>()
+  if (cycleSheets.length > 0) {
+    cycleSheets.forEach((sheet) => {
+      const existing = cycleSheetMap.get(sheet.person_id) ?? []
+      existing.push(sheet)
+      cycleSheetMap.set(sheet.person_id, existing)
+    })
+  }
+
   const mapped = (profiles as ProfileRow[] | null)?.map(person => {
     const debtInfo = debtAccountMap.get(person.id)
     const subs = subscriptionMap.get(person.id) ?? []
@@ -523,6 +546,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       subscription_ids: subs.map(s => s.id), // Keep for backward compatibility if needed
       subscription_details: subs, // Now includes image_url
       monthly_debts: monthlyDebtsByPerson.get(person.id) ?? [],
+      cycle_sheets: cycleSheetMap.get(person.id) ?? [],
     }
   }) ?? []
 

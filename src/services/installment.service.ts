@@ -2,7 +2,8 @@
 
 import { createClient } from '@/lib/supabase/server';
 import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants';
-import { addMonths, format } from 'date-fns';
+import { addMonths } from 'date-fns';
+import { toLegacyMMMYYFromDate, toYYYYMMFromDate } from '@/lib/month-tag'
 
 export type InstallmentStatus = 'active' | 'completed' | 'settled_early' | 'cancelled';
 export type InstallmentType = 'credit_card' | 'p2p_lending';
@@ -72,7 +73,7 @@ export async function getActiveInstallments() {
 export async function getAccountsWithActiveInstallments() {
     const supabase: any = createClient();
     // [Single-Table Migration] Get account_id directly from transactions table
-    // instead of the deprecated transaction_lines table.
+    // instead of the deprecated line items table.
 
     const { data, error } = await supabase
         .from('installments')
@@ -372,7 +373,8 @@ export async function settleEarly(installmentId: string) {
 export async function processBatchInstallments(date?: string) {
     const supabase: any = createClient();
     const targetDate = date ? new Date(date) : new Date();
-    const monthTag = format(targetDate, 'MMMyy').toUpperCase();
+    const monthTag = toYYYYMMFromDate(targetDate)
+    const legacyMonthTag = toLegacyMMMYYFromDate(targetDate)
 
     // 1. Get Active Installments
     const installments = await getActiveInstallments();
@@ -388,13 +390,16 @@ export async function processBatchInstallments(date?: string) {
     // Let's assume we create a dedicated batch "Installments [MonthTag]" if not exists.
 
     const batchName = `Installments ${monthTag}`;
+    const legacyBatchName = legacyMonthTag ? `Installments ${legacyMonthTag}` : null
     let batchId: string;
 
-    const { data: existingBatch } = await supabase
+    const { data: existingBatches } = await supabase
         .from('batches')
-        .select('id')
-        .eq('name', batchName)
-        .single();
+        .select('id, name')
+        .in('name', legacyBatchName ? [batchName, legacyBatchName] : [batchName])
+        .limit(1);
+
+    const existingBatch = Array.isArray(existingBatches) ? existingBatches[0] : null
 
     if (existingBatch) {
         batchId = existingBatch.id;

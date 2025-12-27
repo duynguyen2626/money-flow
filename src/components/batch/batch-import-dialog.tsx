@@ -69,15 +69,15 @@ export function BatchImportDialog({ open, onOpenChange, batchId, onSuccess }: Ba
 
                 <div className="space-y-4">
                     <div className="space-y-2">
-                        <Label htmlFor="batch-tag">Batch Tag (VD: NOV25)</Label>
+                        <Label htmlFor="batch-tag">Batch Tag (VD: 2025-11)</Label>
                         <Input
                             id="batch-tag"
-                            placeholder="NOV25"
+                            placeholder="2025-11"
                             value={batchTag}
                             onChange={(e) => setBatchTag(e.target.value.toUpperCase())}
                         />
                         <p className="text-xs text-muted-foreground">
-                            Tag này sẽ được dùng để tạo Note tự động (VD: VCB NOV25)
+                            Tag này sẽ được dùng để tạo Note tự động (VD: VCB 2025-11)
                         </p>
                     </div>
 

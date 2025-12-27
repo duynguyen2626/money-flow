@@ -32,7 +32,7 @@ If you encounter missing cycle data or incorrect caps in the Cashback Analysis v
 ## Recent Updates (Phase 6)
 
 ### 1. Schema Drift Cleanup
-- Removed dependency on deprecated `transaction_lines` table.
+- Removed dependency on the deprecated transaction line table.
 - Aligned codebase with actual Supabase schema (Flat Transaction Model).
 - Simplified `transaction.service.ts` and `transaction-actions.ts`.
 
@@ -46,6 +46,17 @@ If you encounter missing cycle data or incorrect caps in the Cashback Analysis v
 - Refactored `UnifiedTransactionTable` to use props-driven pagination.
 - Centralized state control in `filterable-transactions.tsx`.
 - Resolved "double-pagination" issues.
+
+## Current Status (Phase 7)
+- People directory + detail UI refresh is in progress with per-cycle "Manage Sheet" support.
+- Requires `person_cycle_sheets` table; apply migration `supabase/migrations/20251226193000_create_person_cycle_sheets.sql` to remove the PGRST205 warning and enable sheet storage.
+- Sheet create/sync runs server-side via `POST /api/sheets/manage` (apps script must support `create_cycle_sheet` action).
+
+## Recent Updates (Phase 8 - Google Sheets Sync)
+- Added per-person, per-cycle sheet creation + sync via Apps Script (`sheetScript/`) with `ensureSheet` and `syncTransactions` actions.
+- Manage Sheet UI now uses a dropdown popover, saves Script/Sheet links, and shows a sync completion modal.
+- Sheet formatter applies banding, formulas, summary panel, bank info, shop icon mapping, and per-row borders on sync.
+- Added `sheet:push` helper with `.env`-based script ID profiles and `--force` support for faster deploys.
 
 ## Learn More
 

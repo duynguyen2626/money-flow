@@ -67,13 +67,13 @@ add column if not exists is_confirmed boolean default false;
 -- Add card_name column to batch_items table
 ALTER TABLE batch_items ADD COLUMN IF NOT EXISTS card_name TEXT;
 
--- Migration: 20251127172400_add_batch_fields_to_transaction_lines.sql
+-- Migration: 20251127172400_add_batch_fields_to_transaction_line_items.sql
 
--- Add bank_name, bank_number, card_name, and receiver_name columns to transaction_lines table
-ALTER TABLE transaction_lines ADD COLUMN IF NOT EXISTS bank_name TEXT;
-ALTER TABLE transaction_lines ADD COLUMN IF NOT EXISTS bank_number TEXT;
-ALTER TABLE transaction_lines ADD COLUMN IF NOT EXISTS card_name TEXT;
-ALTER TABLE transaction_lines ADD COLUMN IF NOT EXISTS receiver_name TEXT;
+-- Add bank_name, bank_number, card_name, and receiver_name columns to transaction_line_items table
+ALTER TABLE transaction_line_items ADD COLUMN IF NOT EXISTS bank_name TEXT;
+ALTER TABLE transaction_line_items ADD COLUMN IF NOT EXISTS bank_number TEXT;
+ALTER TABLE transaction_line_items ADD COLUMN IF NOT EXISTS card_name TEXT;
+ALTER TABLE transaction_line_items ADD COLUMN IF NOT EXISTS receiver_name TEXT;
 
 -- Migration: 20251127190500_create_bank_mappings.sql
 
@@ -801,10 +801,10 @@ CREATE INDEX IF NOT EXISTS idx_transactions_created_by ON public.transactions(cr
 -- Update RLS policy if needed (optional but good practice)
 -- Assuming existing policies cover this if they reference auth.uid()
 
--- Migration: 20251206000007_drop_transaction_lines_old.sql
+-- Migration: 20251206000007_drop_transaction_line_items_old.sql
 
--- Drop deprecated table transaction_lines_old
-DROP TABLE IF EXISTS public.transaction_lines_old CASCADE;
+-- Drop deprecated table transaction_line_items_old
+DROP TABLE IF EXISTS public.transaction_line_items_old CASCADE;
 
 -- Also verify if we need to clean up transactions_old
 -- DROP TABLE IF EXISTS public.transactions_old CASCADE;
@@ -1105,7 +1105,7 @@ CREATE TABLE IF NOT EXISTS public.cashback_cycles (
     updated_at timestamptz DEFAULT now(),
 
     account_id uuid REFERENCES public.accounts(id) NOT NULL,
-    cycle_tag text NOT NULL, -- e.g. "DEC25"
+    cycle_tag text NOT NULL, -- e.g. "2025-12"
 
     -- Snapshots from account config at time of creation/update
     max_budget numeric DEFAULT 0,

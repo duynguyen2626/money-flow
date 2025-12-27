@@ -8,6 +8,7 @@ import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds';
 import { loadShopInfo, ShopRow, parseMetadata, mapUnifiedTransaction } from '@/lib/transaction-mapper';
 import { TransactionWithDetails } from '@/types/moneyflow.types';
 import { upsertTransactionCashback } from '@/services/cashback.service';
+import { normalizeMonthTag } from '@/lib/month-tag'
 
 export type CreateTransactionInput = {
   occurred_at: string;
@@ -175,7 +176,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   const { data: { user } } = await supabase.auth.getUser();
   const userId = user?.id || '917455ba-16c0-42f9-9cea-264f81a3db66';
 
-  const tag = input.tag;
+  const tag = normalizeMonthTag(input.tag) ?? input.tag;
 
   const persistedCycleTag = await calculatePersistedCycleTag(
     supabase,
@@ -253,7 +254,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
         id: txn.id,
         occurred_at: input.occurred_at,
         note: input.note,
-        tag: input.tag,
+        tag,
         shop_name: shopInfo?.name ?? (destAccount as any)?.name ?? null,
         amount: finalAmount, // Repayment amount
         original_amount: finalAmount,
@@ -442,7 +443,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     // However, for single table, we don't have separate lines.
     // WE should just pass what we have.
 
-    // NOTE: The previous logic relied on transaction_lines join which was failing.
+    // NOTE: The previous logic relied on legacy line items joins which were failing.
     // We will attempt to sync deletion but purely based on ID.
     void syncTransactionToSheet(personId, payload as any, 'delete').catch(err => {
       console.error('Sheet Sync Error (Void):', err);
@@ -561,7 +562,7 @@ export async function restoreTransaction(id: string): Promise<boolean> {
       // HOWEVER, `transactions` table usually stores what actually happened on the account.
       // For Sheet Sync, if we miss exact original amount, maybe we just sync what we have?
       // Legacy code iterated `lines`, and `lines` had `original_amount`.
-      // `transaction_lines` table `original_amount` was stored.
+      // The legacy line items table stored `original_amount`.
       // Use `existing.amount` + `cashback` logic approximation?
       // Let's check `metadata`. `createTransaction` stores metadata?
       // `restoreTransaction` is rare. Consistence is key.
@@ -642,7 +643,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
     return false;
   }
 
-  const tag = input.tag;
+  const tag = normalizeMonthTag(input.tag) ?? input.tag;
   const shopInfo = await loadShopInfo(supabase, input.shop_id);
 
   const persistedCycleTag = await calculatePersistedCycleTag(
@@ -1021,5 +1022,4 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
 
   return (data as any[]).map(txn => mapUnifiedTransaction(txn, accountId));
 }
-
 

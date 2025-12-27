@@ -102,6 +102,16 @@ export type MonthlyDebtSummary = {
   total_cashback?: number // Total cashback accumulated
 }
 
+export type PersonCycleSheet = {
+  id: string
+  person_id: string
+  cycle_tag: string
+  sheet_id?: string | null
+  sheet_url?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
 export type Person = {
   id: string
   created_at?: string
@@ -119,6 +129,7 @@ export type Person = {
   subscription_count?: number
   subscription_details?: { id: string; name: string; slots: number; image_url?: string | null }[]
   monthly_debts?: MonthlyDebtSummary[]
+  cycle_sheets?: PersonCycleSheet[]
   current_cycle_debt?: number | null
   outstanding_debt?: number | null
   current_cycle_label?: string | null

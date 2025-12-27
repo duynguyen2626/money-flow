@@ -23,6 +23,7 @@ import {
 } from "@/services/transaction.service"
 import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
+import { normalizeMonthTag, toYYYYMMFromDate } from "@/lib/month-tag"
 
 type ColumnKey =
   | "date"
@@ -404,31 +405,19 @@ export function RecentTransactions({
   }, [transactions, selection, showSelectedOnly])
 
   const getCycleLabel = (txn: TransactionWithDetails) => {
-    const persisted = txn.persisted_cycle_tag ?? txn.tag
-    const normalize = (value: string | null | undefined) => {
-      if (!value) return "-"
-      const yMonth = value.match(/^(\d{4})-(0[1-9]|1[0-2])$/)
-      if (yMonth) {
-        return value
-      }
-      const abbrev = value.slice(0, 3).toLowerCase()
-      const map: Record<string, string> = {
-        jan: "January", feb: "February", mar: "March", apr: "April", may: "May", jun: "June",
-        jul: "July", aug: "August", sep: "September", oct: "October", nov: "November", dec: "December",
-      }
-      if (map[abbrev]) return map[abbrev]
-      return value
-    }
+    const persisted = normalizeMonthTag(txn.persisted_cycle_tag) ?? txn.persisted_cycle_tag
+
     if (accountType === "credit_card") {
-      if (persisted) return normalize(persisted)
+      if (persisted?.trim()) return persisted
       const rawDate = txn.occurred_at ?? (txn as { created_at?: string }).created_at
       const parsed = rawDate ? new Date(rawDate) : null
       if (parsed && !Number.isNaN(parsed.getTime())) {
-        const month = String(parsed.getMonth() + 1).padStart(2, "0")
-        return normalize(`${parsed.getFullYear()}-${month}`)
+        return toYYYYMMFromDate(parsed)
       }
     }
-    return normalize(txn.tag ?? "-")
+
+    const tag = normalizeMonthTag(txn.tag) ?? txn.tag
+    return tag?.trim() ? tag : "-"
   }
 
   const formattedDate = (value: string | number | Date) => {

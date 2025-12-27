@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
-import { addMonths, format, parse } from 'date-fns'
+import { addMonths } from 'date-fns'
 import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants'
+import { isLegacyMMMYY, isYYYYMM, normalizeMonthTag, toLegacyMMMYYFromDate, toYYYYMMFromDate } from '@/lib/month-tag'
 
 export type Batch = Database['public']['Tables']['batches']['Row']
 export type BatchItem = Database['public']['Tables']['batch_items']['Row']
@@ -515,9 +516,10 @@ export async function fundBatch(batchId: string): Promise<FundBatchResult> {
 
     // --- NEW FUNDING (Original Logic) ---
 
-    // 3. Extract Tag from Name (e.g. "CKL NOV25" -> "NOV25")
+    // 3. Extract Tag from Name (e.g. "CKL 2025-11" -> "2025-11")
     const nameParts = batch.name.split(' ')
-    const tag = nameParts[nameParts.length - 1]
+    const rawTag = nameParts[nameParts.length - 1]
+    const tag = normalizeMonthTag(rawTag) ?? rawTag
     const metadata = { batch_id: batch.id, type: 'batch_funding' }
 
     // 4. Create Transaction [Single-Table Schema]
@@ -748,16 +750,14 @@ export async function cloneBatch(batchId: string, newTag: string) {
     const nameParts = originalBatch.name.split(' ')
     const lastPart = nameParts[nameParts.length - 1]
 
-    try {
-        const parsedDate = parse(lastPart, 'MMMyy', new Date())
-        if (!isNaN(parsedDate.getTime())) {
-            nameParts[nameParts.length - 1] = newTag
-            newName = nameParts.join(' ')
-        } else {
-            newName = `${originalBatch.name} ${newTag}`
-        }
-    } catch (e) {
-        newName = `${originalBatch.name} ${newTag}`
+    const normalizedNewTag = normalizeMonthTag(newTag) ?? newTag
+    const hasMonthTagAtEnd = isYYYYMM(lastPart) || isLegacyMMMYY(lastPart)
+
+    if (hasMonthTagAtEnd) {
+        nameParts[nameParts.length - 1] = normalizedNewTag
+        newName = nameParts.join(' ')
+    } else {
+        newName = `${originalBatch.name} ${normalizedNewTag}`
     }
 
     const { data: newBatch, error: createError } = await supabase
@@ -810,16 +810,25 @@ export async function updateBatchCycle(batchId: string, action: 'prev' | 'next')
     if (batchError || !batch) throw new Error('Batch not found')
 
     // 2. Detect Current Tag
-    // Assume format "... MMMyy" (e.g. "DEC25")
     const nameParts = batch.name.split(' ')
-    const currentTag = nameParts.find((p: string) => /^[A-Z]{3}\d{2}$/.test(p))
+    const currentTag =
+        nameParts.find((p: string) => isYYYYMM(p)) ??
+        nameParts.find((p: string) => isLegacyMMMYY(p))
 
-    if (!currentTag) throw new Error('Could not detect month tag (e.g. DEC25) in batch name')
+    if (!currentTag) throw new Error('Could not detect month tag (e.g. 2025-12) in batch name')
+
+    const normalizedCurrentTag = normalizeMonthTag(currentTag) ?? currentTag
+    if (!isYYYYMM(normalizedCurrentTag)) {
+        throw new Error(`Invalid month tag in batch name: ${currentTag}`)
+    }
 
     // 3. Calculate New Tag
-    const currentDate = parse(currentTag, 'MMMyy', new Date())
+    const [yearStr, monthStr] = normalizedCurrentTag.split('-')
+    const year = Number(yearStr)
+    const month = Number(monthStr)
+    const currentDate = new Date(year, month - 1, 1)
     const newDate = addMonths(currentDate, action === 'next' ? 1 : -1)
-    const newTag = format(newDate, 'MMMyy').toUpperCase()
+    const newTag = toYYYYMMFromDate(newDate)
 
     // 4. Update Batch Name
     const newName = batch.name.replace(currentTag, newTag)
@@ -827,17 +836,26 @@ export async function updateBatchCycle(batchId: string, action: 'prev' | 'next')
 
     // 5. Update Batch Items
     const items = batch.batch_items || []
+    const sourceTags = [currentTag, normalizedCurrentTag]
     for (const item of items) {
-        if (item.note && item.note.includes(currentTag)) {
-            const newNote = item.note.replace(currentTag, newTag)
+        if (!item.note) continue
+
+        let updatedNote = item.note
+        for (const sourceTag of sourceTags) {
+            if (updatedNote.includes(sourceTag)) {
+                updatedNote = updatedNote.split(sourceTag).join(newTag)
+            }
+        }
+
+        if (updatedNote !== item.note) {
             await supabase
                 .from('batch_items')
-                .update({ note: newNote })
+                .update({ note: updatedNote })
                 .eq('id', item.id)
         }
     }
 
-    return { success: true, oldTag: currentTag, newTag }
+    return { success: true, oldTag: normalizedCurrentTag, newTag }
 }
 
 export async function updateBatchNoteMode(batchId: string, mode: 'previous' | 'current') {
@@ -856,26 +874,34 @@ export async function updateBatchNoteMode(batchId: string, mode: 'previous' | 'c
     if (items.length === 0) return { success: true, count: 0 }
 
     // 2. Determine Month Tags
-    // Current Month: e.g. DEC24
-    // Previous Month: e.g. NOV24
     const today = new Date()
-    const currentMonthTag = format(today, 'MMMyy').toUpperCase()
-    const prevMonthTag = format(addMonths(today, -1), 'MMMyy').toUpperCase()
+    const currentMonthTag = toYYYYMMFromDate(today)
+    const prevMonthTag = toYYYYMMFromDate(addMonths(today, -1))
+    const currentLegacyMonthTag = toLegacyMMMYYFromDate(today)
+    const prevLegacyMonthTag = toLegacyMMMYYFromDate(addMonths(today, -1))
 
     const targetTag = mode === 'current' ? currentMonthTag : prevMonthTag
-    const sourceTag = mode === 'current' ? prevMonthTag : currentMonthTag
+    const sourceTags =
+        mode === 'current'
+            ? [prevMonthTag, prevLegacyMonthTag]
+            : [currentMonthTag, currentLegacyMonthTag]
 
     // 3. Update Notes
     let updatedCount = 0
     const updates = items.map((item: any) => {
         let note = item.note || ''
-        if (note.includes(sourceTag)) {
-            note = note.replace(sourceTag, targetTag)
-            updatedCount++
-            return {
-                id: item.id,
-                note: note
+        let didChange = false
+
+        for (const sourceTag of sourceTags) {
+            if (sourceTag && note.includes(sourceTag)) {
+                note = note.split(sourceTag).join(targetTag)
+                didChange = true
             }
+        }
+
+        if (didChange) {
+            updatedCount++
+            return { id: item.id, note }
         }
         // If note doesn't have source tag, but we want to enforce the target tag?
         // For now, only swap if source tag exists to avoid messing up other notes.

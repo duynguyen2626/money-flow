@@ -4,6 +4,17 @@ trigger: always_on
 
 # .agent/rules/gravityrules.md — Rules (MF4)
 TypeScript & Build Validation (CRITICAL)
+
+Add CRITICAL: Month Tag Standardization
+
+DO NOT introduce legacy "MMMYY" month tags anywhere
+
+Any month tag stored/sent/displayed must be YYYY-MM
+
+On read: normalize legacy -> YYYY-MM (temporary compatibility)
+
+On write: always persist YYYY-MM
+
 ALWAYS run npm run build or npx tsc --noEmit before:
 Committing code
 Pushing to remote
@@ -82,6 +93,11 @@ Database schema changes require regenerating types
 * Do not duplicate business logic across components
 * Keep derived state in helpers when possible
 * Small, reviewable commits only
+## Month Tag Rules (CRITICAL)
+- Never generate or store debt/cycle tags in legacy "MMMYY" format.
+- Canonical format is `YYYY-MM` only.
+- Any legacy tags must be normalized to `YYYY-MM`.
+- Before marking complete: repo-wide search must return 0 hits for: legacy MMMYY month tags, tagUpper, transaction_lines, shops.logo_url
 
 ## QA Expectations
 

@@ -2,6 +2,7 @@
 
 import { MouseEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { X } from 'lucide-react'
 import { PersonForm } from './person-form'
 import { Subscription, Person } from '@/types/moneyflow.types'
 import { updatePersonAction } from '@/actions/people-actions'
@@ -14,9 +15,17 @@ type EditPersonDialogProps = {
   initiallyOpen?: boolean
   onClose?: () => void
   trigger?: React.ReactNode
+  showTrigger?: boolean
 }
 
-export function EditPersonDialog({ person, subscriptions, initiallyOpen, onClose, trigger }: EditPersonDialogProps) {
+export function EditPersonDialog({
+  person,
+  subscriptions,
+  initiallyOpen,
+  onClose,
+  trigger,
+  showTrigger = true,
+}: EditPersonDialogProps) {
   const [open, setOpen] = useState(Boolean(initiallyOpen))
   const router = useRouter()
 
@@ -37,42 +46,44 @@ export function EditPersonDialog({ person, subscriptions, initiallyOpen, onClose
 
   return (
     <>
-      {trigger ? (
-        <Slot onClick={() => setOpen(true)}>{trigger}</Slot>
-      ) : (
-        <button
-          type="button"
-          className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-          onClick={() => setOpen(true)}
-        >
-          Sua thong tin
-        </button>
-      )}
+      {showTrigger &&
+        (trigger ? (
+          <Slot onClick={() => setOpen(true)}>{trigger}</Slot>
+        ) : (
+          <button
+            type="button"
+            className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+            onClick={() => setOpen(true)}
+          >
+            Edit details
+          </button>
+        ))}
 
       {open && (
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Edit person"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10"
+          aria-label="Edit member"
+          className="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-black/60 px-4 py-6 md:items-center md:py-10"
           onClick={closeDialog}
         >
           <div
-            className="w-full max-w-3xl rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+            className="flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl max-h-[90vh]"
             onClick={stopPropagation}
           >
-            <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
               <div>
-                <p className="text-xs font-semibold uppercase text-slate-500">Chinh sua</p>
-                <h2 className="text-lg font-semibold text-gray-900">{person.name}</h2>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">People</p>
+                <h2 className="text-xl font-semibold text-slate-900">Edit member</h2>
+                <p className="text-sm text-slate-500">Update profile details for {person.name}.</p>
               </div>
               <button
                 type="button"
-                className="rounded p-1 text-gray-500 transition hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                 aria-label="Close dialog"
                 onClick={closeDialog}
               >
-                X
+                <X className="h-4 w-4" />
               </button>
             </div>
 
@@ -102,7 +113,7 @@ export function EditPersonDialog({ person, subscriptions, initiallyOpen, onClose
                 onClose?.()
                 router.refresh()
               }}
-              submitLabel="Luu thay doi"
+              submitLabel="Save changes"
             />
           </div>
         </div>

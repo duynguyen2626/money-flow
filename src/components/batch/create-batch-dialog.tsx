@@ -5,7 +5,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { Button } from '@/components/ui/button'
-import { format, subMonths } from 'date-fns'
+import { subMonths } from 'date-fns'
+import { toYYYYMMFromDate } from '@/lib/month-tag'
 import {
     Dialog,
     DialogContent,
@@ -57,7 +58,7 @@ export function CreateBatchDialog({ accounts, webhookLinks }: { accounts: any[],
     useEffect(() => {
         if (open) {
             const date = monthMode === 'current' ? new Date() : subMonths(new Date(), 1)
-            const tag = format(date, 'MMMyy').toUpperCase()
+            const tag = toYYYYMMFromDate(date)
             form.setValue('name', `CKL ${tag}`)
         }
     }, [monthMode, open, form])
@@ -118,7 +119,7 @@ export function CreateBatchDialog({ accounts, webhookLinks }: { accounts: any[],
                                 <FormItem>
                                     <FormLabel>Batch Name</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="e.g., CKL NOV25" {...field} />
+                                        <Input placeholder="e.g., CKL 2025-11" {...field} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

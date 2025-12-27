@@ -322,6 +322,7 @@ function PersonCardComponent({
                     person={person}
                     subscriptions={subscriptions}
                     initiallyOpen={true}
+                    showTrigger={false}
                     onClose={() => setShowEditDialog(false)}
                 />
             )}
