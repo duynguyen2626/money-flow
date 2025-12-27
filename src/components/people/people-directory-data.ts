@@ -5,6 +5,7 @@ export type PeopleDirectoryItem = {
   id: string
   name: string
   avatarUrl: string | null
+  person: Person
   isOwner?: boolean | null
   subscriptions: Array<{ id: string; name: string; slots: number; image_url?: string | null }>
   cycleTag: string
@@ -17,6 +18,12 @@ export type PeopleDirectoryItem = {
 }
 
 const FALLBACK_TAG = 'Untagged'
+
+function isValidLink(value: string | null | undefined): boolean {
+  if (!value) return false
+  const trimmed = value.trim()
+  return /^https?:\/\//i.test(trimmed)
+}
 
 function toCycleTag(value: string | null | undefined): string {
   if (!value) return FALLBACK_TAG
@@ -77,11 +84,13 @@ export function buildPeopleDirectoryItems(people: Person[]): PeopleDirectoryItem
       (result?.activeCount ?? 0) - (primary && primary.amount > 0 ? 1 : 0)
     )
     const cycleSheet = findCycleSheet(person.cycle_sheets, cycleTag)
+    const hasScriptLink = isValidLink(person.sheet_link ?? null)
 
     return {
       id: person.id,
       name: person.name,
       avatarUrl: person.avatar_url ?? null,
+      person,
       isOwner: person.is_owner ?? null,
       subscriptions: person.subscription_details ?? [],
       cycleTag,
@@ -90,7 +99,7 @@ export function buildPeopleDirectoryItems(people: Person[]): PeopleDirectoryItem
       isSettled,
       additionalActiveCycles,
       sheetUrl: cycleSheet?.sheet_url ?? null,
-      hasScriptLink: Boolean(person.sheet_link && person.sheet_link.trim()),
+      hasScriptLink,
     }
   })
 }

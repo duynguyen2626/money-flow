@@ -65,6 +65,16 @@ export function DebtCycleList({
         })
     }, [transactions, filterType, searchTerm])
 
+    const scriptLink = useMemo(() => {
+        const profile = people.find(person => person.id === sheetProfileId)
+        return profile?.sheet_link ?? null
+    }, [people, sheetProfileId])
+
+    const googleSheetUrl = useMemo(() => {
+        const profile = people.find(person => person.id === sheetProfileId)
+        return profile?.google_sheet_url ?? null
+    }, [people, sheetProfileId])
+
     // 2. Group by Cycle Tag
     const groupedCycles = useMemo(() => {
         const groups = new Map<string, TransactionWithDetails[]>()
@@ -200,7 +210,7 @@ export function DebtCycleList({
     }
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-3 md:space-y-4">
             {displayCycles.map((group) => (
                 <DebtCycleGroup
                     key={group.tag}
@@ -212,6 +222,8 @@ export function DebtCycleList({
                     shops={shops}
                     personId={personId}
                     sheetProfileId={sheetProfileId}
+                    scriptLink={scriptLink}
+                    googleSheetUrl={googleSheetUrl}
                     cycleSheet={cycleSheets.find(sheet => normalizeMonthTag(sheet.cycle_tag) === group.tag) ?? null}
                     isExpanded={group.tag === activeTag}
                     onToggleExpand={() => handleToggle(group.tag)}

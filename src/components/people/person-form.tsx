@@ -27,16 +27,16 @@ type PersonFormProps = {
 }
 
 const schema = z.object({
-  name: z.string().min(1, 'Ten khong duoc de trong'),
-  email: z.string().email('Email khong hop le').optional().or(z.literal('')),
-  avatar_url: z.string().url('Link avatar khong hop le').optional().or(z.literal('')),
-  sheet_link: z.string().url('Link sheet khong hop le').optional().or(z.literal('')),
+  name: z.string().min(1, 'Name is required'),
+  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  avatar_url: z.string().url('Invalid avatar URL').optional().or(z.literal('')),
+  sheet_link: z.string().url('Invalid script link URL').optional().or(z.literal('')),
   subscriptionIds: z.array(z.string()),
   is_owner: z.boolean().optional(),
   is_archived: z.boolean().optional(),
 })
 
-const currencyFormatter = new Intl.NumberFormat('vi-VN', {
+const currencyFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 })
 
@@ -46,9 +46,9 @@ function formatMoney(value?: number | null) {
 }
 
 function formatNextDate(value?: string | null) {
-  if (!value) return 'Chua hen'
+  if (!value) return 'Not scheduled'
   try {
-    return new Intl.DateTimeFormat('vi-VN').format(new Date(value))
+    return new Intl.DateTimeFormat('en-US').format(new Date(value))
   } catch {
     return value
   }
@@ -103,10 +103,10 @@ export function PersonForm({
     setStatus(null)
     try {
       await onSubmit(values)
-      setStatus({ type: 'success', text: mode === 'create' ? 'Da tao thanh vien.' : 'Da cap nhat thanh vien.' })
+      setStatus({ type: 'success', text: mode === 'create' ? 'Member created.' : 'Member updated.' })
     } catch (error) {
       console.error(error)
-      setStatus({ type: 'error', text: 'Khong the luu thong tin. Vui long thu lai.' })
+      setStatus({ type: 'error', text: 'Unable to save changes. Please try again.' })
     }
   }
 
@@ -122,56 +122,59 @@ export function PersonForm({
   )
 
   return (
-    <form onSubmit={handleSubmit(submission)} className="space-y-6">
-      <div className="space-y-6">
-        <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-          Account no se duoc tu dong tao va lien ket sau khi luu nguoi nay.
+    <form onSubmit={handleSubmit(submission)} className="flex h-full min-h-0 flex-col">
+      <div className="flex-1 min-h-0 space-y-6 overflow-y-auto px-6 py-5">
+        <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-2 text-xs text-blue-700">
+          A debt account is created automatically after saving this person.
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <div className="space-y-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Profile</p>
+              <p className="text-sm text-slate-500">Basic info and sheet connection.</p>
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-50">
+              {avatarPreview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarPreview}
+                  alt="Avatar preview"
+                  className="h-full w-full object-cover"
+                  onError={() => setAvatarPreview(null)}
+                />
+              ) : (
+                <span className="text-xs text-slate-400">No</span>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Ten</label>
+              <label className="text-sm font-medium text-slate-700">Full name</label>
               <input
                 {...register('name')}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                placeholder="Vi du: Lam"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="e.g. Jamie Lee"
               />
               {errors.name && <p className="text-sm text-rose-600">{errors.name.message}</p>}
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Email</label>
+              <label className="text-sm font-medium text-slate-700">Email address</label>
               <input
                 {...register('email')}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                placeholder="lam@example.com"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="jamie@example.com"
               />
               {errors.email && <p className="text-sm text-rose-600">{errors.email.message}</p>}
             </div>
-          </div>
 
-          <div className="space-y-4">
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-700">Avatar URL</label>
-                <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-50">
-                  {avatarPreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={avatarPreview}
-                      alt="Avatar preview"
-                      className="h-full w-full object-cover"
-                      onError={() => setAvatarPreview(null)}
-                    />
-                  ) : (
-                    <span className="text-xs text-slate-400">No</span>
-                  )}
-                </div>
-              </div>
+              <label className="text-sm font-medium text-slate-700">Avatar URL</label>
               <input
                 {...register('avatar_url')}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                 placeholder="https://example.com/avatar.jpg"
               />
               {errors.avatar_url && (
@@ -180,24 +183,25 @@ export function PersonForm({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">Link Sheet</label>
+              <label className="text-sm font-medium text-slate-700">Script Link (Webhook)</label>
               <input
                 {...register('sheet_link')}
-                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                placeholder="Link Google Sheet theo doi"
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                placeholder="https://script.google.com/macros/s/..."
               />
               {errors.sheet_link && (
                 <p className="text-sm text-rose-600">{errors.sheet_link.message}</p>
               )}
+              <p className="text-xs text-slate-500">Used for Manage Sheet sync.</p>
             </div>
           </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
+          <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
             <div>
-              <p className="text-sm font-semibold text-slate-800">Toi la chu? (Owner)</p>
-              <p className="text-xs text-slate-500">Flag de bot Subscription biet day la chi phi cua minh.</p>
+              <p className="text-sm font-semibold text-slate-800">Owner profile</p>
+              <p className="text-xs text-slate-500">Mark if this person is you.</p>
             </div>
             <input
               type="checkbox"
@@ -208,10 +212,10 @@ export function PersonForm({
           </div>
 
           {mode === 'edit' && (
-            <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2">
+            <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
               <div>
                 <p className="text-sm font-semibold text-slate-800">Archive member</p>
-                <p className="text-xs text-slate-500">An thanh vien khoi danh sach va dropdown giao dich.</p>
+                <p className="text-xs text-slate-500">Hide from lists and transaction pickers.</p>
               </div>
               <input
                 type="checkbox"
@@ -223,14 +227,14 @@ export function PersonForm({
           )}
         </div>
 
-        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-semibold text-slate-800">Dang ky dich vu</p>
-            <span className="text-xs text-slate-500">{watchedSubs?.length ?? 0} da chon</span>
+            <p className="text-sm font-semibold text-slate-800">Subscriptions</p>
+            <span className="text-xs text-slate-500">{watchedSubs?.length ?? 0} selected</span>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {subscriptionOptions.length === 0 ? (
-              <p className="text-sm text-slate-500 col-span-full">Chua co dich vu nao.</p>
+              <p className="col-span-full text-sm text-slate-500">No services available yet.</p>
             ) : (
               subscriptionOptions.map(item => {
                 const checked = watchedSubs?.includes(item.id) ?? false
@@ -238,7 +242,7 @@ export function PersonForm({
                 return (
                   <label
                     key={item.id}
-                    className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition hover:border-blue-200 h-full"
+                    className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition hover:border-blue-200"
                   >
                     <div
                       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-sm font-semibold ring-2 ${brand.bg} ${brand.text} ${brand.ring}`}
@@ -246,8 +250,8 @@ export function PersonForm({
                       {brand.icon}
                     </div>
                     <div className="flex flex-1 flex-col min-w-0">
-                      <span className="font-medium text-slate-900 truncate">{item.name}</span>
-                      <span className="text-xs text-slate-500 truncate">
+                      <span className="truncate font-medium text-slate-900">{item.name}</span>
+                      <span className="truncate text-xs text-slate-500">
                         {formatMoney(item.price ?? null) || 'No price'}
                       </span>
                     </div>
@@ -270,30 +274,33 @@ export function PersonForm({
         </div>
       </div>
 
-      {status && (
-        <p className={`text-sm ${status.type === 'error' ? 'text-rose-600' : 'text-emerald-600'}`}>
-          {status.text}
-        </p>
-      )}
-
-      <div className="flex items-center justify-end gap-3">
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md px-4 py-2 text-sm font-medium text-slate-700 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-          >
-            Huy
-          </button>
-        )}
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
-        >
-          {isSubmitting && <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" />}
-          {isSubmitting ? 'Dang luu...' : submitLabel ?? (mode === 'create' ? 'Tao moi' : 'Cap nhat')}
-        </button>
+      <div className="sticky bottom-0 border-t border-slate-200 bg-white px-6 py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          {status && (
+            <p className={`text-sm ${status.type === 'error' ? 'text-rose-600' : 'text-emerald-600'}`}>
+              {status.text}
+            </p>
+          )}
+          <div className="flex items-center justify-end gap-2 sm:ml-auto">
+            {onCancel && (
+              <button
+                type="button"
+                onClick={onCancel}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+              >
+                Cancel
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              {isSubmitting && <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" />}
+              {isSubmitting ? 'Saving...' : submitLabel ?? (mode === 'create' ? 'Create member' : 'Save changes')}
+            </button>
+          </div>
+        </div>
       </div>
     </form>
   )

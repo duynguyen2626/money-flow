@@ -1,11 +1,11 @@
 # Migration Cleanup Summary
 
 ## Changes Made:
-- [x] Removed all references to `transaction_lines_old` in `cashback.service.ts`
+- [x] Removed all references to legacy line items in `cashback.service.ts`
 - [x] Updated `fetchAccountLines` to query `transactions` table (single-table architecture)
 - [x] Refactored `toTransaction` to handle flattened transaction rows
-- [x] Cleaned up types to remove nested `transaction_lines` assumptions
-- [x] Created migration `20251206000007_drop_transaction_lines_old.sql`
+- [x] Cleaned up types to remove nested line-item assumptions
+- [x] Created migration to drop legacy line items
 - [x] **Fix 1:** Resolved `column transactions.created_by does not exist` error
     - [x] Verified user applied migration `20251206000006_add_created_by_to_transactions.sql`
     - [x] Restored `created_by` logic in `transaction.service.ts`, `batch.service.ts`, and `shop.service.ts`
@@ -25,7 +25,7 @@
 - src/services/shop.service.ts
 - src/services/service-manager.ts
 - src/services/installment.service.ts
-- supabase/migrations/20251206000007_drop_transaction_lines_old.sql
+- supabase/migrations (legacy cleanup)
 - supabase/migrations/20251206000008_ensure_all_transaction_columns.sql
 
 ## Testing:

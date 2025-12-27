@@ -443,7 +443,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     // However, for single table, we don't have separate lines.
     // WE should just pass what we have.
 
-    // NOTE: The previous logic relied on transaction_lines join which was failing.
+    // NOTE: The previous logic relied on legacy line items joins which were failing.
     // We will attempt to sync deletion but purely based on ID.
     void syncTransactionToSheet(personId, payload as any, 'delete').catch(err => {
       console.error('Sheet Sync Error (Void):', err);
@@ -562,7 +562,7 @@ export async function restoreTransaction(id: string): Promise<boolean> {
       // HOWEVER, `transactions` table usually stores what actually happened on the account.
       // For Sheet Sync, if we miss exact original amount, maybe we just sync what we have?
       // Legacy code iterated `lines`, and `lines` had `original_amount`.
-      // `transaction_lines` table `original_amount` was stored.
+      // The legacy line items table stored `original_amount`.
       // Use `existing.amount` + `cashback` logic approximation?
       // Let's check `metadata`. `createTransaction` stores metadata?
       // `restoreTransaction` is rare. Consistence is key.
@@ -1022,5 +1022,4 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
 
   return (data as any[]).map(txn => mapUnifiedTransaction(txn, accountId));
 }
-
 

@@ -10,17 +10,20 @@ import { CreatePersonDialog } from './create-person-dialog'
 import { PeopleDirectoryDesktop } from '@/components/people/people-directory-desktop'
 import { PeopleDirectoryMobile } from '@/components/people/people-directory-mobile'
 import { buildPeopleDirectoryItems } from '@/components/people/people-directory-data'
-import { Person, Subscription } from '@/types/moneyflow.types'
+import { Account, Category, Person, Shop, Subscription } from '@/types/moneyflow.types'
 import { cn } from '@/lib/utils'
 
 type PeopleGridProps = {
   people: Person[]
   subscriptions: Subscription[]
+  accounts: Account[]
+  categories: Category[]
+  shops: Shop[]
 }
 
 type FilterTab = 'debt' | 'settled' | 'archived'
 
-export function PeopleGrid({ people, subscriptions }: PeopleGridProps) {
+export function PeopleGrid({ people, subscriptions, accounts, categories, shops }: PeopleGridProps) {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<FilterTab>('debt')
@@ -112,7 +115,7 @@ export function PeopleGrid({ people, subscriptions }: PeopleGridProps) {
 
   return (
     <>
-      <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
+      <div className="w-full rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
         {/* Header Controls */}
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <div className="flex-1 min-w-[180px]">
@@ -177,11 +180,21 @@ export function PeopleGrid({ people, subscriptions }: PeopleGridProps) {
             <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Recent</h3>
             <PeopleDirectoryDesktop
               items={recentItems}
+              subscriptions={subscriptions}
+              people={people}
+              accounts={accounts}
+              categories={categories}
+              shops={shops}
               selectedId={selectedId}
               onSelect={(id) => handleSelect(id)}
             />
             <PeopleDirectoryMobile
               items={recentItems}
+              subscriptions={subscriptions}
+              people={people}
+              accounts={accounts}
+              categories={categories}
+              shops={shops}
               selectedId={selectedId}
               onSelect={(id) => handleSelect(id)}
             />
@@ -213,11 +226,21 @@ export function PeopleGrid({ people, subscriptions }: PeopleGridProps) {
           <>
             <PeopleDirectoryDesktop
               items={currentItems}
+              subscriptions={subscriptions}
+              people={people}
+              accounts={accounts}
+              categories={categories}
+              shops={shops}
               selectedId={selectedId}
               onSelect={(id) => handleSelect(id)}
             />
             <PeopleDirectoryMobile
               items={currentItems}
+              subscriptions={subscriptions}
+              people={people}
+              accounts={accounts}
+              categories={categories}
+              shops={shops}
               selectedId={selectedId}
               onSelect={(id) => handleSelect(id)}
             />

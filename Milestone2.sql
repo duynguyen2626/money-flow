@@ -6,7 +6,6 @@
 BEGIN;
 
 -- 1. XÓA BẢNG CŨ (DANGER ZONE)
-DROP TABLE IF EXISTS "public"."transaction_lines" CASCADE; -- Xóa bảng lines phức tạp
 DROP TABLE IF EXISTS "public"."transactions" CASCADE;
 DROP TABLE IF EXISTS "public"."batch_items" CASCADE;
 DROP TABLE IF EXISTS "public"."batches" CASCADE;

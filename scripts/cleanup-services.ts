@@ -48,15 +48,6 @@ async function cleanup() {
         const ids = transactions.map(t => t.id);
         console.log(`Found ${ids.length} transactions to delete.`);
 
-        // Delete lines first
-        const { error: linesError } = await supabase
-            .from('transaction_lines')
-            .delete()
-            .in('transaction_id', ids);
-
-        if (linesError) console.error('Error deleting transaction lines:', linesError.message);
-        else console.log('Deleted transaction lines.');
-
         // Delete transactions
         const { error: txnsError } = await supabase
             .from('transactions')

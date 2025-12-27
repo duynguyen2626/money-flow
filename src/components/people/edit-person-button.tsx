@@ -18,7 +18,7 @@ export function EditPersonButton({ person, subscriptions }: EditPersonButtonProp
             <button
                 type="button"
                 onClick={() => setShowDialog(true)}
-                className="flex items-center gap-2 rounded-md bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-200"
+                className="flex items-center gap-2 rounded-md bg-slate-100 px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-200 md:px-3 md:py-2 md:text-sm"
             >
                 <Pencil className="h-4 w-4" />
                 <span>Edit</span>
@@ -29,6 +29,7 @@ export function EditPersonButton({ person, subscriptions }: EditPersonButtonProp
                     person={person}
                     subscriptions={subscriptions}
                     initiallyOpen={true}
+                    showTrigger={false}
                     onClose={() => setShowDialog(false)}
                 />
             )}

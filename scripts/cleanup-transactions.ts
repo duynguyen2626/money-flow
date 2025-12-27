@@ -68,12 +68,10 @@ async function cleanup() {
       tag,
       created_at,
       occurred_at,
-      transaction_lines (
-        person_id,
-        account_id,
-        amount,
-        type
-      )
+      person_id,
+      account_id,
+      amount,
+      type
     `)
         .or('tag.like._____,note.ilike.Auto:%')
 
@@ -101,39 +99,29 @@ async function cleanup() {
         console.log(`Processing deletion for txn: ${txn.id} (${txn.note})`)
 
         // 2. Sync delete to Sheet
-        const personLines = txn.transaction_lines.filter((l: any) => l.person_id)
-
-        for (const line of personLines) {
-            if (line.person_id) {
-                const sheetLink = await getProfileSheetLink(line.person_id)
-                if (sheetLink) {
-                    const payload = {
-                        action: 'delete',
-                        id: txn.id,
-                        occurred_at: txn.occurred_at || txn.created_at,
-                        note: txn.note || '',
-                        tag: txn.tag || '',
-                        amount: Math.abs(line.amount),
-                        type: (txn as any).type || 'expense',
-                        shop_name: (txn as any).shop_name || 'Service'
-                    }
-
-                    console.log(`Syncing delete for person ${line.person_id}...`)
-                    await postToSheet(sheetLink, payload)
-                } else {
-                    console.log(`No sheet link for person ${line.person_id}, skipping sync.`)
+        const personId = txn.person_id
+        if (personId) {
+            const sheetLink = await getProfileSheetLink(personId)
+            if (sheetLink) {
+                const payload = {
+                    action: 'delete',
+                    id: txn.id,
+                    occurred_at: txn.occurred_at || txn.created_at,
+                    note: txn.note || '',
+                    tag: txn.tag || '',
+                    amount: Math.abs(Number(txn.amount) || 0),
+                    type: (txn as any).type || 'expense',
+                    shop_name: (txn as any).shop_name || 'Service'
                 }
+
+                console.log(`Syncing delete for person ${personId}...`)
+                await postToSheet(sheetLink, payload)
+            } else {
+                console.log(`No sheet link for person ${personId}, skipping sync.`)
             }
         }
 
         // 3. Delete from DB
-        const { error: delLinesErr } = await supabase
-            .from('transaction_lines')
-            .delete()
-            .eq('transaction_id', txn.id)
-
-        if (delLinesErr) console.error('Error deleting lines:', delLinesErr)
-
         const { error: delTxnErr } = await supabase
             .from('transactions')
             .delete()

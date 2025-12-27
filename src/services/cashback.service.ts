@@ -528,7 +528,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
 
     let transactions: CashbackTransaction[] = [];
     if (includeTransactions && cycle) {
-      // Use direct relations instead of transaction_lines to fix missing relation error
+      // Use direct relations instead of legacy line items to fix missing relation error
       const { data: entries, error: entriesError } = await supabase
         .from('cashback_entries')
         .select(`
@@ -781,7 +781,7 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
 
   // 3. Fetch ALL entries
   let transactions: CashbackTransaction[] = [];
-  // Use direct relations instead of transaction_lines to fix missing relation error
+    // Use direct relations instead of legacy line items to fix missing relation error
   const { data: entries, error: entriesError } = await supabase
     .from('cashback_entries')
     .select(`
@@ -992,6 +992,5 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
     };
   });
 }
-
 
 

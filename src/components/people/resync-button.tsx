@@ -25,7 +25,7 @@ export function ResyncButton({ accountId }: { accountId: string }) {
         <button
             onClick={handleResync}
             disabled={isSyncing}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md shadow-sm hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 md:px-4 md:py-2 md:text-sm"
             title="Recalculate balance from active transactions"
         >
             <RotateCcw className={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />

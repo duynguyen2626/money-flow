@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Account, Category, Person, PersonCycleSheet, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
-import { ChevronDown, ChevronRight, FileSpreadsheet } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileSpreadsheet, PlusCircle } from 'lucide-react'
 import { UnifiedTransactionTable } from './unified-transaction-table'
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,8 @@ interface DebtCycleGroupProps {
     shops: Shop[]
     personId: string
     sheetProfileId: string
+    scriptLink?: string | null
+    googleSheetUrl?: string | null
     cycleSheet: PersonCycleSheet | null
     isExpanded: boolean
     onToggleExpand: () => void
@@ -34,6 +36,8 @@ export function DebtCycleGroup({
     shops,
     personId,
     sheetProfileId,
+    scriptLink,
+    googleSheetUrl,
     cycleSheet,
     isExpanded,
     onToggleExpand,
@@ -141,7 +145,7 @@ export function DebtCycleGroup({
                             {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
                         </button>
                         <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-lg font-semibold text-slate-900">{displayTag}</span>
+                            <span className="text-base font-semibold text-slate-900 md:text-lg">{displayTag}</span>
                             <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold", statusBadge)}>
                                 {isSettled ? 'Settled' : 'Active'}
                             </span>
@@ -149,7 +153,7 @@ export function DebtCycleGroup({
                     </div>
                     <div className="flex flex-col items-end">
                         <span className="text-[10px] uppercase text-slate-500 font-bold">Remains</span>
-                        <span className={cn("text-xl font-bold tabular-nums", statusColor)}>
+                        <span className={cn("text-lg font-bold tabular-nums md:text-xl", statusColor)}>
                             {formatter.format(Math.max(0, remains))}
                         </span>
                     </div>
@@ -233,10 +237,31 @@ export function DebtCycleGroup({
                                 </Button>
                             }
                         />
+                        <AddTransactionDialog
+                            accounts={accounts}
+                            categories={categories}
+                            people={people}
+                            shops={shops}
+                            buttonText=""
+                            defaultType="repayment"
+                            defaultPersonId={personId}
+                            defaultTag={canManageSheet ? tag : undefined}
+                            buttonClassName=""
+                            asChild
+                            triggerContent={
+                                <Button variant="default" size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700">
+                                    <PlusCircle className="h-3.5 w-3.5 mr-1.5" />
+                                    Repay
+                                </Button>
+                            }
+                        />
                         <ManageSheetButton
                             personId={sheetProfileId}
                             cycleTag={tag}
                             initialSheetUrl={cycleSheet?.sheet_url ?? null}
+                            scriptLink={scriptLink ?? null}
+                            googleSheetUrl={googleSheetUrl ?? null}
+                            connectHref={`/people/${sheetProfileId}?tab=sheet`}
                             size="sm"
                             disabled={!canManageSheet}
                             linkedLabel="Manage Sheet"
@@ -266,7 +291,7 @@ export function DebtCycleGroup({
 
             {/* Expanded Content */}
             {isExpanded && (
-                <div className="relative w-full overflow-y-auto max-h-[60vh] border-t bg-background">
+                <div className="relative w-full border-t bg-background md:overflow-y-auto md:max-h-[60vh]">
                     <UnifiedTransactionTable
                         transactions={filteredTxns}
                         accountType="debt"

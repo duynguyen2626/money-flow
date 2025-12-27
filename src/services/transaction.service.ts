@@ -308,7 +308,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
   return { accounts, categories, people, shops };
 }
 
-// buildSyntheticLines removed as transaction_lines are deprecated.
+// buildSyntheticLines removed as legacy line items are deprecated.
 
 function mapTransactionRow(
   row: FlatTransactionRow,

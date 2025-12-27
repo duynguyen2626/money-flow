@@ -19,6 +19,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid cycleTag format' }, { status: 400 })
     }
 
+    console.info('[ManageSheet API] request', { personId, cycleTag: normalizedCycle })
+
     const supabase = createClient()
     type CycleSheetRow = { id: string; sheet_id?: string | null; sheet_url?: string | null }
     let existing: CycleSheetRow | null = null
@@ -39,37 +41,63 @@ export async function POST(request: Request) {
     }
 
     let status: ManageCycleSheetResponse['status'] = 'synced'
-    let sheetUrl = existing?.sheet_url ?? null
+    const existingRowId = existing?.id ?? null
+    const hasSheetInfo = Boolean(existing?.sheet_id || existing?.sheet_url)
+    let sheetUrl =
+      existing?.sheet_url ??
+      (existing?.sheet_id ? `https://docs.google.com/spreadsheets/d/${existing.sheet_id}` : null)
     let sheetId = existing?.sheet_id ?? null
+    console.info('[ManageSheet API] existing', { found: !!existing, sheetId, sheetUrl, hasSheetInfo })
 
-    if (!existing) {
+    if (!hasSheetInfo) {
       const createResult = await createCycleSheet(personId, normalizedCycle)
+      console.info('[ManageSheet API] create result', createResult)
       if (!createResult.success) {
         return NextResponse.json({ error: createResult.message ?? 'Create failed' }, { status: 400 })
       }
 
       status = 'created'
-      sheetUrl = createResult.sheetUrl ?? null
-      sheetId = createResult.sheetId ?? null
+      sheetUrl = createResult.sheetUrl ?? sheetUrl ?? null
+      sheetId = createResult.sheetId ?? sheetId ?? null
 
       if (tableAvailable) {
-        await (supabase as any)
-          .from('person_cycle_sheets')
-          .insert({
-            person_id: personId,
-            cycle_tag: normalizedCycle,
-            sheet_id: sheetId,
-            sheet_url: sheetUrl,
-          })
+        const payload = {
+          person_id: personId,
+          cycle_tag: normalizedCycle,
+          sheet_id: sheetId,
+          sheet_url: sheetUrl,
+        }
+        if (existingRowId) {
+          await (supabase as any)
+            .from('person_cycle_sheets')
+            .update(payload)
+            .eq('id', existingRowId)
+        } else {
+          await (supabase as any)
+            .from('person_cycle_sheets')
+            .insert(payload)
+        }
       }
-    } else if (tableAvailable) {
+
+      if (sheetUrl) {
+        try {
+          await (supabase as any)
+            .from('profiles')
+            .update({ google_sheet_url: sheetUrl })
+            .eq('id', personId)
+        } catch (profileError) {
+          console.warn('Unable to update profile sheet url:', profileError)
+        }
+      }
+    } else if (tableAvailable && existingRowId) {
       await (supabase as any)
         .from('person_cycle_sheets')
         .update({ updated_at: new Date().toISOString() })
-        .eq('id', existing.id)
+        .eq('id', existingRowId)
     }
 
     const syncResult = await syncCycleTransactions(personId, normalizedCycle, sheetId)
+    console.info('[ManageSheet API] sync result', syncResult)
     if (!syncResult.success) {
       return NextResponse.json({ error: syncResult.message ?? 'Sync failed' }, { status: 400 })
     }

@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { LayoutDashboard, Link as LinkIcon, History } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Account, Category, Person, PersonCycleSheet, Shop } from '@/types/moneyflow.types'
@@ -34,9 +35,22 @@ export function PersonDetailTabs({
     transactions,
     cycleSheets = [],
 }: PersonDetailTabsProps) {
-    const [activeTab, setActiveTab] = useState<'details' | 'sheet' | 'history'>('details')
+    const searchParams = useSearchParams()
+    const resolveTab = (value: string | null) => {
+        if (value === 'sheet' || value === 'history' || value === 'details') {
+            return value
+        }
+        return 'details'
+    }
+    const initialTab = useMemo(() => resolveTab(searchParams.get('tab')), [searchParams])
+    const [activeTab, setActiveTab] = useState<'details' | 'sheet' | 'history'>(initialTab)
     const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer'>('all')
     const [searchTerm, setSearchTerm] = useState('')
+
+    useEffect(() => {
+        const nextTab = resolveTab(searchParams.get('tab'))
+        setActiveTab(nextTab)
+    }, [searchParams])
 
     const tabs = [
         { id: 'details' as const, label: 'Details', icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -47,13 +61,13 @@ export function PersonDetailTabs({
     return (
         <div className="flex flex-col w-full">
             {/* Tab Headers */}
-            <div className="flex-none flex border-b border-slate-200">
+            <div className="flex-none flex border-b border-slate-200 overflow-x-auto">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
                         className={cn(
-                            "flex items-center gap-2 px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px",
+                            "flex items-center gap-2 whitespace-nowrap px-3 py-2 text-xs font-medium transition-colors border-b-2 -mb-px md:px-4 md:text-sm",
                             activeTab === tab.id
                                 ? "text-blue-600 border-blue-600"
                                 : "text-slate-500 border-transparent hover:text-slate-700 hover:border-slate-300"
@@ -66,11 +80,11 @@ export function PersonDetailTabs({
             </div>
 
             {/* Tab Content */}
-            <div className="py-4">
+            <div className="py-3 md:py-4">
                 {activeTab === 'details' && (
                     <div className="flex flex-col space-y-4">
                         {/* Header Area: Search + Smart Filters */}
-                        <div className="flex flex-col md:flex-row gap-3 items-start md:items-center px-1">
+                        <div className="flex flex-col md:flex-row gap-2 items-start md:items-center md:px-1">
                             <div className="relative w-full md:w-64 shrink-0">
                                 <input
                                     type="text"
@@ -89,18 +103,18 @@ export function PersonDetailTabs({
                                     </button>
                                 )}
                             </div>
-                            <div className="flex-1 min-w-0 overflow-hidden">
+                            <div className="w-full overflow-x-auto md:overflow-visible">
                                 <SmartFilterBar
                                     transactions={transactions}
                                     selectedType={filterType}
                                     onSelectType={setFilterType}
-                                    className="w-full"
+                                    className="min-w-max flex-nowrap"
                                 />
                             </div>
                         </div>
 
                         {/* Accordion View (Multiple Tables) */}
-                        <div className="bg-slate-50 rounded-xl border border-slate-200 p-4">
+                        <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 md:p-4">
                             <DebtCycleList
                                 transactions={transactions}
                                 accounts={accounts}
@@ -146,4 +160,3 @@ export function PersonDetailTabs({
         </div>
     )
 }
-

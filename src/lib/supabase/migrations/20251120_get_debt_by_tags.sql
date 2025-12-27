@@ -13,15 +13,14 @@ language sql
 as $$
   select
     coalesce(t.tag, 'UNTAGGED') as tag,
-    sum(tl.amount) as balance,
+    sum(t.amount) as balance,
     case
-      when abs(sum(tl.amount)) < 0.01 then 'settled'
+      when abs(sum(t.amount)) < 0.01 then 'settled'
       else 'active'
     end as status,
     max(t.occurred_at) as last_activity
-  from transaction_lines tl
-  join transactions t on tl.transaction_id = t.id
-  where tl.account_id = person_id
+  from transactions t
+  where t.account_id = person_id
   group by t.tag
   order by last_activity desc;
 $$;

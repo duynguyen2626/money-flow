@@ -73,7 +73,7 @@ export async function getActiveInstallments() {
 export async function getAccountsWithActiveInstallments() {
     const supabase: any = createClient();
     // [Single-Table Migration] Get account_id directly from transactions table
-    // instead of the deprecated transaction_lines table.
+    // instead of the deprecated line items table.
 
     const { data, error } = await supabase
         .from('installments')

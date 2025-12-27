@@ -2,6 +2,7 @@
 
 import { MouseEvent, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { X } from 'lucide-react'
 import { PersonForm } from './person-form'
 import { Subscription } from '@/types/moneyflow.types'
 import { createPersonAction } from '@/actions/people-actions'
@@ -41,7 +42,7 @@ export function CreatePersonDialog({ subscriptions, trigger, open: controlledOpe
             className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
             onClick={() => setOpen?.(true)}
           >
-            Them thanh vien
+            Add member
           </button>
         )
       )}
@@ -50,26 +51,27 @@ export function CreatePersonDialog({ subscriptions, trigger, open: controlledOpe
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Create person"
+          aria-label="Add member"
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10"
           onClick={closeDialog}
         >
           <div
-            className="w-full max-w-3xl rounded-lg bg-white p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+            className="flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-xl max-h-[90vh]"
             onClick={stopPropagation}
           >
-            <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-start justify-between border-b border-slate-200 px-6 py-4">
               <div>
-                <p className="text-xs font-semibold uppercase text-slate-500">Tao thanh vien</p>
-                <h2 className="text-lg font-semibold text-gray-900">Nguoi nhan/nguoi vay moi</h2>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">People</p>
+                <h2 className="text-xl font-semibold text-slate-900">Add member</h2>
+                <p className="text-sm text-slate-500">Create a profile to track lending and repayments.</p>
               </div>
               <button
                 type="button"
-                className="rounded p-1 text-gray-500 transition hover:text-gray-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                 aria-label="Close dialog"
                 onClick={closeDialog}
               >
-                X
+                <X className="h-4 w-4" />
               </button>
             </div>
 
@@ -89,7 +91,7 @@ export function CreatePersonDialog({ subscriptions, trigger, open: controlledOpe
                 })
                 handleSuccess()
               }}
-              submitLabel="Tao thanh vien"
+              submitLabel="Create member"
             />
           </div>
         </div>
