@@ -379,6 +379,36 @@ type CycleSheetResult = {
   message?: string
 }
 
+
+export async function createTestSheet(personId: string): Promise<CycleSheetResult> {
+  try {
+    const sheetLink = await getProfileSheetLink(personId)
+    if (!sheetLink) {
+      return { success: false, message: 'No valid sheet link configured' }
+    }
+    const sheetInfo = await getProfileSheetInfo(personId)
+
+    const response = await postToSheet(sheetLink, {
+      action: 'create_test_sheet',
+      person_id: personId,
+      sheet_id: sheetInfo.sheetId ?? undefined,
+      sheet_url: sheetInfo.sheetUrl ?? undefined,
+    })
+
+    if (!response.success) {
+      return { success: false, message: response.message ?? 'Test create failed' }
+    }
+    
+    return { 
+      success: true, 
+      sheetUrl: (response.json?.sheetUrl as string) ?? null,
+      sheetId: (response.json?.sheetId as string) ?? null
+    }
+  } catch (err) {
+    return { success: false, message: 'Unexpected error testing sheet' }
+  }
+}
+
 export async function createCycleSheet(personId: string, cycleTag: string): Promise<CycleSheetResult> {
   try {
     const sheetLink = await getProfileSheetLink(personId)
@@ -409,6 +439,7 @@ export async function createCycleSheet(personId: string, cycleTag: string): Prom
     return { success: false, message: 'Failed to create cycle sheet' }
   }
 }
+
 
 export async function syncCycleTransactions(
   personId: string,
@@ -450,59 +481,50 @@ export async function syncCycleTransactions(
       return { success: false, message: 'Failed to load transactions' }
     }
 
-    const rows = (data ?? []) as {
-      id: string
-      occurred_at: string
-      note: string | null
-      status: string
-      tag: string | null
-      type: string | null
-      amount: number
-      cashback_share_percent?: number | null
-      cashback_share_fixed?: number | null
-      shop_id: string | null
-      shops: { name: string | null } | null
-    }[]
-
-    let sent = 0
-    for (const txn of rows) {
+    const rows = (data ?? []) as any[]
+    const batchRows = rows.map((txn) => {
       const shopData = txn.shops as any
       const shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
       const syncType = txn.type === 'repayment' ? 'In' : 'Debt'
 
-      const payload = {
-        ...buildPayload(
-          {
-            id: txn.id,
-            occurred_at: txn.occurred_at,
-            note: txn.note,
-            shop_name: shopName ?? '',
-            tag: txn.tag ?? undefined,
-            amount: txn.amount,
-            original_amount: Math.abs(txn.amount),
-            cashback_share_percent: txn.cashback_share_percent ?? undefined,
-            cashback_share_fixed: txn.cashback_share_fixed ?? undefined,
-            type: syncType,
-          },
-          'create'
-        ),
-        person_id: personId,
-        cycle_tag: cycleTag,
-        sheet_id: sheetId ?? undefined,
-      }
+      // We explicitly call buildPayload to get the formatted fields, 
+      // but we strip the 'action' since we are sending a batch.
+      const payload = buildPayload(
+        {
+          id: txn.id,
+          occurred_at: txn.occurred_at,
+          note: txn.note,
+          shop_name: shopName ?? '',
+          tag: txn.tag ?? undefined,
+          amount: txn.amount,
+          original_amount: Math.abs(txn.amount),
+          cashback_share_percent: txn.cashback_share_percent ?? undefined,
+          cashback_share_fixed: txn.cashback_share_fixed ?? undefined,
+          type: syncType,
+        },
+        'create' // Dummy action, ignored
+      )
+      
+      return payload
+    })
 
-      const result = await postToSheet(sheetLink, payload)
-      if (!result.success) {
-        return { success: false, message: result.message ?? 'Sheet sync failed' }
-      }
-      sent += 1
+    console.log(`[SheetSync] Sending batch of ${batchRows.length} transactions for ${cycleTag}`)
 
-      if (rows.length > 1) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
+    const payload = {
+      action: 'syncTransactions',
+      person_id: personId,
+      cycle_tag: cycleTag,
+      sheet_id: sheetId ?? undefined,
+      rows: batchRows
     }
 
-    return { success: true, count: sent }
+    const result = await postToSheet(sheetLink, payload)
+    
+    if (!result.success) {
+      return { success: false, message: result.message ?? 'Sheet sync failed' }
+    }
+
+    return { success: true, count: batchRows.length }
   } catch (error) {
     console.error('Sync cycle transactions failed:', error)
     return { success: false, message: 'Sync failed' }

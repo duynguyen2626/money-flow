@@ -2,108 +2,38 @@
 trigger: always_on
 ---
 
-# .agent/rules/gravityrules.md — Rules (MF4)
-TypeScript & Build Validation (CRITICAL)
+# Context for Agent — .agent Rules & Workflow
 
-Add CRITICAL: Month Tag Standardization
+## Operating mode
 
-DO NOT introduce legacy "MMMYY" month tags anywhere
+* Read existing implementation before coding.
+* Prefer minimal refactors.
+* Do not introduce breaking changes.
+* Keep changes small and reviewable.
 
-Any month tag stored/sent/displayed must be YYYY-MM
+## Build / quality rules (CRITICAL)
 
-On read: normalize legacy -> YYYY-MM (temporary compatibility)
+* Fix TypeScript errors before commit/push.
+* Always run `npm run build` (or equivalent project build command) before marking task complete.
+* If Vercel build fails: reproduce locally with build, fix, re-run build.
 
-On write: always persist YYYY-MM
+## Month Tag Standard (CRITICAL)
 
-ALWAYS run npm run build or npx tsc --noEmit before:
-Committing code
-Pushing to remote
-Marking task as complete
-NEVER assume local dev server success = production build success
-Fix ALL TypeScript errors before proceeding—no exceptions
-When working with database types:
-Check database.types.ts for field definitions
-Handle nullable fields explicitly (use ?? '' or ?? null)
-Include ALL required fields when mapping DB rows to TypeScript interfaces
-Deployment Rules
-Pre-push validation: TypeScript check installed via git hook
-If Vercel build fails:
-Check the exact error from Vercel logs
-Reproduce locally with npm run build
-Fix and verify build passes locally
-Push fix immediately to the failing branch
-Database schema changes require regenerating types
+* Canonical month tag format: `YYYY-MM`.
+* Never generate/store/display legacy `MMMYY` tags.
 
-* Never ship with two recompute implementations that disagree.
-* Backfill scripts must use the same recompute semantics as runtime.
-* All data-fix scripts must be idempotent.
-- Cashback UI hints MUST read from cashback_cycles, never directly from account config when a cycle exists.
-- Any transaction with cashback_mode != null must result in:
-  - a cashback_entries row
-  - a recomputed cashback_cycles row
-- Budget Left is always:
-  max_budget - real_awarded - virtual_profit
-- cashback_config parsing must support legacy keys (max_amt, min_spend, cycle, statement_day).
+## Commit & PR workflow template
 
+* Use a phase/scope branch naming convention.
+* Commit message style: `PHASE {PHASE_ID} - {TITLE}`.
+* Never push directly to main; open PR.
 
-## UI Rules
+## Domain logic
 
-* Modal layout must be:
+* This task is sheet sync / formatting only.
+* Do NOT change domain calculations (cashback, debt, etc.).
 
-  * Sticky header
-  * Scrollable body
-  * Fixed footer
+## Notes specific to this task
 
-* Transaction type tabs:
-
-  * Must never scroll out of view
-  * Must clearly indicate active state
-
-* Do not stack multiple progress bars or dense indicators
-
-* Prefer badges, pills, and grouped information
-
-## Cashback Rules (MF4)
-
-* Voluntary Cashback is allowed when:
-
-  * Account has no cashback
-  * OR cashback budget is exhausted
-
-* Voluntary cashback values:
-
-  * Are allowed to be negative / overflow
-  * Must NOT affect min spend or budget calculations
-
-* No cashback database schema changes in MF4
-
-## Business Rules
-
-* Transfer transactions:
-
-  * Must auto‑select category `Money Transfer`
-  * Must NOT allow credit cards as source accounts
-
-* Lending / Repay:
-
-  * Require person selection
-
-## Engineering Discipline
-
-* Do not duplicate business logic across components
-* Keep derived state in helpers when possible
-* Small, reviewable commits only
-## Month Tag Rules (CRITICAL)
-- Never generate or store debt/cycle tags in legacy "MMMYY" format.
-- Canonical format is `YYYY-MM` only.
-- Any legacy tags must be normalized to `YYYY-MM`.
-- Before marking complete: repo-wide search must return 0 hits for: legacy MMMYY month tags, tagUpper, transaction_lines, shops.logo_url
-
-## QA Expectations
-
-* Test modal on mobile & desktop
-* Test each transaction type
-* Verify voluntary cashback toggle behavior
-* Verify transfer constraints
-
----
+* The fix must be limited-range operations on the table region A:J.
+* Any delete or sort must never touch the Summary region (L:N).
