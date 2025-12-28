@@ -169,14 +169,21 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
 
   let cycle_range = (start && end) ? `${fmtDate(start)} - ${fmtDate(end)}` : null
 
-  // Smart Cycle Detection
+  // Smart Cycle Detection - Format as DD-MM to DD-MM
   const isFullMonth = start.getDate() === 1 &&
     (new Date(end.getTime() + 86400000).getDate() === 1)
 
   if (config.cycleType === 'calendar_month' || isFullMonth) {
-    cycle_range = "Month Cycle"
+    // Full month: show first day to last day of month
+    const lastDay = new Date(start.getFullYear(), start.getMonth() + 1, 0).getDate()
+    cycle_range = `01-${String(start.getMonth() + 1).padStart(2, '0')} to ${String(lastDay).padStart(2, '0')}-${String(start.getMonth() + 1).padStart(2, '0')}`
   } else {
-    cycle_range = `${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(start)} - ${new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(end)}`
+    // Custom cycle: DD-MM to DD-MM
+    const startDay = String(start.getDate()).padStart(2, '0')
+    const startMonth = String(start.getMonth() + 1).padStart(2, '0')
+    const endDay = String(end.getDate()).padStart(2, '0')
+    const endMonth = String(end.getMonth() + 1).padStart(2, '0')
+    cycle_range = `${startDay}-${startMonth} to ${endDay}-${endMonth}`
   }
 
   // 4. Due Date Display
@@ -287,6 +294,7 @@ export async function getAccounts(): Promise<Account[]> {
       credit_limit: item.credit_limit ?? 0,
       owner_id: item.owner_id ?? '',
       account_number: null,
+      parent_account_id: item.parent_account_id ?? null,
       secured_by_account_id: item.secured_by_account_id ?? null,
       cashback_config: normalizeCashbackConfig(item.cashback_config),
       is_active: typeof item.is_active === 'boolean' ? item.is_active : null,

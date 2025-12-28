@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, memo } from 'react';
-import { LayoutGrid, List, Search, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Check, Filter } from 'lucide-react';
+import { LayoutGrid, List, Search, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Check, Filter, Coins, CalendarClock, Wallet, Clock, TrendingUp, Plus, ListFilter, X } from 'lucide-react';
 import { CreateAccountDialog } from './create-account-dialog';
 import { AccountCard } from './account-card';
 import { AccountTable } from './account-table';
@@ -24,28 +24,17 @@ type AccountListProps = {
   pendingBatchAccountIds?: string[];
   usageStats?: UsageStats;
   quickPeopleConfig?: QuickPeopleConfig;
+  userId?: string;
 };
 
 type ViewMode = 'grid' | 'table';
-type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt' | 'waiting_confirm' | 'need_to_spend';
+type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt';
 type SortKey = 'due_date' | 'balance' | 'limit';
 type SortOrder = 'asc' | 'desc';
 
-const FILTERS: { key: FilterKey; label: string; match: (account: Account) => boolean }[] = [
-  { key: 'all', label: 'All', match: () => true },
-  { key: 'bank', label: 'Bank', match: account => ['bank', 'cash', 'ewallet'].includes(account.type) },
-  { key: 'credit', label: 'Credit', match: account => account.type === 'credit_card' },
-  { key: 'savings', label: 'Savings', match: account => ['savings', 'investment', 'asset'].includes(account.type) },
-  { key: 'debt', label: 'Debt', match: account => account.type === 'debt' },
-  { key: 'waiting_confirm', label: 'Waiting Confirm', match: () => true }, // Logic handled separately
-  { key: 'need_to_spend', label: 'Need To Spend', match: () => true }, // Logic handled separately
-];
-
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: 'due_date', label: 'Due Date' },
-  { key: 'balance', label: 'Balance' },
-  { key: 'limit', label: 'Limit' },
-];
+const numberFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 0,
+});
 
 function getDaysUntilDue(account: Account): number {
   const dueDate = computeNextDueDate(account.cashback_config ?? null);
@@ -73,37 +62,21 @@ function getAccountBalance(account: Account, allAccounts: Account[]): number {
   return getCreditCardAvailableBalance(account);
 }
 
-// Memoized filter button
-const FilterButton = memo(({ filter, isActive, onClick }: {
-  filter: { key: FilterKey; label: string };
-  isActive: boolean;
-  onClick: () => void
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={cn(
-      "rounded-full px-3 py-1 text-sm font-semibold transition",
-      isActive ? 'bg-blue-600 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-    )}
-    aria-pressed={isActive}
-  >
-    {filter.label}
-  </button>
-));
-FilterButton.displayName = 'FilterButton';
 
-export function AccountList({ accounts, cashbackById = {}, categories, people, shops, pendingBatchAccountIds = [], usageStats, quickPeopleConfig }: AccountListProps) {
-  const [view, setView] = useState<ViewMode>('grid');
+export function AccountList({ accounts, cashbackById = {}, categories, people, shops, pendingBatchAccountIds = [], usageStats, quickPeopleConfig, userId }: AccountListProps) {
+  const [layoutMode, setLayoutMode] = useState<ViewMode>('grid');
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
+  const [showWaitingConfirm, setShowWaitingConfirm] = useState(false);
+  const [showNeedToSpend, setShowNeedToSpend] = useState(false);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [items, setItems] = useState<Account[]>(accounts);
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [showClosedAccounts, setShowClosedAccounts] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>('due_date');
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
-  const [sortOpen, setSortOpen] = useState(false);
-  const [mobileFilterOpen, setMobileFilterOpen] = useState(false); // New state for mobile filter
+
+  // Mobile states
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   useEffect(() => {
     setItems(accounts);
@@ -111,11 +84,6 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
 
   const collateralAccounts = useMemo(
     () => items.filter(acc => ['savings', 'investment', 'asset'].includes(acc.type)),
-    [items]
-  );
-
-  const creditCardAccounts = useMemo(
-    () => items.filter(acc => acc.type === 'credit_card'),
     [items]
   );
 
@@ -129,17 +97,42 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
     [items]
   );
 
+  // Stats for Header
+  const totalDebt = useMemo(() => {
+    return items.reduce((sum, acc) => {
+      if (acc.type === 'credit_card' && (acc.current_balance ?? 0) > 0) {
+        return sum + (acc.current_balance ?? 0);
+      }
+      if (acc.type === 'debt' && (acc.current_balance ?? 0) > 0) {
+        return sum + (acc.current_balance ?? 0);
+      }
+      return sum;
+    }, 0);
+  }, [items]);
+
+  const totalDebtNextMonth = useMemo(() => {
+    return totalDebt;
+  }, [totalDebt]);
+
+
   // 1. Filter Logic
   const filteredItems = useMemo(() => {
     let filtered = activeItems;
 
-    // Filter Logic
-    if (activeFilter === 'waiting_confirm') {
+    // A. Visual Tabs
+    if (activeFilter !== 'all') {
+      if (activeFilter === 'bank') filtered = filtered.filter(acc => ['bank', 'cash', 'ewallet'].includes(acc.type));
+      else if (activeFilter === 'credit') filtered = filtered.filter(acc => acc.type === 'credit_card');
+      else if (activeFilter === 'savings') filtered = filtered.filter(acc => ['savings', 'investment', 'asset'].includes(acc.type));
+      else if (activeFilter === 'debt') filtered = filtered.filter(acc => acc.type === 'debt');
+    }
+
+    // B. Toggles (Intersecting)
+    if (showWaitingConfirm) {
       filtered = filtered.filter(acc => pendingBatchAccountIds.includes(acc.id));
-    } else if (activeFilter === 'need_to_spend') {
+    }
+    if (showNeedToSpend) {
       filtered = filtered.filter(acc => (cashbackById[acc.id]?.missing_min_spend ?? 0) > 0);
-    } else {
-      filtered = filtered.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc));
     }
 
     // 2. Search Logic (Family Expansion)
@@ -174,7 +167,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
       filtered = items.filter(acc => expandedIds.has(acc.id) && acc.is_active !== false);
     }
     return filtered;
-  }, [items, activeItems, activeFilter, searchQuery, pendingBatchAccountIds, cashbackById]);
+  }, [items, activeItems, activeFilter, searchQuery, pendingBatchAccountIds, cashbackById, showWaitingConfirm, showNeedToSpend]);
 
   // 3. Sorting
   const sortedItems = useMemo(() => {
@@ -252,312 +245,234 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
     }
   };
 
-  const handleSortSelect = (key: SortKey, order: SortOrder) => {
-    setSortKey(key);
-    setSortOrder(order);
-    setSortOpen(false);
-  };
-
-  const handleResetSort = () => {
-    setSortKey('due_date');
-    setSortOrder('asc');
-    setSortOpen(false);
-  };
-
-  const currentSortLabel = SORT_OPTIONS.find(o => o.key === sortKey)?.label ?? 'Sort';
+  const [showClosedAccountsState, setShowClosedAccountsState] = useState(false);
 
   return (
     <div className="space-y-6">
+      {/* 1. Header with Filters */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between bg-white/50 backdrop-blur-xl sticky top-0 z-30 py-4 -mx-4 px-4 border-b border-slate-100/50 shadow-sm md:static md:bg-transparent md:border-none md:p-0 md:m-0 md:shadow-none mb-20">
 
-      {/* --- HEADER (DESKTOP) --- */}
-      <div className="hidden md:flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between sticky top-0 z-40">
-        <div className="flex flex-wrap items-center gap-2">
-          {FILTERS.map(filter => (
-            <FilterButton
-              key={filter.key}
-              filter={filter}
-              isActive={activeFilter === filter.key}
-              onClick={() => setActiveFilter(filter.key)}
-            />
+        {/* Left: Filters */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0 md:overflow-visible flex-nowrap">
+          {/* Mobile Filter Trigger */}
+          <div className="md:hidden">
+            <Popover open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className={cn("h-8 rounded-full border-slate-200 bg-white", activeFilter !== 'all' && "bg-slate-900 text-white border-slate-900")}>
+                  <ListFilter className="w-3.5 h-3.5 mr-1.5" />
+                  {activeFilter === 'all' ? 'Filter' : activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-2" align="start">
+                <div className="flex flex-col gap-1">
+                  {['all', 'bank', 'credit', 'savings', 'debt'].map(f => (
+                    <button
+                      key={f}
+                      onClick={() => { setActiveFilter(f as any); setMobileFilterOpen(false); }}
+                      className={cn("text-left px-3 py-2 rounded-lg text-sm transition-colors", activeFilter === f ? "bg-slate-100 font-bold text-slate-900" : "hover:bg-slate-50 text-slate-600")}
+                    >
+                      {f === 'all' ? 'All Accounts' : f.charAt(0).toUpperCase() + f.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Desktop Filters */}
+          <button
+            onClick={() => setActiveFilter('all')}
+            className={cn(
+              "hidden md:block px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap",
+              activeFilter === 'all'
+                ? "bg-blue-600 text-white shadow-md shadow-blue-200 transform scale-105"
+                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+            )}
+          >
+            All Accounts
+          </button>
+
+          <div className="hidden md:block w-px h-6 bg-slate-200 mx-2 shrink-0" />
+
+          {[
+            { id: 'bank', label: 'Bank' },
+            { id: 'credit', label: 'Credit Card' },
+            { id: 'savings', label: 'Savings' },
+            { id: 'debt', label: 'Debt & Loans' },
+          ].map((filter) => (
+            <button
+              key={filter.id}
+              onClick={() => setActiveFilter(filter.id as any)}
+              className={cn(
+                "hidden md:block px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap",
+                activeFilter === filter.id
+                  ? "bg-slate-900 text-white shadow-md transform scale-105"
+                  : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+              )}
+            >
+              {filter.label}
+            </button>
           ))}
 
+          {/* Waiting & Need Toggle (Visible on Mobile too) */}
+          <div className="flex items-center gap-2 bg-white rounded-full border border-slate-200 p-1 pr-1 md:pr-3 shrink-0">
+            <button
+              onClick={() => setShowWaitingConfirm(!showWaitingConfirm)}
+              className={cn(
+                "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1",
+                showWaitingConfirm ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-400"
+              )}
+            >
+              <Clock className="w-3 h-3" /> <span className="hidden sm:inline">Waiting</span>
+            </button>
+            <button
+              onClick={() => setShowNeedToSpend(!showNeedToSpend)}
+              className={cn(
+                "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1",
+                showNeedToSpend ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-400"
+              )}
+            >
+              <TrendingUp className="w-3 h-3" /> <span className="hidden sm:inline">Needs</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-3 w-full md:w-auto mt-2 md:mt-0">
           {/* Sort Popover */}
-          <Popover open={sortOpen} onOpenChange={setSortOpen}>
+          <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="ml-2 gap-1.5 text-xs h-8">
-                <ArrowUpDown className="h-3.5 w-3.5" />
-                {currentSortLabel}
-                {sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+              <Button variant="outline" size="sm" className="h-9 px-2.5 bg-white border-slate-200 text-slate-600 hover:text-slate-900 ml-auto md:ml-0">
+                <ArrowUpDown className="w-3.5 h-3.5 mr-1" />
+                <span className="hidden sm:inline text-xs font-medium">Sort</span>
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-52 p-1" align="start">
-              <div className="flex flex-col">
-                {SORT_OPTIONS.map(option => (
-                  <div key={option.key} className="flex flex-col">
-                    <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      {option.label}
-                    </div>
-                    <button
-                      onClick={() => handleSortSelect(option.key, 'asc')}
-                      className={cn("flex items-center justify-between px-3 py-1.5 text-sm rounded-md transition-colors",
-                        sortKey === option.key && sortOrder === 'asc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-100'
-                      )}
-                    >
-                      <span className="flex items-center gap-2">
-                        <ArrowUp className="h-3 w-3" />
-                        Ascending
-                      </span>
-                      {sortKey === option.key && sortOrder === 'asc' && <Check className="h-3.5 w-3.5" />}
-                    </button>
-                    <button
-                      onClick={() => handleSortSelect(option.key, 'desc')}
-                      className={cn("flex items-center justify-between px-3 py-1.5 text-sm rounded-md transition-colors",
-                        sortKey === option.key && sortOrder === 'desc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-100'
-                      )}
-                    >
-                      <span className="flex items-center gap-2">
-                        <ArrowDown className="h-3 w-3" />
-                        Descending
-                      </span>
-                      {sortKey === option.key && sortOrder === 'desc' && <Check className="h-3.5 w-3.5" />}
-                    </button>
-                  </div>
-                ))}
-                <hr className="my-1 border-slate-200" />
-                <button
-                  onClick={handleResetSort}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 rounded-md"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  Reset to Default
+            <PopoverContent className="w-40 p-1" align="end">
+              <div className="grid gap-1">
+                <button onClick={() => setSortKey('due_date')} className={cn("flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-slate-50", sortKey === 'due_date' && "bg-slate-50 font-bold")}>
+                  <CalendarClock className="w-3.5 h-3.5 text-amber-500" /> Due Date
+                </button>
+                <button onClick={() => setSortKey('balance')} className={cn("flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-slate-50", sortKey === 'balance' && "bg-slate-50 font-bold")}>
+                  <Coins className="w-3.5 h-3.5 text-emerald-500" /> Balance
+                </button>
+                <button onClick={() => setSortKey('limit')} className={cn("flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-slate-50", sortKey === 'limit' && "bg-slate-50 font-bold")}>
+                  <Wallet className="w-3.5 h-3.5 text-blue-500" /> Credit Limit
                 </button>
               </div>
             </PopoverContent>
           </Popover>
-        </div>
 
-        <div className="flex items-center gap-2 flex-1 justify-end">
-          <div className="relative w-full flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search accounts..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-full border border-slate-200 bg-white pl-9 pr-4 py-1.5 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-sm"
-            />
-          </div>
-          <div className="flex rounded-full border border-slate-200 bg-slate-50 p-1">
-            <button
-              type="button"
-              onClick={() => setView('grid')}
-              className={cn("flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold transition", view === 'grid' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900')}
-              aria-pressed={view === 'grid'}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              Grid
-            </button>
-            <button
-              type="button"
-              onClick={() => setView('table')}
-              className={cn("flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold transition", view === 'table' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900')}
-              aria-pressed={view === 'table'}
-            >
-              <List className="h-4 w-4" />
-              Table
-            </button>
-          </div>
-          <CreateAccountDialog
-            collateralAccounts={collateralAccounts}
-            creditCardAccounts={creditCardAccounts}
-          />
-        </div>
-      </div>
-
-      {/* --- HEADER (MOBILE) --- */}
-      <div className="md:hidden flex flex-col gap-3 sticky top-0 z-40 bg-slate-50/95 backdrop-blur-sm pb-2 pt-1">
-        {/* Row 1: Search + Add */}
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <div className="relative flex-1 md:w-48">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input
               type="text"
               placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none shadow-sm"
+              className="w-full h-9 pl-8 pr-4 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-slate-900/10 placeholder:text-slate-400"
             />
           </div>
-          {/* Create Button (Compact) */}
-          <div className="shrink-0">
-            <CreateAccountDialog
-              collateralAccounts={collateralAccounts}
-              creditCardAccounts={creditCardAccounts}
-            />
+
+          {/* Layout Mode */}
+          <div className="bg-slate-100 p-1 rounded-lg hidden md:flex">
+            <button onClick={() => setLayoutMode('grid')} className={cn("p-1.5 rounded-md transition-all", layoutMode === 'grid' ? "bg-white shadow-sm text-slate-900" : "text-slate-400 hover:text-slate-600")}>
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button onClick={() => setLayoutMode('table')} className={cn("p-1.5 rounded-md transition-all", layoutMode === 'table' ? "bg-white shadow-sm text-slate-900" : "text-slate-400 hover:text-slate-600")}>
+              <List className="w-4 h-4" />
+            </button>
           </div>
+
+          <CreateAccountDialog
+            collateralAccounts={items}
+            trigger={
+              <Button size="sm" className="h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-200 px-3">
+                <Plus className="w-4 h-4 md:mr-1.5" />
+                <span className="hidden md:inline">Add New</span>
+              </Button>
+            }
+          />
         </div>
+      </div>
 
-        {/* Row 2: Controls (Filter, Sort, View) */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            {/* Filter Popover */}
-            <Popover open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-              <PopoverTrigger asChild>
-                <button
-                  className={cn(
-                    "flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold shadow-sm transition-colors",
-                    activeFilter !== 'all' ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                  )}
-                >
-                  <Filter className="h-3.5 w-3.5" />
-                  {FILTERS.find(f => f.key === activeFilter)?.label || 'Filter'}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-2" align="start">
-                <div className="grid grid-cols-1 gap-1">
-                  {FILTERS.map(filter => (
-                    <button
-                      key={filter.key}
-                      onClick={() => { setActiveFilter(filter.key); setMobileFilterOpen(false); }}
-                      className={cn(
-                        "flex items-center justify-between px-3 py-2 text-sm rounded-md transition-colors text-left",
-                        activeFilter === filter.key ? "bg-blue-50 text-blue-700 font-medium" : "text-slate-600 hover:bg-slate-50"
-                      )}
-                    >
-                      {filter.label}
-                      {activeFilter === filter.key && <Check className="h-3.5 w-3.5" />}
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-
-            {/* Sort Popover (Mobile) - Reusing Desktop Sort, just simpler trigger */}
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-600 shadow-sm hover:bg-slate-50">
-                  <ArrowUpDown className="h-3.5 w-3.5" />
-                  {sortKey === 'due_date' ? 'Date' : sortKey === 'balance' ? 'Bal' : 'Limit'}
-                </button>
-              </PopoverTrigger>
-              <PopoverContent className="w-52 p-1" align="start">
-                {/* Reusing same sort content structure */}
-                <div className="flex flex-col">
-                  {SORT_OPTIONS.map(option => (
-                    <div key={option.key} className="flex flex-col">
-                      <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                        {option.label}
-                      </div>
-                      <button onClick={() => handleSortSelect(option.key, 'asc')} className={cn("flex items-center justify-between px-3 py-1.5 text-sm rounded-md transition-colors", sortKey === option.key && sortOrder === 'asc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-100')}>
-                        <span className="flex items-center gap-2"><ArrowUp className="h-3 w-3" /> Asc</span>
-                        {sortKey === option.key && sortOrder === 'asc' && <Check className="h-3.5 w-3.5" />}
-                      </button>
-                      <button onClick={() => handleSortSelect(option.key, 'desc')} className={cn("flex items-center justify-between px-3 py-1.5 text-sm rounded-md transition-colors", sortKey === option.key && sortOrder === 'desc' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-100')}>
-                        <span className="flex items-center gap-2"><ArrowDown className="h-3 w-3" /> Desc</span>
-                        {sortKey === option.key && sortOrder === 'desc' && <Check className="h-3.5 w-3.5" />}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-
-          {/* View Toggle */}
-          <div className="flex rounded-lg border border-slate-200 bg-slate-50 p-0.5">
-            <button onClick={() => setView('grid')} className={cn("p-1.5 rounded-md transition", view === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400')}>
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-            <button onClick={() => setView('table')} className={cn("p-1.5 rounded-md transition", view === 'table' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400')}>
-              <List className="h-4 w-4" />
-            </button>
-          </div>
+      {/* Debt Banner (Mobile Sticky or Top) */}
+      <div className="md:hidden mb-4 mx-0 bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-xl shadow-lg shadow-slate-200/50 p-3 flex items-center justify-between">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Total Debt</span>
+          <div className="text-lg font-bold">{numberFormatter.format(totalDebt)} <span className="text-xs font-normal text-slate-500">₫</span></div>
+        </div>
+        <div className="text-right">
+          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Projected Next Month</span>
+          <div className="text-sm font-bold text-emerald-400">{numberFormatter.format(totalDebtNextMonth)}</div>
         </div>
       </div>
 
 
-      {displayItems.length === 0 && view === 'grid' ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-slate-500">
-          No accounts match this filter.
-        </div>
-      ) : view === 'grid' ? (
-        /* NEW GRID SYSTEM: grid-cols-2 */
-        /* NEW GRID SYSTEM: grid-cols-4 */
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
-          {displayItems.map(item => {
-            if (item.type === 'family') {
-              return (
-                <FamilyCluster
-                  key={item.id}
-                  parent={item.parent}
-                  children_accounts={item.children}
-                  allAccounts={items}
-                  cashbackById={cashbackById as Record<string, AccountCashbackSnapshot>}
-                  categories={categories}
-                  people={people}
-                  shops={shops}
-                  collateralAccounts={collateralAccounts}
-                  pendingBatchAccountIds={pendingBatchAccountIds}
-                // Identify Single/Orphan vs Family handled internally by FamilyCluster
-                />
-              )
-            } else {
-              return (
-                <div key={item.account.id} className="col-span-1">
-                  <AccountCard
-                    account={item.account}
-                    accounts={items}
-                    cashbackById={cashbackById}
-                    categories={categories}
-                    people={people}
-                    shops={shops}
-                    collateralAccounts={collateralAccounts}
-                    pendingBatchAccountIds={pendingBatchAccountIds}
-                  />
-                </div>
-              )
-            }
-          })}
-        </div>
+      {/* 2. Content */}
+      <div className={cn(
+        "grid gap-6 pb-20",
+        layoutMode === 'grid' ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "grid-cols-1"
+      )}>
+        {displayItems.length === 0 ? (
+          <div className="col-span-full py-12 text-center text-slate-400">
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Search className="w-6 h-6 opacity-50" />
+            </div>
+            <p className="text-sm font-medium">No accounts found</p>
+          </div>
+        ) : (
+          displayItems.map((item) => (
+            item.type === 'single' ? (
+              <AccountCard
+                key={item.account.id}
+                account={item.account}
+                accounts={items}
+                cashbackById={cashbackById}
+                categories={categories}
+                people={people}
+                shops={shops}
+                collateralAccounts={items}
+                pendingBatchAccountIds={pendingBatchAccountIds}
+                className="w-full"
+              />
+            ) : (
+              <FamilyCluster
+                key={item.id}
+                parent={item.parent}
+                children_accounts={item.children}
+                allAccounts={items}
+                categories={categories}
+                people={people}
+                shops={shops}
+                pendingBatchAccountIds={pendingBatchAccountIds}
+                cashbackById={cashbackById as Record<string, AccountCashbackSnapshot>}
+                collateralAccounts={items}
+              />
+            )
+          ))
+        )}
+      </div>
 
-      ) : (
-        <>
-          <AccountTable
-            accounts={sortedItems}
-            onToggleStatus={handleToggleStatus}
-            pendingId={pendingId}
-            collateralAccounts={collateralAccounts}
-            allAccounts={items}
-          />
-
-          {closedItems.length > 0 && (
-            <details
-              className="mt-8 rounded-xl border border-dashed border-slate-200 bg-white px-4 py-3"
-              open={showClosedAccounts}
-              onToggle={event => setShowClosedAccounts(event.currentTarget.open)}
-            >
-              <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
-                <div className="flex items-center gap-2">
-                  <span>Closed accounts</span>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                    {closedItems.length}
-                  </span>
-                </div>
-                <span className="text-slate-500">{showClosedAccounts ? '▲' : '▼'}</span>
-              </summary>
-              <div className="mt-4">
-                <AccountTable
-                  accounts={closedItems}
-                  onToggleStatus={handleToggleStatus}
-                  pendingId={pendingId}
-                  collateralAccounts={collateralAccounts}
-                  allAccounts={items}
-                />
-              </div>
-            </details>
-          )}
-        </>
+      {closedItems.length > 0 && layoutMode === 'table' && (
+        <details
+          className="mt-8 rounded-xl border border-dashed border-slate-200 bg-white px-4 py-3"
+          open={showClosedAccountsState}
+          onToggle={event => setShowClosedAccountsState(event.currentTarget.open)}
+        >
+          <summary className="cursor-pointer text-sm font-medium text-slate-500 hover:text-slate-800">
+            Show {closedItems.length} Closed Accounts
+          </summary>
+          <div className="mt-4">
+            <AccountTable
+              accounts={closedItems}
+              onToggleStatus={handleToggleStatus}
+              pendingId={pendingId}
+              collateralAccounts={collateralAccounts}
+              allAccounts={items}
+            />
+          </div>
+        </details>
       )}
     </div>
-  )
+  );
 }

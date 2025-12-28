@@ -54,6 +54,7 @@ export function FamilyCluster({
                     collateralAccounts={collateralAccounts}
                     pendingBatchAccountIds={pendingBatchAccountIds}
                     isClusterParent={true}
+                    childCount={children_accounts.length}
                 />
             </div>
 
