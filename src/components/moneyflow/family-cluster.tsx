@@ -12,14 +12,12 @@ export type FamilyClusterProps = {
     secured_asset?: Account
     // Props to pass down to AccountCard
     allAccounts: Account[]
-    cashbackById?: Record<string, AccountCashbackSnapshot>
+    cashbackById?: Record<string, AccountCashbackSnapshot | undefined>
     categories: Category[]
     people: Person[]
     shops: Shop[]
     collateralAccounts: Account[]
-    usageStats?: UsageStats
     pendingBatchAccountIds?: string[]
-    quickPeopleConfig?: QuickPeopleConfig
 }
 
 export function FamilyCluster({
@@ -32,9 +30,7 @@ export function FamilyCluster({
     people,
     shops,
     collateralAccounts,
-    usageStats,
     pendingBatchAccountIds,
-    quickPeopleConfig
 }: FamilyClusterProps) {
 
     // Flatten the list for mobile stacking (Parent -> Children)
@@ -56,9 +52,7 @@ export function FamilyCluster({
                     people={people}
                     shops={shops}
                     collateralAccounts={collateralAccounts}
-                    usageStats={usageStats}
                     pendingBatchAccountIds={pendingBatchAccountIds}
-                    quickPeopleConfig={quickPeopleConfig}
                     isClusterParent={true}
                 />
             </div>
@@ -74,9 +68,7 @@ export function FamilyCluster({
                         people={people}
                         shops={shops}
                         collateralAccounts={collateralAccounts}
-                        usageStats={usageStats}
                         pendingBatchAccountIds={pendingBatchAccountIds}
-                        quickPeopleConfig={quickPeopleConfig}
                         isClusterChild={true}
                     />
                 </div>

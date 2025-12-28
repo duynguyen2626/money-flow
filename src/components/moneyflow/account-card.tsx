@@ -48,7 +48,7 @@ type AccountCardProps = {
   shops?: Shop[];
   collateralAccounts?: Account[];
   pendingBatchAccountIds?: string[];
-  cashbackById?: Record<string, AccountCashbackSnapshot>;
+  cashbackById?: Record<string, AccountCashbackSnapshot | undefined>;
   className?: string;
   hideSecuredBadge?: boolean;
   isClusterParent?: boolean;
@@ -101,7 +101,6 @@ function AccountCardComponent({
 }: AccountCardProps) {
   const router = useRouter();
   const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
-  // Removed unused isLoading state entirely if not used in render
 
   const handleCardClick = () => {
     router.push(detailsHref);
@@ -130,6 +129,14 @@ function AccountCardComponent({
   const isCreditCard = account.type === "credit_card";
   const detailsHref = `/accounts/${account.id}`;
   const hasPendingBatch = pendingBatchAccountIds.includes(account.id);
+
+  // Secured Badge Logic
+  const securingAccount = useMemo(() => {
+    if (!account.secured_by_account_id) return null;
+    return collateralAccounts?.find(a => a.id === account.secured_by_account_id)
+      || accounts.find(a => a.id === account.secured_by_account_id);
+  }, [account.secured_by_account_id, collateralAccounts, accounts]);
+
 
   // State
   const cardState = useMemo(
@@ -192,6 +199,7 @@ function AccountCardComponent({
       const config = typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig;
 
       // Use type assertion instead of ignore for lint safety
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const program = (config as any)?.program;
       if (!program) return null;
 
@@ -235,10 +243,11 @@ function AccountCardComponent({
         )}
       >
         {/* TOP SECTION: Header + Split Body */}
-        <div className="px-3 pt-1.5 pb-2"> {/* Tighter Top Padding */}
+        {/* Round 8: Reduced Vertical Padding (pt-1) */}
+        <div className="px-3 pt-1 pb-1.5">
 
           {/* 1. HEADER BADGES */}
-          <div className="flex items-center justify-between mb-2 min-h-[20px]">
+          <div className="flex items-center justify-between mb-1.5 min-h-[20px]">
             {/* Days Left */}
             {stats?.due_date !== undefined && stats?.due_date !== null ? (
               <div className={cn(
@@ -262,13 +271,22 @@ function AccountCardComponent({
               </div>
             ) : (<div />)}
 
-            {/* Secured Badge */}
+            {/* Secured Badge with Tooltip */}
             {isCreditCard && (
               <div className="flex items-center gap-1">
                 {account.secured_by_account_id ? (
-                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
-                    <Lock className="w-3 h-3" /> Secured
-                  </div>
+                  <TooltipProvider>
+                    <Tooltip delayDuration={0}>
+                      <TooltipTrigger asChild>
+                        <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100 cursor-help transition-colors hover:bg-emerald-100">
+                          <Lock className="w-3 h-3" /> Secured
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="text-xs">
+                        Secured by: <span className="font-bold">{securingAccount?.name || "Unknown Asset"}</span>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 ) : (
                   <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
                     <Unlock className="w-3 h-3" /> Unsecured
@@ -290,19 +308,15 @@ function AccountCardComponent({
 
           {/* 2. SPLIT BODY: LEFT IMAGE | RIGHT INFO */}
           <div className="flex gap-3">
-            {/* LEFT: Portrait Image */}
-            {/* 
-                   Rule: "Rotate and fit 100%".
-                   Solution: Use absolute centering with oversized dimensions to ensure coverage when rotated.
-                */}
-            <div className="w-[34%] shrink-0 self-start">
+            {/* LEFT: Portrait Image - Round 8 Reduced Width (26%) */}
+            <div className="w-[26%] shrink-0 self-start">
               <div className="relative w-full aspect-[2/3] rounded-xl bg-slate-100 overflow-hidden shadow-sm border border-slate-200">
                 {account.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={account.image_url}
                     alt=""
-                    // Scale up significantly (160%) to cover crop gaps from aspect ratio mismatch on rotation
+                    // Scale up (160%) to cover crop gaps from aspect ratio mismatch on rotation
                     className="absolute left-1/2 top-1/2 w-[160%] max-w-none -translate-x-1/2 -translate-y-1/2 rotate-90 object-cover"
                   />
                 ) : (
@@ -316,7 +330,7 @@ function AccountCardComponent({
             {/* RIGHT: Info Block */}
             <div className="flex-1 flex flex-col min-w-0">
               {/* Name */}
-              <div className="mb-1">
+              <div className="mb-0.5">
                 <h3 className="font-bold text-slate-900 text-sm leading-tight line-clamp-2">
                   {account.name}
                 </h3>
@@ -443,16 +457,16 @@ function AccountCardComponent({
         {/* BOTTOM SECTION: Full Width Features */}
         <div className="mt-auto">
           {/* Live Cashback Banner */}
-          {cashbackById?.[account.id]?.sharedAmount && cashbackById?.[account.id]?.sharedAmount > 0 && (
+          {cashbackById?.[account.id]?.potential_earned && cashbackById?.[account.id]?.potential_earned !== 0 && (
             <div className="w-full bg-gradient-to-r from-emerald-50 to-emerald-100/50 border-t border-emerald-100 px-4 py-1.5 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="bg-white p-1 rounded-full shadow-sm text-emerald-600"><TrendingUp className="w-3 h-3" /></div>
                 <span className="text-[9px] font-bold text-emerald-800 uppercase tracking-wider">
-                  {cashbackById?.[account.id]?.sharedAmount / (cashbackById?.[account.id]?.total_spend_eligible || 1) * 100 > 0 ? `${(cashbackById?.[account.id]?.sharedAmount / (cashbackById?.[account.id]?.total_spend_eligible || 1) * 100).toFixed(1)}% Yield` : "Active"}
+                  {(cashbackById?.[account.id]?.potential_earned || 0) / (cashbackById?.[account.id]?.total_spend_eligible || 1) * 100 > 0 ? `${((cashbackById?.[account.id]?.potential_earned || 0) / (cashbackById?.[account.id]?.total_spend_eligible || 1) * 100).toFixed(1)}% Yield` : "Active"}
                 </span>
               </div>
               <div className="text-xs font-bold text-emerald-700">
-                +{formatCurrency(cashbackById?.[account.id]?.sharedAmount)}
+                +{formatCurrency(cashbackById?.[account.id]?.potential_earned)}
               </div>
             </div>
           )}
