@@ -1,7 +1,6 @@
 "use client";
 
 import { memo, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CreditCard,
@@ -11,31 +10,20 @@ import {
   User,
   CheckCircle,
   Users,
-  Plus,
   ArrowUpRight,
   ArrowDownLeft,
   ArrowRightLeft,
-  ChevronRight,
-  Settings,
   Baby,
   TrendingUp,
-  DollarSign,
-  Briefcase,
-  Layers,
-  MoreVertical,
-  LayoutGrid,
-  ArrowRight,
-  ExternalLink,
   Edit,
-  Trash2,
-  Copy,
-  Eye,
-  ShoppingBag,
   ShieldCheck,
   Lock,
   Info,
+  CalendarClock,
+  Unlock,
+  UserMinus,
 } from "lucide-react";
-import { Account, Category, Person, Shop } from "@/types/moneyflow.types";
+import { Account, Category, Person, Shop, AccountCashbackSnapshot } from "@/types/moneyflow.types";
 import { cn } from "@/lib/utils";
 import { AccountFamilyModal } from "./account-family-modal";
 import {
@@ -44,29 +32,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@/components/ui/hover-card";
 import { AddTransactionDialog } from "./add-transaction-dialog";
 import { EditAccountDialog } from "./edit-account-dialog";
-import {
-  UsageStats,
-  QuickPeopleConfig,
-  DEFAULT_QUICK_PEOPLE_CONFIG,
-} from "@/types/settings.types";
 import { QuickPeopleSettingsDialog } from "./quick-people-settings-dialog";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
 import { getCardActionState } from "@/lib/card-utils";
 import { getDisplayBalance } from "@/lib/display-balance";
 import { SYSTEM_CATEGORIES } from "@/lib/constants";
-import { getAccountInitial } from "@/lib/utils";
 import { getCreditCardUsage } from "@/lib/account-balance";
 
 type AccountCardProps = {
@@ -76,11 +47,12 @@ type AccountCardProps = {
   people?: Person[];
   shops?: Shop[];
   collateralAccounts?: Account[];
-  usageStats?: UsageStats;
-  quickPeopleConfig?: QuickPeopleConfig;
   pendingBatchAccountIds?: string[];
+  cashbackById?: Record<string, AccountCashbackSnapshot>;
   className?: string;
   hideSecuredBadge?: boolean;
+  isClusterParent?: boolean;
+  isClusterChild?: boolean;
 };
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -107,6 +79,12 @@ function getAccountIcon(type: Account["type"]) {
   }
 }
 
+function getDaysDiff(dateStr: string) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+}
+
 function AccountCardComponent({
   account,
   accounts = [],
@@ -114,14 +92,21 @@ function AccountCardComponent({
   people = [],
   shops = [],
   collateralAccounts = [],
-  usageStats = {},
-  quickPeopleConfig = DEFAULT_QUICK_PEOPLE_CONFIG,
   pendingBatchAccountIds = [],
+  cashbackById,
   className,
   hideSecuredBadge = false,
+  isClusterParent = false,
+  isClusterChild = false,
 }: AccountCardProps) {
   const router = useRouter();
   const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
+  // Removed unused isLoading state entirely if not used in render
+
+  const handleCardClick = () => {
+    router.push(detailsHref);
+  };
+
   // Dialog States
   const [activeDialog, setActiveDialog] = useState<
     | "income"
@@ -135,7 +120,6 @@ function AccountCardComponent({
     | null
   >(null);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
-  const [isLandscape, setIsLandscape] = useState(false);
 
   const stats = account.stats;
   const relationships = account.relationships;
@@ -143,27 +127,14 @@ function AccountCardComponent({
   const childCount = relationships?.child_count ?? childAccounts.length;
   const parentInfo = relationships?.parent_info;
   const parentAccountId = account.parent_account_id ?? parentInfo?.id ?? null;
-  const securedByAccountId = account.secured_by_account_id;
   const isCreditCard = account.type === "credit_card";
-  const isParent = relationships?.is_parent || childCount > 0;
-  const isChild = !!parentAccountId;
-  const hasFamilyContext = isParent || isChild;
-  const showParentBadge = isParent;
-  const showChildBadge = !isParent && isChild;
   const detailsHref = `/accounts/${account.id}`;
   const hasPendingBatch = pendingBatchAccountIds.includes(account.id);
 
-  // State from unified helper
+  // State
   const cardState = useMemo(
     () => getCardActionState(account, hasPendingBatch),
     [account, hasPendingBatch],
-  );
-  const { isDueSoon, needsSpendMore } = useMemo(
-    () => ({
-      isDueSoon: cardState.badges.due,
-      needsSpendMore: cardState.badges.spend,
-    }),
-    [cardState],
   );
 
   // Format Helpers
@@ -173,43 +144,16 @@ function AccountCardComponent({
       : "0";
   };
 
-  // Display balance - show parent's balance for child cards in family context
   const displayBalance = useMemo(() => {
-    // Phase 7X: For any family (parent + children sharing limit), ALL cards must display the same shared balance = parent.current_balance.
-    // This applies if isChild is true (and parent exists).
-
-    // Logic:
-    // 1. If Child with Parent -> Return Parent Balance
-    // 2. Else -> Return Own Balance
-
-    const familyContext = hideSecuredBadge || isChild || isParent;
+    const familyContext = hideSecuredBadge || isClusterChild || isClusterParent;
     const context = familyContext ? "family_tab" : "card";
-
-    if (isChild && parentAccountId) {
+    // If Child with Parent -> Return Parent Balance logic handled in util, but stricter here
+    if ((isClusterChild || !!parentAccountId) && parentAccountId) {
       const parent = accounts.find((a) => a.id === parentAccountId);
       if (parent) return getDisplayBalance(parent, "family_tab", accounts);
     }
-
     return getDisplayBalance(account, context, accounts);
-  }, [account, hideSecuredBadge, accounts, isChild, parentAccountId]);
-
-  // Handle Parent Link Click (Stop Propagation to prevent Card Link)
-  const isSecuredAsset = !!securedByAccountId;
-
-  const handleFamilyBadgeClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsFamilyModalOpen(true);
-  };
-
-  // Prevent bubble for direct links
-  const handleLinkClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-  };
-
-  const handleCardClick = () => {
-    router.push(detailsHref);
-  };
+  }, [account, hideSecuredBadge, accounts, isClusterChild, isClusterParent, parentAccountId]);
 
   const usageData = useMemo(() => {
     const limit = account.credit_limit ?? 0;
@@ -240,901 +184,332 @@ function AccountCardComponent({
     };
   }, [account.credit_limit, account.current_balance, account.type]);
 
+  // Advanced Cashback Config Calculation
+  const cashbackConfig = useMemo(() => {
+    if (!account.cashback_config) return null;
+    try {
+      const rawConfig = account.cashback_config;
+      const config = typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig;
+
+      // Use type assertion instead of ignore for lint safety
+      const program = (config as any)?.program;
+      if (!program) return null;
+
+      const defaultRate = program.defaultRate ?? 0;
+      const levels = program.levels ?? [];
+
+      return {
+        defaultRate,
+        levels,
+        hasAdvanced: defaultRate > 0 || levels.length > 0
+      };
+    } catch (e) {
+      console.error("Error parsing cashback config", e);
+      return null;
+    }
+  }, [account.cashback_config]);
+
+
   // IDs
   const creditPaymentCatId = "e0000000-0000-0000-0000-000000000091";
   const shoppingCatId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99";
   const shopeeShopId = "ea3477cb-30dd-4b7f-8826-a89a1b919661";
 
-  // --- Quick People Sorting Logic ---
-  const sortedPeople = useMemo(() => {
-    // 1. Separate pinned vs others
-    const pinnedIds = new Set(quickPeopleConfig?.pinned_ids || []);
-    const pinnedPeople: Person[] = [];
-    const otherPeople: Person[] = [];
-
-    // Safely check people array
-    if (people) {
-      people.forEach((p) => {
-        if (pinnedIds.has(p.id)) {
-          pinnedPeople.push(p);
-        } else {
-          otherPeople.push(p);
-        }
-      });
-    }
-
-    // 2. Sort "others" if mode is SMART
-    if (quickPeopleConfig?.mode === "smart" && usageStats) {
-      otherPeople.sort((a, b) => {
-        // Combined score (Lend + Repay) for general visibility
-        const statsA = usageStats[a.id];
-        const statsB = usageStats[b.id];
-        const countA = (statsA?.lend_count || 0) + (statsA?.repay_count || 0);
-        const countB = (statsB?.lend_count || 0) + (statsB?.repay_count || 0);
-
-        // Higher count first
-        if (countA !== countB) return countB - countA;
-
-        // If count equal, recency
-        const timeA = statsA?.last_used_at
-          ? new Date(statsA.last_used_at).getTime()
-          : 0;
-        const timeB = statsB?.last_used_at
-          ? new Date(statsB.last_used_at).getTime()
-          : 0;
-        return timeB - timeA;
-      });
-    }
-
-    const result = [...pinnedPeople];
-    if (quickPeopleConfig?.mode === "smart") {
-      // Smart mode: Pinned + Top Others up to 5 total IF slots needed
-      const slotsNeeded = 5 - pinnedPeople.length;
-      if (slotsNeeded > 0) {
-        result.push(...otherPeople.slice(0, slotsNeeded));
-      }
-    }
-    // Manual Mode -> Just Pinned (User feedback: Don't show extra people if manual)
-    return result;
-  }, [people, quickPeopleConfig, usageStats]);
-
-  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    // Consider square images (1:1) as "Landscape-like" for vertical slots -> Rotate them
-    if (img.naturalWidth >= img.naturalHeight) {
-      setIsLandscape(true);
-    }
-  };
+  // Card Styling Determination
+  const borderColor = useMemo(() => {
+    if (cardState.badges.due) return "border-red-500 shadow-sm"; // Urgent
+    if (cardState.badges.spend) return "border-amber-400"; // Warning
+    return "border-slate-100"; // Default Clean Slate
+  }, [cardState.badges]);
 
   // --- Render Sections ---
 
-  // 1. Left Section (Visual) - Portrait Strip (NO SQUARE CROP)
-  const renderVisualSection = () => {
-    return (
-      <div className="relative h-full w-[160px] sm:w-[180px] bg-muted/5 group-hover/card:bg-muted/10 transition-colors border-r border-slate-100 z-10">
-        {/* Image Container - Fills entire portrait strip - Overflow Hidden HERE */}
-        <div className="absolute inset-0 w-full h-full overflow-hidden bg-slate-100 rounded-l-xl">
-          {account.image_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={account.image_url}
-              alt={account.name}
-              onLoad={handleImageLoad}
-              className={cn(
-                "absolute opacity-100 transition-opacity duration-300",
-                "!rounded-none !border-none",
-                // Landscape/Square images: Rotate 90° and show 100% of image (object-contain)
-                // Portrait images: Fill container (object-cover)
-                isCreditCard && isLandscape
-                  ? "rotate-90 w-full h-full object-contain" // Removing bg-slate-950/50 as requested
-                  : "w-full h-full object-cover object-center",
-              )}
-              loading="lazy"
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200 text-muted-foreground/40">
-              {getAccountIcon(account.type)}
-            </div>
-          )}
+  return (
+    <>
+      <div
+        onClick={handleCardClick}
+        className={cn(
+          "group relative flex flex-col w-full rounded-[2rem] border-2 bg-white transition-all hover:shadow-lg hover:border-slate-300 cursor-pointer overflow-hidden",
+          borderColor,
+          className
+        )}
+      >
+        {/* TOP SECTION: Header + Split Body */}
+        <div className="px-3 pt-1.5 pb-2"> {/* Tighter Top Padding */}
 
-          {/* Hover Details Overlay - Z-INDEX 20 (Below Badges/Tooltips) */}
-          <div className="absolute inset-0 flex flex-col gap-3 items-center justify-center opacity-0 group-hover/card:opacity-100 transition-opacity duration-200 z-20 pointer-events-none bg-black/10 backdrop-blur-[1px]">
-            {/* Eye Icon (Details) */}
-            <Link
-              href={detailsHref}
-              onClick={handleLinkClick}
-              className="pointer-events-auto text-white p-3 rounded-full hover:bg-black/60 hover:scale-110 active:scale-95 active:bg-black/80 transition-all drop-shadow-xl border border-white/30"
-            >
-              <Eye className="w-6 h-6 drop-shadow-lg" strokeWidth={2.5} />
-            </Link>
+          {/* 1. HEADER BADGES */}
+          <div className="flex items-center justify-between mb-2 min-h-[20px]">
+            {/* Days Left */}
+            {stats?.due_date !== undefined && stats?.due_date !== null ? (
+              <div className={cn(
+                "flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider shadow-sm",
+                getDaysDiff(stats.due_date) <= 5
+                  ? "bg-rose-100 text-rose-700"
+                  : "bg-amber-100 text-amber-700"
+              )}>
+                {cardState.badges.due ? (
+                  <>
+                    <span>⏳</span>
+                    <span>{cardState.badges.due.days} Days left</span>
+                  </>
+                ) : (
+                  <>
+                    <CalendarClock className="w-3 h-3" />
+                    <span>{getDaysDiff(stats.due_date)} Days left</span>
+                  </>
+                )}
+                <span className="ml-1 text-[9px] opacity-80">{stats.due_date_display}</span>
+              </div>
+            ) : (<div />)}
 
-            {/* Edit Button (Below Eye) */}
-            <div className="pointer-events-auto">
-              <EditAccountDialog
-                account={account}
-                accounts={accounts}
-                collateralAccounts={collateralAccounts}
-                buttonClassName="text-white p-2.5 rounded-full hover:bg-black/60 hover:scale-110 active:scale-95 active:bg-black/80 transition-all drop-shadow-xl border border-white/30 flex items-center justify-center"
-                triggerContent={
-                  <Edit className="w-5 h-5 drop-shadow-lg" strokeWidth={2.5} />
-                }
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* Badges - OUTSIDE overflow-hidden container, but absolute over the image section */}
-        {renderBadges()}
-      </div>
-    );
-  };
-
-  const renderBadges = () => {
-    return (
-      <>
-        {/* Overlay Badges - Top Left - Z-INDEX 30 (Above Overlay) */}
-        <div className="absolute top-2 left-2 flex flex-col gap-1.5 z-30 pointer-events-none">
-          {/* DUE BADGE - Redesigned: Single Row, Longer, Mixed Case */}
-          {isDueSoon && cardState.badges.due && (
-            <div
-              className={cn(
-                "flex items-center gap-1.5 rounded-md shadow-sm border px-2 py-1 backdrop-blur-md w-auto min-w-[120px]",
-                "bg-amber-100/95 border-amber-200 text-amber-900",
-              )}
-            >
-              <span className="font-extrabold text-sm text-amber-700">
-                {cardState.badges.due.days}
-              </span>
-              <span className="font-medium text-[10px] text-amber-800/80 whitespace-nowrap">
-                Days left
-              </span>
-              <span className="font-bold text-[10px] ml-auto">
-                {cardState.badges.due.date}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Overlay Badges - Bottom Center - Z-INDEX 30 (Above Overlay) */}
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex flex-col gap-1.5 z-30 w-full px-2 items-center">
-          {showParentBadge && (
-            <TooltipProvider>
-              <Tooltip delayDuration={100}>
-                <TooltipTrigger asChild>
-                  <div
-                    className="flex items-center gap-1 text-xs font-bold text-indigo-700 bg-indigo-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-indigo-200 pointer-events-auto cursor-help backdrop-blur-sm w-[106px] justify-center"
-                    onClick={handleFamilyBadgeClick}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    Parent {childCount > 1 ? `+${childCount}` : ""}
+            {/* Secured Badge */}
+            {isCreditCard && (
+              <div className="flex items-center gap-1">
+                {account.secured_by_account_id ? (
+                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                    <Lock className="w-3 h-3" /> Secured
                   </div>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="text-xs z-[100]">
-                  <p className="font-semibold mb-1">Linked Accounts:</p>
-                  <ul className="list-disc pl-3 space-y-0.5">
-                    {childAccounts.map((c) => (
-                      <li key={c.id}>{c.name}</li>
-                    ))}
-                    {childAccounts.length === 0 && (
-                      <li>No specific selection</li>
-                    )}
-                  </ul>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-
-          {showChildBadge && (
-            <TooltipProvider>
-              <Tooltip delayDuration={100}>
-                <TooltipTrigger asChild>
-                  <div
-                    className="flex items-center gap-1 text-xs font-bold text-purple-700 bg-purple-100/90 px-2 py-0.5 rounded-sm shadow-sm border border-purple-200 pointer-events-auto cursor-help backdrop-blur-sm w-[106px] justify-center"
-                    onClick={handleFamilyBadgeClick}
-                  >
-                    <Baby className="w-3.5 h-3.5" />
-                    Child
+                ) : (
+                  <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
+                    <Unlock className="w-3 h-3" /> Unsecured
                   </div>
-                </TooltipTrigger>
-                <TooltipContent side="right" className="text-xs z-[100]">
-                  Linked to {parentInfo?.name || "Parent Account"}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
-
-          {/* Standalone Badge */}
-          {cardState.badges.standalone && isCreditCard && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-bold bg-slate-800/80 text-white shadow-sm border border-slate-600 backdrop-blur-md w-[106px] justify-center">
-              Standalone
-            </span>
-          )}
-
-          {/* Timeline Badge - UNIFIED GREEN STYLE */}
-          {stats?.cycle_range && (
-            <span className="inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold shadow-sm backdrop-blur-sm w-[106px] justify-center truncate bg-teal-100/90 text-teal-800 border border-teal-200">
-              {stats.cycle_range === "Month Cycle"
-                ? "Month Cycle"
-                : stats?.cycle_range}
-            </span>
-          )}
-
-          {/* Unsecured Badge - REMOVED (Moved to Data Section) */}
-        </div>
-      </>
-    );
-  };
-
-  // 2. Right Section (Data)
-  const renderDataSection = () => {
-    const balance = displayBalance;
-    const { percent: usageVal, formattedLimit, formattedUsed } = usageData;
-
-    let progressColorClass = "bg-emerald-500"; // < 30%
-    if (usageVal >= 30 && usageVal <= 80) progressColorClass = "bg-yellow-500"; // 30-80%
-    if (usageVal > 80) progressColorClass = "bg-red-500"; // > 80%
-
-    // KPI Logic
-    const minSpendValue = stats?.min_spend;
-    const missing = stats?.missing_for_min ?? 0;
-    const isMet =
-      minSpendValue === null || minSpendValue === undefined
-        ? true
-        : missing <= 0;
-    const showKPI = typeof minSpendValue === "number" && minSpendValue > 0;
-    const hasCashbackConfig =
-      stats?.remains_cap !== null && stats?.remains_cap !== undefined;
-
-    // --- Quick People Sorting Logic ---
-    const sortedPeople = useMemo(() => {
-      // 1. Separate pinned vs others
-      const pinnedIds = new Set(quickPeopleConfig?.pinned_ids || []);
-      const pinnedPeople: Person[] = [];
-      const otherPeople: Person[] = [];
-
-      // Safely check people array
-      if (people) {
-        people.forEach((p) => {
-          if (pinnedIds.has(p.id)) {
-            pinnedPeople.push(p);
-          } else {
-            otherPeople.push(p);
-          }
-        });
-      }
-
-      // 2. Sort "others" if mode is SMART
-      if (quickPeopleConfig?.mode === "smart" && usageStats) {
-        otherPeople.sort((a, b) => {
-          // Combined score (Lend + Repay) for general visibility
-          const statsA = usageStats[a.id];
-          const statsB = usageStats[b.id];
-          const countA = (statsA?.lend_count || 0) + (statsA?.repay_count || 0);
-          const countB = (statsB?.lend_count || 0) + (statsB?.repay_count || 0);
-
-          // Higher count first
-          if (countA !== countB) return countB - countA;
-
-          // If count equal, recency
-          const timeA = statsA?.last_used_at
-            ? new Date(statsA.last_used_at).getTime()
-            : 0;
-          const timeB = statsB?.last_used_at
-            ? new Date(statsB.last_used_at).getTime()
-            : 0;
-          return timeB - timeA;
-        });
-      }
-
-      const result = [...pinnedPeople];
-      if (quickPeopleConfig?.mode === "smart") {
-        // Smart mode: Pinned + Top Others up to 5 total? Or Pinned + Top N?
-        // User said "Manage list check 1, but quick list shows 5".
-        // The previous code was filling up to 5.
-        // If we want specific behavior:
-        // If Smart: Show Pinned + Popular Others
-        // If Manual: Show ONLY Pinned? Or Pinned + Others?
-        // The Dialog says "Select People for Quick Access" in manual mode.
-        // So manual mode should likely ONLY show pinned people?
-
-        // Assuming consistent "Top 5" UI for now, but filling with smart suggestions.
-        // But if mode is MANUAL, we should probably ONLY show pinned.
-
-        // Let's take Pinned + Top X Others to fill 5 slots IF Smart.
-        // If Manual, just Pinned.
-
-        const slotsNeeded = 5 - pinnedPeople.length;
-        if (slotsNeeded > 0) {
-          result.push(...otherPeople.slice(0, slotsNeeded));
-        }
-      }
-      // Manual Mode -> Just Pinned (as per user request "Manage list check 1, quick list 5... remove hard code")
-      // If the user only checked 1 person, they expect only 1 person or exactly what is configured.
-      // So if Manual, we return just pinnedPeople.
-
-      return result;
-    }, [people, quickPeopleConfig, usageStats]);
-
-    // Variables for HoverCard
-    const ownBalance = account.current_balance ?? 0;
-    const ownBalanceTone = account.type === "credit_card"
-      ? ownBalance > 0
-        ? "text-red-600"
-        : ownBalance < 0
-          ? "text-emerald-600"
-          : "text-slate-900"
-      : ownBalance < 0
-        ? "text-red-600"
-        : "text-slate-900";
-    const totalIn = account.total_in ?? 0;
-    const totalOut = account.total_out ?? 0;
-
-    const parentAccount = accounts.find((a) => a.id === parentAccountId);
-    const siblings = accounts.filter((a) => a.parent_account_id === parentAccountId);
-    const family = [parentAccount, ...siblings].filter(Boolean) as Account[];
-    const familyTotalIn = family.reduce((sum, a) => sum + (a.total_in || 0), 0);
-    const familyTotalOut = family.reduce((sum, a) => sum + (a.total_out || 0), 0);
-
-
-    return (
-      <div className="flex flex-col h-full p-2.5 min-w-0 relative">
-        {/* 1. TOP ROW: Name + Action Buttons */}
-        <div className="flex justify-between items-start gap-1 mb-1">
-          {/* Account Name */}
-          <div className="flex-1 min-w-0 max-w-[130px]">
-            <TooltipProvider>
-              <Tooltip delayDuration={100}>
-                <TooltipTrigger asChild>
-                  <h3 className="font-bold text-sm leading-tight truncate text-slate-900 cursor-pointer">
-                    {account.name}
-                  </h3>
-                </TooltipTrigger>
-                <TooltipContent
-                  side="bottom"
-                  className="z-[80] text-xs font-medium max-w-[200px]"
-                >
-                  {account.name}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            {/* CHILD BADGE (Single Balance) - Inserted Here */}
-            {hideSecuredBadge && isChild && (
-              <div className="text-[10px] font-bold text-slate-500 mt-0.5 truncate">
-                [{formatCurrency(account.current_balance)}]
+                )}
+                {/* Edit Button */}
+                <div onClick={(e) => e.stopPropagation()} className="ml-1 text-slate-300 hover:text-slate-600">
+                  <EditAccountDialog
+                    account={account}
+                    accounts={accounts}
+                    collateralAccounts={collateralAccounts}
+                    triggerContent={<Edit className="w-3.5 h-3.5" />}
+                    buttonClassName="p-1 hover:bg-slate-100 rounded-full"
+                  />
+                </div>
               </div>
             )}
           </div>
 
-          {/* Right: Action Buttons (REMOVED Edit Icon - Now handled by Card Click) */}
-        </div>
-
-        {/* 2. SECOND ROW: Balance + Confirm Button (Inline) */}
-        {/* 2. SECOND ROW: Balance + Confirm Button (Inline) */}
-        <div className="flex items-center justify-between gap-2 mb-1.5 min-h-[28px]">
-          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <TooltipProvider>
-              <Tooltip delayDuration={300}>
-                <TooltipTrigger asChild>
-                  <div
-                    className={cn(
-                      "text-xl font-bold tracking-tight truncate cursor-help",
-                      balance < 0 ? "text-red-600" : "text-slate-900",
-                    )}
-                  >
-                    {formatCurrency(balance)}
+          {/* 2. SPLIT BODY: LEFT IMAGE | RIGHT INFO */}
+          <div className="flex gap-3">
+            {/* LEFT: Portrait Image */}
+            {/* 
+                   Rule: "Rotate and fit 100%".
+                   Solution: Use absolute centering with oversized dimensions to ensure coverage when rotated.
+                */}
+            <div className="w-[34%] shrink-0 self-start">
+              <div className="relative w-full aspect-[2/3] rounded-xl bg-slate-100 overflow-hidden shadow-sm border border-slate-200">
+                {account.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={account.image_url}
+                    alt=""
+                    // Scale up significantly (160%) to cover crop gaps from aspect ratio mismatch on rotation
+                    className="absolute left-1/2 top-1/2 w-[160%] max-w-none -translate-x-1/2 -translate-y-1/2 rotate-90 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-slate-400">
+                    {getAccountIcon(account.type)}
                   </div>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="text-xs font-semibold">
-                  {formatCurrency(balance)}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            {/* Phase 7X: Info Icon for Child Accounts - Refined UI */}
-            {isChild && parentAccountId && (
-              <HoverCard openDelay={0} closeDelay={100}>
-                <HoverCardTrigger asChild>
-                  <button
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-slate-400 hover:text-blue-600 transition-colors focus:outline-none p-1 -m-1"
-                  >
-                    <Info className="w-5 h-5" />
-                  </button>
-                </HoverCardTrigger>
-                <HoverCardContent className="w-80 p-0" align="start">
-                  <div className="bg-slate-50/80 p-3 border-b border-slate-100 rounded-t-lg backdrop-blur-sm">
-                    <h4 className="font-bold text-sm text-slate-800 flex items-center gap-2">
-                      <CreditCard className="w-4 h-4 text-slate-500" />
-                      Wallet Breakdown
-                    </h4>
-                  </div>
-                  <div className="p-0 text-sm">
-                    {/* 1. Shared (Parent) */}
-                    <div className="p-3 bg-white space-y-2">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 uppercase tracking-wider mb-2">
-                        <Users className="w-3.5 h-3.5 text-blue-500" />
-                        Shared (Parent)
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-0.5">
-                          <span className="text-xs text-slate-500 block">Available Balance</span>
-                          <span className={cn("font-bold text-base block", (displayBalance || 0) < 0 ? "text-red-600" : "text-slate-900")}>
-                            {formatCurrency(displayBalance)}
-                          </span>
-                        </div>
-                        <div className="space-y-0.5">
-                          <span className="text-xs text-slate-500 block">Total Limit</span>
-                          <span className="font-bold text-base text-slate-700 block">
-                            {(() => {
-                              const parent = accounts.find((a) => a.id === parentAccountId);
-                              return formatCurrency(parent?.credit_limit ?? 0);
-                            })()}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="h-px bg-slate-100" />
-
-                    {/* 2. This Card (Child) */}
-                    <div className="p-3 bg-slate-50/30 space-y-2">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 uppercase tracking-wider mb-2">
-                        <Wallet className="w-3.5 h-3.5 text-emerald-600" />
-                        This Card (Child)
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-500">Private Usage</span>
-                        <span className={cn("font-bold text-base", ownBalanceTone)}>
-                          {formatCurrency(ownBalance)}
-                        </span>
-                      </div>
-                      <div className="flex justify-end gap-3 text-xs">
-                        <span className="text-emerald-600 font-medium">In: {formatCurrency(totalIn)}</span>
-                        <span className="text-rose-600 font-medium">Out: {formatCurrency(Math.abs(totalOut))}</span>
-                      </div>
-                    </div>
-
-                    <div className="h-px bg-slate-100" />
-
-
-                    {/* 3. Family Aggregated */}
-                    <div className="p-3 bg-white">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 uppercase tracking-wider mb-2">
-                        <LayoutGrid className="w-3.5 h-3.5 text-purple-500" />
-                        Family Aggregated
-                      </div>
-                      <div className="flex justify-between items-center rounded-md bg-slate-50 p-2 border border-slate-100">
-                        <div className="space-y-0.5">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">Total In</span>
-                          <span className="block text-emerald-600 font-bold">{formatCurrency(familyTotalIn)}</span>
-                        </div>
-                        <div className="h-8 w-px bg-slate-200 mx-2" />
-                        <div className="text-right space-y-0.5">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase">Total Out</span>
-                          <span className="block text-rose-600 font-bold">{formatCurrency(Math.abs(familyTotalOut))}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </HoverCardContent>
-              </HoverCard>
-            )
-            }
-          </div >
-
-          {/* Confirm Button (Inline with Balance) */}
-          {
-            cardState.badges.pendingBatch && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation(); /* TODO: Open confirm dialog */
-                }}
-                className="flex items-center justify-center gap-1 rounded-md bg-green-100 border border-green-200 px-2 py-1 text-[10px] font-bold text-green-700 hover:bg-green-200 hover:border-green-300 active:scale-95 transition-all text-sm shrink-0 shadow-sm"
-              >
-                <CheckCircle className="w-3.5 h-3.5" />
-                Confirm
-              </button>
-            )
-          }
-        </div >
-
-        {/* 3. MIDDLE: Smart KPI Display */}
-
-        {/* PRIORITY 1: Has Spending Target AND Not Met Yet */}
-        {
-          showKPI && !isMet && (
-            <div className="flex items-center gap-2 bg-gradient-to-r from-amber-50 to-orange-50 p-2 rounded-md text-xs border border-amber-100 mb-2 shadow-sm">
-              <span className="text-xl shrink-0">⚠️</span>
-              <div className="flex items-center gap-3 w-full">
-                <div className="flex flex-col leading-none gap-0.5">
-                  <span className="text-[10px] text-amber-600/80 uppercase font-bold">
-                    NEED
-                  </span>
-                  <span className="font-bold text-amber-800 text-sm">
-                    {formatCurrency(missing)}
-                  </span>
-                </div>
-                <div className="w-[1px] h-6 bg-amber-200/50" />
-                <div className="flex flex-col leading-none gap-0.5">
-                  <span className="text-[10px] text-amber-600/80 uppercase font-bold">
-                    SPENT
-                  </span>
-                  <span className="font-bold text-amber-800 text-sm">
-                    {formatCurrency(stats?.spent_this_cycle ?? 0)}
-                  </span>
-                </div>
+                )}
               </div>
             </div>
-          )
-        }
 
-        {/* PRIORITY 2: Qualified OR No Target+Cashback */}
-        {
-          ((showKPI && isMet) ||
-            (!showKPI && isCreditCard && hasCashbackConfig)) && (
-            <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-50 to-teal-50 p-2 rounded-md text-xs border border-emerald-100 mb-2 shadow-sm">
-              <span className="text-xl shrink-0">💰</span>
-              <div className="flex items-center gap-3 w-full">
-                <div className="flex flex-col leading-none gap-0.5">
-                  <span className="text-[10px] text-emerald-600/80 uppercase font-bold">
-                    Share
-                  </span>
-                  <span className="font-bold text-emerald-800 text-sm">
-                    {formatCurrency(stats?.shared_cashback ?? 0)}
-                  </span>
-                </div>
-                <div className="w-[1px] h-6 bg-emerald-200/50" />
-                <div className="flex flex-col leading-none gap-0.5">
-                  <span className="text-[10px] text-emerald-600/80 uppercase font-bold">
-                    Remains
-                  </span>
-                  <span className="font-bold text-emerald-800 text-sm">
-                    {stats?.remains_cap !== null &&
-                      stats?.remains_cap !== undefined
-                      ? formatCurrency(stats.remains_cap)
-                      : "--"}
-                  </span>
-                </div>
+            {/* RIGHT: Info Block */}
+            <div className="flex-1 flex flex-col min-w-0">
+              {/* Name */}
+              <div className="mb-1">
+                <h3 className="font-bold text-slate-900 text-sm leading-tight line-clamp-2">
+                  {account.name}
+                </h3>
               </div>
-              {isMet && (
-                <div className="ml-auto inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-600 shrink-0">
-                  <CheckCircle className="w-3.5 h-3.5" />
-                </div>
-              )}
-            </div>
-          )
-        }
 
-        {/* PRIORITY 3: No Cashback Config */}
-        {
-          !showKPI && isCreditCard && !hasCashbackConfig && (
-            <div className="flex items-center justify-center bg-slate-50/50 p-2 rounded-md text-xs border border-slate-100 mb-2 text-slate-400 italic font-medium">
-              No cashback for this
-            </div>
-          )
-        }
+              {/* Balance */}
+              <div className="text-lg font-bold text-slate-900 tracking-tight mb-1">
+                {formatCurrency(displayBalance)} <span className="text-xs text-slate-400 font-medium">₫</span>
+              </div>
 
-        {/* 4. Secured By OR Unsecured Badge (MUST be BEFORE Limit bar) */}
-        {
-          isCreditCard && !hideSecuredBadge && (
-            <div className="mb-2 flex items-center">
-              {isSecuredAsset && securedByAccountId ? (
-                <TooltipProvider>
-                  <Tooltip delayDuration={300}>
-                    <TooltipTrigger asChild>
-                      <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-transparent hover:border-amber-200 transition-colors cursor-help">
-                        <Lock className="w-3 h-3" />
-                        <span className="text-[10px] font-bold uppercase tracking-wide">
-                          Secured by Savings
-                        </span>
-                      </div>
-                    </TooltipTrigger>
-                    <TooltipContent
-                      side="bottom"
-                      className="flex items-center gap-3 p-3 max-w-[280px]"
-                    >
-                      {(() => {
-                        const securedAsset = accounts.find(
-                          (a) => a.id === account.secured_by_account_id,
-                        );
-                        if (!securedAsset)
-                          return (
-                            <p className="text-xs">Linked to an unknown asset</p>
-                          );
-                        return (
-                          <>
-                            <div className="relative w-10 h-6 flex-shrink-0 bg-slate-100 rounded-sm overflow-hidden border border-slate-200">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              {securedAsset.image_url && (
-                                <img
-                                  src={securedAsset.image_url}
-                                  className="w-full h-full object-contain p-1"
-                                  alt=""
-                                />
-                              )}
-                            </div>
-                            <div>
-                              <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider mb-0.5">
-                                Secured By
-                              </p>
-                              <p className="text-sm font-bold text-slate-900 line-clamp-2">
-                                {securedAsset.name}
-                              </p>
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
-                  <ShieldCheck className="w-3 h-3" />
-                  Unsecured
-                </span>
-              )}
-            </div>
-          )
-        }
-
-        {/* 5. Credit Card Progress Bar (MUST be AFTER Secured by) */}
-        {
-          isCreditCard && (
-            <div className="mb-2">
-              <div className="flex justify-between items-end mb-1">
-                <span className="text-[10px] text-slate-500 font-medium">
-                  Limit:{" "}
-                  <span className="font-bold text-slate-700">
-                    {formattedLimit}
-                  </span>
-                </span>
-                <span
-                  className={cn(
-                    "text-[10px] font-bold",
-                    usageVal > 80 ? "text-red-600" : "text-slate-600",
+              {/* Parent / Child Badges - BELOW BALANCE */}
+              {(isClusterParent || isClusterChild) && (
+                <div className="flex items-center gap-1 mb-2">
+                  {isClusterParent && (
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
+                      <Users className="w-3 h-3" />
+                      <span className="text-[9px] font-bold uppercase">Parent +{childCount}</span>
+                    </div>
                   )}
-                >
-                  {Math.min(usageVal, 100).toFixed(0)}% Used
-                </span>
-              </div>
-              <TooltipProvider>
-                <Tooltip delayDuration={0}>
-                  <TooltipTrigger asChild>
-                    <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden cursor-help">
-                      <div
-                        className={cn(
-                          "h-full transition-all duration-700 ease-out rounded-full shadow-sm",
-                          progressColorClass,
-                        )}
-                        style={{ width: `${Math.min(usageVal, 100)}%` }}
-                      />
+                  {isClusterChild && (
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-100">
+                      <Baby className="w-3 h-3" />
+                      <span className="text-[9px] font-bold uppercase">Child</span>
                     </div>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="bottom"
-                    sideOffset={6}
-                    className="z-[70] text-xs font-semibold"
-                  >
-                    Used: {formattedUsed} / Limit: {formattedLimit}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+                  )}
+                </div>
+              )}
+
+              {/* UNIFIED STATS BLOCK (Gray Bg) */}
+              {/* Added 'Cashback Config' here */}
+              <div className="mt-auto bg-slate-50/80 rounded-xl p-2.5 border border-slate-100">
+                {/* Cycle Date */}
+                <div className="flex items-center gap-1.5 mb-2 text-slate-400">
+                  <CalendarClock className="w-3 h-3" />
+                  <span className="text-[9px] font-bold uppercase tracking-wider">{stats?.cycle_range || "Current Cycle"}</span>
+                </div>
+
+                {/* Need / Spent Columns */}
+                <div className="flex items-center justify-between">
+                  {/* Need */}
+                  <div>
+                    <div className="flex items-center gap-1 text-[8px] uppercase font-bold text-slate-400 mb-0.5">
+                      Need <ArrowDownLeft className="w-2 h-2" />
+                    </div>
+                    <div className="text-xs font-bold text-slate-900">
+                      {stats?.missing_for_min && stats.missing_for_min > 0 ? formatCurrency(stats.missing_for_min) : "---"}
+                    </div>
+                  </div>
+                  {/* Divider */}
+                  <div className="w-px h-8 bg-slate-200 mx-2" />
+                  {/* Spent */}
+                  <div className="text-right">
+                    <div className="flex items-center justify-end gap-1 text-[8px] uppercase font-bold text-slate-400 mb-0.5">
+                      Spent <ArrowUpRight className="w-2 h-2" />
+                    </div>
+                    <div className="text-xs font-bold text-slate-900">
+                      {formatCurrency(stats?.spent_this_cycle ?? 0)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Target Completion */}
+                {stats?.missing_for_min && stats.missing_for_min > 0 && (
+                  <div className="mt-2.5 w-full">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-[8px] font-bold text-slate-400 uppercase">Target</span>
+                      <span className="text-[8px] font-bold text-blue-600">{usageData.percent < 100 ? `${(100 - (stats.missing_for_min / (stats.min_spend || 1) * 100)).toFixed(0)}%` : "100%"}</span>
+                    </div>
+                    <div className="h-1 bg-slate-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.max(0, Math.min(100, 100 - (stats.missing_for_min / (stats.min_spend || 1) * 100)))}%` }} />
+                    </div>
+                  </div>
+                )}
+
+                {/* CASHBACK CONFIG - MOVED INSIDE STATS BLOCK */}
+                {cashbackConfig && cashbackConfig.hasAdvanced && (
+                  <div className="mt-2 pt-2 border-t border-slate-200">
+                    <TooltipProvider>
+                      <Tooltip delayDuration={0}>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center justify-between cursor-help group/adv px-1 py-0.5 rounded hover:bg-slate-100 transition-colors">
+                            <div className="flex items-center gap-2">
+                              <div className="text-emerald-600"><ShieldCheck className="w-3 h-3" /></div>
+                              <span className="text-[9px] font-bold text-emerald-800 uppercase tracking-wider leading-tight">
+                                {cashbackConfig.defaultRate > 0
+                                  ? `+${(cashbackConfig.defaultRate * 100).toFixed(1)}% Unlimited`
+                                  : "Cashback Active"
+                                }
+                              </span>
+                            </div>
+                            <Info className="w-3 h-3 text-slate-300 group-hover/adv:text-emerald-500 transition-colors" />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" className="p-3 max-w-[240px]">
+                          <div className="space-y-2">
+                            <p className="text-xs font-bold text-slate-900 border-b border-slate-100 pb-1 mb-1">Cashback Policy</p>
+                            {cashbackConfig.defaultRate > 0 && (
+                              <div className="flex items-start gap-2 text-[10px] leading-tight">
+                                <CheckCircle className="w-3 h-3 mt-0.5 text-emerald-500 shrink-0" />
+                                <span className="text-slate-600">
+                                  Base Rate: <span className="font-bold text-slate-800">{(cashbackConfig.defaultRate * 100).toFixed(2)}%</span> on all spend
+                                </span>
+                              </div>
+                            )}
+                            {cashbackConfig.levels.map((lvl: any, idx: number) => (
+                              <div key={idx} className="flex items-start gap-2 text-[10px] leading-tight">
+                                <CheckCircle className="w-3 h-3 mt-0.5 text-blue-500 shrink-0" />
+                                <span className="text-slate-600">
+                                  {lvl.name}: {lvl.rules?.length > 0 ? "Tiered Rules Applied" : "Custom Rate"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                )}
+              </div>
             </div>
-          )
-        }
-
-        {/* 6. BOTTOM: Quick Add Buttons (ALWAYS LAST) */}
-        <div className="mt-auto grid grid-cols-5 gap-1 pt-1.5 border-t border-slate-50">
-          {/* Income */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveDialog("income");
-            }}
-            className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100 transition-all"
-            title="Add Income"
-          >
-            <ArrowDownLeft className="w-3.5 h-3.5" />
-            Income
-          </button>
-
-          {/* Expense */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveDialog("expense");
-            }}
-            className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-bold bg-rose-50 text-rose-700 border border-rose-100 hover:bg-rose-100 transition-all"
-            title="Add Expense"
-          >
-            <ArrowUpRight className="w-3.5 h-3.5" />
-            Expense
-          </button>
-
-          {/* Transfer or Paid (for Credit Cards) */}
-          {isCreditCard ? (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveDialog("paid");
-              }}
-              className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-100 hover:bg-amber-100 transition-all"
-              title="Credit Pay"
-            >
-              <CheckCircle className="w-3.5 h-3.5" />
-              Pay
-            </button>
-          ) : (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveDialog("transfer");
-              }}
-              className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-bold bg-slate-50 text-slate-700 border border-slate-100 hover:bg-slate-100 transition-all"
-              title="Transfer"
-            >
-              <ArrowRightLeft className="w-3.5 h-3.5" />
-              Transfer
-            </button>
-          )}
-
-          {/* Lend (With Hover List) */}
-          <HoverCard>
-            <HoverCardTrigger asChild>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveDialog("debt");
-                }}
-                className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-bold bg-violet-50 text-violet-700 border border-violet-100 hover:bg-violet-100 transition-all"
-                title="Lend Money"
-              >
-                <ArrowUpRight className="w-3.5 h-3.5" />
-                Lend
-              </button>
-            </HoverCardTrigger>
-            <HoverCardContent
-              className="w-56 p-1 z-[60]"
-              align="center"
-              side="top"
-            >
-              <div className="grid gap-1">
-                <p className="px-2 py-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Quick Lend To
-                </p>
-                {sortedPeople.map((person) => (
-                  <button
-                    key={person.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedPersonId(person.id);
-                      setActiveDialog("debt");
-                    }}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-left text-slate-700 hover:bg-violet-50 hover:text-violet-700 rounded-md transition-colors"
-                  >
-                    {person.avatar_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={person.avatar_url}
-                        alt=""
-                        className="w-4 h-4 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-600">
-                        {getAccountInitial(person.name)}
-                      </div>
-                    )}
-                    <span className="truncate flex-1">{person.name}</span>
-                  </button>
-                ))}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-start text-xs text-slate-500 hover:bg-slate-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveDialog("people-settings");
-                  }}
-                >
-                  <Settings className="w-3 h-3 mr-2" /> Manage List
-                </Button>
-              </div>
-            </HoverCardContent>
-          </HoverCard>
-
-          {/* Repay (With Hover List) */}
-          <HoverCard>
-            <HoverCardTrigger asChild>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setActiveDialog("repayment");
-                }}
-                className="flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-md text-[9px] font-bold bg-teal-50 text-teal-700 border border-teal-100 hover:bg-teal-100 transition-all"
-                title="Receive Repayment"
-              >
-                <ArrowDownLeft className="w-3.5 h-3.5" />
-                Repay
-              </button>
-            </HoverCardTrigger>
-            <HoverCardContent
-              className="w-56 p-1 z-[60]"
-              align="center"
-              side="top"
-            >
-              <div className="grid gap-1">
-                <p className="px-2 py-1 text-[10px] font-semibold text-slate-500 uppercase tracking-wider">
-                  Quick Repay From
-                </p>
-                {sortedPeople.map((person) => (
-                  <button
-                    key={person.id}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedPersonId(person.id);
-                      setActiveDialog("repayment");
-                    }}
-                    className="flex items-center gap-2 w-full px-2 py-1.5 text-xs text-left text-slate-700 hover:bg-teal-50 hover:text-teal-700 rounded-md transition-colors"
-                  >
-                    {person.avatar_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={person.avatar_url}
-                        alt=""
-                        className="w-4 h-4 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-[8px] font-bold text-slate-600">
-                        {getAccountInitial(person.name)}
-                      </div>
-                    )}
-                    <span className="truncate flex-1">{person.name}</span>
-                  </button>
-                ))}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="w-full justify-start text-xs text-slate-500 hover:bg-slate-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveDialog("people-settings");
-                  }}
-                >
-                  <Settings className="w-3 h-3 mr-2" /> Manage List
-                </Button>
-              </div>
-            </HoverCardContent>
-          </HoverCard>
-        </div>
-      </div >
-    );
-  };
-
-  return (
-    <>
-      <div className="relative">
-        {/* Due Banner - At top of left section with rounded top-left corner */}
-        {/* Show for ALL Credit Cards with a due date */}
-
-        <div
-          className={cn(
-            "group/card relative block w-full rounded-xl border-2 shadow-sm transition-all overflow-hidden h-full",
-            // Border Color Logic
-            cardState.badges.due
-              ? "bg-red-50/50 border-red-500 shadow-md" // Urgent
-              : needsSpendMore
-                ? "bg-amber-50/50 border-amber-400" // Needs Spend
-                : "bg-white border-slate-300", // Default
-            className,
-          )}
-        >
-          {/* Portrait Strip Layout: Fixed width left (120px/132px), flexible right */}
-          <div className="grid grid-cols-[auto_1fr] h-full">
-            {renderVisualSection()}
-            {renderDataSection()}
           </div>
         </div>
+
+        {/* BOTTOM SECTION: Full Width Features */}
+        <div className="mt-auto">
+          {/* Live Cashback Banner */}
+          {cashbackById?.[account.id]?.sharedAmount && cashbackById?.[account.id]?.sharedAmount > 0 && (
+            <div className="w-full bg-gradient-to-r from-emerald-50 to-emerald-100/50 border-t border-emerald-100 px-4 py-1.5 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="bg-white p-1 rounded-full shadow-sm text-emerald-600"><TrendingUp className="w-3 h-3" /></div>
+                <span className="text-[9px] font-bold text-emerald-800 uppercase tracking-wider">
+                  {cashbackById?.[account.id]?.sharedAmount / (cashbackById?.[account.id]?.total_spend_eligible || 1) * 100 > 0 ? `${(cashbackById?.[account.id]?.sharedAmount / (cashbackById?.[account.id]?.total_spend_eligible || 1) * 100).toFixed(1)}% Yield` : "Active"}
+                </span>
+              </div>
+              <div className="text-xs font-bold text-emerald-700">
+                +{formatCurrency(cashbackById?.[account.id]?.sharedAmount)}
+              </div>
+            </div>
+          )}
+
+          {/* LIMIT BAR */}
+          {isCreditCard && (
+            <div className="bg-white px-4 py-2 border-t border-slate-50">
+              <div className="flex justify-between items-center mb-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Wallet className="w-3 h-3 text-slate-400" />
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Limit: {usageData.formattedLimit}</span>
+                </div>
+                <span className={cn("text-[9px] font-bold", usageData.percent > 90 ? "text-red-600" : "text-slate-900")}>
+                  {usageData.percent.toFixed(0)}%
+                </span>
+              </div>
+              <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                <div className={cn("h-full rounded-full transition-all duration-500", usageData.percent > 90 ? "bg-red-500" : "bg-slate-800")} style={{ width: `${Math.min(100, usageData.percent)}%` }} />
+              </div>
+            </div>
+          )}
+
+          {/* ACTION BAR - Compact & Colored */}
+          <div className="flex border-t border-slate-100 divide-x divide-slate-100">
+            {/* 1. Income (Green) */}
+            <div className="flex-1 py-2.5 flex items-center justify-center hover:bg-emerald-50 cursor-pointer group/btn transition-colors" onClick={(e) => { e.stopPropagation(); setActiveDialog("income"); }}>
+              <div className="p-1.5 rounded-full bg-slate-50 group-hover/btn:bg-white text-slate-400 group-hover/btn:text-emerald-600 transition-all border border-transparent group-hover/btn:border-emerald-100 group-hover/btn:shadow-sm">
+                <ArrowDownLeft className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </div>
+            </div>
+            {/* 2. Expense (Red) */}
+            <div className="flex-1 py-2.5 flex items-center justify-center hover:bg-rose-50 cursor-pointer group/btn transition-colors" onClick={(e) => { e.stopPropagation(); setActiveDialog("expense"); }}>
+              <div className="p-1.5 rounded-full bg-slate-50 group-hover/btn:bg-white text-slate-400 group-hover/btn:text-rose-600 transition-all border border-transparent group-hover/btn:border-rose-100 group-hover/btn:shadow-sm">
+                <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </div>
+            </div>
+            {/* 3. Transfer */}
+            <div className="flex-1 py-2.5 flex items-center justify-center hover:bg-amber-50 cursor-pointer group/btn transition-colors" onClick={(e) => { e.stopPropagation(); setActiveDialog("paid"); }}>
+              {isCreditCard ? (
+                <div className="p-1.5 rounded-full bg-slate-50 group-hover/btn:bg-white text-slate-400 group-hover/btn:text-amber-600 transition-all border border-transparent group-hover/btn:border-amber-100 group-hover/btn:shadow-sm">
+                  <CheckCircle className="w-3.5 h-3.5" strokeWidth={2.5} />
+                </div>
+              ) : (
+                <div className="p-1.5 rounded-full bg-slate-50 group-hover/btn:bg-white text-slate-400 group-hover/btn:text-blue-600 transition-all border border-transparent group-hover/btn:border-blue-100 group-hover/btn:shadow-sm" onClick={(e) => { e.stopPropagation(); setActiveDialog("transfer"); }}>
+                  <ArrowRightLeft className="w-3.5 h-3.5" strokeWidth={2.5} />
+                </div>
+              )}
+            </div>
+            {/* 4. Lend (Red) */}
+            <div className="flex-1 py-2.5 flex items-center justify-center hover:bg-red-50 cursor-pointer group/btn transition-colors" onClick={(e) => { e.stopPropagation(); setActiveDialog("debt"); }}>
+              <div className="p-1.5 rounded-full bg-slate-50 group-hover/btn:bg-white text-slate-400 group-hover/btn:text-red-500 transition-all border border-transparent group-hover/btn:border-red-100 group-hover/btn:shadow-sm">
+                <UserMinus className="w-3.5 h-3.5" strokeWidth={2.5} />
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
 
       {/* Controlled Dialogs */}
@@ -1184,11 +559,12 @@ function AccountCardComponent({
         people={people}
         shops={shops}
         defaultType="transfer"
-        // Source should be user specified (Bank), so we remove defaultSourceAccountId
-        // We set destination to this card
+        defaultSourceAccountId={undefined} // Paid FROM somewhere else
         cloneInitialValues={{
           category_id: creditPaymentCatId,
-          debt_account_id: account.id,
+          debt_account_id: account.id, // Paid TO this card (technically 'debt_account_id' helper or just destination)
+          // Actually for Transfer, destination_account_id is key. But AddTransactionDialog might use a different prop for defaults.
+          // Let's rely on standard 'transfer' logic where user picks source (Bank) and dest (This Card).
         }}
         isOpen={activeDialog === "paid"}
         onOpenChange={(open) => !open && setActiveDialog(null)}
@@ -1258,15 +634,14 @@ function AccountCardComponent({
       />
 
       {/* Family Modal */}
-      {hasFamilyContext && (
-        <AccountFamilyModal
-          isOpen={isFamilyModalOpen}
-          onClose={() => setIsFamilyModalOpen(false)}
-          parentName={account.name}
-          childrenAccounts={childAccounts}
-          parentInfo={parentInfo}
-        />
-      )}
+      {/* Obsolete? We keep it for now as a detailed view if clicked */}
+      <AccountFamilyModal
+        isOpen={isFamilyModalOpen}
+        onClose={() => setIsFamilyModalOpen(false)}
+        parentName={account.name}
+        childrenAccounts={childAccounts}
+        parentInfo={parentInfo}
+      />
     </>
   );
 }

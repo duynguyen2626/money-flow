@@ -2,138 +2,233 @@
 description: Agent Prompt
 ---
 
-# Agent Prompt (ENG) — Fix Google Sheet Sync (Formatting + Safe Delete + Sorting)
+# Agent Task Prompt (ENG)
 
-## Objective
+## Title
 
-Fix Google Sheet sync behavior in **Money Flow 3** so that `pnpm run sheet:push` produces a deterministic, well-formatted table and safe row removal that never breaks the Summary block.
+Hard Refactor Accounts UI — MoneyFlow v3.8 (Family-Centric, Pixel-Exact)
 
-This is a **minimal, well-scoped** change set inside `sheetScript/**` (and only the smallest supporting docs if needed).
+## Absolute Rule (READ FIRST)
 
-## Mandatory reading (do this first)
+You are **NOT allowed** to reuse or lightly tweak existing Accounts UI layout.
+This task requires a **clean refactor** that **matches the provided mockups (Images 2–4)**.
 
-1. Read **all** files under `sheetScript/**`.
-2. Read `.env.example` and any env docs mentioning `SHEET_ID` / script id.
-3. Search repo docs for: `sheet:push`, `sheetScript`, `sync`, `resync`.
-4. Locate transaction→sheet mapping and operations paths by searching for keywords:
+❌ Do NOT:
 
-   * `Final Price`, `% Back`, `Sum Back`, `shop`, `Notes`, `void`, `delete`, `upsert`, `resync`.
-5. Read `.agent/rules/gravityrules.md` and `.agent/workflows/*.md` (commit workflow, constraints).
+* Reuse old layout structure and "restyle" it
+* Mix old sections with new ones
+* Improvise your own design
 
-## Constraints
+✅ You MUST:
 
-* **Do NOT change business logic** (domain math, cashback/debt rules, etc.).
-* **No new dependencies**.
-* Keep changes **minimal** and **reviewable**.
-* All fixes must apply in BOTH:
+* Treat Images **2 / 3 / 4** as the **single source of truth**
+* Build UI strictly according to the specification below
 
-  * create-new sheet/tab
-  * resync existing sheet/tab
-* Never break existing formulas (especially in computed columns and Summary area).
+Image 1 = ❌ WRONG (current, rejected)
+Images 2–4 = ✅ CORRECT (target)
 
-## Issues to fix (must)
+---
 
-### A) Formatting applies on BOTH create + resync
+## Visual Comparison Requirement (MANDATORY)
 
-For **table A:J only** (header row 1, data starts row 2):
+Before coding, you must explicitly compare:
 
-1. Column widths:
+* **Image 1** (current broken design)
+* **Image 2–4** (approved mockups)
 
-   * Shop column: **centered**, width **44px**
-   * Notes column: width **250px**
-   * Others: reasonable (avoid giant Notes)
-2. Alignment:
+And understand why Image 1 is wrong:
 
-   * Shop cells: horizontal + vertical center
-   * Date: left or center (consistent)
-   * Numbers: right-aligned
-3. Number formats:
+* Old code reused
+* No clear Family (Parent–Child) ecosystem
+* Card sections fragmented
+* No visual bridge between Parent & Child
+* Cashback rules feel bolted-on, not integrated
 
-   * Amount + Final Price: thousands separators; prefer `#,##0` for VND; allow decimals where needed
-   * % Back: consistent percent/number convention
-   * Sum Back: numeric format that supports decimals when any (`#,##0.00`)
-4. Resync re-applies:
+Your implementation will be reviewed **side-by-side with the mockups**.
 
-   * header style
-   * widths
-   * number formats
-   * borders for populated rows
-5. Borders:
+---
 
-   * every populated data row in A:J has borders
-   * blank rows below last data row: **no borders**
+## Core Design Concept
 
-### B) Safe void/delete must NOT break Summary (L:N)
+**MoneyFlow v3.8 = Family Financial Ecosystem**
 
-Current bug: deleting a sheet row shifts Summary (L1:N6) and nukes formulas (#REF).
+Parent–Child accounts are NOT independent cards.
+They form a **financial cluster** and must always be rendered together.
 
-Fix:
+---
 
-* **Never call `sheet.deleteRow(rowIndex)`** when removing a transaction.
-* Delete/shift **ONLY within A:J** using `Range.deleteCells(SpreadsheetApp.Dimension.ROWS)` (or equivalent) so only A:J shifts up.
-* Summary columns L:N must remain untouched.
+## 1. Family Logic (CRITICAL)
 
-### C) Insertion ordering by date
+### 1.1 Family Search Logic
 
-If inserting a txn with earlier date (e.g., 16/12/2025), it must appear in the correct position (sorted ascending by Date), not appended to the bottom.
+When searching by name:
 
-Safest approach:
+* Searching Parent OR Child → ALWAYS render the **entire family cluster** (2–3 cards)
+* Never show a Child alone
+* Never break financial context
 
-* After any upsert, **sort only A:J (excluding header)** by Date column (and Time if present).
-* Sorting must be range-limited so it does not touch Summary L:N.
+---
 
-### D) Resync deterministic & Summary stable
+### 1.2 Family Bridge (Visual + Structural)
 
-* Rebuild only data region (A:J)
-* Keep Summary region intact
-* If Summary formulas depend on table range, ensure table range remains stable:
+Between Parent and Child cards:
 
-  * header fixed at row 1
-  * data begins at row 2
+* Render a **Link / Chain icon** at the exact center
+* Draw a **dashed connector line** between cards
+* This bridge represents the "financial bloodstream"
 
-## Implementation guidance (preferred small helpers)
+Rules:
 
-Create / consolidate to ONE source of truth:
+* Icon must be centered between cards
+* Connector uses dashed border (not solid)
+* Bridge is part of layout, not decoration
 
-* `applyTableFormatting(sheet)`
+---
 
-  * header formatting
-  * column widths
-  * alignment rules
-  * number formats
-* `applyTableBorders(sheet, lastDataRow)`
+## 2. Grid System (NON-NEGOTIABLE)
 
-  * apply borders to A1:J
-  * clear borders below lastDataRow (only if script currently touches those rows)
-* `sortTableByDate(sheet, lastDataRow)`
+* Base grid is **grid-cols-2** (even when zoomed)
+* Purpose: prevent Parent–Child cards from stacking vertically
+* Families always occupy **2 columns as a unit**
 
-  * sort only range A2:J
-* `deleteTableRowCells(sheet, rowIndex)`
+Responsive behavior:
 
-  * delete cells in A:J for that row and shift up
-  * MUST NOT delete entire sheet row
+* Mobile: Family cluster stacks internally but remains grouped
+* Desktop: Family cluster is horizontal
 
-If there are multiple old implementations, consolidate to one.
+No grid-cols-3 / 4 / 5 experiments are allowed.
 
-## Acceptance criteria
+---
 
-* Create new sheet/tab → formatting correct.
-* Resync existing sheet/tab → formatting corrected and re-applied.
-* Void/delete in middle of table → Summary L:N never shifts; no #REF.
-* Insert earlier-date txn → appears in correct sorted position.
-* Borders appear for all populated rows only.
+## 3. Card Design — Modern Slate System
 
-## Deliverables
+### Card Container
 
-1. Code changes in `sheetScript/**` implementing A–D.
-2. A short dev note in repo explaining:
+* Border radius: **rounded-3xl**
+* Clean slate background
+* Border color reflects status:
 
-   * why we don’t delete whole rows
-   * why sorting must be range-limited
-3. A short user verification checklist (6–8 steps).
+  * Urgent → Red
+  * Warning → Amber
+  * Normal → Slate
 
-## Output format (for your final response)
+---
 
-* List files changed
-* Bullet summary of behavior changes
-* Verification checklist
+### Header Zone
+
+* Left: Days Left badge
+* Right: Secured / Unsecured badge (green / amber)
+* Edit icon aligned, minimal
+
+Badges must be visually balanced (symmetrical weight).
+
+---
+
+### Need / Spent Zone (VERY IMPORTANT)
+
+* Single unified section (NOT split cards)
+* Vertical divider between Need and Spent
+* Numbers must never overlap or wrap awkwardly
+* Billing Cycle label sits ABOVE this zone
+
+---
+
+### Feature Zone (Height Consistency Rule)
+
+Cashback Bar and Progress Bar:
+
+* Must share the SAME visual height
+* Enforce `min-h-[44px]`
+* This prevents cards from becoming uneven
+
+Cashback Rules:
+
+* Render as integrated block inside card
+* Tooltip expands from same area
+* No floating / detached popovers
+
+---
+
+### Media Integration
+
+* Card image is PART of the card
+* Do NOT split image into a separate visual column
+* Image, content, and actions are one cohesive unit
+
+---
+
+### Action Bar
+
+* 4 icon-only actions
+* Equal width buttons
+* Soft pastel backgrounds
+* Tooltip on hover
+
+---
+
+## 4. Interaction & Loading UX (GLOBAL)
+
+### 4.1 Modal Add / Edit (ALL MODALS)
+
+On Save / Update:
+
+* Button enters loading state
+* Button disabled immediately
+* Prevent double submit completely
+
+---
+
+### 4.2 Navigation Loading (ALL CLICKABLE ITEMS)
+
+Any click that causes:
+
+* route change
+* data fetch
+
+MUST:
+
+* Show loading indicator immediately
+* Never leave static screen
+
+This includes Accounts → People → Transactions → Details.
+
+---
+
+## 5. Technical Constraints
+
+* UI ONLY refactor
+* Do NOT change domain logic
+* No new libraries
+* Tailwind + shadcn + lucide-react only
+* Create NEW layout components if needed
+* Old layout code must be deleted if obsolete
+
+---
+
+## Files Expected to Change
+
+* `src/app/accounts/page.tsx`
+* `src/components/moneyflow/account-list.tsx`
+* `src/components/moneyflow/account-card.tsx`
+* New family-cluster layout components (if needed)
+* Modal components (loading states)
+
+---
+
+## Acceptance Criteria (STRICT)
+
+* UI matches mockups (Images 2–4) visually
+* Family clusters never break
+* Parent–Child bridge is visible and clear
+* Cards are height-aligned
+* No reuse of old broken layout
+* Loading feedback everywhere
+* `pnpm run build` passes
+
+---
+
+## Final Output
+
+1. Files changed
+2. Screenshot comparison: Image 1 vs New UI
+3. Checklist confirming each rule above

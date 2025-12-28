@@ -5,7 +5,7 @@ import { LayoutGrid, List, Search, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, C
 import { CreateAccountDialog } from './create-account-dialog'
 import { AccountCard } from './account-card'
 import { AccountTable } from './account-table'
-import { FamilyCardGroup } from './family-card-group'
+import { FamilyCluster } from './family-cluster'
 import { Account, AccountCashbackSnapshot, Category, Person, Shop } from '@/types/moneyflow.types'
 import { updateAccountConfigAction } from '@/actions/account-actions'
 import { computeNextDueDate, getSharedLimitParentId } from '@/lib/account-utils'
@@ -22,35 +22,23 @@ type AccountListProps = {
   people: Person[]
   shops: Shop[]
   pendingBatchAccountIds?: string[]
-  usageStats?: UsageStats // Proper type
+  usageStats?: UsageStats
   quickPeopleConfig?: QuickPeopleConfig
 }
 
 type ViewMode = 'grid' | 'table'
-type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt' | 'waiting_confirm' | 'need_to_spend' | 'family_cards'
+type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt' | 'waiting_confirm' | 'need_to_spend'
 type SortKey = 'due_date' | 'balance' | 'limit'
 type SortOrder = 'asc' | 'desc'
 
-const FILTERS: { key: FilterKey; label: string; match: (account: Account, allAccounts?: Account[]) => boolean }[] = [
+const FILTERS: { key: FilterKey; label: string; match: (account: Account) => boolean }[] = [
   { key: 'all', label: 'All', match: () => true },
   { key: 'bank', label: 'Bank', match: account => ['bank', 'cash', 'ewallet'].includes(account.type) },
   { key: 'credit', label: 'Credit', match: account => account.type === 'credit_card' },
   { key: 'savings', label: 'Savings', match: account => ['savings', 'investment', 'asset'].includes(account.type) },
   { key: 'debt', label: 'Debt', match: account => account.type === 'debt' },
-  {
-    key: 'family_cards',
-    label: 'Family Cards',
-    match: (account, allAccounts) =>
-      !!account.secured_by_account_id ||
-      !!account.parent_account_id ||
-      (account.relationships?.child_count ?? 0) > 0 ||
-      // Also include assets that secure other cards
-      !!account.relationships?.is_parent ||
-      // Also include assets that secure other cards
-      (allAccounts?.some(acc => acc.secured_by_account_id === account.id) ?? false)
-  },
-  { key: 'waiting_confirm', label: 'Waiting Confirm', match: () => true },
-  { key: 'need_to_spend', label: 'Need To Spend', match: () => true },
+  { key: 'waiting_confirm', label: 'Waiting Confirm', match: () => true }, // Logic handled separately
+  { key: 'need_to_spend', label: 'Need To Spend', match: () => true }, // Logic handled separately
 ]
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
@@ -68,7 +56,6 @@ function getDaysUntilDue(account: Account): number {
 
 function getAccountBalance(account: Account, allAccounts: Account[]): number {
   const netBalance = (account.total_in ?? 0) + (account.total_out ?? 0)
-
   if (account.type !== 'credit_card') return netBalance
 
   const sharedLimitParentId = getSharedLimitParentId(account.cashback_config)
@@ -80,11 +67,9 @@ function getAccountBalance(account: Account, allAccounts: Account[]): number {
       const totalDebt = familyMembers.reduce((sum, member) => {
         return sum + (member.current_balance ?? 0)
       }, 0)
-
       return (parent.credit_limit ?? 0) - totalDebt
     }
   }
-
   return getCreditCardAvailableBalance(account)
 }
 
@@ -143,220 +128,121 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
     [items]
   )
 
+  // 1. Filter Logic
   const filteredItems = useMemo(() => {
     let filtered = activeItems
 
+    // Filter Logic
     if (activeFilter === 'waiting_confirm') {
       filtered = filtered.filter(acc => pendingBatchAccountIds.includes(acc.id))
     } else if (activeFilter === 'need_to_spend') {
       filtered = filtered.filter(acc => (cashbackById[acc.id]?.missing_min_spend ?? 0) > 0)
     } else {
-      filtered = filtered.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc, items))
+      filtered = filtered.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc))
     }
 
+    // 2. Search Logic (Family Expansion)
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(acc => acc.name.toLowerCase().includes(query))
+      // Find matching IDs first
+      const matchedIds = new Set(
+        items.filter(acc => acc.name.toLowerCase().includes(query)).map(a => a.id)
+      )
+
+      // Expand to include families
+      const expandedIds = new Set<string>()
+      items.forEach(acc => {
+        if (matchedIds.has(acc.id)) {
+          expandedIds.add(acc.id)
+          // If parent, add children
+          if (acc.relationships?.child_accounts) {
+            acc.relationships.child_accounts.forEach(c => expandedIds.add(c.id))
+          }
+          // If child, add parent and siblings
+          if (acc.parent_account_id) {
+            expandedIds.add(acc.parent_account_id)
+            // Assume parent exists in items
+            const parent = items.find(p => p.id === acc.parent_account_id)
+            if (parent?.relationships?.child_accounts) {
+              parent.relationships.child_accounts.forEach(c => expandedIds.add(c.id))
+            }
+          }
+        }
+      })
+
+      filtered = items.filter(acc => expandedIds.has(acc.id) && acc.is_active !== false)
     }
-
     return filtered
-  }, [activeItems, activeFilter, searchQuery, pendingBatchAccountIds])
+  }, [items, activeItems, activeFilter, searchQuery, pendingBatchAccountIds, cashbackById])
 
+  // 3. Sorting
   const sortedItems = useMemo(() => {
     const sorted = [...filteredItems]
-
     sorted.sort((a, b) => {
       let comparison = 0
-
       switch (sortKey) {
-        case 'due_date':
-          comparison = getDaysUntilDue(a) - getDaysUntilDue(b)
-          break
-        case 'balance':
-          comparison = getAccountBalance(a, items) - getAccountBalance(b, items)
-          break
-        case 'limit':
-          comparison = (a.credit_limit ?? 0) - (b.credit_limit ?? 0)
-          break
+        case 'due_date': comparison = getDaysUntilDue(a) - getDaysUntilDue(b); break;
+        case 'balance': comparison = getAccountBalance(a, items) - getAccountBalance(b, items); break;
+        case 'limit': comparison = (a.credit_limit ?? 0) - (b.credit_limit ?? 0); break;
       }
-
       return sortOrder === 'asc' ? comparison : -comparison
     })
-
     return sorted
   }, [filteredItems, sortKey, sortOrder, items])
 
-  const grouped = useMemo(() => {
-    // Grouping Logic using unified getCardActionState
-    const actionRequired: { account: Account, sortOrder: number }[] = []
-    const upcomingCC: Account[] = []
-    const payment: Account[] = []
-    const securedSavings: Account[] = []
-    const normalSavings: Account[] = []
-    const debt: Account[] = []
+  // --- Display Item Interface ---
+  type DisplayItem =
+    | { type: 'single', account: Account }
+    | { type: 'family', parent: Account, children: Account[], id: string }
 
-    sortedItems.forEach(acc => {
-      const hasPendingBatch = pendingBatchAccountIds.includes(acc.id)
-      const state = getCardActionState(acc, hasPendingBatch)
-
-      if (state.section === 'action_required') {
-        actionRequired.push({ account: acc, sortOrder: state.priorities.sortOrder })
-        return
-      }
-
-      if (state.section === 'credit_card') {
-        upcomingCC.push(acc)
-        return
-      }
-
-      // Fallback for non-credit cards (section 'other')
-      if (['bank', 'ewallet', 'cash'].includes(acc.type)) {
-        payment.push(acc)
-      } else if (['savings', 'investment', 'asset'].includes(acc.type)) {
-        const isSecuring = sortedItems.some(item => item.secured_by_account_id === acc.id)
-        if (isSecuring) {
-          securedSavings.push(acc)
-        } else {
-          normalSavings.push(acc)
-        }
-      } else if (acc.type === 'debt') {
-        debt.push(acc)
-      }
-    })
-
-    // Sort Action Required by collected sortOrder
-    actionRequired.sort((a, b) => a.sortOrder - b.sortOrder)
-
-    const sections: { key: string; title: string; helper: string; accounts: Account[], gridCols: string }[] = []
-
-    if (actionRequired.length > 0) {
-      sections.push({
-        key: 'action-required',
-        title: '⚠️ Action Required',
-        helper: 'Due soon · Need to spend · Pending confirm',
-        accounts: actionRequired.map(x => x.account),
-        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
-      })
-    }
-
-    if (upcomingCC.length > 0) {
-      sections.push({
-        key: 'upcoming-cc',
-        title: '📅 Credit Cards',
-        helper: 'Cards without immediate due dates',
-        accounts: upcomingCC,
-        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
-      })
-    }
-
-    if (payment.length > 0) {
-      sections.push({
-        key: 'payment',
-        title: '🏦 Payment Accounts',
-        helper: 'Banks · E-wallets · Cash',
-        accounts: payment,
-        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
-      })
-    }
-
-    if (securedSavings.length > 0) {
-      sections.push({
-        key: 'secured-savings',
-        title: '🔒 Secured Assets',
-        helper: 'Deposits linking to credit cards',
-        accounts: securedSavings,
-        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
-      })
-    }
-    if (normalSavings.length > 0) {
-      sections.push({
-        key: 'savings',
-        title: '💰 Savings & Assets',
-        helper: 'Term deposits · Investments',
-        accounts: normalSavings,
-        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
-      })
-    }
-
-    if (debt.length > 0) {
-      sections.push({
-        key: 'debt',
-        title: '👥 Debt Accounts',
-        helper: 'People & loans',
-        accounts: debt,
-        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
-      })
-    }
-
-    return sections
-  }, [sortedItems, pendingBatchAccountIds])
-
-  // Family Grouping Logic (for family_cards filter)
-  const familyGroups = useMemo(() => {
-    if (activeFilter !== 'family_cards') return []
-
-    type FamilyGroup = {
-      id: string
-      securedAsset?: Account
-      parent: Account
-      children: Account[]
-    }
-
-    const groups: FamilyGroup[] = []
+  // --- Process Items Logic ---
+  const displayItems = useMemo(() => {
+    // 4. Clustering
+    const result: DisplayItem[] = []
     const processedIds = new Set<string>()
 
-    // Find all parent accounts
-    const parents = sortedItems.filter(
-      acc => (acc.relationships?.child_count ?? 0) > 0 || acc.relationships?.is_parent
-    )
+    sortedItems.forEach(acc => {
+      if (processedIds.has(acc.id)) return
 
-    parents.forEach(parent => {
-      if (processedIds.has(parent.id)) return
+      // Check if Parent with Children in filtered list
+      const children = sortedItems.filter(c => c.parent_account_id === acc.id)
 
-      // Find secured asset if exists
-      const securedAsset = parent.secured_by_account_id
-        ? sortedItems.find(acc => acc.id === parent.secured_by_account_id)
-        : undefined
-
-      // Find children
-      const children = sortedItems.filter(
-        acc => acc.parent_account_id === parent.id || acc.relationships?.parent_info?.id === parent.id
-      )
-
-      groups.push({
-        id: parent.id,
-        securedAsset,
-        parent,
-        children,
-      })
-
-      // Mark as processed
-      processedIds.add(parent.id)
-      if (securedAsset) processedIds.add(securedAsset.id)
-      children.forEach(child => processedIds.add(child.id))
-    })
-
-    // Handle standalone secured cards (no parent/child relationship)
-    const standaloneSecured = sortedItems.filter(
-      acc => acc.secured_by_account_id && !processedIds.has(acc.id)
-    )
-
-    standaloneSecured.forEach(card => {
-      const securedAsset = sortedItems.find(acc => acc.id === card.secured_by_account_id)
-      if (securedAsset && !processedIds.has(card.id)) {
-        groups.push({
-          id: card.id,
-          securedAsset,
-          parent: card,
-          children: [],
+      if ((acc.relationships?.is_parent || children.length > 0) && children.length > 0) {
+        // It is a parent with visible children
+        result.push({
+          type: 'family',
+          id: acc.id,
+          parent: acc,
+          children: children
         })
-        processedIds.add(card.id)
-        processedIds.add(securedAsset.id)
+        processedIds.add(acc.id)
+        children.forEach(c => processedIds.add(c.id))
+      } else if (acc.parent_account_id) {
+        // Child
+        const parentInList = sortedItems.find(p => p.id === acc.parent_account_id)
+        if (parentInList) {
+          // Skip, handled by parent
+          return
+        } else {
+          result.push({ type: 'single', account: acc })
+          processedIds.add(acc.id)
+        }
+      } else {
+        // Standalone
+        result.push({ type: 'single', account: acc })
+        processedIds.add(acc.id)
       }
     })
 
-    return groups
-  }, [sortedItems, activeFilter])
+    // Fallback: Check for any missed items (due to sort order issues causing child to be skipped but parent never processed?)
+    // With sorted list, if child is first: parent found -> skip.
+    // Parent comes later -> processed -> child added.
+    // Works fine.
+
+    return result
+
+  }, [sortedItems, items])
+
 
   const handleToggleStatus = async (accountId: string, nextValue: boolean) => {
     setPendingId(accountId)
@@ -385,8 +271,8 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
   const currentSortLabel = SORT_OPTIONS.find(o => o.key === sortKey)?.label ?? 'Sort'
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between sticky top-0 z-40">
         <div className="flex flex-wrap items-center gap-2">
           {FILTERS.map(filter => (
             <FilterButton
@@ -397,7 +283,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
             />
           ))}
 
-          {/* Sort Popover - Show all options with asc/desc */}
+          {/* Sort Popover */}
           <Popover open={sortOpen} onOpenChange={setSortOpen}>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="ml-2 gap-1.5 text-xs h-8">
@@ -407,6 +293,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-52 p-1" align="start">
+              {/* Sort Options UI */}
               <div className="flex flex-col">
                 {SORT_OPTIONS.map(option => (
                   <div key={option.key} className="flex flex-col">
@@ -492,92 +379,54 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
         </div>
       </div>
 
-      {grouped.length === 0 && view === 'grid' ? (
+      {displayItems.length === 0 && view === 'grid' ? (
         <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-slate-500">
           No accounts match this filter.
         </div>
       ) : view === 'grid' ? (
-        activeFilter === 'family_cards' ? (
-          <FamilyCardGroup
-            families={familyGroups}
-            accounts={items}
-            categories={categories}
-            people={people}
-            shops={shops}
-            collateralAccounts={collateralAccounts}
-            usageStats={usageStats}
-            pendingBatchAccountIds={pendingBatchAccountIds}
-          // FamilyCardGroup also needs this prop, but for now we focus on AccountCard
-          />
-        ) : (
-          <div className="space-y-6">
-            {grouped.map(section => (
-              <div key={section.key} className="space-y-3">
-                <div className="flex items-center justify-between gap-3 bg-slate-50/50 p-2 rounded-lg border border-slate-100/50">
-                  <div>
-                    <p className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                      {section.title}
-                    </p>
-                    <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wide opacity-80 pl-6 -mt-0.5">{section.helper}</p>
-                  </div>
-                  <span className="rounded-full bg-slate-200/50 px-2 py-0.5 text-[10px] font-bold text-slate-600 border border-slate-200">
-                    {section.accounts.length}
-                  </span>
+        /* NEW GRID SYSTEM: grid-cols-2 */
+        /* NEW GRID SYSTEM: grid-cols-4 */
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start">
+          {displayItems.map(item => {
+            if (item.type === 'family') {
+              return (
+                <FamilyCluster
+                  key={item.id}
+                  parent={item.parent}
+                  children_accounts={item.children}
+                  allAccounts={items}
+                  cashbackById={cashbackById as Record<string, AccountCashbackSnapshot>}
+                  categories={categories}
+                  people={people}
+                  shops={shops}
+                  collateralAccounts={collateralAccounts}
+                  usageStats={usageStats}
+                  pendingBatchAccountIds={pendingBatchAccountIds}
+                  quickPeopleConfig={quickPeopleConfig}
+                // Identify Single/Orphan vs Family handled internally by FamilyCluster
+                />
+              )
+            } else {
+              return (
+                <div key={item.account.id} className="col-span-1">
+                  <AccountCard
+                    account={item.account}
+                    accounts={items}
+                    cashbackById={cashbackById}
+                    categories={categories}
+                    people={people}
+                    shops={shops}
+                    collateralAccounts={collateralAccounts}
+                    usageStats={usageStats}
+                    pendingBatchAccountIds={pendingBatchAccountIds}
+                    quickPeopleConfig={quickPeopleConfig}
+                  />
                 </div>
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-                  {section.accounts.map(account => (
-                    <AccountCard
-                      key={account.id}
-                      account={account}
-                      accounts={items}
-                      categories={categories}
-                      people={people}
-                      shops={shops}
-                      collateralAccounts={collateralAccounts}
-                      usageStats={usageStats}
-                      pendingBatchAccountIds={pendingBatchAccountIds}
-                      quickPeopleConfig={quickPeopleConfig}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
+              )
+            }
+          })}
+        </div>
 
-            {closedItems.length > 0 && (
-              <details
-                className="border-t border-slate-200 pt-6 mt-6"
-                open={showClosedAccounts}
-                onToggle={event => setShowClosedAccounts(event.currentTarget.open)}
-              >
-                <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
-                  <div className="flex items-center gap-2">
-                    <span>Closed accounts</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                      {closedItems.length}
-                    </span>
-                  </div>
-                  <span className="text-slate-500">{showClosedAccounts ? '▲' : '▼'}</span>
-                </summary>
-                <div className="mt-4 grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-                  {closedItems.map(account => (
-                    <AccountCard
-                      key={account.id}
-                      account={account}
-                      accounts={items}
-                      categories={categories}
-                      people={people}
-                      shops={shops}
-                      collateralAccounts={collateralAccounts}
-                      usageStats={usageStats}
-                      pendingBatchAccountIds={pendingBatchAccountIds}
-                      quickPeopleConfig={quickPeopleConfig}
-                    />
-                  ))}
-                </div>
-              </details>
-            )}
-          </div>
-        )
       ) : (
         <>
           <AccountTable
