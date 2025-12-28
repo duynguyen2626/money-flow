@@ -1175,9 +1175,9 @@ export function UnifiedTransactionTable({
   const displayedColumns = (isMobile ? mobileColumnOrder.map(key => defaultColumns.find(col => col.key === key)).filter(Boolean) as ColumnConfig[] : defaultColumns).filter(col => visibleColumns[col.key])
 
   return (
-    <div className="relative flex flex-col h-full overflow-hidden">
+    <div className="relative flex flex-col w-full">
       <div className={cn(
-        "relative w-full rounded-xl border border-slate-200 bg-card shadow-sm transition-colors duration-300 flex-1 overflow-y-auto md:overflow-hidden",
+        "relative w-full rounded-xl border border-slate-200 bg-card shadow-sm transition-colors duration-300",
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )} style={{} as React.CSSProperties}>
         <MobileTransactionsSimpleList
@@ -1201,54 +1201,75 @@ export function UnifiedTransactionTable({
         />
         {!isMobile && (
           <div className="hidden md:block flex-1 overflow-auto w-full scrollbar-visible h-full bg-white relative" style={{ scrollbarGutter: 'stable' }}>
-          <table
-            className="w-full caption-bottom text-sm border-collapse min-w-[800px] lg:min-w-0"
-            onMouseUp={handleCellMouseUp}
-            onMouseLeave={handleCellMouseUp}
-          >
-            <TableHeader className="sticky top-0 z-40 bg-white backdrop-blur text-foreground font-bold shadow-sm ring-1 ring-slate-200">
-              <TableRow className="hover:bg-transparent border-b border-slate-200">
-                {displayedColumns.map(col => {
-                  // Sticky Logic Removed Personally by User Request
-                  // "Mobile Layout bỏ freeze cột (bỏ cả Web luôn)" -> remove sticky classes
-                  const stickyClass = "";
-                  const stickyStyle: React.CSSProperties = { width: columnWidths[col.key] };
+            <table
+              className="w-full caption-bottom text-sm border-collapse min-w-[800px] lg:min-w-0"
+              onMouseUp={handleCellMouseUp}
+              onMouseLeave={handleCellMouseUp}
+            >
+              <TableHeader className="sticky top-0 z-40 bg-white backdrop-blur text-foreground font-bold shadow-sm ring-1 ring-slate-200">
+                <TableRow className="hover:bg-transparent border-b border-slate-200">
+                  {displayedColumns.map(col => {
+                    // Sticky Logic Removed Personally by User Request
+                    // "Mobile Layout bỏ freeze cột (bỏ cả Web luôn)" -> remove sticky classes
+                    const stickyClass = "";
+                    const stickyStyle: React.CSSProperties = { width: columnWidths[col.key] };
 
-                  const isMobileCategoryDate = isMobile && col.key === 'category'
-                  const columnLabel = isMobileCategoryDate ? 'Category / Date' : col.label
+                    const isMobileCategoryDate = isMobile && col.key === 'category'
+                    const columnLabel = isMobileCategoryDate ? 'Category / Date' : col.label
 
-                  return (
-                    <TableHead
-                      key={col.key}
-                      className={cn(
-                        "border-r border-slate-200 bg-slate-200 font-semibold text-slate-700 whitespace-nowrap sticky top-0 z-30 shadow-sm",
-                        // Ensure higher z-index for left-sticky columns to overlap standard headers during horizontal scroll
-                        (stickyStyle.left !== undefined) && "z-50",
-                        stickyClass
-                      )}
-                      style={stickyStyle}
-                    >
-                      {col.key === 'category' ? (
-                        <span>{columnLabel}</span>
-                      ) : col.key === 'date' || isMobileCategoryDate ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            className="rounded border-gray-300"
-                            checked={isAllSelected}
-                            onChange={e => handleSelectAll(e.target.checked)}
-                            disabled={isExcelMode}
-                          />
+                    return (
+                      <TableHead
+                        key={col.key}
+                        className={cn(
+                          "border-r border-slate-200 bg-slate-200 font-semibold text-slate-700 whitespace-nowrap sticky top-0 z-30 shadow-sm",
+                          // Ensure higher z-index for left-sticky columns to overlap standard headers during horizontal scroll
+                          (stickyStyle.left !== undefined) && "z-50",
+                          stickyClass
+                        )}
+                        style={stickyStyle}
+                      >
+                        {col.key === 'category' ? (
+                          <span>{columnLabel}</span>
+                        ) : col.key === 'date' || isMobileCategoryDate ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              className="rounded border-gray-300"
+                              checked={isAllSelected}
+                              onChange={e => handleSelectAll(e.target.checked)}
+                              disabled={isExcelMode}
+                            />
+                            <button
+                              className="flex items-center gap-1 group"
+                              onClick={() => {
+                                const nextDir =
+                                  sortState.key === 'date' ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
+                                setSortState({ key: 'date', dir: nextDir })
+                              }}
+                            >
+                              {columnLabel}
+                              {sortState.key === 'date' ? (
+                                sortState.dir === 'asc' ? (
+                                  <ArrowUp className="h-3 w-3 text-blue-600" />
+                                ) : (
+                                  <ArrowDown className="h-3 w-3 text-blue-600" />
+                                )
+                              ) : (
+                                <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                              )}
+                            </button>
+                          </div>
+                        ) : col.key === 'amount' ? (
                           <button
-                            className="flex items-center gap-1 group"
+                            className="flex items-center gap-1 group w-full justify-end"
                             onClick={() => {
                               const nextDir =
-                                sortState.key === 'date' ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
-                              setSortState({ key: 'date', dir: nextDir })
+                                sortState.key === col.key ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
+                              setSortState({ key: col.key as SortKey, dir: nextDir })
                             }}
                           >
                             {columnLabel}
-                            {sortState.key === 'date' ? (
+                            {sortState.key === col.key ? (
                               sortState.dir === 'asc' ? (
                                 <ArrowUp className="h-3 w-3 text-blue-600" />
                               ) : (
@@ -1258,910 +1279,264 @@ export function UnifiedTransactionTable({
                               <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                             )}
                           </button>
-                        </div>
-                      ) : col.key === 'amount' ? (
-                        <button
-                          className="flex items-center gap-1 group w-full justify-end"
-                          onClick={() => {
-                            const nextDir =
-                              sortState.key === col.key ? (sortState.dir === 'asc' ? 'desc' : 'asc') : 'desc'
-                            setSortState({ key: col.key as SortKey, dir: nextDir })
-                          }}
-                        >
-                          {columnLabel}
-                          {sortState.key === col.key ? (
-                            sortState.dir === 'asc' ? (
-                              <ArrowUp className="h-3 w-3 text-blue-600" />
-                            ) : (
-                              <ArrowDown className="h-3 w-3 text-blue-600" />
-                            )
-                          ) : (
-                            <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                          )}
-                        </button>
-                      ) : (
-                        columnLabel
-                      )}
-                    </TableHead>
-                  )
-                })}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedTransactions.map(txn => {
-                const isRepayment = txn.type === 'repayment';
-                const visualType = (txn as any).displayType ?? txn.type;
-                const amountClass =
-                  visualType === "income" || isRepayment
-                    ? "text-emerald-700"
-                    : visualType === "expense"
-                      ? "text-red-500"
-                      : "text-slate-600"
+                        ) : (
+                          columnLabel
+                        )}
+                      </TableHead>
+                    )
+                  })}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {paginatedTransactions.map(txn => {
+                  const isRepayment = txn.type === 'repayment';
+                  const visualType = (txn as any).displayType ?? txn.type;
+                  const amountClass =
+                    visualType === "income" || isRepayment
+                      ? "text-emerald-700"
+                      : visualType === "expense"
+                        ? "text-red-500"
+                        : "text-slate-600"
 
-                // Shared ID Resolution for Smart Context (Type Badge + Account Column)
-                const txnSourceId = txn.source_account_id || txn.account_id
-                const destNameRaw = txn.destination_name || 'Unknown'
-                const txnDestId = txn.destination_account_id || ((txn as any).target_account_id) || (destNameRaw !== 'Unknown' ? accounts.find(a => a.name === destNameRaw)?.id : undefined)
-                const isSelected = selection.has(txn.id)
-                const effectiveStatus = statusOverrides[txn.id] ?? txn.status
-                const isVoided = effectiveStatus === 'void'
-                const isMenuOpen = actionMenuOpen === txn.id
-                const txnMetadata = parseMetadata(txn.metadata)
-                // Refund SEQ Logic (Global for row)
-                let refundSeq = 0;
-                if (txnMetadata?.has_refund_request || txn.status === 'waiting_refund') refundSeq = 1;
-                else if (txnMetadata?.original_transaction_id && !txnMetadata.is_refund_confirmation) refundSeq = 2;
-                else if (txnMetadata?.is_refund_confirmation) refundSeq = 3;
+                  // Shared ID Resolution for Smart Context (Type Badge + Account Column)
+                  const txnSourceId = txn.source_account_id || txn.account_id
+                  const destNameRaw = txn.destination_name || 'Unknown'
+                  const txnDestId = txn.destination_account_id || ((txn as any).target_account_id) || (destNameRaw !== 'Unknown' ? accounts.find(a => a.name === destNameRaw)?.id : undefined)
+                  const isSelected = selection.has(txn.id)
+                  const effectiveStatus = statusOverrides[txn.id] ?? txn.status
+                  const isVoided = effectiveStatus === 'void'
+                  const isMenuOpen = actionMenuOpen === txn.id
+                  const txnMetadata = parseMetadata(txn.metadata)
+                  // Refund SEQ Logic (Global for row)
+                  let refundSeq = 0;
+                  if (txnMetadata?.has_refund_request || txn.status === 'waiting_refund') refundSeq = 1;
+                  else if (txnMetadata?.original_transaction_id && !txnMetadata.is_refund_confirmation) refundSeq = 2;
+                  else if (txnMetadata?.is_refund_confirmation) refundSeq = 3;
 
-                let displayIdForBadge = txn.id;
-                if (refundSeq === 2 || refundSeq === 3) {
-                  displayIdForBadge = (txnMetadata?.original_transaction_id as string) || txn.id;
-                }
+                  let displayIdForBadge = txn.id;
+                  if (refundSeq === 2 || refundSeq === 3) {
+                    displayIdForBadge = (txnMetadata?.original_transaction_id as string) || txn.id;
+                  }
 
 
 
 
-                const voidedTextClass = ""
+                  const voidedTextClass = ""
 
-                // Row Background Logic (Restored)
-                let rowBgColor = "bg-white"
-                if (isVoided) {
-                  rowBgColor = "opacity-60 bg-gray-50 scale-[0.99] border-dashed grayscale"
-                } else {
-                  const refundSeqCheck = (txn.metadata as any)?.refund_sequence || 0
-                  if (txn.is_installment || txn.installment_plan_id) rowBgColor = "bg-amber-50"
-                  else if (refundSeqCheck > 0) rowBgColor = "bg-purple-50" // Refund shading
-                  else if (txn.type === 'repayment') rowBgColor = "bg-slate-50"
-                  else if (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') rowBgColor = "bg-emerald-50/50"
-                }
+                  // Row Background Logic (Restored)
+                  let rowBgColor = "bg-white"
+                  if (isVoided) {
+                    rowBgColor = "opacity-60 bg-gray-50 scale-[0.99] border-dashed grayscale"
+                  } else {
+                    const refundSeqCheck = (txn.metadata as any)?.refund_sequence || 0
+                    if (txn.is_installment || txn.installment_plan_id) rowBgColor = "bg-amber-50"
+                    else if (refundSeqCheck > 0) rowBgColor = "bg-purple-50" // Refund shading
+                    else if (txn.type === 'repayment') rowBgColor = "bg-slate-50"
+                    else if (effectiveStatus === 'pending' || effectiveStatus === 'waiting_refund') rowBgColor = "bg-emerald-50/50"
+                  }
 
-                const renderCell = (key: ColumnKey) => {
-                  switch (key) {
-                    case "date": {
-                      const d = new Date(txn.occurred_at ?? txn.created_at ?? Date.now())
-                      const day = String(d.getDate()).padStart(2, '0')
-                      const monthShort = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
-                      const year = d.getFullYear()
-                      const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
-                      const fullDateStr = d.toLocaleDateString('vi-VN', {
-                        weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
-                      })
+                  const renderCell = (key: ColumnKey) => {
+                    switch (key) {
+                      case "date": {
+                        const d = new Date(txn.occurred_at ?? txn.created_at ?? Date.now())
+                        const day = String(d.getDate()).padStart(2, '0')
+                        const monthShort = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
+                        const year = d.getFullYear()
+                        const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+                        const fullDateStr = d.toLocaleDateString('vi-VN', {
+                          weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
+                        })
 
-                      // Determine badge color for Date - Match Type Badge Style
-                      let dateBadgeColors = "bg-slate-50 text-slate-700 border-slate-300";
-                      if (txn.type === 'debt') dateBadgeColors = "bg-amber-50 text-amber-700 border-amber-300";
-                      else if (txn.type === 'repayment') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-300";
-                      else if (txn.type === 'transfer') dateBadgeColors = "bg-sky-50 text-sky-700 border-sky-300";
-                      else if (txn.type === 'income') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-300";
-                      else if (txn.type === 'expense') dateBadgeColors = "bg-red-50 text-red-700 border-red-300";
+                        // Determine badge color for Date - Match Type Badge Style
+                        let dateBadgeColors = "bg-slate-50 text-slate-700 border-slate-300";
+                        if (txn.type === 'debt') dateBadgeColors = "bg-amber-50 text-amber-700 border-amber-300";
+                        else if (txn.type === 'repayment') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-300";
+                        else if (txn.type === 'transfer') dateBadgeColors = "bg-sky-50 text-sky-700 border-sky-300";
+                        else if (txn.type === 'income') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-300";
+                        else if (txn.type === 'expense') dateBadgeColors = "bg-red-50 text-red-700 border-red-300";
 
-                      return (
-                        <div className="flex items-center gap-2 overflow-visible">
-                          <input
-                            type="checkbox"
-                            className="rounded border-slate-300 pointer-events-auto"
-                            checked={isSelected}
-                            onClick={(e) => { e.stopPropagation(); if (e.shiftKey) handleSelectOne(txn.id, !isSelected, true); }}
-                            onChange={(e) => handleSelectOne(txn.id, e.target.checked)}
-                            disabled={isExcelMode}
-                          />
-                          {/* Calendar Tile with Year */}
-                          <div className={cn("flex flex-col items-center justify-center px-2 py-1 rounded-md border min-w-[70px]", dateBadgeColors)}>
-                            <span className="text-[9px] font-bold leading-none tracking-wide">{monthShort} {year}</span>
-                            <span className="text-lg font-bold leading-none mt-0.5">{day}</span>
+                        return (
+                          <div className="flex items-center gap-2 overflow-visible">
+                            <input
+                              type="checkbox"
+                              className="rounded border-slate-300 pointer-events-auto"
+                              checked={isSelected}
+                              onClick={(e) => { e.stopPropagation(); if (e.shiftKey) handleSelectOne(txn.id, !isSelected, true); }}
+                              onChange={(e) => handleSelectOne(txn.id, e.target.checked)}
+                              disabled={isExcelMode}
+                            />
+                            {/* Calendar Tile with Year */}
+                            <div className={cn("flex flex-col items-center justify-center px-2 py-1 rounded-md border min-w-[70px]", dateBadgeColors)}>
+                              <span className="text-[9px] font-bold leading-none tracking-wide">{monthShort} {year}</span>
+                              <span className="text-lg font-bold leading-none mt-0.5">{day}</span>
+                            </div>
+                            {/* Time with Clock Icon */}
+                            <CustomTooltip content={fullDateStr}>
+                              <div className="flex items-center gap-1 text-slate-500 cursor-help min-w-0 flex-1">
+                                <Clock className="h-3 w-3 flex-shrink-0" />
+                                <span className="text-xs font-medium truncate">{timeStr}</span>
+                              </div>
+                            </CustomTooltip>
+
+                            {/* Action Menu (Wrench Icon) */}
+                            <div className="relative flex ml-auto flex-shrink-0">
+                              {renderRowActions(txn, isVoided)}
+                            </div>
                           </div>
-                          {/* Time with Clock Icon */}
-                          <CustomTooltip content={fullDateStr}>
-                            <div className="flex items-center gap-1 text-slate-500 cursor-help min-w-0 flex-1">
-                              <Clock className="h-3 w-3 flex-shrink-0" />
-                              <span className="text-xs font-medium truncate">{timeStr}</span>
+                        )
+                      }
+                      // Note: 'type' column was removed - it's now merged into the 'date' column
+                      case "shop": {
+                        let shopLogo = txn.shop_image_url;
+
+                        const repaymentAccount = txnSourceId ? accounts.find(account => account.id === txnSourceId) : null;
+                        const repaymentLogo = txn.source_image ?? repaymentAccount?.image_url ?? null;
+
+                        // Fallback logic for repayment/service
+                        if (txn.type === 'repayment') {
+                          shopLogo = repaymentLogo ?? shopLogo ?? null;
+                        }
+
+                        const isServicePayment = txn.note?.startsWith('Payment for Service') || (txn.metadata as any)?.type === 'service_payment';
+                        if (isServicePayment && !shopLogo) {
+                          shopLogo = txn.source_image;
+                        }
+
+                        const installmentBadge = (txn.is_installment || txn.installment_plan_id) ? (
+                          <CustomTooltip content="Trả góp - Click để xem">
+                            <Link
+                              href={`/installments?tab=active&highlight=${txn.id}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center justify-center rounded bg-amber-100 border border-amber-400 px-1 py-0.5 text-amber-700 hover:bg-amber-200 transition-colors shrink-0"
+                            >
+                              <Link2 className="h-4 w-4" />
+                            </Link>
+                          </CustomTooltip>
+                        ) : null;
+
+                        const refundBadge = refundSeq > 0 ? (
+                          <CustomTooltip content={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
+                            <div className="flex items-center justify-center rounded bg-purple-100 border border-purple-400 text-purple-700 px-1 py-0.5 shrink-0 transition-colors hover:bg-purple-200">
+                              <RefreshCcw className="h-3 w-3" />
+                              <span className="text-[10px] font-bold ml-1">{refundSeq}</span>
                             </div>
                           </CustomTooltip>
+                        ) : null;
 
-                          {/* Action Menu (Wrench Icon) */}
-                          <div className="relative flex ml-auto flex-shrink-0">
-                            {renderRowActions(txn, isVoided)}
-                          </div>
-                        </div>
-                      )
-                    }
-                    // Note: 'type' column was removed - it's now merged into the 'date' column
-                    case "shop": {
-                      let shopLogo = txn.shop_image_url;
+                        // Transaction ID display - No prefix, just truncated ID
+                        const txnIdShort = txn.id.slice(0, 4) + '...';
+                        const txnIdFull = txn.id;
 
-                      const repaymentAccount = txnSourceId ? accounts.find(account => account.id === txnSourceId) : null;
-                      const repaymentLogo = txn.source_image ?? repaymentAccount?.image_url ?? null;
-
-                      // Fallback logic for repayment/service
-                      if (txn.type === 'repayment') {
-                        shopLogo = repaymentLogo ?? shopLogo ?? null;
-                      }
-
-                      const isServicePayment = txn.note?.startsWith('Payment for Service') || (txn.metadata as any)?.type === 'service_payment';
-                      if (isServicePayment && !shopLogo) {
-                        shopLogo = txn.source_image;
-                      }
-
-                      const installmentBadge = (txn.is_installment || txn.installment_plan_id) ? (
-                        <CustomTooltip content="Trả góp - Click để xem">
-                          <Link
-                            href={`/installments?tab=active&highlight=${txn.id}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="flex items-center justify-center rounded bg-amber-100 border border-amber-400 px-1 py-0.5 text-amber-700 hover:bg-amber-200 transition-colors shrink-0"
-                          >
-                            <Link2 className="h-4 w-4" />
-                          </Link>
-                        </CustomTooltip>
-                      ) : null;
-
-                      const refundBadge = refundSeq > 0 ? (
-                        <CustomTooltip content={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
-                          <div className="flex items-center justify-center rounded bg-purple-100 border border-purple-400 text-purple-700 px-1 py-0.5 shrink-0 transition-colors hover:bg-purple-200">
-                            <RefreshCcw className="h-3 w-3" />
-                            <span className="text-[10px] font-bold ml-1">{refundSeq}</span>
-                          </div>
-                        </CustomTooltip>
-                      ) : null;
-
-                      // Transaction ID display - No prefix, just truncated ID
-                      const txnIdShort = txn.id.slice(0, 4) + '...';
-                      const txnIdFull = txn.id;
-
-                      return (
-                        <div className="flex items-center gap-2 w-full overflow-hidden group">
-                          {/* Logo */}
-                          {shopLogo ? (
-                            <>
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={shopLogo} alt="" className="h-10 w-10 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none" />
-                            </>
-                          ) : (
-                            <div className={cn(
-                              "flex items-center justify-center h-10 w-10 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0"
-                            )}>
-                              {txn.type === 'repayment' ? (
-                                <Wallet className="h-5 w-5 text-orange-600" />
-                              ) : (
-                                <ShoppingBasket className="h-5 w-5 text-slate-500" />
-                              )}
-                            </div>
-                          )}
-
-                          <div className="flex flex-col min-w-0 flex-1">
-                            {/* Note with tooltip */}
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              {txn.note ? (
-                                <CustomTooltip content={txn.note}>
-                                  <span
-                                    className="text-slate-900 font-semibold truncate cursor-help"
-                                    style={{ fontSize: `${fontSize}px` }}
-                                  >
-                                    {txn.note}
-                                  </span>
-                                </CustomTooltip>
-                              ) : (
-                                <span className="text-sm text-slate-400 italic">No note</span>
-                              )}
-                            </div>
-
-                            {/* Transaction ID Badge + Refund/Installment Badges (all clickable to copy) */}
-                            <div className="flex items-center gap-1 mt-0.5">
-                              {/* ID Badge - Clickable */}
-                              <CustomTooltip content={`Click to copy: ${txnIdFull}`}>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigator.clipboard.writeText(txn.id);
-                                    setCopiedId(txn.id);
-                                    setTimeout(() => setCopiedId(null), 2000);
-                                  }}
-                                  className={cn(
-                                    "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors",
-                                    copiedId === txn.id
-                                      ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
-                                      : "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200"
-                                  )}
-                                >
-                                  {txnIdShort}
-                                  {copiedId === txn.id ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
-                                </button>
-                              </CustomTooltip>
-
-                              {/* Installment Badge */}
-                              {installmentBadge}
-
-                              {/* Refund Badge - Clickable to copy refund ID */}
-                              {refundBadge}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    }
-                    case "note": {
-                      const linkedIdForCopy = (refundSeq === 2 || refundSeq === 3) ? displayIdForBadge : null;
-                      return (
-                        <div className="flex items-center gap-1 max-w-[250px] group/note">
-                          {/* Linked ID Copy (if exists) */}
-                          {linkedIdForCopy && linkedIdForCopy !== txn.id && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard.writeText(linkedIdForCopy);
-                                setCopiedId(`linked-${txn.id}`);
-                                setTimeout(() => setCopiedId(null), 2000);
-                              }}
-                              className={cn(
-                                "opacity-0 group-hover/note:opacity-100 transition-opacity p-0.5 hover:bg-blue-50 rounded text-blue-400 hover:text-blue-600",
-                                copiedId === `linked-${txn.id}` && "opacity-100 text-emerald-500"
-                              )}
-                              title={`Copy Linked ID: ${linkedIdForCopy}`}
-                            >
-                              {copiedId === `linked-${txn.id}` ? <CheckCheck className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
-                            </button>
-                          )}
-
-                          {/* Note Content */}
-                          <div className="flex items-center gap-2 truncate flex-1">
-                            <span
-                              className="truncate text-slate-700 font-medium"
-                              title={txn.note ?? ''}
-                              style={{ fontSize: `${fontSize}px` }}
-                            >
-                              {txn.note}
-                            </span>
-                            {txn.note && (
-                              <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
-                                <Info className="h-3 w-3 text-slate-400 flex-shrink-0" />
-                              </CustomTooltip>
-                            )}
-                          </div>
-
-                          {/* Transaction ID Copy */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigator.clipboard.writeText(txn.id);
-                              setCopiedId(txn.id);
-                              setTimeout(() => setCopiedId(null), 2000);
-                            }}
-                            className={cn(
-                              "p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 ml-1 transition-colors",
-                              copiedId === txn.id && "text-emerald-500"
-                            )}
-                            title={`Copy Transaction ID: ${txn.id}`}
-                          >
-                            {copiedId === txn.id ? <CheckCheck className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                          </button>
-                        </div>
-                      );
-                    }
-                    case "category": {
-                      // 1. Determine Type Badge
-                      let typeLabel = "EXPENSE"; // Default
-                      let typeColor = "bg-red-100 text-red-700 border-red-200";
-                      let typeTextColor = "text-red-700"; // For Name Sync
-                      let typeIcon = <Minus className="h-3 w-3" />;
-
-                      if (txn.type === 'repayment') {
-                        typeLabel = "PAID";
-                        typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200";
-                        typeTextColor = "text-emerald-700";
-                        typeIcon = <Check className="h-3 w-3" />;
-                      } else if (txn.type === 'debt') {
-                        typeLabel = "LEND";
-                        typeColor = "bg-orange-100 text-orange-700 border-orange-200";
-                        typeTextColor = "text-orange-700";
-                        typeIcon = <ArrowUpRight className="h-3 w-3" />;
-                      } else if (txn.type === 'transfer') {
-                        typeLabel = "TF";
-                        typeColor = "bg-sky-100 text-sky-700 border-sky-200";
-                        typeTextColor = "text-sky-700";
-                        typeIcon = <ArrowRightLeft className="h-3 w-3" />;
-                        // Smart Context for Transfer
-                        if (contextId) {
-                          if (contextId == txnSourceId) { typeLabel = "TF OUT"; typeIcon = <ArrowUpRight className="h-3 w-3" />; }
-                          else if (contextId == txnDestId) { typeLabel = "TF IN"; typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200"; typeTextColor = "text-emerald-700"; typeIcon = <ArrowDownLeft className="h-3 w-3" />; }
-                        }
-                      } else if (txn.type === 'income') {
-                        typeLabel = "IN";
-                        typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200";
-                        typeTextColor = "text-emerald-700";
-                        typeIcon = <Plus className="h-3 w-3" />;
-                      } else if (txn.type === 'expense') {
-                        typeLabel = "OUT";
-                        typeIcon = <Minus className="h-3 w-3" />;
-                      }
-
-                      // 2. Resolve Actual Category Data
-                      const actualCategory = categories.find(c => c.id === txn.category_id) || null;
-
-                      const displayCategory = actualCategory?.name || txn.category_name || (txn.type ? txn.type.charAt(0).toUpperCase() + txn.type.slice(1) : "Uncategorized");
-                      const metadataImage = (txn.metadata as any)?.image_url ?? null;
-                      const shopImage = txn.shop_image_url ?? null;
-                      const categoryImage = (actualCategory as any)?.image_url || actualCategory?.image_url || txn.category_image_url || null;
-                      const categoryIcon = (actualCategory as any)?.icon || txn.category_icon || null;
-                      const displayImage = metadataImage || shopImage || categoryImage;
-                      const occurredDate = txn.occurred_at ?? txn.created_at ?? null;
-                      const mobileDateLabel = isMobile && occurredDate
-                        ? new Date(occurredDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
-                        : null;
-
-                      const catBadgeColor = "bg-white border-slate-200";
-
-                      return (
-                        <div className="flex w-full flex-col gap-1">
-                          <div className="flex items-center gap-1.5 justify-start">
-                            {isMobile && (
-                              <input
-                                type="checkbox"
-                                className="rounded border-slate-300 pointer-events-auto"
-                                checked={isSelected}
-                                onClick={(e) => { e.stopPropagation(); if (e.shiftKey) handleSelectOne(txn.id, !isSelected, true); }}
-                                onChange={(e) => handleSelectOne(txn.id, e.target.checked)}
-                              />
-                            )}
-                            {/* 1. Category Icon (Visual) */}
-                            <CustomTooltip content={displayCategory}>
-                              <div className="shrink-0 cursor-help">
-                                {displayImage ? (
-                                  <div className="flex h-12 w-12 items-center justify-center">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img src={displayImage} alt="" className="h-full w-full object-contain rounded-none ring-0 outline-none" />
-                                  </div>
-                                ) : categoryIcon ? (
-                                  <div className="flex h-12 w-12 items-center justify-center bg-slate-50 rounded-sm text-xl border border-slate-200">
-                                    {categoryIcon}
-                                  </div>
+                        return (
+                          <div className="flex items-center gap-2 w-full overflow-hidden group">
+                            {/* Logo */}
+                            {shopLogo ? (
+                              <>
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={shopLogo} alt="" className="h-10 w-10 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none" />
+                              </>
+                            ) : (
+                              <div className={cn(
+                                "flex items-center justify-center h-10 w-10 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0"
+                              )}>
+                                {txn.type === 'repayment' ? (
+                                  <Wallet className="h-5 w-5 text-orange-600" />
                                 ) : (
-                                  <div className="flex h-12 w-12 items-center justify-center bg-slate-100 rounded-sm text-xs font-bold text-slate-500 border border-slate-200 uppercase">
-                                    {displayCategory.slice(0, 1)}
-                                  </div>
+                                  <ShoppingBasket className="h-5 w-5 text-slate-500" />
                                 )}
                               </div>
-                            </CustomTooltip>
+                            )}
 
-                            {/* 2. Type Badge */}
-                            <span className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[50px] justify-center shrink-0", typeColor)}>
-                              {typeIcon} {typeLabel}
-                            </span>
+                            <div className="flex flex-col min-w-0 flex-1">
+                              {/* Note with tooltip */}
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {txn.note ? (
+                                  <CustomTooltip content={txn.note}>
+                                    <span
+                                      className="text-slate-900 font-semibold truncate cursor-help"
+                                      style={{ fontSize: `${fontSize}px` }}
+                                    >
+                                      {txn.note}
+                                    </span>
+                                  </CustomTooltip>
+                                ) : (
+                                  <span className="text-sm text-slate-400 italic">No note</span>
+                                )}
+                              </div>
 
-                            {/* 3. Category Name Badge - same style & font as type, with tooltip and consistent width */}
-                            <CustomTooltip content={displayCategory}>
+                              {/* Transaction ID Badge + Refund/Installment Badges (all clickable to copy) */}
+                              <div className="flex items-center gap-1 mt-0.5">
+                                {/* ID Badge - Clickable */}
+                                <CustomTooltip content={`Click to copy: ${txnIdFull}`}>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      navigator.clipboard.writeText(txn.id);
+                                      setCopiedId(txn.id);
+                                      setTimeout(() => setCopiedId(null), 2000);
+                                    }}
+                                    className={cn(
+                                      "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors",
+                                      copiedId === txn.id
+                                        ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
+                                        : "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200"
+                                    )}
+                                  >
+                                    {txnIdShort}
+                                    {copiedId === txn.id ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
+                                  </button>
+                                </CustomTooltip>
+
+                                {/* Installment Badge */}
+                                {installmentBadge}
+
+                                {/* Refund Badge - Clickable to copy refund ID */}
+                                {refundBadge}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      }
+                      case "note": {
+                        const linkedIdForCopy = (refundSeq === 2 || refundSeq === 3) ? displayIdForBadge : null;
+                        return (
+                          <div className="flex items-center gap-1 max-w-[250px] group/note">
+                            {/* Linked ID Copy (if exists) */}
+                            {linkedIdForCopy && linkedIdForCopy !== txn.id && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(linkedIdForCopy);
+                                  setCopiedId(`linked-${txn.id}`);
+                                  setTimeout(() => setCopiedId(null), 2000);
+                                }}
+                                className={cn(
+                                  "opacity-0 group-hover/note:opacity-100 transition-opacity p-0.5 hover:bg-blue-50 rounded text-blue-400 hover:text-blue-600",
+                                  copiedId === `linked-${txn.id}` && "opacity-100 text-emerald-500"
+                                )}
+                                title={`Copy Linked ID: ${linkedIdForCopy}`}
+                              >
+                                {copiedId === `linked-${txn.id}` ? <CheckCheck className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
+                              </button>
+                            )}
+
+                            {/* Note Content */}
+                            <div className="flex items-center gap-2 truncate flex-1">
                               <span
-                                className={cn("inline-flex items-center justify-center rounded-md border px-1.5 font-extrabold truncate w-[85px] h-6 leading-none cursor-help shrink-0", catBadgeColor, typeTextColor)}
+                                className="truncate text-slate-700 font-medium"
+                                title={txn.note ?? ''}
                                 style={{ fontSize: `${fontSize}px` }}
                               >
-                                {displayCategory}
+                                {txn.note}
                               </span>
-                            </CustomTooltip>
-
-                            {/* 4. Status Indicators - Separate Tooltip to avoid shadowing */}
-
-                            {!isMobile && mobileDateLabel && (
-                              <span className="text-[10px] text-slate-500 leading-tight">{mobileDateLabel}</span>
-                            )}
-                          </div>
-                          {isMobile && mobileDateLabel && (
-                            <div className="flex w-full justify-start">
-                              <span className="text-[11px] text-slate-500 leading-tight block pl-14">{mobileDateLabel}</span>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    }
-                    case "account": {
-                      // --- 1. Resolve Entities (Source & Target) ---
-                      const sourceName = txn.source_name || txn.account_name || 'Unknown'
-                      const sourceIcon = txn.source_image
-                      const sourceId = txnSourceId
-                      // In single-table mode, account_id is the source.
-
-                      // Target Parsing
-                      let targetName = destNameRaw
-                      let targetIcon = txn.destination_image
-                      let targetId = txnDestId
-                      let targetType: 'account' | 'person' | 'none' = 'account'
-                      let targetLink = targetId ? `/accounts/${targetId}` : null
-
-                      // Check for Person First (Person takes precedence in "Accounts -> People" flow logic usually, or depends on data)
-                      const personId = (txn as any).person_id
-                      const personNameLink = (txn as any).person_name
-                      const personAvatar = (txn as any).person_avatar_url
-
-                      if (personId) {
-                        targetType = 'person'
-                        targetName = personNameLink || 'Unknown Person'
-                        targetIcon = personAvatar
-                        targetId = personId
-                        targetLink = `/people/${personId}`
-                      } else if (targetId) {
-                        targetType = 'account'
-                        if (targetName === 'Unknown') {
-                          const foundAcc = accounts.find(a => a.id === targetId)
-                          if (foundAcc) {
-                            targetName = foundAcc.name
-                            targetIcon = foundAcc.image_url
-                          }
-                        }
-                        targetLink = `/accounts/${targetId}`
-                      } else {
-                        targetType = 'none'
-                        targetLink = null
-                      }
-
-                      // Validation: If Source == Target (Draft Fund Bug or Bad Data), treat Target as None
-                      if (sourceId && targetId && sourceId === targetId) {
-                        targetType = 'none'
-                        targetId = undefined
-                        targetLink = null
-                      }
-
-                      // --- 2. Resolve Context & View Mode ---
-                      // "Smart Context"
-                      const isPersonContext = context === 'person' || (Boolean(contextId) && personId === contextId);
-                      const isAccountContext = context === 'account' || (Boolean(contextId) && !isPersonContext);
-
-                      // --- 3. Badges & Tags ---
-                      const cycleTag = normalizeMonthTag(txn.persisted_cycle_tag) ?? txn.persisted_cycle_tag
-                      const debtTag = personId ? (normalizeMonthTag(txn.tag) ?? txn.tag) : null
-
-                      let cycleLabel = "-"
-                      if (sourceId) {
-                        const acc = accounts.find(a => a.id === sourceId)
-                        if (acc && acc.cashback_config) {
-                          const config = parseCashbackConfig(acc.cashback_config)
-                          const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
-                          if (range) {
-                            const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}`
-                            cycleLabel = `${fmt(range.start)} to ${fmt(range.end)}`
-                          }
-                        }
-                      }
-
-                      // --- 4. Render Helper for Entity ---
-                      // Simplified Entity Renderer that is fully clickable
-                      const RenderEntity = ({
-                        name,
-                        icon,
-                        link,
-                        isSquare = true,
-                        badges = [],
-                        contextBadge = null,
-                        isTarget = false // New prop for right-aligned target entities
-                      }: {
-                        name: string,
-                        icon?: string | null,
-                        link: string | null,
-                        isSquare?: boolean,
-                        badges?: React.ReactNode[],
-                        contextBadge?: React.ReactNode,
-                        isTarget?: boolean
-                      }) => {
-                        const Content = isTarget ? (
-                          // Target Entity: Right-aligned with Image After Text
-                          <div className="flex items-center gap-2 min-w-0 w-full justify-end">
-                            {/* Name & Badges */}
-                            <div className="flex flex-col min-w-0 flex-1 justify-center items-end">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                {/* From/To Badge */}
-                                {contextBadge}
-                                <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1 text-right" title={name}>
-                                  {name}
-                                </span>
-                              </div>
-                              {badges.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-0.5 justify-end">
-                                  {badges}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Icon - After Text */}
-                            {icon ? (
-                              <>
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
-                              </>
-                            ) : (
-                              <div className={cn("flex h-12 w-12 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
-                                {link?.includes('people') ? <User className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          // Source Entity: Default layout with Icon Before Text
-                          <div className="flex items-center gap-2 min-w-0 w-full">
-                            {/* Icon - Increased Size */}
-                            {icon ? (
-                              <>
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
-                              </>
-                            ) : (
-                              <div className={cn("flex h-12 w-12 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
-                                {link?.includes('people') ? <User className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
-                              </div>
-                            )}
-
-                            {/* Name & Badges */}
-                            <div className="flex flex-col min-w-0 flex-1 justify-center">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                {/* From/To Badge */}
-                                {contextBadge}
-
-                                <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1" title={name}>
-                                  {name}
-                                </span>
-                              </div>
-                              {badges.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-0.5">
-                                  {badges}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )
-
-                        if (link) {
-                          return (
-                            <Link href={link} onClick={(e) => e.stopPropagation()} className="block w-full hover:bg-slate-50 rounded-sm transition-colors p-0.5 relative z-20">
-                              {Content}
-                            </Link>
-                          )
-                        }
-                        return <div className="block w-full p-0.5 opacity-80">{Content}</div>
-                      }
-
-                      const personEntity = personId ? {
-                        name: personNameLink || 'Unknown Person',
-                        icon: personAvatar,
-                        link: `/people/${personId}`,
-                      } : null
-                      const accountEntity = {
-                        name: sourceName,
-                        icon: sourceIcon,
-                        link: sourceId ? `/accounts/${sourceId}` : null,
-                      }
-
-                      // Badges Construction - Rounded md and Bold Colors
-                      const cycleBadge = (cycleLabel && cycleLabel !== '-') ? (
-                        <span key="cycle" className="inline-flex items-center rounded-md bg-purple-100 px-1.5 py-0.5 text-[0.7em] font-bold text-purple-700 whitespace-nowrap leading-none border border-purple-200">
-                          {cycleLabel}
-                        </span>
-                      ) : null
-
-                      const tagBadge = (cycleTag || debtTag) ? (
-                        <span key="tag" className="inline-flex items-center rounded-md bg-teal-100 px-1.5 py-0.5 text-[0.7em] font-bold text-teal-800 whitespace-nowrap leading-none border border-teal-200">
-                          {cycleTag || debtTag}
-                        </span>
-                      ) : null
-
-                      const fromBadge = <span key="from" className="inline-flex items-center rounded-md bg-orange-100 px-1.5 h-5 text-[0.7em] font-extrabold text-orange-700 border border-orange-200">FROM</span>
-                      const toBadge = <span key="to" className="inline-flex items-center rounded-md bg-sky-100 px-1.5 h-5 text-[0.7em] font-extrabold text-sky-700 border border-sky-200">TO</span>
-
-
-                      // --- 5. Main Render Switch ---
-
-                      // SCENARIO 1: VIEWING PERSON PAGE (Context = Person)
-                      if (isPersonContext && contextId && personEntity && personId === contextId) {
-                        const isRepaymentTxn = txn.type === 'repayment';
-                        // For Repayment: Person -> Account. We hide Person (Context). Show Target (Account).
-                        // For Debt: Account -> Person. We hide Person (Context). Show Source (Account).
-
-                        if (isRepaymentTxn) {
-                          // REPAY: Show Target Account with TO badge
-                          return (
-                            <div className="flex items-center w-full">
-                              <div className="flex-1 min-w-0">
-                                <RenderEntity
-                                  name={accountEntity.name}
-                                  icon={accountEntity.icon}
-                                  link={accountEntity.link}
-                                  badges={[tagBadge, cycleBadge]}
-                                  contextBadge={toBadge}
-                                  isTarget={true}
-                                />
-                              </div>
-                            </div>
-                          )
-                        } else {
-                          // DEBT: Show Source Account with FROM badge
-                          return (
-                            <div className="flex items-center w-full">
-                              <div className="flex-1 min-w-0">
-                                <RenderEntity
-                                  name={accountEntity.name}
-                                  icon={accountEntity.icon}
-                                  link={accountEntity.link}
-                                  badges={[cycleBadge]}
-                                  contextBadge={fromBadge}
-                                />
-                              </div>
-                            </div>
-                          )
-                        }
-                      }
-
-                      // SCENARIO 2: VIEWING ACCOUNT PAGE (Context = Account)
-                      if (isAccountContext && contextId) {
-                        // Sub-case 2a: Viewing Source Account (Outbound)
-                        if (sourceId === contextId) {
-                          // Show: TO [Target] (Person or Account)
-                          // Hide: Source (Self) & Arrow
-
-                          if (targetType === 'none') {
-                            return <span className="text-slate-400 text-xs italic pl-1">Expense / No Target</span>
-                          }
-
-                          return (
-                            <div className="flex items-center w-full">
-                              <div className="flex-1 min-w-0">
-                                <RenderEntity
-                                  name={targetName}
-                                  icon={targetIcon}
-                                  link={targetLink}
-                                  badges={[tagBadge]} // Tags on target
-                                  contextBadge={toBadge}
-                                  isTarget={true}
-                                />
-                              </div>
-                            </div>
-                          )
-                        }
-
-                        // Sub-case 2b: Viewing Target Account (Inbound)
-                        if (targetType === 'account' && targetId === contextId) {
-                          // Show: FROM [Source]
-                          // Hide: Target (Self) & Arrow
-
-                          return (
-                            <div className="flex items-center w-full">
-                              <div className="flex-1 min-w-0">
-                                <RenderEntity
-                                  name={sourceName}
-                                  icon={sourceIcon}
-                                  link={sourceId ? `/accounts/${sourceId}` : null}
-                                  badges={[cycleBadge]}
-                                  contextBadge={fromBadge}
-                                />
-                              </div>
-                            </div>
-                          )
-                        }
-                      }
-
-                      // SCENARIO 3: STANDARD VIEW (No Context or context mismatch)
-                      // Show: [Source] -> [Target]
-                      if (targetType === 'none') {
-                        return (
-                          <div className="flex items-center w-full min-w-0">
-                            <div className="flex-1 min-w-0">
-                              <RenderEntity
-                                name={sourceName}
-                                icon={sourceIcon}
-                                link={sourceId ? `/accounts/${sourceId}` : null}
-                                badges={[cycleBadge]}
-                              />
-                            </div>
-                          </div>
-                        )
-                      }
-
-                      return (
-                        <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center w-full min-w-0">
-                          {/* Left: Source */}
-                          <div className="min-w-0 w-full overflow-hidden">
-                            <RenderEntity
-                              name={sourceName}
-                              icon={sourceIcon}
-                              link={sourceId ? `/accounts/${sourceId}` : null}
-                              badges={[cycleBadge]}
-                            />
-                          </div>
-
-                          {/* Center: Arrow (Only if Target exists) */}
-                          <div className="shrink-0 flex justify-center text-slate-400">
-                            <MoveRight className="h-5 w-5" />
-                          </div>
-
-                          {/* Right: Target */}
-                          <div className="min-w-0 w-full overflow-hidden">
-                            <RenderEntity
-                              name={targetName}
-                              icon={targetIcon}
-                              link={targetLink}
-                              badges={[tagBadge]}
-                              isTarget={true}
-                            />
-                          </div>
-                        </div>
-                      )
-
-                    }
-                    case "tag": {
-                      const displayTag = normalizeMonthTag(txn.tag) ?? txn.tag ?? ''
-
-                      // Tooltip: Date Range (if recognized) or full tag
-                      const dateRangeTooltip = displayTag ? formatCycleTag(displayTag) : ''
-
-                      return (
-                        <div className="flex flex-wrap gap-1 min-w-[120px] justify-end">
-                          {displayTag && (
-                            <CustomTooltip content={dateRangeTooltip || displayTag}>
-                              <span className="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-inset ring-amber-600/20 cursor-help whitespace-nowrap">
-                                {displayTag}
-                              </span>
-                            </CustomTooltip>
-                          )}
-                          {/* Installment Icon moved here */}
-                          {(txn.is_installment || txn.installment_plan_id) && (
-                            <Link
-                              href="/installments"
-                              className="text-blue-600 hover:text-blue-800 transition-colors"
-                              title="View Installment Plan"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <CreditCard className="h-4 w-4" />
-                            </Link>
-                          )}
-                          {!txn.tag && !txn.is_installment && !txn.installment_plan_id && <span className="text-slate-400 opacity-50 text-xs">-</span>}
-                        </div>
-                      )
-                    }
-                    case "amount": {
-                      const amount = typeof txn.amount === "number" ? txn.amount : 0
-                      const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : amount
-                      // Amount logic: if >= 0 income/in, < 0 expense/out
-                      const isIncome = amount >= 0
-
-                      // Calculate Cashback/Fee for display
-                      const cashbackVal = txn.cashback_share_amount ?? 0
-                      const percentDisp = Number(txn.cashback_share_percent ?? 0)
-                      const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
-
-                      // Calculate final price
-                      const rate = percentDisp > 1 ? percentDisp / 100 : percentDisp
-                      const cashbackCalc = (Math.abs(Number(originalAmount ?? 0)) * rate) + fixedDisp
-                      const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
-                      const baseAmount = Math.abs(Number(originalAmount ?? 0));
-                      const finalDisp = (typeof txn.final_price === 'number')
-                        ? Math.abs(txn.final_price)
-                        : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount));
-
-                      const hasCashback = cashbackVal > 0 || percentDisp > 0 || fixedDisp > 0
-
-                      // Price breakdown tooltip content
-                      const priceBreakdown = hasCashback ? (
-                        <div className="text-xs space-y-1">
-                          <div className="font-semibold border-b border-slate-200 pb-1 mb-1">💰 Price Breakdown</div>
-                          <div className="flex justify-between gap-4">
-                            <span>Original Amount:</span>
-                            <span className="font-mono">{numberFormatter.format(Math.abs(originalAmount))}</span>
-                          </div>
-                          {percentDisp > 0 && (
-                            <div className="flex justify-between gap-4 text-emerald-600">
-                              <span>Discount ({percentDisp > 1 ? percentDisp : percentDisp * 100}%):</span>
-                              <span className="font-mono">-{numberFormatter.format(Math.abs(originalAmount) * rate)}</span>
-                            </div>
-                          )}
-                          {fixedDisp > 0 && (
-                            <div className="flex justify-between gap-4 text-emerald-600">
-                              <span>Fixed Discount:</span>
-                              <span className="font-mono">-{numberFormatter.format(fixedDisp)}</span>
-                            </div>
-                          )}
-                          <div className="flex justify-between gap-4 font-bold border-t border-slate-200 pt-1 mt-1">
-                            <span>Final Price:</span>
-                            <span className="font-mono">{numberFormatter.format(finalDisp)}</span>
-                          </div>
-                        </div>
-                      ) : null;
-
-                      return (
-                        <div className="flex flex-col items-end gap-1 w-full">
-                          {/* Amount with Cashback Badges - NO +/- signs */}
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={cn(
-                                "font-bold tabular-nums tracking-tight",
-                                isIncome ? "text-emerald-600" : "text-red-600"
-                              )}
-                              style={{ fontSize: `${fontSize}px` }}
-                            >
-                              {numberFormatter.format(Math.abs(amount))}
-                            </span>
-                            {/* Cashback Badges */}
-                            {percentDisp > 0 && (
-                              <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200">
-                                -{percentDisp > 1 ? percentDisp : percentDisp * 100}%
-                              </span>
-                            )}
-                            {fixedDisp > 0 && (
-                              <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200">
-                                -{numberFormatter.format(fixedDisp)}
-                              </span>
-                            )}
-                          </div>
-
-                          {/* Final Price - only show if has cashback */}
-                          {hasCashback && (
-                            <div className="flex items-center gap-1">
-                              <span className="text-xs text-slate-400">=</span>
-                              <span className="text-xs font-semibold text-slate-700">
-                                {numberFormatter.format(finalDisp)}
-                              </span>
-                              {priceBreakdown && (
-                                <CustomTooltip content={priceBreakdown}>
-                                  <Info className="h-3 w-3 text-slate-400 hover:text-slate-600 cursor-help" />
+                              {txn.note && (
+                                <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
+                                  <Info className="h-3 w-3 text-slate-400 flex-shrink-0" />
                                 </CustomTooltip>
                               )}
                             </div>
-                          )}
-                        </div>
-                      )
-                    }
-                    case "back_info": {
-                      // Cashback Info Display (merged initial_back + people_back)
-                      const cashbackAmount = Number(txn.bank_back ?? 0) + Number(txn.cashback_share_amount ?? 0)
-                      const pRaw = Number(txn.cashback_share_percent ?? 0)
-                      const fRaw = Number(txn.cashback_share_fixed ?? 0)
-                      if (!pRaw && !fRaw && typeof txn.profit !== 'number') return <span className="text-slate-300">-</span>
-                      return (
-                        <div className="flex flex-col text-[1em]">
-                          {/* Formula on Top */}
-                          {(pRaw || fRaw) && (
-                            <span className="text-[0.7em] text-slate-500 mb-0.5">
-                              {pRaw ? `${(pRaw * 100).toFixed(2)}%` : ''}
-                              {pRaw && fRaw ? ' + ' : ''}
-                              {fRaw ? numberFormatter.format(fRaw) : ''}
-                            </span>
-                          )}
-                          {/* Sum and Profit on Bottom */}
-                          <div className="flex items-center gap-2">
-                            {cashbackAmount > 0 && (
-                              <span className="text-emerald-600 font-bold flex items-center gap-1">
-                                <Sigma className="h-3 w-3" />
-                                {numberFormatter.format(cashbackAmount)}
-                              </span>
-                            )}
-                            {typeof txn.profit === 'number' && txn.profit !== 0 && (
-                              <>
-                                {cashbackAmount > 0 && <span className="text-slate-300">;</span>}
-                                <span className={`font-bold flex items-center gap-1 ${txn.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                  🤑 {numberFormatter.format(txn.profit)}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      )
-                    }
-                    // Note: 'initial_back' and 'people_back' columns removed - merged into 'back_info'
-                    case "id":
-                      const isCopied = copiedId === txn.id
-                      return (
-                        <CustomTooltip content={txn.id}>
-                          <div className="flex items-center gap-1.5 max-w-[100px]">
+
+                            {/* Transaction ID Copy */}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -2169,108 +1544,733 @@ export function UnifiedTransactionTable({
                                 setCopiedId(txn.id);
                                 setTimeout(() => setCopiedId(null), 2000);
                               }}
-                              className="text-slate-400 hover:text-slate-600 transition-colors shrink-0"
-                              title="Copy ID"
+                              className={cn(
+                                "p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 ml-1 transition-colors",
+                                copiedId === txn.id && "text-emerald-500"
+                              )}
+                              title={`Copy Transaction ID: ${txn.id}`}
                             >
-                              {isCopied ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                              {copiedId === txn.id ? <CheckCheck className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                             </button>
-                            <span className="text-[0.85em] text-slate-400 font-mono cursor-help truncate">
-                              {isCopied ? 'Copied!' : `${txn.id.slice(0, 8)}...`}
-                            </span>
                           </div>
-                        </CustomTooltip>
-                      )
-                    default:
-                      return ""
+                        );
+                      }
+                      case "category": {
+                        // 1. Determine Type Badge
+                        let typeLabel = "EXPENSE"; // Default
+                        let typeColor = "bg-red-100 text-red-700 border-red-200";
+                        let typeTextColor = "text-red-700"; // For Name Sync
+                        let typeIcon = <Minus className="h-3 w-3" />;
+
+                        if (txn.type === 'repayment') {
+                          typeLabel = "PAID";
+                          typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200";
+                          typeTextColor = "text-emerald-700";
+                          typeIcon = <Check className="h-3 w-3" />;
+                        } else if (txn.type === 'debt') {
+                          typeLabel = "LEND";
+                          typeColor = "bg-orange-100 text-orange-700 border-orange-200";
+                          typeTextColor = "text-orange-700";
+                          typeIcon = <ArrowUpRight className="h-3 w-3" />;
+                        } else if (txn.type === 'transfer') {
+                          typeLabel = "TF";
+                          typeColor = "bg-sky-100 text-sky-700 border-sky-200";
+                          typeTextColor = "text-sky-700";
+                          typeIcon = <ArrowRightLeft className="h-3 w-3" />;
+                          // Smart Context for Transfer
+                          if (contextId) {
+                            if (contextId == txnSourceId) { typeLabel = "TF OUT"; typeIcon = <ArrowUpRight className="h-3 w-3" />; }
+                            else if (contextId == txnDestId) { typeLabel = "TF IN"; typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200"; typeTextColor = "text-emerald-700"; typeIcon = <ArrowDownLeft className="h-3 w-3" />; }
+                          }
+                        } else if (txn.type === 'income') {
+                          typeLabel = "IN";
+                          typeColor = "bg-emerald-100 text-emerald-700 border-emerald-200";
+                          typeTextColor = "text-emerald-700";
+                          typeIcon = <Plus className="h-3 w-3" />;
+                        } else if (txn.type === 'expense') {
+                          typeLabel = "OUT";
+                          typeIcon = <Minus className="h-3 w-3" />;
+                        }
+
+                        // 2. Resolve Actual Category Data
+                        const actualCategory = categories.find(c => c.id === txn.category_id) || null;
+
+                        const displayCategory = actualCategory?.name || txn.category_name || (txn.type ? txn.type.charAt(0).toUpperCase() + txn.type.slice(1) : "Uncategorized");
+                        const metadataImage = (txn.metadata as any)?.image_url ?? null;
+                        const shopImage = txn.shop_image_url ?? null;
+                        const categoryImage = (actualCategory as any)?.image_url || actualCategory?.image_url || txn.category_image_url || null;
+                        const categoryIcon = (actualCategory as any)?.icon || txn.category_icon || null;
+                        const displayImage = metadataImage || shopImage || categoryImage;
+                        const occurredDate = txn.occurred_at ?? txn.created_at ?? null;
+                        const mobileDateLabel = isMobile && occurredDate
+                          ? new Date(occurredDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                          : null;
+
+                        const catBadgeColor = "bg-white border-slate-200";
+
+                        return (
+                          <div className="flex w-full flex-col gap-1">
+                            <div className="flex items-center gap-1.5 justify-start">
+                              {isMobile && (
+                                <input
+                                  type="checkbox"
+                                  className="rounded border-slate-300 pointer-events-auto"
+                                  checked={isSelected}
+                                  onClick={(e) => { e.stopPropagation(); if (e.shiftKey) handleSelectOne(txn.id, !isSelected, true); }}
+                                  onChange={(e) => handleSelectOne(txn.id, e.target.checked)}
+                                />
+                              )}
+                              {/* 1. Category Icon (Visual) */}
+                              <CustomTooltip content={displayCategory}>
+                                <div className="shrink-0 cursor-help">
+                                  {displayImage ? (
+                                    <div className="flex h-12 w-12 items-center justify-center">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={displayImage} alt="" className="h-full w-full object-contain rounded-none ring-0 outline-none" />
+                                    </div>
+                                  ) : categoryIcon ? (
+                                    <div className="flex h-12 w-12 items-center justify-center bg-slate-50 rounded-sm text-xl border border-slate-200">
+                                      {categoryIcon}
+                                    </div>
+                                  ) : (
+                                    <div className="flex h-12 w-12 items-center justify-center bg-slate-100 rounded-sm text-xs font-bold text-slate-500 border border-slate-200 uppercase">
+                                      {displayCategory.slice(0, 1)}
+                                    </div>
+                                  )}
+                                </div>
+                              </CustomTooltip>
+
+                              {/* 2. Type Badge */}
+                              <span className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[50px] justify-center shrink-0", typeColor)}>
+                                {typeIcon} {typeLabel}
+                              </span>
+
+                              {/* 3. Category Name Badge - same style & font as type, with tooltip and consistent width */}
+                              <CustomTooltip content={displayCategory}>
+                                <span
+                                  className={cn("inline-flex items-center justify-center rounded-md border px-1.5 font-extrabold truncate w-[85px] h-6 leading-none cursor-help shrink-0", catBadgeColor, typeTextColor)}
+                                  style={{ fontSize: `${fontSize}px` }}
+                                >
+                                  {displayCategory}
+                                </span>
+                              </CustomTooltip>
+
+                              {/* 4. Status Indicators - Separate Tooltip to avoid shadowing */}
+
+                              {!isMobile && mobileDateLabel && (
+                                <span className="text-[10px] text-slate-500 leading-tight">{mobileDateLabel}</span>
+                              )}
+                            </div>
+                            {isMobile && mobileDateLabel && (
+                              <div className="flex w-full justify-start">
+                                <span className="text-[11px] text-slate-500 leading-tight block pl-14">{mobileDateLabel}</span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                      case "account": {
+                        // --- 1. Resolve Entities (Source & Target) ---
+                        const sourceName = txn.source_name || txn.account_name || 'Unknown'
+                        const sourceIcon = txn.source_image
+                        const sourceId = txnSourceId
+                        // In single-table mode, account_id is the source.
+
+                        // Target Parsing
+                        let targetName = destNameRaw
+                        let targetIcon = txn.destination_image
+                        let targetId = txnDestId
+                        let targetType: 'account' | 'person' | 'none' = 'account'
+                        let targetLink = targetId ? `/accounts/${targetId}` : null
+
+                        // Check for Person First (Person takes precedence in "Accounts -> People" flow logic usually, or depends on data)
+                        const personId = (txn as any).person_id
+                        const personNameLink = (txn as any).person_name
+                        const personAvatar = (txn as any).person_avatar_url
+
+                        if (personId) {
+                          targetType = 'person'
+                          targetName = personNameLink || 'Unknown Person'
+                          targetIcon = personAvatar
+                          targetId = personId
+                          targetLink = `/people/${personId}`
+                        } else if (targetId) {
+                          targetType = 'account'
+                          if (targetName === 'Unknown') {
+                            const foundAcc = accounts.find(a => a.id === targetId)
+                            if (foundAcc) {
+                              targetName = foundAcc.name
+                              targetIcon = foundAcc.image_url
+                            }
+                          }
+                          targetLink = `/accounts/${targetId}`
+                        } else {
+                          targetType = 'none'
+                          targetLink = null
+                        }
+
+                        // Validation: If Source == Target (Draft Fund Bug or Bad Data), treat Target as None
+                        if (sourceId && targetId && sourceId === targetId) {
+                          targetType = 'none'
+                          targetId = undefined
+                          targetLink = null
+                        }
+
+                        // --- 2. Resolve Context & View Mode ---
+                        // "Smart Context"
+                        const isPersonContext = context === 'person' || (Boolean(contextId) && personId === contextId);
+                        const isAccountContext = context === 'account' || (Boolean(contextId) && !isPersonContext);
+
+                        // --- 3. Badges & Tags ---
+                        const cycleTag = normalizeMonthTag(txn.persisted_cycle_tag) ?? txn.persisted_cycle_tag
+                        const debtTag = personId ? (normalizeMonthTag(txn.tag) ?? txn.tag) : null
+
+                        let cycleLabel = "-"
+                        if (sourceId) {
+                          const acc = accounts.find(a => a.id === sourceId)
+                          if (acc && acc.cashback_config) {
+                            const config = parseCashbackConfig(acc.cashback_config)
+                            const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
+                            if (range) {
+                              const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                              cycleLabel = `${fmt(range.start)} to ${fmt(range.end)}`
+                            }
+                          }
+                        }
+
+                        // --- 4. Render Helper for Entity ---
+                        // Simplified Entity Renderer that is fully clickable
+                        const RenderEntity = ({
+                          name,
+                          icon,
+                          link,
+                          isSquare = true,
+                          badges = [],
+                          contextBadge = null,
+                          isTarget = false // New prop for right-aligned target entities
+                        }: {
+                          name: string,
+                          icon?: string | null,
+                          link: string | null,
+                          isSquare?: boolean,
+                          badges?: React.ReactNode[],
+                          contextBadge?: React.ReactNode,
+                          isTarget?: boolean
+                        }) => {
+                          const Content = isTarget ? (
+                            // Target Entity: Right-aligned with Image After Text
+                            <div className="flex items-center gap-2 min-w-0 w-full justify-end">
+                              {/* Name & Badges */}
+                              <div className="flex flex-col min-w-0 flex-1 justify-center items-end">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  {/* From/To Badge */}
+                                  {contextBadge}
+                                  <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1 text-right" title={name}>
+                                    {name}
+                                  </span>
+                                </div>
+                                {badges.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-0.5 justify-end">
+                                    {badges}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Icon - After Text */}
+                              {icon ? (
+                                <>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
+                                </>
+                              ) : (
+                                <div className={cn("flex h-12 w-12 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
+                                  {link?.includes('people') ? <User className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            // Source Entity: Default layout with Icon Before Text
+                            <div className="flex items-center gap-2 min-w-0 w-full">
+                              {/* Icon - Increased Size */}
+                              {icon ? (
+                                <>
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
+                                </>
+                              ) : (
+                                <div className={cn("flex h-12 w-12 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
+                                  {link?.includes('people') ? <User className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
+                                </div>
+                              )}
+
+                              {/* Name & Badges */}
+                              <div className="flex flex-col min-w-0 flex-1 justify-center">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  {/* From/To Badge */}
+                                  {contextBadge}
+
+                                  <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1" title={name}>
+                                    {name}
+                                  </span>
+                                </div>
+                                {badges.length > 0 && (
+                                  <div className="flex flex-wrap gap-1 mt-0.5">
+                                    {badges}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+
+                          if (link) {
+                            return (
+                              <Link href={link} onClick={(e) => e.stopPropagation()} className="block w-full hover:bg-slate-50 rounded-sm transition-colors p-0.5 relative z-20">
+                                {Content}
+                              </Link>
+                            )
+                          }
+                          return <div className="block w-full p-0.5 opacity-80">{Content}</div>
+                        }
+
+                        const personEntity = personId ? {
+                          name: personNameLink || 'Unknown Person',
+                          icon: personAvatar,
+                          link: `/people/${personId}`,
+                        } : null
+                        const accountEntity = {
+                          name: sourceName,
+                          icon: sourceIcon,
+                          link: sourceId ? `/accounts/${sourceId}` : null,
+                        }
+
+                        // Badges Construction - Rounded md and Bold Colors
+                        const cycleBadge = (cycleLabel && cycleLabel !== '-') ? (
+                          <span key="cycle" className="inline-flex items-center rounded-md bg-purple-100 px-1.5 py-0.5 text-[0.7em] font-bold text-purple-700 whitespace-nowrap leading-none border border-purple-200">
+                            {cycleLabel}
+                          </span>
+                        ) : null
+
+                        const tagBadge = (cycleTag || debtTag) ? (
+                          <span key="tag" className="inline-flex items-center rounded-md bg-teal-100 px-1.5 py-0.5 text-[0.7em] font-bold text-teal-800 whitespace-nowrap leading-none border border-teal-200">
+                            {cycleTag || debtTag}
+                          </span>
+                        ) : null
+
+                        const fromBadge = <span key="from" className="inline-flex items-center rounded-md bg-orange-100 px-1.5 h-5 text-[0.7em] font-extrabold text-orange-700 border border-orange-200">FROM</span>
+                        const toBadge = <span key="to" className="inline-flex items-center rounded-md bg-sky-100 px-1.5 h-5 text-[0.7em] font-extrabold text-sky-700 border border-sky-200">TO</span>
+
+
+                        // --- 5. Main Render Switch ---
+
+                        // SCENARIO 1: VIEWING PERSON PAGE (Context = Person)
+                        if (isPersonContext && contextId && personEntity && personId === contextId) {
+                          const isRepaymentTxn = txn.type === 'repayment';
+                          // For Repayment: Person -> Account. We hide Person (Context). Show Target (Account).
+                          // For Debt: Account -> Person. We hide Person (Context). Show Source (Account).
+
+                          if (isRepaymentTxn) {
+                            // REPAY: Show Target Account with TO badge
+                            return (
+                              <div className="flex items-center w-full">
+                                <div className="flex-1 min-w-0">
+                                  <RenderEntity
+                                    name={accountEntity.name}
+                                    icon={accountEntity.icon}
+                                    link={accountEntity.link}
+                                    badges={[tagBadge, cycleBadge]}
+                                    contextBadge={toBadge}
+                                    isTarget={true}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          } else {
+                            // DEBT: Show Source Account with FROM badge
+                            return (
+                              <div className="flex items-center w-full">
+                                <div className="flex-1 min-w-0">
+                                  <RenderEntity
+                                    name={accountEntity.name}
+                                    icon={accountEntity.icon}
+                                    link={accountEntity.link}
+                                    badges={[cycleBadge]}
+                                    contextBadge={fromBadge}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          }
+                        }
+
+                        // SCENARIO 2: VIEWING ACCOUNT PAGE (Context = Account)
+                        if (isAccountContext && contextId) {
+                          // Sub-case 2a: Viewing Source Account (Outbound)
+                          if (sourceId === contextId) {
+                            // Show: TO [Target] (Person or Account)
+                            // Hide: Source (Self) & Arrow
+
+                            if (targetType === 'none') {
+                              return <span className="text-slate-400 text-xs italic pl-1">Expense / No Target</span>
+                            }
+
+                            return (
+                              <div className="flex items-center w-full">
+                                <div className="flex-1 min-w-0">
+                                  <RenderEntity
+                                    name={targetName}
+                                    icon={targetIcon}
+                                    link={targetLink}
+                                    badges={[tagBadge]} // Tags on target
+                                    contextBadge={toBadge}
+                                    isTarget={true}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          }
+
+                          // Sub-case 2b: Viewing Target Account (Inbound)
+                          if (targetType === 'account' && targetId === contextId) {
+                            // Show: FROM [Source]
+                            // Hide: Target (Self) & Arrow
+
+                            return (
+                              <div className="flex items-center w-full">
+                                <div className="flex-1 min-w-0">
+                                  <RenderEntity
+                                    name={sourceName}
+                                    icon={sourceIcon}
+                                    link={sourceId ? `/accounts/${sourceId}` : null}
+                                    badges={[cycleBadge]}
+                                    contextBadge={fromBadge}
+                                  />
+                                </div>
+                              </div>
+                            )
+                          }
+                        }
+
+                        // SCENARIO 3: STANDARD VIEW (No Context or context mismatch)
+                        // Show: [Source] -> [Target]
+                        if (targetType === 'none') {
+                          return (
+                            <div className="flex items-center w-full min-w-0">
+                              <div className="flex-1 min-w-0">
+                                <RenderEntity
+                                  name={sourceName}
+                                  icon={sourceIcon}
+                                  link={sourceId ? `/accounts/${sourceId}` : null}
+                                  badges={[cycleBadge]}
+                                />
+                              </div>
+                            </div>
+                          )
+                        }
+
+                        return (
+                          <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center w-full min-w-0">
+                            {/* Left: Source */}
+                            <div className="min-w-0 w-full overflow-hidden">
+                              <RenderEntity
+                                name={sourceName}
+                                icon={sourceIcon}
+                                link={sourceId ? `/accounts/${sourceId}` : null}
+                                badges={[cycleBadge]}
+                              />
+                            </div>
+
+                            {/* Center: Arrow (Only if Target exists) */}
+                            <div className="shrink-0 flex justify-center text-slate-400">
+                              <MoveRight className="h-5 w-5" />
+                            </div>
+
+                            {/* Right: Target */}
+                            <div className="min-w-0 w-full overflow-hidden">
+                              <RenderEntity
+                                name={targetName}
+                                icon={targetIcon}
+                                link={targetLink}
+                                badges={[tagBadge]}
+                                isTarget={true}
+                              />
+                            </div>
+                          </div>
+                        )
+
+                      }
+                      case "tag": {
+                        const displayTag = normalizeMonthTag(txn.tag) ?? txn.tag ?? ''
+
+                        // Tooltip: Date Range (if recognized) or full tag
+                        const dateRangeTooltip = displayTag ? formatCycleTag(displayTag) : ''
+
+                        return (
+                          <div className="flex flex-wrap gap-1 min-w-[120px] justify-end">
+                            {displayTag && (
+                              <CustomTooltip content={dateRangeTooltip || displayTag}>
+                                <span className="inline-flex items-center rounded-md bg-amber-50 px-2.5 py-1 text-xs font-bold text-amber-700 ring-1 ring-inset ring-amber-600/20 cursor-help whitespace-nowrap">
+                                  {displayTag}
+                                </span>
+                              </CustomTooltip>
+                            )}
+                            {/* Installment Icon moved here */}
+                            {(txn.is_installment || txn.installment_plan_id) && (
+                              <Link
+                                href="/installments"
+                                className="text-blue-600 hover:text-blue-800 transition-colors"
+                                title="View Installment Plan"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <CreditCard className="h-4 w-4" />
+                              </Link>
+                            )}
+                            {!txn.tag && !txn.is_installment && !txn.installment_plan_id && <span className="text-slate-400 opacity-50 text-xs">-</span>}
+                          </div>
+                        )
+                      }
+                      case "amount": {
+                        const amount = typeof txn.amount === "number" ? txn.amount : 0
+                        const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : amount
+                        // Amount logic: if >= 0 income/in, < 0 expense/out
+                        const isIncome = amount >= 0
+
+                        // Calculate Cashback/Fee for display
+                        const cashbackVal = txn.cashback_share_amount ?? 0
+                        const percentDisp = Number(txn.cashback_share_percent ?? 0)
+                        const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
+
+                        // Calculate final price
+                        const rate = percentDisp > 1 ? percentDisp / 100 : percentDisp
+                        const cashbackCalc = (Math.abs(Number(originalAmount ?? 0)) * rate) + fixedDisp
+                        const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
+                        const baseAmount = Math.abs(Number(originalAmount ?? 0));
+                        const finalDisp = (typeof txn.final_price === 'number')
+                          ? Math.abs(txn.final_price)
+                          : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount));
+
+                        const hasCashback = cashbackVal > 0 || percentDisp > 0 || fixedDisp > 0
+
+                        // Price breakdown tooltip content
+                        const priceBreakdown = hasCashback ? (
+                          <div className="text-xs space-y-1">
+                            <div className="font-semibold border-b border-slate-200 pb-1 mb-1">💰 Price Breakdown</div>
+                            <div className="flex justify-between gap-4">
+                              <span>Original Amount:</span>
+                              <span className="font-mono">{numberFormatter.format(Math.abs(originalAmount))}</span>
+                            </div>
+                            {percentDisp > 0 && (
+                              <div className="flex justify-between gap-4 text-emerald-600">
+                                <span>Discount ({percentDisp > 1 ? percentDisp : percentDisp * 100}%):</span>
+                                <span className="font-mono">-{numberFormatter.format(Math.abs(originalAmount) * rate)}</span>
+                              </div>
+                            )}
+                            {fixedDisp > 0 && (
+                              <div className="flex justify-between gap-4 text-emerald-600">
+                                <span>Fixed Discount:</span>
+                                <span className="font-mono">-{numberFormatter.format(fixedDisp)}</span>
+                              </div>
+                            )}
+                            <div className="flex justify-between gap-4 font-bold border-t border-slate-200 pt-1 mt-1">
+                              <span>Final Price:</span>
+                              <span className="font-mono">{numberFormatter.format(finalDisp)}</span>
+                            </div>
+                          </div>
+                        ) : null;
+
+                        return (
+                          <div className="flex flex-col items-end gap-1 w-full">
+                            {/* Amount with Cashback Badges - NO +/- signs */}
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={cn(
+                                  "font-bold tabular-nums tracking-tight",
+                                  isIncome ? "text-emerald-600" : "text-red-600"
+                                )}
+                                style={{ fontSize: `${fontSize}px` }}
+                              >
+                                {numberFormatter.format(Math.abs(amount))}
+                              </span>
+                              {/* Cashback Badges */}
+                              {percentDisp > 0 && (
+                                <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                  -{percentDisp > 1 ? percentDisp : percentDisp * 100}%
+                                </span>
+                              )}
+                              {fixedDisp > 0 && (
+                                <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                  -{numberFormatter.format(fixedDisp)}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Final Price - only show if has cashback */}
+                            {hasCashback && (
+                              <div className="flex items-center gap-1">
+                                <span className="text-xs text-slate-400">=</span>
+                                <span className="text-xs font-semibold text-slate-700">
+                                  {numberFormatter.format(finalDisp)}
+                                </span>
+                                {priceBreakdown && (
+                                  <CustomTooltip content={priceBreakdown}>
+                                    <Info className="h-3 w-3 text-slate-400 hover:text-slate-600 cursor-help" />
+                                  </CustomTooltip>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      }
+                      case "back_info": {
+                        // Cashback Info Display (merged initial_back + people_back)
+                        const cashbackAmount = Number(txn.bank_back ?? 0) + Number(txn.cashback_share_amount ?? 0)
+                        const pRaw = Number(txn.cashback_share_percent ?? 0)
+                        const fRaw = Number(txn.cashback_share_fixed ?? 0)
+                        if (!pRaw && !fRaw && typeof txn.profit !== 'number') return <span className="text-slate-300">-</span>
+                        return (
+                          <div className="flex flex-col text-[1em]">
+                            {/* Formula on Top */}
+                            {(pRaw || fRaw) && (
+                              <span className="text-[0.7em] text-slate-500 mb-0.5">
+                                {pRaw ? `${(pRaw * 100).toFixed(2)}%` : ''}
+                                {pRaw && fRaw ? ' + ' : ''}
+                                {fRaw ? numberFormatter.format(fRaw) : ''}
+                              </span>
+                            )}
+                            {/* Sum and Profit on Bottom */}
+                            <div className="flex items-center gap-2">
+                              {cashbackAmount > 0 && (
+                                <span className="text-emerald-600 font-bold flex items-center gap-1">
+                                  <Sigma className="h-3 w-3" />
+                                  {numberFormatter.format(cashbackAmount)}
+                                </span>
+                              )}
+                              {typeof txn.profit === 'number' && txn.profit !== 0 && (
+                                <>
+                                  {cashbackAmount > 0 && <span className="text-slate-300">;</span>}
+                                  <span className={`font-bold flex items-center gap-1 ${txn.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                    🤑 {numberFormatter.format(txn.profit)}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      }
+                      // Note: 'initial_back' and 'people_back' columns removed - merged into 'back_info'
+                      case "id":
+                        const isCopied = copiedId === txn.id
+                        return (
+                          <CustomTooltip content={txn.id}>
+                            <div className="flex items-center gap-1.5 max-w-[100px]">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigator.clipboard.writeText(txn.id);
+                                  setCopiedId(txn.id);
+                                  setTimeout(() => setCopiedId(null), 2000);
+                                }}
+                                className="text-slate-400 hover:text-slate-600 transition-colors shrink-0"
+                                title="Copy ID"
+                              >
+                                {isCopied ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                              </button>
+                              <span className="text-[0.85em] text-slate-400 font-mono cursor-help truncate">
+                                {isCopied ? 'Copied!' : `${txn.id.slice(0, 8)}...`}
+                              </span>
+                            </div>
+                          </CustomTooltip>
+                        )
+                      default:
+                        return ""
+                    }
                   }
-                }
 
 
 
 
 
-                return (
-                  <TableRow
-                    key={txn.id}
-                    className={cn(
-                      "border-b border-slate-200 transition-colors text-base",
-                      isMenuOpen ? "bg-blue-50" : rowBgColor,
-                      !isExcelMode && "hover:bg-slate-50/50"
-                    )}
-                  >
-                    {displayedColumns.map(col => {
-                      // ... column rendering ...
-                      // Sticky Logic for Cells
-                      // Use a slightly more flexible stickyStyle that respects content if not explicitly date/shop
-                      const allowOverflow = col.key === "date"
-                      const stickyStyle: React.CSSProperties = {
-                        width: columnWidths[col.key],
-                        maxWidth: col.key === 'account' ? 'none' : columnWidths[col.key],
-                        overflow: allowOverflow ? 'visible' : 'hidden',
-                        whiteSpace: allowOverflow ? 'nowrap' : 'nowrap'
-                      };
-                      const stickyClass = "";
+                  return (
+                    <TableRow
+                      key={txn.id}
+                      className={cn(
+                        "border-b border-slate-200 transition-colors text-base",
+                        isMenuOpen ? "bg-blue-50" : rowBgColor,
+                        !isExcelMode && "hover:bg-slate-50/50"
+                      )}
+                    >
+                      {displayedColumns.map(col => {
+                        // ... column rendering ...
+                        // Sticky Logic for Cells
+                        // Use a slightly more flexible stickyStyle that respects content if not explicitly date/shop
+                        const allowOverflow = col.key === "date"
+                        const stickyStyle: React.CSSProperties = {
+                          width: columnWidths[col.key],
+                          maxWidth: col.key === 'account' ? 'none' : columnWidths[col.key],
+                          overflow: allowOverflow ? 'visible' : 'hidden',
+                          whiteSpace: allowOverflow ? 'nowrap' : 'nowrap'
+                        };
+                        const stickyClass = "";
 
-                      return (
-                        <TableCell
-                          key={`${txn.id}-${col.key}`}
-                          onMouseDown={(e) => handleCellMouseDown(txn.id, col.key, e)}
-                          onMouseEnter={() => handleCellMouseEnter(txn.id, col.key)}
-                          className={cn(
-                            `border-r border-slate-200 ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
-                            } ${col.key === "amount" ? amountClass : ""} ${voidedTextClass} truncate`,
-                            stickyClass,
-                            col.key === "date" && "p-1",
-                            col.key === "date" && "relative overflow-visible",
-                            isExcelMode && "select-none cursor-crosshair active:cursor-crosshair",
-                            isExcelMode && selectedCells.has(txn.id) && col.key === 'amount' && "bg-blue-100 ring-2 ring-inset ring-blue-500 z-10" // ADDED: Visual feedback for selected cells
+                        return (
+                          <TableCell
+                            key={`${txn.id}-${col.key}`}
+                            onMouseDown={(e) => handleCellMouseDown(txn.id, col.key, e)}
+                            onMouseEnter={() => handleCellMouseEnter(txn.id, col.key)}
+                            className={cn(
+                              `border-r border-slate-200 ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
+                              } ${col.key === "amount" ? amountClass : ""} ${voidedTextClass} truncate`,
+                              stickyClass,
+                              col.key === "date" && "p-1",
+                              col.key === "date" && "relative overflow-visible",
+                              isExcelMode && "select-none cursor-crosshair active:cursor-crosshair",
+                              isExcelMode && selectedCells.has(txn.id) && col.key === 'amount' && "bg-blue-100 ring-2 ring-inset ring-blue-500 z-10" // ADDED: Visual feedback for selected cells
+                            )}
+                            style={stickyStyle}
+                          >
+                            {renderCell(col.key)}
+                          </TableCell>
+                        )
+                      })}
+                    </TableRow>
+                  )
+                })}
+                {
+                  selection.size > 0 && (
+                    <>
+                      {summary.incomeSummary.sumAmount > 0 && (
+                        <TableRow className="bg-slate-50 border-t border-slate-200 hover:bg-slate-50">
+                          {displayedColumns.findIndex(c => c.key === 'amount') > 1 && (
+                            <TableCell colSpan={displayedColumns.findIndex(c => c.key === 'amount') - 1} />
                           )}
-                          style={stickyStyle}
-                        >
-                          {renderCell(col.key)}
-                        </TableCell>
-                      )
-                    })}
-                  </TableRow>
-                )
-              })}
-              {
-                selection.size > 0 && (
-                  <>
-                    {summary.incomeSummary.sumAmount > 0 && (
-                      <TableRow className="bg-slate-50 border-t border-slate-200 hover:bg-slate-50">
-                        {displayedColumns.findIndex(c => c.key === 'amount') > 1 && (
-                          <TableCell colSpan={displayedColumns.findIndex(c => c.key === 'amount') - 1} />
-                        )}
-                        <TableCell className="font-bold text-emerald-700 text-right pr-4">
-                          Total Income:
-                        </TableCell>
-                        <TableCell className="font-bold text-emerald-700 text-right">
-                          {numberFormatter.format(summary.incomeSummary.sumAmount)}
-                        </TableCell>
-                        <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')} />
-                      </TableRow>
-                    )}
-                    {summary.expenseSummary.sumAmount > 0 && (
-                      <TableRow className="bg-slate-50 border-t border-slate-200 hover:bg-slate-50">
-                        {displayedColumns.findIndex(c => c.key === 'amount') > 1 && (
-                          <TableCell colSpan={displayedColumns.findIndex(c => c.key === 'amount') - 1} />
-                        )}
-                        <TableCell className="font-bold text-red-600 text-right pr-4">
-                          Total Expense:
-                        </TableCell>
-                        <TableCell className="font-bold text-red-600 text-right">
-                          {numberFormatter.format(summary.expenseSummary.sumAmount)}
-                        </TableCell>
-                        <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')}></TableCell>
-                      </TableRow>
-                    )}
-                  </>
-                )
-              }
-            </TableBody >
+                          <TableCell className="font-bold text-emerald-700 text-right pr-4">
+                            Total Income:
+                          </TableCell>
+                          <TableCell className="font-bold text-emerald-700 text-right">
+                            {numberFormatter.format(summary.incomeSummary.sumAmount)}
+                          </TableCell>
+                          <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')} />
+                        </TableRow>
+                      )}
+                      {summary.expenseSummary.sumAmount > 0 && (
+                        <TableRow className="bg-slate-50 border-t border-slate-200 hover:bg-slate-50">
+                          {displayedColumns.findIndex(c => c.key === 'amount') > 1 && (
+                            <TableCell colSpan={displayedColumns.findIndex(c => c.key === 'amount') - 1} />
+                          )}
+                          <TableCell className="font-bold text-red-600 text-right pr-4">
+                            Total Expense:
+                          </TableCell>
+                          <TableCell className="font-bold text-red-600 text-right">
+                            {numberFormatter.format(summary.expenseSummary.sumAmount)}
+                          </TableCell>
+                          <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')}></TableCell>
+                        </TableRow>
+                      )}
+                    </>
+                  )
+                }
+              </TableBody >
 
-          </table>
+            </table>
           </div>
         )}
       </div>

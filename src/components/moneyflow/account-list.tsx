@@ -1,621 +1,478 @@
-'use client'
+"use client";
 
-import { useEffect, useMemo, useState, memo } from 'react'
-import { LayoutGrid, List, Search, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Check } from 'lucide-react'
-import { CreateAccountDialog } from './create-account-dialog'
-import { AccountCard } from './account-card'
-import { AccountTable } from './account-table'
-import { FamilyCardGroup } from './family-card-group'
-import { Account, AccountCashbackSnapshot, Category, Person, Shop } from '@/types/moneyflow.types'
-import { updateAccountConfigAction } from '@/actions/account-actions'
-import { computeNextDueDate, getSharedLimitParentId } from '@/lib/account-utils'
-import { getCreditCardAvailableBalance } from '@/lib/account-balance'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Button } from '@/components/ui/button'
-import { UsageStats, QuickPeopleConfig } from '@/types/settings.types'
-import { getCardActionState } from '@/lib/card-utils'
+import { useEffect, useMemo, useState, memo } from 'react';
+import { LayoutGrid, List, Search, ArrowUpDown, ArrowUp, ArrowDown, RotateCcw, Check, Filter, Coins, CalendarClock, Wallet, Clock, TrendingUp, Plus, ListFilter, X } from 'lucide-react';
+import { CreateAccountDialog } from './create-account-dialog';
+import { AccountCard } from './account-card';
+import { AccountTable } from './account-table';
+import { FamilyCluster } from './family-cluster';
+import { Account, AccountCashbackSnapshot, Category, Person, Shop } from '@/types/moneyflow.types';
+import { updateAccountConfigAction } from '@/actions/account-actions';
+import { computeNextDueDate, getSharedLimitParentId } from '@/lib/account-utils';
+import { getCreditCardAvailableBalance } from '@/lib/account-balance';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
+import { UsageStats, QuickPeopleConfig } from '@/types/settings.types';
+import { cn } from '@/lib/utils';
 
 type AccountListProps = {
-  accounts: Account[]
-  cashbackById?: Record<string, AccountCashbackSnapshot | undefined>
-  categories: Category[]
-  people: Person[]
-  shops: Shop[]
-  pendingBatchAccountIds?: string[]
-  usageStats?: UsageStats // Proper type
-  quickPeopleConfig?: QuickPeopleConfig
-}
+  accounts: Account[];
+  cashbackById?: Record<string, AccountCashbackSnapshot | undefined>;
+  categories: Category[];
+  people: Person[];
+  shops: Shop[];
+  pendingBatchAccountIds?: string[];
+  usageStats?: UsageStats;
+  quickPeopleConfig?: QuickPeopleConfig;
+  userId?: string;
+};
 
-type ViewMode = 'grid' | 'table'
-type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt' | 'waiting_confirm' | 'need_to_spend' | 'family_cards'
-type SortKey = 'due_date' | 'balance' | 'limit'
-type SortOrder = 'asc' | 'desc'
+type ViewMode = 'grid' | 'table';
+type FilterKey = 'all' | 'bank' | 'credit' | 'savings' | 'debt';
+type SortKey = 'due_date' | 'balance' | 'limit';
+type SortOrder = 'asc' | 'desc';
 
-const FILTERS: { key: FilterKey; label: string; match: (account: Account, allAccounts?: Account[]) => boolean }[] = [
-  { key: 'all', label: 'All', match: () => true },
-  { key: 'bank', label: 'Bank', match: account => ['bank', 'cash', 'ewallet'].includes(account.type) },
-  { key: 'credit', label: 'Credit', match: account => account.type === 'credit_card' },
-  { key: 'savings', label: 'Savings', match: account => ['savings', 'investment', 'asset'].includes(account.type) },
-  { key: 'debt', label: 'Debt', match: account => account.type === 'debt' },
-  {
-    key: 'family_cards',
-    label: 'Family Cards',
-    match: (account, allAccounts) =>
-      !!account.secured_by_account_id ||
-      !!account.parent_account_id ||
-      (account.relationships?.child_count ?? 0) > 0 ||
-      // Also include assets that secure other cards
-      !!account.relationships?.is_parent ||
-      // Also include assets that secure other cards
-      (allAccounts?.some(acc => acc.secured_by_account_id === account.id) ?? false)
-  },
-  { key: 'waiting_confirm', label: 'Waiting Confirm', match: () => true },
-  { key: 'need_to_spend', label: 'Need To Spend', match: () => true },
-]
-
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: 'due_date', label: 'Due Date' },
-  { key: 'balance', label: 'Balance' },
-  { key: 'limit', label: 'Limit' },
-]
+const numberFormatter = new Intl.NumberFormat("en-US", {
+  maximumFractionDigits: 0,
+});
 
 function getDaysUntilDue(account: Account): number {
-  const dueDate = computeNextDueDate(account.cashback_config ?? null)
-  if (!dueDate) return 999999
-  const now = new Date()
-  return Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+  const dueDate = computeNextDueDate(account.cashback_config ?? null);
+  if (!dueDate) return 999999;
+  const now = new Date();
+  return Math.ceil((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function getAccountBalance(account: Account, allAccounts: Account[]): number {
-  const netBalance = (account.total_in ?? 0) + (account.total_out ?? 0)
+  const netBalance = (account.total_in ?? 0) + (account.total_out ?? 0);
+  if (account.type !== 'credit_card') return netBalance;
 
-  if (account.type !== 'credit_card') return netBalance
-
-  const sharedLimitParentId = getSharedLimitParentId(account.cashback_config)
+  const sharedLimitParentId = getSharedLimitParentId(account.cashback_config);
   if (sharedLimitParentId) {
-    const parent = allAccounts.find(a => a.id === sharedLimitParentId)
+    const parent = allAccounts.find(a => a.id === sharedLimitParentId);
     if (parent) {
-      const siblings = allAccounts.filter(a => getSharedLimitParentId(a.cashback_config) === parent.id)
-      const familyMembers = [parent, ...siblings]
+      const siblings = allAccounts.filter(a => getSharedLimitParentId(a.cashback_config) === parent.id);
+      const familyMembers = [parent, ...siblings];
       const totalDebt = familyMembers.reduce((sum, member) => {
-        return sum + (member.current_balance ?? 0)
-      }, 0)
-
-      return (parent.credit_limit ?? 0) - totalDebt
+        return sum + (member.current_balance ?? 0);
+      }, 0);
+      return (parent.credit_limit ?? 0) - totalDebt;
     }
   }
-
-  return getCreditCardAvailableBalance(account)
+  return getCreditCardAvailableBalance(account);
 }
 
-// Memoized filter button
-const FilterButton = memo(({ filter, isActive, onClick }: {
-  filter: { key: FilterKey; label: string };
-  isActive: boolean;
-  onClick: () => void
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className={`rounded-full px-3 py-1 text-sm font-semibold transition ${isActive
-      ? 'bg-blue-600 text-white shadow-sm'
-      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-      }`}
-    aria-pressed={isActive}
-  >
-    {filter.label}
-  </button>
-))
-FilterButton.displayName = 'FilterButton'
 
-export function AccountList({ accounts, cashbackById = {}, categories, people, shops, pendingBatchAccountIds = [], usageStats, quickPeopleConfig }: AccountListProps) {
-  const [view, setView] = useState<ViewMode>('grid')
-  const [activeFilter, setActiveFilter] = useState<FilterKey>('all')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [items, setItems] = useState<Account[]>(accounts)
-  const [pendingId, setPendingId] = useState<string | null>(null)
-  const [showClosedAccounts, setShowClosedAccounts] = useState(false)
-  const [sortKey, setSortKey] = useState<SortKey>('due_date')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
-  const [sortOpen, setSortOpen] = useState(false)
+export function AccountList({ accounts, cashbackById = {}, categories, people, shops, pendingBatchAccountIds = [], usageStats, quickPeopleConfig, userId }: AccountListProps) {
+  const [layoutMode, setLayoutMode] = useState<ViewMode>('grid');
+  const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
+  const [showWaitingConfirm, setShowWaitingConfirm] = useState(false);
+  const [showNeedToSpend, setShowNeedToSpend] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [items, setItems] = useState<Account[]>(accounts);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>('due_date');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
+
+  // Mobile states
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false);
 
   useEffect(() => {
-    setItems(accounts)
-  }, [accounts])
+    setItems(accounts);
+  }, [accounts]);
 
   const collateralAccounts = useMemo(
     () => items.filter(acc => ['savings', 'investment', 'asset'].includes(acc.type)),
     [items]
-  )
-
-  const creditCardAccounts = useMemo(
-    () => items.filter(acc => acc.type === 'credit_card'),
-    [items]
-  )
+  );
 
   const activeItems = useMemo(
     () => items.filter(acc => acc.is_active !== false),
     [items]
-  )
+  );
 
   const closedItems = useMemo(
     () => items.filter(acc => acc.is_active === false),
     [items]
-  )
+  );
 
-  const filteredItems = useMemo(() => {
-    let filtered = activeItems
-
-    if (activeFilter === 'waiting_confirm') {
-      filtered = filtered.filter(acc => pendingBatchAccountIds.includes(acc.id))
-    } else if (activeFilter === 'need_to_spend') {
-      filtered = filtered.filter(acc => (cashbackById[acc.id]?.missing_min_spend ?? 0) > 0)
-    } else {
-      filtered = filtered.filter(acc => FILTERS.find(f => f.key === activeFilter)?.match(acc, items))
-    }
-
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(acc => acc.name.toLowerCase().includes(query))
-    }
-
-    return filtered
-  }, [activeItems, activeFilter, searchQuery, pendingBatchAccountIds])
-
-  const sortedItems = useMemo(() => {
-    const sorted = [...filteredItems]
-
-    sorted.sort((a, b) => {
-      let comparison = 0
-
-      switch (sortKey) {
-        case 'due_date':
-          comparison = getDaysUntilDue(a) - getDaysUntilDue(b)
-          break
-        case 'balance':
-          comparison = getAccountBalance(a, items) - getAccountBalance(b, items)
-          break
-        case 'limit':
-          comparison = (a.credit_limit ?? 0) - (b.credit_limit ?? 0)
-          break
+  // Stats for Header
+  const totalDebt = useMemo(() => {
+    return items.reduce((sum, acc) => {
+      if (acc.type === 'credit_card' && (acc.current_balance ?? 0) > 0) {
+        return sum + (acc.current_balance ?? 0);
       }
+      if (acc.type === 'debt' && (acc.current_balance ?? 0) > 0) {
+        return sum + (acc.current_balance ?? 0);
+      }
+      return sum;
+    }, 0);
+  }, [items]);
 
-      return sortOrder === 'asc' ? comparison : -comparison
-    })
+  const totalDebtNextMonth = useMemo(() => {
+    return totalDebt;
+  }, [totalDebt]);
 
-    return sorted
-  }, [filteredItems, sortKey, sortOrder, items])
 
-  const grouped = useMemo(() => {
-    // Grouping Logic using unified getCardActionState
-    const actionRequired: { account: Account, sortOrder: number }[] = []
-    const upcomingCC: Account[] = []
-    const payment: Account[] = []
-    const securedSavings: Account[] = []
-    const normalSavings: Account[] = []
-    const debt: Account[] = []
+  // 1. Filter Logic
+  const filteredItems = useMemo(() => {
+    let filtered = activeItems;
+
+    // A. Visual Tabs
+    if (activeFilter !== 'all') {
+      if (activeFilter === 'bank') filtered = filtered.filter(acc => ['bank', 'cash', 'ewallet'].includes(acc.type));
+      else if (activeFilter === 'credit') filtered = filtered.filter(acc => acc.type === 'credit_card');
+      else if (activeFilter === 'savings') filtered = filtered.filter(acc => ['savings', 'investment', 'asset'].includes(acc.type));
+      else if (activeFilter === 'debt') filtered = filtered.filter(acc => acc.type === 'debt');
+    }
+
+    // B. Toggles (Intersecting)
+    if (showWaitingConfirm) {
+      filtered = filtered.filter(acc => pendingBatchAccountIds.includes(acc.id));
+    }
+    if (showNeedToSpend) {
+      filtered = filtered.filter(acc => (cashbackById[acc.id]?.missing_min_spend ?? 0) > 0);
+    }
+
+    // 2. Search Logic (Family Expansion)
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      // Find matching IDs first
+      const matchedIds = new Set(
+        items.filter(acc => acc.name.toLowerCase().includes(query)).map(a => a.id)
+      );
+
+      // Expand to include families
+      const expandedIds = new Set<string>();
+      items.forEach(acc => {
+        if (matchedIds.has(acc.id)) {
+          expandedIds.add(acc.id);
+          // If parent, add children
+          if (acc.relationships?.child_accounts) {
+            acc.relationships.child_accounts.forEach(c => expandedIds.add(c.id));
+          }
+          // If child, add parent and siblings
+          if (acc.parent_account_id) {
+            expandedIds.add(acc.parent_account_id);
+            // Assume parent exists in items
+            const parent = items.find(p => p.id === acc.parent_account_id);
+            if (parent?.relationships?.child_accounts) {
+              parent.relationships.child_accounts.forEach(c => expandedIds.add(c.id));
+            }
+          }
+        }
+      });
+
+      filtered = items.filter(acc => expandedIds.has(acc.id) && acc.is_active !== false);
+    }
+    return filtered;
+  }, [items, activeItems, activeFilter, searchQuery, pendingBatchAccountIds, cashbackById, showWaitingConfirm, showNeedToSpend]);
+
+  // 3. Sorting
+  const sortedItems = useMemo(() => {
+    const sorted = [...filteredItems];
+    sorted.sort((a, b) => {
+      let comparison = 0;
+      switch (sortKey) {
+        case 'due_date': comparison = getDaysUntilDue(a) - getDaysUntilDue(b); break;
+        case 'balance': comparison = getAccountBalance(a, items) - getAccountBalance(b, items); break;
+        case 'limit': comparison = (a.credit_limit ?? 0) - (b.credit_limit ?? 0); break;
+      }
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+    return sorted;
+  }, [filteredItems, sortKey, sortOrder, items]);
+
+  // --- Display Item Interface ---
+  type DisplayItem =
+    | { type: 'single', account: Account }
+    | { type: 'family', parent: Account, children: Account[], id: string };
+
+  // --- Process Items Logic ---
+  const displayItems = useMemo(() => {
+    // 4. Clustering
+    const result: DisplayItem[] = [];
+    const processedIds = new Set<string>();
 
     sortedItems.forEach(acc => {
-      const hasPendingBatch = pendingBatchAccountIds.includes(acc.id)
-      const state = getCardActionState(acc, hasPendingBatch)
+      if (processedIds.has(acc.id)) return;
 
-      if (state.section === 'action_required') {
-        actionRequired.push({ account: acc, sortOrder: state.priorities.sortOrder })
-        return
-      }
+      // Check if Parent with Children in filtered list
+      const children = sortedItems.filter(c => c.parent_account_id === acc.id);
 
-      if (state.section === 'credit_card') {
-        upcomingCC.push(acc)
-        return
-      }
-
-      // Fallback for non-credit cards (section 'other')
-      if (['bank', 'ewallet', 'cash'].includes(acc.type)) {
-        payment.push(acc)
-      } else if (['savings', 'investment', 'asset'].includes(acc.type)) {
-        const isSecuring = sortedItems.some(item => item.secured_by_account_id === acc.id)
-        if (isSecuring) {
-          securedSavings.push(acc)
+      if ((acc.relationships?.is_parent || children.length > 0) && children.length > 0) {
+        // It is a parent with visible children
+        result.push({
+          type: 'family',
+          id: acc.id,
+          parent: acc,
+          children: children
+        });
+        processedIds.add(acc.id);
+        children.forEach(c => processedIds.add(c.id));
+      } else if (acc.parent_account_id) {
+        // Child
+        const parentInList = sortedItems.find(p => p.id === acc.parent_account_id);
+        if (parentInList) {
+          // Skip, handled by parent
+          return;
         } else {
-          normalSavings.push(acc)
+          result.push({ type: 'single', account: acc });
+          processedIds.add(acc.id);
         }
-      } else if (acc.type === 'debt') {
-        debt.push(acc)
+      } else {
+        // Standalone
+        result.push({ type: 'single', account: acc });
+        processedIds.add(acc.id);
       }
-    })
+    });
 
-    // Sort Action Required by collected sortOrder
-    actionRequired.sort((a, b) => a.sortOrder - b.sortOrder)
+    return result;
 
-    const sections: { key: string; title: string; helper: string; accounts: Account[], gridCols: string }[] = []
+  }, [sortedItems, items]);
 
-    if (actionRequired.length > 0) {
-      sections.push({
-        key: 'action-required',
-        title: '⚠️ Action Required',
-        helper: 'Due soon · Need to spend · Pending confirm',
-        accounts: actionRequired.map(x => x.account),
-        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
-      })
-    }
-
-    if (upcomingCC.length > 0) {
-      sections.push({
-        key: 'upcoming-cc',
-        title: '📅 Credit Cards',
-        helper: 'Cards without immediate due dates',
-        accounts: upcomingCC,
-        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
-      })
-    }
-
-    if (payment.length > 0) {
-      sections.push({
-        key: 'payment',
-        title: '🏦 Payment Accounts',
-        helper: 'Banks · E-wallets · Cash',
-        accounts: payment,
-        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
-      })
-    }
-
-    if (securedSavings.length > 0) {
-      sections.push({
-        key: 'secured-savings',
-        title: '🔒 Secured Assets',
-        helper: 'Deposits linking to credit cards',
-        accounts: securedSavings,
-        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
-      })
-    }
-    if (normalSavings.length > 0) {
-      sections.push({
-        key: 'savings',
-        title: '💰 Savings & Assets',
-        helper: 'Term deposits · Investments',
-        accounts: normalSavings,
-        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
-      })
-    }
-
-    if (debt.length > 0) {
-      sections.push({
-        key: 'debt',
-        title: '👥 Debt Accounts',
-        helper: 'People & loans',
-        accounts: debt,
-        gridCols: 'lg:grid-cols-4 md:grid-cols-2'
-      })
-    }
-
-    return sections
-  }, [sortedItems, pendingBatchAccountIds])
-
-  // Family Grouping Logic (for family_cards filter)
-  const familyGroups = useMemo(() => {
-    if (activeFilter !== 'family_cards') return []
-
-    type FamilyGroup = {
-      id: string
-      securedAsset?: Account
-      parent: Account
-      children: Account[]
-    }
-
-    const groups: FamilyGroup[] = []
-    const processedIds = new Set<string>()
-
-    // Find all parent accounts
-    const parents = sortedItems.filter(
-      acc => (acc.relationships?.child_count ?? 0) > 0 || acc.relationships?.is_parent
-    )
-
-    parents.forEach(parent => {
-      if (processedIds.has(parent.id)) return
-
-      // Find secured asset if exists
-      const securedAsset = parent.secured_by_account_id
-        ? sortedItems.find(acc => acc.id === parent.secured_by_account_id)
-        : undefined
-
-      // Find children
-      const children = sortedItems.filter(
-        acc => acc.parent_account_id === parent.id || acc.relationships?.parent_info?.id === parent.id
-      )
-
-      groups.push({
-        id: parent.id,
-        securedAsset,
-        parent,
-        children,
-      })
-
-      // Mark as processed
-      processedIds.add(parent.id)
-      if (securedAsset) processedIds.add(securedAsset.id)
-      children.forEach(child => processedIds.add(child.id))
-    })
-
-    // Handle standalone secured cards (no parent/child relationship)
-    const standaloneSecured = sortedItems.filter(
-      acc => acc.secured_by_account_id && !processedIds.has(acc.id)
-    )
-
-    standaloneSecured.forEach(card => {
-      const securedAsset = sortedItems.find(acc => acc.id === card.secured_by_account_id)
-      if (securedAsset && !processedIds.has(card.id)) {
-        groups.push({
-          id: card.id,
-          securedAsset,
-          parent: card,
-          children: [],
-        })
-        processedIds.add(card.id)
-        processedIds.add(securedAsset.id)
-      }
-    })
-
-    return groups
-  }, [sortedItems, activeFilter])
 
   const handleToggleStatus = async (accountId: string, nextValue: boolean) => {
-    setPendingId(accountId)
+    setPendingId(accountId);
     try {
-      const success = await updateAccountConfigAction({ id: accountId, isActive: nextValue })
+      const success = await updateAccountConfigAction({ id: accountId, isActive: nextValue });
       if (success) {
-        setItems(prev => prev.map(acc => (acc.id === accountId ? { ...acc, is_active: nextValue } : acc)))
+        setItems(prev => prev.map(acc => (acc.id === accountId ? { ...acc, is_active: nextValue } : acc)));
       }
     } finally {
-      setPendingId(null)
+      setPendingId(null);
     }
-  }
+  };
 
-  const handleSortSelect = (key: SortKey, order: SortOrder) => {
-    setSortKey(key)
-    setSortOrder(order)
-    setSortOpen(false)
-  }
-
-  const handleResetSort = () => {
-    setSortKey('due_date')
-    setSortOrder('asc')
-    setSortOpen(false)
-  }
-
-  const currentSortLabel = SORT_OPTIONS.find(o => o.key === sortKey)?.label ?? 'Sort'
+  const [showClosedAccountsState, setShowClosedAccountsState] = useState(false);
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-4 rounded-lg border border-slate-200 bg-white p-4 shadow-sm md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          {FILTERS.map(filter => (
-            <FilterButton
-              key={filter.key}
-              filter={filter}
-              isActive={activeFilter === filter.key}
-              onClick={() => setActiveFilter(filter.key)}
-            />
+    <div className="space-y-6">
+      {/* 1. Header with Filters */}
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between bg-white/50 backdrop-blur-xl sticky top-0 z-30 py-4 -mx-4 px-4 border-b border-slate-100/50 shadow-sm md:static md:bg-transparent md:border-none md:p-0 md:m-0 md:shadow-none mb-20">
+
+        {/* Left: Filters */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-2 md:pb-0 md:overflow-visible flex-nowrap">
+          {/* Mobile Filter Trigger */}
+          <div className="md:hidden">
+            <Popover open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className={cn("h-8 rounded-full border-slate-200 bg-white", activeFilter !== 'all' && "bg-slate-900 text-white border-slate-900")}>
+                  <ListFilter className="w-3.5 h-3.5 mr-1.5" />
+                  {activeFilter === 'all' ? 'Filter' : activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-2" align="start">
+                <div className="flex flex-col gap-1">
+                  {['all', 'bank', 'credit', 'savings', 'debt'].map(f => (
+                    <button
+                      key={f}
+                      onClick={() => { setActiveFilter(f as any); setMobileFilterOpen(false); }}
+                      className={cn("text-left px-3 py-2 rounded-lg text-sm transition-colors", activeFilter === f ? "bg-slate-100 font-bold text-slate-900" : "hover:bg-slate-50 text-slate-600")}
+                    >
+                      {f === 'all' ? 'All Accounts' : f.charAt(0).toUpperCase() + f.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Desktop Filters */}
+          <button
+            onClick={() => setActiveFilter('all')}
+            className={cn(
+              "hidden md:block px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap",
+              activeFilter === 'all'
+                ? "bg-blue-600 text-white shadow-md shadow-blue-200 transform scale-105"
+                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+            )}
+          >
+            All Accounts
+          </button>
+
+          <div className="hidden md:block w-px h-6 bg-slate-200 mx-2 shrink-0" />
+
+          {[
+            { id: 'bank', label: 'Bank' },
+            { id: 'credit', label: 'Credit Card' },
+            { id: 'savings', label: 'Savings' },
+            { id: 'debt', label: 'Debt & Loans' },
+          ].map((filter) => (
+            <button
+              key={filter.id}
+              onClick={() => setActiveFilter(filter.id as any)}
+              className={cn(
+                "hidden md:block px-3 py-1.5 rounded-full text-xs font-bold transition-all whitespace-nowrap",
+                activeFilter === filter.id
+                  ? "bg-slate-900 text-white shadow-md transform scale-105"
+                  : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+              )}
+            >
+              {filter.label}
+            </button>
           ))}
 
-          {/* Sort Popover - Show all options with asc/desc */}
-          <Popover open={sortOpen} onOpenChange={setSortOpen}>
+          {/* Waiting & Need Toggle (Visible on Mobile too) */}
+          <div className="flex items-center gap-2 bg-white rounded-full border border-slate-200 p-1 pr-1 md:pr-3 shrink-0">
+            <button
+              onClick={() => setShowWaitingConfirm(!showWaitingConfirm)}
+              className={cn(
+                "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1",
+                showWaitingConfirm ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-400"
+              )}
+            >
+              <Clock className="w-3 h-3" /> <span className="hidden sm:inline">Waiting</span>
+            </button>
+            <button
+              onClick={() => setShowNeedToSpend(!showNeedToSpend)}
+              className={cn(
+                "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider transition-all flex items-center gap-1",
+                showNeedToSpend ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-400"
+              )}
+            >
+              <TrendingUp className="w-3 h-3" /> <span className="hidden sm:inline">Needs</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Right: Actions */}
+        <div className="flex items-center gap-3 w-full md:w-auto mt-2 md:mt-0">
+          {/* Sort Popover */}
+          <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="ml-2 gap-1.5 text-xs h-8">
-                <ArrowUpDown className="h-3.5 w-3.5" />
-                {currentSortLabel}
-                {sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
+              <Button variant="outline" size="sm" className="h-9 px-2.5 bg-white border-slate-200 text-slate-600 hover:text-slate-900 ml-auto md:ml-0">
+                <ArrowUpDown className="w-3.5 h-3.5 mr-1" />
+                <span className="hidden sm:inline text-xs font-medium">Sort</span>
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-52 p-1" align="start">
-              <div className="flex flex-col">
-                {SORT_OPTIONS.map(option => (
-                  <div key={option.key} className="flex flex-col">
-                    <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-                      {option.label}
-                    </div>
-                    <button
-                      onClick={() => handleSortSelect(option.key, 'asc')}
-                      className={`flex items-center justify-between px-3 py-1.5 text-sm rounded-md transition-colors ${sortKey === option.key && sortOrder === 'asc'
-                        ? 'bg-blue-50 text-blue-700 font-medium'
-                        : 'text-slate-600 hover:bg-slate-100'
-                        }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <ArrowUp className="h-3 w-3" />
-                        Ascending
-                      </span>
-                      {sortKey === option.key && sortOrder === 'asc' && <Check className="h-3.5 w-3.5" />}
-                    </button>
-                    <button
-                      onClick={() => handleSortSelect(option.key, 'desc')}
-                      className={`flex items-center justify-between px-3 py-1.5 text-sm rounded-md transition-colors ${sortKey === option.key && sortOrder === 'desc'
-                        ? 'bg-blue-50 text-blue-700 font-medium'
-                        : 'text-slate-600 hover:bg-slate-100'
-                        }`}
-                    >
-                      <span className="flex items-center gap-2">
-                        <ArrowDown className="h-3 w-3" />
-                        Descending
-                      </span>
-                      {sortKey === option.key && sortOrder === 'desc' && <Check className="h-3.5 w-3.5" />}
-                    </button>
-                  </div>
-                ))}
-                <hr className="my-1 border-slate-200" />
-                <button
-                  onClick={handleResetSort}
-                  className="flex items-center gap-2 px-3 py-2 text-sm text-slate-500 hover:bg-slate-100 rounded-md"
-                >
-                  <RotateCcw className="h-3.5 w-3.5" />
-                  Reset to Default
+            <PopoverContent className="w-40 p-1" align="end">
+              <div className="grid gap-1">
+                <button onClick={() => setSortKey('due_date')} className={cn("flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-slate-50", sortKey === 'due_date' && "bg-slate-50 font-bold")}>
+                  <CalendarClock className="w-3.5 h-3.5 text-amber-500" /> Due Date
+                </button>
+                <button onClick={() => setSortKey('balance')} className={cn("flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-slate-50", sortKey === 'balance' && "bg-slate-50 font-bold")}>
+                  <Coins className="w-3.5 h-3.5 text-emerald-500" /> Balance
+                </button>
+                <button onClick={() => setSortKey('limit')} className={cn("flex items-center gap-2 px-2 py-1.5 rounded-md text-xs hover:bg-slate-50", sortKey === 'limit' && "bg-slate-50 font-bold")}>
+                  <Wallet className="w-3.5 h-3.5 text-blue-500" /> Credit Limit
                 </button>
               </div>
             </PopoverContent>
           </Popover>
-        </div>
 
-        <div className="flex items-center gap-2 flex-1 justify-end">
-          <div className="relative w-full flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <div className="relative flex-1 md:w-48">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
             <input
               type="text"
-              placeholder="Search accounts..."
+              placeholder="Search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-full border border-slate-200 bg-white pl-9 pr-4 py-1.5 text-sm text-slate-900 placeholder-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition shadow-sm"
+              className="w-full h-9 pl-8 pr-4 rounded-xl border border-slate-200 bg-white text-xs focus:outline-none focus:ring-2 focus:ring-slate-900/10 placeholder:text-slate-400"
             />
           </div>
-          <div className="flex rounded-full border border-slate-200 bg-slate-50 p-1">
-            <button
-              type="button"
-              onClick={() => setView('grid')}
-              className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold transition ${view === 'grid' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-              aria-pressed={view === 'grid'}
-            >
-              <LayoutGrid className="h-4 w-4" />
-              Grid
+
+          {/* Layout Mode */}
+          <div className="bg-slate-100 p-1 rounded-lg hidden md:flex">
+            <button onClick={() => setLayoutMode('grid')} className={cn("p-1.5 rounded-md transition-all", layoutMode === 'grid' ? "bg-white shadow-sm text-slate-900" : "text-slate-400 hover:text-slate-600")}>
+              <LayoutGrid className="w-4 h-4" />
             </button>
-            <button
-              type="button"
-              onClick={() => setView('table')}
-              className={`flex items-center gap-1 rounded-full px-3 py-1 text-sm font-semibold transition ${view === 'table' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
-              aria-pressed={view === 'table'}
-            >
-              <List className="h-4 w-4" />
-              Table
+            <button onClick={() => setLayoutMode('table')} className={cn("p-1.5 rounded-md transition-all", layoutMode === 'table' ? "bg-white shadow-sm text-slate-900" : "text-slate-400 hover:text-slate-600")}>
+              <List className="w-4 h-4" />
             </button>
           </div>
+
           <CreateAccountDialog
-            collateralAccounts={collateralAccounts}
-            creditCardAccounts={creditCardAccounts}
+            collateralAccounts={items}
+            trigger={
+              <Button size="sm" className="h-9 rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-sm shadow-blue-200 px-3">
+                <Plus className="w-4 h-4 md:mr-1.5" />
+                <span className="hidden md:inline">Add New</span>
+              </Button>
+            }
           />
         </div>
       </div>
 
-      {grouped.length === 0 && view === 'grid' ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white p-8 text-center text-slate-500">
-          No accounts match this filter.
+      {/* Debt Banner (Mobile Sticky or Top) */}
+      <div className="md:hidden mb-4 mx-0 bg-gradient-to-r from-slate-900 to-slate-800 text-white rounded-xl shadow-lg shadow-slate-200/50 p-3 flex items-center justify-between">
+        <div className="flex flex-col">
+          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Total Debt</span>
+          <div className="text-lg font-bold">{numberFormatter.format(totalDebt)} <span className="text-xs font-normal text-slate-500">₫</span></div>
         </div>
-      ) : view === 'grid' ? (
-        activeFilter === 'family_cards' ? (
-          <FamilyCardGroup
-            families={familyGroups}
-            accounts={items}
-            categories={categories}
-            people={people}
-            shops={shops}
-            collateralAccounts={collateralAccounts}
-            usageStats={usageStats}
-            pendingBatchAccountIds={pendingBatchAccountIds}
-          // FamilyCardGroup also needs this prop, but for now we focus on AccountCard
-          />
-        ) : (
-          <div className="space-y-6">
-            {grouped.map(section => (
-              <div key={section.key} className="space-y-3">
-                <div className="flex items-center justify-between gap-3 bg-slate-50/50 p-2 rounded-lg border border-slate-100/50">
-                  <div>
-                    <p className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                      {section.title}
-                    </p>
-                    <p className="text-[10px] text-slate-500 font-medium uppercase tracking-wide opacity-80 pl-6 -mt-0.5">{section.helper}</p>
-                  </div>
-                  <span className="rounded-full bg-slate-200/50 px-2 py-0.5 text-[10px] font-bold text-slate-600 border border-slate-200">
-                    {section.accounts.length}
-                  </span>
-                </div>
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-                  {section.accounts.map(account => (
-                    <AccountCard
-                      key={account.id}
-                      account={account}
-                      accounts={items}
-                      categories={categories}
-                      people={people}
-                      shops={shops}
-                      collateralAccounts={collateralAccounts}
-                      usageStats={usageStats}
-                      pendingBatchAccountIds={pendingBatchAccountIds}
-                      quickPeopleConfig={quickPeopleConfig}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
+        <div className="text-right">
+          <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Projected Next Month</span>
+          <div className="text-sm font-bold text-emerald-400">{numberFormatter.format(totalDebtNextMonth)}</div>
+        </div>
+      </div>
 
-            {closedItems.length > 0 && (
-              <details
-                className="border-t border-slate-200 pt-6 mt-6"
-                open={showClosedAccounts}
-                onToggle={event => setShowClosedAccounts(event.currentTarget.open)}
-              >
-                <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
-                  <div className="flex items-center gap-2">
-                    <span>Closed accounts</span>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                      {closedItems.length}
-                    </span>
-                  </div>
-                  <span className="text-slate-500">{showClosedAccounts ? '▲' : '▼'}</span>
-                </summary>
-                <div className="mt-4 grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-                  {closedItems.map(account => (
-                    <AccountCard
-                      key={account.id}
-                      account={account}
-                      accounts={items}
-                      categories={categories}
-                      people={people}
-                      shops={shops}
-                      collateralAccounts={collateralAccounts}
-                      usageStats={usageStats}
-                      pendingBatchAccountIds={pendingBatchAccountIds}
-                      quickPeopleConfig={quickPeopleConfig}
-                    />
-                  ))}
-                </div>
-              </details>
-            )}
+
+      {/* 2. Content */}
+      <div className={cn(
+        "grid gap-6 pb-20",
+        layoutMode === 'grid' ? "grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4" : "grid-cols-1"
+      )}>
+        {displayItems.length === 0 ? (
+          <div className="col-span-full py-12 text-center text-slate-400">
+            <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Search className="w-6 h-6 opacity-50" />
+            </div>
+            <p className="text-sm font-medium">No accounts found</p>
           </div>
-        )
-      ) : (
-        <>
-          <AccountTable
-            accounts={sortedItems}
-            onToggleStatus={handleToggleStatus}
-            pendingId={pendingId}
-            collateralAccounts={collateralAccounts}
-            allAccounts={items}
-          />
+        ) : (
+          displayItems.map((item) => (
+            item.type === 'single' ? (
+              <AccountCard
+                key={item.account.id}
+                account={item.account}
+                accounts={items}
+                cashbackById={cashbackById}
+                categories={categories}
+                people={people}
+                shops={shops}
+                collateralAccounts={items}
+                pendingBatchAccountIds={pendingBatchAccountIds}
+                className="w-full"
+              />
+            ) : (
+              <FamilyCluster
+                key={item.id}
+                parent={item.parent}
+                children_accounts={item.children}
+                allAccounts={items}
+                categories={categories}
+                people={people}
+                shops={shops}
+                pendingBatchAccountIds={pendingBatchAccountIds}
+                cashbackById={cashbackById as Record<string, AccountCashbackSnapshot>}
+                collateralAccounts={items}
+              />
+            )
+          ))
+        )}
+      </div>
 
-          {closedItems.length > 0 && (
-            <details
-              className="mt-8 rounded-xl border border-dashed border-slate-200 bg-white px-4 py-3"
-              open={showClosedAccounts}
-              onToggle={event => setShowClosedAccounts(event.currentTarget.open)}
-            >
-              <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2 text-sm font-semibold text-slate-800">
-                <div className="flex items-center gap-2">
-                  <span>Closed accounts</span>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                    {closedItems.length}
-                  </span>
-                </div>
-                <span className="text-slate-500">{showClosedAccounts ? '▲' : '▼'}</span>
-              </summary>
-              <div className="mt-4">
-                <AccountTable
-                  accounts={closedItems}
-                  onToggleStatus={handleToggleStatus}
-                  pendingId={pendingId}
-                  collateralAccounts={collateralAccounts}
-                  allAccounts={items}
-                />
-              </div>
-            </details>
-          )}
-        </>
+      {closedItems.length > 0 && layoutMode === 'table' && (
+        <details
+          className="mt-8 rounded-xl border border-dashed border-slate-200 bg-white px-4 py-3"
+          open={showClosedAccountsState}
+          onToggle={event => setShowClosedAccountsState(event.currentTarget.open)}
+        >
+          <summary className="cursor-pointer text-sm font-medium text-slate-500 hover:text-slate-800">
+            Show {closedItems.length} Closed Accounts
+          </summary>
+          <div className="mt-4">
+            <AccountTable
+              accounts={closedItems}
+              onToggleStatus={handleToggleStatus}
+              pendingId={pendingId}
+              collateralAccounts={collateralAccounts}
+              allAccounts={items}
+            />
+          </div>
+        </details>
       )}
     </div>
-  )
+  );
 }

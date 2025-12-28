@@ -234,7 +234,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             <span className="text-lg font-bold text-slate-800">Money Flow <span className="text-blue-600">3</span></span>
           </div>
         </div>
-        <div className="mx-auto w-full max-w-[1920px] px-4 sm:px-6 lg:px-8 h-full bg-white">
+        <div className="mx-auto w-full max-w-[1920px] px-4 sm:px-6 lg:px-8 flex-1 min-h-0 bg-white">
           {children}
         </div>
       </main>

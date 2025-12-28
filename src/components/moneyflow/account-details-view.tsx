@@ -292,7 +292,7 @@ export function AccountDetailsView({
         !bulkActionHandler || (bulkActions?.selectionCount ?? 0) === 0 || !!bulkActionBusy
 
     return (
-        <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex flex-col min-h-full pb-20">
             {/* Header */}
             <div className="mx-6 mt-6 space-y-3">
                 <AccountDetailHeader
