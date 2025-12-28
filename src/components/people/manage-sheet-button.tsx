@@ -337,6 +337,51 @@ export function ManageSheetButton({
                   )}
                 </div>
               )}
+
+              {/* Test & Diagnostics Section */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Test & Diagnostics</p>
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-slate-500">Create a test sheet to verify formatting/scripts.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!hasValidScriptLink) {
+                        toast.error('Add a valid Script Link first.')
+                        return
+                      }
+                      startManageTransition(async () => {
+                        const toastId = toast.loading('Creating test sheet...')
+                        try {
+                          const res = await fetch('/api/sheets/manage', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ personId, action: 'test_create' }),
+                          })
+                          const data = await res.json()
+                          if (!res.ok || data?.error) {
+                            toast.dismiss(toastId)
+                            toast.error(data?.error || 'Test failed')
+                            return
+                          }
+                          toast.dismiss(toastId)
+                          toast.success('Test sheet created!')
+                          if (data.sheetUrl) {
+                            window.open(data.sheetUrl, '_blank')
+                          }
+                        } catch (err) {
+                          toast.dismiss(toastId)
+                          toast.error('Test request failed')
+                        }
+                      })
+                    }}
+                    disabled={!hasValidScriptLink || isManaging}
+                    className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Test Create
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="border-t border-slate-200 px-4 py-3 flex items-center justify-between">

@@ -2,132 +2,81 @@
 description: Money Flow 3 (Updated Phase 75)
 ---
 
-# .agent/workflows/gemini.md — Context (MF4)
+# Task Spec — SheetScript Fix (source: task.md)
 
-## Project Overview
+You are working in repo: `rei6868/money-flow-3` (PR #147 already merged; `sheetScript` folder is unified; sync is via `pnpm run sheet:push` using `SHEET_ID` in `.env`).
 
-Money Flow 3 is a personal finance manager built with:
+## Goal
 
-* Next.js (App Router)
-* TypeScript
-* Tailwind CSS + shadcn/ui
-* Supabase (PostgreSQL)
+Fix Google Sheet sync issues:
 
-## Key Domain Concepts
+* formatting (width/alignment/number formats)
+* safe row removal (do not break Summary)
+* stable Summary range
+* proper insert ordering by Date
 
-### Transactions
+## Must read first
 
-Types:
+* `sheetScript/**` (all files)
+* `.env.example` (or env docs mentioning `SHEET_ID` / script id)
+* repo docs about sheets sync (search: `sheet:push`, `sheetScript`, `sync`, `resync`)
+* transaction → sheet mapping code path (search: `Final Price`, `% Back`, `Sum Back`, `shop`, `Notes`, `void`, `delete`, `upsert`, `resync`)
 
-* Expense
-* Income
-* Transfer
-* Lending
-* Repay
+## Issues to fix
 
-Each transaction type controls visible fields in the modal.
+### A) Formatting must apply on BOTH create-new and re-sync
 
-### Accounts
+1. Column widths (A:J only)
 
-* Credit cards
-* Banks / wallets
-* Savings / secured accounts
+* Shop: center, 44px
+* Notes: 250px
 
-Important rules:
+2. Alignment
 
-* Credit cards **cannot** be transfer sources
-* Some credit cards have cashback policies
+* Shop: center H+V
+* Date: left or center (consistent)
+* Numbers: right
 
-### Cashback (Current State)
+3. Number formats
 
-* Cashback configuration lives in `accounts.cashback_config`
-* Current system computes cashback mostly in backend logic
-* There is no unified table to manage cashback per cycle yet
+* Amount, Final Price: thousands separators; prefer #,##0 (VND), allow #,##0.00 where needed
+* % Back: consistent
+* Sum Back: #,##0.00
 
-### Voluntary Cashback (MF4)
+4. Resync must re-apply header style, widths, formats, borders
+5. Borders: every populated row A:J has borders; blank rows below last data row no borders
 
-Voluntary cashback means:
+### B) Safe void/delete row must NOT break Summary area
 
-* User gives cashback manually even when:
-  * Account has no cashback
-  * Cashback budget for the cycle is exhausted
+* Do not call `sheet.deleteRow(rowIndex)`
+* Only delete/shift within A:J using `deleteCells(ROWS)` or equivalent
+* Summary (L:N) remains untouched
 
-Rules:
+### C) Insertion ordering
 
-* Voluntary cashback is allowed
-* It must NOT affect:
-  * Min spend
-  * Cashback budget
-* These values will be persisted separately in MF5
+* Inserting earlier date must land in correct sorted position
+* Sort only A:J range (exclude header), never touch Summary
 
-## UI Conventions
+### D) Resync deterministic
 
-* Transaction modal uses sticky header + fixed footer
-* Transaction type tabs are visually dominant
-* Due / cashback logic clarity > compactness
-* Mobile experience is first-class
+* Rebuild only A:J
+* Keep Summary intact
+* Ensure table range stable (header row 1, data row 2)
 
-## Agent Operating Mode
+## Deliverables
 
-* Read existing implementation before coding
-* Prefer minimal refactors
-* Do not introduce backend breaking changes
-* Keep UI consistent with existing design system
+1. Implement fixes in `sheetScript`.
+2. Add short dev note about safe delete + range-limited sorting.
+3. Provide short user verification checklist (6–8 steps).
 
-## Phase Boundaries
+## Constraints
 
-MF4 focuses on:
+* Minimal changes, no new deps.
+* Cover create + resync.
+* Prefer small pure helper functions.
+* Consolidate multiple implementations to one source of truth.
 
-* Transaction modal UI
-* Form logic & validation
+## Output
 
-MF5 will handle:
-
-* Cashback tables
-* Budget aggregation
-* Profit / loss reporting
-
-Cashback is now persisted in:
-
-cashback_cycles (per account per cycle)
-
-cashback_entries (ledger)
-
-Modes:
-
-real = awarded cashback (counts toward budget)
-
-virtual = predicted profit (clamped)
-
-voluntary = overflow/loss (does not count)
-
-* Cashback recomputation must be consistent across SQL and TS.
-* `overflow_loss` must include real overflow when cap is exceeded.
-* Missing config should be stored as NULL, not 0.
-
-## Cashback Percent Rules
-
-* DB stores decimal [0..1] (e.g. 0.05)
-* UI shows percent [0..100] (e.g. 5)
-* Sheet Export sends raw percent [0..100] (e.g. 5)
-* Transactions must ALWAYS update `cashback_entries` and recompute `cashback_cycles` (including old cycle if moved).
-
-MF5 cashback model:
-
-- transactions = source of intent
-- cashback_entries = ledger (per transaction)
-- cashback_cycles = single source of truth for UI hints & budgets
-
-UI must never recompute budget independently.
-
-## Tag & Month-Key Standard (CRITICAL)
-
-We use ONE month-key format across the entire system: `YYYY-MM` (e.g. `2025-12`).
-
-- Debt period tags: `YYYY-MM`
-- Cashback cycle tags: `YYYY-MM`
-- Any persisted transaction cycle tag must be `YYYY-MM`
-
-Back-compat:
-- If legacy data contains an `MMMYY` month tag, normalize to `YYYY-MM` during reads/migrations (temporary).
-- Never write legacy month tags.
+* Summary of changes + where.
+* Verification checklist.
