@@ -34,6 +34,7 @@ import {
   ShieldCheck,
   Lock,
   Info,
+  Loader2,
 } from "lucide-react";
 import { Account, Category, Person, Shop } from "@/types/moneyflow.types";
 import { cn } from "@/lib/utils";
@@ -122,6 +123,7 @@ function AccountCardComponent({
 }: AccountCardProps) {
   const router = useRouter();
   const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   // Dialog States
   const [activeDialog, setActiveDialog] = useState<
     | "income"
@@ -208,6 +210,7 @@ function AccountCardComponent({
   };
 
   const handleCardClick = () => {
+    setIsNavigating(true);
     router.push(detailsHref);
   };
 
@@ -610,7 +613,6 @@ function AccountCardComponent({
         </div>
 
         {/* 2. SECOND ROW: Balance + Confirm Button (Inline) */}
-        {/* 2. SECOND ROW: Balance + Confirm Button (Inline) */}
         <div className="flex items-center justify-between gap-2 mb-1.5 min-h-[28px]">
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <TooltipProvider>
@@ -618,8 +620,8 @@ function AccountCardComponent({
                 <TooltipTrigger asChild>
                   <div
                     className={cn(
-                      "text-xl font-bold tracking-tight truncate cursor-help",
-                      balance < 0 ? "text-red-600" : "text-slate-900",
+                      "text-3xl font-black tracking-tight truncate cursor-help",
+                      balance < 0 ? "text-red-600" : "text-indigo-950",
                     )}
                   >
                     {formatCurrency(balance)}
@@ -1119,16 +1121,23 @@ function AccountCardComponent({
 
         <div
           className={cn(
-            "group/card relative block w-full rounded-xl border-2 shadow-sm transition-all overflow-hidden h-full",
+            "group/card relative block w-full rounded-[2.5rem] border-2 shadow-sm transition-all overflow-hidden h-full min-h-[420px]",
             // Border Color Logic
             cardState.badges.due
               ? "bg-red-50/50 border-red-500 shadow-md" // Urgent
               : needsSpendMore
-                ? "bg-amber-50/50 border-amber-400" // Needs Spend
-                : "bg-white border-slate-300", // Default
+                ? "bg-amber-50/50 border-amber-500" // Needs Spend
+                : "bg-white border-slate-200", // Default
             className,
           )}
         >
+          {/* Loading Overlay */}
+          {isNavigating && (
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-[2.5rem]">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            </div>
+          )}
+
           {/* Portrait Strip Layout: Fixed width left (120px/132px), flexible right */}
           <div className="grid grid-cols-[auto_1fr] h-full">
             {renderVisualSection()}

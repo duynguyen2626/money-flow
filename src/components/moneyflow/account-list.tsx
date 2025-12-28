@@ -524,7 +524,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
                     {section.accounts.length}
                   </span>
                 </div>
-                <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {section.accounts.map(account => (
                     <AccountCard
                       key={account.id}
@@ -558,7 +558,7 @@ export function AccountList({ accounts, cashbackById = {}, categories, people, s
                   </div>
                   <span className="text-slate-500">{showClosedAccounts ? '▲' : '▼'}</span>
                 </summary>
-                <div className="mt-4 grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+                <div className="mt-4 grid gap-6 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                   {closedItems.map(account => (
                     <AccountCard
                       key={account.id}
