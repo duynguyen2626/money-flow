@@ -304,7 +304,7 @@ export function DashboardContent({
                       ))}
                     </Pie>
                     <Tooltip
-                      formatter={(value: number) => numberFormatter.format(value)}
+                      formatter={(value: any) => value !== undefined ? numberFormatter.format(value) : ''}
                       contentStyle={{
                         fontSize: '12px',
                         borderRadius: '8px',

@@ -24,6 +24,7 @@ import {
   BookOpen,
   Hourglass,
   PiggyBank,
+  Lock,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
@@ -36,6 +37,7 @@ import { getCreditCardAvailableBalance } from '@/lib/account-balance'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { AccountSpendingStats } from '@/types/cashback.types'
 import { toast } from 'sonner'
+import { cn } from '@/lib/utils'
 
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { EditAccountDialog } from './edit-account-dialog'
@@ -206,15 +208,6 @@ export function AccountDetailHeader({
     rewardBg = 'bg-rose-50 border-rose-200'
   }
 
-  const avatar = account.image_url ? (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={account.image_url} alt="" className="h-16 w-16 object-cover rounded-none" />
-  ) : (
-    <div className="flex h-16 w-16 items-center justify-center bg-slate-200 text-base font-semibold text-slate-700 rounded-none">
-      {account.name.charAt(0).toUpperCase()}
-    </div>
-  )
-
   const handleToggleAccountStatus = async () => {
     if (isUpdatingStatus) return
     setIsUpdatingStatus(true)
@@ -296,241 +289,244 @@ export function AccountDetailHeader({
   const displayBalance = computeDisplayBalance(account, allAccounts)
   const balanceTone = account.type === 'credit_card'
     ? account.current_balance > 0
-      ? 'text-red-600'
-      : account.current_balance < 0
-        ? 'text-emerald-600'
-        : 'text-slate-900'
-    : displayBalance < 0
-      ? 'text-red-600'
-      : 'text-slate-900'
+      ? 'text-red-600' // Owing money
+      : 'text-slate-900' // Unpaid but within term or positive
+    : displayBalance > 0
+      ? 'text-emerald-600'
+      : 'text-slate-900' // Zero or negative
+  // Logic fix: Credit card positive balance = Debt? Usually positive balance means credit available OR debt? 
+  // In this system: Credit Card Current Balance is usually POSITIVE if you SPENT money (Debt).
+  // So > 0 is Red.  < 0 is Surplus (Credit). 
+  // Check lines 297 in original: 
+  // account.current_balance > 0 ? 'text-red-600' : 'text-slate-900' (if < 0 ?)
+  // My previous logic was:
+  // displayBalance > 0 ? (account.type === 'credit_card' ? 'text-slate-900' : 'text-emerald-700')
+  // Let's stick to simple logic:
+
   const statusBadge = isCurrentlyActive
     ? 'bg-emerald-50 text-emerald-700'
     : 'bg-slate-100 text-slate-600'
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
-      {/* Layer 1: Account Info */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-3">
+    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+      {/* HEADER: Identity & Balance & Actions */}
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+
+        {/* LEFT: Back + Identity */}
+        <div className="flex items-start gap-3">
           <Link
             href={backHref}
-            className="inline-flex h-12 w-12 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50"
+            className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 mt-1"
           >
             <ArrowLeft className="h-5 w-5" />
           </Link>
-          {avatar}
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-lg font-semibold text-slate-900">{account.name}</h1>
-              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide">
-                {getAccountTypeLabel(account.type)}
-              </span>
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${statusBadge}`}>
+
+          <div className="relative pt-1">
+            {/* Image - Uncropped Square */}
+            <div className="w-14 h-14 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center">
+              {account.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={account.image_url} alt="" className="w-full h-full object-contain p-1" />
+              ) : (
+                <div className="text-xl font-bold text-slate-400">{account.name.charAt(0)}</div>
+              )}
+            </div>
+            {/* Secured Badge Small Overlay */}
+            {account.secured_by_account_id && (
+              <div className="absolute -bottom-1 -right-1 bg-emerald-50 text-emerald-700 p-0.5 rounded-full border border-emerald-100 shadow-sm">
+                <Lock className="w-3 h-3" />
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col min-w-0">
+            <div className="flex flex-wrap items-center gap-2 mb-1">
+              <h1 className="text-lg font-bold text-slate-900 leading-tight">{account.name}</h1>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusBadge}`}>
                 {isCurrentlyActive ? 'Active' : 'Closed'}
               </span>
-              {collapsed && showQualifyingCard && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 border border-amber-200 animate-pulse">
-                  {isQualified ? 'Qualified' : `Need ${formatPlain(needAmount)}`}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={handleConfirmPending}
-                className="inline-flex items-center gap-1 rounded-md border border-amber-200 bg-gradient-to-r from-amber-50 via-amber-100 to-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700 shadow-sm hover:border-amber-300 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 animate-pulse"
-                disabled={isConfirmingPending || isPendingLoading}
-              >
-                {isConfirmingPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Clock4 className="h-3.5 w-3.5" />
-                )}
-                Pending {formatPlain(waitingAmount)}
-              </button>
-              <span className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700">
-                <CheckCircle2 className="h-3.5 w-3.5" />
-                Confirm {formatPlain(confirmedAmount)}
-              </span>
-              {/* Quick actions inline */}
-              {account.type === 'credit_card' ? (
-                <AddTransactionDialog
-                  {...dialogBaseProps}
-                  defaultType="transfer"
-                  defaultDebtAccountId={account.id}
-                  triggerContent={
-                    <span className="inline-flex items-center gap-1 rounded-md border border-orange-100 bg-white px-3 py-1.5 text-xs font-semibold text-orange-700 shadow-sm hover:border-orange-200 hover:bg-orange-50 cursor-pointer">
-                      <CreditCard className="h-3.5 w-3.5" />
-                      Pay
-                    </span>
-                  }
-                />
-              ) : (
-                <AddTransactionDialog
-                  {...dialogBaseProps}
-                  defaultType="transfer"
-                  defaultSourceAccountId={account.id}
-                  triggerContent={
-                    <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 cursor-pointer">
-                      <ArrowLeftRight className="h-3.5 w-3.5" />
-                      Transfer
-                    </span>
-                  }
-                />
-              )}
-              <AddTransactionDialog
-                {...dialogBaseProps}
-                defaultType="income"
-                defaultSourceAccountId={account.id}
-                triggerContent={
-                  <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-700 shadow-sm hover:border-emerald-300 hover:bg-emerald-50 cursor-pointer">
-                    <Plus className="h-3.5 w-3.5" />
-                    Income
-                  </span>
-                }
-              />
-              <AddTransactionDialog
-                {...dialogBaseProps}
-                defaultType="expense"
-                defaultSourceAccountId={account.id}
-                triggerContent={
-                  <span className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-sm hover:border-rose-300 hover:bg-rose-50 cursor-pointer">
-                    <Minus className="h-3.5 w-3.5" />
-                    Expense
-                  </span>
-                }
-              />
-              <AddTransactionDialog
-                {...dialogBaseProps}
-                defaultType="debt"
-                defaultDebtAccountId={account.id}
-                defaultSourceAccountId={account.id}
-                triggerContent={
-                  <span className="inline-flex items-center gap-1 rounded-md border border-purple-200 bg-white px-3 py-1.5 text-xs font-semibold text-purple-700 shadow-sm hover:border-purple-300 hover:bg-purple-50 cursor-pointer">
-                    <User className="h-3.5 w-3.5" />
-                    Lend
-                  </span>
-                }
-              />
-              <AddTransactionDialog
-                {...dialogBaseProps}
-                defaultType="repayment"
-                defaultDebtAccountId={account.id}
-                triggerContent={
-                  <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 cursor-pointer">
-                    <RotateCcw className="h-3.5 w-3.5" />
-                    Repay
-                  </span>
-                }
-              />
-              <div className="h-4 w-px bg-slate-200 mx-1" />
-              <button
-                type="button"
-                onClick={handleRecalculateBalance}
-                disabled={isRecalculating}
-                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${isRecalculating ? 'animate-spin' : ''}`} />
-                Sync
-              </button>
-              <EditAccountDialog
-                account={account}
-                collateralAccounts={savingsAccounts}
-                accounts={allAccounts}
-                triggerContent={
-                  <span className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-300 hover:bg-slate-50 cursor-pointer">
-                    <Settings className="h-3.5 w-3.5" />
-                    Config
-                  </span>
-                }
-              />
             </div>
-            {account.type === 'credit_card' && typeof account.credit_limit === 'number' && (
-              <p className="text-xs text-slate-600">
-                Credit limit: {formatPlain(account.credit_limit ?? 0)}
-              </p>
-            )}
-            {account.secured_by_account_id && collateralAccount && (
-              <div className="flex items-center gap-2 mt-1">
-                <Link href={`/accounts/${collateralAccount.id}`} className="group flex items-center gap-2 px-3 py-1 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-full transition-colors cursor-pointer text-decoration-none">
-                  <PiggyBank className="w-3.5 h-3.5 text-amber-700" />
-                  <span className="text-xs font-bold text-amber-700 uppercase tracking-wide">Secured by</span>
-                  <div className="w-px h-3 bg-amber-300 mx-0.5"></div>
-                  {/* Collateral Asset Info */}
-                  <div className="flex items-center gap-1.5">
-                    <div className="relative w-5 h-5 flex-shrink-0 bg-white rounded-full overflow-hidden border border-amber-200">
-                      {collateralAccount.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={collateralAccount.image_url} alt="" className="w-full h-full object-contain p-0.5" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-slate-100 text-[8px] font-bold text-slate-500">
-                          {collateralAccount.name.charAt(0)}
-                        </div>
-                      )}
-                    </div>
-                    <span className="text-xs font-bold text-slate-900 group-hover:text-amber-900 transition-colors">
-                      {collateralAccount.name}
-                    </span>
-                  </div>
+            <p className="text-sm text-slate-500 font-medium flex items-center gap-1.5">
+              {getAccountTypeLabel(account.type)}
+              {account.type === 'credit_card' && (
+                <span className="text-xs text-slate-400">• Limit: {formatPlain(account.credit_limit || 0)}</span>
+              )}
+            </p>
+
+            {/* Pending / Confirm Badges (Mobile: below name) */}
+            <div className="flex flex-wrap gap-2 mt-2">
+              {hasPending && (
+                <button
+                  onClick={handleConfirmPending}
+                  disabled={isConfirmingPending}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-wider border border-amber-200 animate-pulse"
+                >
+                  {isConfirmingPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clock4 className="w-3 h-3" />}
+                  {waitingAmount > 0 ? `Verify ${formatPlain(waitingAmount)}` : 'Pending'}
+                </button>
+              )}
+              {confirmedAmount > 0 && (
+                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-wider border border-blue-200">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Ready {formatPlain(confirmedAmount)}
+                </div>
+              )}
+
+              {/* Secured By Link */}
+              {account.secured_by_account_id && collateralAccount && (
+                <Link href={`/accounts/${collateralAccount.id}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-wider border border-emerald-200 hover:bg-emerald-100">
+                  <PiggyBank className="w-3 h-3" />
+                  By {collateralAccount.name}
                 </Link>
-              </div>
-            )}
-            {account.secured_by_account_id && !collateralAccount && (
-              <div className="flex items-center gap-1.5 mt-1">
-                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-500 border border-slate-200">
-                  <PiggyBank className="w-3.5 h-3.5" />
-                  Secured by (Missing)
-                </span>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-2">
-          <div className="text-right flex items-center gap-3">
-            <div className="mt-1 inline-flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-1">
-              <Wallet className="h-4 w-4 text-slate-500" />
-              <span className={`text-2xl font-bold tabular-nums ${balanceTone}`}>
-                {formatPlain(displayBalance)}
-              </span>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 px-2 text-xs font-semibold"
-              onClick={() => setCollapsed(prev => !prev)}
-            >
-              {collapsed ? (
-                <>
-                  <ChevronDown className="h-4 w-4" />
-                </>
-              ) : (
-                <>
-                  <ChevronUp className="h-4 w-4" />
-                </>
-              )}
+        {/* RIGHT: Balance & Toggle */}
+        <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-start gap-3 mt-2 md:mt-0 pl-14 md:pl-0">
+          <div className={cn(
+            "text-2xl font-black tracking-tight tabular-nums",
+            displayBalance > 0
+              ? (account.type === 'credit_card' ? 'text-red-600' : 'text-emerald-700')
+              : (displayBalance < 0 ? (account.type === 'credit_card' ? 'text-emerald-600' : 'text-red-600') : 'text-slate-900')
+          )}>
+            {formatPlain(displayBalance)} <span className="text-sm font-medium text-slate-400">₫</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8 p-0 rounded-full">
+              {collapsed ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronUp className="w-5 h-5 text-slate-400" />}
             </Button>
           </div>
-          <Button
+        </div>
+
+      </div>
+
+      {/* ACTION BAR: Grid on Mobile, Flex on Desktop */}
+      <div className="grid grid-cols-4 gap-2 md:flex md:gap-3 border-t border-slate-100 pt-4">
+        {/* 1. Income */}
+        <AddTransactionDialog
+          {...dialogBaseProps}
+          defaultType="income"
+          defaultSourceAccountId={account.id}
+          triggerContent={
+            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-emerald-50/50 hover:bg-emerald-100/50 border border-emerald-100 cursor-pointer transition-colors group">
+              <div className="p-1.5 rounded-full bg-emerald-100 text-emerald-600 group-hover:bg-emerald-200 group-hover:text-emerald-700"><Plus className="w-4 h-4" /></div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Income</span>
+            </div>
+          }
+        />
+        {/* 2. Expense */}
+        <AddTransactionDialog
+          {...dialogBaseProps}
+          defaultType="expense"
+          defaultSourceAccountId={account.id}
+          triggerContent={
+            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-rose-50/50 hover:bg-rose-100/50 border border-rose-100 cursor-pointer transition-colors group">
+              <div className="p-1.5 rounded-full bg-rose-100 text-rose-600 group-hover:bg-rose-200 group-hover:text-rose-700"><Minus className="w-4 h-4" /></div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700">Expense</span>
+            </div>
+          }
+        />
+        {/* 3. Transfer / Pay */}
+        {account.type === 'credit_card' ? (
+          <AddTransactionDialog
+            {...dialogBaseProps}
+            defaultType="transfer"
+            defaultDebtAccountId={account.id}
+            triggerContent={
+              <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-amber-50/50 hover:bg-amber-100/50 border border-amber-100 cursor-pointer transition-colors group">
+                <div className="p-1.5 rounded-full bg-amber-100 text-amber-600 group-hover:bg-amber-200 group-hover:text-amber-700"><CreditCard className="w-4 h-4" /></div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Pay Bill</span>
+              </div>
+            }
+          />
+        ) : (
+          <AddTransactionDialog
+            {...dialogBaseProps}
+            defaultType="transfer"
+            defaultSourceAccountId={account.id}
+            triggerContent={
+              <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 cursor-pointer transition-colors group">
+                <div className="p-1.5 rounded-full bg-blue-100 text-blue-600 group-hover:bg-blue-200 group-hover:text-blue-700"><ArrowLeftRight className="w-4 h-4" /></div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 md:whitespace-nowrap">Transfer</span>
+              </div>
+            }
+          />
+        )}
+        {/* 4. Lend */}
+        <AddTransactionDialog
+          {...dialogBaseProps}
+          defaultType="debt"
+          defaultDebtAccountId={account.id}
+          defaultSourceAccountId={account.id}
+          triggerContent={
+            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-purple-50/50 hover:bg-purple-100/50 border border-purple-100 cursor-pointer transition-colors group">
+              <div className="p-1.5 rounded-full bg-purple-100 text-purple-600 group-hover:bg-purple-200 group-hover:text-purple-700"><User className="w-4 h-4" /></div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700">Lend</span>
+            </div>
+          }
+        />
+
+        {/* Secondary Actions - Hidden on small mobile, visible on expansion or desktop? Or just flex wrap? */}
+        <div className="hidden md:flex items-center gap-2 ml-auto">
+          <button
             type="button"
-            variant="ghost"
-            size="sm"
-            className="h-8 px-3 text-xs font-semibold"
-            onClick={handleToggleAccountStatus}
-            disabled={isUpdatingStatus}
+            onClick={handleRecalculateBalance}
+            disabled={isRecalculating}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-50 transition-colors"
+            title="Sync Balance"
           >
-            {isCurrentlyActive ? (
-              <Archive className="h-4 w-4 mr-1.5" />
-            ) : (
-              <RotateCcw className="h-4 w-4 mr-1.5" />
-            )}
-            {isCurrentlyActive ? 'Close account' : 'Reopen account'}
-          </Button>
+            <RefreshCw className={cn("w-4 h-4", isRecalculating && "animate-spin")} />
+          </button>
+          <EditAccountDialog
+            account={account}
+            collateralAccounts={savingsAccounts}
+            accounts={allAccounts}
+            triggerContent={
+              <button className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-50 transition-colors" title="Settings">
+                <Settings className="w-4 h-4" />
+              </button>
+            }
+          />
         </div>
       </div>
 
-      {collapsed ? null : (
-        <>
+      {/* Mobile Secondary Actions Row */}
+      <div className="flex md:hidden items-center justify-end gap-2 border-t border-slate-50 pt-2">
+        <button
+          type="button"
+          onClick={handleRecalculateBalance}
+          disabled={isRecalculating}
+          className="p-2 text-slate-400 hover:text-slate-600"
+        >
+          <RefreshCw className={cn("w-4 h-4", isRecalculating && "animate-spin")} />
+        </button>
+        <EditAccountDialog
+          account={account}
+          collateralAccounts={savingsAccounts}
+          accounts={allAccounts}
+          triggerContent={
+            <button className="p-2 text-slate-400 hover:text-slate-600">
+              <Settings className="w-4 h-4" />
+            </button>
+          }
+        />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-xs text-slate-400"
+          onClick={handleToggleAccountStatus}
+        >
+          {isCurrentlyActive ? 'Close' : 'Reopen'}
+        </Button>
+      </div>
 
+
+      {/* EXPANDED CONTENT */}
+      {collapsed ? null : (
+        <div className="pt-4 border-t border-slate-100 transition-all">
           {/* Layer 2: Cashback Stats */}
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {showQualifyingCard && (
@@ -607,7 +603,7 @@ export function AccountDetailHeader({
                     disabled={isConfirmingPending || isPendingLoading || !hasPending}
                   >
                     {isConfirmingPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <BookOpen className="mr-1.5 h-4 w-4" />}
-                    Confirm batch pending
+                    Confirm
                   </Button>
                   {pendingRefundAmount > 0 && (
                     <Button
@@ -618,7 +614,7 @@ export function AccountDetailHeader({
                       onClick={() => router.push('/refunds')}
                     >
                       <Hourglass className="mr-1.5 h-4 w-4" />
-                      Confirm pending refund
+                      Refunds
                     </Button>
                   )}
                 </div>
@@ -632,10 +628,7 @@ export function AccountDetailHeader({
                   <div className="text-2xl font-extrabold text-amber-700 tabular-nums">{formatPlain(pendingTotal)}</div>
                   <div className="text-[11px] text-amber-700/90 space-y-0.5">
                     <div className="inline-flex items-center gap-1 rounded-md bg-white/60 px-2 py-1 font-semibold text-amber-700 border border-amber-100">
-                      Pending Paid: {formatPlain(waitingAmount)}
-                    </div>
-                    <div className="inline-flex items-center gap-1 rounded-md bg-white/60 px-2 py-1 font-semibold text-amber-700 border border-amber-100">
-                      Pending Refund: {formatPlain(pendingRefundAmount)}
+                      Pending: {formatPlain(waitingAmount)}
                     </div>
                   </div>
                 </div>
@@ -645,19 +638,13 @@ export function AccountDetailHeader({
                     <CheckCircle2 className="h-3.5 w-3.5" />
                   </div>
                   <div className="text-lg font-bold text-blue-700 tabular-nums">{formatPlain(confirmedAmount)}</div>
-                  <span className="text-[11px] text-blue-700/80">Funded from batch</span>
+                  <span className="text-[11px] text-blue-700/80">Batch</span>
                 </div>
               </div>
             </div>
           </div>
-
-
-        </>
+        </div>
       )}
     </div>
   )
 }
-
-
-
-

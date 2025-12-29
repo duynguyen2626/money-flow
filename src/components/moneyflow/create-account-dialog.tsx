@@ -407,6 +407,7 @@ function LevelList({
 type CreateAccountDialogProps = {
   collateralAccounts?: Account[]
   creditCardAccounts?: Account[]
+  trigger?: ReactNode
 }
 
 type StatusMessage = {
@@ -416,7 +417,7 @@ type StatusMessage = {
 
 const ASSET_TYPES: Account['type'][] = ['savings', 'investment', 'asset']
 
-export function CreateAccountDialog({ collateralAccounts = [], creditCardAccounts = [] }: CreateAccountDialogProps) {
+export function CreateAccountDialog({ collateralAccounts = [], creditCardAccounts = [], trigger }: CreateAccountDialogProps) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<StatusMessage>(null)
@@ -656,13 +657,18 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
 
   return (
     <>
-      <button
-        type="button"
-        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500"
-        onClick={() => setOpen(true)}
-      >
-        Add New Account
-      </button>
+      <div onClick={(e) => { e.stopPropagation(); openDialog(); }}>
+        {trigger}
+      </div>
+      {!trigger && (
+        <button
+          type="button"
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500"
+          onClick={() => setOpen(true)}
+        >
+          Add New Account
+        </button>
+      )}
 
       {open &&
         createPortal(

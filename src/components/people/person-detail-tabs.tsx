@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useMemo, useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
@@ -37,20 +37,21 @@ export function PersonDetailTabs({
     cycleSheets = [],
 }: PersonDetailTabsProps) {
     const searchParams = useSearchParams()
+
     const resolveTab = (value: string | null) => {
-        if (value === 'sheet' || value === 'history' || value === 'details' || value === 'split-bill') {
+        if (value === 'sheet' || value === 'details' || value === 'split-bill') {
             return value
         }
         return 'details'
     }
+
     const initialTab = useMemo(() => resolveTab(searchParams.get('tab')), [searchParams])
     const [activeTab, setActiveTab] = useState<'details' | 'sheet' | 'history' | 'split-bill'>(initialTab)
     const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer'>('all')
     const [searchTerm, setSearchTerm] = useState('')
 
     useEffect(() => {
-        const nextTab = resolveTab(searchParams.get('tab'))
-        setActiveTab(nextTab)
+        setActiveTab(resolveTab(searchParams.get('tab')))
     }, [searchParams])
 
     const tabs = [
@@ -62,7 +63,6 @@ export function PersonDetailTabs({
 
     return (
         <div className="flex flex-col w-full">
-            {/* Tab Headers */}
             <div className="flex-none flex border-b border-slate-200 overflow-x-auto">
                 {tabs.map(tab => (
                     <button
@@ -81,11 +81,9 @@ export function PersonDetailTabs({
                 ))}
             </div>
 
-            {/* Tab Content */}
             <div className="py-3 md:py-4">
                 {activeTab === 'details' && (
                     <div className="flex flex-col space-y-4">
-                        {/* Header Area: Search + Smart Filters */}
                         <div className="flex flex-col md:flex-row gap-2 items-start md:items-center md:px-1">
                             <div className="relative w-full md:w-64 shrink-0">
                                 <input
@@ -115,7 +113,6 @@ export function PersonDetailTabs({
                             </div>
                         </div>
 
-                        {/* Accordion View (Multiple Tables) */}
                         <div className="bg-slate-50 rounded-xl border border-slate-200 p-3 md:p-4">
                             <DebtCycleList
                                 transactions={transactions}

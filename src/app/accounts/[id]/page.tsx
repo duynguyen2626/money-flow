@@ -63,10 +63,10 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
   const collateralAccount = account.secured_by_account_id ? allAccounts.find(a => a.id === account.secured_by_account_id) ?? null : null
 
   return (
-    <div className="flex flex-col h-full overflow-hidden mb-20">
+    <div className="flex flex-col h-full overflow-y-auto bg-slate-50">
       <TagFilterProvider>
-        {/* Header */}
-        <div className="mx-6 mt-6 space-y-4">
+        {/* Header - Increased Spacing */}
+        <div className="mx-6 mt-6 mb-8 space-y-6">
           <AccountDetailHeader
             account={account}
             categories={categories}
@@ -86,7 +86,7 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-hidden mt-2 bg-white">
+        <div className="flex-1 mt-2 bg-white">
           {activeTab === 'transactions' ? (
             <FilterableTransactions
               transactions={transactions}

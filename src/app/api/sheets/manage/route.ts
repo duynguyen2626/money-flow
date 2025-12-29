@@ -1,17 +1,36 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { isYYYYMM, normalizeMonthTag } from '@/lib/month-tag'
-import { createCycleSheet, syncCycleTransactions } from '@/services/sheet.service'
+import { createCycleSheet, syncCycleTransactions, createTestSheet } from '@/services/sheet.service'
 import type { ManageCycleSheetRequest, ManageCycleSheetResponse } from '@/types/sheet.types'
 
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as ManageCycleSheetRequest
     const personId = payload?.personId?.trim()
-    const rawCycle = payload?.cycleTag?.trim()
+    const action = payload?.action || 'sync'
+    
+    if (!personId) {
+      return NextResponse.json({ error: 'Missing personId' }, { status: 400 })
+    }
 
-    if (!personId || !rawCycle) {
-      return NextResponse.json({ error: 'Missing personId or cycleTag' }, { status: 400 })
+    // Handle Test Create Action
+    if (action === 'test_create') {
+      const result = await createTestSheet(personId)
+      if (!result.success) {
+        return NextResponse.json({ error: result.message ?? 'Test create failed' }, { status: 400 })
+      }
+      return NextResponse.json({ 
+        status: 'test_created', 
+        sheetUrl: result.sheetUrl, 
+        sheetId: result.sheetId 
+      })
+    }
+
+    // Default Sync Action
+    const rawCycle = payload?.cycleTag?.trim()
+    if (!rawCycle) {
+      return NextResponse.json({ error: 'Missing cycleTag' }, { status: 400 })
     }
 
     const normalizedCycle = normalizeMonthTag(rawCycle)
