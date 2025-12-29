@@ -16,6 +16,8 @@ export async function createPersonAction(payload: {
   subscriptionIds?: string[]
   is_owner?: boolean
   is_archived?: boolean
+  is_group?: boolean
+  group_parent_id?: string | null
 }) {
   const result = await createPerson(
     payload.name,
@@ -23,7 +25,12 @@ export async function createPersonAction(payload: {
     payload.avatar_url ?? undefined,
     payload.sheet_link ?? undefined,
     payload.subscriptionIds,
-    { is_owner: payload.is_owner, is_archived: payload.is_archived }
+    {
+      is_owner: payload.is_owner,
+      is_archived: payload.is_archived,
+      is_group: payload.is_group,
+      group_parent_id: payload.group_parent_id,
+    }
   )
   if (result) {
     revalidatePath('/people')
@@ -50,6 +57,8 @@ export async function updatePersonAction(
     subscriptionIds?: string[]
     is_owner?: boolean
     is_archived?: boolean
+    is_group?: boolean
+    group_parent_id?: string | null
   }
 ) {
   const ok = await updatePerson(id, payload)

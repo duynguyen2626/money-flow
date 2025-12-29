@@ -741,6 +741,37 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   return true;
 }
 
+export async function updateTransactionMetadata(
+  transactionId: string,
+  patch: Record<string, unknown>,
+): Promise<boolean> {
+  if (!transactionId) return false
+  const supabase = createClient()
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('metadata')
+    .eq('id', transactionId)
+    .maybeSingle()
+
+  if (error || !data) {
+    console.error('Failed to load transaction metadata:', error)
+    return false
+  }
+
+  const existing = parseMetadata((data as any).metadata) ?? {}
+  const merged = { ...existing, ...patch }
+  const { error: updateError } = await (supabase.from('transactions').update as any)({
+    metadata: merged,
+  }).eq('id', transactionId)
+
+  if (updateError) {
+    console.error('Failed to update transaction metadata:', updateError)
+    return false
+  }
+
+  return true
+}
+
 type RefundTransactionLine = {
   id?: string
   amount: number

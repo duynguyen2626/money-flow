@@ -214,7 +214,7 @@ export function AddTransactionDialog({
             onClick={handleOverlayClick}
           >
             <div
-              className={`flex w-full flex-col bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden ${isMobile ? "h-[100dvh] max-w-none rounded-none" : "max-w-xl md:max-w-2xl rounded-2xl"}`}
+              className={`flex w-full flex-col bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden ${isMobile ? "h-[100dvh] max-w-none rounded-none" : "max-w-2xl md:max-w-3xl rounded-2xl"}`}
               style={{ maxHeight: isMobile ? "none" : "90vh" }}
               onClick={stopPropagation}
             >

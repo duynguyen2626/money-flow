@@ -6,7 +6,7 @@ import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
 import { getServices } from '@/services/service-manager'
 import { getPersonDetails } from '@/services/debt.service'
-import { getUnifiedTransactions } from '@/services/transaction.service'
+import { getTransactionsByPeople, getUnifiedTransactions } from '@/services/transaction.service'
 import { getPersonCycleSheets } from '@/services/person-cycle-sheet.service'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 import { TagFilterProvider } from '@/context/tag-filter-context'
@@ -35,15 +35,35 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
 
   const sheetProfileId = person.owner_id ?? personId
 
-  const [accounts, categories, people, shops, transactions, subscriptions, cycleSheets] = await Promise.all([
+  const [accounts, categories, people, shops, subscriptions, cycleSheets] = await Promise.all([
     getAccounts(),
     getCategories(),
     getPeople(),
     getShops(),
-    getUnifiedTransactions({ accountId: actualAccountId, personId: person.owner_id ?? undefined, limit: 1000, context: 'person' }),
     getServices(),
     getPersonCycleSheets(sheetProfileId),
   ])
+
+  const profileRecord = people.find((item) => item.id === sheetProfileId)
+  const isGroupProfile = Boolean(profileRecord?.is_group)
+  const groupMemberIds = isGroupProfile
+    ? people
+        .filter((member) => member.group_parent_id === sheetProfileId)
+        .map((member) => member.id)
+    : []
+
+  const groupPersonIds = isGroupProfile
+    ? Array.from(new Set([sheetProfileId, ...groupMemberIds]))
+    : []
+
+  const transactions = isGroupProfile
+    ? await getTransactionsByPeople(groupPersonIds, 1000)
+    : await getUnifiedTransactions({
+        accountId: actualAccountId,
+        personId: person.owner_id ?? undefined,
+        limit: 1000,
+        context: 'person',
+      })
 
   const balance = person.current_balance ?? 0
   const balanceLabel = balance > 0 ? 'They owe you' : balance < 0 ? 'You owe them' : 'Settled'

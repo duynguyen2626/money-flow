@@ -12,7 +12,11 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { z } from "zod";
-import { ensureDebtAccountAction } from "@/actions/people-actions";
+import {
+  createPersonAction,
+  ensureDebtAccountAction,
+  updatePersonAction,
+} from "@/actions/people-actions";
 import {
   createTransaction,
   updateTransaction,
@@ -52,11 +56,16 @@ import {
   X,
   Sparkles,
   Loader2,
+  Users,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { cn, getAccountInitial } from "@/lib/utils";
 import { SmartAmountInput } from "@/components/ui/smart-amount-input";
+import {
+  SplitBillTable,
+  SplitBillParticipant,
+} from "@/components/moneyflow/split-bill-table";
 import { CategoryDialog } from "@/components/moneyflow/category-dialog";
 import { AddShopDialog } from "@/components/moneyflow/add-shop-dialog";
 import { CreatePersonDialog } from "@/components/people/create-person-dialog";
@@ -83,6 +92,7 @@ const formSchema = z
     category_id: z.string().optional(),
     person_id: z.string().optional(),
     debt_account_id: z.string().optional(),
+    split_bill: z.boolean().optional(),
     cashback_share_percent: z.coerce.number().min(0).optional(),
     cashback_share_fixed: z.coerce.number().min(0).optional(),
     shop_id: z.string().optional(),
@@ -112,6 +122,7 @@ const formSchema = z
     (data) => {
       if (
         (data.type === "debt" || data.type === "repayment") &&
+        !data.split_bill &&
         !data.person_id
       ) {
         return false;
@@ -129,6 +140,7 @@ const formSchema = z
         (data.type === "debt" ||
           data.type === "transfer" ||
           data.type === "repayment") &&
+        !data.split_bill &&
         !data.debt_account_id
       ) {
         return false;
@@ -146,6 +158,7 @@ const formSchema = z
         (data.type === "transfer" ||
           data.type === "debt" ||
           data.type === "repayment") &&
+        !data.split_bill &&
         data.debt_account_id &&
         data.debt_account_id === data.source_account_id
       ) {
@@ -163,6 +176,7 @@ const numberFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 const REFUND_CATEGORY_ID = "e0000000-0000-0000-0000-000000000095";
+const SPLIT_BILL_SYSTEM_ACCOUNT_ID = "88888888-9999-9999-9999-888888888888";
 
 export type TransactionFormValues = z.infer<typeof formSchema>;
 
@@ -297,6 +311,82 @@ export function TransactionForm({
     return map;
   }, [peopleState]);
 
+  const defaultPayerName = useMemo(() => {
+    const owner = peopleState.find((person) => person.is_owner);
+    return owner?.name ?? "Me";
+  }, [peopleState]);
+
+  const ownerPerson = useMemo(
+    () => peopleState.find((person) => person.is_owner),
+    [peopleState],
+  );
+
+  const splitBillGroups = useMemo(() => {
+    const groupMembers = new Map<string, Person[]>();
+    const groups = peopleState.filter((person) => Boolean(person.is_group));
+
+    peopleState.forEach((person) => {
+      if (person.is_group || !person.group_parent_id) return;
+      const list = groupMembers.get(person.group_parent_id) ?? [];
+      list.push(person);
+      groupMembers.set(person.group_parent_id, list);
+    });
+
+    return groups
+      .map((group) => ({
+        id: group.id,
+        name: group.name ?? "Group",
+        imageUrl: group.avatar_url ?? null,
+        members: (groupMembers.get(group.id) ?? []).sort((a, b) =>
+          a.name.localeCompare(b.name),
+        ),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [peopleState]);
+
+  const splitBillGroupMap = useMemo(() => {
+    const map = new Map<string, (typeof splitBillGroups)[number]>();
+    splitBillGroups.forEach((group) => map.set(group.id, group));
+    return map;
+  }, [splitBillGroups]);
+
+  const splitBillGroupOptions = useMemo(
+    () =>
+      splitBillGroups.map((group) => ({
+        value: group.id,
+        label: group.name,
+        description: `${group.members.length} members`,
+        searchValue: `${group.name} ${group.members.length}`,
+        icon: group.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={group.imageUrl}
+            alt={group.name}
+            className="h-5 w-5 object-contain rounded-none"
+          />
+        ) : (
+          <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-slate-500">
+            <Users className="h-4 w-4" />
+          </span>
+        ),
+      })),
+    [splitBillGroups],
+  );
+
+  const getEvenSplitAmounts = useCallback(
+    (totalAmount: number, count: number) => {
+      if (!Number.isFinite(totalAmount) || count <= 0) return [];
+      const scale = 100;
+      const scaledTotal = Math.round(Math.abs(totalAmount) * scale);
+      const base = Math.floor(scaledTotal / count);
+      const remainder = scaledTotal % count;
+      return Array.from({ length: count }, (_, index) =>
+        (base + (index < remainder ? 1 : 0)) / scale,
+      );
+    },
+    [],
+  );
+
   const refundCategoryId = useMemo(() => {
     const direct = categories.find((cat) => cat.id === REFUND_CATEGORY_ID);
     if (direct) return direct.id;
@@ -306,7 +396,7 @@ export function TransactionForm({
     return byName?.id ?? REFUND_CATEGORY_ID;
   }, [categories]);
 
-  const [, setStatus] = useState<StatusMessage>(null);
+  const [status, setStatus] = useState<StatusMessage>(null);
   const [cashbackProgress, setCashbackProgress] = useState<CashbackCard | null>(
     null,
   );
@@ -337,6 +427,19 @@ export function TransactionForm({
   const [isEnsuringDebt, startEnsuringDebt] = useTransition();
   const [persistedMetadata, setPersistedMetadata] =
     useState<CashbackPolicyMetadata | null>(null);
+
+  const [splitGroupId, setSplitGroupId] = useState<string | undefined>(undefined);
+  const [splitParticipants, setSplitParticipants] = useState<
+    SplitBillParticipant[]
+  >([]);
+  const [splitBillError, setSplitBillError] = useState<string | null>(null);
+  const [splitBillAutoSplit, setSplitBillAutoSplit] = useState(true);
+  const [splitPersonInput, setSplitPersonInput] = useState("");
+  const [splitPersonError, setSplitPersonError] = useState<string | null>(null);
+  const [splitPersonDropdownOpen, setSplitPersonDropdownOpen] = useState(false);
+  const [ownerRemoved, setOwnerRemoved] = useState(false);
+  const [splitRepayPersonId, setSplitRepayPersonId] = useState<string | null>(null);
+  const [isCreatingSplitPerson, startCreatingSplitPerson] = useTransition();
 
   // Phase 7.3: Cashback Preview State
   const [cashbackPreview, setCashbackPreview] =
@@ -370,6 +473,7 @@ export function TransactionForm({
       source_account_id: defaultSourceAccountId ?? undefined,
       person_id: undefined,
       debt_account_id: defaultDebtAccountId ?? undefined,
+      split_bill: false,
       category_id: isRefundMode ? (refundCategoryId ?? undefined) : undefined,
       shop_id: undefined,
       cashback_share_percent: undefined,
@@ -420,9 +524,12 @@ export function TransactionForm({
       return;
     }
     const direct = personMap.get(defaultPersonId);
-    if (direct) {
+    if (direct && !direct.is_group) {
       form.setValue("person_id", direct.id, { shouldDirty: false });
       form.setValue("debt_account_id", direct.debt_account_id ?? undefined, { shouldDirty: false });
+      return;
+    }
+    if (direct && direct.is_group) {
       return;
     }
     const fromDebt = peopleState.find(
@@ -434,6 +541,20 @@ export function TransactionForm({
       return;
     }
     form.setValue("debt_account_id", defaultPersonId, { shouldDirty: false });
+  }, [defaultPersonId, form, peopleState, personMap]);
+
+  const resolveSplitRepayPerson = useCallback(() => {
+    const selectedPersonId = form.getValues("person_id");
+    if (selectedPersonId) {
+      return peopleState.find((person) => person.id === selectedPersonId) ?? null;
+    }
+    if (!defaultPersonId) return null;
+    const direct = personMap.get(defaultPersonId);
+    if (direct && !direct.is_group) return direct;
+    return (
+      peopleState.find((person) => person.debt_account_id === defaultPersonId) ??
+      null
+    );
   }, [defaultPersonId, form, peopleState, personMap]);
 
   useEffect(() => {
@@ -536,6 +657,9 @@ export function TransactionForm({
   }, [form, initialValues?.note, isRefundMode, refundCategoryId]);
 
   const onSubmit = async (values: TransactionFormValues) => {
+    setIsSubmitting(true);
+    setStatus(null);
+    setSplitBillError(null);
     try {
       if (isRefundMode) {
         const targetTransactionId = refundTransactionId ?? transactionId;
@@ -658,19 +782,212 @@ export function TransactionForm({
         return;
       }
 
-      const rawPercent = Number(values.cashback_share_percent ?? 0);
+      const { split_bill, ...restValues } = values;
+
+    if (split_bill) {
+      if (isEditMode) {
+        const errorText = "Split bill is only available for new transactions.";
+        setSplitBillError(errorText);
+        setStatus({ type: "error", text: errorText });
+        return;
+      }
+
+      const totalAmount = Math.abs(restValues.amount ?? 0);
+      const validationError = validateSplitBill(totalAmount, splitParticipants);
+      if (validationError) {
+        setSplitBillError(validationError);
+        setStatus({ type: "error", text: validationError });
+        return;
+      }
+
+      const rawPercent = Number(restValues.cashback_share_percent ?? 0);
+      const percentValue = rawPercent / 100;
+      const fixedTotal = Number(restValues.cashback_share_fixed ?? 0);
+      const fixedScale = 100;
+      const scaledFixed = Math.round(Math.abs(fixedTotal) * fixedScale);
+      const fixedAllocations = splitParticipants.map((participant) => {
+        if (totalAmount <= 0 || scaledFixed === 0) return 0;
+        return Math.round((participant.amount / totalAmount) * scaledFixed);
+      });
+
+        const fixedRemainder =
+          scaledFixed -
+          fixedAllocations.reduce((sum, value) => sum + value, 0);
+        if (fixedAllocations.length > 0 && fixedRemainder !== 0) {
+          fixedAllocations[0] += fixedRemainder;
+        }
+
+      const groupName = splitGroupId
+        ? splitBillGroupMap.get(splitGroupId)?.name
+        : undefined;
+      const billTitle = (restValues.note ?? "").trim() || "Split Bill";
+      const splitPrefix =
+        restValues.type === "repayment" ? "[SplitRepay]" : "[SplitBill]";
+      const basePrefix =
+        restValues.type === "repayment"
+          ? "[SplitRepay Base]"
+          : "[SplitBill Base]";
+      const childNoteBase = `${splitPrefix} ${groupName ?? "Group"} | ${billTitle}`;
+      const baseNote = `${basePrefix} ${groupName ?? "Group"} | ${billTitle}`;
+      const baseMetadata = {
+        ...(restValues.installment_plan_id
+          ? { installment_id: restValues.installment_plan_id }
+          : {}),
+        ...(initialValues?.metadata || {}),
+      };
+
+      const baseType =
+        restValues.type === "repayment" ? "income" : restValues.type;
+
+      const basePayload: Parameters<typeof createTransaction>[0] = {
+        occurred_at: restValues.occurred_at.toISOString(),
+        note: baseNote,
+        type: baseType,
+        source_account_id: restValues.source_account_id,
+        amount: totalAmount,
+        tag: restValues.tag,
+        category_id: restValues.category_id ?? undefined,
+        person_id: splitGroupId ?? undefined,
+        shop_id: restValues.shop_id ?? undefined,
+        destination_account_id:
+          baseType === "income" ? restValues.source_account_id : undefined,
+        metadata: {
+          ...baseMetadata,
+          is_split_bill_base: true,
+          split_group_id: splitGroupId ?? null,
+          split_group_name: groupName ?? null,
+          split_count: splitParticipants.length,
+          split_type: restValues.type,
+        },
+        is_installment: isInstallment,
+        installment_plan_id: restValues.installment_plan_id ?? undefined,
+        cashback_share_percent: percentValue,
+        cashback_share_fixed: fixedTotal,
+        cashback_mode: restValues.cashback_mode,
+      };
+
+      const baseTransactionId = await createTransaction(basePayload);
+      if (!baseTransactionId) {
+        setStatus({
+          type: "error",
+          text: "Failed to create base transaction for split bill.",
+        });
+        return;
+      }
+
+      const results = await Promise.allSettled(
+        splitParticipants.map((participant, index) => {
+          const debtAccountId = debtAccountByPerson.get(participant.personId);
+          const noteParts = [childNoteBase];
+          const paidBy = participant.paidBy.trim();
+          if (paidBy) {
+            noteParts.push(`Paid by ${paidBy}`);
+          }
+          if (
+            restValues.type !== "repayment" &&
+            participant.paidBefore &&
+            participant.paidBefore > 0
+          ) {
+            noteParts.push(
+              `Paid before ${numberFormatter.format(participant.paidBefore)}`,
+            );
+          }
+          const rowNote = participant.note.trim();
+          if (rowNote) {
+            noteParts.push(rowNote);
+          }
+
+          const payload: Parameters<typeof createTransaction>[0] = {
+            occurred_at: restValues.occurred_at.toISOString(),
+            note: noteParts.join(" | "),
+            type: restValues.type,
+            source_account_id: SPLIT_BILL_SYSTEM_ACCOUNT_ID,
+            amount: participant.amount,
+            tag: restValues.tag,
+            category_id: restValues.category_id ?? undefined,
+            person_id: participant.personId,
+            debt_account_id: debtAccountId ?? undefined,
+            shop_id: restValues.shop_id ?? undefined,
+            destination_account_id:
+              restValues.type === "income" ? restValues.source_account_id : undefined,
+            metadata: {
+              ...baseMetadata,
+              split_parent_id: baseTransactionId,
+              split_group_id: splitGroupId ?? null,
+              split_group_name: groupName ?? null,
+            },
+            is_installment: isInstallment,
+            installment_plan_id: restValues.installment_plan_id ?? undefined,
+            cashback_share_percent: percentValue,
+            cashback_share_fixed:
+              (fixedAllocations[index] ?? 0) / fixedScale,
+            cashback_mode: restValues.cashback_mode,
+          };
+
+          return createTransaction(payload);
+        }),
+      );
+
+      const failedNames = results
+        .map((result, index) => {
+          if (result.status === "fulfilled" && result.value) {
+            return null;
+          }
+          return splitParticipants[index]?.name ?? "Unknown";
+        })
+        .filter((name): name is string => Boolean(name));
+
+      if (failedNames.length > 0) {
+        setStatus({
+          type: "error",
+          text: `Base transaction saved. Split rows ${results.length - failedNames.length}/${results.length}. Failed: ${failedNames.join(", ")}.`,
+        });
+        router.refresh();
+        return;
+      }
+
+        router.refresh();
+        form.reset({
+          ...baseDefaults,
+          occurred_at: new Date(),
+          amount: 0,
+          note: "",
+          tag: defaultTag ?? generateTag(new Date()),
+          source_account_id: defaultSourceAccountId ?? undefined,
+          category_id: undefined,
+          person_id: undefined,
+          debt_account_id: defaultDebtAccountId ?? undefined,
+          shop_id: undefined,
+          cashback_share_percent: undefined,
+          cashback_share_fixed: undefined,
+          split_bill: false,
+        });
+        setManualTagMode(Boolean(defaultTag));
+        setIsInstallment(false);
+        setSplitGroupId(undefined);
+        setSplitParticipants([]);
+        setSplitBillAutoSplit(true);
+        setSplitBillError(null);
+        setSplitPersonInput("");
+        setSplitPersonError(null);
+        applyDefaultPersonSelection();
+        onSuccess?.();
+        return;
+      }
+
+      const rawPercent = Number(restValues.cashback_share_percent ?? 0);
 
       // Check if this is a group debt repayment and append payer name to note
-      const selectedPerson = values.person_id
-        ? personMap.get(values.person_id)
+      const selectedPerson = restValues.person_id
+        ? personMap.get(restValues.person_id)
         : null;
       const isGroupDebt =
         selectedPerson?.name?.toLowerCase().includes("clt") ||
         selectedPerson?.name?.toLowerCase().includes("group");
 
-      let finalNote = values.note ?? "";
+      let finalNote = restValues.note ?? "";
       if (
-        (values.type === "repayment" || values.type === "debt") &&
+        (restValues.type === "repayment" || restValues.type === "debt") &&
         isGroupDebt &&
         payerName.trim()
       ) {
@@ -678,20 +995,22 @@ export function TransactionForm({
       }
 
       const payload: Parameters<typeof createTransaction>[0] = {
-        ...values,
-        occurred_at: values.occurred_at.toISOString(),
-        shop_id: values.shop_id ?? undefined,
+        ...restValues,
+        occurred_at: restValues.occurred_at.toISOString(),
+        shop_id: restValues.shop_id ?? undefined,
         note: finalNote,
         destination_account_id:
-          values.type === "income" ? values.source_account_id : undefined,
+          restValues.type === "income"
+            ? restValues.source_account_id
+            : undefined,
         is_installment: isInstallment,
         cashback_share_percent: rawPercent / 100, // Always divide by 100 to store as decimal (0.08 for 8%)
-        metadata: values.installment_plan_id
-          ? {
-            installment_id: values.installment_plan_id,
-            ...(initialValues?.metadata || {}), // Preserve other metadata if any
-          }
-          : undefined,
+        metadata: {
+          ...(restValues.installment_plan_id
+            ? { installment_id: restValues.installment_plan_id }
+            : {}),
+          ...(initialValues?.metadata || {}),
+        },
       };
 
       console.log("[TransactionForm] Submitting payload:", {
@@ -730,9 +1049,16 @@ export function TransactionForm({
           shop_id: undefined,
           cashback_share_percent: undefined,
           cashback_share_fixed: undefined,
+          split_bill: false,
         });
         setManualTagMode(Boolean(defaultTag));
         setIsInstallment(false);
+        setSplitGroupId(undefined);
+        setSplitParticipants([]);
+        setSplitBillAutoSplit(true);
+        setSplitBillError(null);
+        setSplitPersonInput("");
+        setSplitPersonError(null);
         applyDefaultPersonSelection();
         onSuccess?.();
       } else {
@@ -822,6 +1148,14 @@ export function TransactionForm({
     name: "amount",
   });
 
+  const splitTotalAmount = useMemo(
+    () =>
+      typeof watchedAmount === "number" && Number.isFinite(watchedAmount)
+        ? Math.abs(watchedAmount)
+        : 0,
+    [watchedAmount],
+  );
+
   const watchedDate = useWatch({
     control,
     name: "occurred_at",
@@ -880,6 +1214,108 @@ export function TransactionForm({
     control,
     name: "person_id",
   });
+
+  const watchedSplitBill = useWatch({
+    control,
+    name: "split_bill",
+  });
+
+  const isSplitBill = Boolean(watchedSplitBill);
+
+  const buildSplitParticipants = useCallback(
+    (members: Person[], totalAmount: number): SplitBillParticipant[] => {
+      const amounts = getEvenSplitAmounts(totalAmount, members.length);
+      return members.map((person, index) => ({
+        personId: person.id,
+        name: person.name,
+        amount: amounts[index] ?? 0,
+        paidBefore: 0,
+        paidBy: defaultPayerName,
+        note: "",
+      }));
+    },
+    [defaultPayerName, getEvenSplitAmounts],
+  );
+
+  const resplitParticipants = useCallback(
+    (participants: SplitBillParticipant[], totalAmount: number) => {
+      const amounts = getEvenSplitAmounts(totalAmount, participants.length);
+      return participants.map((participant, index) => {
+        const paidBefore = participant.paidBefore ?? 0;
+        const baseAmount = amounts[index] ?? 0;
+        return {
+          ...participant,
+          paidBefore,
+          amount: Math.max(0, baseAmount - paidBefore),
+        };
+      });
+    },
+    [getEvenSplitAmounts],
+  );
+
+  const buildSingleSplitParticipant = useCallback(
+    (person: Person, totalAmount: number, paidBy: string) => [
+      {
+        personId: person.id,
+        name: person.name,
+        amount: totalAmount,
+        paidBefore: 0,
+        paidBy,
+        note: "",
+      },
+    ],
+    [],
+  );
+
+  const validateSplitBill = useCallback(
+    (totalAmount: number, participants: SplitBillParticipant[]) => {
+      if (participants.length === 0) {
+        return "Add at least one participant for split bill.";
+      }
+
+      const missingPerson = participants.find(
+        (participant) => !participant.personId,
+      );
+      if (missingPerson) {
+        return "Each split row must include a person.";
+      }
+
+      const missingDebtAccounts = participants
+        .filter((participant) => !debtAccountByPerson.get(participant.personId))
+        .map((participant) => participant.name);
+      if (missingDebtAccounts.length > 0) {
+        return `Missing debt accounts for: ${missingDebtAccounts.join(", ")}`;
+      }
+
+      const invalidAmount = participants.find(
+        (participant) =>
+          !Number.isFinite(participant.amount) || participant.amount < 0,
+      );
+      if (invalidAmount) {
+        return "Split amounts must be zero or greater.";
+      }
+
+      const invalidPaidBefore = participants.find((participant) => {
+        if (participant.paidBefore === undefined) return false;
+        return !Number.isFinite(participant.paidBefore) || participant.paidBefore < 0;
+      });
+      if (invalidPaidBefore) {
+        return "Paid before must be zero or greater.";
+      }
+
+      const sum = participants.reduce(
+        (acc, participant) =>
+          acc + (participant.amount || 0) + (participant.paidBefore || 0),
+        0,
+      );
+      if (Math.abs(sum - totalAmount) > 0.01) {
+        return "Split total plus paid before must match the main amount.";
+      }
+
+      return null;
+    },
+    [debtAccountByPerson],
+  );
 
   // Phase 7.3: Cashback Simulation Effect
   useEffect(() => {
@@ -1226,7 +1662,9 @@ export function TransactionForm({
 
   const personOptions = useMemo(
     () =>
-      peopleState.map((person) => ({
+      peopleState
+        .filter((person) => !person.is_group)
+        .map((person) => ({
         value: person.id,
         label: person.name,
         description: person.email || "No email",
@@ -1245,6 +1683,71 @@ export function TransactionForm({
         ),
       })),
     [peopleState],
+  );
+
+  const splitPersonCandidates = useMemo(
+    () => peopleState.filter((person) => !person.is_group),
+    [peopleState],
+  );
+
+  const splitPersonSuggestions = useMemo(() => {
+    const query = splitPersonInput.trim().toLowerCase();
+    const selectedIds = new Set(splitParticipants.map((p) => p.personId));
+    const groupMembers = splitGroupId
+      ? splitBillGroupMap.get(splitGroupId)?.members ?? []
+      : [];
+
+    let baseList = splitGroupId ? groupMembers : splitPersonCandidates;
+    baseList = baseList.filter((person) => !selectedIds.has(person.id));
+
+    if (query) {
+      baseList = baseList.filter((person) =>
+        person.name.toLowerCase().includes(query),
+      );
+    } else if (!splitGroupId) {
+      baseList = [...baseList].sort((a, b) => {
+        const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return bTime - aTime;
+      });
+    }
+
+    return baseList.slice(0, 6).map((person) => {
+      const groupName = person.group_parent_id
+        ? splitBillGroupMap.get(person.group_parent_id)?.name
+        : null;
+      const hint = splitGroupId
+        ? "Group member"
+        : groupName
+          ? `In ${groupName}`
+          : "Single";
+      return {
+        id: person.id,
+        name: person.name,
+        hint,
+        avatar_url: person.avatar_url ?? null,
+      };
+    });
+  }, [
+    splitBillGroupMap,
+    splitGroupId,
+    splitParticipants,
+    splitPersonCandidates,
+    splitPersonInput,
+  ]);
+
+  const splitGroupMemberIds = useMemo(() => {
+    if (!splitGroupId) return new Set<string>();
+    const members = splitBillGroupMap.get(splitGroupId)?.members ?? [];
+    return new Set(members.map((member) => member.id));
+  }, [splitBillGroupMap, splitGroupId]);
+
+  const splitExtraParticipants = useMemo(
+    () =>
+      splitParticipants.filter(
+        (participant) => !splitGroupMemberIds.has(participant.personId),
+      ),
+    [splitGroupMemberIds, splitParticipants],
   );
 
   const shopOptions = useMemo(() => {
@@ -1349,7 +1852,7 @@ export function TransactionForm({
   ]);
 
   useEffect(() => {
-    if (!defaultPersonId) {
+    if (!defaultPersonId || isSplitBill) {
       return;
     }
     const currentPerson = form.getValues("person_id");
@@ -1358,9 +1861,13 @@ export function TransactionForm({
       return;
     }
     applyDefaultPersonSelection();
-  }, [applyDefaultPersonSelection, defaultPersonId, form]);
+  }, [applyDefaultPersonSelection, defaultPersonId, form, isSplitBill]);
 
   useEffect(() => {
+    if (isSplitBill) {
+      setDebtEnsureError(null);
+      return;
+    }
     if (transactionType !== "debt" && transactionType !== "repayment") {
       setDebtEnsureError(null);
       return;
@@ -1373,7 +1880,7 @@ export function TransactionForm({
     setDebtEnsureError(null);
     const linkedAccountId = debtAccountByPerson.get(watchedPersonId);
     form.setValue("debt_account_id", linkedAccountId ?? undefined, { shouldDirty: false });
-  }, [transactionType, watchedPersonId, debtAccountByPerson, form]);
+  }, [transactionType, watchedPersonId, debtAccountByPerson, form, isSplitBill]);
 
   useEffect(() => {
     if (
@@ -1384,6 +1891,408 @@ export function TransactionForm({
       form.setValue("shop_id", undefined, { shouldDirty: false });
     }
   }, [transactionType, form]);
+
+  useEffect(() => {
+    if (transactionType === "debt" || transactionType === "repayment") {
+      return;
+    }
+    if (form.getValues("split_bill")) {
+      form.setValue("split_bill", false, { shouldDirty: true });
+    }
+  }, [transactionType, form]);
+
+  useEffect(() => {
+    if (!isSplitBill || !splitBillAutoSplit) return;
+    if (splitParticipants.length === 0) return;
+    setSplitParticipants((prev) => resplitParticipants(prev, splitTotalAmount));
+  }, [
+    isSplitBill,
+    splitBillAutoSplit,
+    splitParticipants.length,
+    splitTotalAmount,
+    resplitParticipants,
+  ]);
+
+  useEffect(() => {
+    if (!isSplitBill) return;
+    setSplitBillError(validateSplitBill(splitTotalAmount, splitParticipants));
+  }, [isSplitBill, splitParticipants, splitTotalAmount, validateSplitBill]);
+
+  useEffect(() => {
+    if (!isSplitBill || transactionType !== "repayment") return;
+    const hasPaidBefore = splitParticipants.some(
+      (participant) => (participant.paidBefore ?? 0) > 0,
+    );
+    if (!hasPaidBefore) return;
+    setSplitParticipants((prev) =>
+      resplitParticipants(
+        prev.map((participant) => ({ ...participant, paidBefore: 0 })),
+        splitTotalAmount,
+      ),
+    );
+  }, [
+    isSplitBill,
+    transactionType,
+    splitParticipants,
+    resplitParticipants,
+    splitTotalAmount,
+  ]);
+
+  const handleSplitAmountChange = (personId: string, amount: number) => {
+    setSplitBillAutoSplit(false);
+    setSplitParticipants((prev) =>
+      prev.map((participant) =>
+        participant.personId === personId
+          ? { ...participant, amount }
+          : participant,
+      ),
+    );
+  };
+
+  const handleSplitPaidByChange = (personId: string, paidBy: string) => {
+    setSplitParticipants((prev) =>
+      prev.map((participant) =>
+        participant.personId === personId
+          ? { ...participant, paidBy }
+          : participant,
+      ),
+    );
+  };
+
+  const handleSplitNoteChange = (personId: string, note: string) => {
+    setSplitParticipants((prev) =>
+      prev.map((participant) =>
+        participant.personId === personId
+          ? { ...participant, note }
+          : participant,
+      ),
+    );
+  };
+
+  const handleSplitPaidBeforeChange = (personId: string, paidBefore: number) => {
+    setSplitBillAutoSplit(true);
+    setSplitParticipants((prev) =>
+      resplitParticipants(
+        prev.map((participant) =>
+          participant.personId === personId
+            ? { ...participant, paidBefore }
+            : participant,
+        ),
+        splitTotalAmount,
+      ),
+    );
+  };
+
+  const updatePersonState = useCallback(
+    (personId: string, updates: Partial<Person>) => {
+      setPeopleState((prev) =>
+        prev.map((person) =>
+          person.id === personId ? { ...person, ...updates } : person,
+        ),
+      );
+    },
+    [],
+  );
+
+  const ensureSplitPersonDebtAccount = useCallback(
+    (person: Person) => {
+      if (person.debt_account_id) return;
+      startEnsuringDebt(async () => {
+        const accountId = await ensureDebtAccountAction(person.id, person.name);
+        if (accountId) {
+          updatePersonState(person.id, { debt_account_id: accountId });
+        }
+      });
+    },
+    [startEnsuringDebt, updatePersonState],
+  );
+
+  const ensureSplitPersonGroup = useCallback(
+    (person: Person) => {
+      if (person.is_owner) return;
+      if (!splitGroupId) return;
+      if (person.group_parent_id === splitGroupId) return;
+      startCreatingSplitPerson(async () => {
+        const ok = await updatePersonAction(person.id, {
+          group_parent_id: splitGroupId,
+        });
+        if (ok) {
+          updatePersonState(person.id, { group_parent_id: splitGroupId });
+        }
+      });
+    },
+    [splitGroupId, startCreatingSplitPerson, updatePersonState],
+  );
+
+  const handleAddSplitParticipant = useCallback(
+    (person: Person) => {
+      if (ownerPerson && person.id === ownerPerson.id) {
+        setOwnerRemoved(false);
+      }
+      if (!splitGroupId && person.group_parent_id) {
+        setSplitGroupId(person.group_parent_id);
+      }
+      setSplitParticipants((prev) => {
+        if (prev.some((participant) => participant.personId === person.id)) {
+          return prev;
+        }
+        const next = [
+          ...prev,
+          {
+            personId: person.id,
+            name: person.name,
+            amount: 0,
+            paidBefore: 0,
+            paidBy: defaultPayerName,
+            note: "",
+          },
+        ];
+        return resplitParticipants(next, splitTotalAmount);
+      });
+      ensureSplitPersonGroup(person);
+      ensureSplitPersonDebtAccount(person);
+      setSplitBillAutoSplit(true);
+    },
+    [
+      defaultPayerName,
+      ensureSplitPersonDebtAccount,
+      ensureSplitPersonGroup,
+      ownerPerson,
+      resplitParticipants,
+      splitGroupId,
+      splitTotalAmount,
+    ],
+  );
+
+  const ensureOwnerParticipant = useCallback(() => {
+    if (transactionType === "repayment") return;
+    if (!ownerPerson) return;
+    if (ownerRemoved) return;
+    setSplitParticipants((prev) => {
+      if (prev.some((participant) => participant.personId === ownerPerson.id)) {
+        return prev;
+      }
+      const next = [
+        ...prev,
+        {
+          personId: ownerPerson.id,
+          name: ownerPerson.name,
+          amount: 0,
+          paidBefore: 0,
+          paidBy: defaultPayerName,
+          note: "",
+        },
+      ];
+      return resplitParticipants(next, splitTotalAmount);
+    });
+    ensureSplitPersonDebtAccount(ownerPerson);
+  }, [
+    defaultPayerName,
+    ownerPerson,
+    ownerRemoved,
+    resplitParticipants,
+    splitTotalAmount,
+    ensureSplitPersonDebtAccount,
+    transactionType,
+  ]);
+
+  useEffect(() => {
+    if (!isSplitBill || !splitGroupId) return;
+    if (splitRepayPersonId) {
+      const person = peopleState.find((item) => item.id === splitRepayPersonId);
+      if (person) {
+        setSplitPersonInput("");
+        setSplitPersonError(null);
+        const rawAmount = form.getValues("amount");
+        const total =
+          typeof rawAmount === "number" && Number.isFinite(rawAmount)
+            ? Math.abs(rawAmount)
+            : 0;
+        setSplitParticipants(
+          buildSingleSplitParticipant(person, total, person.name),
+        );
+        setSplitBillAutoSplit(true);
+        return;
+      }
+    }
+    const group = splitBillGroupMap.get(splitGroupId);
+    if (!group) {
+      setSplitParticipants([]);
+      return;
+    }
+    setSplitPersonInput("");
+    setSplitPersonError(null);
+    const rawAmount = form.getValues("amount");
+    const total =
+      typeof rawAmount === "number" && Number.isFinite(rawAmount)
+        ? Math.abs(rawAmount)
+        : 0;
+    let members = [...group.members];
+    if (transactionType === "repayment" && ownerPerson) {
+      members = members.filter((member) => member.id !== ownerPerson.id);
+    }
+    if (
+      transactionType !== "repayment" &&
+      ownerPerson &&
+      !ownerRemoved &&
+      !splitRepayPersonId &&
+      !members.some((member) => member.id === ownerPerson.id)
+    ) {
+      members.push(ownerPerson);
+    }
+    setSplitParticipants(buildSplitParticipants(members, total));
+    setSplitBillAutoSplit(true);
+  }, [
+    isSplitBill,
+    splitGroupId,
+    splitBillGroupMap,
+    form,
+    buildSplitParticipants,
+    buildSingleSplitParticipant,
+    peopleState,
+    ownerPerson,
+    ownerRemoved,
+    splitRepayPersonId,
+    transactionType,
+  ]);
+
+  useEffect(() => {
+    if (!isSplitBill) {
+      setSplitGroupId(undefined);
+      setSplitParticipants([]);
+      setSplitBillAutoSplit(true);
+      setSplitBillError(null);
+      setSplitPersonInput("");
+      setSplitPersonError(null);
+      setOwnerRemoved(false);
+      setSplitRepayPersonId(null);
+      if (!isEditMode) {
+        applyDefaultPersonSelection();
+      }
+      return;
+    }
+    setSplitBillError(null);
+    setPayerName("");
+    setOwnerRemoved(false);
+    const selectedPerson =
+      transactionType === "repayment" ? resolveSplitRepayPerson() : null;
+    if (transactionType === "repayment" && selectedPerson) {
+      setSplitRepayPersonId(selectedPerson.id);
+      setOwnerRemoved(true);
+      setSplitGroupId(selectedPerson.group_parent_id ?? undefined);
+      const rawAmount = form.getValues("amount");
+      const total =
+        typeof rawAmount === "number" && Number.isFinite(rawAmount)
+          ? Math.abs(rawAmount)
+          : 0;
+      setSplitParticipants(
+        buildSingleSplitParticipant(selectedPerson, total, selectedPerson.name),
+      );
+      setSplitBillAutoSplit(true);
+      setSplitPersonInput("");
+      setSplitPersonError(null);
+    } else {
+      setSplitRepayPersonId(null);
+    }
+    form.setValue("person_id", undefined, { shouldDirty: false });
+    form.setValue("debt_account_id", undefined, { shouldDirty: false });
+    if (!(transactionType === "repayment" && selectedPerson)) {
+      ensureOwnerParticipant();
+    }
+  }, [
+    isSplitBill,
+    form,
+    applyDefaultPersonSelection,
+    isEditMode,
+    ensureOwnerParticipant,
+    transactionType,
+    buildSingleSplitParticipant,
+    resolveSplitRepayPerson,
+  ]);
+
+  const handleRemoveSplitParticipant = (personId: string) => {
+    if (ownerPerson && personId === ownerPerson.id) {
+      setOwnerRemoved(true);
+    }
+    setSplitParticipants((prev) =>
+      resplitParticipants(
+        prev.filter((participant) => participant.personId !== personId),
+        splitTotalAmount,
+      ),
+    );
+    setSplitBillAutoSplit(true);
+  };
+
+  const handleSplitPersonSubmit = useCallback(async () => {
+    const rawName = splitPersonInput.trim();
+    if (!rawName) return;
+    setSplitPersonError(null);
+
+    const normalized = rawName.toLowerCase();
+    const existing = splitPersonCandidates.find(
+      (person) => person.name.toLowerCase() === normalized,
+    );
+
+    if (existing) {
+      handleAddSplitParticipant(existing);
+      setSplitPersonInput("");
+      setSplitPersonDropdownOpen(false);
+      return;
+    }
+
+    startCreatingSplitPerson(async () => {
+      const created = await createPersonAction({
+        name: rawName,
+        group_parent_id: splitGroupId ?? null,
+      });
+      if (!created) {
+        setSplitPersonError("Unable to create person.");
+        return;
+      }
+
+      const newPerson: Person = {
+        id: created.profileId,
+        name: rawName,
+        email: null,
+        avatar_url: null,
+        sheet_link: null,
+        google_sheet_url: null,
+        is_owner: null,
+        is_archived: null,
+        is_group: false,
+        group_parent_id: splitGroupId ?? null,
+        debt_account_id: created.debtAccountId ?? null,
+        balance: 0,
+      };
+
+      setPeopleState((prev) =>
+        prev.some((person) => person.id === newPerson.id)
+          ? prev
+          : [...prev, newPerson],
+      );
+      handleAddSplitParticipant(newPerson);
+      setSplitPersonInput("");
+      setSplitPersonDropdownOpen(false);
+    });
+  }, [
+    handleAddSplitParticipant,
+    splitGroupId,
+    splitPersonCandidates,
+    splitPersonInput,
+    startCreatingSplitPerson,
+  ]);
+
+  const handleSelectSplitSuggestion = useCallback(
+    (personId: string) => {
+      const person = splitPersonCandidates.find((p) => p.id === personId);
+      if (!person) return;
+      setSplitPersonError(null);
+      handleAddSplitParticipant(person);
+      setSplitPersonInput("");
+      setSplitPersonDropdownOpen(false);
+    },
+    [handleAddSplitParticipant, splitPersonCandidates],
+  );
 
   // Clear source account if switching to Transfer and it's a credit card
   useEffect(() => {
@@ -1929,9 +2838,10 @@ export function TransactionForm({
     ) : null;
 
   const PersonInput =
-    transactionType === "debt" ||
+    !isSplitBill &&
+    (transactionType === "debt" ||
       transactionType === "repayment" ||
-      (transactionType === "income" && !isRefundMode) ? (
+      (transactionType === "income" && !isRefundMode)) ? (
       <div className="space-y-3">
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Person</label>
@@ -2047,6 +2957,187 @@ export function TransactionForm({
         )}
       </div>
     ) : null;
+
+  const splitBillLabel =
+    transactionType === "repayment" ? "Split Repayment" : "Split Bill";
+  const splitBillDescription =
+    transactionType === "repayment"
+      ? "Split this repayment across multiple people."
+      : "Split this bill across multiple people.";
+
+  const SplitBillToggle =
+    (transactionType === "debt" || transactionType === "repayment") &&
+    !isRefundMode ? (
+      <div className="space-y-2">
+        <Label htmlFor="split-bill-toggle" className="text-sm font-medium text-gray-700">
+          {splitBillLabel}
+        </Label>
+        <div
+          className={cn(
+            "flex items-center justify-between rounded-md border border-gray-300 px-3 py-2 shadow-sm",
+            isEditMode && "opacity-60",
+          )}
+        >
+          <p className="text-xs text-slate-500">{splitBillDescription}</p>
+          <Controller
+            control={control}
+            name="split_bill"
+            render={({ field }) => (
+              <Switch
+                id="split-bill-toggle"
+                checked={field.value ?? false}
+                disabled={isEditMode}
+                onCheckedChange={(checked) => {
+                  if (isEditMode) return;
+                  field.onChange(checked);
+                  if (checked) {
+                    setSplitBillAutoSplit(true);
+                  }
+                }}
+              />
+            )}
+          />
+        </div>
+      </div>
+    ) : null;
+
+  const SplitBillSelection = isSplitBill ? (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-slate-800">
+            Participants
+          </h3>
+          {splitBillAutoSplit ? (
+            <span className="text-[10px] uppercase text-slate-400">
+              Even split
+            </span>
+          ) : (
+            <span className="text-[10px] uppercase text-amber-500">
+              Custom split
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-500">
+              Group
+            </label>
+            <Combobox
+              items={splitBillGroupOptions}
+              value={splitGroupId}
+              onValueChange={(value) => setSplitGroupId(value)}
+              placeholder="Select group"
+              inputPlaceholder="Search group..."
+              emptyState="No groups available"
+              className="h-11"
+            />
+          </div>
+          <div className="space-y-2 relative">
+            <label className="text-xs font-semibold text-slate-500">
+              Add person
+            </label>
+            <div className="min-h-[44px] rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                {splitExtraParticipants.map((participant) => (
+                  <span
+                    key={participant.personId}
+                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+                  >
+                    {participant.name}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleRemoveSplitParticipant(participant.personId)
+                      }
+                      className="rounded-full p-0.5 text-slate-400 hover:text-slate-600"
+                      aria-label={`Remove ${participant.name}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  value={splitPersonInput}
+                  onChange={(event) => {
+                    setSplitPersonInput(event.target.value);
+                    if (splitPersonError) {
+                      setSplitPersonError(null);
+                    }
+                  }}
+                  onFocus={() => setSplitPersonDropdownOpen(true)}
+                  onBlur={() => {
+                    setTimeout(() => setSplitPersonDropdownOpen(false), 150);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void handleSplitPersonSubmit();
+                    }
+                  }}
+                  placeholder="Type name and press Enter"
+                  className="min-w-[160px] flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+                />
+              </div>
+            </div>
+            {splitPersonDropdownOpen && splitPersonSuggestions.length > 0 && (
+              <div className="absolute left-0 top-full z-20 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
+                {splitPersonSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion.id}
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => handleSelectSplitSuggestion(suggestion.id)}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                  >
+                    {suggestion.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={suggestion.avatar_url}
+                        alt={suggestion.name}
+                        className="h-7 w-7 rounded-full object-cover"
+                      />
+                    ) : (
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+                        {getAccountInitial(suggestion.name)}
+                      </span>
+                    )}
+                    <div className="flex flex-col">
+                      <span className="font-medium text-slate-700">
+                        {suggestion.name}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {suggestion.hint}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {splitPersonError && (
+              <p className="text-xs text-rose-600">{splitPersonError}</p>
+            )}
+            {isCreatingSplitPerson && (
+              <p className="text-[10px] text-slate-400">Saving person...</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <SplitBillTable
+        participants={splitParticipants}
+        totalAmount={splitTotalAmount}
+        onAmountChange={handleSplitAmountChange}
+        onPaidByChange={handleSplitPaidByChange}
+        onNoteChange={handleSplitNoteChange}
+        onPaidBeforeChange={handleSplitPaidBeforeChange}
+        onRemove={handleRemoveSplitParticipant}
+        allowPaidBefore={transactionType !== "repayment"}
+        error={splitBillError}
+      />
+    </div>
+  ) : null;
 
   const DestinationAccountInput =
     transactionType === "transfer" ? (
@@ -2585,44 +3676,30 @@ export function TransactionForm({
                     const budgetLeft = spendingStats?.maxCashback
                       ? Math.max(
                         0,
-                        spendingStats.maxCashback - spendingStats.earnedSoFar,
+                        spendingStats.maxCashback -
+                        spendingStats.earnedSoFar,
                       )
                       : Infinity;
                     const rateMaxAmount =
                       (amountValue * (rateLimitPercent ?? 100)) / 100;
-                    const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+                    const absoluteLimit = Math.min(
+                      budgetLeft,
+                      rateMaxAmount,
+                    );
+
                     const currentFixed =
                       form.getValues("cashback_share_fixed") || 0;
-                    const isFullyConsumedByFixed =
-                      currentFixed >= absoluteLimit - 100; // tolerance
+                    const remainingForPercent = Math.max(
+                      0,
+                      absoluteLimit - currentFixed,
+                    );
+
+                    const isFullyConsumedByFixed = remainingForPercent <= 0;
 
                     return (
                       <SmartAmountInput
                         value={field.value}
-                        unit="%"
-                        disabled={isFullyConsumedByFixed && !field.value} // Disable if consumed AND empty
-                        onChange={(val) => {
-                          const budgetLeft = spendingStats?.maxCashback
-                            ? Math.max(
-                              0,
-                              spendingStats.maxCashback -
-                              spendingStats.earnedSoFar,
-                            )
-                            : Infinity;
-                          const rateMaxAmount =
-                            (amountValue * (rateLimitPercent ?? 100)) / 100;
-                          const absoluteLimit = Math.min(
-                            budgetLeft,
-                            rateMaxAmount,
-                          );
-
-                          const currentFixed =
-                            form.getValues("cashback_share_fixed") || 0;
-                          const remainingForPercent = Math.max(
-                            0,
-                            absoluteLimit - currentFixed,
-                          );
-
+                        onChange={(val: number | undefined) => {
                           // Calculate implied amount from this %
                           let safePercent = val;
                           if (val !== undefined && amountValue > 0) {
@@ -2687,15 +3764,21 @@ export function TransactionForm({
                     const budgetLeft = spendingStats?.maxCashback
                       ? Math.max(
                         0,
-                        spendingStats.maxCashback - spendingStats.earnedSoFar,
+                        spendingStats.maxCashback -
+                        spendingStats.earnedSoFar,
                       )
                       : Infinity;
                     const rateMaxAmount =
                       (amountValue * (rateLimitPercent ?? 100)) / 100;
-                    const absoluteLimit = Math.min(budgetLeft, rateMaxAmount);
+                    const absoluteLimit = Math.min(
+                      budgetLeft,
+                      rateMaxAmount,
+                    );
+
                     const currentPercent =
                       form.getValues("cashback_share_percent") || 0;
-                    const percentAmount = (amountValue * currentPercent) / 100;
+                    const percentAmount =
+                      (amountValue * currentPercent) / 100;
                     const isFullyConsumedByPercent =
                       percentAmount >= absoluteLimit - 100; // tolerance
 
@@ -3155,109 +4238,81 @@ export function TransactionForm({
                 render={() => <>{TypeInput}</>}
               />
             </div>
-
-            {/* Refund Status in Header if needed, or keep in body? keeping in body for now as it's niche */}
           </div>
 
-          {/* SCROLLABLE BODY */}
-          <div className="flex-1 overflow-y-auto min-h-0 bg-white">
-            <div className="px-5 py-6 space-y-6">
-              {RefundStatusInput}
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+            {status?.type === "error" && (
+              <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                {status.text}
+              </div>
+            )}
 
-              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                {transactionType === "debt" ||
-                  transactionType === "repayment" ? (
-                  <>
-                    <div className="md:col-span-2">{PersonInput}</div>
-                    <div className="md:col-span-1">{DateInput}</div>
-                    <div className="md:col-span-1">{TagInput}</div>
-                    {/* Always show Category Input for Repayment now */}
-                    <div className="md:col-span-1">{CategoryInput}</div>
-                    <div
-                      className={
-                        transactionType === "repayment"
-                          ? "md:col-span-1"
-                          : "md:col-span-1"
-                      }
-                    >
-                      {ShopInput}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
+                {DateInput}
+                {SourceAccountInput}
+                {AmountInput}
+                {TagInput}
+              </div>
+              <div className="space-y-4">
+                {CategoryInput}
+                {ShopInput}
+                {SplitBillToggle}
+                {PersonInput}
+                {DestinationAccountInput}
+                {RefundStatusInput}
+              </div>
+            </div>
+
+            {SplitBillSelection}
+
+            <div className="space-y-4 pt-2 border-t border-slate-100">
+              {/* Phase 7X: Explicit Installment Toggle */}
+              {(transactionType === "repayment" ||
+                transactionType === "expense" ||
+                transactionType === "income") &&
+                installments.length > 0 && (
+                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <div className="space-y-0.5">
+                      <Label
+                        htmlFor="is-installment-repay"
+                        className="text-sm font-medium text-slate-900"
+                      >
+                        Pay for Installment?
+                      </Label>
+                      <p className="text-xs text-slate-500">
+                        Link this {transactionType} to an active plan
+                      </p>
                     </div>
-                    <div className="md:col-span-1">{SourceAccountInput}</div>
-                    <div className="md:col-span-1">{AmountInput}</div>
-                  </>
-                ) : (
-                  <>
-                    <div className="md:col-span-2">{DateInput}</div>
-                    {transactionType === "transfer" ? (
-                      <>
-                        <div className="md:col-span-2">{CategoryInput}</div>
-                        <div className="md:col-span-1">{SourceAccountInput}</div>
-                        <div className="md:col-span-1">
-                          {DestinationAccountInput}
-                        </div>
-                        <div className="md:col-span-2">{AmountInput}</div>
-                      </>
-                    ) : transactionType === "income" ? (
-                      <>
-                        <div className="md:col-span-1">{CategoryInput}</div>
-                        <div className="md:col-span-1">{SourceAccountInput}</div>
-                        <div className="md:col-span-1">{AmountInput}</div>
-                        <div className="md:col-span-1">{PersonInput}</div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="md:col-span-1">{CategoryInput}</div>
-                        <div className="md:col-span-1">{ShopInput}</div>
-                        <div className="md:col-span-1">{SourceAccountInput}</div>
-                        <div className="md:col-span-1">{AmountInput}</div>
-                        <div className="md:col-span-2">{PersonInput}</div>
-                      </>
-                    )}
-                  </>
+                    <Controller
+                      control={control}
+                      name="is_installment"
+                      render={({ field }) => (
+                        <Switch
+                          id="is-installment-repay"
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            field.onChange(checked);
+                            if (!checked) {
+                              form.setValue("installment_plan_id", undefined);
+                            }
+                          }}
+                        />
+                      )}
+                    />
+                  </div>
                 )}
 
-                <div className="col-span-1 md:col-span-2 space-y-4 pt-2 border-t border-slate-100">
-                  {/* Phase 7X: Explicit Installment Toggle */}
-                  {(transactionType === "repayment" || transactionType === "expense" || transactionType === "income") && installments.length > 0 && (
-                    <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                      <div className="space-y-0.5">
-                        <Label htmlFor="is-installment-repay" className="text-sm font-medium text-slate-900">
-                          Pay for Installment?
-                        </Label>
-                        <p className="text-xs text-slate-500">
-                          Link this {transactionType} to an active plan
-                        </p>
-                      </div>
-                      <Controller
-                        control={control}
-                        name="is_installment"
-                        render={({ field }) => (
-                          <Switch
-                            id="is-installment-repay"
-                            checked={field.value}
-                            onCheckedChange={(checked) => {
-                              field.onChange(checked);
-                              if (!checked) {
-                                form.setValue("installment_plan_id", undefined);
-                              }
-                            }}
-                          />
-                        )}
-                      />
-                    </div>
-                  )}
-
-                  {watchedIsInstallment && InstallmentRepaymentSelector}
-                  {!watchedIsInstallment && InstallmentInput}
-                  {CashbackModeInput}
-                  {NoteInput}
-                </div>
-              </div>
+              {watchedIsInstallment && InstallmentRepaymentSelector}
+              {!watchedIsInstallment && InstallmentInput}
+              {CashbackModeInput}
+              {NoteInput}
             </div>
           </div>
 
+
           {/* FIXED FOOTER */}
-          <div className="sticky bottom-0 z-20 bg-white border-t border-slate-100 px-5 py-4 flex-none">
+          < div className="sticky bottom-0 z-20 bg-white border-t border-slate-100 px-5 py-4 flex-none" >
             <div className="flex justify-end gap-3">
               {isEditMode && (
                 <button
@@ -3294,9 +4349,11 @@ export function TransactionForm({
                 {submitLabel}
               </button>
             </div>
-          </div>
-        </form>
-      )}
+          </div >
+        </form >
+      )
+      }
+
 
       <CategoryDialog
         open={isCategoryDialogOpen}

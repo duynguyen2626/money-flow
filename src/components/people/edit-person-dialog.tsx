@@ -98,6 +98,7 @@ export function EditPersonDialog({
                 subscriptionIds: person.subscription_ids ?? [],
                 is_owner: person.is_owner ?? false,
                 is_archived: person.is_archived ?? false,
+                is_group: person.is_group ?? false,
               }}
               onCancel={closeDialog}
               onSubmit={async values => {
@@ -108,6 +109,7 @@ export function EditPersonDialog({
                   sheet_link: values.sheet_link,
                   subscriptionIds: values.subscriptionIds,
                   is_archived: values.is_archived,
+                  is_group: values.is_group,
                 })
                 setOpen(false)
                 onClose?.()

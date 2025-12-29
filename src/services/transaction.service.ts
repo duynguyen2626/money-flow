@@ -401,6 +401,7 @@ function mapTransactionRow(
 export async function loadTransactions(options: {
   accountId?: string;
   personId?: string;
+  personIds?: string[];
   shopId?: string;
   installmentPlanId?: string;
   limit?: number;
@@ -419,7 +420,9 @@ export async function loadTransactions(options: {
     query = query.neq("status", "void");
   }
 
-  if (options.personId) {
+  if (options.personIds && options.personIds.length > 0) {
+    query = query.in("person_id", options.personIds);
+  } else if (options.personId) {
     query = query.eq("person_id", options.personId);
   } else if (options.accountId) {
     query = query.or(
@@ -1083,6 +1086,14 @@ export async function getTransactionsByShop(
   limit: number = 50,
 ): Promise<TransactionWithDetails[]> {
   return loadTransactions({ shopId, limit });
+}
+
+export async function getTransactionsByPeople(
+  personIds: string[],
+  limit: number = 1000,
+): Promise<TransactionWithDetails[]> {
+  if (!personIds.length) return [];
+  return loadTransactions({ personIds, limit, context: "person" });
 }
 
 type UnifiedTransactionParams = {

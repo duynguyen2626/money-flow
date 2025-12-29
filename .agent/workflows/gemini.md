@@ -1,133 +1,41 @@
----
-description: Money Flow 3 (Updated Phase 75)
----
+# PATCH 1 — .agent/gemini.md
+# Goal: enforce "read-first", build gate, and mobile-split pattern as a hard requirement.
 
-# .agent/workflows/gemini.md — Context (MF4)
+## Add this section near the top (after any intro), or at the end if unsure:
+### Non-negotiable gates (must follow)
+- Before editing any code, you MUST read these files and restate (in 5 bullets max) how you will apply them:
+  - ./.agent/gemini.md
+  - ./.agent/gravityrules.md
+  - ./.agent/domain_logic.md
+  - ./README.md
+- Every change must keep business logic intact unless the task explicitly says otherwise.
+- Build gate is mandatory:
+  - Run: `npm run build`
+  - If it fails, fix it in the same PR. Do not leave build broken.
 
-## Project Overview
+### UI refactor rule: mobile must be split, reusable
+- When a page has complex desktop UI (badges, chips, sticky table, hover actions), DO NOT “make it responsive” by hiding columns inside the same component.
+- Instead: create a dedicated, reusable mobile component and keep the desktop component clean.
+- Prefer the Transactions refactor pattern:
+  - A reusable mobile row/card component
+  - A page-specific mapper file
+  - A thin adapter component per domain (transactions/people/accounts)
+- Naming convention:
+  - `XxxDesktop.tsx`
+  - `XxxMobile.tsx`
+  - `xxxToMobileRow.ts` (mapper)
+  - `MobileRecordRow.tsx` (reusable base)
 
-Money Flow 3 is a personal finance manager built with:
-
-* Next.js (App Router)
-* TypeScript
-* Tailwind CSS + shadcn/ui
-* Supabase (PostgreSQL)
-
-## Key Domain Concepts
-
-### Transactions
-
-Types:
-
-* Expense
-* Income
-* Transfer
-* Lending
-* Repay
-
-Each transaction type controls visible fields in the modal.
-
-### Accounts
-
-* Credit cards
-* Banks / wallets
-* Savings / secured accounts
-
-Important rules:
-
-* Credit cards **cannot** be transfer sources
-* Some credit cards have cashback policies
-
-### Cashback (Current State)
-
-* Cashback configuration lives in `accounts.cashback_config`
-* Current system computes cashback mostly in backend logic
-* There is no unified table to manage cashback per cycle yet
-
-### Voluntary Cashback (MF4)
-
-Voluntary cashback means:
-
-* User gives cashback manually even when:
-  * Account has no cashback
-  * Cashback budget for the cycle is exhausted
-
-Rules:
-
-* Voluntary cashback is allowed
-* It must NOT affect:
-  * Min spend
-  * Cashback budget
-* These values will be persisted separately in MF5
-
-## UI Conventions
-
-* Transaction modal uses sticky header + fixed footer
-* Transaction type tabs are visually dominant
-* Due / cashback logic clarity > compactness
-* Mobile experience is first-class
-
-## Agent Operating Mode
-
-* Read existing implementation before coding
-* Prefer minimal refactors
-* Do not introduce backend breaking changes
-* Keep UI consistent with existing design system
-
-## Phase Boundaries
-
-MF4 focuses on:
-
-* Transaction modal UI
-* Form logic & validation
-
-MF5 will handle:
-
-* Cashback tables
-* Budget aggregation
-* Profit / loss reporting
-
-Cashback is now persisted in:
-
-cashback_cycles (per account per cycle)
-
-cashback_entries (ledger)
-
-Modes:
-
-real = awarded cashback (counts toward budget)
-
-virtual = predicted profit (clamped)
-
-voluntary = overflow/loss (does not count)
-
-* Cashback recomputation must be consistent across SQL and TS.
-* `overflow_loss` must include real overflow when cap is exceeded.
-* Missing config should be stored as NULL, not 0.
-
-## Cashback Percent Rules
-
-* DB stores decimal [0..1] (e.g. 0.05)
-* UI shows percent [0..100] (e.g. 5)
-* Sheet Export sends raw percent [0..100] (e.g. 5)
-* Transactions must ALWAYS update `cashback_entries` and recompute `cashback_cycles` (including old cycle if moved).
-
-MF5 cashback model:
-
-- transactions = source of intent
-- cashback_entries = ledger (per transaction)
-- cashback_cycles = single source of truth for UI hints & budgets
-
-UI must never recompute budget independently.
-
-## Tag & Month-Key Standard (CRITICAL)
-
-We use ONE month-key format across the entire system: `YYYY-MM` (e.g. `2025-12`).
-
-- Debt period tags: `YYYY-MM`
-- Cashback cycle tags: `YYYY-MM`
-- Any persisted transaction cycle tag must be `YYYY-MM`
-
-Back-compat:
-- If legacy data contains an `MMMYY` month tag, normalize to `YYYY-MM` during reads/migrations (temporary).
-- Never write legacy month tags.
+### Definition of Done (DoD)
+- UI matches the provided mock screenshots (spacing + structure), not “close enough”.
+- Mobile:
+  - No overlap
+  - No horizontal scrolling
+  - No missing columns / wrong data mapping
+- Desktop:
+  - Works on large (27") and laptop (13") screens without excessive empty margins
+- Build passes: `npm run build`
+- Provide:
+  - files changed list
+  - manual verification checklist
+  - quick notes on tradeoffs

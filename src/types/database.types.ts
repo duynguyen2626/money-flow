@@ -615,7 +615,9 @@ export type Database = {
           id: string
           is_active: boolean | null
           is_archived: boolean | null
+          is_group: boolean | null
           is_owner: boolean | null
+          group_parent_id: string | null
           name: string | null
           phone: string | null
           role: string | null
@@ -632,7 +634,9 @@ export type Database = {
           id: string
           is_active?: boolean | null
           is_archived?: boolean | null
+          is_group?: boolean | null
           is_owner?: boolean | null
+          group_parent_id?: string | null
           name?: string | null
           phone?: string | null
           role?: string | null
@@ -649,7 +653,9 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           is_archived?: boolean | null
+          is_group?: boolean | null
           is_owner?: boolean | null
+          group_parent_id?: string | null
           name?: string | null
           phone?: string | null
           role?: string | null

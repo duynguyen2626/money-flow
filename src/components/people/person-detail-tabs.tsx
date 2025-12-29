@@ -2,11 +2,12 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { LayoutDashboard, Link as LinkIcon, History } from 'lucide-react'
+import { LayoutDashboard, Link as LinkIcon, History, DollarSign } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Account, Category, Person, PersonCycleSheet, Shop } from '@/types/moneyflow.types'
 import { SmartFilterBar } from '@/components/moneyflow/smart-filter-bar'
 import { DebtCycleList } from '@/components/moneyflow/debt-cycle-list'
+import { SplitBillManager } from '@/components/people/split-bill-manager'
 import { SheetSyncControls } from '@/components/people/sheet-sync-controls'
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
 
@@ -37,13 +38,13 @@ export function PersonDetailTabs({
 }: PersonDetailTabsProps) {
     const searchParams = useSearchParams()
     const resolveTab = (value: string | null) => {
-        if (value === 'sheet' || value === 'history' || value === 'details') {
+        if (value === 'sheet' || value === 'history' || value === 'details' || value === 'split-bill') {
             return value
         }
         return 'details'
     }
     const initialTab = useMemo(() => resolveTab(searchParams.get('tab')), [searchParams])
-    const [activeTab, setActiveTab] = useState<'details' | 'sheet' | 'history'>(initialTab)
+    const [activeTab, setActiveTab] = useState<'details' | 'sheet' | 'history' | 'split-bill'>(initialTab)
     const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer'>('all')
     const [searchTerm, setSearchTerm] = useState('')
 
@@ -56,6 +57,7 @@ export function PersonDetailTabs({
         { id: 'details' as const, label: 'Details', icon: <LayoutDashboard className="h-4 w-4" /> },
         { id: 'history' as const, label: 'History', icon: <History className="h-4 w-4" /> },
         { id: 'sheet' as const, label: 'Sheet Link', icon: <LinkIcon className="h-4 w-4" /> },
+        { id: 'split-bill' as const, label: 'Split Bill', icon: <DollarSign className="h-4 w-4" /> },
     ]
 
     return (
@@ -153,6 +155,19 @@ export function PersonDetailTabs({
                             personId={sheetProfileId}
                             sheetLink={sheetLink}
                             googleSheetUrl={googleSheetUrl}
+                        />
+                    </div>
+                )}
+
+                {activeTab === 'split-bill' && (
+                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden p-4">
+                        <SplitBillManager
+                            transactions={transactions}
+                            personId={personId}
+                            people={people}
+                            accounts={accounts}
+                            categories={categories}
+                            shops={shops}
                         />
                     </div>
                 )}

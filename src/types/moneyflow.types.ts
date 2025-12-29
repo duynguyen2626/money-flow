@@ -1,6 +1,7 @@
 import { Json, Database } from '@/types/database.types'
 
 export type TransactionRow = Database["public"]["Tables"]["transactions"]["Row"]
+export type Transaction = TransactionRow
 export type AccountRow = Database["public"]["Tables"]["accounts"]["Row"]
 export type CategoryRow = Database["public"]["Tables"]["categories"]["Row"]
 
@@ -125,6 +126,8 @@ export type Person = {
   balance?: number | null
   is_owner?: boolean | null
   is_archived?: boolean | null
+  is_group?: boolean | null
+  group_parent_id?: string | null
   subscription_ids?: string[]
   subscription_count?: number
   subscription_details?: { id: string; name: string; slots: number; image_url?: string | null }[]

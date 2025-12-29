@@ -15,6 +15,7 @@ type PersonFormValues = {
   subscriptionIds: string[]
   is_owner?: boolean
   is_archived?: boolean
+  is_group?: boolean
 }
 
 type PersonFormProps = {
@@ -34,6 +35,7 @@ const schema = z.object({
   subscriptionIds: z.array(z.string()),
   is_owner: z.boolean().optional(),
   is_archived: z.boolean().optional(),
+  is_group: z.boolean().optional(),
 })
 
 const currencyFormatter = new Intl.NumberFormat('en-US', {
@@ -82,6 +84,7 @@ export function PersonForm({
       subscriptionIds: initialValues?.subscriptionIds ?? [],
       is_owner: initialValues?.is_owner ?? false,
       is_archived: initialValues?.is_archived ?? false,
+      is_group: initialValues?.is_group ?? false,
     },
   })
 
@@ -89,6 +92,7 @@ export function PersonForm({
   const watchedSubs = watch('subscriptionIds')
   const watchedIsOwner = watch('is_owner')
   const watchedIsArchived = watch('is_archived')
+  const watchedIsGroup = watch('is_group')
 
   useEffect(() => {
     setAvatarPreview(watchedAvatar || null)
@@ -225,6 +229,19 @@ export function PersonForm({
               />
             </div>
           )}
+
+          <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Group profile</p>
+              <p className="text-xs text-slate-500">Show in Split Bill group picker.</p>
+            </div>
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-blue-600"
+              checked={watchedIsGroup}
+              onChange={e => setValue('is_group', e.target.checked, { shouldValidate: true })}
+            />
+          </div>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
