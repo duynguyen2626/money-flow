@@ -1,8 +1,45 @@
----
-description: Money Flow 3 (Updated Phase 75)
----
+﻿# PATCH 1 ƒ?" .agent/gemini.md
+# Goal: enforce "read-first", build gate, and mobile-split pattern as a hard requirement.
 
-# Task Spec — SheetScript Fix (source: task.md)
+### Non-negotiable gates (must follow)
+- Before editing any code, you MUST read these files and restate (in 5 bullets max) how you will apply them:
+  - ./.agent/gemini.md
+  - ./.agent/gravityrules.md
+  - ./.agent/domain_logic.md
+  - ./README.md
+- Every change must keep business logic intact unless the task explicitly says otherwise.
+- Build gate is mandatory:
+  - Run: `npm run build`
+  - If it fails, fix it in the same PR. Do not leave build broken.
+
+### UI refactor rule: mobile must be split, reusable
+- When a page has complex desktop UI (badges, chips, sticky table, hover actions), DO NOT ƒ?omake it responsiveƒ?? by hiding columns inside the same component.
+- Instead: create a dedicated, reusable mobile component and keep the desktop component clean.
+- Prefer the Transactions refactor pattern:
+  - A reusable mobile row/card component
+  - A page-specific mapper file
+  - A thin adapter component per domain (transactions/people/accounts)
+- Naming convention:
+  - `XxxDesktop.tsx`
+  - `XxxMobile.tsx`
+  - `xxxToMobileRow.ts` (mapper)
+  - `MobileRecordRow.tsx` (reusable base)
+
+### Definition of Done (DoD)
+- UI matches the provided mock screenshots (spacing + structure), not ƒ?oclose enoughƒ??.
+- Mobile:
+  - No overlap
+  - No horizontal scrolling
+  - No missing columns / wrong data mapping
+- Desktop:
+  - Works on large (27") and laptop (13") screens without excessive empty margins
+- Build passes: `npm run build`
+- Provide:
+  - files changed list
+  - manual verification checklist
+  - quick notes on tradeoffs
+
+# Task Spec ƒ?" SheetScript Fix (source: task.md)
 
 You are working in repo: `rei6868/money-flow-3` (PR #147 already merged; `sheetScript` folder is unified; sync is via `pnpm run sheet:push` using `SHEET_ID` in `.env`).
 
@@ -20,7 +57,7 @@ Fix Google Sheet sync issues:
 * `sheetScript/**` (all files)
 * `.env.example` (or env docs mentioning `SHEET_ID` / script id)
 * repo docs about sheets sync (search: `sheet:push`, `sheetScript`, `sync`, `resync`)
-* transaction → sheet mapping code path (search: `Final Price`, `% Back`, `Sum Back`, `shop`, `Notes`, `void`, `delete`, `upsert`, `resync`)
+* transaction ƒ+" sheet mapping code path (search: `Final Price`, `% Back`, `Sum Back`, `shop`, `Notes`, `void`, `delete`, `upsert`, `resync`)
 
 ## Issues to fix
 
@@ -67,7 +104,7 @@ Fix Google Sheet sync issues:
 
 1. Implement fixes in `sheetScript`.
 2. Add short dev note about safe delete + range-limited sorting.
-3. Provide short user verification checklist (6–8 steps).
+3. Provide short user verification checklist (6ƒ?"8 steps).
 
 ## Constraints
 

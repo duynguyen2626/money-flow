@@ -88,6 +88,7 @@ export function CreatePersonDialog({ subscriptions, trigger, open: controlledOpe
                   subscriptionIds: values.subscriptionIds,
                   is_owner: values.is_owner,
                   is_archived: values.is_archived,
+                  is_group: values.is_group,
                 })
                 handleSuccess()
               }}

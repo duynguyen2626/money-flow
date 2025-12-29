@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Search, UserPlus, AlertTriangle, CheckCircle, Archive } from 'lucide-react'
+import { Search, UserPlus, AlertTriangle, CheckCircle, Archive, Users } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
 
@@ -21,7 +21,7 @@ type PeopleGridProps = {
   shops: Shop[]
 }
 
-type FilterTab = 'debt' | 'settled' | 'archived'
+type FilterTab = 'debt' | 'settled' | 'archived' | 'groups'
 
 export function PeopleGrid({ people, subscriptions, accounts, categories, shops }: PeopleGridProps) {
   const router = useRouter()
@@ -60,19 +60,21 @@ export function PeopleGrid({ people, subscriptions, accounts, categories, shops 
   }
 
   // Group people by status
-  const activePeople = filteredPeople.filter(person => !person.is_archived && Math.abs(person.balance ?? 0) > 0)
-  const settledPeople = filteredPeople.filter(person => !person.is_archived && Math.abs(person.balance ?? 0) === 0)
-  const archivedPeople = filteredPeople.filter(person => person.is_archived)
+  const activePeople = filteredPeople.filter(person => !person.is_archived && !person.is_group && Math.abs(person.balance ?? 0) > 0)
+  const settledPeople = filteredPeople.filter(person => !person.is_archived && !person.is_group && Math.abs(person.balance ?? 0) === 0)
+  const archivedPeople = filteredPeople.filter(person => !person.is_group && person.is_archived)
+  const groupPeople = filteredPeople.filter(person => person.is_group)
 
   // Get current tab data
   const currentPeople = activeTab === 'debt' ? activePeople
     : activeTab === 'settled' ? settledPeople
-      : archivedPeople
+      : activeTab === 'archived' ? archivedPeople
+        : groupPeople
 
   const recentPeople = useMemo(() => {
     if (searchQuery.trim() !== '' || activeTab !== 'debt') return []
     return [...filteredPeople]
-      .filter((p) => !p.is_archived)
+      .filter((p) => !p.is_archived && !p.is_group)
       .map((p) => {
         const createdAt = p.created_at ? new Date(p.created_at).getTime() : 0
         const latestDebt = p.monthly_debts?.[0]
@@ -110,6 +112,13 @@ export function PeopleGrid({ people, subscriptions, accounts, categories, shops 
       icon: <Archive className="h-3.5 w-3.5" />,
       count: archivedPeople.length,
       color: 'text-slate-500 bg-slate-50 border-slate-200'
+    },
+    {
+      id: 'groups',
+      label: 'Groups',
+      icon: <Users className="h-3.5 w-3.5" />,
+      count: groupPeople.length,
+      color: 'text-blue-600 bg-blue-50 border-blue-200'
     },
   ]
 
@@ -205,7 +214,13 @@ export function PeopleGrid({ people, subscriptions, accounts, categories, shops 
         {/* People Grid */}
         <div className="mb-2">
           <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-            {activeTab === 'debt' ? 'All Members' : activeTab === 'settled' ? 'Settled Members' : 'Archived Members'}
+            {activeTab === 'debt'
+              ? 'All Members'
+              : activeTab === 'settled'
+                ? 'Settled Members'
+                : activeTab === 'archived'
+                  ? 'Archived Members'
+                  : 'Groups'}
           </h3>
         </div>
 
@@ -220,6 +235,7 @@ export function PeopleGrid({ people, subscriptions, accounts, categories, shops 
               {activeTab === 'debt' && 'No outstanding debtors right now.'}
               {activeTab === 'settled' && 'No settled members yet.'}
               {activeTab === 'archived' && 'No archived members.'}
+              {activeTab === 'groups' && 'No groups available yet.'}
             </p>
           </div>
         ) : (
