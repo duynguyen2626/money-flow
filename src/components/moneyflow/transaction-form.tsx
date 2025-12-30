@@ -227,6 +227,8 @@ type TransactionFormProps = {
     category_name?: string;
     account_name?: string;
     metadata?: any;
+    split_group_id?: string;
+    split_person_ids?: string[];
   };
   mode?: "create" | "edit" | "refund";
   refundTransactionId?: string;
@@ -457,6 +459,7 @@ export function TransactionForm({
   // Fix for Form Reset Loop
   const initialValuesRef = useRef(initialValues);
   const hiddenDateInputRef = useRef<HTMLInputElement | null>(null);
+  const initialSplitAppliedRef = useRef(false);
 
   // Force update ref if transactionId changes (switching to another txn)
   useEffect(() => {
@@ -2166,6 +2169,7 @@ export function TransactionForm({
       setSplitPersonError(null);
       setOwnerRemoved(false);
       setSplitRepayPersonId(null);
+      initialSplitAppliedRef.current = false;
       if (!isEditMode) {
         applyDefaultPersonSelection();
       }
@@ -2208,6 +2212,50 @@ export function TransactionForm({
     transactionType,
     buildSingleSplitParticipant,
     resolveSplitRepayPerson,
+  ]);
+
+  useEffect(() => {
+    if (!isSplitBill) return;
+    if (initialSplitAppliedRef.current) return;
+
+    const initialGroupId = initialValues?.split_group_id;
+    const initialPersonIds = initialValues?.split_person_ids ?? [];
+
+    if (initialGroupId) {
+      setSplitGroupId(initialGroupId);
+      setSplitBillAutoSplit(true);
+      initialSplitAppliedRef.current = true;
+      return;
+    }
+
+    if (initialPersonIds.length > 0) {
+      const members = initialPersonIds
+        .map((id) => peopleState.find((person) => person.id === id))
+        .filter((person): person is Person => Boolean(person));
+
+      if (
+        transactionType !== "repayment" &&
+        ownerPerson &&
+        !members.some((member) => member.id === ownerPerson.id)
+      ) {
+        members.push(ownerPerson);
+      }
+
+      if (members.length > 0) {
+        setSplitParticipants(buildSplitParticipants(members, splitTotalAmount));
+        setSplitBillAutoSplit(true);
+      }
+      initialSplitAppliedRef.current = true;
+    }
+  }, [
+    isSplitBill,
+    initialValues?.split_group_id,
+    initialValues?.split_person_ids,
+    peopleState,
+    buildSplitParticipants,
+    ownerPerson,
+    transactionType,
+    splitTotalAmount,
   ]);
 
   const handleRemoveSplitParticipant = (personId: string) => {
