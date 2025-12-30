@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -9,7 +10,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Combobox } from "@/components/ui/combobox";
+import type { ComboboxGroup } from "@/components/ui/combobox";
 import { AddTransactionDialog } from "@/components/moneyflow/add-transaction-dialog";
 import { generateTag } from "@/lib/tag";
 import { cn } from "@/lib/utils";
@@ -23,8 +27,10 @@ import {
   MessageSquareText,
   Sparkles,
   ArrowLeft,
+  Search,
   Check,
   X,
+  Pencil,
 } from "lucide-react";
 
 type WizardStep =
@@ -34,8 +40,6 @@ type WizardStep =
   | "who"
   | "account"
   | "transfer_destination"
-  | "date"
-  | "note"
   | "split_confirm"
   | "review";
 
@@ -51,11 +55,17 @@ type QuickAddDraft = {
   people: Person[];
   group: Person | null;
   sourceAccount: Account | null;
+  sourceAccountConfirmed: boolean;
   destinationAccount: Account | null;
   occurredAt: Date | null;
   note: string | null;
   splitBill: boolean | null;
   splitBillConfirmed: boolean;
+  shop: Shop | null;
+  category: Category | null;
+  cashbackSharePercent: number | null;
+  cashbackShareFixed: number | null;
+  cashbackMode: "none_back" | "voluntary" | "real_fixed" | "real_percent" | null;
 };
 
 type QuickAddInitialValues = Partial<TransactionFormValues> & {
@@ -63,7 +73,47 @@ type QuickAddInitialValues = Partial<TransactionFormValues> & {
   split_person_ids?: string[];
 };
 
-const normalizeName = (value: string) => value.trim().toLowerCase();
+type QuickAddTemplatePayload = {
+  intent?: ParseTransactionIntent | null;
+  source_account_id?: string | null;
+  destination_account_id?: string | null;
+  person_ids?: string[];
+  group_id?: string | null;
+  category_id?: string | null;
+  shop_id?: string | null;
+  note?: string | null;
+  split_bill?: boolean | null;
+  cashback_share_percent?: number | null;
+  cashback_share_fixed?: number | null;
+  cashback_mode?: "none_back" | "voluntary" | "real_fixed" | "real_percent" | null;
+};
+
+type QuickAddTemplate = {
+  id: string;
+  name: string;
+  payload: QuickAddTemplatePayload;
+};
+
+type ReviewEditField =
+  | "type"
+  | "amount"
+  | "who"
+  | "account"
+  | "destination"
+  | "date"
+  | "note"
+  | "category"
+  | "shop"
+  | "back"
+  | "split";
+
+
+const normalizeName = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
 
 const findByName = <T extends { name: string }>(
   list: T[],
@@ -76,6 +126,52 @@ const findByName = <T extends { name: string }>(
     list.find((item) => normalizeName(item.name).includes(normalized)) ??
     list.find((item) => normalized.includes(normalizeName(item.name))) ??
     null
+  );
+};
+
+const dedupeById = <T extends { id: string }>(list: T[]) => {
+  const seen = new Set<string>();
+  return list.filter((item) => {
+    if (seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+};
+
+const getInitials = (value: string) => {
+  const parts = value.trim().split(/\s+/);
+  if (parts.length === 0) return "";
+  const first = parts[0]?.charAt(0) ?? "";
+  const last = parts.length > 1 ? parts[parts.length - 1]?.charAt(0) ?? "" : "";
+  return `${first}${last}`.toUpperCase();
+};
+
+const renderAvatarNode = (
+  name: string,
+  url?: string | null,
+  rounded = true,
+) => {
+  if (url) {
+    return (
+      <img
+        src={url}
+        alt={name}
+        className={cn(
+          "h-6 w-6 object-cover",
+          rounded ? "rounded-full" : "rounded-md",
+        )}
+      />
+    );
+  }
+  return (
+    <div
+      className={cn(
+        "flex h-6 w-6 items-center justify-center bg-slate-200 text-[10px] font-semibold text-slate-600",
+        rounded ? "rounded-full" : "rounded-md",
+      )}
+    >
+      {getInitials(name)}
+    </div>
   );
 };
 
@@ -92,35 +188,26 @@ const parseAmount = (value: string) => {
   return Math.abs(base) * multiplier;
 };
 
-const parseDateValue = (value: string) => {
-  const cleaned = value.trim().toLowerCase();
-  const today = new Date();
-  if (cleaned === "today") return today;
-  if (cleaned === "yesterday") {
-    const date = new Date();
-    date.setDate(today.getDate() - 1);
-    return date;
-  }
-  const iso = cleaned.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (iso) {
-    const candidate = new Date(
-      Number(iso[1]),
-      Number(iso[2]) - 1,
-      Number(iso[3]),
-    );
-    if (!Number.isNaN(candidate.getTime())) return candidate;
-  }
-  return null;
+const extractAmountFromText = (value: string) => {
+  const match = value.match(/(\d[\d,]*\.?\d*)\s*(k|m|b)?/i);
+  if (!match) return null;
+  return parseAmount(match[0]);
 };
 
 const intentFromInput = (value: string): ParseTransactionIntent | null => {
-  const cleaned = value.trim().toLowerCase();
+  const cleaned = normalizeName(value);
   if (!cleaned) return null;
-  if (["expense", "spend", "spent"].includes(cleaned)) return "expense";
+  if (["expense", "spend", "spent", "tieu", "chi", "chi tieu"].includes(cleaned)) {
+    return "expense";
+  }
   if (["income", "salary", "received"].includes(cleaned)) return "income";
   if (["transfer", "move", "moved"].includes(cleaned)) return "transfer";
-  if (["lend", "loan", "debt", "lending"].includes(cleaned)) return "lend";
-  if (["repay", "repayment", "payback", "pay back"].includes(cleaned)) return "repay";
+  if (["lend", "loan", "debt", "lending", "cho muon", "muon tien"].includes(cleaned)) {
+    return "lend";
+  }
+  if (["repay", "repayment", "payback", "pay back", "tra", "tra no", "tra tien", "hoan"].includes(cleaned)) {
+    return "repay";
+  }
   return null;
 };
 
@@ -130,17 +217,102 @@ const splitPeopleInput = (value: string) =>
     .map((part) => part.trim())
     .filter(Boolean);
 
+const resolveCashbackMode = (
+  account: Account | null,
+  percent: number | null,
+  fixed: number | null,
+) => {
+  if (!percent && !fixed) return "none_back" as const;
+  const hasCashback = Boolean(account?.cashback_config);
+  if (!hasCashback) return "voluntary" as const;
+  if (percent && percent > 0) return "real_percent" as const;
+  return "real_fixed" as const;
+};
+
+const getDefaultShop = (shops: Shop[]) =>
+  shops.find((shop) => normalizeName(shop.name).includes("shopee")) ?? null;
+
+const findAccountCandidates = (text: string, accounts: Account[]) => {
+  const normalized = normalizeName(text);
+  if (!normalized) return [];
+  return accounts.filter((account) => {
+    const accountName = normalizeName(account.name);
+    return accountName.includes(normalized) || normalized.includes(accountName);
+  });
+};
+
+const DEFAULT_CASHBACK_PERCENT = 8;
+
+const pickCandidateByIndex = <T,>(value: string, list: T[]) => {
+  const asNumber = Number(value);
+  if (!Number.isFinite(asNumber)) return null;
+  if (asNumber < 1 || asNumber > list.length) return null;
+  return list[asNumber - 1] ?? null;
+};
+
+const applyContextPerson = (
+  draft: QuickAddDraft,
+  contextPerson: Person | null | undefined,
+) => {
+  if (!contextPerson) return draft;
+  if (draft.intent !== "lend" && draft.intent !== "repay") return draft;
+  if (draft.group || draft.people.length > 0) return draft;
+  if (contextPerson.is_group) {
+    return {
+      ...draft,
+      group: contextPerson,
+      people: [],
+      splitBill: true,
+      splitBillConfirmed: true,
+    };
+  }
+  return {
+    ...draft,
+    group: null,
+    people: [contextPerson],
+    splitBill: false,
+    splitBillConfirmed: true,
+  };
+};
+
+const applyDefaultCashbackForPeople = (
+  draft: QuickAddDraft,
+  params: { groupMembers: Map<string, Person[]>; people: Person[] },
+) => {
+  if (draft.cashbackSharePercent !== null || draft.cashbackShareFixed !== null) {
+    return draft;
+  }
+  const hasLam = (person: Person) =>
+    normalizeName(person.name).includes("lam");
+  const groupPeople = draft.group
+    ? params.groupMembers.get(draft.group.id) ?? []
+    : [];
+  const shouldApply =
+    draft.people.some(hasLam) || groupPeople.some(hasLam);
+  if (!shouldApply) return draft;
+  return {
+    ...draft,
+    cashbackSharePercent: DEFAULT_CASHBACK_PERCENT,
+  };
+};
+
 const buildInitialDraft = (): QuickAddDraft => ({
   intent: null,
   amount: null,
   people: [],
   group: null,
   sourceAccount: null,
+  sourceAccountConfirmed: false,
   destinationAccount: null,
-  occurredAt: null,
-  note: null,
+  occurredAt: new Date(),
+  note: "",
   splitBill: null,
   splitBillConfirmed: false,
+  shop: null,
+  category: null,
+  cashbackSharePercent: null,
+  cashbackShareFixed: null,
+  cashbackMode: null,
 });
 
 const stepPrompts: Record<WizardStep, string> = {
@@ -151,8 +323,6 @@ const stepPrompts: Record<WizardStep, string> = {
   who: "Who is this for? Choose a person or group.",
   account: "Which account should be used?",
   transfer_destination: "Which account should receive the transfer?",
-  date: "When did it happen? Use YYYY-MM-DD or 'today'.",
-  note: "Add a note? (optional)",
   split_confirm: "Should this be a split bill?",
   review: "Review your details before confirming.",
 };
@@ -176,12 +346,17 @@ export function QuickAddChat({
   categories,
   people,
   shops,
+  variant = "inline",
+  contextPerson,
 }: {
   accounts: Account[];
   categories: Category[];
   people: Person[];
   shops: Shop[];
+  variant?: "inline" | "floating";
+  contextPerson?: Person | null;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState<QuickAddDraft>(buildInitialDraft());
@@ -193,6 +368,27 @@ export function QuickAddChat({
     null,
   );
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
+  const [accountCandidates, setAccountCandidates] = useState<Account[]>([]);
+  const [accountQuery, setAccountQuery] = useState("");
+  const [destinationCandidates, setDestinationCandidates] = useState<Account[]>([]);
+  const [templates, setTemplates] = useState<QuickAddTemplate[]>([]);
+  const [recentPrompts, setRecentPrompts] = useState<string[]>([]);
+  const [isTemplateLoading, setIsTemplateLoading] = useState(false);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [templateName, setTemplateName] = useState("");
+  const [isSavingTemplate, setIsSavingTemplate] = useState(false);
+  const [isSubmittingNow, setIsSubmittingNow] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [reviewEditField, setReviewEditField] = useState<ReviewEditField | null>(
+    null,
+  );
+  const [reviewEditValue, setReviewEditValue] = useState("");
+  const [reviewEditSecondaryValue, setReviewEditSecondaryValue] = useState("");
+  const [reviewAccountFilter, setReviewAccountFilter] = useState<"all" | "vib">(
+    "all",
+  );
+  const [isMinimized, setIsMinimized] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const historyRef = useRef<WizardStep[]>([]);
   const lastPromptedStep = useRef<WizardStep | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -225,12 +421,148 @@ export function QuickAddChat({
 
   const recentGroups = useMemo(() => groups.slice(0, 4), [groups]);
 
-  const recentAccounts = useMemo(
-    () => accounts.filter((account) => account.type !== "system").slice(0, 6),
+  const selectableAccounts = useMemo(
+    () => accounts.filter((account) => account.type !== "system"),
     [accounts],
   );
 
+  const vibAccounts = useMemo(
+    () => findAccountCandidates("vib", selectableAccounts),
+    [selectableAccounts],
+  );
+
+  const recentAccounts = useMemo(
+    () => selectableAccounts.slice(0, 6),
+    [selectableAccounts],
+  );
+
+  useEffect(() => {
+    if (!contextPerson) return;
+    if (draft.intent !== "lend" && draft.intent !== "repay") return;
+    if (draft.group || draft.people.length > 0) return;
+    let nextDraft = applyContextPerson(draft, contextPerson);
+    if (nextDraft === draft) return;
+    nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+      groupMembers,
+      people: individualPeople,
+    });
+    nextDraft.cashbackMode = resolveCashbackMode(
+      nextDraft.sourceAccount,
+      nextDraft.cashbackSharePercent,
+      nextDraft.cashbackShareFixed,
+    );
+    setDraft(nextDraft);
+  }, [
+    contextPerson,
+    draft,
+    groupMembers,
+    individualPeople,
+  ]);
+
   const isDebtIntent = draft.intent === "lend" || draft.intent === "repay";
+  const isFloating = variant === "floating";
+
+  const accountItems = useMemo(() => {
+    const list = reviewAccountFilter === "vib" ? vibAccounts : selectableAccounts;
+    return list.map((account) => ({
+      value: account.id,
+      label: account.name,
+      description: account.type.replace(/_/g, " "),
+      icon: renderAvatarNode(account.name, account.image_url ?? null, false),
+      searchValue: `${account.name} ${account.type}`,
+    }));
+  }, [reviewAccountFilter, vibAccounts, selectableAccounts]);
+
+  const personGroups = useMemo<ComboboxGroup[]>(() => {
+    const groupItems = groups.map((group) => ({
+      value: group.id,
+      label: group.name,
+      icon: renderAvatarNode(group.name, group.avatar_url ?? null),
+      searchValue: group.name,
+    }));
+    const peopleItems = individualPeople.map((person) => ({
+      value: person.id,
+      label: person.name,
+      description: person.email ?? undefined,
+      icon: renderAvatarNode(person.name, person.avatar_url ?? null),
+      searchValue: person.name,
+    }));
+    return [
+      { label: "Groups", items: groupItems },
+      { label: "People", items: peopleItems },
+    ];
+  }, [groups, individualPeople]);
+
+  const categoryItems = useMemo(
+    () =>
+      categories.map((category) => ({
+        value: category.id,
+        label: category.name,
+        description: category.type,
+      })),
+    [categories],
+  );
+
+  const shopItems = useMemo(
+    () =>
+      shops.map((shop) => ({
+        value: shop.id,
+        label: shop.name,
+        icon: shop.image_url
+          ? renderAvatarNode(shop.name, shop.image_url, false)
+          : null,
+      })),
+    [shops],
+  );
+
+  const formatAccountList = (list: Account[]) =>
+    list.map((account, index) => `${index + 1}. ${account.name}`).join(" | ");
+
+  const formatIntentLabel = (intent: ParseTransactionIntent | null) => {
+    if (!intent) return "-";
+    return `${intent.charAt(0).toUpperCase()}${intent.slice(1)}`;
+  };
+
+  const formatCashbackLabel = (data: QuickAddDraft) => {
+    if (!data.cashbackSharePercent && !data.cashbackShareFixed) {
+      return "None";
+    }
+    const percent = data.cashbackSharePercent ?? 0;
+    const fixed = data.cashbackShareFixed ?? 0;
+    return `${percent}% / ${fixed}`;
+  };
+
+  const formatSplitLabel = (data: QuickAddDraft) => {
+    const isDebt = data.intent === "lend" || data.intent === "repay";
+    if (!isDebt) return "N/A";
+    const groupCount = data.group
+      ? groupMembers.get(data.group.id)?.length ?? 0
+      : 0;
+    if (data.splitBill) {
+      return data.group ? `On (Group - ${groupCount} people)` : "On";
+    }
+    return "Off";
+  };
+
+  const getPromptForStep = (currentStep: WizardStep) => {
+    if (currentStep === "account") {
+      if (draft.sourceAccount && !draft.sourceAccountConfirmed) {
+        const list =
+          accountCandidates.length > 1
+            ? ` Choose: ${formatAccountList(accountCandidates)}`
+            : "";
+        return `Use account "${draft.sourceAccount.name}"? Reply yes to confirm, or pick another.${list}`;
+      }
+      if (accountCandidates.length > 1) {
+        return `Which account? Reply with a number or name: ${formatAccountList(accountCandidates)}`;
+      }
+      return stepPrompts.account;
+    }
+    if (currentStep === "transfer_destination" && destinationCandidates.length > 1) {
+      return `Which destination account? Reply with a number or name: ${formatAccountList(destinationCandidates)}`;
+    }
+    return stepPrompts[currentStep];
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -238,14 +570,50 @@ export function QuickAddChat({
     if (step === "review") return;
     setMessages((prev) => [
       ...prev,
-      { id: createId(), role: "assistant", content: stepPrompts[step] },
+      { id: createId(), role: "assistant", content: getPromptForStep(step) },
     ]);
     lastPromptedStep.current = step;
-  }, [open, step]);
+  }, [
+    open,
+    step,
+    draft.sourceAccount,
+    draft.sourceAccountConfirmed,
+    accountCandidates,
+    destinationCandidates,
+  ]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    if (open && !isMinimized) {
+      setUnreadCount(0);
+    }
+  }, [open, isMinimized]);
+
+
+  const loadTemplates = async () => {
+    setIsTemplateLoading(true);
+    setTemplateError(null);
+    try {
+      const response = await fetch("/api/ai/templates");
+      if (!response.ok) {
+        throw new Error("Failed to load templates");
+      }
+      const data = (await response.json()) as { templates: QuickAddTemplate[] };
+      setTemplates(data.templates ?? []);
+    } catch (error) {
+      setTemplateError("Failed to load templates.");
+    } finally {
+      setIsTemplateLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    void loadTemplates();
+  }, [open]);
 
   const resetWizard = () => {
     setDraft(buildInitialDraft());
@@ -259,31 +627,56 @@ export function QuickAddChat({
     setStep("input");
     setInputValue("");
     setParseError(null);
+    setSubmitError(null);
+    setTemplateError(null);
+    setTemplateName("");
+    setAccountCandidates([]);
+    setAccountQuery("");
+    setDestinationCandidates([]);
+    setReviewEditField(null);
+    setReviewEditValue("");
+    setReviewEditSecondaryValue("");
+    setReviewAccountFilter("all");
+    setIsMinimized(false);
+    setUnreadCount(0);
     historyRef.current = [];
     lastPromptedStep.current = "input";
   };
 
-  const openWizard = () => {
-    resetWizard();
+  const openWizard = (forceReset = false) => {
+    if (forceReset || messages.length === 0) {
+      resetWizard();
+    }
     setOpen(true);
+    setIsMinimized(false);
+    setUnreadCount(0);
+  };
+
+  const closeChat = () => {
+    setOpen(false);
+    setIsMinimized(false);
   };
 
   const appendMessage = (role: "assistant" | "user", content: string) => {
     setMessages((prev) => [...prev, { id: createId(), role, content }]);
+    if (isMinimized || !open) {
+      setUnreadCount((prev) => prev + 1);
+    }
   };
 
   const computeNextStep = (nextDraft: QuickAddDraft): WizardStep => {
     if (!nextDraft.intent) return "type";
     if (!nextDraft.amount) return "amount";
     if (nextDraft.intent === "lend" || nextDraft.intent === "repay") {
-      if (!nextDraft.group && nextDraft.people.length === 0) return "who";
+      const hasContextPerson = Boolean(contextPerson);
+      if (!nextDraft.group && nextDraft.people.length === 0 && !hasContextPerson) {
+        return "who";
+      }
     }
-    if (!nextDraft.sourceAccount) return "account";
+    if (!nextDraft.sourceAccount || !nextDraft.sourceAccountConfirmed) return "account";
     if (nextDraft.intent === "transfer" && !nextDraft.destinationAccount) {
       return "transfer_destination";
     }
-    if (!nextDraft.occurredAt) return "date";
-    if (nextDraft.note === null) return "note";
     if (
       (nextDraft.intent === "lend" || nextDraft.intent === "repay") &&
       !nextDraft.splitBillConfirmed
@@ -301,11 +694,20 @@ export function QuickAddChat({
 
   const applyParsedResult = (result: ParsedTransaction) => {
     const intent = result.intent;
-    const group =
+    const groupCandidate =
       findByName(groups, result.group_name ?? undefined) ?? null;
-    const resolvedPeople = result.people
-      .map((ref) => findByName(individualPeople, ref.name))
-      .filter((person): person is Person => Boolean(person));
+    const resolvedPeople = dedupeById(
+      result.people
+        .map((ref) => findByName(individualPeople, ref.name))
+        .filter((person): person is Person => Boolean(person)),
+    );
+    const group =
+      groupCandidate &&
+      resolvedPeople.some(
+        (person) => normalizeName(person.name) === normalizeName(groupCandidate.name),
+      )
+        ? null
+        : groupCandidate;
     const sourceAccount =
       findByName(accounts, result.source_account_name ?? undefined) ?? null;
     const destinationAccount =
@@ -313,27 +715,59 @@ export function QuickAddChat({
     const occurredAt = result.occurred_at
       ? new Date(`${result.occurred_at}T12:00:00`)
       : null;
+    const shop =
+      findByName(shops, result.shop_name ?? undefined) ??
+      getDefaultShop(shops);
 
     const splitBill =
-      group ? true : result.split_bill ?? (resolvedPeople.length > 1 ? true : null);
+      group
+        ? true
+        : result.split_bill ?? (resolvedPeople.length > 1 ? true : false);
+    const splitBillConfirmed =
+      group || result.split_bill !== null ? true : resolvedPeople.length <= 1;
 
-    const nextDraft: QuickAddDraft = {
+    const cashbackSharePercent =
+      result.cashback_share_percent ?? draft.cashbackSharePercent ?? null;
+    const cashbackShareFixed =
+      result.cashback_share_fixed ?? draft.cashbackShareFixed ?? null;
+
+    let nextDraft: QuickAddDraft = {
       ...draft,
       intent,
       amount: result.amount ?? draft.amount,
       group,
       people: group ? [] : resolvedPeople,
       sourceAccount,
+      sourceAccountConfirmed: sourceAccount ? false : draft.sourceAccountConfirmed,
       destinationAccount,
-      occurredAt,
-      note: result.note ?? draft.note,
+      occurredAt: occurredAt ?? draft.occurredAt ?? new Date(),
+      note: result.note ?? draft.note ?? "",
       splitBill,
-      splitBillConfirmed: false,
+      splitBillConfirmed,
+      shop: shop ?? null,
+      category: findByName(categories, result.category_name ?? undefined),
+      cashbackSharePercent,
+      cashbackShareFixed,
+      cashbackMode: result.cashback_mode ?? null,
     };
 
-    setDraft(nextDraft);
-    const nextStep = computeNextStep(nextDraft);
-    goToStep(nextStep);
+    nextDraft = applyContextPerson(nextDraft, contextPerson);
+    const withDefault = applyDefaultCashbackForPeople(nextDraft, {
+      groupMembers,
+      people: individualPeople,
+    });
+    const resolvedMode =
+      result.cashback_mode ??
+      resolveCashbackMode(
+        sourceAccount,
+        withDefault.cashbackSharePercent,
+        withDefault.cashbackShareFixed,
+      );
+
+    return {
+      ...withDefault,
+      cashbackMode: resolvedMode,
+    };
   };
 
   const handleParseInput = async (text: string) => {
@@ -373,7 +807,41 @@ export function QuickAddChat({
         throw new Error("Unable to parse");
       }
       const data = (await response.json()) as { result: ParsedTransaction };
-      applyParsedResult(data.result);
+      let nextDraft: QuickAddDraft = applyParsedResult(data.result);
+      if (!nextDraft.intent && contextPerson) {
+        const normalizedText = normalizeName(text);
+        const shouldLend =
+          normalizedText.includes("back") ||
+          normalizedText.includes("cho") ||
+          normalizedText.includes("muon");
+        if (shouldLend) {
+          nextDraft = applyContextPerson(
+            { ...nextDraft, intent: "lend" },
+            contextPerson,
+          );
+          nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+            groupMembers,
+            people: individualPeople,
+          });
+          nextDraft.cashbackMode = resolveCashbackMode(
+            nextDraft.sourceAccount,
+            nextDraft.cashbackSharePercent,
+            nextDraft.cashbackShareFixed,
+          );
+        }
+      }
+      const accountLookupText =
+        nextDraft.sourceAccount?.name ?? text;
+      const candidates = findAccountCandidates(accountLookupText, selectableAccounts);
+      if (candidates.length > 1) {
+        setAccountCandidates(candidates);
+      } else {
+        setAccountCandidates([]);
+      }
+      setAccountQuery(accountLookupText);
+      const nextStep = computeNextStep(nextDraft);
+      setDraft(nextDraft);
+      goToStep(nextStep);
     } catch (error) {
       setParseError("Parsing failed. We'll continue manually.");
       goToStep("type");
@@ -384,7 +852,7 @@ export function QuickAddChat({
 
   const handleSubmitInput = async () => {
     const trimmed = inputValue.trim();
-    if (!trimmed && step !== "note") return;
+    if (!trimmed) return;
 
     if (trimmed) {
       appendMessage("user", trimmed);
@@ -392,6 +860,47 @@ export function QuickAddChat({
 
     if (step === "input") {
       if (!trimmed) return;
+      const normalizedInput = normalizeName(trimmed);
+      if (normalizedInput === "template list" || normalizedInput === "templates") {
+        if (!templates.length) {
+          appendMessage("assistant", "No templates yet.");
+        } else {
+          appendMessage(
+            "assistant",
+            `Templates: ${templates.map((tpl) => tpl.name).join(", ")}`,
+          );
+        }
+        setInputValue("");
+        return;
+      }
+
+      if (normalizedInput.startsWith("template ")) {
+        const templateName = normalizedInput.replace(/^template\s+/, "").trim();
+        const matched = templates.find(
+          (tpl) => normalizeName(tpl.name) === templateName,
+        );
+        if (!matched) {
+          appendMessage("assistant", "Template not found.");
+          return;
+        }
+        applyTemplate(matched);
+        return;
+      }
+
+      const matchedTemplate = templates.find(
+        (tpl) => normalizeName(tpl.name) === normalizedInput,
+      );
+      if (matchedTemplate) {
+        applyTemplate(matchedTemplate);
+        return;
+      }
+      setRecentPrompts((prev) => {
+        const next = [
+          trimmed,
+          ...prev.filter((prompt) => normalizeName(prompt) !== normalizedInput),
+        ];
+        return next.slice(0, 3);
+      });
       await handleParseInput(trimmed);
       setInputValue("");
       return;
@@ -416,7 +925,15 @@ export function QuickAddChat({
         appendMessage("assistant", "Please enter a valid amount.");
         return;
       }
-      const nextDraft = { ...draft, amount };
+      const nextDraft = {
+        ...draft,
+        amount,
+        cashbackMode: resolveCashbackMode(
+          draft.sourceAccount,
+          draft.cashbackSharePercent,
+          draft.cashbackShareFixed,
+        ),
+      };
       setDraft(nextDraft);
       goToStep(computeNextStep(nextDraft));
       setInputValue("");
@@ -433,31 +950,62 @@ export function QuickAddChat({
         .map((part) => findByName(groups, part))
         .find(Boolean) as Person | undefined;
       if (matchedGroup) {
-        const nextDraft = {
+        let nextDraft: QuickAddDraft = {
           ...draft,
           group: matchedGroup,
           people: [],
           splitBill: true,
-          splitBillConfirmed: false,
+          splitBillConfirmed: true,
         };
+        nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+          groupMembers,
+          people: individualPeople,
+        });
+        nextDraft.cashbackMode = resolveCashbackMode(
+          nextDraft.sourceAccount,
+          nextDraft.cashbackSharePercent,
+          nextDraft.cashbackShareFixed,
+        );
         setDraft(nextDraft);
         goToStep(computeNextStep(nextDraft));
         setInputValue("");
         return;
       }
-      const matchedPeople = parts
-        .map((part) => findByName(individualPeople, part))
-        .filter((person): person is Person => Boolean(person));
+      const matchedPeople = dedupeById(
+        parts
+          .map((part) => findByName(individualPeople, part))
+          .filter((person): person is Person => Boolean(person)),
+      );
       if (matchedPeople.length === 0) {
         appendMessage("assistant", "I couldn't find those people.");
         return;
       }
-      const nextDraft = {
+      if (draft.splitBill === false && matchedPeople.length > 1) {
+        appendMessage("assistant", "Choose a single person for no split.");
+        return;
+      }
+      let nextDraft: QuickAddDraft = {
         ...draft,
         people: matchedPeople,
         group: null,
-        splitBill: matchedPeople.length > 1 ? true : draft.splitBill,
+        splitBill:
+          matchedPeople.length > 1
+            ? true
+            : draft.splitBill === false
+              ? false
+              : false,
+        splitBillConfirmed:
+          matchedPeople.length > 1 ? false : true,
       };
+      nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+        groupMembers,
+        people: individualPeople,
+      });
+      nextDraft.cashbackMode = resolveCashbackMode(
+        nextDraft.sourceAccount,
+        nextDraft.cashbackSharePercent,
+        nextDraft.cashbackShareFixed,
+      );
       setDraft(nextDraft);
       goToStep(computeNextStep(nextDraft));
       setInputValue("");
@@ -465,12 +1013,65 @@ export function QuickAddChat({
     }
 
     if (step === "account") {
-      const account = findByName(accounts, trimmed);
-      if (!account) {
-        appendMessage("assistant", "I couldn't find that account.");
+      const normalized = normalizeName(trimmed);
+      const isConfirmAnswer = ["yes", "y", "ok", "okay", "no", "n", "change", "different"].includes(normalized);
+      if (!isConfirmAnswer) {
+        setAccountQuery(trimmed);
+      }
+      const candidates =
+        accountCandidates.length > 0
+          ? accountCandidates
+          : findAccountCandidates(trimmed, selectableAccounts);
+      if (candidates.length > 1 && accountCandidates.length === 0) {
+        setAccountCandidates(candidates);
+        appendMessage("assistant", "Multiple accounts match. Please choose one.");
         return;
       }
+      if (draft.sourceAccount && !draft.sourceAccountConfirmed) {
+        if (["yes", "y", "ok", "okay"].includes(normalized)) {
+          const nextDraft = { ...draft, sourceAccountConfirmed: true };
+          setDraft(nextDraft);
+          setAccountCandidates([]);
+          goToStep(computeNextStep(nextDraft));
+          setInputValue("");
+          return;
+        }
+        if (["no", "n", "change", "different"].includes(normalized)) {
+          const nextDraft = {
+            ...draft,
+            sourceAccount: null,
+            sourceAccountConfirmed: false,
+          };
+          setDraft(nextDraft);
+          setInputValue("");
+          lastPromptedStep.current = null;
+          appendMessage("assistant", "Okay, pick another account.");
+          return;
+        }
+      }
+      const account =
+        candidates.length === 1
+          ? candidates[0]
+          : pickCandidateByIndex(trimmed, candidates) ?? findByName(candidates, trimmed);
+      if (!account) {
+        if (draft.sourceAccount && !draft.sourceAccountConfirmed) {
+          appendMessage(
+            "assistant",
+            "Reply yes to confirm, or choose another account.",
+          );
+        } else {
+          appendMessage("assistant", "I couldn't find that account.");
+        }
+        return;
+      }
+      setAccountCandidates([]);
       const nextDraft = { ...draft, sourceAccount: account };
+      nextDraft.sourceAccountConfirmed = true;
+      nextDraft.cashbackMode = resolveCashbackMode(
+        account,
+        nextDraft.cashbackSharePercent,
+        nextDraft.cashbackShareFixed,
+      );
       setDraft(nextDraft);
       goToStep(computeNextStep(nextDraft));
       setInputValue("");
@@ -478,7 +1079,24 @@ export function QuickAddChat({
     }
 
     if (step === "transfer_destination") {
-      const account = findByName(accounts, trimmed);
+      const candidates =
+        destinationCandidates.length > 0
+          ? destinationCandidates
+          : findAccountCandidates(trimmed, selectableAccounts);
+      if (candidates.length > 1 && destinationCandidates.length === 0) {
+        setDestinationCandidates(candidates);
+        appendMessage(
+          "assistant",
+          `Multiple destinations match: ${candidates
+            .map((account) => account.name)
+            .join(", ")}.`,
+        );
+        return;
+      }
+      const account =
+        candidates.length === 1
+          ? candidates[0]
+          : pickCandidateByIndex(trimmed, candidates) ?? findByName(candidates, trimmed);
       if (!account) {
         appendMessage("assistant", "I couldn't find that account.");
         return;
@@ -490,29 +1108,8 @@ export function QuickAddChat({
         );
         return;
       }
+      setDestinationCandidates([]);
       const nextDraft = { ...draft, destinationAccount: account };
-      setDraft(nextDraft);
-      goToStep(computeNextStep(nextDraft));
-      setInputValue("");
-      return;
-    }
-
-    if (step === "date") {
-      const parsedDate = parseDateValue(trimmed);
-      if (!parsedDate) {
-        appendMessage("assistant", "Please use YYYY-MM-DD or 'today'.");
-        return;
-      }
-      const nextDraft = { ...draft, occurredAt: parsedDate };
-      setDraft(nextDraft);
-      goToStep(computeNextStep(nextDraft));
-      setInputValue("");
-      return;
-    }
-
-    if (step === "note") {
-      const noteValue = trimmed || "";
-      const nextDraft = { ...draft, note: noteValue };
       setDraft(nextDraft);
       goToStep(computeNextStep(nextDraft));
       setInputValue("");
@@ -534,19 +1131,313 @@ export function QuickAddChat({
       appendMessage("assistant", "Please answer yes or no.");
       return;
     }
+
+    if (step === "review") {
+      const normalized = normalizeName(trimmed);
+      const noteMatch = trimmed.match(/^(note|ghi\s*chu)[:\-\s]+(.+)$/i);
+      const amountValue = extractAmountFromText(trimmed);
+      if (
+        amountValue &&
+        (normalized.includes("amount") || normalized.includes("so tien") || normalized.startsWith("sua"))
+      ) {
+        const nextDraft = { ...draft, amount: amountValue };
+        setDraft(nextDraft);
+        appendMessage("assistant", `Updated amount to ${amountValue.toLocaleString()}.`);
+        setInputValue("");
+        return;
+      }
+      if (noteMatch && noteMatch[2]) {
+        const nextNote = noteMatch[2].trim();
+        const nextDraft = { ...draft, note: nextNote };
+        setDraft(nextDraft);
+        appendMessage("assistant", "Updated note.");
+        setInputValue("");
+        return;
+      }
+      if (
+        normalized.includes("account") ||
+        normalized.includes("the") ||
+        normalized.includes("card")
+      ) {
+        const candidates = findAccountCandidates(trimmed, selectableAccounts);
+        if (candidates.length === 0) {
+          appendMessage("assistant", "I couldn't find that account.");
+          return;
+        }
+        if (candidates.length > 1) {
+          setAccountCandidates(candidates);
+          setAccountQuery(trimmed);
+          appendMessage("assistant", "Multiple accounts match. Please choose one.");
+          goToStep("account");
+          setInputValue("");
+          return;
+        }
+        const account = candidates[0];
+        const nextDraft = {
+          ...draft,
+          sourceAccount: account,
+          sourceAccountConfirmed: true,
+          cashbackMode: resolveCashbackMode(
+            account,
+            draft.cashbackSharePercent,
+            draft.cashbackShareFixed,
+          ),
+        };
+        setDraft(nextDraft);
+        appendMessage("assistant", `Updated account to ${account.name}.`);
+        setInputValue("");
+        return;
+      }
+      appendMessage(
+        "assistant",
+        "You can edit amount, note, or account here. Example: amount 200k, note Zakka, or account Vib.",
+      );
+      return;
+    }
   };
 
   const handleSplitConfirm = (value: boolean) => {
     if (!isDebtIntent) return;
-    if (draft.group && !value) return;
+    if (draft.group && !value) {
+      appendMessage("assistant", "Groups must use split bill.");
+      return;
+    }
     if (!value && draft.people.length > 1) {
       appendMessage("assistant", "Choose a single person for no split.");
+      const nextDraft = { ...draft, splitBill: false, splitBillConfirmed: false };
+      setDraft(nextDraft);
       goToStep("who");
       return;
     }
     const nextDraft = { ...draft, splitBill: value, splitBillConfirmed: true };
     setDraft(nextDraft);
     goToStep(computeNextStep(nextDraft));
+  };
+
+  const applyTemplate = (template: QuickAddTemplate) => {
+    const payload = template.payload ?? {};
+    const sourceAccount =
+      accounts.find((account) => account.id === payload.source_account_id) ?? null;
+    const destinationAccount =
+      accounts.find((account) => account.id === payload.destination_account_id) ??
+      null;
+    const group =
+      payload.group_id
+        ? groups.find((item) => item.id === payload.group_id) ?? null
+        : null;
+    const resolvedPeople = (payload.person_ids ?? [])
+      .map((id) => individualPeople.find((person) => person.id === id))
+      .filter((person): person is Person => Boolean(person));
+    const shop =
+      payload.shop_id
+        ? shops.find((item) => item.id === payload.shop_id) ?? null
+        : null;
+    const category =
+      payload.category_id
+        ? categories.find((item) => item.id === payload.category_id) ?? null
+        : null;
+
+    let nextDraft: QuickAddDraft = {
+      ...buildInitialDraft(),
+      intent: payload.intent ?? null,
+      amount: null,
+      group,
+      people: group ? [] : resolvedPeople,
+      sourceAccount,
+      sourceAccountConfirmed: Boolean(sourceAccount),
+      destinationAccount,
+      note: payload.note ?? "",
+      splitBill:
+        payload.split_bill ?? (group ? true : resolvedPeople.length > 1 ? true : null),
+      splitBillConfirmed:
+        payload.split_bill !== null || Boolean(group) || resolvedPeople.length > 1,
+      shop,
+      category,
+      cashbackSharePercent: payload.cashback_share_percent ?? null,
+      cashbackShareFixed: payload.cashback_share_fixed ?? null,
+      cashbackMode: payload.cashback_mode ?? null,
+    };
+
+    nextDraft = applyContextPerson(nextDraft, contextPerson);
+    nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+      groupMembers,
+      people: individualPeople,
+    });
+    nextDraft.cashbackMode =
+      payload.cashback_mode ??
+      resolveCashbackMode(
+        sourceAccount,
+        nextDraft.cashbackSharePercent,
+        nextDraft.cashbackShareFixed,
+      );
+
+    setDraft(nextDraft);
+    setInputValue("");
+    setAccountCandidates([]);
+    setAccountQuery(sourceAccount?.name ?? "");
+    setDestinationCandidates([]);
+    appendMessage("assistant", `Template "${template.name}" loaded.`);
+    lastPromptedStep.current = null;
+    setStep(computeNextStep(nextDraft));
+  };
+
+  const saveTemplate = async () => {
+    const name = templateName.trim();
+    if (!name) return;
+    setIsSavingTemplate(true);
+    setTemplateError(null);
+    try {
+      const payload: QuickAddTemplatePayload = {
+        intent: draft.intent ?? null,
+        source_account_id: draft.sourceAccount?.id ?? null,
+        destination_account_id: draft.destinationAccount?.id ?? null,
+        person_ids: draft.people.map((person) => person.id),
+        group_id: draft.group?.id ?? null,
+        category_id: draft.category?.id ?? null,
+        shop_id: draft.shop?.id ?? null,
+        note: draft.note ?? "",
+        split_bill: draft.splitBill ?? null,
+        cashback_share_percent: draft.cashbackSharePercent ?? null,
+        cashback_share_fixed: draft.cashbackShareFixed ?? null,
+        cashback_mode: draft.cashbackMode ?? null,
+      };
+      const response = await fetch("/api/ai/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, payload }),
+      });
+      if (!response.ok) {
+        throw new Error("Failed to save template");
+      }
+      await loadTemplates();
+      setTemplateName("");
+      appendMessage("assistant", `Template "${name}" saved.`);
+    } catch (error) {
+      setTemplateError("Failed to save template.");
+    } finally {
+      setIsSavingTemplate(false);
+    }
+  };
+
+  const submitNow = async () => {
+    if (isSubmittingNow) return;
+    setSubmitError(null);
+
+    if (!draft.intent) {
+      setSubmitError("Select a transaction type first.");
+      return;
+    }
+    if (!draft.amount || draft.amount <= 0) {
+      setSubmitError("Add a valid amount first.");
+      return;
+    }
+    if (!draft.sourceAccount) {
+      setSubmitError("Choose an account first.");
+      return;
+    }
+    if (draft.intent === "transfer" && !draft.destinationAccount) {
+      setSubmitError("Choose a destination account.");
+      return;
+    }
+    if (isDebtIntent && !draft.group && draft.people.length === 0) {
+      setSubmitError("Pick a person or group.");
+      return;
+    }
+
+    const type: TransactionFormValues["type"] =
+      draft.intent === "lend"
+        ? "debt"
+        : draft.intent === "repay"
+          ? "repayment"
+          : draft.intent;
+
+    let personIds = draft.people.map((person) => person.id);
+    const groupId = draft.group?.id ?? null;
+    if (groupId) {
+      const members = groupMembers.get(groupId) ?? [];
+      const owner = people.find((person) => person.is_owner);
+      let memberIds = members.map((member) => member.id);
+      if (type === "debt" && owner && !memberIds.includes(owner.id)) {
+        memberIds = [...memberIds, owner.id];
+      }
+      if (type === "repayment" && owner) {
+        memberIds = memberIds.filter((id) => id !== owner.id);
+      }
+      personIds = memberIds;
+    }
+
+    const splitEnabled =
+      (type === "debt" || type === "repayment") &&
+      draft.splitBill === true &&
+      personIds.length > 1;
+
+    const cashbackMode =
+      draft.cashbackMode ??
+      resolveCashbackMode(
+        draft.sourceAccount,
+        draft.cashbackSharePercent,
+        draft.cashbackShareFixed,
+      );
+
+    const payload = {
+      type,
+      amount: draft.amount,
+      occurred_at: (draft.occurredAt ?? new Date()).toISOString(),
+      note: draft.note ?? "",
+      source_account_id: draft.sourceAccount.id,
+      destination_account_id:
+        type === "transfer" ? draft.destinationAccount?.id ?? null : null,
+      person_ids: personIds,
+      group_id: groupId,
+      split_bill: splitEnabled,
+      category_id: draft.category?.id ?? null,
+      shop_id: draft.shop?.id ?? null,
+      cashback_share_percent:
+        draft.cashbackSharePercent !== null
+          ? draft.cashbackSharePercent / 100
+          : null,
+      cashback_share_fixed: draft.cashbackShareFixed ?? null,
+      cashback_mode: cashbackMode,
+    };
+
+    setIsSubmittingNow(true);
+    try {
+      const response = await fetch("/api/transactions/quick-add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        const data = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(data?.error ?? "Failed to save transaction.");
+      }
+      const data = (await response.json().catch(() => null)) as
+        | { id?: string }
+        | null;
+      const createdId = data?.id ?? null;
+      appendMessage("assistant", "Done! Transaction saved.");
+      if (createdId) {
+        router.push(`/transactions/temp-${createdId}`);
+      } else {
+        router.refresh();
+      }
+      setDraft(buildInitialDraft());
+      setStep("input");
+      setInputValue("");
+      setAccountCandidates([]);
+      setDestinationCandidates([]);
+      setReviewEditField(null);
+      setReviewEditValue("");
+      setReviewEditSecondaryValue("");
+      historyRef.current = [];
+      lastPromptedStep.current = null;
+    } catch (error: any) {
+      setSubmitError(error?.message ?? "Failed to save transaction.");
+    } finally {
+      setIsSubmittingNow(false);
+    }
   };
 
   const confirmAndOpenForm = () => {
@@ -559,6 +1450,13 @@ export function QuickAddChat({
         : draft.intent === "repay"
           ? "repayment"
           : draft.intent;
+    const cashbackMode =
+      draft.cashbackMode ??
+      resolveCashbackMode(
+        draft.sourceAccount,
+        draft.cashbackSharePercent,
+        draft.cashbackShareFixed,
+      );
     const splitEnabled = draft.splitBill === true && (type === "debt" || type === "repayment");
     const initialValues: QuickAddInitialValues = {
       type,
@@ -569,6 +1467,14 @@ export function QuickAddChat({
       source_account_id: draft.sourceAccount?.id,
       debt_account_id:
         type === "transfer" ? draft.destinationAccount?.id : undefined,
+      category_id: draft.category?.id ?? undefined,
+      shop_id: draft.shop?.id ?? undefined,
+      cashback_share_percent:
+        draft.cashbackSharePercent !== null
+          ? draft.cashbackSharePercent / 100
+          : undefined,
+      cashback_share_fixed: draft.cashbackShareFixed ?? undefined,
+      cashback_mode: cashbackMode ?? undefined,
       person_id:
         type === "debt" || type === "repayment"
           ? splitEnabled
@@ -589,6 +1495,210 @@ export function QuickAddChat({
     setTransactionDialogOpen(true);
   };
 
+  const closeReviewEdit = () => {
+    setReviewEditField(null);
+    setReviewEditValue("");
+    setReviewEditSecondaryValue("");
+  };
+
+  const startReviewEdit = (field: ReviewEditField) => {
+    setSubmitError(null);
+    setReviewEditField(field);
+    setReviewEditValue("");
+    setReviewEditSecondaryValue("");
+    if (field === "amount") {
+      setReviewEditValue(draft.amount ? `${draft.amount}` : "");
+      return;
+    }
+    if (field === "date") {
+      setReviewEditValue(
+        draft.occurredAt ? draft.occurredAt.toISOString().slice(0, 10) : "",
+      );
+      return;
+    }
+    if (field === "note") {
+      setReviewEditValue(draft.note ?? "");
+      return;
+    }
+    if (field === "back") {
+      setReviewEditValue(
+        draft.cashbackSharePercent !== null ? `${draft.cashbackSharePercent}` : "",
+      );
+      setReviewEditSecondaryValue(
+        draft.cashbackShareFixed !== null ? `${draft.cashbackShareFixed}` : "",
+      );
+    }
+  };
+
+  const commitAmountEdit = () => {
+    const parsed = parseAmount(reviewEditValue);
+    if (!parsed || parsed <= 0) {
+      setSubmitError("Amount must be a positive number.");
+      return;
+    }
+    setDraft({ ...draft, amount: parsed });
+    closeReviewEdit();
+  };
+
+  const commitDateEdit = () => {
+    if (!reviewEditValue) {
+      setSubmitError("Pick a valid date.");
+      return;
+    }
+    const nextDate = new Date(`${reviewEditValue}T12:00:00`);
+    if (Number.isNaN(nextDate.getTime())) {
+      setSubmitError("Pick a valid date.");
+      return;
+    }
+    setDraft({ ...draft, occurredAt: nextDate });
+    closeReviewEdit();
+  };
+
+  const commitNoteEdit = () => {
+    setDraft({ ...draft, note: reviewEditValue });
+    closeReviewEdit();
+  };
+
+  const commitBackEdit = () => {
+    const percentValue =
+      reviewEditValue.trim() === ""
+        ? null
+        : Number(reviewEditValue.trim());
+    const fixedValue =
+      reviewEditSecondaryValue.trim() === ""
+        ? null
+        : Number(reviewEditSecondaryValue.trim());
+    const percent = Number.isFinite(percentValue) ? percentValue : null;
+    const fixed = Number.isFinite(fixedValue) ? fixedValue : null;
+    const nextDraft = {
+      ...draft,
+      cashbackSharePercent: percent,
+      cashbackShareFixed: fixed,
+      cashbackMode: resolveCashbackMode(draft.sourceAccount, percent, fixed),
+    };
+    setDraft(nextDraft);
+    closeReviewEdit();
+  };
+
+  const handleReviewAccountChange = (value?: string) => {
+    if (!value) return;
+    const account = selectableAccounts.find((item) => item.id === value);
+    if (!account) return;
+    const nextDraft = {
+      ...draft,
+      sourceAccount: account,
+      sourceAccountConfirmed: true,
+      cashbackMode: resolveCashbackMode(
+        account,
+        draft.cashbackSharePercent,
+        draft.cashbackShareFixed,
+      ),
+    };
+    setDraft(nextDraft);
+    closeReviewEdit();
+  };
+
+  const handleReviewDestinationChange = (value?: string) => {
+    if (!value) return;
+    const account = selectableAccounts.find((item) => item.id === value);
+    if (!account) return;
+    if (draft.sourceAccount && account.id === draft.sourceAccount.id) {
+      setSubmitError("Destination must be different from the source account.");
+      return;
+    }
+    setDraft({ ...draft, destinationAccount: account });
+    closeReviewEdit();
+  };
+
+  const handleReviewWhoChange = (value?: string) => {
+    if (!value) return;
+    const group = groups.find((item) => item.id === value);
+    if (group) {
+      let nextDraft: QuickAddDraft = {
+        ...draft,
+        group,
+        people: [],
+        splitBill: true,
+        splitBillConfirmed: true,
+      };
+      nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+        groupMembers,
+        people: individualPeople,
+      });
+      nextDraft.cashbackMode = resolveCashbackMode(
+        nextDraft.sourceAccount,
+        nextDraft.cashbackSharePercent,
+        nextDraft.cashbackShareFixed,
+      );
+      setDraft(nextDraft);
+      closeReviewEdit();
+      return;
+    }
+    const person = individualPeople.find((item) => item.id === value);
+    if (!person) return;
+    let nextDraft: QuickAddDraft = {
+      ...draft,
+      group: null,
+      people: [person],
+      splitBill: false,
+      splitBillConfirmed: true,
+    };
+    nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+      groupMembers,
+      people: individualPeople,
+    });
+    nextDraft.cashbackMode = resolveCashbackMode(
+      nextDraft.sourceAccount,
+      nextDraft.cashbackSharePercent,
+      nextDraft.cashbackShareFixed,
+    );
+    setDraft(nextDraft);
+    closeReviewEdit();
+  };
+
+  const handleReviewCategoryChange = (value?: string) => {
+    if (!value) return;
+    const category = categories.find((item) => item.id === value) ?? null;
+    setDraft({ ...draft, category });
+    closeReviewEdit();
+  };
+
+  const handleReviewShopChange = (value?: string) => {
+    if (!value) return;
+    const shop = shops.find((item) => item.id === value) ?? null;
+    setDraft({ ...draft, shop });
+    closeReviewEdit();
+  };
+
+  const handleReviewTypeChange = (intent: ParseTransactionIntent) => {
+    let nextDraft: QuickAddDraft = { ...draft, intent };
+    nextDraft = applyContextPerson(nextDraft, contextPerson);
+    nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+      groupMembers,
+      people: individualPeople,
+    });
+    nextDraft.cashbackMode = resolveCashbackMode(
+      nextDraft.sourceAccount,
+      nextDraft.cashbackSharePercent,
+      nextDraft.cashbackShareFixed,
+    );
+    setDraft(nextDraft);
+    closeReviewEdit();
+  };
+
+  const handleReviewSplitChange = (value: boolean) => {
+    if (draft.group && !value) {
+      setSubmitError("Groups must use split bill.");
+      return;
+    }
+    if (!value && draft.people.length > 1) {
+      setSubmitError("Choose a single person for no split.");
+      return;
+    }
+    setDraft({ ...draft, splitBill: value, splitBillConfirmed: true });
+    closeReviewEdit();
+  };
+
   const handleBack = () => {
     const prev = historyRef.current.pop();
     if (!prev) return;
@@ -596,6 +1706,64 @@ export function QuickAddChat({
   };
 
   const renderQuickPicks = () => {
+    if (step === "input") {
+      if (isTemplateLoading) {
+        return (
+          <div className="text-xs text-slate-500">
+            Loading templates...
+          </div>
+        );
+      }
+      return (
+        <div className="space-y-2">
+          {templates.length > 0 && (
+            <>
+              <div className="text-xs font-semibold text-slate-500">
+                Templates
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {templates.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
+                    onClick={() => {
+                      appendMessage("user", template.name);
+                      applyTemplate(template);
+                    }}
+                  >
+                    {template.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+          {recentPrompts.length > 0 && (
+            <>
+              <div className="text-xs font-semibold text-slate-500">
+                Recent prompts
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {recentPrompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
+                    onClick={() => {
+                      appendMessage("user", prompt);
+                      void handleParseInput(prompt);
+                    }}
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      );
+    }
+
     if (step === "type") {
       return (
         <div className="flex flex-wrap gap-2">
@@ -606,7 +1774,17 @@ export function QuickAddChat({
               className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
               onClick={() => {
                 appendMessage("user", option.label);
-                const nextDraft = { ...draft, intent: option.intent };
+                let nextDraft: QuickAddDraft = { ...draft, intent: option.intent };
+                nextDraft = applyContextPerson(nextDraft, contextPerson);
+                nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+                  groupMembers,
+                  people: individualPeople,
+                });
+                nextDraft.cashbackMode = resolveCashbackMode(
+                  nextDraft.sourceAccount,
+                  nextDraft.cashbackSharePercent,
+                  nextDraft.cashbackShareFixed,
+                );
                 setDraft(nextDraft);
                 goToStep(computeNextStep(nextDraft));
               }}
@@ -630,13 +1808,22 @@ export function QuickAddChat({
                   className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
                   onClick={() => {
                     appendMessage("user", group.name);
-                    const nextDraft = {
+                    let nextDraft: QuickAddDraft = {
                       ...draft,
                       group,
                       people: [],
                       splitBill: true,
-                      splitBillConfirmed: false,
+                      splitBillConfirmed: true,
                     };
+                    nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+                      groupMembers,
+                      people: individualPeople,
+                    });
+                    nextDraft.cashbackMode = resolveCashbackMode(
+                      nextDraft.sourceAccount,
+                      nextDraft.cashbackSharePercent,
+                      nextDraft.cashbackShareFixed,
+                    );
                     setDraft(nextDraft);
                     goToStep(computeNextStep(nextDraft));
                   }}
@@ -647,22 +1834,33 @@ export function QuickAddChat({
             </div>
           )}
           <div className="flex flex-wrap gap-2">
-            {recentPeople.map((person) => (
-              <button
-                key={person.id}
-                type="button"
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
-                onClick={() => {
-                  appendMessage("user", person.name);
-                  const nextDraft = {
-                    ...draft,
-                    people: [person],
-                    group: null,
-                  };
-                  setDraft(nextDraft);
-                  goToStep(computeNextStep(nextDraft));
-                }}
-              >
+              {recentPeople.map((person) => (
+                <button
+                  key={person.id}
+                  type="button"
+                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
+                  onClick={() => {
+                    appendMessage("user", person.name);
+                    let nextDraft: QuickAddDraft = {
+                      ...draft,
+                      people: [person],
+                      group: null,
+                      splitBill: false,
+                      splitBillConfirmed: true,
+                    };
+                    nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+                      groupMembers,
+                      people: individualPeople,
+                    });
+                    nextDraft.cashbackMode = resolveCashbackMode(
+                      nextDraft.sourceAccount,
+                      nextDraft.cashbackSharePercent,
+                      nextDraft.cashbackShareFixed,
+                    );
+                    setDraft(nextDraft);
+                    goToStep(computeNextStep(nextDraft));
+                  }}
+                >
                 {person.name}
               </button>
             ))}
@@ -672,17 +1870,64 @@ export function QuickAddChat({
     }
 
     if (step === "account") {
-      return (
+      const query = accountQuery.trim();
+      const filteredAccounts = query
+        ? findAccountCandidates(query, selectableAccounts)
+        : accountCandidates.length > 0
+          ? accountCandidates
+          : recentAccounts;
+      const searchInput = (
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            value={accountQuery}
+            onChange={(event) => setAccountQuery(event.target.value)}
+            placeholder="Search account..."
+            className="h-9 pl-9 text-sm"
+          />
+        </div>
+      );
+      const quickFilters = vibAccounts.length ? (
         <div className="flex flex-wrap gap-2">
-          {recentAccounts.map((account) => (
+          <button
+            type="button"
+            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
+            onClick={() => {
+              setAccountQuery("vib");
+              setAccountCandidates(vibAccounts);
+            }}
+          >
+            Vib
+          </button>
+        </div>
+      ) : null;
+      const accountList = filteredAccounts.length ? (
+        <div className="flex flex-wrap gap-2">
+          {filteredAccounts.map((account) => (
             <button
               key={account.id}
               type="button"
-              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs font-semibold",
+                account.id === draft.sourceAccount?.id
+                  ? "border-blue-300 bg-blue-50 text-blue-700"
+                  : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700",
+              )}
               onClick={() => {
                 appendMessage("user", account.name);
-                const nextDraft = { ...draft, sourceAccount: account };
+                setAccountQuery(account.name);
+                const nextDraft = {
+                  ...draft,
+                  sourceAccount: account,
+                  sourceAccountConfirmed: true,
+                  cashbackMode: resolveCashbackMode(
+                    account,
+                    draft.cashbackSharePercent,
+                    draft.cashbackShareFixed,
+                  ),
+                };
                 setDraft(nextDraft);
+                setAccountCandidates([]);
                 goToStep(computeNextStep(nextDraft));
               }}
             >
@@ -690,62 +1935,85 @@ export function QuickAddChat({
             </button>
           ))}
         </div>
+      ) : (
+        <div className="text-xs text-slate-500">No matching accounts.</div>
       );
-    }
 
-    if (step === "transfer_destination") {
-      return (
-        <div className="flex flex-wrap gap-2">
-          {recentAccounts
-            .filter((account) => account.id !== draft.sourceAccount?.id)
-            .map((account) => (
+      if (draft.sourceAccount && !draft.sourceAccountConfirmed) {
+        return (
+          <div className="space-y-2">
+            <div className="flex flex-wrap gap-2">
               <button
-                key={account.id}
                 type="button"
-                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
+                className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700"
                 onClick={() => {
-                  appendMessage("user", account.name);
-                  const nextDraft = { ...draft, destinationAccount: account };
+                  appendMessage("user", "Yes");
+                  const nextDraft = { ...draft, sourceAccountConfirmed: true };
                   setDraft(nextDraft);
+                  setAccountCandidates([]);
+                  setAccountQuery(nextDraft.sourceAccount?.name ?? "");
+                  lastPromptedStep.current = null;
                   goToStep(computeNextStep(nextDraft));
                 }}
               >
-                {account.name}
+                Yes
               </button>
-            ))}
+              <button
+                type="button"
+                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700"
+                onClick={() => {
+                  appendMessage("user", "Change");
+                  const nextDraft = {
+                    ...draft,
+                    sourceAccount: null,
+                    sourceAccountConfirmed: false,
+                  };
+                  setDraft(nextDraft);
+                  setAccountCandidates([]);
+                  lastPromptedStep.current = null;
+                  appendMessage("assistant", "Okay, pick another account.");
+                }}
+              >
+                Change
+              </button>
+            </div>
+            {searchInput}
+            {quickFilters}
+            {accountList}
+          </div>
+        );
+      }
+      return (
+        <div className="space-y-2">
+          {searchInput}
+          {quickFilters}
+          {accountList}
         </div>
       );
     }
 
-    if (step === "date") {
+    if (step === "transfer_destination") {
+      const list = destinationCandidates.length > 0
+        ? destinationCandidates
+        : recentAccounts.filter((account) => account.id !== draft.sourceAccount?.id);
       return (
         <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
-            onClick={() => {
-              appendMessage("user", "Today");
-              const nextDraft = { ...draft, occurredAt: new Date() };
-              setDraft(nextDraft);
-              goToStep(computeNextStep(nextDraft));
-            }}
-          >
-            Today
-          </button>
-          <button
-            type="button"
-            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
-            onClick={() => {
-              const date = new Date();
-              date.setDate(date.getDate() - 1);
-              appendMessage("user", "Yesterday");
-              const nextDraft = { ...draft, occurredAt: date };
-              setDraft(nextDraft);
-              goToStep(computeNextStep(nextDraft));
-            }}
-          >
-            Yesterday
-          </button>
+          {list.map((account) => (
+            <button
+              key={account.id}
+              type="button"
+              className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
+              onClick={() => {
+                appendMessage("user", account.name);
+                const nextDraft = { ...draft, destinationAccount: account };
+                setDestinationCandidates([]);
+                setDraft(nextDraft);
+                goToStep(computeNextStep(nextDraft));
+              }}
+            >
+              {account.name}
+            </button>
+          ))}
         </div>
       );
     }
@@ -762,7 +2030,10 @@ export function QuickAddChat({
                 ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                 : "border-slate-200 bg-white text-slate-700",
             )}
-            onClick={() => handleSplitConfirm(true)}
+            onClick={() => {
+              appendMessage("user", "Yes");
+              handleSplitConfirm(true);
+            }}
           >
             Split
           </button>
@@ -776,7 +2047,10 @@ export function QuickAddChat({
                 : "border-slate-200 bg-white text-slate-700",
               splitDisabled && "opacity-50 cursor-not-allowed",
             )}
-            onClick={() => handleSplitConfirm(false)}
+            onClick={() => {
+              appendMessage("user", "No");
+              handleSplitConfirm(false);
+            }}
           >
             No split
           </button>
@@ -788,171 +2062,587 @@ export function QuickAddChat({
   };
 
   const renderReview = () => {
-    const groupCount = draft.group
-      ? groupMembers.get(draft.group.id)?.length ?? 0
-      : 0;
     const whoLabel = draft.group
       ? draft.group.name
       : draft.people.length > 0
         ? draft.people.map((person) => person.name).join(", ")
         : "-";
-    const splitLabel = isDebtIntent
-      ? draft.splitBill
-        ? draft.group
-          ? `On (Group • ${groupCount} people)`
-          : "On"
-        : "Off"
-      : "N/A";
+    const splitLabel = formatSplitLabel(draft);
+    const cashbackLabel = formatCashbackLabel(draft);
+    const activePersonValue = draft.group?.id ?? draft.people[0]?.id ?? undefined;
+
+    const renderRow = ({
+      field,
+      label,
+      value,
+      editor,
+      editable = true,
+    }: {
+      field: ReviewEditField;
+      label: string;
+      value: string;
+      editor?: ReactNode;
+      editable?: boolean;
+    }) => {
+      const isEditing = reviewEditField === field;
+      return (
+        <div className={cn("space-y-2", isEditing && "lg:col-span-2")}>
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-start">
+            <span className="text-xs font-semibold text-slate-600 sm:w-24 sm:shrink-0">
+              {label}
+            </span>
+            <div className="flex items-start gap-2 sm:flex-1 sm:justify-end">
+              <span className="text-sm text-slate-900 break-words sm:text-right">
+                {value}
+              </span>
+              {editable ? (
+                <button
+                  type="button"
+                  className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-600"
+                  onClick={() => startReviewEdit(field)}
+                  aria-label={`Edit ${label}`}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              ) : (
+                <span className="h-6 w-6" />
+              )}
+            </div>
+          </div>
+          {isEditing && editor && (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+              {editor}
+            </div>
+          )}
+        </div>
+      );
+    };
 
     return (
       <div className="space-y-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-          <div className="flex items-center justify-between">
-            <span className="font-semibold">Type</span>
-            <span className="capitalize">{draft.intent ?? "-"}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="font-semibold">Amount</span>
-            <span>{draft.amount?.toLocaleString() ?? "-"}</span>
-          </div>
-          {isDebtIntent && (
-            <div className="flex items-center justify-between">
-              <span className="font-semibold">Who</span>
-              <span>{whoLabel}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between">
-            <span className="font-semibold">Account</span>
-            <span>{draft.sourceAccount?.name ?? "-"}</span>
-          </div>
-          {draft.intent === "transfer" && (
-            <div className="flex items-center justify-between">
-              <span className="font-semibold">Destination</span>
-              <span>{draft.destinationAccount?.name ?? "-"}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between">
-            <span className="font-semibold">Date</span>
-            <span>
-              {draft.occurredAt
-                ? draft.occurredAt.toISOString().slice(0, 10)
-                : "-"}
-            </span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="font-semibold">Note</span>
-            <span>{draft.note || "-"}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="font-semibold">Split Bill</span>
-            <span>{splitLabel}</span>
+          <div className="grid gap-3 lg:grid-cols-2">
+            {renderRow({
+              field: "type",
+              label: "Type",
+              value: formatIntentLabel(draft.intent),
+              editor: (
+              <div className="flex flex-wrap gap-2">
+                {quickTypeOptions.map((option) => (
+                  <button
+                    key={option.intent}
+                    type="button"
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-semibold",
+                      draft.intent === option.intent
+                        ? "border-blue-300 bg-blue-50 text-blue-700"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700",
+                    )}
+                    onClick={() => handleReviewTypeChange(option.intent)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            ),
+          })}
+          {renderRow({
+            field: "amount",
+            label: "Amount",
+            value: draft.amount?.toLocaleString() ?? "-",
+            editor: (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                  value={reviewEditValue}
+                  onChange={(event) => setReviewEditValue(event.target.value)}
+                  placeholder="Amount"
+                  className="h-9 w-full sm:w-40"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="h-9 px-3 text-xs"
+                    onClick={commitAmountEdit}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="h-9 px-2 text-xs"
+                    onClick={closeReviewEdit}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ),
+          })}
+          {isDebtIntent &&
+            renderRow({
+              field: "who",
+              label: "Who",
+              value: whoLabel,
+              editor: (
+                <Combobox
+                  groups={personGroups}
+                  value={activePersonValue}
+                  onValueChange={handleReviewWhoChange}
+                  placeholder="Pick a person or group"
+                  inputPlaceholder="Search people..."
+                />
+              ),
+            })}
+          {renderRow({
+            field: "account",
+            label: "Account",
+            value: draft.sourceAccount?.name ?? "-",
+            editor: (
+              <Combobox
+                items={accountItems}
+                value={draft.sourceAccount?.id}
+                onValueChange={handleReviewAccountChange}
+                placeholder="Pick an account"
+                inputPlaceholder="Search accounts..."
+                tabs={[
+                  {
+                    value: "all",
+                    label: "All",
+                    onClick: () => setReviewAccountFilter("all"),
+                    active: reviewAccountFilter === "all",
+                  },
+                  {
+                    value: "vib",
+                    label: "Vib",
+                    onClick: () => setReviewAccountFilter("vib"),
+                    active: reviewAccountFilter === "vib",
+                  },
+                ]}
+              />
+            ),
+          })}
+          {draft.intent === "transfer" &&
+            renderRow({
+              field: "destination",
+              label: "Destination",
+              value: draft.destinationAccount?.name ?? "-",
+              editor: (
+                <Combobox
+                  items={accountItems}
+                  value={draft.destinationAccount?.id}
+                  onValueChange={handleReviewDestinationChange}
+                  placeholder="Pick a destination"
+                  inputPlaceholder="Search accounts..."
+                />
+              ),
+            })}
+          {renderRow({
+            field: "date",
+            label: "Date",
+            value: draft.occurredAt
+              ? draft.occurredAt.toISOString().slice(0, 10)
+              : "-",
+            editor: (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                  type="date"
+                  value={reviewEditValue}
+                  onChange={(event) => setReviewEditValue(event.target.value)}
+                  className="h-9 w-full sm:w-44"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="h-9 px-3 text-xs"
+                    onClick={commitDateEdit}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="h-9 px-2 text-xs"
+                    onClick={closeReviewEdit}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ),
+          })}
+          {renderRow({
+            field: "category",
+            label: "Category",
+            value: draft.category?.name ?? "-",
+            editor: (
+              <Combobox
+                items={categoryItems}
+                value={draft.category?.id}
+                onValueChange={handleReviewCategoryChange}
+                placeholder="Pick a category"
+                inputPlaceholder="Search categories..."
+              />
+            ),
+          })}
+          {renderRow({
+            field: "shop",
+            label: "Shop",
+            value: draft.shop?.name ?? "-",
+            editor: (
+              <Combobox
+                items={shopItems}
+                value={draft.shop?.id}
+                onValueChange={handleReviewShopChange}
+                placeholder="Pick a shop"
+                inputPlaceholder="Search shops..."
+              />
+            ),
+          })}
+          {renderRow({
+            field: "note",
+            label: "Note",
+            value: draft.note?.trim() ? draft.note : "-",
+            editor: (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                  value={reviewEditValue}
+                  onChange={(event) => setReviewEditValue(event.target.value)}
+                  placeholder="Note"
+                  className="h-9 w-full sm:min-w-[240px]"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="h-9 px-3 text-xs"
+                    onClick={commitNoteEdit}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="h-9 px-2 text-xs"
+                    onClick={closeReviewEdit}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ),
+          })}
+          {renderRow({
+            field: "back",
+            label: "Back",
+            value: cashbackLabel,
+            editor: (
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Input
+                  value={reviewEditValue}
+                  onChange={(event) => setReviewEditValue(event.target.value)}
+                  placeholder="Percent"
+                  className="h-9 w-full sm:w-28"
+                />
+                <Input
+                  value={reviewEditSecondaryValue}
+                  onChange={(event) =>
+                    setReviewEditSecondaryValue(event.target.value)
+                  }
+                  placeholder="Fixed"
+                  className="h-9 w-full sm:w-28"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="h-9 px-3 text-xs"
+                    onClick={commitBackEdit}
+                  >
+                    Save
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="h-9 px-2 text-xs"
+                    onClick={closeReviewEdit}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ),
+          })}
+          {renderRow({
+            field: "split",
+            label: "Split Bill",
+            value: splitLabel,
+            editable: isDebtIntent,
+            editor: isDebtIntent ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-semibold",
+                    draft.splitBill
+                      ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                      : "border-slate-200 bg-white text-slate-700",
+                  )}
+                  onClick={() => handleReviewSplitChange(true)}
+                >
+                  Split
+                </button>
+                <button
+                  type="button"
+                  disabled={Boolean(draft.group)}
+                  className={cn(
+                    "rounded-full border px-3 py-1 text-xs font-semibold",
+                    !draft.splitBill
+                      ? "border-rose-300 bg-rose-50 text-rose-700"
+                      : "border-slate-200 bg-white text-slate-700",
+                    draft.group && "cursor-not-allowed opacity-50",
+                  )}
+                  onClick={() => handleReviewSplitChange(false)}
+                >
+                  No split
+                </button>
+              </div>
+            ) : undefined,
+          })}
           </div>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
+          <div className="text-xs font-semibold text-slate-500">
+            Save as template
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              value={templateName}
+              onChange={(event) => setTemplateName(event.target.value)}
+              placeholder="Template name"
+            />
+            <Button
+              variant="outline"
+              onClick={saveTemplate}
+              disabled={isSavingTemplate || !templateName.trim()}
+            >
+              {isSavingTemplate ? "Saving..." : "Save"}
+            </Button>
+          </div>
+          {templateError && (
+            <div className="text-xs text-rose-600">
+              {templateError}
+            </div>
+          )}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
           <Button
             variant="outline"
             onClick={() => goToStep("type")}
-            className="gap-2"
+            className="gap-2 w-full"
           >
             <ArrowLeft className="h-4 w-4" />
             Edit
           </Button>
-          <Button onClick={confirmAndOpenForm} className="gap-2">
+          <Button
+            variant="outline"
+            onClick={submitNow}
+            disabled={isSubmittingNow}
+            className="gap-2 w-full"
+          >
             <Check className="h-4 w-4" />
-            Confirm & Open Form
+            {isSubmittingNow ? "Submitting..." : "Submit Now"}
+          </Button>
+          <Button onClick={confirmAndOpenForm} className="gap-2 w-full">
+            <Check className="h-4 w-4" />
+            Review in Modal
           </Button>
         </div>
+        {submitError && (
+          <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+            {submitError}
+          </div>
+        )}
       </div>
     );
   };
 
-  return (
+  const renderChatContent = () => (
     <>
-      <Button
-        onClick={openWizard}
-        className="gap-2"
-        variant="secondary"
-      >
-        <MessageSquareText className="h-4 w-4" />
-        Quick Add (Chat)
-      </Button>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-blue-500" />
-              Quick Add (Chat)
-            </DialogTitle>
-            <DialogDescription>
-              Describe a transaction, then confirm before creating it.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3 max-h-[320px] overflow-y-auto">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={cn(
-                  "max-w-[80%] rounded-2xl px-3 py-2 text-sm",
-                  message.role === "user"
-                    ? "ml-auto bg-blue-600 text-white"
-                    : "bg-white text-slate-700",
-                )}
-              >
-                {message.content}
-              </div>
-            ))}
-            <div ref={messagesEndRef} />
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3 max-h-[320px] overflow-y-auto">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={cn(
+              "max-w-[80%] rounded-2xl px-3 py-2 text-sm",
+              message.role === "user"
+                ? "ml-auto bg-blue-600 text-white"
+                : "bg-white text-slate-700",
+            )}
+          >
+            {message.content}
           </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
 
-          {parseError && (
-            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              {parseError}
-            </div>
-          )}
+      {parseError && (
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          {parseError}
+        </div>
+      )}
+      {templateError && step !== "review" && (
+        <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          {templateError}
+        </div>
+      )}
 
-          {step === "review" ? (
-            renderReview()
-          ) : (
-            <>
-              {renderQuickPicks()}
-              <div className="flex items-end gap-2">
-                <Textarea
-                  value={inputValue}
-                  onChange={(event) => setInputValue(event.target.value)}
-                  placeholder={
-                    step === "note"
-                      ? "Add a note or leave blank"
-                      : "Type your answer..."
-                  }
-                  className="min-h-[72px]"
-                />
-                <Button
-                  onClick={handleSubmitInput}
-                  disabled={isParsing}
-                  className="h-10"
-                >
-                  {isParsing ? "Parsing..." : "Send"}
-                </Button>
-              </div>
-              <div className="flex items-center justify-between">
+      {step === "review" ? (
+        renderReview()
+      ) : (
+        <>
+          {renderQuickPicks()}
+          <div className="flex items-end gap-2">
+            <Textarea
+              value={inputValue}
+              onChange={(event) => setInputValue(event.target.value)}
+              placeholder="Type your answer..."
+              className="min-h-[72px]"
+            />
+            <Button
+              onClick={handleSubmitInput}
+              disabled={isParsing}
+              className="h-10"
+            >
+              {isParsing ? "Parsing..." : "Send"}
+            </Button>
+          </div>
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              onClick={handleBack}
+              disabled={historyRef.current.length === 0}
+            >
+              Back
+            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={resetWizard} className="gap-2">
+                <X className="h-4 w-4" />
+                New chat
+              </Button>
+              {recentPrompts.length > 0 && (
                 <Button
                   variant="ghost"
-                  onClick={handleBack}
-                  disabled={historyRef.current.length === 0}
+                  onClick={() => setRecentPrompts([])}
+                  className="gap-2"
                 >
-                  Back
+                  Clear prompts
                 </Button>
-                <Button variant="outline" onClick={resetWizard} className="gap-2">
-                  <X className="h-4 w-4" />
-                  Reset
-                </Button>
-              </div>
-            </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+
+  return (
+    <>
+      {isFloating ? (
+        <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-3">
+          {!open && (
+            <button
+              type="button"
+              onClick={() => openWizard()}
+              className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg hover:border-blue-300 hover:text-blue-700"
+            >
+              <MessageSquareText className="h-4 w-4" />
+              Chat
+            </button>
           )}
-        </DialogContent>
-      </Dialog>
+          {open && isMinimized && (
+            <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-lg">
+              <button
+                type="button"
+                onClick={() => setIsMinimized(false)}
+                className="flex items-center gap-2"
+              >
+                <MessageSquareText className="h-4 w-4" />
+                Chat
+                {(unreadCount > 0 || messages.length > 0) && (
+                  <span className="text-blue-600">{`(+${unreadCount > 0 ? unreadCount : 1})`}</span>
+                )}
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-rose-300 hover:text-rose-600"
+                onClick={closeChat}
+                aria-label="Close chat"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+          {open && !isMinimized && (
+            <div
+              className={cn(
+                "flex max-h-[80vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl",
+                "w-[420px]",
+                "max-w-[calc(100vw-2rem)]",
+              )}
+            >
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                  <Sparkles className="h-4 w-4 text-blue-500" />
+                  Quick Add (Chat)
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsMinimized(true)}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-600"
+                    aria-label="Minimize chat"
+                  >
+                    <span className="text-base leading-none">–</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeChat}
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-rose-300 hover:text-rose-600"
+                    aria-label="Close chat"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {renderChatContent()}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <Button
+            onClick={() => openWizard(true)}
+            className="gap-2"
+            variant="secondary"
+          >
+            <MessageSquareText className="h-4 w-4" />
+            Quick Add (Chat)
+          </Button>
+
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent
+              className="max-w-3xl"
+            >
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-blue-500" />
+                  Quick Add (Chat)
+                </DialogTitle>
+                <DialogDescription>
+                  Describe a transaction, then confirm before creating it.
+                </DialogDescription>
+              </DialogHeader>
+              {renderChatContent()}
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
 
       <AddTransactionDialog
         accounts={accounts}
@@ -966,6 +2656,10 @@ export function QuickAddChat({
             setReviewValues(null);
           }
         }}
+        onBackToChat={() => {
+          setOpen(true);
+          setIsMinimized(false);
+        }}
         buttonClassName="hidden"
         buttonText="Quick Add"
         initialValues={reviewValues ?? undefined}
@@ -973,3 +2667,4 @@ export function QuickAddChat({
     </>
   );
 }
+

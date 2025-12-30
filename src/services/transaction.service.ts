@@ -399,6 +399,7 @@ function mapTransactionRow(
 }
 
 export async function loadTransactions(options: {
+  transactionId?: string;
   accountId?: string;
   personId?: string;
   personIds?: string[];
@@ -420,14 +421,18 @@ export async function loadTransactions(options: {
     query = query.neq("status", "void");
   }
 
-  if (options.personIds && options.personIds.length > 0) {
-    query = query.in("person_id", options.personIds);
-  } else if (options.personId) {
-    query = query.eq("person_id", options.personId);
-  } else if (options.accountId) {
-    query = query.or(
-      `account_id.eq.${options.accountId},target_account_id.eq.${options.accountId}`,
-    );
+  if (options.transactionId) {
+    query = query.eq("id", options.transactionId);
+  } else {
+    if (options.personIds && options.personIds.length > 0) {
+      query = query.in("person_id", options.personIds);
+    } else if (options.personId) {
+      query = query.eq("person_id", options.personId);
+    } else if (options.accountId) {
+      query = query.or(
+        `account_id.eq.${options.accountId},target_account_id.eq.${options.accountId}`,
+      );
+    }
   }
 
   if (options.shopId) {
@@ -1079,6 +1084,19 @@ export async function getRecentTransactions(
   limit: number = 10,
 ): Promise<TransactionWithDetails[]> {
   return loadTransactions({ limit });
+}
+
+export async function getTransactionById(
+  transactionId: string,
+  includeVoided: boolean = true,
+): Promise<TransactionWithDetails | null> {
+  if (!transactionId) return null;
+  const rows = await loadTransactions({
+    transactionId,
+    includeVoided,
+    limit: 1,
+  });
+  return rows[0] ?? null;
 }
 
 export async function getTransactionsByShop(

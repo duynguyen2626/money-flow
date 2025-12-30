@@ -508,3 +508,16 @@ If Gemini fails or is disabled:
 - Missing fields trigger follow-up questions.
 - Split bill behavior matches current UI rules.
 - Build passes.
+
+## Phase 2 Status (In Progress)
+
+Completed:
+- Quick Add chat wizard with parse endpoint + review step.
+- Floating widget on Dashboard, Transactions, and People detail pages.
+- People detail context auto-binds the selected person/group.
+- Templates API + `quick_add_templates` table migrations.
+- Temp transaction view at `/transactions/temp-<id>`.
+
+Pending / follow-ups:
+- Final polish on review layout responsiveness (spacing + edit controls).
+- Apply RLS migration for template saves in all environments.

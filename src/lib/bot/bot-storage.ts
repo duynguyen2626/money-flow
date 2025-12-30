@@ -47,7 +47,7 @@ export async function upsertBotUserLink(params: {
       updated_at: new Date().toISOString(),
     },
     { onConflict: "platform,platform_user_id" },
-  );
+  ).select("*").single();
 
   if (error) {
     console.error("[bot] Failed to link user:", error);

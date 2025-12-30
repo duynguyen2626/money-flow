@@ -1059,7 +1059,7 @@ export function FilterableTransactions({
                     isMobile ? "bg-white border-t" : "w-full px-4 lg:px-10 pb-4 bg-slate-50/50"
                 )}>
                     <div className={cn(
-                        "flex flex-col h-full overflow-hidden",
+                        "flex flex-col h-full min-h-0 overflow-hidden",
                         isMobile ? "" : "bg-white rounded-2xl border border-slate-200 shadow-sm"
                     )}>
                         {/* Table Region */}

@@ -2220,6 +2220,7 @@ export function TransactionForm({
 
     const initialGroupId = initialValues?.split_group_id;
     const initialPersonIds = initialValues?.split_person_ids ?? [];
+    const uniquePersonIds = Array.from(new Set(initialPersonIds));
 
     if (initialGroupId) {
       setSplitGroupId(initialGroupId);
@@ -2228,8 +2229,8 @@ export function TransactionForm({
       return;
     }
 
-    if (initialPersonIds.length > 0) {
-      const members = initialPersonIds
+    if (uniquePersonIds.length > 0) {
+      const members = uniquePersonIds
         .map((id) => peopleState.find((person) => person.id === id))
         .filter((person): person is Person => Boolean(person));
 
@@ -2924,12 +2925,11 @@ export function TransactionForm({
             </p>
           )}
           {debtAccountName && (
-            <p className="text-xs text-slate-500 mt-1">
-              Debt Account:{" "}
-              <span className="font-semibold text-slate-700">
+            <div className="flex flex-wrap gap-2 mt-1">
+              <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                 {debtAccountName}
               </span>
-            </p>
+            </div>
           )}
         </div>
 
@@ -3051,125 +3051,109 @@ export function TransactionForm({
 
   const SplitBillSelection = isSplitBill ? (
     <div className="space-y-4">
-      <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-800">
-            Participants
-          </h3>
-          {splitBillAutoSplit ? (
-            <span className="text-[10px] uppercase text-slate-400">
-              Even split
-            </span>
-          ) : (
-            <span className="text-[10px] uppercase text-amber-500">
-              Custom split
-            </span>
-          )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-slate-500">
+            Group
+          </label>
+          <Combobox
+            items={splitBillGroupOptions}
+            value={splitGroupId}
+            onValueChange={(value) => setSplitGroupId(value)}
+            placeholder="Select group"
+            inputPlaceholder="Search group..."
+            emptyState="No groups available"
+            className="h-11"
+          />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-500">
-              Group
-            </label>
-            <Combobox
-              items={splitBillGroupOptions}
-              value={splitGroupId}
-              onValueChange={(value) => setSplitGroupId(value)}
-              placeholder="Select group"
-              inputPlaceholder="Search group..."
-              emptyState="No groups available"
-              className="h-11"
-            />
-          </div>
-          <div className="space-y-2 relative">
-            <label className="text-xs font-semibold text-slate-500">
-              Add person
-            </label>
-            <div className="min-h-[44px] rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                {splitExtraParticipants.map((participant) => (
-                  <span
-                    key={participant.personId}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
-                  >
-                    {participant.name}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleRemoveSplitParticipant(participant.personId)
-                      }
-                      className="rounded-full p-0.5 text-slate-400 hover:text-slate-600"
-                      aria-label={`Remove ${participant.name}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-                <input
-                  type="text"
-                  value={splitPersonInput}
-                  onChange={(event) => {
-                    setSplitPersonInput(event.target.value);
-                    if (splitPersonError) {
-                      setSplitPersonError(null);
-                    }
-                  }}
-                  onFocus={() => setSplitPersonDropdownOpen(true)}
-                  onBlur={() => {
-                    setTimeout(() => setSplitPersonDropdownOpen(false), 150);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void handleSplitPersonSubmit();
-                    }
-                  }}
-                  placeholder="Type name and press Enter"
-                  className="min-w-[160px] flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
-                />
-              </div>
-            </div>
-            {splitPersonDropdownOpen && splitPersonSuggestions.length > 0 && (
-              <div className="absolute left-0 top-full z-20 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
-                {splitPersonSuggestions.map((suggestion) => (
+        <div className="space-y-2 relative">
+          <label className="text-xs font-semibold text-slate-500">
+            Add person
+          </label>
+          <div className="min-h-[44px] rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              {splitExtraParticipants.map((participant) => (
+                <span
+                  key={participant.personId}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+                >
+                  {participant.name}
                   <button
-                    key={suggestion.id}
                     type="button"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => handleSelectSplitSuggestion(suggestion.id)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                    onClick={() =>
+                      handleRemoveSplitParticipant(participant.personId)
+                    }
+                    className="rounded-full p-0.5 text-slate-400 hover:text-slate-600"
+                    aria-label={`Remove ${participant.name}`}
                   >
-                    {suggestion.avatar_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={suggestion.avatar_url}
-                        alt={suggestion.name}
-                        className="h-7 w-7 rounded-full object-cover"
-                      />
-                    ) : (
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
-                        {getAccountInitial(suggestion.name)}
-                      </span>
-                    )}
-                    <div className="flex flex-col">
-                      <span className="font-medium text-slate-700">
-                        {suggestion.name}
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        {suggestion.hint}
-                      </span>
-                    </div>
+                    <X className="h-3 w-3" />
                   </button>
-                ))}
-              </div>
-            )}
-            {splitPersonError && (
-              <p className="text-xs text-rose-600">{splitPersonError}</p>
-            )}
-            {isCreatingSplitPerson && (
-              <p className="text-[10px] text-slate-400">Saving person...</p>
-            )}
+                </span>
+              ))}
+              <input
+                type="text"
+                value={splitPersonInput}
+                onChange={(event) => {
+                  setSplitPersonInput(event.target.value);
+                  if (splitPersonError) {
+                    setSplitPersonError(null);
+                  }
+                }}
+                onFocus={() => setSplitPersonDropdownOpen(true)}
+                onBlur={() => {
+                  setTimeout(() => setSplitPersonDropdownOpen(false), 150);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleSplitPersonSubmit();
+                  }
+                }}
+                placeholder="Type name and press Enter"
+                className="min-w-[160px] flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+              />
+            </div>
           </div>
+          {splitPersonDropdownOpen && splitPersonSuggestions.length > 0 && (
+            <div className="absolute left-0 top-full z-20 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
+              {splitPersonSuggestions.map((suggestion) => (
+                <button
+                  key={suggestion.id}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => handleSelectSplitSuggestion(suggestion.id)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                >
+                  {suggestion.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={suggestion.avatar_url}
+                      alt={suggestion.name}
+                      className="h-7 w-7 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+                      {getAccountInitial(suggestion.name)}
+                    </span>
+                  )}
+                  <div className="flex flex-col">
+                    <span className="font-medium text-slate-700">
+                      {suggestion.name}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      {suggestion.hint}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          {splitPersonError && (
+            <p className="text-xs text-rose-600">{splitPersonError}</p>
+          )}
+          {isCreatingSplitPerson && (
+            <p className="text-[10px] text-slate-400">Saving person...</p>
+          )}
         </div>
       </div>
 
@@ -3184,6 +3168,28 @@ export function TransactionForm({
         allowPaidBefore={transactionType !== "repayment"}
         error={splitBillError}
       />
+    </div>
+  ) : null;
+
+  const SplitBillSection = SplitBillToggle ? (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-800">
+          Participants
+        </h3>
+        {isSplitBill &&
+          (splitBillAutoSplit ? (
+            <span className="text-[10px] uppercase text-slate-400">
+              Even split
+            </span>
+          ) : (
+            <span className="text-[10px] uppercase text-amber-500">
+              Custom split
+            </span>
+          ))}
+      </div>
+      {SplitBillToggle}
+      {SplitBillSelection}
     </div>
   ) : null;
 
@@ -3476,17 +3482,37 @@ export function TransactionForm({
     </div>
   );
 
+  const isDebtForm =
+    transactionType === "debt" || transactionType === "repayment";
+
   const NoteInput = (
-    <div className="space-y-2">
+    <div
+      className={cn(
+        "space-y-2",
+        isDebtForm && "h-full flex flex-col",
+      )}
+    >
       <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
         <FileText className="h-4 w-4 text-slate-500" />
         Note
       </label>
-      <textarea
-        {...register("note")}
-        placeholder="Add a note..."
-        className="min-h-[60px] w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-      />
+      {isDebtForm ? (
+        <input
+          type="text"
+          {...register("note")}
+          placeholder="Add a note..."
+          className="h-11 w-full rounded-md border border-gray-300 px-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+        />
+      ) : (
+        <textarea
+          {...register("note")}
+          placeholder="Add a note..."
+          className={cn(
+            "w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200",
+            "min-h-[60px]",
+          )}
+        />
+      )}
       {errors.note && (
         <p className="text-sm text-red-600">{errors.note.message}</p>
       )}
@@ -3495,19 +3521,90 @@ export function TransactionForm({
 
   const INSTALLMENT_MIN_AMOUNT = 3_000_000; // 3 million VND threshold
   const showInstallmentToggle =
-    (transactionType === "debt" || transactionType === "repayment") &&
     !isRefundMode &&
-    (watchedAmount ?? 0) >= INSTALLMENT_MIN_AMOUNT;
+    (transactionType === "repayment"
+      ? true
+      : transactionType === "debt"
+        ? (watchedAmount ?? 0) >= INSTALLMENT_MIN_AMOUNT
+        : installments.length > 0 &&
+          (transactionType === "expense" || transactionType === "income"));
 
-  const InstallmentInput = showInstallmentToggle ? (
-    <div className="rounded-lg border border-slate-200 p-4 space-y-4 bg-slate-50/50">
+  const hasInstallmentPlans = installments.length > 0;
+
+  const InstallmentPlanPicker = watchedIsInstallment ? (
+    transactionType === "repayment" && hasInstallmentPlans ? (
+      <Controller
+        control={control}
+        name="installment_plan_id"
+        render={({ field }) => (
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-purple-700 uppercase tracking-wider">
+              Select Plan
+            </label>
+            <Combobox
+              items={installments.map((i) => ({
+                value: i.id,
+                label: i.name,
+                description: `Due: ${i.next_due_date ? format(new Date(i.next_due_date), "dd/MM/yyyy") : "N/A"} - ${numberFormatter.format(i.monthly_amount)}`,
+                icon: <Sparkles className="w-4 h-4 text-purple-500" />,
+              }))}
+              value={field.value}
+              onValueChange={(val: string | undefined) => {
+                if (!val) {
+                  field.onChange(undefined);
+                  return;
+                }
+                field.onChange(val);
+                const plan = installments.find((i) => i.id === val);
+                if (plan) {
+                  const currentAmt = form.getValues("amount");
+                  if (!currentAmt || currentAmt === 0) {
+                    form.setValue("amount", plan.monthly_amount);
+                  }
+
+                  const currentNote = form.getValues("note");
+                  if (!currentNote || currentNote.trim() === "") {
+                    const start = new Date(plan.start_date);
+                    const now = new Date();
+                    const diffMonths =
+                      (now.getFullYear() - start.getFullYear()) * 12 +
+                      (now.getMonth() - start.getMonth()) +
+                      1;
+                    const monthNum = Math.min(
+                      Math.max(1, diffMonths),
+                      plan.term_months,
+                    );
+                    form.setValue(
+                      "note",
+                      `${plan.name} (Month ${monthNum}/${plan.term_months})`,
+                    );
+                  }
+                }
+              }}
+              placeholder="Select Installment Plan..."
+              className="w-full bg-white border-purple-200"
+            />
+          </div>
+        )}
+      />
+    ) : (
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+        New installment plan will be created on submit.
+      </div>
+    )
+  ) : null;
+
+  const InstallmentSection = showInstallmentToggle ? (
+    <div className="rounded-lg border border-slate-200 p-4 space-y-3 bg-slate-50/50">
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
           <label className="text-sm font-medium text-slate-900">
-            Installment Plan
+            {transactionType === "repayment" ? "Installment Repayment" : "Installment Plan"}
           </label>
           <p className="text-xs text-slate-500">
-            Convert this transaction into an installment plan
+            {transactionType === "repayment"
+              ? "Link this repayment to an installment plan"
+              : "Convert this transaction into an installment plan"}
           </p>
         </div>
         <Controller
@@ -3519,92 +3616,19 @@ export function TransactionForm({
               onCheckedChange={(checked) => {
                 field.onChange(checked);
                 setIsInstallment(checked);
+                if (!checked) {
+                  form.setValue("installment_plan_id", undefined, {
+                    shouldDirty: true,
+                  });
+                }
               }}
             />
           )}
         />
       </div>
+      {InstallmentPlanPicker}
     </div>
   ) : null;
-
-  const InstallmentRepaymentSelector =
-    (installments && installments.length > 0) ||
-      form.getValues("installment_plan_id") ? (
-      <div className="rounded-lg border border-purple-200 p-4 space-y-4 bg-purple-50/50">
-        <div className="flex items-center gap-2 mb-2">
-          <Sparkles className="w-4 h-4 text-purple-600" />
-          <h4 className="text-sm font-semibold text-purple-900">
-            Installment Repayment
-          </h4>
-        </div>
-        <Controller
-          control={control}
-          name="installment_plan_id"
-          render={({ field }) => (
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-purple-700 uppercase tracking-wider">
-                Select Plan
-              </label>
-              <Combobox
-                items={installments.map((i) => ({
-                  value: i.id,
-                  label: i.name,
-                  description: `Due: ${i.next_due_date ? format(new Date(i.next_due_date), "dd/MM/yyyy") : "N/A"} - ${numberFormatter.format(i.monthly_amount)}`,
-                  icon: <Sparkles className="w-4 h-4 text-purple-500" />,
-                }))}
-                value={field.value}
-                onValueChange={(val: string | undefined) => {
-                  if (!val) {
-                    field.onChange(undefined);
-                    return;
-                  }
-                  field.onChange(val);
-                  // Auto-fill details if plan selected details are available
-                  const plan = installments.find((i) => i.id === val);
-                  if (plan) {
-                    // If Amount is empty or 0, auto fill monthly amount
-                    const currentAmt = form.getValues("amount");
-                    if (!currentAmt || currentAmt === 0) {
-                      form.setValue("amount", plan.monthly_amount);
-                    }
-
-                    // Update Note if empty or generic
-                    const currentNote = form.getValues("note");
-                    if (!currentNote || currentNote.trim() === "") {
-                      // Calculate month index
-                      const start = new Date(plan.start_date);
-                      const now = new Date();
-                      // Rough month diff
-                      const diffMonths =
-                        (now.getFullYear() - start.getFullYear()) * 12 +
-                        (now.getMonth() - start.getMonth()) +
-                        1;
-                      const monthNum = Math.min(
-                        Math.max(1, diffMonths),
-                        plan.term_months,
-                      );
-                      form.setValue(
-                        "note",
-                        `${plan.name} (Month ${monthNum}/${plan.term_months})`,
-                      );
-                    }
-                  }
-                }}
-                placeholder="Select Installment Plan..."
-                className="w-full bg-white border-purple-200"
-                disabled={!installments.length && !!field.value} // Read-only if ID set but no list
-              />
-              {!installments.length && field.value && (
-                <p className="text-[10px] text-purple-600 italic">
-                  Linked to plan ID: {field.value.slice(0, 8)}... (List not
-                  loaded)
-                </p>
-              )}
-            </div>
-          )}
-        />
-      </div>
-    ) : null;
 
   const showCashbackSection =
     transactionType === "expense" ||
@@ -4295,66 +4319,74 @@ export function TransactionForm({
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-4">
-                {DateInput}
-                {SourceAccountInput}
-                {AmountInput}
-                {TagInput}
-              </div>
-              <div className="space-y-4">
-                {CategoryInput}
-                {ShopInput}
-                {SplitBillToggle}
-                {PersonInput}
-                {DestinationAccountInput}
-                {RefundStatusInput}
-              </div>
-            </div>
+            {isDebtForm ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    {PersonInput}
+                  </div>
+                  <div className="space-y-4">
+                    {NoteInput}
+                  </div>
+                </div>
 
-            {SplitBillSelection}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    {DateInput}
+                  </div>
+                  <div className="space-y-4">
+                    {TagInput}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    {CategoryInput}
+                  </div>
+                  <div className="space-y-4">
+                    {ShopInput}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    {SourceAccountInput}
+                  </div>
+                  <div className="space-y-4">
+                    {AmountInput}
+                  </div>
+                </div>
+
+                {InstallmentSection}
+                {SplitBillSection}
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    {DateInput}
+                    {SourceAccountInput}
+                    {AmountInput}
+                    {TagInput}
+                  </div>
+                  <div className="space-y-4">
+                    {CategoryInput}
+                    {ShopInput}
+                    {SplitBillToggle}
+                    {PersonInput}
+                    {DestinationAccountInput}
+                    {RefundStatusInput}
+                  </div>
+                </div>
+
+                {SplitBillSection}
+              </>
+            )}
 
             <div className="space-y-4 pt-2 border-t border-slate-100">
-              {/* Phase 7X: Explicit Installment Toggle */}
-              {(transactionType === "repayment" ||
-                transactionType === "expense" ||
-                transactionType === "income") &&
-                installments.length > 0 && (
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <div className="space-y-0.5">
-                      <Label
-                        htmlFor="is-installment-repay"
-                        className="text-sm font-medium text-slate-900"
-                      >
-                        Pay for Installment?
-                      </Label>
-                      <p className="text-xs text-slate-500">
-                        Link this {transactionType} to an active plan
-                      </p>
-                    </div>
-                    <Controller
-                      control={control}
-                      name="is_installment"
-                      render={({ field }) => (
-                        <Switch
-                          id="is-installment-repay"
-                          checked={field.value}
-                          onCheckedChange={(checked) => {
-                            field.onChange(checked);
-                            if (!checked) {
-                              form.setValue("installment_plan_id", undefined);
-                            }
-                          }}
-                        />
-                      )}
-                    />
-                  </div>
-                )}
-
-              {watchedIsInstallment && InstallmentRepaymentSelector}
-              {!watchedIsInstallment && InstallmentInput}
+              {!isDebtForm && InstallmentSection}
               {CashbackModeInput}
-              {NoteInput}
+              {!isDebtForm && NoteInput}
             </div>
           </div>
 

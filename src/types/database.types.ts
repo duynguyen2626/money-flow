@@ -326,6 +326,41 @@ export type Database = {
           },
         ]
       }
+      quick_add_templates: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          payload: Json
+          profile_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          payload: Json
+          profile_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          payload?: Json
+          profile_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quick_add_templates_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cashback_cycles: {
         Row: {
           account_id: string

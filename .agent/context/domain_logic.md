@@ -25,6 +25,17 @@
   - Replace usage with the current schema equivalents.
   - Remove dead code paths when safe.
 
+### Quick Add Templates
+
+- Templates live in `quick_add_templates` and are scoped by `profile_id = auth.uid()`.
+- Template names are normalized to lowercase for uniqueness.
+- RLS policies must allow select/insert/update/delete for the owning profile.
+
+### Temp Transaction View
+
+- Temporary transaction view uses `/transactions/temp-<transaction_id>`.
+- The view is ephemeral; refresh/close should warn users that state is lost.
+
 ### API behavior expectations
 
 - Any create/update flows must be idempotent when possible.
