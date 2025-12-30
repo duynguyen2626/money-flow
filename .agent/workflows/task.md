@@ -378,3 +378,133 @@ Implementation guidance:
   - Save creates N transactions
   - modal prevents double submit
 - pnpm run build passes.
+
+---
+
+# Phase 1 Status - Split Bill MVP (DONE)
+
+Status report for the next agent:
+
+- Split Bill toggle added to lend/repay flow with group + participant selection.
+- Base transaction is created for traceability; split rows are linked via metadata.
+- Split repayment behavior avoids auto-adding owner; single repay can map to group.
+- Paid-before support exists for lend only (not repayment).
+- Split Bill Manager tab in People details with Copy Table / Copy QR capture.
+- QR image URL is stored on base transaction metadata and used for capture.
+- Quick Repay opens prefilled split repayment dialog.
+- Build passes; lint has pre-existing repo-wide errors.
+
+---
+
+# Phase 2 Task Prompt - Natural Language Quick Add (Chatbot) [Dashboard Only]
+
+## Goal
+
+Add a dashboard-only chat assistant to create transactions from natural language input.
+The bot should guide the user through a dialog (wizard style) and always show a review
+step before creating a transaction.
+
+## Scope
+
+In-scope:
+- Dashboard page only (no global widget yet).
+- Wizard-style dialog with optional natural language parsing.
+- Supports types: expense, income, transfer, lend, repay.
+- Can toggle Split Bill for lend/repay and prefill participants.
+- Uses existing TransactionForm/AddTransactionDialog for final review/submit.
+
+Out of scope:
+- Global chat on all pages.
+- Voice input.
+- Auto-post without user confirmation.
+- AI split suggestions beyond the current split-bill rules.
+
+## UX Requirements
+
+- Entry point on dashboard: "Quick Add (Chat)" button.
+- If user types NL input, attempt to parse and prefill fields.
+- If fields are missing, ask follow-up questions (who, amount, account, date, note).
+- Show recent people and accounts as fast-pick chips.
+- Always show a confirmation summary and allow edit before submission.
+- For lend split: auto-include owner if current UI does.
+- For repay split: do NOT auto-include owner.
+
+## Conversation Flow (Wizard)
+
+1) Ask type (lend/repay/expense/income/transfer) if missing.
+2) Ask amount (required).
+3) Ask who (person or group) for lend/repay. Offer recent people/groups.
+4) Ask account (source, and destination if transfer).
+5) Ask date/time (default today if missing).
+6) Ask note (optional).
+7) For lend/repay: ask if split bill should be on (default off unless detected).
+8) Review summary card -> Confirm -> open AddTransactionDialog with prefilled values.
+
+## Data Sources
+
+- People (groups + members), accounts, categories, shops, recent transactions.
+- Tag uses existing `generateTag` and must stay `YYYY-MM`.
+
+## Implementation Guidance
+
+- No new dependencies.
+- Create a dashboard-only chat component (new file in `src/components/ai/` or similar).
+- Use server-side route for LLM parsing (do not call Gemini from client).
+- Reuse AddTransactionDialog with `initialValues` / `cloneInitialValues`.
+- Use existing validation logic in TransactionForm.
+
+## Gemini Integration (Server-side)
+
+Use a structured JSON response. Example schema:
+
+{
+  "intent": "expense|income|transfer|lend|repay",
+  "amount": number|null,
+  "people": [{ "id": string|null, "name": string }], 
+  "group_id": string|null,
+  "split_bill": boolean,
+  "occurred_at": "YYYY-MM-DD" | null,
+  "source_account_id": string|null,
+  "debt_account_id": string|null,
+  "category_id": string|null,
+  "shop_id": string|null,
+  "note": string|null,
+  "needs": ["amount","person","account","date","split_confirm"],
+  "confidence": 0.0
+}
+
+Prompt rules:
+- Output JSON only, no extra text.
+- If a field is unknown, return null and add to `needs`.
+- Never hallucinate IDs; use `name` when unsure.
+- Use the existing split-bill rules: lend can include owner by default, repay never auto-adds owner.
+
+## Fallback (No AI)
+
+If Gemini fails or is disabled:
+- Use a simple rule-based parser for amount + keywords (lend/repay/transfer).
+- Continue wizard questions to fill missing fields.
+
+## Files Expected to Change
+
+- `src/app/(dashboard)/page.tsx` (or dashboard entry point)
+- `src/components/ai/quick-add-chat.tsx`
+- `src/components/ai/quick-add-chat-message.tsx` (optional)
+- `src/app/api/ai/parse-transaction/route.ts`
+- Maybe shared types under `src/types/ai.types.ts`
+
+## Deliverables
+
+1) Dashboard chat UI with wizard flow.
+2) Server-side Gemini parse endpoint with JSON schema output.
+3) Integration that opens AddTransactionDialog prefilled.
+4) Manual test checklist.
+5) Build passes.
+
+## Acceptance Criteria
+
+- Chat only appears on dashboard.
+- No transaction created without explicit confirm.
+- Missing fields trigger follow-up questions.
+- Split bill behavior matches current UI rules.
+- Build passes.

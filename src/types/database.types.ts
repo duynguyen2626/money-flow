@@ -288,6 +288,44 @@ export type Database = {
         }
         Relationships: []
       }
+      bot_user_links: {
+        Row: {
+          created_at: string
+          id: string
+          platform: string
+          platform_user_id: string
+          profile_id: string
+          state: Json | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          platform: string
+          platform_user_id: string
+          profile_id: string
+          state?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          platform?: string
+          platform_user_id?: string
+          profile_id?: string
+          state?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bot_user_links_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cashback_cycles: {
         Row: {
           account_id: string

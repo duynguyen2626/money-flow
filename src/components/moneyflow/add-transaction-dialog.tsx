@@ -27,13 +27,19 @@ type AddTransactionDialogProps = {
   onOpen?: () => void;
   listenToUrlParams?: boolean;
   asChild?: boolean;
-  cloneInitialValues?: Partial<TransactionFormValues>;
+  cloneInitialValues?: Partial<TransactionFormValues> & {
+    split_group_id?: string;
+    split_person_ids?: string[];
+  };
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   // Edit Mode Props
   mode?: "create" | "edit" | "refund";
   transactionId?: string;
-  initialValues?: Partial<TransactionFormValues>;
+  initialValues?: Partial<TransactionFormValues> & {
+    split_group_id?: string;
+    split_person_ids?: string[];
+  };
 };
 
 export function AddTransactionDialog({

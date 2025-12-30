@@ -6,6 +6,7 @@ import { format } from 'date-fns'
 import { DashboardStats } from '@/services/dashboard.service'
 import { Users, Clock, Wallet, TrendingDown, TrendingUp, AlertCircle, FileText, Plus, Check } from 'lucide-react'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
+import { QuickAddChat } from '@/components/ai/quick-add-chat'
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts'
 import { Select } from '@/components/ui/select'
 import { Person } from '@/types/moneyflow.types'
@@ -225,6 +226,14 @@ export function DashboardContent({
   return (
     <div className="h-full overflow-auto">
       <div className="max-w-screen-2xl mx-auto space-y-5 p-4">
+        <div className="flex justify-end">
+          <QuickAddChat
+            accounts={accounts}
+            categories={categories}
+            people={people}
+            shops={shops}
+          />
+        </div>
 
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">

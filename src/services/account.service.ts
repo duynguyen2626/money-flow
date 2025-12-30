@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { Account, AccountRelationships, AccountStats, TransactionWithDetails, AccountRow } from '@/types/moneyflow.types'
 import {
   parseCashbackConfig,
@@ -627,6 +628,55 @@ export async function recalculateBalance(accountId: string): Promise<boolean> {
       total_in: totalIn,
       total_out: totalOut
     })
+    .eq('id', accountId)
+
+  if (updateError) {
+    console.error('Error updating account balance:', updateError)
+    return false
+  }
+
+  return true
+}
+
+export async function recalculateBalanceWithClient(
+  supabase: SupabaseClient,
+  accountId: string,
+): Promise<boolean> {
+  const { data: account, error: accError } = await supabase
+    .from('accounts')
+    .select('type')
+    .eq('id', accountId)
+    .single() as any
+
+  if (accError || !account) {
+    console.error('Account not found for balance calc:', accountId)
+    return false
+  }
+
+  const { data: txns, error: txnError } = await supabase
+    .from('transactions')
+    .select('amount, type, category_id, account_id, target_account_id, status')
+    .eq('status', 'posted')
+    .or(`account_id.eq.${accountId},target_account_id.eq.${accountId}`)
+
+  if (txnError) {
+    console.error('Error fetching transactions for balance:', txnError)
+    return false
+  }
+
+  const { totalIn, totalOut, currentBalance } = computeAccountTotals({
+    accountId,
+    accountType: account.type,
+    transactions: (txns as any[] || []),
+  })
+
+  const { error: updateError } = await (supabase
+    .from('accounts')
+    .update as any)({
+    current_balance: currentBalance,
+    total_in: totalIn,
+    total_out: totalOut,
+  })
     .eq('id', accountId)
 
   if (updateError) {
