@@ -30,6 +30,7 @@ type ComboboxProps = {
   emptyState?: string
   disabled?: boolean
   className?: string
+  triggerClassName?: string
   onAddNew?: () => void
   addLabel?: string
   tabs?: {
@@ -50,6 +51,7 @@ export function Combobox({
   emptyState = 'No results found',
   disabled = false,
   className,
+  triggerClassName,
   onAddNew,
   addLabel,
   tabs,
@@ -73,7 +75,8 @@ export function Combobox({
         disabled={disabled}
         className={cn(
           'flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm ring-offset-white placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50',
-          className
+          className,
+          triggerClassName
         )}
       >
         <span className="block truncate text-gray-500">{placeholder}</span>
@@ -97,7 +100,8 @@ export function Combobox({
             'flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm text-slate-600 shadow-sm transition hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-0',
             open ? 'border-blue-500' : '',
             disabled ? 'bg-gray-100 text-slate-500 cursor-not-allowed' : '',
-            className
+            className,
+            triggerClassName
           )}
           title={disabled ? 'This field is locked in Refund mode' : undefined}
           aria-expanded={open}

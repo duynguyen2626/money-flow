@@ -158,8 +158,8 @@ const renderAvatarNode = (
         src={url}
         alt={name}
         className={cn(
-          "h-6 w-6 object-cover",
-          rounded ? "rounded-full" : "rounded-md",
+          "h-6 w-6 object-contain", // Changed cover to contain per user request
+          rounded ? "rounded-full" : "rounded-none", // Changed md to none per user request
         )}
       />
     );
@@ -168,7 +168,7 @@ const renderAvatarNode = (
     <div
       className={cn(
         "flex h-6 w-6 items-center justify-center bg-slate-200 text-[10px] font-semibold text-slate-600",
-        rounded ? "rounded-full" : "rounded-md",
+        rounded ? "rounded-full" : "rounded-none",
       )}
     >
       {getInitials(name)}
@@ -177,20 +177,52 @@ const renderAvatarNode = (
 };
 
 const parseAmount = (value: string) => {
+  // Handle "2,5tr" / "2,5k" format specifically FIRST
+  // If we see digits + comma + digits + suffix, treat comma as decimal
+  if (/^\d+,\d+\s*(tr|k|m|b)$/i.test(value.trim())) {
+    value = value.replace(",", ".");
+  }
+
   const cleaned = value.replace(/,/g, "").trim();
   if (!cleaned) return null;
-  const match = cleaned.match(/^(\d+(\.\d+)?)(k|m|b)?$/i);
+
+  // Handle mixed format like "6tr4" -> 6.4 million
+  const mixedMatch = cleaned.match(/^(\d+)(tr)(\d+)$/i);
+  if (mixedMatch) {
+    const main = mixedMatch[1];
+    const decimal = mixedMatch[3];
+    const combined = parseFloat(`${main}.${decimal}`);
+    return combined * 1_000_000;
+  }
+
+  const match = cleaned.match(/^(\d+([.,]\d+)?)(k|m|b|tr)?$/i);
   if (!match) return null;
-  const base = Number(match[1]);
+  // Support comma as decimal separator (e.g. 2,5)
+  const baseStr = match[1].replace(',', '.');
+  const base = Number(baseStr);
   if (!Number.isFinite(base)) return null;
   const suffix = match[3]?.toLowerCase();
   const multiplier =
-    suffix === "k" ? 1_000 : suffix === "m" ? 1_000_000 : suffix === "b" ? 1_000_000_000 : 1;
+    suffix === "k"
+      ? 1_000
+      : suffix === "m" || suffix === "tr"
+        ? 1_000_000
+        : suffix === "b"
+          ? 1_000_000_000
+          : 1;
   return Math.abs(base) * multiplier;
 };
 
 const extractAmountFromText = (value: string) => {
-  const match = value.match(/(\d[\d,]*\.?\d*)\s*(k|m|b)?/i);
+  // Added 'tr' to regex and mixed format
+  // Check specifically for XtrY pattern first
+  const mixedMatch = value.match(/\b(\d+)tr(\d+)\b/i);
+  if (mixedMatch) {
+    const main = mixedMatch[1];
+    const decimal = mixedMatch[2];
+    return parseFloat(`${main}.${decimal}`) * 1_000_000;
+  }
+  const match = value.match(/(\d[\d,]*\.?\d*)\s*(k|m|b|tr)?/i);
   if (!match) return null;
   return parseAmount(match[0]);
 };
@@ -393,6 +425,7 @@ export function QuickAddChat({
   shops,
   variant = "inline",
   contextPerson,
+  modelName,
 }: {
   accounts: Account[];
   categories: Category[];
@@ -400,6 +433,7 @@ export function QuickAddChat({
   shops: Shop[];
   variant?: "inline" | "floating";
   contextPerson?: Person | null;
+  modelName?: string;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -472,6 +506,20 @@ export function QuickAddChat({
     [accounts],
   );
 
+  // Lend allows System accounts (e.g. Wallet) but NOT Saving/Invest
+  // Lend allows System accounts (e.g. Wallet) but NOT Saving/Invest
+  const lendSelectableAccounts = useMemo(
+    () => accounts.filter((account) => {
+      const type = account.type.toLowerCase();
+      // Aggressive filter: Block anything that looks like saving/invest/asset
+      if (type.includes("saving")) return false;
+      if (type.includes("invest")) return false;
+      if (type.includes("asset")) return false;
+      return true;
+    }),
+    [accounts],
+  );
+
   const vibAccounts = useMemo(
     () => findAccountCandidates("vib", selectableAccounts),
     [selectableAccounts],
@@ -509,15 +557,17 @@ export function QuickAddChat({
   const isFloating = variant === "floating";
 
   const accountItems = useMemo(() => {
-    const list = reviewAccountFilter === "vib" ? vibAccounts : selectableAccounts;
+    // Switch account source based on intent
+    const sourceList = isDebtIntent ? lendSelectableAccounts : selectableAccounts;
+    const list = reviewAccountFilter === "vib" ? findAccountCandidates("vib", sourceList) : sourceList;
     return list.map((account) => ({
       value: account.id,
       label: account.name,
-      description: account.type.replace(/_/g, " "),
+      // description: account.type.replace(/_/g, " "), // Hidden per user request
       icon: renderAvatarNode(account.name, account.image_url ?? null, false),
       searchValue: `${account.name} ${account.type}`,
     }));
-  }, [reviewAccountFilter, vibAccounts, selectableAccounts]);
+  }, [reviewAccountFilter, lendSelectableAccounts, selectableAccounts, isDebtIntent]);
 
   const personGroups = useMemo<ComboboxGroup[]>(() => {
     const groupItems = groups.map((group) => ({
@@ -662,8 +712,29 @@ export function QuickAddChat({
   }, [open]);
 
   // Smart context detection: pre-populate from URL
+  // Smart context detection: pre-populate from URL
   useEffect(() => {
-    if (!pathname || !open) return;
+    if (!open) return;
+
+    // If contextPerson is provided directly (e.g. from props), use it
+    if (contextPerson && !draft.intent && !draft.people.length) {
+      setDraft(prev => {
+        const next = {
+          ...prev,
+          intent: "lend" as ParseTransactionIntent,
+          people: [contextPerson],
+        };
+        // Also pre-calculate cashback/mode immediately
+        let withDefaults = applyDefaultCashbackForPeople(next, { groupMembers, people: individualPeople });
+        withDefaults.cashbackMode = resolveCashbackMode(withDefaults.sourceAccount, withDefaults.cashbackSharePercent, withDefaults.cashbackShareFixed);
+        return withDefaults;
+      });
+      appendMessage("assistant", `Detected you're on ${contextPerson.name}'s page. Setting type to Lend.`);
+      // We can skip the 'type' step if we already have intent
+      return;
+    }
+
+    if (!pathname) return;
     const personMatch = pathname.match(/\/people\/([^\/\?]+)/);
     if (personMatch?.[1] && people.length > 0) {
       const personId = personMatch[1];
@@ -677,7 +748,7 @@ export function QuickAddChat({
         appendMessage("assistant", `Detected you're on ${person.name}'s page. Setting type to Lend.`);
       }
     }
-  }, [pathname, open, people]);
+  }, [pathname, open, people, contextPerson]); // Added contextPerson dependency
 
   const resetWizard = () => {
     setDraft(buildInitialDraft());
@@ -872,7 +943,34 @@ export function QuickAddChat({
       }
       const data = (await response.json()) as { result: ParsedTransaction };
       let nextDraft: QuickAddDraft = applyParsedResult(data.result);
+
+      // FIX: Preserve Context if AI returned no intent
       if (!nextDraft.intent && contextPerson) {
+        // Force lend if context exists and no other intent detected
+        // Logic: You are on a person page, default to DEBT/LEND
+        nextDraft.intent = "lend";
+        if (nextDraft.people.length === 0) {
+          nextDraft.people = [contextPerson];
+        }
+
+        // Default Split Bill to True for Lend Context
+        nextDraft.splitBill = true;
+
+        appendMessage("assistant", `Keeping context: Lend to ${contextPerson.name}.`);
+
+        nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+          groupMembers,
+          people: individualPeople,
+        });
+        nextDraft.cashbackMode = resolveCashbackMode(
+          nextDraft.sourceAccount,
+          nextDraft.cashbackSharePercent,
+          nextDraft.cashbackShareFixed,
+        );
+      } else if (!nextDraft.intent && contextPerson) {
+        // Fallback if logic needs to check text "keywords" manually (kept from original code just in case)
+        // But the block above should cover it. 
+        // Merging logic:
         const normalizedText = normalizeName(text);
         const shouldLend =
           normalizedText.includes("back") ||
@@ -894,9 +992,15 @@ export function QuickAddChat({
           );
         }
       }
+
       const accountLookupText =
         nextDraft.sourceAccount?.name ?? text;
-      const candidates = findAccountCandidates(accountLookupText, selectableAccounts);
+
+      const lookupList = (nextDraft.intent === 'lend' || nextDraft.intent === 'repay')
+        ? lendSelectableAccounts
+        : selectableAccounts;
+
+      const candidates = findAccountCandidates(accountLookupText, lookupList);
       if (candidates.length > 1) {
         setAccountCandidates(candidates);
       } else {
@@ -1080,14 +1184,18 @@ export function QuickAddChat({
       const normalized = normalizeName(trimmed);
       const isConfirmAnswer = ["yes", "y", "ok", "okay", "no", "n", "change", "different"].includes(normalized);
       if (!isConfirmAnswer) {
-        setAccountQuery(trimmed);
+        // IMPROVEMENT: Use extracted keyword for search query instead of full text
+        // This handles "voucher 300k, vib" -> searching "vib"
+        const keyword = extractAccountKeyword(trimmed);
+        setAccountQuery(keyword);
       }
       // Extract keyword from full prompt for better matching
       const searchKeyword = extractAccountKeyword(trimmed);
+      const lookupList = isDebtIntent ? lendSelectableAccounts : selectableAccounts;
       const candidates =
         accountCandidates.length > 0
           ? accountCandidates
-          : findAccountCandidates(searchKeyword, selectableAccounts);
+          : findAccountCandidates(searchKeyword, lookupList);
       if (candidates.length > 1 && accountCandidates.length === 0) {
         setAccountCandidates(candidates);
         appendMessage("assistant", "Multiple accounts match. Please choose one.");
@@ -2190,77 +2298,44 @@ export function QuickAddChat({
   };
 
   const renderReview = () => {
-    const whoLabel = draft.group
-      ? draft.group.name
-      : draft.people.length > 0
-        ? draft.people.map((person) => person.name).join(", ")
-        : "-";
-    const splitLabel = formatSplitLabel(draft);
-    const cashbackLabel = formatCashbackLabel(draft);
+    // whoLabel, splitLabel, cashbackLabel removed as unused
     const activePersonValue = draft.group?.id ?? draft.people[0]?.id ?? undefined;
 
-    const renderRow = ({
-      field,
+    const renderField = ({
       label,
-      value,
-      editor,
-      editable = true,
+      children,
+      className,
     }: {
-      field: ReviewEditField;
       label: string;
-      value: string;
-      editor?: ReactNode;
-      editable?: boolean;
-    }) => {
-      const isEditing = reviewEditField === field;
-      return (
-        <div className={cn("flex-shrink-0 space-y-1 rounded-xl p-3 transition-colors duration-200 min-w-[120px]", isEditing ? "bg-slate-50 shadow-sm border border-slate-100" : "hover:bg-slate-50")}>
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-              {label}
-            </span>
-            {editable && (
-              <button
-                type="button"
-                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-600"
-                onClick={() => startReviewEdit(field)}
-                aria-label={`Edit ${label}`}
-              >
-                <Pencil className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-          <div className="text-sm font-medium text-slate-900 truncate" title={value}>
-            {value}
-          </div>
-          {isEditing && editor && (
-            <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3">
-              {editor}
-            </div>
-          )}
-        </div>
-      );
-    };
+      children: ReactNode;
+      className?: string;
+    }) => (
+      <div className={cn("rounded-lg border border-slate-200 bg-white p-2 flex flex-col gap-1", className)}>
+        <label className="text-[10px] font-bold uppercase text-slate-500 tracking-wide">
+          {label}
+        </label>
+        {children}
+      </div>
+    );
 
     return (
       <div className="space-y-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-          <div className="flex gap-3 overflow-x-auto pb-2">
-            {renderRow({
-              field: "type",
+        <div className="rounded-2xl bg-white text-sm text-slate-700">
+          <div className="grid grid-cols-2 gap-2">
+            {/* TYPE */}
+            {renderField({
               label: "Type",
-              value: formatIntentLabel(draft.intent),
-              editor: (
-                <div className="flex flex-wrap gap-2">
+              children: (
+                <div className="flex flex-wrap gap-1">
                   {quickTypeOptions.map((option) => (
                     <button
                       key={option.intent}
                       type="button"
                       className={cn(
-                        "rounded-full border px-3 py-1 text-xs font-semibold",
+                        "rounded px-2 py-1 text-xs font-semibold transition-colors",
                         draft.intent === option.intent
-                          ? "border-blue-300 bg-blue-50 text-blue-700"
-                          : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700",
+                          ? "bg-blue-100 text-blue-700"
+                          : "bg-slate-50 text-slate-600 hover:bg-slate-100",
                       )}
                       onClick={() => handleReviewTypeChange(option.intent)}
                     >
@@ -2269,69 +2344,77 @@ export function QuickAddChat({
                   ))}
                 </div>
               ),
+              className: "col-span-2",
             })}
-            {renderRow({
-              field: "amount",
+
+            {/* AMOUNT */}
+            {renderField({
               label: "Amount",
-              value: draft.amount?.toLocaleString() ?? "-",
-              editor: (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <Input
-                    value={reviewEditValue}
-                    onChange={(event) => setReviewEditValue(event.target.value)}
-                    placeholder="Amount"
-                    className="h-9 w-full sm:w-40"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitAmountEdit();
-                      if (e.key === "Escape") closeReviewEdit();
-                    }}
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      className="h-9 px-3 text-xs"
-                      onClick={commitAmountEdit}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="h-9 px-2 text-xs"
-                      onClick={closeReviewEdit}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ),
+              children: (
+                <Input
+                  key={draft.amount} // Force re-render on amount change to update defaultValue
+                  defaultValue={draft.amount ? new Intl.NumberFormat("en-US").format(draft.amount) : ""}
+                  onBlur={(e) => {
+                    const val = e.target.value;
+                    const parsed = parseAmount(val);
+                    if (parsed) setDraft({ ...draft, amount: parsed });
+                    // If invalid, maybe show visual feedback? keeping simple for now
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  className="h-7 px-2 text-sm border-none focus-visible:ring-0 bg-transparent shadow-none p-0"
+                  placeholder="e.g. 50k"
+                />
+              )
             })}
-            {isDebtIntent &&
-              renderRow({
-                field: "who",
-                label: "Who",
-                value: whoLabel,
-                editor: (
-                  <Combobox
-                    groups={personGroups}
-                    value={activePersonValue}
-                    onValueChange={handleReviewWhoChange}
-                    placeholder="Pick a person or group"
-                    inputPlaceholder="Search people..."
-                  />
-                ),
-              })}
-            {renderRow({
-              field: "account",
+
+            {/* DATE */}
+            {renderField({
+              label: "Date",
+              children: (
+                <Input
+                  type="date"
+                  defaultValue={draft.occurredAt ? draft.occurredAt.toISOString().slice(0, 10) : ""}
+                  onChange={(e) => {
+                    const date = new Date(`${e.target.value}T12:00:00`);
+                    if (!Number.isNaN(date.getTime())) {
+                      setDraft({ ...draft, occurredAt: date });
+                    }
+                  }}
+                  className="h-7 px-2 text-sm border-none focus-visible:ring-0 bg-transparent shadow-none p-0"
+                />
+              )
+            })}
+
+            {/* WHO (Lend only) */}
+            {isDebtIntent && renderField({
+              label: "Who",
+              children: (
+                <Combobox
+                  groups={personGroups}
+                  value={activePersonValue}
+                  onValueChange={handleReviewWhoChange}
+                  placeholder="Pick a person"
+                  inputPlaceholder="Search people..."
+                  triggerClassName="h-7 px-2 text-sm border-none bg-transparent justify-between shadow-none p-0 focus:ring-0"
+                />
+              )
+            })}
+
+            {/* ACCOUNT */}
+            {renderField({
               label: "Account",
-              value: draft.sourceAccount?.name ?? "-",
-              editor: (
+              children: (
                 <Combobox
                   items={accountItems}
                   value={draft.sourceAccount?.id}
                   onValueChange={handleReviewAccountChange}
-                  placeholder="Pick an account"
+                  placeholder="Account"
                   inputPlaceholder="Search accounts..."
+                  triggerClassName="h-7 px-2 text-sm border-none bg-transparent justify-between shadow-none p-0 focus:ring-0"
                   tabs={[
                     {
                       value: "all",
@@ -2347,209 +2430,123 @@ export function QuickAddChat({
                     },
                   ]}
                 />
-              ),
+              )
             })}
-            {draft.intent === "transfer" &&
-              renderRow({
-                field: "destination",
-                label: "Destination",
-                value: draft.destinationAccount?.name ?? "-",
-                editor: (
-                  <Combobox
-                    items={accountItems}
-                    value={draft.destinationAccount?.id}
-                    onValueChange={handleReviewDestinationChange}
-                    placeholder="Pick a destination"
-                    inputPlaceholder="Search accounts..."
-                  />
-                ),
-              })}
-            {renderRow({
-              field: "date",
-              label: "Date",
-              value: draft.occurredAt
-                ? draft.occurredAt.toISOString().slice(0, 10)
-                : "-",
-              editor: (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <Input
-                    type="date"
-                    value={reviewEditValue}
-                    onChange={(event) => setReviewEditValue(event.target.value)}
-                    className="h-9 w-full sm:w-44"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitDateEdit();
-                      if (e.key === "Escape") closeReviewEdit();
-                    }}
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      className="h-9 px-3 text-xs"
-                      onClick={commitDateEdit}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="h-9 px-2 text-xs"
-                      onClick={closeReviewEdit}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ),
+
+            {/* DESTINATION (Transfer only) */}
+            {draft.intent === "transfer" && renderField({
+              label: "To Account",
+              children: (
+                <Combobox
+                  items={accountItems}
+                  value={draft.destinationAccount?.id}
+                  onValueChange={handleReviewDestinationChange}
+                  placeholder="Destination"
+                  inputPlaceholder="Search accounts..."
+                  triggerClassName="h-7 px-2 text-sm border-none bg-transparent justify-between shadow-none p-0 focus:ring-0"
+                />
+              )
             })}
-            {renderRow({
-              field: "category",
+
+            {/* CATEGORY */}
+            {renderField({
               label: "Category",
-              value: draft.category?.name ?? "-",
-              editor: (
+              children: (
                 <Combobox
                   items={categoryItems}
                   value={draft.category?.id}
                   onValueChange={handleReviewCategoryChange}
-                  placeholder="Pick a category"
+                  placeholder="Category"
                   inputPlaceholder="Search categories..."
+                  triggerClassName="h-7 px-2 text-sm border-none bg-transparent justify-between shadow-none p-0 focus:ring-0"
                 />
-              ),
+              )
             })}
-            {renderRow({
-              field: "shop",
+
+            {/* SHOP */}
+            {renderField({
               label: "Shop",
-              value: draft.shop?.name ?? "-",
-              editor: (
+              children: (
                 <Combobox
                   items={shopItems}
                   value={draft.shop?.id}
                   onValueChange={handleReviewShopChange}
-                  placeholder="Pick a shop"
+                  placeholder="Shop"
                   inputPlaceholder="Search shops..."
+                  triggerClassName="h-7 px-2 text-sm border-none bg-transparent justify-between shadow-none p-0 focus:ring-0"
                 />
-              ),
+              )
             })}
-            {renderRow({
-              field: "note",
-              label: "Note",
-              value: draft.note?.trim() ? draft.note : "-",
-              editor: (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <Input
-                    value={reviewEditValue}
-                    onChange={(event) => setReviewEditValue(event.target.value)}
-                    placeholder="Note"
-                    className="h-9 w-full sm:min-w-[240px]"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitNoteEdit();
-                      if (e.key === "Escape") closeReviewEdit();
-                    }}
-                  />
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      className="h-9 px-3 text-xs"
-                      onClick={commitNoteEdit}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="h-9 px-2 text-xs"
-                      onClick={closeReviewEdit}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ),
-            })}
-            {renderRow({
-              field: "back",
-              label: "Back",
-              value: cashbackLabel,
-              editor: (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <Input
-                    value={reviewEditValue}
-                    onChange={(event) => setReviewEditValue(event.target.value)}
-                    placeholder="Percent"
-                    className="h-9 w-full sm:w-28"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitBackEdit();
-                      if (e.key === "Escape") closeReviewEdit();
-                    }}
-                  />
-                  <Input
-                    value={reviewEditSecondaryValue}
-                    onChange={(event) =>
-                      setReviewEditSecondaryValue(event.target.value)
-                    }
-                    placeholder="Fixed"
-                    className="h-9 w-full sm:w-28"
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitBackEdit();
-                      if (e.key === "Escape") closeReviewEdit();
-                    }}
-                  />
 
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      className="h-9 px-3 text-xs"
-                      onClick={commitBackEdit}
-                    >
-                      Save
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="h-9 px-2 text-xs"
-                      onClick={closeReviewEdit}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              ),
+            {/* NOTE */}
+            {renderField({
+              label: "Note",
+              className: "col-span-2",
+              children: (
+                <Input
+                  defaultValue={draft.note ?? ""}
+                  onBlur={(e) => setDraft({ ...draft, note: e.target.value })}
+                  className="h-7 px-2 text-sm border-none focus-visible:ring-0 bg-transparent shadow-none p-0"
+                  placeholder="Note..."
+                />
+              )
             })}
-            {renderRow({
-              field: "split",
+
+            {/* CASHBACK */}
+            {renderField({
+              label: "Cashback (Fixed / %)",
+              className: "col-span-2",
+              children: (
+                <div className="flex gap-2">
+                  <Input
+                    defaultValue={draft.cashbackShareFixed?.toString() ?? ""}
+                    placeholder="Fixed Amount"
+                    className="h-7 px-2 text-sm border-slate-100 focus-visible:ring-1 bg-transparent flex-1"
+                    onBlur={(e) => {
+                      const val = e.target.value.trim() ? Number(e.target.value) : null;
+                      const next = { ...draft, cashbackShareFixed: val };
+                      next.cashbackMode = resolveCashbackMode(next.sourceAccount, next.cashbackSharePercent, val);
+                      setDraft(next);
+                    }}
+                  />
+                  <Input
+                    defaultValue={draft.cashbackSharePercent?.toString() ?? ""}
+                    placeholder="Percent"
+                    className="h-7 px-2 text-sm border-slate-100 focus-visible:ring-1 bg-transparent w-24"
+                    onBlur={(e) => {
+                      const val = e.target.value.trim() ? Number(e.target.value) : null;
+                      const next = { ...draft, cashbackSharePercent: val };
+                      next.cashbackMode = resolveCashbackMode(next.sourceAccount, val, next.cashbackShareFixed);
+                      setDraft(next);
+                    }}
+                  />
+                </div>
+              )
+            })}
+
+            {/* SPLIT */}
+            {isDebtIntent && renderField({
               label: "Split Bill",
-              value: splitLabel,
-              editable: isDebtIntent,
-              editor: isDebtIntent ? (
-                <div className="flex flex-wrap gap-2">
+              className: "col-span-2",
+              children: (
+                <div className="flex gap-2">
                   <button
                     type="button"
-                    className={cn(
-                      "rounded-full border px-3 py-1 text-xs font-semibold",
-                      draft.splitBill
-                        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                        : "border-slate-200 bg-white text-slate-700",
-                    )}
                     onClick={() => handleReviewSplitChange(true)}
+                    className={cn("flex-1 rounded border px-3 py-1 text-xs font-semibold", draft.splitBill ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600")}
                   >
                     Split
                   </button>
                   <button
                     type="button"
                     disabled={Boolean(draft.group)}
-                    className={cn(
-                      "rounded-full border px-3 py-1 text-xs font-semibold",
-                      !draft.splitBill
-                        ? "border-rose-300 bg-rose-50 text-rose-700"
-                        : "border-slate-200 bg-white text-slate-700",
-                      draft.group && "cursor-not-allowed opacity-50",
-                    )}
                     onClick={() => handleReviewSplitChange(false)}
+                    className={cn("flex-1 rounded border px-3 py-1 text-xs font-semibold", !draft.splitBill ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600", draft.group && "opacity-50")}
                   >
-                    No split
+                    No Split
                   </button>
                 </div>
-              ) : undefined,
+              )
             })}
           </div>
         </div>
@@ -2758,14 +2755,21 @@ export function QuickAddChat({
             <div
               className={cn(
                 "flex max-h-[80vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl",
-                "w-[420px]",
+                "w-[600px]", // Increased width per user request
                 "max-w-[calc(100vw-2rem)]",
               )}
             >
               <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                  <Sparkles className="h-4 w-4 text-blue-500" />
-                  Quick Add (Chat)
+                <div className="flex flex-col gap-0.5">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                    <Sparkles className="h-4 w-4 text-blue-500" />
+                    Quick Add (Chat)
+                  </div>
+                  {modelName && (
+                    <div className="pl-6 text-[10px] uppercase tracking-wider text-slate-400 font-medium">
+                      {modelName}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -2808,9 +2812,16 @@ export function QuickAddChat({
               className="max-w-4xl"
             >
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-blue-500" />
-                  Quick Add (Chat)
+                <DialogTitle className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-blue-500" />
+                    Quick Add (Chat)
+                  </div>
+                  {modelName && (
+                    <div className="pl-6 text-[10px] uppercase tracking-wider text-slate-400 font-medium font-normal">
+                      {modelName}
+                    </div>
+                  )}
                 </DialogTitle>
                 <DialogDescription>
                   Describe a transaction, then confirm before creating it.
