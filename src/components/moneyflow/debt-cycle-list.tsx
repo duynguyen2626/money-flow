@@ -224,6 +224,9 @@ export function DebtCycleList({
                     sheetProfileId={sheetProfileId}
                     scriptLink={scriptLink}
                     googleSheetUrl={googleSheetUrl}
+                    sheetFullImg={people.find(p => p.id === sheetProfileId)?.sheet_full_img ?? null}
+                    showBankAccount={people.find(p => p.id === sheetProfileId)?.sheet_show_bank_account ?? false}
+                    showQrImage={people.find(p => p.id === sheetProfileId)?.sheet_show_qr_image ?? false}
                     cycleSheet={cycleSheets.find(sheet => normalizeMonthTag(sheet.cycle_tag) === group.tag) ?? null}
                     isExpanded={group.tag === activeTag}
                     onToggleExpand={() => handleToggle(group.tag)}

@@ -20,6 +20,7 @@ const getFlagValue = (flag) => {
 
 const scriptIdArg = getFlagValue('--script-id') || getFlagValue('--id') || args.find((arg) => !arg.startsWith('--'))
 const profileArg = getFlagValue('--profile') || getFlagValue('--name')
+const indexArg = getFlagValue('--index') || getFlagValue('--pick')
 const forceFlag = args.includes('--force') ? true : args.includes('--no-force') ? false : true
 
 const ask = (question) =>
@@ -73,6 +74,25 @@ const resolveProfile = (profiles, name) => {
   return profiles.find((profile) => profile.aliases.includes(normalized) || profile.key.toLowerCase() === normalized) || null
 }
 
+const toIndex = (value) => {
+  if (value === null || value === undefined) return null
+  const numeric = Number.parseInt(String(value).trim(), 10)
+  if (Number.isNaN(numeric)) return null
+  return numeric
+}
+
+const selectByIndex = (profiles, index) => {
+  if (!index) return null
+  if (index < 1 || index > profiles.length) return null
+  return { index, profile: profiles[index - 1] }
+}
+
+const selectionFromProfile = (profiles, profile) => {
+  if (!profile) return null
+  const index = profiles.findIndex((item) => item.key === profile.key)
+  return { index: index >= 0 ? index + 1 : null, profile }
+}
+
 const chooseProfile = async (profiles) => {
   if (!profiles.length) return null
   console.log('Available script IDs:')
@@ -80,11 +100,17 @@ const chooseProfile = async (profiles) => {
     console.log(`${index + 1}) ${profile.key}`)
   })
   const answer = await ask('Choose a number or paste a Script ID: ')
-  const index = Number.parseInt(answer, 10)
-  if (!Number.isNaN(index) && index >= 1 && index <= profiles.length) {
-    return profiles[index - 1].value
+  const index = toIndex(answer)
+  const byIndex = selectByIndex(profiles, index)
+  if (byIndex) {
+    return byIndex
   }
   if (answer && isLikelyScriptId(answer)) return answer
+  if (answer) {
+    const resolved = resolveProfile(profiles, answer)
+    const selection = selectionFromProfile(profiles, resolved)
+    if (selection) return selection
+  }
   return null
 }
 
@@ -92,24 +118,86 @@ const main = async () => {
   loadEnv()
   const profiles = buildProfiles()
 
-  let scriptId = scriptIdArg || process.env.CLASP_SCRIPT_ID || ''
-  if (scriptId && !isLikelyScriptId(scriptId)) {
-    const resolved = resolveProfile(profiles, scriptId)
-    scriptId = resolved?.value ?? ''
+  const lifecycleEvent = process.env.npm_lifecycle_event || ''
+  const lifecycleMatch = lifecycleEvent.match(/^sheet:push:(\d+)$/)
+  const lifecycleIndex = lifecycleMatch ? toIndex(lifecycleMatch[1]) : null
+
+  let selected = null
+  let scriptId = ''
+
+  const directIndex = toIndex(scriptIdArg)
+  if (directIndex) {
+    selected = selectByIndex(profiles, directIndex)
+    scriptId = selected?.profile?.value ?? ''
   }
+
+  if (!scriptId && scriptIdArg && isLikelyScriptId(scriptIdArg)) {
+    scriptId = scriptIdArg
+  }
+
+  if (!scriptId && scriptIdArg) {
+    const resolved = resolveProfile(profiles, scriptIdArg)
+    const selection = selectionFromProfile(profiles, resolved)
+    if (selection) {
+      selected = selection
+      scriptId = selection.profile.value
+    }
+  }
+
+  if (!scriptId && process.env.CLASP_SCRIPT_ID) {
+    const envValue = process.env.CLASP_SCRIPT_ID
+    if (envValue && isLikelyScriptId(envValue)) {
+      scriptId = envValue
+    } else {
+      const resolved = resolveProfile(profiles, envValue)
+      const selection = selectionFromProfile(profiles, resolved)
+      if (selection) {
+        selected = selection
+        scriptId = selection.profile.value
+      }
+    }
+  }
+
   if (!scriptId && profileArg) {
     const resolved = resolveProfile(profiles, profileArg)
-    scriptId = resolved?.value ?? ''
+    const selection = selectionFromProfile(profiles, resolved)
+    if (selection) {
+      selected = selection
+      scriptId = selection.profile.value
+    }
   }
+
+  if (!scriptId && indexArg) {
+    selected = selectByIndex(profiles, toIndex(indexArg))
+    scriptId = selected?.profile?.value ?? ''
+  }
+
+  if (!scriptId && lifecycleIndex) {
+    selected = selectByIndex(profiles, lifecycleIndex)
+    scriptId = selected?.profile?.value ?? ''
+  }
+
   if (!scriptId && profiles.length) {
-    scriptId = await chooseProfile(profiles)
+    const selection = await chooseProfile(profiles)
+    if (selection && typeof selection === 'object' && selection.profile) {
+      selected = selection
+      scriptId = selection.profile.value
+    } else if (typeof selection === 'string') {
+      scriptId = selection
+    }
   }
+
   if (!scriptId) {
     scriptId = await ask('Enter Apps Script ID to push to: ')
   }
   if (!scriptId) {
     console.error('Missing script ID. Aborting.')
     process.exit(1)
+  }
+
+  if (selected?.profile?.key) {
+    const indexLabel = selected.index ? `${selected.index}) ` : ''
+    console.log(`Selected: ${indexLabel}${selected.profile.key}`)
   }
 
   const raw = readFileSync(claspPath, 'utf8')
@@ -124,6 +212,12 @@ const main = async () => {
     cwd: __dirname,
     stdio: 'inherit',
   })
+
+  if (selected?.profile?.key) {
+    const indexLabel = selected.index ? `${selected.index}) ` : ''
+    const statusLabel = result.status === 0 ? 'PUSHED' : 'PUSH FAILED'
+    console.log(`${indexLabel}${selected.profile.key} ${statusLabel}`)
+  }
 
   process.exit(result.status ?? 0)
 }

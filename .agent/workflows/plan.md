@@ -1,14 +1,15 @@
-Implementation Plan - Split Bill v2 (Manager Mode)
-Status: Phase 1 complete (Split Bill MVP)
+Implementation Plan - Manage Sheet Settings + Sheet Sync
+Status: Completed
 
-Progress Update (Phase 1)
-- Transaction Form: split bill toggle, participants, auto split, paid-before, repay-specific behavior. [Done]
-- People Split Bill tab: manager list, row detail, quick repay entry. [Done]
-- Capture: copy table and copy QR with preview modal. [Done]
-- Data: base transaction + child split rows with metadata linking. [Done]
+What shipped
+- Cycle list now reads live sheet settings from `getPeople()` for Manage Sheet popover.
+- Apps Script respects bank-row toggle and QR image placement in merged summary area.
+- Sheet push helper accepts `sheet:push:<n>` via npm lifecycle for fast deploys.
 
-Phase 2 Plan - Chatbot (New Chat Start)
-- Add a "Start Chat" entry point to open a new chat session.
-- Create a chat session record and route to a new chat page.
-- Provide a minimal prompt builder and stub backend (no AI automation yet).
-- Wire chat context to split-bill data (read-only) for future suggestions.
+Verification
+- Toggle bank account on/off: L6:N6 merges only when enabled, clears when disabled.
+- Toggle QR image on/off: image appears in summary area (M6:N31 or L7:N31).
+- Sorting and row shifts do not move the summary image.
+
+Next Action
+- Push script (`pnpm run sheet:push:3`) and re-sync a cycle sheet.

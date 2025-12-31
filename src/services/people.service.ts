@@ -552,6 +552,9 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       avatar_url: person.avatar_url,
       sheet_link: person.sheet_link,
       google_sheet_url: person.google_sheet_url,
+      sheet_full_img: (person as any).sheet_full_img ?? null,
+      sheet_show_bank_account: (person as any).sheet_show_bank_account ?? false,
+      sheet_show_qr_image: (person as any).sheet_show_qr_image ?? false,
       is_owner: (person as any).is_owner ?? null,
       is_archived: (person as any).is_archived ?? null,
       is_group: (person as any).is_group ?? null,
@@ -675,15 +678,10 @@ export async function updatePerson(
     payload.group_parent_id = data.group_parent_id ? data.group_parent_id : null
   }
 
-  console.log('updatePerson payload:', { id, payload })
-
   if (Object.keys(payload).length > 0) {
-    console.log('[updatePerson] Executing database update with payload:', payload)
     let { error, data: updateData } = await (supabase.from('profiles').update as any)(payload).eq('id', id).select()
-    console.log('[updatePerson] Database update result:', { error, data: updateData })
     
     if (error?.code === '42703' || error?.code === 'PGRST204') {
-      console.log('[updatePerson] Column not found error, trying fallback without new columns')
       const {
         is_archived: _ignoreArchived,
         is_owner: _ignoreOwner,
@@ -694,13 +692,11 @@ export async function updatePerson(
       } = payload as any
       const fallback = await (supabase.from('profiles').update as any)(fallbackPayload).eq('id', id).select()
       error = fallback.error
-      console.log('[updatePerson] Fallback result:', { error, data: fallback.data })
     }
     if (error) {
       console.error('Failed to update profile:', error)
       return false
     }
-    console.log('[updatePerson] Update successful!')
   }
 
   if (Array.isArray(data.subscriptionIds)) {
@@ -804,6 +800,9 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     avatar_url: (profile as any).avatar_url,
     sheet_link: (profile as any).sheet_link,
     google_sheet_url: (profile as any).google_sheet_url,
+    sheet_full_img: (profile as any).sheet_full_img ?? null,
+    sheet_show_bank_account: (profile as any).sheet_show_bank_account ?? false,
+    sheet_show_qr_image: (profile as any).sheet_show_qr_image ?? false,
     is_owner: (profile as any).is_owner ?? null,
     is_archived: (profile as any).is_archived ?? null,
     is_group: (profile as any).is_group ?? null,

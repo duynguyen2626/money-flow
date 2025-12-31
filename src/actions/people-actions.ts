@@ -64,9 +64,7 @@ export async function updatePersonAction(
     group_parent_id?: string | null
   }
 ) {
-  console.log('[updatePersonAction] Called with:', { id, payload })
   const ok = await updatePerson(id, payload)
-  console.log('[updatePersonAction] Result:', ok)
   if (ok) {
     revalidatePath('/people')
     revalidatePath(`/people/${id}`)

@@ -262,8 +262,8 @@ export async function syncTransactionToSheet(
       ...buildPayload(txn, action),
       person_id: personId,
       cycle_tag: txn.tag ?? undefined,
-      bank_account: showBankAccount ? 'TPBank 27888889999 NGUYEN THANH NAM' : undefined, // TODO: Get actual bank account info
-      img: showQrImage && qrImageUrl ? qrImageUrl : undefined
+      bank_account: showBankAccount ? 'TPBank 27888889999 NGUYEN THANH NAM' : '', // Send empty to clear if disabled
+      img: showQrImage && qrImageUrl ? qrImageUrl : '' // Send empty to clear if disabled
     }
     console.log('Syncing to sheet for Person:', personId, 'Payload:', payload)
     const result = await postToSheet(sheetLink, payload)
@@ -585,8 +585,8 @@ export async function syncCycleTransactions(
       cycle_tag: cycleTag,
       sheet_id: sheetId ?? undefined,
       rows: batchRows,
-      bank_account: showBankAccount ? 'TPBank 27888889999 NGUYEN THANH NAM' : undefined, // TODO: Get actual bank account info
-      img: showQrImage && qrImageUrl ? qrImageUrl : undefined
+      bank_account: showBankAccount ? 'TPBank 27888889999 NGUYEN THANH NAM' : '',
+      img: showQrImage && qrImageUrl ? qrImageUrl : ''
     }
     
     console.log('[syncCycleTransactions] Final payload:', { ...payload, rows: `[${payload.rows.length} rows]` })

@@ -1,6 +1,6 @@
-// Created by Antigravity on 2025-12-28 08:31 +07
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 3.7 (AGGRESSIVE DATE CENTER)
+// VERSION: 4.2 (QR IMAGE MERGED CELL PLACEMENT)
+// Task: place QR via IMAGE() in merged summary area with bank-row-aware positioning.
 
 /*
 function onOpen() {
@@ -105,18 +105,9 @@ function handleSyncTransactions(payload) {
 
     var ss = getOrCreateSpreadsheet(personId, payload);
     var sheet = getOrCreateCycleTab(ss, cycleTag);
-    var isAnhScript = payload.anh_script_mode || false;
+    var syncOptions = buildSheetSyncOptions(payload);
 
-    setupNewSheet(sheet, isAnhScript);
-
-    // Handle Image Insertion if Anh Script mode and img provided
-    if (isAnhScript && payload.img) {
-        try {
-            var existing = sheet.getImages();
-            for (var k = 0; k < existing.length; k++) { existing[k].remove(); } // Clear old images?
-            sheet.insertImage(payload.img, 12, 8).setAnchorCell(sheet.getRange("L8"));
-        } catch (e) { }
-    }
+    setupNewSheet(sheet, syncOptions.summaryOptions);
 
     var lastRow = sheet.getLastRow();
     if (lastRow > 1) {
@@ -159,6 +150,8 @@ function handleSyncTransactions(payload) {
             sheet.getRange(startRow, 1, numRows, 10).setBorder(true, true, true, true, true, true);
         }
     }
+    applyBordersAndSort(sheet, syncOptions.summaryOptions);
+    applySheetImage(sheet, syncOptions.imgUrl, syncOptions.imgProvided, syncOptions.summaryOptions);
     return jsonResponse({ ok: true, syncedCount: validTxns.length, sheetId: ss.getId(), tabName: sheet.getName() });
 }
 
@@ -167,8 +160,9 @@ function handleSingleTransaction(payload, action) {
     var cycleTag = getCycleTagFromDate(new Date(payload.date));
     var ss = getOrCreateSpreadsheet(personId, payload);
     var sheet = getOrCreateCycleTab(ss, cycleTag);
+    var syncOptions = buildSheetSyncOptions(payload);
 
-    setupNewSheet(sheet);
+    setupNewSheet(sheet, syncOptions.summaryOptions);
 
     var rowIndex = findRowById(sheet, payload.id);
 
@@ -177,6 +171,7 @@ function handleSingleTransaction(payload, action) {
             sheet.getRange(rowIndex, 1, 1, 11).deleteCells(SpreadsheetApp.Dimension.ROWS);
             try { sheet.getRange(rowIndex, 15, 1, 1).deleteCells(SpreadsheetApp.Dimension.ROWS); } catch (e) { }
         }
+        applySheetImage(sheet, syncOptions.imgUrl, syncOptions.imgProvided, syncOptions.summaryOptions);
         return jsonResponse({ ok: true, action: 'deleted' });
     }
 
@@ -194,14 +189,17 @@ function handleSingleTransaction(payload, action) {
     applyFormulasToRow(sheet, targetRow);
 
     SpreadsheetApp.flush();
-    applyBordersAndSort(sheet);
+    applyBordersAndSort(sheet, syncOptions.summaryOptions);
+    applySheetImage(sheet, syncOptions.imgUrl, syncOptions.imgProvided, syncOptions.summaryOptions);
 
     return jsonResponse({ ok: true, action: action });
 }
 
-function applyBordersAndSort(sheet) {
+function applyBordersAndSort(sheet, summaryOptions) {
     var lastRow = sheet.getLastRow();
     if (lastRow < 2) return;
+
+    clearImageMerges(sheet);
 
     var dataRange = sheet.getRange(2, 1, lastRow - 1, 15);
     dataRange.sort({ column: 3, ascending: true });
@@ -232,7 +230,7 @@ function applyBordersAndSort(sheet) {
     sheet.getRange('L7:N').clearContent();
     sheet.getRange('L7:N').setBorder(false, false, false, false, false, false);
 
-    setupSummaryTable(sheet);
+    setupSummaryTable(sheet, summaryOptions);
 }
 
 
@@ -253,9 +251,9 @@ function getOrCreateCycleTab(ss, cycleTag) {
     return sheet;
 }
 
-function setupNewSheet(sheet, isAnhScript) {
+function setupNewSheet(sheet, summaryOptions) {
     SpreadsheetApp.flush();
-    sheet.getRange('A1').setNote('Script Version: 3.7');
+    sheet.getRange('A1').setNote('Script Version: 4.2');
 
     sheet.getRange('A:O').setFontSize(12);
 
@@ -297,13 +295,34 @@ function setupNewSheet(sheet, isAnhScript) {
     var rule1 = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$B2="In"').setBackground("#D5F5E3").setFontColor("#145A32").setRanges([sheet.getRange('A2:J')]).build();
     sheet.setConditionalFormatRules([rule1]);
 
-    setupSummaryTable(sheet, isAnhScript);
+    setupSummaryTable(sheet, summaryOptions);
     ensureShopSheet(sheet.getParent());
     ensureBankInfoSheet(sheet.getParent());
     SpreadsheetApp.flush();
 }
 
-function setupSummaryTable(sheet, isAnhScript) {
+function setupSummaryTable(sheet, summaryOptions) {
+    var showBankAccount;
+    var shouldMerge = true;
+    var bankAccountText = '';
+
+    if (typeof summaryOptions === 'boolean') {
+        shouldMerge = !summaryOptions;
+    } else if (summaryOptions) {
+        if (typeof summaryOptions.showBankAccount === 'boolean') {
+            showBankAccount = summaryOptions.showBankAccount;
+        }
+        if (typeof summaryOptions.shouldMerge === 'boolean') {
+            shouldMerge = summaryOptions.shouldMerge;
+        }
+        if (typeof summaryOptions.bankAccountText === 'string') {
+            bankAccountText = summaryOptions.bankAccountText.trim();
+        }
+    }
+
+    if (typeof showBankAccount === 'undefined') {
+        showBankAccount = true;
+    }
     var r = sheet.getRange('L1:N1');
     r.setValues([['No.', 'Summary', 'Value']]);
     r.setFontWeight('bold').setBackground('#fde4e4').setFontSize(12).setBorder(true, true, true, true, true, true).setHorizontalAlignment('center');
@@ -332,12 +351,28 @@ function setupSummaryTable(sheet, isAnhScript) {
 
     var bankCell = sheet.getRange('L6:N6');
     try {
-        if (!isAnhScript) {
-            bankCell.merge();
+        if (showBankAccount) {
+            if (shouldMerge) {
+                bankCell.merge();
+            } else {
+                bankCell.breakApart();
+            }
+        } else {
+            bankCell.breakApart();
         }
     } catch (e) { }
-    bankCell.setFormula('=BankInfo!A2&" "&BankInfo!B2&" "&BankInfo!C2&" "&ROUND(N5;0)');
-    bankCell.setFontWeight('bold').setHorizontalAlignment('left').setBorder(true, true, true, true, true, true);
+    if (showBankAccount) {
+        if (bankAccountText) {
+            var escapedText = bankAccountText.replace(/"/g, '""');
+            bankCell.setFormula('="' + escapedText + ' " & ROUND(N5;0)');
+        } else {
+            bankCell.setFormula('=BankInfo!A2&" "&BankInfo!B2&" "&BankInfo!C2&" "&ROUND(N5;0)');
+        }
+        bankCell.setFontWeight('bold').setHorizontalAlignment('left').setBorder(true, true, true, true, true, true);
+    } else {
+        bankCell.clearContent();
+        bankCell.setBorder(false, false, false, false, false, false);
+    }
 }
 
 function ensureShopSheet(ss) {
@@ -385,6 +420,72 @@ function normalizeCycleTag(tag) {
     var match = str.match(/^([A-Z]{3})(\d{2})$/i);
     if (match) { var month = { 'JAN': '01', 'FEB': '02', 'MAR': '03', 'APR': '04', 'MAY': '05', 'JUN': '06', 'JUL': '07', 'AUG': '08', 'SEP': '09', 'OCT': '10', 'NOV': '11', 'DEC': '12' }[match[1].toUpperCase()]; if (month) return '20' + match[2] + '-' + month; }
     return str;
+}
+
+function buildSheetSyncOptions(payload) {
+    var summaryOptions = {};
+    if (payload && Object.prototype.hasOwnProperty.call(payload, 'bank_account')) {
+        var bankAccountText = typeof payload.bank_account === 'string' ? payload.bank_account.trim() : '';
+        summaryOptions.showBankAccount = bankAccountText.length > 0;
+        summaryOptions.bankAccountText = bankAccountText;
+    }
+    if (payload && payload.anh_script_mode) {
+        summaryOptions.shouldMerge = false;
+    }
+
+    var imgProvided = payload && Object.prototype.hasOwnProperty.call(payload, 'img');
+    var imgUrl = '';
+    if (imgProvided) {
+        imgUrl = typeof payload.img === 'string' ? payload.img.trim() : '';
+    }
+
+    return {
+        summaryOptions: summaryOptions,
+        imgProvided: imgProvided,
+        imgUrl: imgUrl
+    };
+}
+
+function applySheetImage(sheet, imgUrl, imgProvided, summaryOptions) {
+    if (!imgProvided) return;
+
+    var showBankAccount = true;
+    if (summaryOptions && typeof summaryOptions.showBankAccount === 'boolean') {
+        showBankAccount = summaryOptions.showBankAccount;
+    }
+
+    var baseRange = sheet.getRange(6, 13, 26, 2); // M6:N31
+    var accountRange = sheet.getRange(7, 12, 25, 3); // L7:N31
+
+    if (showBankAccount) {
+        try { sheet.getRange(7, 13, 25, 2).clearContent(); } catch (e) { } // M7:N31
+        try { accountRange.clearContent(); } catch (e) { }
+    } else {
+        try { baseRange.clearContent(); } catch (e) { }
+        try { accountRange.clearContent(); } catch (e) { }
+    }
+
+    try {
+        var existing = sheet.getImages();
+        for (var i = 0; i < existing.length; i++) {
+            existing[i].remove();
+        }
+    } catch (e) { }
+
+    if (!imgUrl) return;
+
+    var targetRange = showBankAccount ? accountRange : baseRange;
+    try { targetRange.merge(); } catch (e) { }
+
+    try {
+        var escapedUrl = imgUrl.replace(/"/g, '""');
+        targetRange.getCell(1, 1).setFormula('=IMAGE("' + escapedUrl + '";2)');
+    } catch (e) { }
+}
+
+function clearImageMerges(sheet) {
+    try { sheet.getRange(6, 13, 26, 2).breakApart(); } catch (e) { } // M6:N31
+    try { sheet.getRange(7, 12, 25, 3).breakApart(); } catch (e) { } // L7:N31
 }
 
 function jsonResponse(obj) { return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); }

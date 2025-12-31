@@ -169,6 +169,7 @@ export async function getPersonDetails(id: string): Promise<{
   sheet_show_qr_image: boolean
 } | null> {
   const supabase = createClient()
+  
   // Add new columns to SELECT
   const { data, error } = await supabase
     .from('profiles')
@@ -176,7 +177,12 @@ export async function getPersonDetails(id: string): Promise<{
     .eq('id', id)
     .maybeSingle()
 
+  if (error) {
+    console.error('[getPersonDetails] Main query error:', error)
+  }
+
   if (error?.code === '42703' || error?.code === 'PGRST204') {
+    console.warn('[getPersonDetails] Column missing, using fallback (settings will be lost)')
     // Fallback if google_sheet_url column doesn't exist
     const fallback = await supabase
       .from('profiles')
@@ -201,6 +207,7 @@ export async function getPersonDetails(id: string): Promise<{
   }
 
   const profile = data as any // simpler casting since we added fields
+
   const currentBalance = await getPersonDebt(id)
   return {
     id: profile.id,

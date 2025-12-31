@@ -76,8 +76,7 @@ export function ManageSheetButton({
   const [isManaging, startManageTransition] = useTransition()
   const [isSaving, startSaveTransition] = useTransition()
   const [showManageDialog, setShowManageDialog] = useState(false)
-  const [showSyncMessage, setShowSyncMessage] = useState(false)
-  const [syncMessage, setSyncMessage] = useState('')
+  /* Removed inline message state in favor of toast */
   const [activeTab, setActiveTab] = useState<'script' | 'test'>('script')
   const [isPopoverOpen, setIsPopoverOpen] = useState(false)
 
@@ -114,11 +113,7 @@ export function ManageSheetButton({
     setIsEditingQrImage(false)
   }, [scriptLink, googleSheetUrl, sheetFullImg, showBankAccount, showQrImage, isPopoverOpen, showManageDialog])
 
-  useEffect(() => {
-    if (!showSyncMessage) return
-    const timeoutId = window.setTimeout(() => setShowSyncMessage(false), 3000)
-    return () => window.clearTimeout(timeoutId)
-  }, [showSyncMessage])
+
 
   const label = sheetUrl ? linkedLabel : unlinkedLabel
   const icon = sheetUrl ? RefreshCcw : FileSpreadsheet
@@ -220,10 +215,14 @@ export function ManageSheetButton({
           setSheetUrl(data.sheetUrl)
         }
         toast.dismiss(toastId)
+        if (data.status === 'created' || data.status === 'synced') { // Assuming data.status indicates success
+          toast.success(data.status === 'created' ? 'Sheet created & synced.' : 'Sheet synced.')
+        } else {
+          console.error("Sync failed:", data.message) // Assuming data might have a message for non-error failures
+          toast.error("Failed to sync sheet: " + (data.message || "Unknown error"))
+        }
         setIsPopoverOpen(false) // Close popover on success
         setShowManageDialog(false)
-        setSyncMessage(data.status === 'created' ? 'Sheet created & synced.' : 'Sheet synced.')
-        setShowSyncMessage(true)
         router.refresh()
         if (openAfterSuccess && nextUrl) {
           window.open(nextUrl, '_blank', 'noopener,noreferrer')
@@ -386,11 +385,6 @@ export function ManageSheetButton({
           </PopoverContent>
         </Popover>
 
-        {showSyncMessage && (
-          <span className="text-sm text-green-600 font-medium animate-in fade-in">
-            {syncMessage}
-          </span>
-        )}
       </div>
 
       {/* Full Settings Dialog (Hidden by default, used for advanced link editing) */}
