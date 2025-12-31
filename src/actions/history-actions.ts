@@ -93,7 +93,7 @@ export async function getTransactionHistory(
             let snapshotAfter: Record<string, unknown>
             if (i === 0) {
                 // Most recent change - compare to current state
-                snapshotAfter = currentTxn ? flattenTransaction(currentTxn) : {}
+                snapshotAfter = currentTxn ? flattenTransaction(currentTxn as unknown as Record<string, unknown>) : {}
             } else {
                 // Compare to the previous snapshot (which is more recent in our desc order)
                 snapshotAfter = parseSnapshot(historyRecords[i - 1].snapshot_before)

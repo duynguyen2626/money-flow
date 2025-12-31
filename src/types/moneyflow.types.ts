@@ -122,6 +122,9 @@ export type Person = {
 
   sheet_link?: string | null
   google_sheet_url?: string | null
+  sheet_full_img?: string | null
+  sheet_show_bank_account?: boolean | null
+  sheet_show_qr_image?: boolean | null
   debt_account_id?: string | null
   balance?: number | null
   is_owner?: boolean | null

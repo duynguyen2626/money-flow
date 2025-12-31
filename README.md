@@ -47,8 +47,10 @@ If you encounter missing cycle data or incorrect caps in the Cashback Analysis v
 - Centralized state control in `filterable-transactions.tsx`.
 - Resolved "double-pagination" issues.
 
-## Current Status (Phase 7)
-- People directory + detail UI refresh is in progress with per-cycle "Manage Sheet" support.
+## Current Status (Phase 9)
+- Manage Sheet settings now persist in the cycle list and header UI.
+- Apps Script supports bank row toggle + QR image placement in the summary area, shifting when the bank row is shown.
+- Sheet push helper supports `pnpm run sheet:push:<n>` with profile status output.
 - Requires `person_cycle_sheets` table; apply migration `supabase/migrations/20251226193000_create_person_cycle_sheets.sql` to remove the PGRST205 warning and enable sheet storage.
 - Sheet create/sync runs server-side via `POST /api/sheets/manage` (apps script must support `create_cycle_sheet` action).
 
@@ -71,6 +73,11 @@ If you encounter missing cycle data or incorrect caps in the Cashback Analysis v
 - Manage Sheet UI now uses a dropdown popover, saves Script/Sheet links, and shows a sync completion modal.
 - Sheet formatter applies banding, formulas, summary panel, bank info, shop icon mapping, and per-row borders on sync.
 - Added `sheet:push` helper with `.env`-based script ID profiles and `--force` support for faster deploys.
+
+## Recent Updates (Phase 9 - Manage Sheet Settings)
+- Fixed stale sheet settings in the cycle list (settings now flow from `getPeople()`).
+- Apps Script now clears/merges the bank row based on toggle state and positions QR images in a merged summary area.
+- New `pnpm run sheet:push:<n>` shortcuts for faster Apps Script deploys.
 
 ## Learn More
 

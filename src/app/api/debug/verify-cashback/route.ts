@@ -18,7 +18,7 @@ export async function GET() {
             return NextResponse.json({ logs });
         }
 
-        const account = accounts[0];
+        const account = (accounts as any)[0];
         log(`✅ Found Credit Card: ${account.name}`);
 
         // 2. Scenario 1: Real Fixed Cashback
@@ -38,7 +38,7 @@ export async function GET() {
 
         // Verify Entry
         const { data: entry1 } = await supabase.from('cashback_entries').select('*').eq('transaction_id', t1Id).single();
-        if (entry1 && entry1.mode === 'real' && entry1.amount === 10) {
+        if (entry1 && (entry1 as any).mode === 'real' && (entry1 as any).amount === 10) {
             log('✅ Entry 1 Correct: Mode=real, Amount=10');
         } else {
             log(`❌ Entry 1 Failed: ${JSON.stringify(entry1)}`);
@@ -60,8 +60,8 @@ export async function GET() {
         // Add delay for async operations if needed? No, await should be enough.
 
         const { data: entry2 } = await supabase.from('cashback_entries').select('*').eq('transaction_id', t1Id).single();
-        if (entry2 && entry2.mode === 'virtual') {
-            log(`✅ Entry 2 Correct: Mode=virtual, Amount=${entry2.amount}`);
+        if (entry2 && (entry2 as any).mode === 'virtual') {
+            log(`✅ Entry 2 Correct: Mode=virtual, Amount=${(entry2 as any).amount}`);
         } else {
             log(`❌ Entry 2 Failed: ${JSON.stringify(entry2)}`);
         }
@@ -79,7 +79,7 @@ export async function GET() {
         });
 
         const { data: entry3 } = await supabase.from('cashback_entries').select('*').eq('transaction_id', t1Id).single();
-        if (entry3 && entry3.mode === 'voluntary' && entry3.amount === 5) {
+        if (entry3 && (entry3 as any).mode === 'voluntary' && (entry3 as any).amount === 5) {
             log('✅ Entry 3 Correct: Mode=voluntary, Amount=5');
         } else {
             log(`❌ Entry 3 Failed: ${JSON.stringify(entry3)}`);

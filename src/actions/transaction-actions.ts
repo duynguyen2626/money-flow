@@ -46,7 +46,7 @@ async function resolveSystemCategory(
     return null;
   }
 
-  return (data as { id: string } | null)?.id ?? null;
+  return (data as unknown as { id: string } | null)?.id ?? null;
 }
 
 async function resolveDiscountCategoryId(
@@ -76,7 +76,7 @@ async function resolveDiscountCategoryId(
     return null;
   }
 
-  const fallbackRows = (fallback ?? []) as { id: string }[];
+  const fallbackRows = (fallback ?? []) as unknown as { id: string }[];
   return fallbackRows[0]?.id ?? null;
 }
 
@@ -110,7 +110,7 @@ async function calculatePersistedCycleTag(
     .eq('id', accountId)
     .single();
 
-  const account = data as { type: string; cashback_config: Json } | null;
+  const account = data as unknown as { type: string; cashback_config: Json } | null;
 
   if (error || !account || account.type !== 'credit_card') {
     return null;
@@ -297,7 +297,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   try {
     const { data: rawTxn } = await supabase.from('transactions').select('*, categories(name)').eq('id', txn.id).single();
     if (rawTxn) {
-      const txnShape: any = { ...rawTxn, category_name: (rawTxn as any).categories?.name };
+      const txnShape: any = { ...(rawTxn as any), category_name: (rawTxn as any).categories?.name };
       await upsertTransactionCashback(txnShape);
     }
   } catch (cbError) {
@@ -531,18 +531,18 @@ export async function restoreTransaction(id: string): Promise<boolean> {
   if ((existing as any).person_id) {
     const personId = (existing as any).person_id;
     // Construct payload from flat transaction
+    const safeExisting = existing as any;
     const payload = {
-      id: existing.id,
-      occurred_at: existing.occurred_at,
-      note: existing.note ?? undefined,
-      tag: existing.tag ?? undefined,
-      amount: Math.abs(existing.amount), // Logic: Restore means re-create flow? existing.amount is strict value.
+      id: safeExisting.id,
+      occurred_at: safeExisting.occurred_at,
+      note: safeExisting.note ?? undefined,
+      tag: safeExisting.tag ?? undefined,
+      amount: Math.abs(safeExisting.amount), // Logic: Restore means re-create flow? existing.amount is strict value.
       // Sheet usually wants positive amounts + Direction (for debt).
       // Debt logic?
       // If it was DEBT transaction, amount is Net Amount (Original - Cashback).
       // We need Original Amount for sheet?
       // Existing data has amount. Does it have original_amount stored? No, flat table doesn't have original_amount column except via calculation?
-      // Wait, flat schema has NOT `original_amount` column?
       // `createTransaction` calculates `finalAmount`. `originalAmount` is lost if not stored?
       // Let's check `transactions` schema in `transaction.service.ts` types.
       // `FlatTransactionRow` does NOT have `original_amount`.
@@ -567,9 +567,9 @@ export async function restoreTransaction(id: string): Promise<boolean> {
       // Let's check `metadata`. `createTransaction` stores metadata?
       // `restoreTransaction` is rare. Consistence is key.
       // Let's use `Math.abs(existing.amount)` for now.
-      original_amount: Math.abs(existing.amount),
-      cashback_share_percent: existing.cashback_share_percent ? existing.cashback_share_percent * 100 : undefined,
-      cashback_share_fixed: existing.cashback_share_fixed ?? undefined,
+      original_amount: Math.abs(safeExisting.amount),
+      cashback_share_percent: safeExisting.cashback_share_percent ? safeExisting.cashback_share_percent * 100 : undefined,
+      cashback_share_fixed: safeExisting.cashback_share_fixed ?? undefined,
     };
 
     // Note: Re-creating might duplicate if not careful, but 'restore' implies it's back.
@@ -731,7 +731,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
   try {
     const { data: rawTxn } = await supabase.from('transactions').select('*, categories(name)').eq('id', id).single();
     if (rawTxn) {
-      const txnShape: any = { ...rawTxn, category_name: (rawTxn as any).categories?.name };
+      const txnShape: any = { ...(rawTxn as any), category_name: (rawTxn as any).categories?.name };
       await upsertTransactionCashback(txnShape);
     }
   } catch (cbError) {
@@ -819,11 +819,13 @@ export async function requestRefund(
     return { success: false, error: 'Không tìm thấy giao dịch hoặc đã xảy ra lỗi.' }
   }
 
-  if (!existing.category_id) {
+  const safeExisting = existing as any;
+
+  if (!safeExisting.category_id) {
     return { success: false, error: 'Giao dịch không có danh mục phí để hoàn.' }
   }
 
-  const maxAmount = Math.abs(existing.amount ?? 0)
+  const maxAmount = Math.abs(safeExisting.amount ?? 0)
   if (maxAmount <= 0) {
     return { success: false, error: 'Không thể hoàn tiền cho giao dịch giá trị 0.' }
   }
@@ -835,10 +837,10 @@ export async function requestRefund(
   }
 
   const userId = await resolveCurrentUserId(supabase)
-  const requestNote = `Refund Request for ${(existing as any).note ?? transactionId}`
+  const requestNote = `Refund Request for ${safeExisting.note ?? transactionId}`
   const lineMetadata = {
-    original_note: (existing as any).note ?? null,
-    original_category_id: existing.category_id,
+    original_note: safeExisting.note ?? null,
+    original_category_id: safeExisting.category_id,
   }
 
   const refundCategoryId = await resolveSystemCategory(supabase, 'Refund', 'expense');
@@ -854,9 +856,9 @@ export async function requestRefund(
       occurred_at: new Date().toISOString(),
       note: requestNote,
       status: 'posted',
-      tag: (existing as any).tag,
+      tag: safeExisting.tag,
       created_by: userId,
-      shop_id: (existing as any).shop_id ?? null,
+      shop_id: safeExisting.shop_id ?? null,
       account_id: REFUND_PENDING_ACCOUNT_ID,
       category_id: refundCategoryId,
       amount: safeAmount,
@@ -876,7 +878,7 @@ export async function requestRefund(
   try {
     // Update original transaction metadata
     const mergedOriginalMeta = {
-      ...parseMetadata(existing.metadata),
+      ...parseMetadata(safeExisting.metadata),
       refund_request_id: requestTxn.id,
       refund_requested_at: new Date().toISOString(),
       has_refund_request: true,
@@ -920,7 +922,7 @@ export async function confirmRefund(
     return { success: false, error: 'Không tìm thấy giao dịch hoàn tiền hoặc đã xảy ra lỗi.' }
   }
 
-  const amountToConfirm = Math.abs(pending.amount ?? 0)
+  const amountToConfirm = Math.abs((pending as any).amount ?? 0)
   if (amountToConfirm <= 0) {
     return { success: false, error: 'Số tiền xác nhận không hợp lệ.' }
   }
@@ -961,7 +963,7 @@ export async function confirmRefund(
 
   try {
     const updatedPendingMeta = {
-      ...parseMetadata(pending.metadata),
+      ...parseMetadata((pending as any).metadata),
       refund_status: 'confirmed',
       refund_confirmed_transaction_id: confirmTxn.id,
       refunded_at: new Date().toISOString(),
@@ -976,7 +978,7 @@ export async function confirmRefund(
     console.error('Failed to update pending refund metadata:', err)
   }
 
-  const pendingMeta = parseMetadata(pending.metadata)
+  const pendingMeta = parseMetadata((pending as any).metadata)
   const originalTransactionId =
     typeof pendingMeta.original_transaction_id === 'string' ? pendingMeta.original_transaction_id : null
 

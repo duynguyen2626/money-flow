@@ -22,6 +22,9 @@ interface DebtCycleGroupProps {
     sheetProfileId: string
     scriptLink?: string | null
     googleSheetUrl?: string | null
+    sheetFullImg?: string | null
+    showBankAccount?: boolean
+    showQrImage?: boolean
     cycleSheet: PersonCycleSheet | null
     isExpanded: boolean
     onToggleExpand: () => void
@@ -38,6 +41,9 @@ export function DebtCycleGroup({
     sheetProfileId,
     scriptLink,
     googleSheetUrl,
+    sheetFullImg,
+    showBankAccount,
+    showQrImage,
     cycleSheet,
     isExpanded,
     onToggleExpand,
@@ -47,28 +53,10 @@ export function DebtCycleGroup({
     const [localFilter, setLocalFilter] = useState<'all' | 'lend' | 'repay'>('all')
     const containerRef = useRef<HTMLDivElement>(null)
 
-    // Effect: scroll into view when expanded
-    // Note: If parent reorders, this item becomes first. We might essentially want to scroll to it.
-    // Ideally parent handles "Move to Top".
-    // But we keep this for visual feedback if reordering doesn't auto-scroll.
-    /*
-    useEffect(() => {
-        if (isExpanded) {
-             setTimeout(() => {
-                containerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-            }, 150)
-        }
-    }, [isExpanded])
-    */
-    // User requirement: "move lên trên cùng". Parent will handle order.
-
-    // Calculate detailed stats...
-
     // Calculate detailed stats for this cycle (Client-side Aggregation)
     const stats = transactions.reduce(
         (acc, txn) => {
             const amount = Math.abs(Number(txn.amount) || 0)
-            const finalPrice = Math.abs(Number(txn.final_price) || amount) // Fallback to amount if final_price is null/0? No, if it's 0 it means free? Usually final_price is set. If not set, use amount.
             const type = txn.type
 
             // Only count "Outbound" debts for the main Loan stats
@@ -76,9 +64,6 @@ export function DebtCycleGroup({
 
             if (isOutboundDebt) {
                 acc.initial += amount
-                // Lend should be Final Price (actual money out)
-                // Note: Logic check. If amount is negative, final_price should also be treated as magnitude.
-                // We use Math.abs(final_price) to be safe assuming final_price tracks the cost.
                 const effectiveFinal = txn.final_price !== null && txn.final_price !== undefined ? Math.abs(Number(txn.final_price)) : amount
                 acc.lend += effectiveFinal
             }
@@ -132,35 +117,31 @@ export function DebtCycleGroup({
 
     return (
         <div ref={containerRef} className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden transition-all duration-200">
-            {/* Header */}
+            {/* Header - Single Row Layout */}
             <div
                 className={cn(
-                    "flex flex-col gap-3 p-3",
+                    "flex flex-wrap items-center justify-between gap-3 p-3",
                     isExpanded ? "bg-slate-50 border-b border-slate-200" : "hover:bg-slate-50"
                 )}
             >
-                <div className="flex items-center justify-between gap-3 cursor-pointer" onClick={onToggleExpand}>
-                    <div className="flex items-center gap-3">
-                        <button className="text-slate-400">
+                {/* Left Group: Expand + Title + Badge + Filters */}
+                <div className="flex flex-wrap items-center gap-2">
+                    {/* Expand Control */}
+                    <button
+                        onClick={onToggleExpand}
+                        className="flex items-center gap-2 text-slate-700 hover:text-slate-900 group"
+                    >
+                        <div className="text-slate-400 group-hover:text-slate-600">
                             {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-                        </button>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-base font-semibold text-slate-900 md:text-lg">{displayTag}</span>
-                            <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold", statusBadge)}>
-                                {isSettled ? 'Settled' : 'Active'}
-                            </span>
                         </div>
-                    </div>
-                    <div className="flex flex-col items-end">
-                        <span className="text-[10px] uppercase text-slate-500 font-bold">Remains</span>
-                        <span className={cn("text-lg font-bold tabular-nums md:text-xl", statusColor)}>
-                            {formatter.format(Math.max(0, remains))}
+                        <span className="text-base font-semibold md:text-lg">{displayTag}</span>
+                        <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold", statusBadge)}>
+                            {isSettled ? 'Settled' : 'Active'}
                         </span>
-                    </div>
-                </div>
+                    </button>
 
-                <div className="flex flex-wrap items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex flex-wrap items-center gap-2">
+                    {/* Filters & Summary (Inline) */}
+                    <div className="flex items-center gap-2 ml-2" onClick={(e) => e.stopPropagation()}>
                         <button
                             type="button"
                             className={cn(
@@ -218,6 +199,16 @@ export function DebtCycleGroup({
                             </PopoverContent>
                         </Popover>
                     </div>
+                </div>
+
+                {/* Right Group: Remains + Actions */}
+                <div className="flex flex-wrap items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex flex-col items-end mr-1">
+                        <span className="text-[10px] uppercase text-slate-500 font-bold">Remains</span>
+                        <span className={cn("text-lg font-bold tabular-nums md:text-xl md:min-w-[4rem] text-right", statusColor)}>
+                            {formatter.format(Math.max(0, remains))}
+                        </span>
+                    </div>
 
                     <div className="flex items-center gap-2">
                         <AddTransactionDialog
@@ -261,6 +252,9 @@ export function DebtCycleGroup({
                             initialSheetUrl={cycleSheet?.sheet_url ?? null}
                             scriptLink={scriptLink ?? null}
                             googleSheetUrl={googleSheetUrl ?? null}
+                            sheetFullImg={sheetFullImg}
+                            showBankAccount={showBankAccount}
+                            showQrImage={showQrImage}
                             connectHref={`/people/${sheetProfileId}?tab=sheet`}
                             size="sm"
                             disabled={!canManageSheet}

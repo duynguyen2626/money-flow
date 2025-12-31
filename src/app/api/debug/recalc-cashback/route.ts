@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
     try {
         // Force re-run logic
         const payload = {
-            ...txn,
+            ...(txn as any),
             category_name: (txn as any).categories?.name
         };
         await upsertTransactionCashback(payload as unknown as TransactionWithDetails);
@@ -70,8 +70,8 @@ export async function GET(req: NextRequest) {
             message: 'Recalculated cashback',
             before: existingEntry,
             after: newEntry,
-            transaction_amount: txn.amount,
-            cashback_fixed: txn.cashback_share_fixed,
+            transaction_amount: (txn as any).amount,
+            cashback_fixed: (txn as any).cashback_share_fixed,
         });
     } catch (e: any) {
         return NextResponse.json({ error: e.message, stack: e.stack }, { status: 500 });

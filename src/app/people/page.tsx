@@ -18,7 +18,7 @@ export default async function PeoplePage() {
     getAccounts(),
     getCategories(),
     getShops(),
-  ])
+  ]) as any
 
   return (
     <div className="h-full overflow-auto px-0 py-4 -mx-4 sm:-mx-6 lg:-mx-8">

@@ -41,7 +41,7 @@ async function findExistingDebtAccountId(
     return null
   }
 
-  return (data as Pick<AccountRow, 'id'>[] | null)?.[0]?.id ?? null
+  return (data as unknown as Pick<AccountRow, 'id'>[] | null)?.[0]?.id ?? null
 }
 
 async function createDebtAccountForPerson(
@@ -69,7 +69,7 @@ async function createDebtAccountForPerson(
     return null
   }
 
-  return (data as Pick<AccountRow, 'id'>).id
+  return (data as unknown as Pick<AccountRow, 'id'>).id
 }
 
 export async function createPerson(
@@ -99,9 +99,9 @@ export async function createPerson(
     email: email?.trim() || null,
     avatar_url: avatar_url?.trim() || null,
     sheet_link: sheet_link?.trim() || null,
-    is_owner: opts?.is_owner ?? null,
-    is_archived: typeof opts?.is_archived === 'boolean' ? opts.is_archived : null,
-    is_group: typeof opts?.is_group === 'boolean' ? opts.is_group : null,
+    is_owner: (opts?.is_owner ?? null) as any,
+    is_archived: (typeof opts?.is_archived === 'boolean' ? opts.is_archived : null) as any,
+    is_group: (typeof opts?.is_group === 'boolean' ? opts.is_group : null) as any,
     group_parent_id:
       typeof opts?.group_parent_id === 'string' ? opts.group_parent_id : null,
   }
@@ -135,7 +135,7 @@ export async function createPerson(
     return null
   }
 
-  const profileId = (profile as Pick<ProfileRow, 'id'>).id
+  const profileId = (profile as unknown as Pick<ProfileRow, 'id'>).id
 
   const debtAccountId = await createDebtAccountForPerson(supabase, profileId, trimmedName)
 
@@ -162,7 +162,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     const attempt = await supabase
       .from('profiles')
       .select(
-        'id, created_at, name, email, avatar_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id'
+        'id, created_at, name, email, avatar_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image'
       )
       .order('name', { ascending: true })
     if (attempt.error?.code === '42703' || attempt.error?.code === 'PGRST204') {
@@ -211,8 +211,8 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
 
   // Calculate balances from transactions
   // Note: Some debt transactions use person_id instead of target_account_id
-  const debtAccountIds = (debtAccounts as AccountRow[])?.map(a => a.id) ?? []
-  const personIds = (profiles as ProfileRow[])?.map(p => p.id) ?? []
+  const debtAccountIds = (debtAccounts as unknown as AccountRow[])?.map(a => a.id) ?? []
+  const personIds = (profiles as unknown as ProfileRow[])?.map(p => p.id) ?? []
   const debtBalanceByPerson = new Map<string, number>()
   const currentCycleDebtByPerson = new Map<string, number>()
 
@@ -226,14 +226,14 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     if (error) {
       console.warn('Unable to load person cycle sheets:', error)
     } else if (Array.isArray(data)) {
-      cycleSheets = data as PersonCycleSheet[]
+      cycleSheets = data as unknown as PersonCycleSheet[]
     }
   }
 
   // Build mapping from debt account to person
   const debtAccountToPersonMap = new Map<string, string>()
   if (Array.isArray(debtAccounts)) {
-    (debtAccounts as AccountRow[]).forEach(account => {
+    (debtAccounts as unknown as AccountRow[]).forEach(account => {
       if (account.owner_id) {
         debtAccountToPersonMap.set(account.id, account.owner_id)
       }
@@ -341,7 +341,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   const debtAccountMap = new Map<string, { id: string; balance: number; currentCycleDebt: number }>()
   const accountOwnerByAccountId = new Map<string, string>()
   if (Array.isArray(debtAccounts)) {
-    (debtAccounts as AccountRow[]).forEach(account => {
+    (debtAccounts as unknown as AccountRow[]).forEach(account => {
       if (account.owner_id) {
         const balance = debtBalanceByPerson.get(account.owner_id) ?? 0
         const currentCycleDebt = currentCycleDebtByPerson.get(account.owner_id) ?? 0
@@ -538,7 +538,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     })
   }
 
-  const mapped = (profiles as ProfileRow[] | null)?.map(person => {
+  const mapped = (profiles as unknown as ProfileRow[] | null)?.map(person => {
     const debtInfo = debtAccountMap.get(person.id)
     const subs = subscriptionMap.get(person.id) ?? []
     const balance = debtInfo?.balance ?? 0
@@ -552,6 +552,9 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       avatar_url: person.avatar_url,
       sheet_link: person.sheet_link,
       google_sheet_url: person.google_sheet_url,
+      sheet_full_img: (person as any).sheet_full_img ?? null,
+      sheet_show_bank_account: (person as any).sheet_show_bank_account ?? false,
+      sheet_show_qr_image: (person as any).sheet_show_qr_image ?? false,
       is_owner: (person as any).is_owner ?? null,
       is_archived: (person as any).is_archived ?? null,
       is_group: (person as any).is_group ?? null,
@@ -628,7 +631,7 @@ async function syncSubscriptionMemberships(
 
   const { error } = await (supabase
     .from('service_members')
-    .insert as any)(rows as ServiceMemberRow[])
+    .insert as any)(rows as unknown as ServiceMemberRow[])
 
   if (error) {
     console.error('Failed to sync subscription memberships:', error)
@@ -644,6 +647,8 @@ export async function updatePerson(
     sheet_link?: string | null
     google_sheet_url?: string | null
     sheet_full_img?: string | null
+    sheet_show_bank_account?: boolean
+    sheet_show_qr_image?: boolean
     subscriptionIds?: string[]
     is_owner?: boolean
     is_archived?: boolean
@@ -664,6 +669,8 @@ export async function updatePerson(
   if (normalizedSheetLink !== undefined) payload.sheet_link = normalizedSheetLink
   if (normalizedGoogleSheetUrl !== undefined) payload.google_sheet_url = normalizedGoogleSheetUrl
   if (typeof data.sheet_full_img !== 'undefined') payload.sheet_full_img = data.sheet_full_img?.trim() || null
+  if (typeof data.sheet_show_bank_account === 'boolean') payload.sheet_show_bank_account = data.sheet_show_bank_account
+  if (typeof data.sheet_show_qr_image === 'boolean') payload.sheet_show_qr_image = data.sheet_show_qr_image
   if (typeof data.is_owner === 'boolean') payload.is_owner = data.is_owner
   if (typeof data.is_archived === 'boolean') payload.is_archived = data.is_archived
   if (typeof data.is_group === 'boolean') payload.is_group = data.is_group
@@ -671,15 +678,10 @@ export async function updatePerson(
     payload.group_parent_id = data.group_parent_id ? data.group_parent_id : null
   }
 
-  console.log('updatePerson payload:', { id, payload })
-
   if (Object.keys(payload).length > 0) {
-    console.log('[updatePerson] Executing database update with payload:', payload)
     let { error, data: updateData } = await (supabase.from('profiles').update as any)(payload).eq('id', id).select()
-    console.log('[updatePerson] Database update result:', { error, data: updateData })
     
     if (error?.code === '42703' || error?.code === 'PGRST204') {
-      console.log('[updatePerson] Column not found error, trying fallback without new columns')
       const {
         is_archived: _ignoreArchived,
         is_owner: _ignoreOwner,
@@ -690,13 +692,11 @@ export async function updatePerson(
       } = payload as any
       const fallback = await (supabase.from('profiles').update as any)(fallbackPayload).eq('id', id).select()
       error = fallback.error
-      console.log('[updatePerson] Fallback result:', { error, data: fallback.data })
     }
     if (error) {
       console.error('Failed to update profile:', error)
       return false
     }
-    console.log('[updatePerson] Update successful!')
   }
 
   if (Array.isArray(data.subscriptionIds)) {
@@ -713,7 +713,7 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     const attempt = await supabase
       .from('profiles')
       .select(
-        'id, name, email, avatar_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id'
+        'id, name, email, avatar_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image'
       )
       .eq('id', id)
       .maybeSingle()
@@ -764,10 +764,10 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     console.error('Failed to load debt account for person:', debtError)
   }
 
-  const subscription_ids = (memberships as { service_id: string }[] | null)?.map(
+  const subscription_ids = (memberships as unknown as { service_id: string }[] | null)?.map(
     row => row.service_id
   ) ?? []
-  const debt_account_id = (debtAccounts as { id: string; current_balance: number }[] | null)?.[0]?.id ?? null
+  const debt_account_id = (debtAccounts as unknown as { id: string; current_balance: number }[] | null)?.[0]?.id ?? null
 
   // [M2-SP1] Fix: Calculate balance dynamically to exclude void transactions (Phantom Debt Fix)
   let balance = 0;
@@ -800,6 +800,9 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     avatar_url: (profile as any).avatar_url,
     sheet_link: (profile as any).sheet_link,
     google_sheet_url: (profile as any).google_sheet_url,
+    sheet_full_img: (profile as any).sheet_full_img ?? null,
+    sheet_show_bank_account: (profile as any).sheet_show_bank_account ?? false,
+    sheet_show_qr_image: (profile as any).sheet_show_qr_image ?? false,
     is_owner: (profile as any).is_owner ?? null,
     is_archived: (profile as any).is_archived ?? null,
     is_group: (profile as any).is_group ?? null,

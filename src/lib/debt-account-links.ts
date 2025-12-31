@@ -35,7 +35,7 @@ export async function resolveMissingDebtAccountIds(
   }
 
   const accountMap = new Map<string, string>()
-  ;(data as Array<{ id: string; owner_id?: string | null }> | null)?.forEach(row => {
+  ;(data as unknown as Array<{ id: string; owner_id?: string | null }> | null)?.forEach(row => {
     if (row.owner_id) {
       accountMap.set(row.owner_id, row.id)
     }

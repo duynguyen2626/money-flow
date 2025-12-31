@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "sheet:push": "node google-scripts/push-sheet.mjs"
+    "sheet:push": "node google-scripts/push-sheet.mjs",
+    "sheet:push:1": "node google-scripts/push-sheet.mjs",
+    "sheet:push:2": "node google-scripts/push-sheet.mjs",
+    "sheet:push:3": "node google-scripts/push-sheet.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

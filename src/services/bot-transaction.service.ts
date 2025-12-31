@@ -131,7 +131,7 @@ export async function createBotTransactions(
     if (error || !data) {
       throw new Error(error?.message ?? "Failed to create transaction.");
     }
-    createdIds.push((data as { id: string }).id);
+    createdIds.push((data as unknown as { id: string }).id);
   };
 
   const isSplit =

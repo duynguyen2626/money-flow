@@ -140,8 +140,8 @@ async function getProfileSheetInfo(personId: string): Promise<{ sheetUrl: string
     return { sheetUrl: null, sheetId: null }
   }
 
-  if (!attempt.error && attempt.data?.google_sheet_url) {
-    const sheetUrl = attempt.data.google_sheet_url?.trim() ?? null
+  if (!attempt.error && (attempt.data as any)?.google_sheet_url) {
+    const sheetUrl = (attempt.data as any).google_sheet_url?.trim() ?? null
     return { sheetUrl, sheetId: extractSheetId(sheetUrl) }
   }
 
@@ -235,33 +235,35 @@ export async function syncTransactionToSheet(
     const sheetLink = await getProfileSheetLink(personId)
     if (!sheetLink) return
 
-    const sheetId = extractSheetId(sheetLink)
-    const anhScriptId = process.env.ANH_SCRIPT
-    const isAnhScript = anhScriptId && sheetId === anhScriptId
-
-    // Fetch person's sheet_full_img if this is ANH_SCRIPT
-    let sheetFullImg: string | null = null
-    if (isAnhScript) {
-      console.log('[syncTransactionToSheet] Fetching sheet_full_img for ANH_SCRIPT, personId:', personId)
-      const supabase = await createClient()
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('sheet_full_img')
-        .eq('id', personId)
-        .single()
-      if (error) {
-        console.error('[syncTransactionToSheet] Error fetching sheet_full_img:', error)
-      }
-      sheetFullImg = data?.sheet_full_img ?? null
-      console.log('[syncTransactionToSheet] Fetched sheet_full_img:', sheetFullImg)
+    // Fetch person's sheet preferences (replaces hardcoded ANH_SCRIPT)
+    const supabaseTxn = await createClient()
+    const { data: personData, error: personError } = await supabaseTxn
+      .from('profiles')
+      .select('sheet_show_bank_account, sheet_show_qr_image, sheet_full_img')
+      .eq('id', personId)
+      .single()
+    
+    if (personError) {
+      console.error('[syncTransactionToSheet] Error fetching person preferences:', personError)
     }
+
+    const showBankAccount = (personData as any)?.sheet_show_bank_account ?? false
+    const showQrImage = (personData as any)?.sheet_show_qr_image ?? false
+    const qrImageUrl = (personData as any)?.sheet_full_img ?? null
+
+    console.log('[syncTransactionToSheet] Person sheet preferences:', {
+      personId,
+      showBankAccount,
+      showQrImage,
+      qrImageUrl: qrImageUrl ? '(URL set)' : '(not set)'
+    })
 
     const payload = {
       ...buildPayload(txn, action),
       person_id: personId,
       cycle_tag: txn.tag ?? undefined,
-      anh_script_mode: isAnhScript ? true : undefined,
-      img: isAnhScript && sheetFullImg ? sheetFullImg : undefined
+      bank_account: showBankAccount ? 'TPBank 27888889999 NGUYEN THANH NAM' : '', // Send empty to clear if disabled
+      img: showQrImage && qrImageUrl ? qrImageUrl : '' // Send empty to clear if disabled
     }
     console.log('Syncing to sheet for Person:', personId, 'Payload:', payload)
     const result = await postToSheet(sheetLink, payload)
@@ -339,7 +341,7 @@ export async function syncAllTransactions(personId: string) {
 
     console.log(`[SheetSync] syncAllTransactions for personId: ${personId}. Found ${data?.length} transactions.`);
 
-    const rows = (data ?? []) as {
+    const rows = (data ?? []) as unknown as {
       id: string
       occurred_at: string
       note: string | null
@@ -519,7 +521,7 @@ export async function syncCycleTransactions(
       return { success: false, message: 'Failed to load transactions' }
     }
 
-    const rows = (data ?? []) as any[]
+    const rows = (data ?? []) as unknown as any[]
     const batchRows = rows.map((txn) => {
       const shopData = txn.shops as any
       let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
@@ -554,32 +556,28 @@ export async function syncCycleTransactions(
 
     console.log(`[SheetSync] Sending batch of ${batchRows.length} transactions for ${cycleTag}`)
 
-    const extractedSheetId = extractSheetId(sheetLink)
-    const anhScriptEnv = process.env.ANH_SCRIPT
-    console.log('[syncCycleTransactions] ANH_SCRIPT check:', {
-      extractedSheetId,
-      anhScriptEnv,
-      sheetLink,
-      matches: extractedSheetId === anhScriptEnv
-    })
-    const isAnhScript = anhScriptEnv && extractedSheetId === anhScriptEnv
+    // Fetch person's sheet preferences (replaces hardcoded ANH_SCRIPT)
+    const supabaseCycle = await createClient()
+    const { data: personData, error: personError } = await supabaseCycle
+      .from('profiles')
+      .select('sheet_show_bank_account, sheet_show_qr_image, sheet_full_img')
+      .eq('id', personId)
+      .single()
     
-    // Fetch person's sheet_full_img if this is ANH_SCRIPT
-    let sheetFullImg: string | null = null
-    if (isAnhScript) {
-      console.log('[syncCycleTransactions] Fetching sheet_full_img for ANH_SCRIPT, personId:', personId)
-      const supabase = await createClient()
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('sheet_full_img')
-        .eq('id', personId)
-        .single()
-      if (error) {
-        console.error('[syncCycleTransactions] Error fetching sheet_full_img:', error)
-      }
-      sheetFullImg = data?.sheet_full_img ?? null
-      console.log('[syncCycleTransactions] Fetched sheet_full_img:', sheetFullImg)
+    if (personError) {
+      console.error('[syncCycleTransactions] Error fetching person preferences:', personError)
     }
+
+    const showBankAccount = (personData as any)?.sheet_show_bank_account ?? false
+    const showQrImage = (personData as any)?.sheet_show_qr_image ?? false
+    const qrImageUrl = (personData as any)?.sheet_full_img ?? null
+
+    console.log('[syncCycleTransactions] Person sheet preferences:', {
+      personId,
+      showBankAccount,
+      showQrImage,
+      qrImageUrl: qrImageUrl ? '(URL set)' : '(not set)'
+    })
 
     const payload = {
       action: 'syncTransactions',
@@ -587,8 +585,8 @@ export async function syncCycleTransactions(
       cycle_tag: cycleTag,
       sheet_id: sheetId ?? undefined,
       rows: batchRows,
-      anh_script_mode: isAnhScript ? true : undefined,
-      img: isAnhScript && sheetFullImg ? sheetFullImg : undefined
+      bank_account: showBankAccount ? 'TPBank 27888889999 NGUYEN THANH NAM' : '',
+      img: showQrImage && qrImageUrl ? qrImageUrl : ''
     }
     
     console.log('[syncCycleTransactions] Final payload:', { ...payload, rows: `[${payload.rows.length} rows]` })

@@ -43,14 +43,14 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
     getShops(),
     getServices(),
     getPersonCycleSheets(sheetProfileId),
-  ])
+  ]) as any
 
-  const profileRecord = people.find((item) => item.id === sheetProfileId)
+  const profileRecord = people.find((item: any) => item.id === sheetProfileId)
   const isGroupProfile = Boolean(profileRecord?.is_group)
   const groupMemberIds = isGroupProfile
     ? people
-        .filter((member) => member.group_parent_id === sheetProfileId)
-        .map((member) => member.id)
+      .filter((member: any) => member.group_parent_id === sheetProfileId)
+      .map((member: any) => member.id)
     : []
 
   const groupPersonIds = isGroupProfile
@@ -60,11 +60,11 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
   const transactions = isGroupProfile
     ? await getTransactionsByPeople(groupPersonIds, 1000)
     : await getUnifiedTransactions({
-        accountId: actualAccountId,
-        personId: person.owner_id ?? undefined,
-        limit: 1000,
-        context: 'person',
-      })
+      accountId: actualAccountId,
+      personId: person.owner_id ?? undefined,
+      limit: 1000,
+      context: 'person',
+    })
 
   const balance = person.current_balance ?? 0
   const balanceLabel = balance > 0 ? 'They owe you' : balance < 0 ? 'You owe them' : 'Settled'
@@ -122,6 +122,9 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                   initialSheetUrl={null}
                   scriptLink={person.sheet_link}
                   googleSheetUrl={person.google_sheet_url}
+                  sheetFullImg={person.sheet_full_img}
+                  showBankAccount={person.sheet_show_bank_account ?? false}
+                  showQrImage={person.sheet_show_qr_image ?? false}
                   connectHref={`/people/${sheetProfileId}?tab=sheet`}
                   size="sm"
                   linkedLabel="Manage Sheet"

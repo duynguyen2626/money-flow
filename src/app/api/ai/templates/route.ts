@@ -14,7 +14,7 @@ const resolveProfileId = async (userId: string) => {
       .select("id")
       .eq("id", userId)
       .maybeSingle();
-    if (profile?.id) return profile.id;
+    if ((profile as any)?.id) return (profile as any).id;
 
     const { data: owner } = await service
       .from("profiles")
@@ -23,7 +23,7 @@ const resolveProfileId = async (userId: string) => {
       .eq("is_archived", false)
       .limit(1)
       .maybeSingle();
-    return owner?.id ?? null;
+    return (owner as any)?.id ?? null;
   } catch {
     const supabase = createClient();
     const { data: profile } = await supabase
@@ -31,7 +31,7 @@ const resolveProfileId = async (userId: string) => {
       .select("id")
       .eq("id", userId)
       .maybeSingle();
-    return profile?.id ?? null;
+    return (profile as any)?.id ?? null;
   }
 };
 

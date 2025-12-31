@@ -26,7 +26,7 @@ async function debugAccount() {
         .single()
 
     console.log('--- Account Config ---')
-    console.log(JSON.stringify(account?.cashback_config, null, 2))
+    console.log(JSON.stringify((account as any)?.cashback_config, null, 2))
 
     // 2. Cycles
     const { data: cycles } = await supabase
@@ -36,7 +36,7 @@ async function debugAccount() {
         .order('cycle_tag', { ascending: false })
 
     console.log('--- Cashback Cycles ---')
-    console.table(cycles?.map(c => ({
+    console.table((cycles as any)?.map((c: any) => ({
         tag: c.cycle_tag,
         spent: c.spent_amount,
         real: c.real_awarded,
@@ -45,7 +45,8 @@ async function debugAccount() {
     })))
 
     const requestedTag = process.env.CYCLE_TAG ? normalizeMonthTag(process.env.CYCLE_TAG) : null
-    const latestTag = cycles?.[0]?.cycle_tag ? (normalizeMonthTag(cycles?.[0]?.cycle_tag) ?? cycles?.[0]?.cycle_tag) : null
+    const cyclesAny = cycles as any;
+    const latestTag = cyclesAny?.[0]?.cycle_tag ? (normalizeMonthTag(cyclesAny?.[0]?.cycle_tag) ?? cyclesAny?.[0]?.cycle_tag) : null
     const cycleTag = requestedTag ?? latestTag
 
     if (!cycleTag) {
@@ -54,7 +55,7 @@ async function debugAccount() {
     }
 
     // 3. Entries for selected cycle
-    const selectedCycle = cycles?.find(c => (normalizeMonthTag(c.cycle_tag) ?? c.cycle_tag) === cycleTag)
+    const selectedCycle = (cycles as any)?.find((c: any) => (normalizeMonthTag(c.cycle_tag) ?? c.cycle_tag) === cycleTag)
     if (selectedCycle) {
         const { data: entries } = await supabase
             .from('cashback_entries')
@@ -62,7 +63,7 @@ async function debugAccount() {
             .eq('cycle_id', selectedCycle.id)
 
         console.log(`--- Entries for ${cycleTag} ---`)
-        console.table(entries?.map(e => ({
+        console.table((entries as any)?.map((e: any) => ({
             note: (e.transactions as any)?.note,
             amount: e.amount,
             mode: e.mode,
@@ -83,7 +84,7 @@ async function debugAccount() {
         .in('persisted_cycle_tag', cycleTagsToQuery)
 
     console.log(`--- Transactions for ${cycleTag} ---`)
-    console.table(txns)
+    console.table(txns as any)
 }
 
 debugAccount().catch(console.error)

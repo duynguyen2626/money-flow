@@ -105,7 +105,7 @@ export async function getPersonDebt(personId: string): Promise<number> {
     return 0
   }
 
-  return await computeDebtFromTransactions(data as DebtTransactionRow[], personId)
+  return await computeDebtFromTransactions(data as unknown as DebtTransactionRow[], personId)
 }
 
 export async function getDebtAccounts(): Promise<DebtAccount[]> {
@@ -122,7 +122,7 @@ export async function getDebtAccounts(): Promise<DebtAccount[]> {
 
   const personIds = Array.from(
     new Set(
-      ((data ?? []) as Array<{ person_id: string | null }>).map(row => row.person_id).filter(Boolean) as string[]
+      ((data ?? []) as unknown as Array<{ person_id: string | null }>).map(row => row.person_id).filter(Boolean) as string[]
     )
   )
 
@@ -164,15 +164,25 @@ export async function getPersonDetails(id: string): Promise<{
   avatar_url: string | null
   sheet_link: string | null
   google_sheet_url: string | null
+  sheet_full_img: string | null
+  sheet_show_bank_account: boolean
+  sheet_show_qr_image: boolean
 } | null> {
   const supabase = createClient()
+  
+  // Add new columns to SELECT
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, name, avatar_url, sheet_link, google_sheet_url')
+    .select('id, name, avatar_url, sheet_link, google_sheet_url, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image')
     .eq('id', id)
     .maybeSingle()
 
+  if (error) {
+    console.error('[getPersonDetails] Main query error:', error)
+  }
+
   if (error?.code === '42703' || error?.code === 'PGRST204') {
+    console.warn('[getPersonDetails] Column missing, using fallback (settings will be lost)')
     // Fallback if google_sheet_url column doesn't exist
     const fallback = await supabase
       .from('profiles')
@@ -180,11 +190,14 @@ export async function getPersonDetails(id: string): Promise<{
       .eq('id', id)
       .maybeSingle()
     return fallback.data ? {
-      ...fallback.data,
-      name: fallback.data.name ?? 'Unknown',
-      owner_id: fallback.data.id,
+      ...(fallback.data as any),
+      name: (fallback.data as any).name ?? 'Unknown',
+      owner_id: (fallback.data as any).id,
       current_balance: await getPersonDebt(id), // Recalculate or reuse logic below
-      google_sheet_url: null
+      google_sheet_url: null,
+      sheet_full_img: null,
+      sheet_show_bank_account: false,
+      sheet_show_qr_image: false
     } : null
   }
 
@@ -193,7 +206,8 @@ export async function getPersonDetails(id: string): Promise<{
     return null
   }
 
-  const profile = data as { id: string; name: string; avatar_url: string | null; sheet_link: string | null; google_sheet_url?: string | null }
+  const profile = data as any // simpler casting since we added fields
+
   const currentBalance = await getPersonDebt(id)
   return {
     id: profile.id,
@@ -203,6 +217,9 @@ export async function getPersonDetails(id: string): Promise<{
     avatar_url: profile.avatar_url ?? null,
     sheet_link: profile.sheet_link ?? null,
     google_sheet_url: profile.google_sheet_url ?? null,
+    sheet_full_img: profile.sheet_full_img ?? null,
+    sheet_show_bank_account: profile.sheet_show_bank_account ?? false,
+    sheet_show_qr_image: profile.sheet_show_qr_image ?? false
   }
 }
 
@@ -233,7 +250,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
     }
   >()
 
-    ; (data as DebtTransactionRow[]).forEach(row => {
+    ; (data as unknown as DebtTransactionRow[]).forEach(row => {
       const tag = row.tag ?? 'UNTAGGED'
       const baseType = resolveBaseType(row.type)
       // Use final price (amount - cashback) instead of raw amount

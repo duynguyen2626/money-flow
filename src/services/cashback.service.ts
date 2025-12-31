@@ -44,7 +44,7 @@ async function ensureCycle(
     .select('id')
     .eq('account_id', accountId)
     .eq('cycle_tag', cycleTag)
-    .maybeSingle();
+    .maybeSingle() as any;
 
   if (existing) return { id: existing.id, tag: cycleTag };
 
@@ -54,7 +54,7 @@ async function ensureCycle(
       .select('id')
       .eq('account_id', accountId)
       .eq('cycle_tag', fallbackTag)
-      .maybeSingle();
+      .maybeSingle() as any;
 
     if (fallback) return { id: fallback.id, tag: fallbackTag };
   }
@@ -85,7 +85,7 @@ async function ensureCycle(
       .select('id')
       .eq('account_id', accountId)
       .eq('cycle_tag', cycleTag)
-      .maybeSingle();
+      .maybeSingle() as any;
 
     if (retry) return { id: retry.id, tag: cycleTag };
     throw error;
@@ -124,7 +124,7 @@ export async function upsertTransactionCashback(
     .from('accounts')
     .select('id, type, cashback_config')
     .eq('id', transaction.account_id)
-    .single();
+    .single() as any;
 
   if (!account || account.type !== 'credit_card') {
     if (existingEntries && existingEntries.length > 0) {
@@ -180,7 +180,7 @@ export async function upsertTransactionCashback(
 
   // Get Cycle Totals for Policy Resolution (MF5.3 preparation)
   // We need spent_amount so far.
-  const { data: cycle } = await supabase.from('cashback_cycles').select('spent_amount').eq('id', cycleId).single();
+  const { data: cycle } = await supabase.from('cashback_cycles').select('spent_amount').eq('id', cycleId).single() as any;
   const cycleTotals = { spent: cycle?.spent_amount ?? 0 };
 
   const policy = resolveCashbackPolicy({
@@ -301,7 +301,7 @@ export async function recomputeCashbackCycle(cycleId: string) {
     .from('accounts')
     .select('cashback_config')
     .eq('id', cycle.account_id)
-    .single();
+    .single() as any;
 
   const config = parseCashbackConfig(account?.cashback_config, cycle.account_id);
   const maxBudget = config.maxAmount ?? 0;
@@ -380,8 +380,8 @@ export async function removeTransactionCashback(transactionId: string) {
 
   if (entry) {
     await supabase.from('cashback_entries').delete().eq('transaction_id', transactionId);
-    if (entry.cycle_id) {
-      await recomputeCashbackCycle(entry.cycle_id);
+    if ((entry as any).cycle_id) {
+      await recomputeCashbackCycle((entry as any).cycle_id);
     }
   }
 }
@@ -391,7 +391,7 @@ export async function removeTransactionCashback(transactionId: string) {
  */
 export async function getAccountSpendingStats(accountId: string, date: Date, categoryId?: string): Promise<AccountSpendingStats | null> {
   const supabase = createClient();
-  const { data: account } = await supabase.from('accounts').select('cashback_config, type').eq('id', accountId).single();
+  const { data: account } = await (supabase.from('accounts').select('cashback_config, type').eq('id', accountId).single() as any);
   if (!account || account.type !== 'credit_card') return null;
 
   const config = parseCashbackConfig(account.cashback_config, accountId);
@@ -405,7 +405,7 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
     .select('*')
     .eq('account_id', accountId)
     .eq('cycle_tag', cycleTag)
-    .maybeSingle()).data ?? null;
+    .maybeSingle()).data as any ?? null;
 
   if (!cycle && legacyTag !== cycleTag) {
     cycle = (await supabase
@@ -413,14 +413,14 @@ export async function getAccountSpendingStats(accountId: string, date: Date, cat
       .select('*')
       .eq('account_id', accountId)
       .eq('cycle_tag', legacyTag)
-      .maybeSingle()).data ?? null;
+      .maybeSingle()).data as any ?? null;
   }
 
   console.log(`[getAccountSpendingStats] AID: ${accountId}, Tag: ${cycleTag}, Found: ${!!cycle}, Real: ${cycle?.real_awarded}`);
 
   let categoryName = undefined;
   if (categoryId) {
-    const { data: cat } = await supabase.from('categories').select('name').eq('id', categoryId).single();
+    const { data: cat } = await supabase.from('categories').select('name').eq('id', categoryId).single() as any;
     categoryName = cat?.name;
   }
 
@@ -659,7 +659,7 @@ export async function getTransactionCashbackPolicyExplanation(transactionId: str
     .from('cashback_entries')
     .select('metadata')
     .eq('transaction_id', transactionId)
-    .maybeSingle();
+    .maybeSingle() as any;
 
   if (error) {
     console.error('Error fetching cashback policy explanation:', error);
@@ -688,7 +688,8 @@ export async function simulateCashback(params: {
     .from('accounts')
     .select('id, name, cashback_config, type')
     .eq('id', accountId)
-    .single();
+    .eq('id', accountId)
+    .single() as any;
 
   if (!account || account.type !== 'credit_card') {
     return {
@@ -713,7 +714,7 @@ export async function simulateCashback(params: {
       .select('spent_amount')
       .eq('account_id', accountId)
       .eq('cycle_tag', cycleTag)
-      .maybeSingle()).data ?? null;
+      .maybeSingle()).data as any ?? null;
 
     if (!cycle && legacyCycleTag !== cycleTag) {
       cycle = (await supabase
@@ -721,7 +722,7 @@ export async function simulateCashback(params: {
         .select('spent_amount')
         .eq('account_id', accountId)
         .eq('cycle_tag', legacyCycleTag)
-        .maybeSingle()).data ?? null;
+        .maybeSingle()).data as any ?? null;
     }
 
     spentSoFar = cycle?.spent_amount ?? 0;
@@ -733,7 +734,7 @@ export async function simulateCashback(params: {
   // Fetch Category Name if ID provided (for pretty reason text)
   let categoryName: string | undefined = undefined;
   if (categoryId) {
-    const { data: cat } = await supabase.from('categories').select('name').eq('id', categoryId).single();
+    const { data: cat } = await supabase.from('categories').select('name').eq('id', categoryId).single() as any;
     categoryName = cat?.name;
   }
 
@@ -768,7 +769,7 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
   const supabase = createAdminClient();
 
   // 1. Get Account
-  const { data: account } = await supabase.from('accounts').select('id, name, image_url, cashback_config').eq('id', accountId).single();
+  const { data: account } = await (supabase.from('accounts').select('id, name, image_url, cashback_config').eq('id', accountId).single() as any);
   if (!account) return null;
 
   console.log(`[getAllCashbackHistory] Raw Config for ${accountId}:`, JSON.stringify(account.cashback_config));
@@ -779,15 +780,16 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
   const { data: cycles } = await supabase
     .from('cashback_cycles')
     .select('*')
-    .eq('account_id', accountId);
+    .select('*')
+    .eq('account_id', accountId) as any;
 
   console.log(`[getAllCashbackHistory] Fetched ${cycles?.length} cycles for aggregation.`);
   if (cycles?.length === 0) console.log('[getAllCashbackHistory] WARNING: No cycles found despite transactions existing?');
 
-  const totalEarned = (cycles ?? []).reduce((sum, c) => sum + (c.real_awarded ?? 0) + (c.virtual_profit ?? 0), 0);
-  const totalShared = (cycles ?? []).reduce((sum, c) => sum + (c.real_awarded ?? 0), 0);
-  const totalNet = (cycles ?? []).reduce((sum, c) => sum + (c.virtual_profit ?? 0) - (c.overflow_loss ?? 0), 0);
-  const sumMaxBudget = (cycles ?? []).reduce((sum, c) => sum + (c.max_budget ?? 0), 0);
+  const totalEarned = (cycles ?? []).reduce((sum: number, c: any) => sum + (c.real_awarded ?? 0) + (c.virtual_profit ?? 0), 0);
+  const totalShared = (cycles ?? []).reduce((sum: number, c: any) => sum + (c.real_awarded ?? 0), 0);
+  const totalNet = (cycles ?? []).reduce((sum: number, c: any) => sum + (c.virtual_profit ?? 0) - (c.overflow_loss ?? 0), 0);
+  const sumMaxBudget = (cycles ?? []).reduce((sum: number, c: any) => sum + (c.max_budget ?? 0), 0);
 
   // 3. Fetch ALL entries
   let transactions: CashbackTransaction[] = [];
@@ -939,13 +941,14 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
     .from('cashback_cycles')
     .select('cycle_tag')
     .eq('account_id', accountId)
-    .limit(48); // Increased limit to show more past cycles
+    .limit(48) as any; // Increased limit to show more past cycles
 
   const { data: account } = await supabase
     .from('accounts')
     .select('cashback_config')
     .eq('id', accountId)
-    .single();
+    .eq('id', accountId)
+    .single() as any;
 
   const config = parseCashbackConfig(account?.cashback_config, accountId);
   const currentCycleTag = getCashbackCycleTag(new Date(), {

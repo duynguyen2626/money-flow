@@ -44,7 +44,8 @@ async function backfill() {
 
     console.log(`Found ${entries.length} entries to backfill.`);
 
-    for (const entry of entries) {
+    for (const row of entries) {
+        const entry = row as any;
         const txn = entry.transactions as any;
         const acc = entry.accounts as any;
 
@@ -64,7 +65,7 @@ async function backfill() {
                 account: acc,
                 categoryId: txn.category_id,
                 amount: Math.abs(txn.amount),
-                cycleTotals: { spent: cycle?.spent_amount ?? 0 },
+                cycleTotals: { spent: (cycle as any)?.spent_amount ?? 0 },
                 categoryName: txn.category_name?.name
             });
 

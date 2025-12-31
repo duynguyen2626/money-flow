@@ -81,14 +81,15 @@ async function updateLadyConfig() {
     if (categories && categories.length > 0) {
         const level = ladyConfig.program.levels[1]
         if (level && level.categoryRules && level.categoryRules[0]) {
-            level.categoryRules[0].categoryIds = categories.map(c => c.id)
+            level.categoryRules[0].categoryIds = categories.map((c: any) => c.id)
             console.log(`Mapped ${categories.length} categories for Lady rules.`)
         }
     } else {
         console.warn('Could not find categories by name. Using placeholders.')
     }
 
-    for (const acc of accounts) {
+    for (const accRaw of accounts) {
+        const acc = accRaw as any;
         console.log(`Updating ${acc.name} (${acc.id})...`)
         const { error: updateError } = await supabase
             .from('accounts')
