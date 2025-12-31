@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import type { ManageCycleSheetResponse } from '@/types/sheet.types'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { isYYYYMM } from '@/lib/month-tag'
 import { updatePersonAction } from '@/actions/people-actions'
 
@@ -18,6 +19,7 @@ type ManageSheetButtonProps = {
   initialSheetUrl?: string | null
   scriptLink?: string | null
   googleSheetUrl?: string | null
+  sheetFullImg?: string | null
   className?: string
   buttonClassName?: string
   size?: 'sm' | 'md'
@@ -43,6 +45,7 @@ export function ManageSheetButton({
   initialSheetUrl = null,
   scriptLink = null,
   googleSheetUrl = null,
+  sheetFullImg = null,
   className,
   buttonClassName,
   size = 'sm',
@@ -63,6 +66,7 @@ export function ManageSheetButton({
   const [syncMessage, setSyncMessage] = useState('')
   const [currentScriptLink, setCurrentScriptLink] = useState(scriptLink ?? '')
   const [currentSheetUrl, setCurrentSheetUrl] = useState(googleSheetUrl ?? '')
+  const [currentSheetImg, setCurrentSheetImg] = useState(sheetFullImg ?? '')
   const [isEditing, setIsEditing] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
@@ -76,8 +80,9 @@ export function ManageSheetButton({
     if (!showManageDialog) return
     setCurrentScriptLink(scriptLink ?? '')
     setCurrentSheetUrl(googleSheetUrl ?? '')
+    setCurrentSheetImg(sheetFullImg ?? '')
     setIsEditing(false)
-  }, [scriptLink, googleSheetUrl, showManageDialog])
+  }, [scriptLink, googleSheetUrl, sheetFullImg, showManageDialog])
 
   useEffect(() => {
     if (!showSyncMessage) return
@@ -109,6 +114,7 @@ export function ManageSheetButton({
         const ok = await updatePersonAction(personId, {
           sheet_link: currentScriptLink.trim() || null,
           google_sheet_url: currentSheetUrl.trim() || null,
+          sheet_full_img: currentSheetImg.trim() || null,
         })
         if (!ok) {
           toast.dismiss(toastId)
@@ -246,16 +252,29 @@ export function ManageSheetButton({
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sheet script</p>
                   <div className="mt-2 flex items-center gap-2">
-                    <input
-                      type="url"
-                      value={currentScriptLink}
-                      onChange={(event) => {
-                        setCurrentScriptLink(event.target.value)
-                        setIsEditing(true)
-                      }}
-                      placeholder="https://script.google.com/macros/s/..."
-                      className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex-1">
+                            <input
+                              type="url"
+                              value={currentScriptLink}
+                              onChange={(event) => {
+                                setCurrentScriptLink(event.target.value)
+                                setIsEditing(true)
+                              }}
+                              placeholder="https://script.google.com/macros/s/..."
+                              className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                            />
+                          </div>
+                        </TooltipTrigger>
+                        {currentScriptLink && (
+                          <TooltipContent side="bottom" className="max-w-md break-all">
+                            <p className="text-xs">{currentScriptLink}</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    </TooltipProvider>
                     <button
                       type="button"
                       onClick={handlePasteScriptLink}
@@ -265,124 +284,148 @@ export function ManageSheetButton({
                     </button>
                   </div>
                 </div>
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sheet link</p>
-                  <input
-                    type="url"
-                    value={currentSheetUrl}
-                    onChange={(event) => {
-                      setCurrentSheetUrl(event.target.value)
-                      setIsEditing(true)
-                    }}
-                    placeholder="https://docs.google.com/spreadsheets/d/..."
-                    className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleSaveLinks}
-                    disabled={!isEditing || isSaving}
-                    className="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                  >
-                    {isSaving ? 'Saving...' : 'Save settings'}
-                  </button>
-                  {isValidLink(currentSheetUrl) && (
-                    <a
-                      href={currentSheetUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center justify-center rounded-md border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-white"
-                    >
-                      Open sheet
-                    </a>
-                  )}
-                </div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Sheet link</p>
+                <input
+                  type="url"
+                  value={currentSheetUrl}
+                  onChange={(event) => {
+                    setCurrentSheetUrl(event.target.value)
+                    setIsEditing(true)
+                  }}
+                  placeholder="https://docs.google.com/spreadsheets/d/..."
+                  className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
               </div>
-
-              {showCycleAction && (
-                <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cycle sheet</p>
-                      <p className="text-sm font-semibold text-slate-900">{cycleTag}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleManageCycle}
-                      disabled={!hasValidCycle || !hasValidScriptLink || isManaging}
-                      className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-                    >
-                      {isManaging
-                        ? 'Working...'
-                        : sheetUrl
-                          ? 'Sync cycle sheet'
-                          : 'Create cycle sheet'}
-                    </button>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">QR / Image Link</p>
+                <input
+                  type="url"
+                  value={currentSheetImg}
+                  onChange={(event) => {
+                    setCurrentSheetImg(event.target.value)
+                    setIsEditing(true)
+                  }}
+                  placeholder="https://... (Image URL)"
+                  className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+                {isValidLink(currentSheetImg) && (
+                  <div className="mt-2">
+                    <img
+                      src={currentSheetImg}
+                      alt="QR Preview"
+                      className="h-24 w-24 rounded-md border border-slate-200 object-contain"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none'
+                      }}
+                    />
                   </div>
-                  {sheetUrl && (
-                    <a
-                      href={sheetUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
-                    >
-                      Open cycle sheet
-                    </a>
-                  )}
-                  {!hasValidScriptLink && (
-                    <p className="text-xs text-slate-500">
-                      Add a Script Link before creating or syncing this cycle.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Test & Diagnostics Section */}
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Test & Diagnostics</p>
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-slate-500">Create a test sheet to verify formatting/scripts.</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!hasValidScriptLink) {
-                        toast.error('Add a valid Script Link first.')
-                        return
-                      }
-                      startManageTransition(async () => {
-                        const toastId = toast.loading('Creating test sheet...')
-                        try {
-                          const res = await fetch('/api/sheets/manage', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ personId, action: 'test_create' }),
-                          })
-                          const data = await res.json()
-                          if (!res.ok || data?.error) {
-                            toast.dismiss(toastId)
-                            toast.error(data?.error || 'Test failed')
-                            return
-                          }
-                          toast.dismiss(toastId)
-                          toast.success('Test sheet created!')
-                          if (data.sheetUrl) {
-                            window.open(data.sheetUrl, '_blank')
-                          }
-                        } catch (err) {
-                          toast.dismiss(toastId)
-                          toast.error('Test request failed')
-                        }
-                      })
-                    }}
-                    disabled={!hasValidScriptLink || isManaging}
-                    className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleSaveLinks}
+                  disabled={!isEditing || isSaving}
+                  className="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  {isSaving ? 'Saving...' : 'Save settings'}
+                </button>
+                {isValidLink(currentSheetUrl) && (
+                  <a
+                    href={currentSheetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center rounded-md border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-white"
                   >
-                    Test Create
-                  </button>
-                </div>
+                    Open sheet
+                  </a>
+                )}
               </div>
             </div>
+
+            {showCycleAction && (
+              <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cycle sheet</p>
+                    <p className="text-sm font-semibold text-slate-900">{cycleTag}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleManageCycle}
+                    disabled={!hasValidCycle || !hasValidScriptLink || isManaging}
+                    className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    {isManaging
+                      ? 'Working...'
+                      : sheetUrl
+                        ? 'Sync cycle sheet'
+                        : 'Create cycle sheet'}
+                  </button>
+                </div>
+                {sheetUrl && (
+                  <a
+                    href={sheetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                  >
+                    Open cycle sheet
+                  </a>
+                )}
+                {!hasValidScriptLink && (
+                  <p className="text-xs text-slate-500">
+                    Add a Script Link before creating or syncing this cycle.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Test & Diagnostics Section */}
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Test & Diagnostics</p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs text-slate-500">Create a test sheet to verify formatting/scripts.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!hasValidScriptLink) {
+                      toast.error('Add a valid Script Link first.')
+                      return
+                    }
+                    startManageTransition(async () => {
+                      const toastId = toast.loading('Creating test sheet...')
+                      try {
+                        const res = await fetch('/api/sheets/manage', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ personId, action: 'test_create' }),
+                        })
+                        const data = await res.json()
+                        if (!res.ok || data?.error) {
+                          toast.dismiss(toastId)
+                          toast.error(data?.error || 'Test failed')
+                          return
+                        }
+                        toast.dismiss(toastId)
+                        toast.success('Test sheet created!')
+                        if (data.sheetUrl) {
+                          window.open(data.sheetUrl, '_blank')
+                        }
+                      } catch (err) {
+                        toast.dismiss(toastId)
+                        toast.error('Test request failed')
+                      }
+                    })
+                  }}
+                  disabled={!hasValidScriptLink || isManaging}
+                  className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+                >
+                  Test Create
+                </button>
+              </div>
+            </div>
+
 
             <div className="border-t border-slate-200 px-4 py-3 flex items-center justify-between">
               <button
@@ -420,7 +463,7 @@ export function ManageSheetButton({
             View Sheet
           </a>
         )}
-      </div>
+      </div >
 
       <Dialog open={showSyncMessage} onOpenChange={setShowSyncMessage}>
         <DialogContent className="max-w-sm text-center">

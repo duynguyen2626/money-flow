@@ -633,6 +633,25 @@ export function TransactionForm({
     }
   }, [baseDefaults, form, initialValues, allAccounts]);
 
+  // Bug Fix: Update account filter to ensure the selected account is visible in Edit Mode
+  useEffect(() => {
+    const sourceId = initialValues?.source_account_id || defaultSourceAccountId;
+    if (sourceId) {
+      const account = allAccounts.find((a) => a.id === sourceId);
+      if (account) {
+        if (["credit_card"].includes(account.type)) {
+          setAccountFilter("credit");
+        } else if (["bank", "cash", "ewallet"].includes(account.type)) {
+          setAccountFilter("account");
+        } else if (["savings", "investment", "asset"].includes(account.type)) {
+          setAccountFilter("other"); // Save tab
+        } else {
+          setAccountFilter("other");
+        }
+      }
+    }
+  }, [initialValues?.source_account_id, defaultSourceAccountId, allAccounts]);
+
   // Smart Reset: Clear category/shop if current selection is invalid for the new type
 
   useEffect(() => {
@@ -787,31 +806,31 @@ export function TransactionForm({
 
       const { split_bill, ...restValues } = values;
 
-    if (split_bill) {
-      if (isEditMode) {
-        const errorText = "Split bill is only available for new transactions.";
-        setSplitBillError(errorText);
-        setStatus({ type: "error", text: errorText });
-        return;
-      }
+      if (split_bill) {
+        if (isEditMode) {
+          const errorText = "Split bill is only available for new transactions.";
+          setSplitBillError(errorText);
+          setStatus({ type: "error", text: errorText });
+          return;
+        }
 
-      const totalAmount = Math.abs(restValues.amount ?? 0);
-      const validationError = validateSplitBill(totalAmount, splitParticipants);
-      if (validationError) {
-        setSplitBillError(validationError);
-        setStatus({ type: "error", text: validationError });
-        return;
-      }
+        const totalAmount = Math.abs(restValues.amount ?? 0);
+        const validationError = validateSplitBill(totalAmount, splitParticipants);
+        if (validationError) {
+          setSplitBillError(validationError);
+          setStatus({ type: "error", text: validationError });
+          return;
+        }
 
-      const rawPercent = Number(restValues.cashback_share_percent ?? 0);
-      const percentValue = rawPercent / 100;
-      const fixedTotal = Number(restValues.cashback_share_fixed ?? 0);
-      const fixedScale = 100;
-      const scaledFixed = Math.round(Math.abs(fixedTotal) * fixedScale);
-      const fixedAllocations = splitParticipants.map((participant) => {
-        if (totalAmount <= 0 || scaledFixed === 0) return 0;
-        return Math.round((participant.amount / totalAmount) * scaledFixed);
-      });
+        const rawPercent = Number(restValues.cashback_share_percent ?? 0);
+        const percentValue = rawPercent / 100;
+        const fixedTotal = Number(restValues.cashback_share_fixed ?? 0);
+        const fixedScale = 100;
+        const scaledFixed = Math.round(Math.abs(fixedTotal) * fixedScale);
+        const fixedAllocations = splitParticipants.map((participant) => {
+          if (totalAmount <= 0 || scaledFixed === 0) return 0;
+          return Math.round((participant.amount / totalAmount) * scaledFixed);
+        });
 
         const fixedRemainder =
           scaledFixed -
@@ -820,134 +839,134 @@ export function TransactionForm({
           fixedAllocations[0] += fixedRemainder;
         }
 
-      const groupName = splitGroupId
-        ? splitBillGroupMap.get(splitGroupId)?.name
-        : undefined;
-      const billTitle = (restValues.note ?? "").trim() || "Split Bill";
-      const splitPrefix =
-        restValues.type === "repayment" ? "[SplitRepay]" : "[SplitBill]";
-      const basePrefix =
-        restValues.type === "repayment"
-          ? "[SplitRepay Base]"
-          : "[SplitBill Base]";
-      const childNoteBase = `${splitPrefix} ${groupName ?? "Group"} | ${billTitle}`;
-      const baseNote = `${basePrefix} ${groupName ?? "Group"} | ${billTitle}`;
-      const baseMetadata = {
-        ...(restValues.installment_plan_id
-          ? { installment_id: restValues.installment_plan_id }
-          : {}),
-        ...(initialValues?.metadata || {}),
-      };
+        const groupName = splitGroupId
+          ? splitBillGroupMap.get(splitGroupId)?.name
+          : undefined;
+        const billTitle = (restValues.note ?? "").trim() || "Split Bill";
+        const splitPrefix =
+          restValues.type === "repayment" ? "[SplitRepay]" : "[SplitBill]";
+        const basePrefix =
+          restValues.type === "repayment"
+            ? "[SplitRepay Base]"
+            : "[SplitBill Base]";
+        const childNoteBase = `${splitPrefix} ${groupName ?? "Group"} | ${billTitle}`;
+        const baseNote = `${basePrefix} ${groupName ?? "Group"} | ${billTitle}`;
+        const baseMetadata = {
+          ...(restValues.installment_plan_id
+            ? { installment_id: restValues.installment_plan_id }
+            : {}),
+          ...(initialValues?.metadata || {}),
+        };
 
-      const baseType =
-        restValues.type === "repayment" ? "income" : restValues.type;
+        const baseType =
+          restValues.type === "repayment" ? "income" : restValues.type;
 
-      const basePayload: Parameters<typeof createTransaction>[0] = {
-        occurred_at: restValues.occurred_at.toISOString(),
-        note: baseNote,
-        type: baseType,
-        source_account_id: restValues.source_account_id,
-        amount: totalAmount,
-        tag: restValues.tag,
-        category_id: restValues.category_id ?? undefined,
-        person_id: splitGroupId ?? undefined,
-        shop_id: restValues.shop_id ?? undefined,
-        destination_account_id:
-          baseType === "income" ? restValues.source_account_id : undefined,
-        metadata: {
-          ...baseMetadata,
-          is_split_bill_base: true,
-          split_group_id: splitGroupId ?? null,
-          split_group_name: groupName ?? null,
-          split_count: splitParticipants.length,
-          split_type: restValues.type,
-        },
-        is_installment: isInstallment,
-        installment_plan_id: restValues.installment_plan_id ?? undefined,
-        cashback_share_percent: percentValue,
-        cashback_share_fixed: fixedTotal,
-        cashback_mode: restValues.cashback_mode,
-      };
+        const basePayload: Parameters<typeof createTransaction>[0] = {
+          occurred_at: restValues.occurred_at.toISOString(),
+          note: baseNote,
+          type: baseType,
+          source_account_id: restValues.source_account_id,
+          amount: totalAmount,
+          tag: restValues.tag,
+          category_id: restValues.category_id ?? undefined,
+          person_id: splitGroupId ?? undefined,
+          shop_id: restValues.shop_id ?? undefined,
+          destination_account_id:
+            baseType === "income" ? restValues.source_account_id : undefined,
+          metadata: {
+            ...baseMetadata,
+            is_split_bill_base: true,
+            split_group_id: splitGroupId ?? null,
+            split_group_name: groupName ?? null,
+            split_count: splitParticipants.length,
+            split_type: restValues.type,
+          },
+          is_installment: isInstallment,
+          installment_plan_id: restValues.installment_plan_id ?? undefined,
+          cashback_share_percent: percentValue,
+          cashback_share_fixed: fixedTotal,
+          cashback_mode: restValues.cashback_mode,
+        };
 
-      const baseTransactionId = await createTransaction(basePayload);
-      if (!baseTransactionId) {
-        setStatus({
-          type: "error",
-          text: "Failed to create base transaction for split bill.",
-        });
-        return;
-      }
+        const baseTransactionId = await createTransaction(basePayload);
+        if (!baseTransactionId) {
+          setStatus({
+            type: "error",
+            text: "Failed to create base transaction for split bill.",
+          });
+          return;
+        }
 
-      const results = await Promise.allSettled(
-        splitParticipants.map((participant, index) => {
-          const debtAccountId = debtAccountByPerson.get(participant.personId);
-          const noteParts = [childNoteBase];
-          const paidBy = participant.paidBy.trim();
-          if (paidBy) {
-            noteParts.push(`Paid by ${paidBy}`);
-          }
-          if (
-            restValues.type !== "repayment" &&
-            participant.paidBefore &&
-            participant.paidBefore > 0
-          ) {
-            noteParts.push(
-              `Paid before ${numberFormatter.format(participant.paidBefore)}`,
-            );
-          }
-          const rowNote = participant.note.trim();
-          if (rowNote) {
-            noteParts.push(rowNote);
-          }
+        const results = await Promise.allSettled(
+          splitParticipants.map((participant, index) => {
+            const debtAccountId = debtAccountByPerson.get(participant.personId);
+            const noteParts = [childNoteBase];
+            const paidBy = participant.paidBy.trim();
+            if (paidBy) {
+              noteParts.push(`Paid by ${paidBy}`);
+            }
+            if (
+              restValues.type !== "repayment" &&
+              participant.paidBefore &&
+              participant.paidBefore > 0
+            ) {
+              noteParts.push(
+                `Paid before ${numberFormatter.format(participant.paidBefore)}`,
+              );
+            }
+            const rowNote = participant.note.trim();
+            if (rowNote) {
+              noteParts.push(rowNote);
+            }
 
-          const payload: Parameters<typeof createTransaction>[0] = {
-            occurred_at: restValues.occurred_at.toISOString(),
-            note: noteParts.join(" | "),
-            type: restValues.type,
-            source_account_id: SPLIT_BILL_SYSTEM_ACCOUNT_ID,
-            amount: participant.amount,
-            tag: restValues.tag,
-            category_id: restValues.category_id ?? undefined,
-            person_id: participant.personId,
-            debt_account_id: debtAccountId ?? undefined,
-            shop_id: restValues.shop_id ?? undefined,
-            destination_account_id:
-              restValues.type === "income" ? restValues.source_account_id : undefined,
-            metadata: {
-              ...baseMetadata,
-              split_parent_id: baseTransactionId,
-              split_group_id: splitGroupId ?? null,
-              split_group_name: groupName ?? null,
-            },
-            is_installment: isInstallment,
-            installment_plan_id: restValues.installment_plan_id ?? undefined,
-            cashback_share_percent: percentValue,
-            cashback_share_fixed:
-              (fixedAllocations[index] ?? 0) / fixedScale,
-            cashback_mode: restValues.cashback_mode,
-          };
+            const payload: Parameters<typeof createTransaction>[0] = {
+              occurred_at: restValues.occurred_at.toISOString(),
+              note: noteParts.join(" | "),
+              type: restValues.type,
+              source_account_id: SPLIT_BILL_SYSTEM_ACCOUNT_ID,
+              amount: participant.amount,
+              tag: restValues.tag,
+              category_id: restValues.category_id ?? undefined,
+              person_id: participant.personId,
+              debt_account_id: debtAccountId ?? undefined,
+              shop_id: restValues.shop_id ?? undefined,
+              destination_account_id:
+                restValues.type === "income" ? restValues.source_account_id : undefined,
+              metadata: {
+                ...baseMetadata,
+                split_parent_id: baseTransactionId,
+                split_group_id: splitGroupId ?? null,
+                split_group_name: groupName ?? null,
+              },
+              is_installment: isInstallment,
+              installment_plan_id: restValues.installment_plan_id ?? undefined,
+              cashback_share_percent: percentValue,
+              cashback_share_fixed:
+                (fixedAllocations[index] ?? 0) / fixedScale,
+              cashback_mode: restValues.cashback_mode,
+            };
 
-          return createTransaction(payload);
-        }),
-      );
+            return createTransaction(payload);
+          }),
+        );
 
-      const failedNames = results
-        .map((result, index) => {
-          if (result.status === "fulfilled" && result.value) {
-            return null;
-          }
-          return splitParticipants[index]?.name ?? "Unknown";
-        })
-        .filter((name): name is string => Boolean(name));
+        const failedNames = results
+          .map((result, index) => {
+            if (result.status === "fulfilled" && result.value) {
+              return null;
+            }
+            return splitParticipants[index]?.name ?? "Unknown";
+          })
+          .filter((name): name is string => Boolean(name));
 
-      if (failedNames.length > 0) {
-        setStatus({
-          type: "error",
-          text: `Base transaction saved. Split rows ${results.length - failedNames.length}/${results.length}. Failed: ${failedNames.join(", ")}.`,
-        });
-        router.refresh();
-        return;
-      }
+        if (failedNames.length > 0) {
+          setStatus({
+            type: "error",
+            text: `Base transaction saved. Split rows ${results.length - failedNames.length}/${results.length}. Failed: ${failedNames.join(", ")}.`,
+          });
+          router.refresh();
+          return;
+        }
 
         router.refresh();
         form.reset({
@@ -1668,23 +1687,23 @@ export function TransactionForm({
       peopleState
         .filter((person) => !person.is_group)
         .map((person) => ({
-        value: person.id,
-        label: person.name,
-        description: person.email || "No email",
-        searchValue: `${person.name} ${person.email ?? ""}`.trim(),
-        icon: person.avatar_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={person.avatar_url}
-            alt={person.name}
-            className="h-5 w-5 object-contain rounded-none"
-          />
-        ) : (
-          <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
-            {getAccountInitial(person.name)}
-          </span>
-        ),
-      })),
+          value: person.id,
+          label: person.name,
+          description: person.email || "No email",
+          searchValue: `${person.name} ${person.email ?? ""}`.trim(),
+          icon: person.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={person.avatar_url}
+              alt={person.name}
+              className="h-5 w-5 object-contain rounded-none"
+            />
+          ) : (
+            <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
+              {getAccountInitial(person.name)}
+            </span>
+          ),
+        })),
     [peopleState],
   );
 
@@ -2888,9 +2907,9 @@ export function TransactionForm({
 
   const PersonInput =
     !isSplitBill &&
-    (transactionType === "debt" ||
-      transactionType === "repayment" ||
-      (transactionType === "income" && !isRefundMode)) ? (
+      (transactionType === "debt" ||
+        transactionType === "repayment" ||
+        (transactionType === "income" && !isRefundMode)) ? (
       <div className="space-y-3">
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Person</label>
@@ -3015,7 +3034,7 @@ export function TransactionForm({
 
   const SplitBillToggle =
     (transactionType === "debt" || transactionType === "repayment") &&
-    !isRefundMode ? (
+      !isRefundMode ? (
       <div className="space-y-2">
         <Label htmlFor="split-bill-toggle" className="text-sm font-medium text-gray-700">
           {splitBillLabel}
@@ -3527,7 +3546,7 @@ export function TransactionForm({
       : transactionType === "debt"
         ? (watchedAmount ?? 0) >= INSTALLMENT_MIN_AMOUNT
         : installments.length > 0 &&
-          (transactionType === "expense" || transactionType === "income"));
+        (transactionType === "expense" || transactionType === "income"));
 
   const hasInstallmentPlans = installments.length > 0;
 

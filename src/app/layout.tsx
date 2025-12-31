@@ -35,7 +35,7 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased h-full w-full overflow-hidden flex flex-col bg-background font-sans`} suppressHydrationWarning>
         <TooltipProvider>
           <AppLayout>{children}</AppLayout>
-          <Toaster />
+          <Toaster position="top-right" richColors />
         </TooltipProvider>
       </body>
     </html>

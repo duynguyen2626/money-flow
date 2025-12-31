@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Combobox } from "@/components/ui/combobox";
 import type { ComboboxGroup } from "@/components/ui/combobox";
+import { Command, CommandEmpty, CommandGroup, CommandItem, CommandList } from "@/components/ui/command";
 import { AddTransactionDialog } from "@/components/moneyflow/add-transaction-dialog";
 import { generateTag } from "@/lib/tag";
 import { cn } from "@/lib/utils";
@@ -232,12 +233,56 @@ const resolveCashbackMode = (
 const getDefaultShop = (shops: Shop[]) =>
   shops.find((shop) => normalizeName(shop.name).includes("shopee")) ?? null;
 
+const extractAccountKeyword = (text: string) => {
+  const patterns = [
+    /(?:thẻ|card|account)\s+(\w+)/i,
+    /(\w+)\s+(?:card|account)/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) return match[1];
+  }
+  // If no pattern matches, try to extract the last word
+  const words = text.trim().split(/\s+/);
+  if (words.length > 0) {
+    const lastWord = words[words.length - 1];
+    // Check if it looks like an account keyword (short, alphanumeric)
+    if (lastWord.length <= 10 && /^[a-z0-9]+$/i.test(lastWord)) {
+      return lastWord;
+    }
+  }
+  return text; // fallback to full text
+};
+
 const findAccountCandidates = (text: string, accounts: Account[]) => {
-  const normalized = normalizeName(text);
-  if (!normalized) return [];
+  const normalizedInput = normalizeName(text);
+  if (!normalizedInput) return [];
+
+  // 1. Exact match (highest priority)
+  const exact = accounts.find(acc => normalizeName(acc.name) === normalizedInput);
+  if (exact) return [exact];
+
+  // 2. Start-with match
+  const startsWith = accounts.filter(acc => normalizeName(acc.name).startsWith(normalizedInput));
+  if (startsWith.length > 0) return startsWith;
+
+  // 3. Word-based match (smart keywords)
+  const inputWords = normalizedInput.split(/\s+/);
   return accounts.filter((account) => {
     const accountName = normalizeName(account.name);
-    return accountName.includes(normalized) || normalized.includes(accountName);
+    // If the input is fully contained in the account name
+    if (accountName.includes(normalizedInput)) return true;
+
+    // If identifying words from the account name are present in the input
+    // e.g. "vib credit" -> matches "Vib Platinum" if "vib" is a match
+    const accountWords = accountName.split(/\s+/);
+    const matchesAllInputKeywords = inputWords.every(word => accountName.includes(word));
+    if (matchesAllInputKeywords) return true;
+
+    return false;
+  }).sort((a, b) => {
+    // Prefer shorter names (more precise match) when fuzzy matching
+    return a.name.length - b.name.length;
   });
 };
 
@@ -357,6 +402,7 @@ export function QuickAddChat({
   contextPerson?: Person | null;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState<QuickAddDraft>(buildInitialDraft());
@@ -615,6 +661,24 @@ export function QuickAddChat({
     void loadTemplates();
   }, [open]);
 
+  // Smart context detection: pre-populate from URL
+  useEffect(() => {
+    if (!pathname || !open) return;
+    const personMatch = pathname.match(/\/people\/([^\/\?]+)/);
+    if (personMatch?.[1] && people.length > 0) {
+      const personId = personMatch[1];
+      const person = people.find(p => p.id === personId);
+      if (person && !draft.intent && !draft.people.length) {
+        setDraft(prev => ({
+          ...prev,
+          intent: "lend",
+          people: [person],
+        }));
+        appendMessage("assistant", `Detected you're on ${person.name}'s page. Setting type to Lend.`);
+      }
+    }
+  }, [pathname, open, people]);
+
   const resetWizard = () => {
     setDraft(buildInitialDraft());
     setMessages([
@@ -703,9 +767,9 @@ export function QuickAddChat({
     );
     const group =
       groupCandidate &&
-      resolvedPeople.some(
-        (person) => normalizeName(person.name) === normalizeName(groupCandidate.name),
-      )
+        resolvedPeople.some(
+          (person) => normalizeName(person.name) === normalizeName(groupCandidate.name),
+        )
         ? null
         : groupCandidate;
     const sourceAccount =
@@ -1018,10 +1082,12 @@ export function QuickAddChat({
       if (!isConfirmAnswer) {
         setAccountQuery(trimmed);
       }
+      // Extract keyword from full prompt for better matching
+      const searchKeyword = extractAccountKeyword(trimmed);
       const candidates =
         accountCandidates.length > 0
           ? accountCandidates
-          : findAccountCandidates(trimmed, selectableAccounts);
+          : findAccountCandidates(searchKeyword, selectableAccounts);
       if (candidates.length > 1 && accountCandidates.length === 0) {
         setAccountCandidates(candidates);
         appendMessage("assistant", "Multiple accounts match. Please choose one.");
@@ -1301,19 +1367,30 @@ export function QuickAddChat({
         cashback_share_fixed: draft.cashbackShareFixed ?? null,
         cashback_mode: draft.cashbackMode ?? null,
       };
+      console.log("[QuickAddChat] Saving template:", { name, payload });
       const response = await fetch("/api/ai/templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, payload }),
       });
       if (!response.ok) {
-        throw new Error("Failed to save template");
+        const errorData = await response.json().catch(() => ({}));
+        console.error("[QuickAddChat] Template save failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData,
+        });
+        throw new Error(errorData?.error || `Failed to save template (${response.status})`);
       }
+      const result = await response.json();
+      console.log("[QuickAddChat] Template saved successfully:", result);
       await loadTemplates();
       setTemplateName("");
       appendMessage("assistant", `Template "${name}" saved.`);
     } catch (error) {
-      setTemplateError("Failed to save template.");
+      console.error("[QuickAddChat] Template save error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to save template.";
+      setTemplateError(errorMessage);
     } finally {
       setIsSavingTemplate(false);
     }
@@ -1833,34 +1910,85 @@ export function QuickAddChat({
               ))}
             </div>
           )}
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              value={inputValue}
+              onChange={(event) => setInputValue(event.target.value)}
+              placeholder="Search people or groups..."
+              className="h-9 pl-9 text-sm"
+            />
+          </div>
+          {inputValue.trim() && (
+            <Command className="rounded-lg border border-slate-200">
+              <CommandList>
+                <CommandEmpty>No results.</CommandEmpty>
+                <CommandGroup>
+                  {individualPeople
+                    .filter((person) =>
+                      normalizeName(person.name).includes(normalizeName(inputValue))
+                    )
+                    .map((person) => (
+                      <CommandItem
+                        key={person.id}
+                        onSelect={() => {
+                          appendMessage("user", person.name);
+                          let nextDraft: QuickAddDraft = {
+                            ...draft,
+                            people: [person],
+                            group: null,
+                            splitBill: false,
+                            splitBillConfirmed: true,
+                          };
+                          nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+                            groupMembers,
+                            people: individualPeople,
+                          });
+                          nextDraft.cashbackMode = resolveCashbackMode(
+                            nextDraft.sourceAccount,
+                            nextDraft.cashbackSharePercent,
+                            nextDraft.cashbackShareFixed,
+                          );
+                          setDraft(nextDraft);
+                          goToStep(computeNextStep(nextDraft));
+                          setInputValue("");
+                        }}
+                      >
+                        {person.name}
+                      </CommandItem>
+                    ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          )}
           <div className="flex flex-wrap gap-2">
-              {recentPeople.map((person) => (
-                <button
-                  key={person.id}
-                  type="button"
-                  className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
-                  onClick={() => {
-                    appendMessage("user", person.name);
-                    let nextDraft: QuickAddDraft = {
-                      ...draft,
-                      people: [person],
-                      group: null,
-                      splitBill: false,
-                      splitBillConfirmed: true,
-                    };
-                    nextDraft = applyDefaultCashbackForPeople(nextDraft, {
-                      groupMembers,
-                      people: individualPeople,
-                    });
-                    nextDraft.cashbackMode = resolveCashbackMode(
-                      nextDraft.sourceAccount,
-                      nextDraft.cashbackSharePercent,
-                      nextDraft.cashbackShareFixed,
-                    );
-                    setDraft(nextDraft);
-                    goToStep(computeNextStep(nextDraft));
-                  }}
-                >
+            {recentPeople.map((person) => (
+              <button
+                key={person.id}
+                type="button"
+                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
+                onClick={() => {
+                  appendMessage("user", person.name);
+                  let nextDraft: QuickAddDraft = {
+                    ...draft,
+                    people: [person],
+                    group: null,
+                    splitBill: false,
+                    splitBillConfirmed: true,
+                  };
+                  nextDraft = applyDefaultCashbackForPeople(nextDraft, {
+                    groupMembers,
+                    people: individualPeople,
+                  });
+                  nextDraft.cashbackMode = resolveCashbackMode(
+                    nextDraft.sourceAccount,
+                    nextDraft.cashbackSharePercent,
+                    nextDraft.cashbackShareFixed,
+                  );
+                  setDraft(nextDraft);
+                  goToStep(computeNextStep(nextDraft));
+                }}
+              >
                 {person.name}
               </button>
             ))}
@@ -2086,31 +2214,27 @@ export function QuickAddChat({
     }) => {
       const isEditing = reviewEditField === field;
       return (
-        <div className={cn("space-y-2", isEditing && "lg:col-span-2")}>
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-start">
-            <span className="text-xs font-semibold text-slate-600 sm:w-24 sm:shrink-0">
+        <div className={cn("flex-shrink-0 space-y-1 rounded-xl p-3 transition-colors duration-200 min-w-[120px]", isEditing ? "bg-slate-50 shadow-sm border border-slate-100" : "hover:bg-slate-50")}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
               {label}
             </span>
-            <div className="flex items-start gap-2 sm:flex-1 sm:justify-end">
-              <span className="text-sm text-slate-900 break-words sm:text-right">
-                {value}
-              </span>
-              {editable ? (
-                <button
-                  type="button"
-                  className="mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-600"
-                  onClick={() => startReviewEdit(field)}
-                  aria-label={`Edit ${label}`}
-                >
-                  <Pencil className="h-3.5 w-3.5" />
-                </button>
-              ) : (
-                <span className="h-6 w-6" />
-              )}
-            </div>
+            {editable && (
+              <button
+                type="button"
+                className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-600"
+                onClick={() => startReviewEdit(field)}
+                aria-label={`Edit ${label}`}
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
+            )}
+          </div>
+          <div className="text-sm font-medium text-slate-900 truncate" title={value}>
+            {value}
           </div>
           {isEditing && editor && (
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <div className="mt-2 rounded-xl border border-slate-200 bg-white p-3">
               {editor}
             </div>
           )}
@@ -2121,287 +2245,312 @@ export function QuickAddChat({
     return (
       <div className="space-y-3">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-700">
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="flex gap-3 overflow-x-auto pb-2">
             {renderRow({
               field: "type",
               label: "Type",
               value: formatIntentLabel(draft.intent),
               editor: (
-              <div className="flex flex-wrap gap-2">
-                {quickTypeOptions.map((option) => (
-                  <button
-                    key={option.intent}
-                    type="button"
-                    className={cn(
-                      "rounded-full border px-3 py-1 text-xs font-semibold",
-                      draft.intent === option.intent
-                        ? "border-blue-300 bg-blue-50 text-blue-700"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700",
-                    )}
-                    onClick={() => handleReviewTypeChange(option.intent)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            ),
-          })}
-          {renderRow({
-            field: "amount",
-            label: "Amount",
-            value: draft.amount?.toLocaleString() ?? "-",
-            editor: (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Input
-                  value={reviewEditValue}
-                  onChange={(event) => setReviewEditValue(event.target.value)}
-                  placeholder="Amount"
-                  className="h-9 w-full sm:w-40"
-                />
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="h-9 px-3 text-xs"
-                    onClick={commitAmountEdit}
-                  >
-                    Save
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="h-9 px-2 text-xs"
-                    onClick={closeReviewEdit}
-                  >
-                    Cancel
-                  </Button>
+                <div className="flex flex-wrap gap-2">
+                  {quickTypeOptions.map((option) => (
+                    <button
+                      key={option.intent}
+                      type="button"
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-semibold",
+                        draft.intent === option.intent
+                          ? "border-blue-300 bg-blue-50 text-blue-700"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:text-blue-700",
+                      )}
+                      onClick={() => handleReviewTypeChange(option.intent)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
                 </div>
-              </div>
-            ),
-          })}
-          {isDebtIntent &&
-            renderRow({
-              field: "who",
-              label: "Who",
-              value: whoLabel,
-              editor: (
-                <Combobox
-                  groups={personGroups}
-                  value={activePersonValue}
-                  onValueChange={handleReviewWhoChange}
-                  placeholder="Pick a person or group"
-                  inputPlaceholder="Search people..."
-                />
               ),
             })}
-          {renderRow({
-            field: "account",
-            label: "Account",
-            value: draft.sourceAccount?.name ?? "-",
-            editor: (
-              <Combobox
-                items={accountItems}
-                value={draft.sourceAccount?.id}
-                onValueChange={handleReviewAccountChange}
-                placeholder="Pick an account"
-                inputPlaceholder="Search accounts..."
-                tabs={[
-                  {
-                    value: "all",
-                    label: "All",
-                    onClick: () => setReviewAccountFilter("all"),
-                    active: reviewAccountFilter === "all",
-                  },
-                  {
-                    value: "vib",
-                    label: "Vib",
-                    onClick: () => setReviewAccountFilter("vib"),
-                    active: reviewAccountFilter === "vib",
-                  },
-                ]}
-              />
-            ),
-          })}
-          {draft.intent === "transfer" &&
-            renderRow({
-              field: "destination",
-              label: "Destination",
-              value: draft.destinationAccount?.name ?? "-",
+            {renderRow({
+              field: "amount",
+              label: "Amount",
+              value: draft.amount?.toLocaleString() ?? "-",
+              editor: (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Input
+                    value={reviewEditValue}
+                    onChange={(event) => setReviewEditValue(event.target.value)}
+                    placeholder="Amount"
+                    className="h-9 w-full sm:w-40"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitAmountEdit();
+                      if (e.key === "Escape") closeReviewEdit();
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-9 px-3 text-xs"
+                      onClick={commitAmountEdit}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="h-9 px-2 text-xs"
+                      onClick={closeReviewEdit}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ),
+            })}
+            {isDebtIntent &&
+              renderRow({
+                field: "who",
+                label: "Who",
+                value: whoLabel,
+                editor: (
+                  <Combobox
+                    groups={personGroups}
+                    value={activePersonValue}
+                    onValueChange={handleReviewWhoChange}
+                    placeholder="Pick a person or group"
+                    inputPlaceholder="Search people..."
+                  />
+                ),
+              })}
+            {renderRow({
+              field: "account",
+              label: "Account",
+              value: draft.sourceAccount?.name ?? "-",
               editor: (
                 <Combobox
                   items={accountItems}
-                  value={draft.destinationAccount?.id}
-                  onValueChange={handleReviewDestinationChange}
-                  placeholder="Pick a destination"
+                  value={draft.sourceAccount?.id}
+                  onValueChange={handleReviewAccountChange}
+                  placeholder="Pick an account"
                   inputPlaceholder="Search accounts..."
+                  tabs={[
+                    {
+                      value: "all",
+                      label: "All",
+                      onClick: () => setReviewAccountFilter("all"),
+                      active: reviewAccountFilter === "all",
+                    },
+                    {
+                      value: "vib",
+                      label: "Vib",
+                      onClick: () => setReviewAccountFilter("vib"),
+                      active: reviewAccountFilter === "vib",
+                    },
+                  ]}
                 />
               ),
             })}
-          {renderRow({
-            field: "date",
-            label: "Date",
-            value: draft.occurredAt
-              ? draft.occurredAt.toISOString().slice(0, 10)
-              : "-",
-            editor: (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Input
-                  type="date"
-                  value={reviewEditValue}
-                  onChange={(event) => setReviewEditValue(event.target.value)}
-                  className="h-9 w-full sm:w-44"
-                />
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="h-9 px-3 text-xs"
-                    onClick={commitDateEdit}
-                  >
-                    Save
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="h-9 px-2 text-xs"
-                    onClick={closeReviewEdit}
-                  >
-                    Cancel
-                  </Button>
+            {draft.intent === "transfer" &&
+              renderRow({
+                field: "destination",
+                label: "Destination",
+                value: draft.destinationAccount?.name ?? "-",
+                editor: (
+                  <Combobox
+                    items={accountItems}
+                    value={draft.destinationAccount?.id}
+                    onValueChange={handleReviewDestinationChange}
+                    placeholder="Pick a destination"
+                    inputPlaceholder="Search accounts..."
+                  />
+                ),
+              })}
+            {renderRow({
+              field: "date",
+              label: "Date",
+              value: draft.occurredAt
+                ? draft.occurredAt.toISOString().slice(0, 10)
+                : "-",
+              editor: (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Input
+                    type="date"
+                    value={reviewEditValue}
+                    onChange={(event) => setReviewEditValue(event.target.value)}
+                    className="h-9 w-full sm:w-44"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitDateEdit();
+                      if (e.key === "Escape") closeReviewEdit();
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-9 px-3 text-xs"
+                      onClick={commitDateEdit}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="h-9 px-2 text-xs"
+                      onClick={closeReviewEdit}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ),
-          })}
-          {renderRow({
-            field: "category",
-            label: "Category",
-            value: draft.category?.name ?? "-",
-            editor: (
-              <Combobox
-                items={categoryItems}
-                value={draft.category?.id}
-                onValueChange={handleReviewCategoryChange}
-                placeholder="Pick a category"
-                inputPlaceholder="Search categories..."
-              />
-            ),
-          })}
-          {renderRow({
-            field: "shop",
-            label: "Shop",
-            value: draft.shop?.name ?? "-",
-            editor: (
-              <Combobox
-                items={shopItems}
-                value={draft.shop?.id}
-                onValueChange={handleReviewShopChange}
-                placeholder="Pick a shop"
-                inputPlaceholder="Search shops..."
-              />
-            ),
-          })}
-          {renderRow({
-            field: "note",
-            label: "Note",
-            value: draft.note?.trim() ? draft.note : "-",
-            editor: (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Input
-                  value={reviewEditValue}
-                  onChange={(event) => setReviewEditValue(event.target.value)}
-                  placeholder="Note"
-                  className="h-9 w-full sm:min-w-[240px]"
+              ),
+            })}
+            {renderRow({
+              field: "category",
+              label: "Category",
+              value: draft.category?.name ?? "-",
+              editor: (
+                <Combobox
+                  items={categoryItems}
+                  value={draft.category?.id}
+                  onValueChange={handleReviewCategoryChange}
+                  placeholder="Pick a category"
+                  inputPlaceholder="Search categories..."
                 />
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="h-9 px-3 text-xs"
-                    onClick={commitNoteEdit}
-                  >
-                    Save
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="h-9 px-2 text-xs"
-                    onClick={closeReviewEdit}
-                  >
-                    Cancel
-                  </Button>
+              ),
+            })}
+            {renderRow({
+              field: "shop",
+              label: "Shop",
+              value: draft.shop?.name ?? "-",
+              editor: (
+                <Combobox
+                  items={shopItems}
+                  value={draft.shop?.id}
+                  onValueChange={handleReviewShopChange}
+                  placeholder="Pick a shop"
+                  inputPlaceholder="Search shops..."
+                />
+              ),
+            })}
+            {renderRow({
+              field: "note",
+              label: "Note",
+              value: draft.note?.trim() ? draft.note : "-",
+              editor: (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Input
+                    value={reviewEditValue}
+                    onChange={(event) => setReviewEditValue(event.target.value)}
+                    placeholder="Note"
+                    className="h-9 w-full sm:min-w-[240px]"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitNoteEdit();
+                      if (e.key === "Escape") closeReviewEdit();
+                    }}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-9 px-3 text-xs"
+                      onClick={commitNoteEdit}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="h-9 px-2 text-xs"
+                      onClick={closeReviewEdit}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ),
-          })}
-          {renderRow({
-            field: "back",
-            label: "Back",
-            value: cashbackLabel,
-            editor: (
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Input
-                  value={reviewEditValue}
-                  onChange={(event) => setReviewEditValue(event.target.value)}
-                  placeholder="Percent"
-                  className="h-9 w-full sm:w-28"
-                />
-                <Input
-                  value={reviewEditSecondaryValue}
-                  onChange={(event) =>
-                    setReviewEditSecondaryValue(event.target.value)
-                  }
-                  placeholder="Fixed"
-                  className="h-9 w-full sm:w-28"
-                />
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="h-9 px-3 text-xs"
-                    onClick={commitBackEdit}
-                  >
-                    Save
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="h-9 px-2 text-xs"
-                    onClick={closeReviewEdit}
-                  >
-                    Cancel
-                  </Button>
+              ),
+            })}
+            {renderRow({
+              field: "back",
+              label: "Back",
+              value: cashbackLabel,
+              editor: (
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Input
+                    value={reviewEditValue}
+                    onChange={(event) => setReviewEditValue(event.target.value)}
+                    placeholder="Percent"
+                    className="h-9 w-full sm:w-28"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitBackEdit();
+                      if (e.key === "Escape") closeReviewEdit();
+                    }}
+                  />
+                  <Input
+                    value={reviewEditSecondaryValue}
+                    onChange={(event) =>
+                      setReviewEditSecondaryValue(event.target.value)
+                    }
+                    placeholder="Fixed"
+                    className="h-9 w-full sm:w-28"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") commitBackEdit();
+                      if (e.key === "Escape") closeReviewEdit();
+                    }}
+                  />
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="h-9 px-3 text-xs"
+                      onClick={commitBackEdit}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="h-9 px-2 text-xs"
+                      onClick={closeReviewEdit}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ),
-          })}
-          {renderRow({
-            field: "split",
-            label: "Split Bill",
-            value: splitLabel,
-            editable: isDebtIntent,
-            editor: isDebtIntent ? (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-xs font-semibold",
-                    draft.splitBill
-                      ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                      : "border-slate-200 bg-white text-slate-700",
-                  )}
-                  onClick={() => handleReviewSplitChange(true)}
-                >
-                  Split
-                </button>
-                <button
-                  type="button"
-                  disabled={Boolean(draft.group)}
-                  className={cn(
-                    "rounded-full border px-3 py-1 text-xs font-semibold",
-                    !draft.splitBill
-                      ? "border-rose-300 bg-rose-50 text-rose-700"
-                      : "border-slate-200 bg-white text-slate-700",
-                    draft.group && "cursor-not-allowed opacity-50",
-                  )}
-                  onClick={() => handleReviewSplitChange(false)}
-                >
-                  No split
-                </button>
-              </div>
-            ) : undefined,
-          })}
+              ),
+            })}
+            {renderRow({
+              field: "split",
+              label: "Split Bill",
+              value: splitLabel,
+              editable: isDebtIntent,
+              editor: isDebtIntent ? (
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-semibold",
+                      draft.splitBill
+                        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                        : "border-slate-200 bg-white text-slate-700",
+                    )}
+                    onClick={() => handleReviewSplitChange(true)}
+                  >
+                    Split
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(draft.group)}
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-semibold",
+                      !draft.splitBill
+                        ? "border-rose-300 bg-rose-50 text-rose-700"
+                        : "border-slate-200 bg-white text-slate-700",
+                      draft.group && "cursor-not-allowed opacity-50",
+                    )}
+                    onClick={() => handleReviewSplitChange(false)}
+                  >
+                    No split
+                  </button>
+                </div>
+              ) : undefined,
+            })}
           </div>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
@@ -2451,12 +2600,14 @@ export function QuickAddChat({
             Review in Modal
           </Button>
         </div>
-        {submitError && (
-          <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-            {submitError}
-          </div>
-        )}
-      </div>
+        {
+          submitError && (
+            <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              {submitError}
+            </div>
+          )
+        }
+      </div >
     );
   };
 
@@ -2467,13 +2618,32 @@ export function QuickAddChat({
           <div
             key={message.id}
             className={cn(
-              "max-w-[80%] rounded-2xl px-3 py-2 text-sm",
-              message.role === "user"
-                ? "ml-auto bg-blue-600 text-white"
-                : "bg-white text-slate-700",
+              "flex w-full gap-2",
+              message.role === "user" ? "justify-end" : "justify-start"
             )}
           >
-            {message.content}
+            {message.role !== "user" && (
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
+                <Sparkles className="h-4 w-4" />
+              </div>
+            )}
+            <div
+              className={cn(
+                "max-w-[80%] rounded-2xl px-4 py-3 text-sm shadow-sm",
+                message.role === "user"
+                  ? "bg-blue-600 text-white rounded-br-none"
+                  : "bg-white text-slate-700 border border-slate-100 rounded-bl-none"
+              )}
+            >
+              <div
+                className={cn(
+                  "whitespace-pre-wrap break-words leading-relaxed",
+                  message.role !== "user" && "text-slate-600"
+                )}
+              >
+                {message.content}
+              </div>
+            </div>
           </div>
         ))}
         <div ref={messagesEndRef} />
@@ -2501,6 +2671,14 @@ export function QuickAddChat({
               onChange={(event) => setInputValue(event.target.value)}
               placeholder="Type your answer..."
               className="min-h-[72px]"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!isParsing) {
+                    handleSubmitInput();
+                  }
+                }
+              }}
             />
             <Button
               onClick={handleSubmitInput}
@@ -2627,7 +2805,7 @@ export function QuickAddChat({
 
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogContent
-              className="max-w-3xl"
+              className="max-w-4xl"
             >
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">

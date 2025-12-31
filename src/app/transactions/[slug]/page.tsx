@@ -5,7 +5,7 @@ import { getCategories } from "@/services/category.service";
 import { getPeople } from "@/services/people.service";
 import { getShops } from "@/services/shop.service";
 import { getTransactionById } from "@/services/transaction.service";
-import { FilterableTransactions } from "@/components/moneyflow/filterable-transactions";
+import { EditableTempTable } from "@/components/moneyflow/editable-temp-table";
 import { TagFilterProvider } from "@/context/tag-filter-context";
 import { QuickAddChat } from "@/components/ai/quick-add-chat";
 import { TempTransactionGuard } from "@/components/moneyflow/temp-transaction-guard";
@@ -75,7 +75,7 @@ export default async function TempTransactionPage({
               </div>
             </div>
             {transaction ? (
-              <FilterableTransactions
+              <EditableTempTable
                 transactions={[transaction]}
                 categories={categories}
                 accounts={accounts}

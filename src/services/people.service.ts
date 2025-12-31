@@ -643,6 +643,7 @@ export async function updatePerson(
     avatar_url?: string | null
     sheet_link?: string | null
     google_sheet_url?: string | null
+    sheet_full_img?: string | null
     subscriptionIds?: string[]
     is_owner?: boolean
     is_archived?: boolean
@@ -662,6 +663,7 @@ export async function updatePerson(
   if (typeof data.avatar_url !== 'undefined') payload.avatar_url = data.avatar_url?.trim() || null
   if (normalizedSheetLink !== undefined) payload.sheet_link = normalizedSheetLink
   if (normalizedGoogleSheetUrl !== undefined) payload.google_sheet_url = normalizedGoogleSheetUrl
+  if (typeof data.sheet_full_img !== 'undefined') payload.sheet_full_img = data.sheet_full_img?.trim() || null
   if (typeof data.is_owner === 'boolean') payload.is_owner = data.is_owner
   if (typeof data.is_archived === 'boolean') payload.is_archived = data.is_archived
   if (typeof data.is_group === 'boolean') payload.is_group = data.is_group
@@ -672,8 +674,12 @@ export async function updatePerson(
   console.log('updatePerson payload:', { id, payload })
 
   if (Object.keys(payload).length > 0) {
-    let { error } = await (supabase.from('profiles').update as any)(payload).eq('id', id)
+    console.log('[updatePerson] Executing database update with payload:', payload)
+    let { error, data: updateData } = await (supabase.from('profiles').update as any)(payload).eq('id', id).select()
+    console.log('[updatePerson] Database update result:', { error, data: updateData })
+    
     if (error?.code === '42703' || error?.code === 'PGRST204') {
+      console.log('[updatePerson] Column not found error, trying fallback without new columns')
       const {
         is_archived: _ignoreArchived,
         is_owner: _ignoreOwner,
@@ -682,13 +688,15 @@ export async function updatePerson(
         google_sheet_url: _ignoreSheet,
         ...fallbackPayload
       } = payload as any
-      const fallback = await (supabase.from('profiles').update as any)(fallbackPayload).eq('id', id)
+      const fallback = await (supabase.from('profiles').update as any)(fallbackPayload).eq('id', id).select()
       error = fallback.error
+      console.log('[updatePerson] Fallback result:', { error, data: fallback.data })
     }
     if (error) {
       console.error('Failed to update profile:', error)
       return false
     }
+    console.log('[updatePerson] Update successful!')
   }
 
   if (Array.isArray(data.subscriptionIds)) {

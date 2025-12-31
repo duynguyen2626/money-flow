@@ -105,8 +105,18 @@ function handleSyncTransactions(payload) {
 
     var ss = getOrCreateSpreadsheet(personId, payload);
     var sheet = getOrCreateCycleTab(ss, cycleTag);
+    var isAnhScript = payload.anh_script_mode || false;
 
-    setupNewSheet(sheet);
+    setupNewSheet(sheet, isAnhScript);
+
+    // Handle Image Insertion if Anh Script mode and img provided
+    if (isAnhScript && payload.img) {
+        try {
+            var existing = sheet.getImages();
+            for (var k = 0; k < existing.length; k++) { existing[k].remove(); } // Clear old images?
+            sheet.insertImage(payload.img, 12, 8).setAnchorCell(sheet.getRange("L8"));
+        } catch (e) { }
+    }
 
     var lastRow = sheet.getLastRow();
     if (lastRow > 1) {
@@ -243,7 +253,7 @@ function getOrCreateCycleTab(ss, cycleTag) {
     return sheet;
 }
 
-function setupNewSheet(sheet) {
+function setupNewSheet(sheet, isAnhScript) {
     SpreadsheetApp.flush();
     sheet.getRange('A1').setNote('Script Version: 3.7');
 
@@ -287,13 +297,13 @@ function setupNewSheet(sheet) {
     var rule1 = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$B2="In"').setBackground("#D5F5E3").setFontColor("#145A32").setRanges([sheet.getRange('A2:J')]).build();
     sheet.setConditionalFormatRules([rule1]);
 
-    setupSummaryTable(sheet);
+    setupSummaryTable(sheet, isAnhScript);
     ensureShopSheet(sheet.getParent());
     ensureBankInfoSheet(sheet.getParent());
     SpreadsheetApp.flush();
 }
 
-function setupSummaryTable(sheet) {
+function setupSummaryTable(sheet, isAnhScript) {
     var r = sheet.getRange('L1:N1');
     r.setValues([['No.', 'Summary', 'Value']]);
     r.setFontWeight('bold').setBackground('#fde4e4').setFontSize(12).setBorder(true, true, true, true, true, true).setHorizontalAlignment('center');
@@ -304,7 +314,7 @@ function setupSummaryTable(sheet) {
     sheet.getRange('N2').setFormula('=SUMIFS(J:J;B:B;"In")');
     sheet.getRange('N3').setFormula('=SUM(I2:I)');
     sheet.getRange('N4').setFormula('=SUMIFS(J:J;B:B;"Out")');
-    sheet.getRange('N5').setFormula('=N4-(N2+N3)');
+    sheet.getRange('N5').setFormula('=N4+N2');
 
     sheet.getRange('N2:N5').setNumberFormat('#,##0').setFontWeight('bold');
     sheet.getRange('L2:N5').setBorder(true, true, true, true, true, true);
@@ -321,7 +331,11 @@ function setupSummaryTable(sheet) {
     } catch (e) { }
 
     var bankCell = sheet.getRange('L6:N6');
-    try { bankCell.merge(); } catch (e) { }
+    try {
+        if (!isAnhScript) {
+            bankCell.merge();
+        }
+    } catch (e) { }
     bankCell.setFormula('=BankInfo!A2&" "&BankInfo!B2&" "&BankInfo!C2&" "&ROUND(N5;0)');
     bankCell.setFontWeight('bold').setHorizontalAlignment('left').setBorder(true, true, true, true, true, true);
 }

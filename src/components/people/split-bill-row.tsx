@@ -242,7 +242,7 @@ export function SplitBillRow({
         backgroundColor: '#ffffff',
         useCORS: true,
         allowTaint: true,
-        onclone: (doc) => {
+        onclone: (doc: Document) => {
           const view = doc.defaultView
           if (!view) return
           const cloneTarget = doc.querySelector(captureSelector) as HTMLElement | null
@@ -270,7 +270,7 @@ export function SplitBillRow({
           )
           applyFallbackStyles([...cloneGlobals, ...cloneNodes], view, false)
         },
-      })
+      } as any)
       canvas.toBlob((blob) => {
         if (!blob) {
           toast.error('Failed to capture image')
@@ -509,17 +509,17 @@ export function SplitBillRow({
                   </button>
                 </div>
                 {qrInput ? (
-                <div className="rounded-md border border-slate-200 bg-white p-2 flex items-center justify-center">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    ref={qrPreviewRef}
-                    crossOrigin="anonymous"
-                    src={qrInput}
-                    alt="QR code"
-                    className="max-h-48 w-auto max-w-full object-contain"
-                  />
-                </div>
-              ) : (
+                  <div className="rounded-md border border-slate-200 bg-white p-2 flex items-center justify-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      ref={qrPreviewRef}
+                      crossOrigin="anonymous"
+                      src={qrInput}
+                      alt="QR code"
+                      className="max-h-48 w-auto max-w-full object-contain"
+                    />
+                  </div>
+                ) : (
                   <p className="text-[11px] text-slate-400">
                     Paste an image URL to preview the QR code here.
                   </p>

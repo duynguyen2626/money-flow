@@ -54,6 +54,7 @@ export async function updatePersonAction(
     avatar_url?: string | null
     sheet_link?: string | null
     google_sheet_url?: string | null
+    sheet_full_img?: string | null
     subscriptionIds?: string[]
     is_owner?: boolean
     is_archived?: boolean
@@ -61,7 +62,9 @@ export async function updatePersonAction(
     group_parent_id?: string | null
   }
 ) {
+  console.log('[updatePersonAction] Called with:', { id, payload })
   const ok = await updatePerson(id, payload)
+  console.log('[updatePersonAction] Result:', ok)
   if (ok) {
     revalidatePath('/people')
   }
