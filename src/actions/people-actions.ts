@@ -55,6 +55,8 @@ export async function updatePersonAction(
     sheet_link?: string | null
     google_sheet_url?: string | null
     sheet_full_img?: string | null
+    sheet_show_bank_account?: boolean
+    sheet_show_qr_image?: boolean
     subscriptionIds?: string[]
     is_owner?: boolean
     is_archived?: boolean

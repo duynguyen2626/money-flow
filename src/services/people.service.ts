@@ -644,6 +644,8 @@ export async function updatePerson(
     sheet_link?: string | null
     google_sheet_url?: string | null
     sheet_full_img?: string | null
+    sheet_show_bank_account?: boolean
+    sheet_show_qr_image?: boolean
     subscriptionIds?: string[]
     is_owner?: boolean
     is_archived?: boolean
@@ -664,6 +666,8 @@ export async function updatePerson(
   if (normalizedSheetLink !== undefined) payload.sheet_link = normalizedSheetLink
   if (normalizedGoogleSheetUrl !== undefined) payload.google_sheet_url = normalizedGoogleSheetUrl
   if (typeof data.sheet_full_img !== 'undefined') payload.sheet_full_img = data.sheet_full_img?.trim() || null
+  if (typeof data.sheet_show_bank_account === 'boolean') payload.sheet_show_bank_account = data.sheet_show_bank_account
+  if (typeof data.sheet_show_qr_image === 'boolean') payload.sheet_show_qr_image = data.sheet_show_qr_image
   if (typeof data.is_owner === 'boolean') payload.is_owner = data.is_owner
   if (typeof data.is_archived === 'boolean') payload.is_archived = data.is_archived
   if (typeof data.is_group === 'boolean') payload.is_group = data.is_group
