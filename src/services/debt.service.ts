@@ -164,11 +164,15 @@ export async function getPersonDetails(id: string): Promise<{
   avatar_url: string | null
   sheet_link: string | null
   google_sheet_url: string | null
+  sheet_full_img: string | null
+  sheet_show_bank_account: boolean
+  sheet_show_qr_image: boolean
 } | null> {
   const supabase = createClient()
+  // Add new columns to SELECT
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, name, avatar_url, sheet_link, google_sheet_url')
+    .select('id, name, avatar_url, sheet_link, google_sheet_url, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image')
     .eq('id', id)
     .maybeSingle()
 
@@ -184,7 +188,10 @@ export async function getPersonDetails(id: string): Promise<{
       name: fallback.data.name ?? 'Unknown',
       owner_id: fallback.data.id,
       current_balance: await getPersonDebt(id), // Recalculate or reuse logic below
-      google_sheet_url: null
+      google_sheet_url: null,
+      sheet_full_img: null,
+      sheet_show_bank_account: false,
+      sheet_show_qr_image: false
     } : null
   }
 
@@ -193,7 +200,7 @@ export async function getPersonDetails(id: string): Promise<{
     return null
   }
 
-  const profile = data as { id: string; name: string; avatar_url: string | null; sheet_link: string | null; google_sheet_url?: string | null }
+  const profile = data as any // simpler casting since we added fields
   const currentBalance = await getPersonDebt(id)
   return {
     id: profile.id,
@@ -203,6 +210,9 @@ export async function getPersonDetails(id: string): Promise<{
     avatar_url: profile.avatar_url ?? null,
     sheet_link: profile.sheet_link ?? null,
     google_sheet_url: profile.google_sheet_url ?? null,
+    sheet_full_img: profile.sheet_full_img ?? null,
+    sheet_show_bank_account: profile.sheet_show_bank_account ?? false,
+    sheet_show_qr_image: profile.sheet_show_qr_image ?? false
   }
 }
 
