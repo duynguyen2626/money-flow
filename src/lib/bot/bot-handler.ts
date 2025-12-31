@@ -145,7 +145,7 @@ export async function handleBotMessage(params: {
 
     return {
       replies: [
-        `Linked to ${profile.name ?? "profile"}.`,
+        `Linked to ${(profile as any)?.name ?? "profile"}.`,
         "Send a transaction like: lunch 120k with Huy",
       ],
     };

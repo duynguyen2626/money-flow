@@ -105,7 +105,7 @@ export async function getPersonDebt(personId: string): Promise<number> {
     return 0
   }
 
-  return await computeDebtFromTransactions(data as DebtTransactionRow[], personId)
+  return await computeDebtFromTransactions(data as unknown as DebtTransactionRow[], personId)
 }
 
 export async function getDebtAccounts(): Promise<DebtAccount[]> {
@@ -122,7 +122,7 @@ export async function getDebtAccounts(): Promise<DebtAccount[]> {
 
   const personIds = Array.from(
     new Set(
-      ((data ?? []) as Array<{ person_id: string | null }>).map(row => row.person_id).filter(Boolean) as string[]
+      ((data ?? []) as unknown as Array<{ person_id: string | null }>).map(row => row.person_id).filter(Boolean) as string[]
     )
   )
 
@@ -190,9 +190,9 @@ export async function getPersonDetails(id: string): Promise<{
       .eq('id', id)
       .maybeSingle()
     return fallback.data ? {
-      ...fallback.data,
-      name: fallback.data.name ?? 'Unknown',
-      owner_id: fallback.data.id,
+      ...(fallback.data as any),
+      name: (fallback.data as any).name ?? 'Unknown',
+      owner_id: (fallback.data as any).id,
       current_balance: await getPersonDebt(id), // Recalculate or reuse logic below
       google_sheet_url: null,
       sheet_full_img: null,
@@ -250,7 +250,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
     }
   >()
 
-    ; (data as DebtTransactionRow[]).forEach(row => {
+    ; (data as unknown as DebtTransactionRow[]).forEach(row => {
       const tag = row.tag ?? 'UNTAGGED'
       const baseType = resolveBaseType(row.type)
       // Use final price (amount - cashback) instead of raw amount

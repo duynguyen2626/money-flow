@@ -32,7 +32,7 @@ export async function getCategories(): Promise<Category[]> {
     return []
   }
 
-  const rows = (data ?? []) as CategoryRow[]
+  const rows = (data ?? []) as unknown as CategoryRow[]
 
   return rows.map(item => ({
     id: item.id,

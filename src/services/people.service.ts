@@ -41,7 +41,7 @@ async function findExistingDebtAccountId(
     return null
   }
 
-  return (data as Pick<AccountRow, 'id'>[] | null)?.[0]?.id ?? null
+  return (data as unknown as Pick<AccountRow, 'id'>[] | null)?.[0]?.id ?? null
 }
 
 async function createDebtAccountForPerson(
@@ -69,7 +69,7 @@ async function createDebtAccountForPerson(
     return null
   }
 
-  return (data as Pick<AccountRow, 'id'>).id
+  return (data as unknown as Pick<AccountRow, 'id'>).id
 }
 
 export async function createPerson(
@@ -99,9 +99,9 @@ export async function createPerson(
     email: email?.trim() || null,
     avatar_url: avatar_url?.trim() || null,
     sheet_link: sheet_link?.trim() || null,
-    is_owner: opts?.is_owner ?? null,
-    is_archived: typeof opts?.is_archived === 'boolean' ? opts.is_archived : null,
-    is_group: typeof opts?.is_group === 'boolean' ? opts.is_group : null,
+    is_owner: (opts?.is_owner ?? null) as any,
+    is_archived: (typeof opts?.is_archived === 'boolean' ? opts.is_archived : null) as any,
+    is_group: (typeof opts?.is_group === 'boolean' ? opts.is_group : null) as any,
     group_parent_id:
       typeof opts?.group_parent_id === 'string' ? opts.group_parent_id : null,
   }
@@ -135,7 +135,7 @@ export async function createPerson(
     return null
   }
 
-  const profileId = (profile as Pick<ProfileRow, 'id'>).id
+  const profileId = (profile as unknown as Pick<ProfileRow, 'id'>).id
 
   const debtAccountId = await createDebtAccountForPerson(supabase, profileId, trimmedName)
 
@@ -211,8 +211,8 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
 
   // Calculate balances from transactions
   // Note: Some debt transactions use person_id instead of target_account_id
-  const debtAccountIds = (debtAccounts as AccountRow[])?.map(a => a.id) ?? []
-  const personIds = (profiles as ProfileRow[])?.map(p => p.id) ?? []
+  const debtAccountIds = (debtAccounts as unknown as AccountRow[])?.map(a => a.id) ?? []
+  const personIds = (profiles as unknown as ProfileRow[])?.map(p => p.id) ?? []
   const debtBalanceByPerson = new Map<string, number>()
   const currentCycleDebtByPerson = new Map<string, number>()
 
@@ -226,14 +226,14 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     if (error) {
       console.warn('Unable to load person cycle sheets:', error)
     } else if (Array.isArray(data)) {
-      cycleSheets = data as PersonCycleSheet[]
+      cycleSheets = data as unknown as PersonCycleSheet[]
     }
   }
 
   // Build mapping from debt account to person
   const debtAccountToPersonMap = new Map<string, string>()
   if (Array.isArray(debtAccounts)) {
-    (debtAccounts as AccountRow[]).forEach(account => {
+    (debtAccounts as unknown as AccountRow[]).forEach(account => {
       if (account.owner_id) {
         debtAccountToPersonMap.set(account.id, account.owner_id)
       }
@@ -341,7 +341,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   const debtAccountMap = new Map<string, { id: string; balance: number; currentCycleDebt: number }>()
   const accountOwnerByAccountId = new Map<string, string>()
   if (Array.isArray(debtAccounts)) {
-    (debtAccounts as AccountRow[]).forEach(account => {
+    (debtAccounts as unknown as AccountRow[]).forEach(account => {
       if (account.owner_id) {
         const balance = debtBalanceByPerson.get(account.owner_id) ?? 0
         const currentCycleDebt = currentCycleDebtByPerson.get(account.owner_id) ?? 0
@@ -538,7 +538,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     })
   }
 
-  const mapped = (profiles as ProfileRow[] | null)?.map(person => {
+  const mapped = (profiles as unknown as ProfileRow[] | null)?.map(person => {
     const debtInfo = debtAccountMap.get(person.id)
     const subs = subscriptionMap.get(person.id) ?? []
     const balance = debtInfo?.balance ?? 0
@@ -631,7 +631,7 @@ async function syncSubscriptionMemberships(
 
   const { error } = await (supabase
     .from('service_members')
-    .insert as any)(rows as ServiceMemberRow[])
+    .insert as any)(rows as unknown as ServiceMemberRow[])
 
   if (error) {
     console.error('Failed to sync subscription memberships:', error)
@@ -764,10 +764,10 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     console.error('Failed to load debt account for person:', debtError)
   }
 
-  const subscription_ids = (memberships as { service_id: string }[] | null)?.map(
+  const subscription_ids = (memberships as unknown as { service_id: string }[] | null)?.map(
     row => row.service_id
   ) ?? []
-  const debt_account_id = (debtAccounts as { id: string; current_balance: number }[] | null)?.[0]?.id ?? null
+  const debt_account_id = (debtAccounts as unknown as { id: string; current_balance: number }[] | null)?.[0]?.id ?? null
 
   // [M2-SP1] Fix: Calculate balance dynamically to exclude void transactions (Phantom Debt Fix)
   let balance = 0;

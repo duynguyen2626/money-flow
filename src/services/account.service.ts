@@ -98,7 +98,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
     .select('*')
     .eq('account_id', account.id)
     .eq('cycle_tag', cycleTag)
-    .maybeSingle()).data ?? null
+    .maybeSingle()).data as any ?? null
 
   if (!cycle && legacyCycleTag !== cycleTag) {
     cycle = (await supabase
@@ -106,7 +106,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
       .select('*')
       .eq('account_id', account.id)
       .eq('cycle_tag', legacyCycleTag)
-      .maybeSingle()).data ?? null
+      .maybeSingle()).data as any ?? null
   }
 
   // 1. Stats from Cycle (Primary Source)
@@ -124,7 +124,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
       .in('persisted_cycle_tag', cycleTags)
 
     if (!taggedError && taggedTxns && taggedTxns.length > 0) {
-      const taggedSum = taggedTxns.reduce((sum, txn) => sum + Math.abs(txn.amount ?? 0), 0)
+      const taggedSum = taggedTxns.reduce((sum, txn: any) => sum + Math.abs(txn.amount ?? 0), 0)
       if (taggedSum > 0) {
         spent_this_cycle = taggedSum
       }
@@ -139,7 +139,7 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
         .lte('occurred_at', end.toISOString())
 
       if (rangeTxns && rangeTxns.length > 0) {
-        const rangeSum = rangeTxns.reduce((sum, txn) => sum + Math.abs(txn.amount ?? 0), 0)
+        const rangeSum = rangeTxns.reduce((sum, txn: any) => sum + Math.abs(txn.amount ?? 0), 0)
         if (rangeSum > 0) {
           spent_this_cycle = rangeSum
         }
@@ -499,7 +499,8 @@ export async function updateAccountConfig(
       .from('accounts')
       .select('cashback_config, cashback_config_version')
       .eq('id', accountId)
-      .single()
+      .eq('id', accountId)
+      .single() as any
 
     const oldConfigStr = JSON.stringify(oldAccount?.cashback_config)
     const newConfigStr = JSON.stringify(data.cashback_config)

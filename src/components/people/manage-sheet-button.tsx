@@ -218,8 +218,8 @@ export function ManageSheetButton({
         if (data.status === 'created' || data.status === 'synced') { // Assuming data.status indicates success
           toast.success(data.status === 'created' ? 'Sheet created & synced.' : 'Sheet synced.')
         } else {
-          console.error("Sync failed:", data.message) // Assuming data might have a message for non-error failures
-          toast.error("Failed to sync sheet: " + (data.message || "Unknown error"))
+          console.error("Sync failed:", (data as any).message) // Assuming data might have a message for non-error failures
+          toast.error("Failed to sync sheet: " + ((data as any).message || "Unknown error"))
         }
         setIsPopoverOpen(false) // Close popover on success
         setShowManageDialog(false)
@@ -241,7 +241,7 @@ export function ManageSheetButton({
           <PopoverTrigger asChild>
             <Button
               variant="outline"
-              size={size}
+              size={size === 'md' ? 'default' : size}
               className={cn(buttonClassName)}
               disabled={isDisabled}
               onClick={handleTriggerClick}

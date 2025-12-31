@@ -24,7 +24,7 @@ export async function fixAllAccountBalances() {
         let failCount = 0
 
         // Cast accounts to any[] or specific type to avoid 'never' error
-        const accountList = accounts as { id: string; name: string }[]
+        const accountList = accounts as unknown as { id: string; name: string }[]
 
         for (const account of accountList) {
             try {

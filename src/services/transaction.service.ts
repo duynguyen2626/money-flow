@@ -461,7 +461,7 @@ export async function loadTransactions(options: {
     return [];
   }
 
-  const rows = data as FlatTransactionRow[];
+  const rows = data as unknown as FlatTransactionRow[];
   const lookups = await fetchLookups(rows);
   return rows.map((row) =>
     mapTransactionRow(row, {
@@ -596,7 +596,7 @@ export async function createTransaction(
           .single();
         if (rawTxn) {
           const txnShape: any = {
-            ...rawTxn,
+            ...(rawTxn as any),
             category_name: (rawTxn as any).categories?.name,
           };
           await upsertTransactionCashback(txnShape);
@@ -847,7 +847,7 @@ export async function updateTransaction(
       .single();
     if (rawTxn) {
       const txnShape: any = {
-        ...rawTxn,
+        ...(rawTxn as any),
         category_name: (rawTxn as any).categories?.name,
       };
       await upsertTransactionCashback(txnShape);
@@ -1068,7 +1068,7 @@ export async function restoreTransaction(id: string): Promise<boolean> {
       .single();
     if (rawTxn) {
       const txnShape: any = {
-        ...rawTxn,
+        ...(rawTxn as any),
         category_name: (rawTxn as any).categories?.name,
       };
       await upsertTransactionCashback(txnShape);
@@ -1173,7 +1173,7 @@ export async function requestRefund(
     return { success: false, error: "Original transaction not found" };
   }
 
-  const originalRow = originalTxn as FlatTransactionRow;
+  const originalRow = originalTxn as unknown as FlatTransactionRow;
   const originalMeta = (originalRow.metadata || {}) as Record<string, any>;
 
   // 1a. Format Note (GD2) - No prefix ID, badges show ID separately
@@ -1326,7 +1326,7 @@ export async function confirmRefund(
     return { success: false, error: "Pending refund transaction not found" };
   }
 
-  const pendingRow = pendingTxn as FlatTransactionRow;
+  const pendingRow = pendingTxn as unknown as FlatTransactionRow;
   const pendingMeta = (pendingRow.metadata || {}) as Record<string, any>;
 
   // Extract Short ID from Original Transaction ID (if available)

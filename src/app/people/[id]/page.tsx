@@ -43,14 +43,14 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
     getShops(),
     getServices(),
     getPersonCycleSheets(sheetProfileId),
-  ])
+  ]) as any
 
-  const profileRecord = people.find((item) => item.id === sheetProfileId)
+  const profileRecord = people.find((item: any) => item.id === sheetProfileId)
   const isGroupProfile = Boolean(profileRecord?.is_group)
   const groupMemberIds = isGroupProfile
     ? people
-      .filter((member) => member.group_parent_id === sheetProfileId)
-      .map((member) => member.id)
+      .filter((member: any) => member.group_parent_id === sheetProfileId)
+      .map((member: any) => member.id)
     : []
 
   const groupPersonIds = isGroupProfile

@@ -140,8 +140,8 @@ async function getProfileSheetInfo(personId: string): Promise<{ sheetUrl: string
     return { sheetUrl: null, sheetId: null }
   }
 
-  if (!attempt.error && attempt.data?.google_sheet_url) {
-    const sheetUrl = attempt.data.google_sheet_url?.trim() ?? null
+  if (!attempt.error && (attempt.data as any)?.google_sheet_url) {
+    const sheetUrl = (attempt.data as any).google_sheet_url?.trim() ?? null
     return { sheetUrl, sheetId: extractSheetId(sheetUrl) }
   }
 
@@ -247,9 +247,9 @@ export async function syncTransactionToSheet(
       console.error('[syncTransactionToSheet] Error fetching person preferences:', personError)
     }
 
-    const showBankAccount = personData?.sheet_show_bank_account ?? false
-    const showQrImage = personData?.sheet_show_qr_image ?? false
-    const qrImageUrl = personData?.sheet_full_img ?? null
+    const showBankAccount = (personData as any)?.sheet_show_bank_account ?? false
+    const showQrImage = (personData as any)?.sheet_show_qr_image ?? false
+    const qrImageUrl = (personData as any)?.sheet_full_img ?? null
 
     console.log('[syncTransactionToSheet] Person sheet preferences:', {
       personId,
@@ -341,7 +341,7 @@ export async function syncAllTransactions(personId: string) {
 
     console.log(`[SheetSync] syncAllTransactions for personId: ${personId}. Found ${data?.length} transactions.`);
 
-    const rows = (data ?? []) as {
+    const rows = (data ?? []) as unknown as {
       id: string
       occurred_at: string
       note: string | null
@@ -521,7 +521,7 @@ export async function syncCycleTransactions(
       return { success: false, message: 'Failed to load transactions' }
     }
 
-    const rows = (data ?? []) as any[]
+    const rows = (data ?? []) as unknown as any[]
     const batchRows = rows.map((txn) => {
       const shopData = txn.shops as any
       let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
@@ -568,9 +568,9 @@ export async function syncCycleTransactions(
       console.error('[syncCycleTransactions] Error fetching person preferences:', personError)
     }
 
-    const showBankAccount = personData?.sheet_show_bank_account ?? false
-    const showQrImage = personData?.sheet_show_qr_image ?? false
-    const qrImageUrl = personData?.sheet_full_img ?? null
+    const showBankAccount = (personData as any)?.sheet_show_bank_account ?? false
+    const showQrImage = (personData as any)?.sheet_show_qr_image ?? false
+    const qrImageUrl = (personData as any)?.sheet_full_img ?? null
 
     console.log('[syncCycleTransactions] Person sheet preferences:', {
       personId,
