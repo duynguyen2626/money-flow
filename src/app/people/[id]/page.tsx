@@ -201,6 +201,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
         shops={shops}
         variant="floating"
         contextPerson={profileRecord ?? null}
+        modelName={process.env.GEMINI_MODEL ?? "Gemini Auto"}
       />
     </TagFilterProvider>
   )
