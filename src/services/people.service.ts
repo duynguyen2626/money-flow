@@ -162,7 +162,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     const attempt = await supabase
       .from('profiles')
       .select(
-        'id, created_at, name, email, avatar_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id'
+        'id, created_at, name, email, avatar_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image'
       )
       .order('name', { ascending: true })
     if (attempt.error?.code === '42703' || attempt.error?.code === 'PGRST204') {
@@ -717,7 +717,7 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     const attempt = await supabase
       .from('profiles')
       .select(
-        'id, name, email, avatar_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id'
+        'id, name, email, avatar_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image'
       )
       .eq('id', id)
       .maybeSingle()

@@ -3,7 +3,7 @@
 import { useEffect, useState, useTransition } from 'react'
 import type { MouseEvent } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { FileSpreadsheet, RefreshCcw, Edit2, ExternalLink, Image as ImageIcon } from 'lucide-react'
+import { FileSpreadsheet, RefreshCcw, Edit2, ExternalLink, Settings, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import type { ManageCycleSheetResponse } from '@/types/sheet.types'
@@ -79,13 +79,16 @@ export function ManageSheetButton({
   const [showSyncMessage, setShowSyncMessage] = useState(false)
   const [syncMessage, setSyncMessage] = useState('')
   const [activeTab, setActiveTab] = useState<'script' | 'test'>('script')
+  const [isPopoverOpen, setIsPopoverOpen] = useState(false)
 
-  // Script tab state
+  // State managed in both Popover (Quick Settings) and Dialog (Full Settings)
   const [currentScriptLink, setCurrentScriptLink] = useState(scriptLink ?? '')
   const [currentSheetUrl, setCurrentSheetUrl] = useState(googleSheetUrl ?? '')
   const [currentSheetImg, setCurrentSheetImg] = useState(sheetFullImg ?? '')
   const [currentShowBankAccount, setCurrentShowBankAccount] = useState(showBankAccount)
   const [currentShowQrImage, setCurrentShowQrImage] = useState(showQrImage)
+
+  // Edit states for Dialog inputs
   const [isEditingScript, setIsEditingScript] = useState(false)
   const [isEditingSheetUrl, setIsEditingSheetUrl] = useState(false)
   const [isEditingQrImage, setIsEditingQrImage] = useState(false)
@@ -98,8 +101,9 @@ export function ManageSheetButton({
     setSheetUrl(initialSheetUrl ?? null)
   }, [initialSheetUrl])
 
+  // Reset state when props change or when Popover/Dialog opens
   useEffect(() => {
-    if (!showManageDialog) return
+    if (!isPopoverOpen && !showManageDialog) return
     setCurrentScriptLink(scriptLink ?? '')
     setCurrentSheetUrl(googleSheetUrl ?? '')
     setCurrentSheetImg(sheetFullImg ?? '')
@@ -108,8 +112,7 @@ export function ManageSheetButton({
     setIsEditingScript(false)
     setIsEditingSheetUrl(false)
     setIsEditingQrImage(false)
-    setActiveTab('script')
-  }, [scriptLink, googleSheetUrl, sheetFullImg, showBankAccount, showQrImage, showManageDialog])
+  }, [scriptLink, googleSheetUrl, sheetFullImg, showBankAccount, showQrImage, isPopoverOpen, showManageDialog])
 
   useEffect(() => {
     if (!showSyncMessage) return
@@ -123,7 +126,13 @@ export function ManageSheetButton({
   const isDisabled = disabled || !personId || isManaging || isSaving
   const hasValidCycle = isYYYYMM(cycleTag)
   const hasValidScriptLink = isValidLink(currentScriptLink)
-  const resolvedConnectHref = connectHref ?? (personId ? `/people/${personId}?tab=sheet` : '/people')
+
+  const hasUnsavedChanges =
+    currentScriptLink !== (scriptLink ?? '') ||
+    currentSheetUrl !== (googleSheetUrl ?? '') ||
+    currentSheetImg !== (sheetFullImg ?? '') ||
+    currentShowBankAccount !== showBankAccount ||
+    currentShowQrImage !== showQrImage
 
   const handleTriggerClick = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation()
@@ -136,7 +145,7 @@ export function ManageSheetButton({
     }
 
     startSaveTransition(async () => {
-      const toastId = toast.loading('Saving sheet settings...')
+      const toastId = toast.loading('Saving settings...')
       try {
         const ok = await updatePersonAction(personId, {
           sheet_link: currentScriptLink.trim() || null,
@@ -147,50 +156,20 @@ export function ManageSheetButton({
         })
         if (!ok) {
           toast.dismiss(toastId)
-          toast.error('Unable to save sheet settings.')
+          toast.error('Unable to save settings.')
           return
         }
         toast.dismiss(toastId)
-        toast.success('Sheet settings saved.')
+        toast.success('Settings saved.')
         setIsEditingScript(false)
         setIsEditingSheetUrl(false)
         setIsEditingQrImage(false)
         router.refresh()
       } catch (error) {
         toast.dismiss(toastId)
-        toast.error('Saving sheet settings failed.')
+        toast.error('Saving settings failed.')
       }
     })
-  }
-
-  const handlePasteScriptLink = async () => {
-    try {
-      const text = await navigator.clipboard.readText()
-      if (!text) {
-        toast.error('Clipboard is empty.')
-        return
-      }
-      setCurrentScriptLink(text.trim())
-      setIsEditingScript(true)
-      toast.success('Script link pasted.')
-    } catch (error) {
-      toast.error('Unable to read clipboard.')
-    }
-  }
-
-  const handlePasteSheetUrl = async () => {
-    try {
-      const text = await navigator.clipboard.readText()
-      if (!text) {
-        toast.error('Clipboard is empty.')
-        return
-      }
-      setCurrentSheetUrl(text.trim())
-      setIsEditingSheetUrl(true)
-      toast.success('Sheet link pasted.')
-    } catch (error) {
-      toast.error('Unable to read clipboard.')
-    }
   }
 
   const handlePasteQrImage = async () => {
@@ -210,12 +189,10 @@ export function ManageSheetButton({
 
   const handleManageCycle = () => {
     if (!hasValidCycle) {
-      console.log('[ManageSheet] invalid cycle tag', { personId, cycleTag })
       toast.error('Cycle tag must be YYYY-MM.')
       return
     }
     if (!hasValidScriptLink) {
-      console.log('[ManageSheet] missing script link', { personId })
       toast.error('Add a valid Script Link before syncing.')
       return
     }
@@ -223,7 +200,6 @@ export function ManageSheetButton({
     startManageTransition(async () => {
       const toastId = toast.loading(sheetUrl ? 'Syncing sheet...' : 'Creating sheet...')
       try {
-        console.log('[ManageSheet] request', { personId, cycleTag })
         const res = await fetch('/api/sheets/manage', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -231,7 +207,7 @@ export function ManageSheetButton({
         })
 
         const data = (await res.json()) as ManageCycleSheetResponse
-        console.log('[ManageSheet] response', { status: res.status, data })
+
         if (!res.ok || data?.error) {
           toast.dismiss(toastId)
           const errorMessage = data?.error ?? res.statusText
@@ -244,14 +220,10 @@ export function ManageSheetButton({
           setSheetUrl(data.sheetUrl)
         }
         toast.dismiss(toastId)
+        setIsPopoverOpen(false) // Close popover on success
         setShowManageDialog(false)
         setSyncMessage(data.status === 'created' ? 'Sheet created & synced.' : 'Sheet synced.')
         setShowSyncMessage(true)
-        if (searchParams.get('tab') === 'history') {
-          const params = new URLSearchParams(searchParams.toString())
-          params.set('tab', 'details')
-          router.replace(`${pathname}?${params.toString()}`)
-        }
         router.refresh()
         if (openAfterSuccess && nextUrl) {
           window.open(nextUrl, '_blank', 'noopener,noreferrer')
@@ -263,17 +235,10 @@ export function ManageSheetButton({
     })
   }
 
-  const hasUnsavedChanges =
-    currentScriptLink !== (scriptLink ?? '') ||
-    currentSheetUrl !== (googleSheetUrl ?? '') ||
-    currentSheetImg !== (sheetFullImg ?? '') ||
-    currentShowBankAccount !== showBankAccount ||
-    currentShowQrImage !== showQrImage
-
   return (
     <TooltipProvider>
       <div className={cn('inline-flex items-center gap-2', className)}>
-        <Popover>
+        <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
@@ -286,59 +251,137 @@ export function ManageSheetButton({
               {!iconOnly && label}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-96 p-4" align="start">
-            <div className="space-y-4">
-              <div>
-                <h4 className="font-semibold text-sm mb-1">Manage sheet</h4>
-                <p className="text-xs text-muted-foreground">
-                  Update sheet settings and sync the cycle {cycleTag}.
-                </p>
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="default"
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setShowManageDialog(true)}
-                >
-                  Open sheet settings
-                </Button>
-                {sheetUrl && (
+          <PopoverContent className="w-[420px] p-0" align="start">
+            <div className="p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-semibold text-sm">Manage sheet</h4>
+                  <p className="text-xs text-muted-foreground">{cycleTag}</p>
+                </div>
+                <div className="flex gap-1">
+                  {sheetUrl && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => window.open(sheetUrl, '_blank', 'noopener,noreferrer')}
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Open sheet</TooltipContent>
+                    </Tooltip>
+                  )}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(sheetUrl, '_blank', 'noopener,noreferrer')}
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => {
+                          setIsPopoverOpen(false)
+                          setShowManageDialog(true)
+                        }}
                       >
-                        <ExternalLink className="h-4 w-4" />
+                        <Settings className="h-4 w-4" />
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>Open sheet</TooltipContent>
+                    <TooltipContent>Full settings</TooltipContent>
                   </Tooltip>
-                )}
+                </div>
               </div>
 
-              {showCycleAction && (
-                <>
-                  <div className="border-t pt-4">
-                    <Label className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                      Cycle Sheet
-                    </Label>
-                    <p className="text-xs text-muted-foreground mb-2">{cycleTag}</p>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      className="w-full"
-                      onClick={handleManageCycle}
-                      disabled={!hasValidScriptLink || isManaging}
-                    >
-                      {isManaging ? 'Syncing...' : 'Sync cycle sheet'}
-                    </Button>
+              {/* Quick Settings Section */}
+              <div className="bg-slate-50 rounded-md p-3 space-y-4 border">
+                {/* Bank Account Toggle */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label htmlFor="quick-bank" className="text-sm font-medium">Show bank account</Label>
+                    <p className="text-[10px] text-muted-foreground">L6:N6 merged</p>
                   </div>
-                </>
-              )}
+                  <Switch
+                    id="quick-bank"
+                    checked={currentShowBankAccount}
+                    onCheckedChange={setCurrentShowBankAccount}
+                    disabled={isSaving}
+                  />
+                </div>
+
+                {/* QR Image Toggle */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label htmlFor="quick-qr" className="text-sm font-medium">Send QR image</Label>
+                      <p className="text-[10px] text-muted-foreground">L6</p>
+                    </div>
+                    <Switch
+                      id="quick-qr"
+                      checked={currentShowQrImage}
+                      onCheckedChange={setCurrentShowQrImage}
+                      disabled={isSaving}
+                    />
+                  </div>
+
+                  {currentShowQrImage && (
+                    <div className="animate-in fade-in slide-in-from-top-1">
+                      <div className="flex gap-2">
+                        <Input
+                          value={currentSheetImg}
+                          onChange={(e) => setCurrentSheetImg(e.target.value)}
+                          placeholder="Image URL"
+                          className="h-8 text-xs"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2"
+                          onClick={handlePasteQrImage}
+                          title="Paste image link"
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+
+                      {currentSheetImg && isValidLink(currentSheetImg) && (
+                        <div className="mt-2 relative h-32 w-full rounded-md border border-slate-200 overflow-hidden bg-white flex items-center justify-center">
+                          <img
+                            src={currentSheetImg}
+                            alt="QR Preview"
+                            className="h-full w-full object-contain"
+                            onError={(e) => { e.currentTarget.style.display = 'none' }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Button
+                  variant={hasUnsavedChanges ? "default" : "secondary"}
+                  size="sm"
+                  className="w-full"
+                  onClick={handleSaveSettings}
+                  disabled={isSaving || !hasUnsavedChanges}
+                >
+                  {isSaving ? 'Saving...' : 'Save settings'}
+                </Button>
+
+                {showCycleAction && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={handleManageCycle}
+                    disabled={!hasValidScriptLink || isManaging}
+                  >
+                    {isManaging ? 'Syncing...' : 'Sync cycle sheet'}
+                  </Button>
+                )}
+              </div>
             </div>
           </PopoverContent>
         </Popover>
@@ -350,18 +393,19 @@ export function ManageSheetButton({
         )}
       </div>
 
+      {/* Full Settings Dialog (Hidden by default, used for advanced link editing) */}
       <Dialog open={showManageDialog} onOpenChange={setShowManageDialog}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Manage sheet</DialogTitle>
+            <DialogTitle>Sheet Settings</DialogTitle>
             <DialogDescription>
-              Update sheet settings and sync the cycle {cycleTag}.
+              Configure script and sheet links.
             </DialogDescription>
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'script' | 'test')}>
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="script">Sheet Script</TabsTrigger>
+              <TabsTrigger value="script">Configuration</TabsTrigger>
               <TabsTrigger value="test">Test Connection</TabsTrigger>
             </TabsList>
 
@@ -369,201 +413,40 @@ export function ManageSheetButton({
               {/* Script Link */}
               <div className="space-y-2">
                 <Label className="text-sm font-semibold">Sheet Script</Label>
-                <p className="text-xs text-muted-foreground">
-                  Google Apps Script deployment URL
-                </p>
-                {isEditingScript || !currentScriptLink ? (
-                  <div className="flex gap-2">
-                    <Input
-                      value={currentScriptLink}
-                      onChange={(e) => setCurrentScriptLink(e.target.value)}
-                      placeholder="https://script.google.com/macros/s/..."
-                      className="flex-1"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handlePasteScriptLink}
-                    >
-                      Paste link
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-md border">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="text-sm flex-1 truncate cursor-help">
-                          {truncateUrl(currentScriptLink)}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-md break-all">
-                        {currentScriptLink}
-                      </TooltipContent>
-                    </Tooltip>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsEditingScript(true)}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+                <div className="flex gap-2">
+                  <Input
+                    value={currentScriptLink}
+                    onChange={(e) => setCurrentScriptLink(e.target.value)}
+                    placeholder="https://script.google.com/macros/s/..."
+                    className="flex-1"
+                  />
+                </div>
               </div>
 
               {/* Sheet Link */}
               <div className="space-y-2">
                 <Label className="text-sm font-semibold">Sheet Link</Label>
-                <p className="text-xs text-muted-foreground">
-                  Google Spreadsheet URL
-                </p>
-                {isEditingSheetUrl || !currentSheetUrl ? (
-                  <div className="flex gap-2">
-                    <Input
-                      value={currentSheetUrl}
-                      onChange={(e) => setCurrentSheetUrl(e.target.value)}
-                      placeholder="https://docs.google.com/spreadsheets/d/..."
-                      className="flex-1"
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handlePasteSheetUrl}
-                    >
-                      Paste link
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-md border">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="text-sm flex-1 truncate cursor-help">
-                          {truncateUrl(currentSheetUrl)}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-md break-all">
-                        {currentSheetUrl}
-                      </TooltipContent>
-                    </Tooltip>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setIsEditingSheetUrl(true)}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t pt-6 space-y-4">
-                <h4 className="text-sm font-semibold">Sync Options</h4>
-
-                {/* Bank Account Toggle */}
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <Label htmlFor="show-bank-account" className="text-sm font-medium">
-                      Show bank account in sheet
-                    </Label>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Displays account info at L6:N6 (merged cells)
-                    </p>
-                  </div>
-                  <Switch
-                    id="show-bank-account"
-                    checked={currentShowBankAccount}
-                    onCheckedChange={setCurrentShowBankAccount}
+                <div className="flex gap-2">
+                  <Input
+                    value={currentSheetUrl}
+                    onChange={(e) => setCurrentSheetUrl(e.target.value)}
+                    placeholder="https://docs.google.com/spreadsheets/d/..."
+                    className="flex-1"
                   />
-                </div>
-
-                {/* QR Image Toggle */}
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <Label htmlFor="show-qr-image" className="text-sm font-medium">
-                        Send QR image to sheet
-                      </Label>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Inserts image at cell L6
-                      </p>
-                    </div>
-                    <Switch
-                      id="show-qr-image"
-                      checked={currentShowQrImage}
-                      onCheckedChange={setCurrentShowQrImage}
-                    />
-                  </div>
-
-                  {currentShowQrImage && (
-                    <div className="ml-0 space-y-2">
-                      <Label className="text-xs font-semibold text-slate-600">QR / Image Link</Label>
-                      {isEditingQrImage || !currentSheetImg ? (
-                        <div className="flex gap-2">
-                          <Input
-                            value={currentSheetImg}
-                            onChange={(e) => setCurrentSheetImg(e.target.value)}
-                            placeholder="https://... (Image URL)"
-                            className="flex-1"
-                          />
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handlePasteQrImage}
-                          >
-                            Paste link
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-2 p-3 bg-slate-50 rounded-md border">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <span className="text-sm flex-1 truncate cursor-help">
-                                  {truncateUrl(currentSheetImg)}
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent className="max-w-md break-all">
-                                {currentSheetImg}
-                              </TooltipContent>
-                            </Tooltip>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => setIsEditingQrImage(true)}
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          {currentSheetImg && isValidLink(currentSheetImg) && (
-                            <div className="flex items-center gap-2">
-                              <div className="relative h-24 w-24 rounded-md border border-slate-200 overflow-hidden bg-slate-50">
-                                <img
-                                  src={currentSheetImg}
-                                  alt="QR Preview"
-                                  className="h-full w-full object-contain"
-                                  onError={(e) => {
-                                    e.currentTarget.style.display = 'none'
-                                  }}
-                                />
-                              </div>
-                              <p className="text-xs text-muted-foreground">Preview</p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
 
               <div className="flex gap-2 pt-4 border-t">
                 <Button
                   variant="default"
-                  onClick={handleSaveSettings}
+                  onClick={() => {
+                    handleSaveSettings();
+                    setShowManageDialog(false);
+                  }}
                   disabled={isSaving || !hasUnsavedChanges}
                   className="flex-1"
                 >
-                  {isSaving ? 'Saving...' : 'Save settings'}
+                  Save & Close
                 </Button>
                 <Button
                   variant="outline"
@@ -575,49 +458,14 @@ export function ManageSheetButton({
             </TabsContent>
 
             <TabsContent value="test" className="space-y-4 mt-6">
-              <div className="space-y-4">
-                <div>
-                  <Label className="text-sm font-semibold">Cycle Sheet</Label>
-                  <p className="text-xs text-muted-foreground mb-3">{cycleTag}</p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={handleManageCycle}
-                      disabled={!hasValidScriptLink || isManaging}
-                      className="flex-1"
-                    >
-                      {isManaging ? 'Syncing...' : 'Sync cycle sheet'}
-                    </Button>
-                    {sheetUrl && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => window.open(sheetUrl, '_blank', 'noopener,noreferrer')}
-                      >
-                        Open sheet
-                      </Button>
-                    )}
-                  </div>
-                </div>
-
-                {sheetUrl && (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-                    <p className="text-xs font-medium text-green-800">
-                      ✓ Sheet connected
-                    </p>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <p className="text-xs text-green-700 mt-1 truncate cursor-help">
-                          {truncateUrl(sheetUrl, 60)}
-                        </p>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-md break-all">
-                        {sheetUrl}
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                )}
+              {/* Reuse existing test UI logic here if needed, or keep simple */}
+              <div className="p-4 border rounded-md bg-slate-50 text-center">
+                <p className="text-sm text-muted-foreground mb-4">
+                  Use the "Sync cycle sheet" button in the quick menu to test the connection.
+                </p>
+                <Button variant="outline" onClick={handleManageCycle} disabled={isManaging}>
+                  {isManaging ? 'Testing...' : 'Test Sync Now'}
+                </Button>
               </div>
             </TabsContent>
           </Tabs>
