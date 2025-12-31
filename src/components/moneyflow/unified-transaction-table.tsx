@@ -1175,32 +1175,34 @@ export function UnifiedTransactionTable({
   const displayedColumns = (isMobile ? mobileColumnOrder.map(key => defaultColumns.find(col => col.key === key)).filter(Boolean) as ColumnConfig[] : defaultColumns).filter(col => visibleColumns[col.key])
 
   return (
-    <div className="relative flex flex-col w-full">
+    <div className="relative flex flex-col w-full h-full min-h-0">
       <div className={cn(
-        "relative w-full rounded-xl border border-slate-200 bg-card shadow-sm transition-colors duration-300",
+        "relative w-full rounded-xl border border-slate-200 bg-card shadow-sm transition-colors duration-300 flex flex-col h-full min-h-0",
         isExcelMode && "border-emerald-500 shadow-emerald-100 ring-4 ring-emerald-50"
       )} style={{} as React.CSSProperties}>
-        <MobileTransactionsSimpleList
-          transactions={paginatedTransactions}
-          categories={categories}
-          selectedTxnIds={selection}
-          onSelectTxn={(id, selected) => handleSelectOne(id, selected)}
-          renderActions={isMobile ? (txn) => renderRowActions(txn, (statusOverrides[txn.id] ?? txn.status) === 'void') : undefined}
-          onRowClick={(txn) => {
-            if (isExcelMode) return;
-            setEditingTxn(txn);
-          }}
-          onCopyId={(id) => {
-            navigator.clipboard.writeText(id)
-            toast.success("Transaction ID copied")
-          }}
-          formatters={{
-            currency: (val) => numberFormatter.format(val),
-            date: formattedDate
-          }}
-        />
+        <div className="md:hidden flex-1 min-h-0 overflow-y-auto">
+          <MobileTransactionsSimpleList
+            transactions={paginatedTransactions}
+            categories={categories}
+            selectedTxnIds={selection}
+            onSelectTxn={(id, selected) => handleSelectOne(id, selected)}
+            renderActions={isMobile ? (txn) => renderRowActions(txn, (statusOverrides[txn.id] ?? txn.status) === 'void') : undefined}
+            onRowClick={(txn) => {
+              if (isExcelMode) return;
+              setEditingTxn(txn);
+            }}
+            onCopyId={(id) => {
+              navigator.clipboard.writeText(id)
+              toast.success("Transaction ID copied")
+            }}
+            formatters={{
+              currency: (val) => numberFormatter.format(val),
+              date: formattedDate
+            }}
+          />
+        </div>
         {!isMobile && (
-          <div className="hidden md:block flex-1 overflow-auto w-full scrollbar-visible h-full bg-white relative" style={{ scrollbarGutter: 'stable' }}>
+          <div className="hidden md:block flex-1 min-h-0 overflow-auto w-full scrollbar-visible h-full bg-white relative" style={{ scrollbarGutter: 'stable' }}>
             <table
               className="w-full caption-bottom text-sm border-collapse min-w-[800px] lg:min-w-0"
               onMouseUp={handleCellMouseUp}
@@ -2320,7 +2322,7 @@ export function UnifiedTransactionTable({
               document.body
             )}
 
-            <div className="hidden md:flex flex-none bg-white border-t border-slate-200 p-2 lg:p-3 items-center justify-between gap-2 z-30 relative shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div className="hidden md:flex flex-none bg-white border-t border-slate-200 p-2 lg:p-3 items-center justify-between gap-2 z-40 sticky bottom-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
               {/* Left: Items per Page */}
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] text-slate-500 font-medium whitespace-nowrap hidden sm:inline">Rows</span>

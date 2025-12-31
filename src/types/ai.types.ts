@@ -27,6 +27,9 @@ export type ParsedTransaction = {
   shop_id: string | null;
   shop_name?: string | null;
   note: string | null;
+  cashback_share_percent?: number | null;
+  cashback_share_fixed?: number | null;
+  cashback_mode?: "none_back" | "voluntary" | "real_fixed" | "real_percent" | null;
   needs: string[];
   confidence: number;
   mode?: "gemini" | "rules";

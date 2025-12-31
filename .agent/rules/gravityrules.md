@@ -53,3 +53,7 @@
   - Switch consumers
   - Delete old code only after the new path is verified
 - Do not refactor unrelated files because it is nicer.
+
+## Project-specific UI scope
+
+- Quick Add chat widget is limited to Dashboard, Transactions, and People detail pages.

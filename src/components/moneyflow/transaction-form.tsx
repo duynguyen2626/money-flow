@@ -633,6 +633,25 @@ export function TransactionForm({
     }
   }, [baseDefaults, form, initialValues, allAccounts]);
 
+  // Bug Fix: Update account filter to ensure the selected account is visible in Edit Mode
+  useEffect(() => {
+    const sourceId = initialValues?.source_account_id || defaultSourceAccountId;
+    if (sourceId) {
+      const account = allAccounts.find((a) => a.id === sourceId);
+      if (account) {
+        if (["credit_card"].includes(account.type)) {
+          setAccountFilter("credit");
+        } else if (["bank", "cash", "ewallet"].includes(account.type)) {
+          setAccountFilter("account");
+        } else if (["savings", "investment", "asset"].includes(account.type)) {
+          setAccountFilter("other"); // Save tab
+        } else {
+          setAccountFilter("other");
+        }
+      }
+    }
+  }, [initialValues?.source_account_id, defaultSourceAccountId, allAccounts]);
+
   // Smart Reset: Clear category/shop if current selection is invalid for the new type
 
   useEffect(() => {
@@ -787,31 +806,31 @@ export function TransactionForm({
 
       const { split_bill, ...restValues } = values;
 
-    if (split_bill) {
-      if (isEditMode) {
-        const errorText = "Split bill is only available for new transactions.";
-        setSplitBillError(errorText);
-        setStatus({ type: "error", text: errorText });
-        return;
-      }
+      if (split_bill) {
+        if (isEditMode) {
+          const errorText = "Split bill is only available for new transactions.";
+          setSplitBillError(errorText);
+          setStatus({ type: "error", text: errorText });
+          return;
+        }
 
-      const totalAmount = Math.abs(restValues.amount ?? 0);
-      const validationError = validateSplitBill(totalAmount, splitParticipants);
-      if (validationError) {
-        setSplitBillError(validationError);
-        setStatus({ type: "error", text: validationError });
-        return;
-      }
+        const totalAmount = Math.abs(restValues.amount ?? 0);
+        const validationError = validateSplitBill(totalAmount, splitParticipants);
+        if (validationError) {
+          setSplitBillError(validationError);
+          setStatus({ type: "error", text: validationError });
+          return;
+        }
 
-      const rawPercent = Number(restValues.cashback_share_percent ?? 0);
-      const percentValue = rawPercent / 100;
-      const fixedTotal = Number(restValues.cashback_share_fixed ?? 0);
-      const fixedScale = 100;
-      const scaledFixed = Math.round(Math.abs(fixedTotal) * fixedScale);
-      const fixedAllocations = splitParticipants.map((participant) => {
-        if (totalAmount <= 0 || scaledFixed === 0) return 0;
-        return Math.round((participant.amount / totalAmount) * scaledFixed);
-      });
+        const rawPercent = Number(restValues.cashback_share_percent ?? 0);
+        const percentValue = rawPercent / 100;
+        const fixedTotal = Number(restValues.cashback_share_fixed ?? 0);
+        const fixedScale = 100;
+        const scaledFixed = Math.round(Math.abs(fixedTotal) * fixedScale);
+        const fixedAllocations = splitParticipants.map((participant) => {
+          if (totalAmount <= 0 || scaledFixed === 0) return 0;
+          return Math.round((participant.amount / totalAmount) * scaledFixed);
+        });
 
         const fixedRemainder =
           scaledFixed -
@@ -820,134 +839,134 @@ export function TransactionForm({
           fixedAllocations[0] += fixedRemainder;
         }
 
-      const groupName = splitGroupId
-        ? splitBillGroupMap.get(splitGroupId)?.name
-        : undefined;
-      const billTitle = (restValues.note ?? "").trim() || "Split Bill";
-      const splitPrefix =
-        restValues.type === "repayment" ? "[SplitRepay]" : "[SplitBill]";
-      const basePrefix =
-        restValues.type === "repayment"
-          ? "[SplitRepay Base]"
-          : "[SplitBill Base]";
-      const childNoteBase = `${splitPrefix} ${groupName ?? "Group"} | ${billTitle}`;
-      const baseNote = `${basePrefix} ${groupName ?? "Group"} | ${billTitle}`;
-      const baseMetadata = {
-        ...(restValues.installment_plan_id
-          ? { installment_id: restValues.installment_plan_id }
-          : {}),
-        ...(initialValues?.metadata || {}),
-      };
+        const groupName = splitGroupId
+          ? splitBillGroupMap.get(splitGroupId)?.name
+          : undefined;
+        const billTitle = (restValues.note ?? "").trim() || "Split Bill";
+        const splitPrefix =
+          restValues.type === "repayment" ? "[SplitRepay]" : "[SplitBill]";
+        const basePrefix =
+          restValues.type === "repayment"
+            ? "[SplitRepay Base]"
+            : "[SplitBill Base]";
+        const childNoteBase = `${splitPrefix} ${groupName ?? "Group"} | ${billTitle}`;
+        const baseNote = `${basePrefix} ${groupName ?? "Group"} | ${billTitle}`;
+        const baseMetadata = {
+          ...(restValues.installment_plan_id
+            ? { installment_id: restValues.installment_plan_id }
+            : {}),
+          ...(initialValues?.metadata || {}),
+        };
 
-      const baseType =
-        restValues.type === "repayment" ? "income" : restValues.type;
+        const baseType =
+          restValues.type === "repayment" ? "income" : restValues.type;
 
-      const basePayload: Parameters<typeof createTransaction>[0] = {
-        occurred_at: restValues.occurred_at.toISOString(),
-        note: baseNote,
-        type: baseType,
-        source_account_id: restValues.source_account_id,
-        amount: totalAmount,
-        tag: restValues.tag,
-        category_id: restValues.category_id ?? undefined,
-        person_id: splitGroupId ?? undefined,
-        shop_id: restValues.shop_id ?? undefined,
-        destination_account_id:
-          baseType === "income" ? restValues.source_account_id : undefined,
-        metadata: {
-          ...baseMetadata,
-          is_split_bill_base: true,
-          split_group_id: splitGroupId ?? null,
-          split_group_name: groupName ?? null,
-          split_count: splitParticipants.length,
-          split_type: restValues.type,
-        },
-        is_installment: isInstallment,
-        installment_plan_id: restValues.installment_plan_id ?? undefined,
-        cashback_share_percent: percentValue,
-        cashback_share_fixed: fixedTotal,
-        cashback_mode: restValues.cashback_mode,
-      };
+        const basePayload: Parameters<typeof createTransaction>[0] = {
+          occurred_at: restValues.occurred_at.toISOString(),
+          note: baseNote,
+          type: baseType,
+          source_account_id: restValues.source_account_id,
+          amount: totalAmount,
+          tag: restValues.tag,
+          category_id: restValues.category_id ?? undefined,
+          person_id: splitGroupId ?? undefined,
+          shop_id: restValues.shop_id ?? undefined,
+          destination_account_id:
+            baseType === "income" ? restValues.source_account_id : undefined,
+          metadata: {
+            ...baseMetadata,
+            is_split_bill_base: true,
+            split_group_id: splitGroupId ?? null,
+            split_group_name: groupName ?? null,
+            split_count: splitParticipants.length,
+            split_type: restValues.type,
+          },
+          is_installment: isInstallment,
+          installment_plan_id: restValues.installment_plan_id ?? undefined,
+          cashback_share_percent: percentValue,
+          cashback_share_fixed: fixedTotal,
+          cashback_mode: restValues.cashback_mode,
+        };
 
-      const baseTransactionId = await createTransaction(basePayload);
-      if (!baseTransactionId) {
-        setStatus({
-          type: "error",
-          text: "Failed to create base transaction for split bill.",
-        });
-        return;
-      }
+        const baseTransactionId = await createTransaction(basePayload);
+        if (!baseTransactionId) {
+          setStatus({
+            type: "error",
+            text: "Failed to create base transaction for split bill.",
+          });
+          return;
+        }
 
-      const results = await Promise.allSettled(
-        splitParticipants.map((participant, index) => {
-          const debtAccountId = debtAccountByPerson.get(participant.personId);
-          const noteParts = [childNoteBase];
-          const paidBy = participant.paidBy.trim();
-          if (paidBy) {
-            noteParts.push(`Paid by ${paidBy}`);
-          }
-          if (
-            restValues.type !== "repayment" &&
-            participant.paidBefore &&
-            participant.paidBefore > 0
-          ) {
-            noteParts.push(
-              `Paid before ${numberFormatter.format(participant.paidBefore)}`,
-            );
-          }
-          const rowNote = participant.note.trim();
-          if (rowNote) {
-            noteParts.push(rowNote);
-          }
+        const results = await Promise.allSettled(
+          splitParticipants.map((participant, index) => {
+            const debtAccountId = debtAccountByPerson.get(participant.personId);
+            const noteParts = [childNoteBase];
+            const paidBy = participant.paidBy.trim();
+            if (paidBy) {
+              noteParts.push(`Paid by ${paidBy}`);
+            }
+            if (
+              restValues.type !== "repayment" &&
+              participant.paidBefore &&
+              participant.paidBefore > 0
+            ) {
+              noteParts.push(
+                `Paid before ${numberFormatter.format(participant.paidBefore)}`,
+              );
+            }
+            const rowNote = participant.note.trim();
+            if (rowNote) {
+              noteParts.push(rowNote);
+            }
 
-          const payload: Parameters<typeof createTransaction>[0] = {
-            occurred_at: restValues.occurred_at.toISOString(),
-            note: noteParts.join(" | "),
-            type: restValues.type,
-            source_account_id: SPLIT_BILL_SYSTEM_ACCOUNT_ID,
-            amount: participant.amount,
-            tag: restValues.tag,
-            category_id: restValues.category_id ?? undefined,
-            person_id: participant.personId,
-            debt_account_id: debtAccountId ?? undefined,
-            shop_id: restValues.shop_id ?? undefined,
-            destination_account_id:
-              restValues.type === "income" ? restValues.source_account_id : undefined,
-            metadata: {
-              ...baseMetadata,
-              split_parent_id: baseTransactionId,
-              split_group_id: splitGroupId ?? null,
-              split_group_name: groupName ?? null,
-            },
-            is_installment: isInstallment,
-            installment_plan_id: restValues.installment_plan_id ?? undefined,
-            cashback_share_percent: percentValue,
-            cashback_share_fixed:
-              (fixedAllocations[index] ?? 0) / fixedScale,
-            cashback_mode: restValues.cashback_mode,
-          };
+            const payload: Parameters<typeof createTransaction>[0] = {
+              occurred_at: restValues.occurred_at.toISOString(),
+              note: noteParts.join(" | "),
+              type: restValues.type,
+              source_account_id: SPLIT_BILL_SYSTEM_ACCOUNT_ID,
+              amount: participant.amount,
+              tag: restValues.tag,
+              category_id: restValues.category_id ?? undefined,
+              person_id: participant.personId,
+              debt_account_id: debtAccountId ?? undefined,
+              shop_id: restValues.shop_id ?? undefined,
+              destination_account_id:
+                restValues.type === "income" ? restValues.source_account_id : undefined,
+              metadata: {
+                ...baseMetadata,
+                split_parent_id: baseTransactionId,
+                split_group_id: splitGroupId ?? null,
+                split_group_name: groupName ?? null,
+              },
+              is_installment: isInstallment,
+              installment_plan_id: restValues.installment_plan_id ?? undefined,
+              cashback_share_percent: percentValue,
+              cashback_share_fixed:
+                (fixedAllocations[index] ?? 0) / fixedScale,
+              cashback_mode: restValues.cashback_mode,
+            };
 
-          return createTransaction(payload);
-        }),
-      );
+            return createTransaction(payload);
+          }),
+        );
 
-      const failedNames = results
-        .map((result, index) => {
-          if (result.status === "fulfilled" && result.value) {
-            return null;
-          }
-          return splitParticipants[index]?.name ?? "Unknown";
-        })
-        .filter((name): name is string => Boolean(name));
+        const failedNames = results
+          .map((result, index) => {
+            if (result.status === "fulfilled" && result.value) {
+              return null;
+            }
+            return splitParticipants[index]?.name ?? "Unknown";
+          })
+          .filter((name): name is string => Boolean(name));
 
-      if (failedNames.length > 0) {
-        setStatus({
-          type: "error",
-          text: `Base transaction saved. Split rows ${results.length - failedNames.length}/${results.length}. Failed: ${failedNames.join(", ")}.`,
-        });
-        router.refresh();
-        return;
-      }
+        if (failedNames.length > 0) {
+          setStatus({
+            type: "error",
+            text: `Base transaction saved. Split rows ${results.length - failedNames.length}/${results.length}. Failed: ${failedNames.join(", ")}.`,
+          });
+          router.refresh();
+          return;
+        }
 
         router.refresh();
         form.reset({
@@ -1668,23 +1687,23 @@ export function TransactionForm({
       peopleState
         .filter((person) => !person.is_group)
         .map((person) => ({
-        value: person.id,
-        label: person.name,
-        description: person.email || "No email",
-        searchValue: `${person.name} ${person.email ?? ""}`.trim(),
-        icon: person.avatar_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={person.avatar_url}
-            alt={person.name}
-            className="h-5 w-5 object-contain rounded-none"
-          />
-        ) : (
-          <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
-            {getAccountInitial(person.name)}
-          </span>
-        ),
-      })),
+          value: person.id,
+          label: person.name,
+          description: person.email || "No email",
+          searchValue: `${person.name} ${person.email ?? ""}`.trim(),
+          icon: person.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={person.avatar_url}
+              alt={person.name}
+              className="h-5 w-5 object-contain rounded-none"
+            />
+          ) : (
+            <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
+              {getAccountInitial(person.name)}
+            </span>
+          ),
+        })),
     [peopleState],
   );
 
@@ -2220,6 +2239,7 @@ export function TransactionForm({
 
     const initialGroupId = initialValues?.split_group_id;
     const initialPersonIds = initialValues?.split_person_ids ?? [];
+    const uniquePersonIds = Array.from(new Set(initialPersonIds));
 
     if (initialGroupId) {
       setSplitGroupId(initialGroupId);
@@ -2228,8 +2248,8 @@ export function TransactionForm({
       return;
     }
 
-    if (initialPersonIds.length > 0) {
-      const members = initialPersonIds
+    if (uniquePersonIds.length > 0) {
+      const members = uniquePersonIds
         .map((id) => peopleState.find((person) => person.id === id))
         .filter((person): person is Person => Boolean(person));
 
@@ -2887,9 +2907,9 @@ export function TransactionForm({
 
   const PersonInput =
     !isSplitBill &&
-    (transactionType === "debt" ||
-      transactionType === "repayment" ||
-      (transactionType === "income" && !isRefundMode)) ? (
+      (transactionType === "debt" ||
+        transactionType === "repayment" ||
+        (transactionType === "income" && !isRefundMode)) ? (
       <div className="space-y-3">
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Person</label>
@@ -2924,12 +2944,11 @@ export function TransactionForm({
             </p>
           )}
           {debtAccountName && (
-            <p className="text-xs text-slate-500 mt-1">
-              Debt Account:{" "}
-              <span className="font-semibold text-slate-700">
+            <div className="flex flex-wrap gap-2 mt-1">
+              <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                 {debtAccountName}
               </span>
-            </p>
+            </div>
           )}
         </div>
 
@@ -3015,7 +3034,7 @@ export function TransactionForm({
 
   const SplitBillToggle =
     (transactionType === "debt" || transactionType === "repayment") &&
-    !isRefundMode ? (
+      !isRefundMode ? (
       <div className="space-y-2">
         <Label htmlFor="split-bill-toggle" className="text-sm font-medium text-gray-700">
           {splitBillLabel}
@@ -3051,125 +3070,109 @@ export function TransactionForm({
 
   const SplitBillSelection = isSplitBill ? (
     <div className="space-y-4">
-      <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-800">
-            Participants
-          </h3>
-          {splitBillAutoSplit ? (
-            <span className="text-[10px] uppercase text-slate-400">
-              Even split
-            </span>
-          ) : (
-            <span className="text-[10px] uppercase text-amber-500">
-              Custom split
-            </span>
-          )}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <label className="text-xs font-semibold text-slate-500">
+            Group
+          </label>
+          <Combobox
+            items={splitBillGroupOptions}
+            value={splitGroupId}
+            onValueChange={(value) => setSplitGroupId(value)}
+            placeholder="Select group"
+            inputPlaceholder="Search group..."
+            emptyState="No groups available"
+            className="h-11"
+          />
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-500">
-              Group
-            </label>
-            <Combobox
-              items={splitBillGroupOptions}
-              value={splitGroupId}
-              onValueChange={(value) => setSplitGroupId(value)}
-              placeholder="Select group"
-              inputPlaceholder="Search group..."
-              emptyState="No groups available"
-              className="h-11"
-            />
-          </div>
-          <div className="space-y-2 relative">
-            <label className="text-xs font-semibold text-slate-500">
-              Add person
-            </label>
-            <div className="min-h-[44px] rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                {splitExtraParticipants.map((participant) => (
-                  <span
-                    key={participant.personId}
-                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
-                  >
-                    {participant.name}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleRemoveSplitParticipant(participant.personId)
-                      }
-                      className="rounded-full p-0.5 text-slate-400 hover:text-slate-600"
-                      aria-label={`Remove ${participant.name}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-                <input
-                  type="text"
-                  value={splitPersonInput}
-                  onChange={(event) => {
-                    setSplitPersonInput(event.target.value);
-                    if (splitPersonError) {
-                      setSplitPersonError(null);
-                    }
-                  }}
-                  onFocus={() => setSplitPersonDropdownOpen(true)}
-                  onBlur={() => {
-                    setTimeout(() => setSplitPersonDropdownOpen(false), 150);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      void handleSplitPersonSubmit();
-                    }
-                  }}
-                  placeholder="Type name and press Enter"
-                  className="min-w-[160px] flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
-                />
-              </div>
-            </div>
-            {splitPersonDropdownOpen && splitPersonSuggestions.length > 0 && (
-              <div className="absolute left-0 top-full z-20 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
-                {splitPersonSuggestions.map((suggestion) => (
+        <div className="space-y-2 relative">
+          <label className="text-xs font-semibold text-slate-500">
+            Add person
+          </label>
+          <div className="min-h-[44px] rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              {splitExtraParticipants.map((participant) => (
+                <span
+                  key={participant.personId}
+                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
+                >
+                  {participant.name}
                   <button
-                    key={suggestion.id}
                     type="button"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => handleSelectSplitSuggestion(suggestion.id)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                    onClick={() =>
+                      handleRemoveSplitParticipant(participant.personId)
+                    }
+                    className="rounded-full p-0.5 text-slate-400 hover:text-slate-600"
+                    aria-label={`Remove ${participant.name}`}
                   >
-                    {suggestion.avatar_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={suggestion.avatar_url}
-                        alt={suggestion.name}
-                        className="h-7 w-7 rounded-full object-cover"
-                      />
-                    ) : (
-                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
-                        {getAccountInitial(suggestion.name)}
-                      </span>
-                    )}
-                    <div className="flex flex-col">
-                      <span className="font-medium text-slate-700">
-                        {suggestion.name}
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        {suggestion.hint}
-                      </span>
-                    </div>
+                    <X className="h-3 w-3" />
                   </button>
-                ))}
-              </div>
-            )}
-            {splitPersonError && (
-              <p className="text-xs text-rose-600">{splitPersonError}</p>
-            )}
-            {isCreatingSplitPerson && (
-              <p className="text-[10px] text-slate-400">Saving person...</p>
-            )}
+                </span>
+              ))}
+              <input
+                type="text"
+                value={splitPersonInput}
+                onChange={(event) => {
+                  setSplitPersonInput(event.target.value);
+                  if (splitPersonError) {
+                    setSplitPersonError(null);
+                  }
+                }}
+                onFocus={() => setSplitPersonDropdownOpen(true)}
+                onBlur={() => {
+                  setTimeout(() => setSplitPersonDropdownOpen(false), 150);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void handleSplitPersonSubmit();
+                  }
+                }}
+                placeholder="Type name and press Enter"
+                className="min-w-[160px] flex-1 border-0 bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
+              />
+            </div>
           </div>
+          {splitPersonDropdownOpen && splitPersonSuggestions.length > 0 && (
+            <div className="absolute left-0 top-full z-20 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg">
+              {splitPersonSuggestions.map((suggestion) => (
+                <button
+                  key={suggestion.id}
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => handleSelectSplitSuggestion(suggestion.id)}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
+                >
+                  {suggestion.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={suggestion.avatar_url}
+                      alt={suggestion.name}
+                      className="h-7 w-7 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-[11px] font-semibold text-slate-600">
+                      {getAccountInitial(suggestion.name)}
+                    </span>
+                  )}
+                  <div className="flex flex-col">
+                    <span className="font-medium text-slate-700">
+                      {suggestion.name}
+                    </span>
+                    <span className="text-[10px] text-slate-400">
+                      {suggestion.hint}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+          {splitPersonError && (
+            <p className="text-xs text-rose-600">{splitPersonError}</p>
+          )}
+          {isCreatingSplitPerson && (
+            <p className="text-[10px] text-slate-400">Saving person...</p>
+          )}
         </div>
       </div>
 
@@ -3184,6 +3187,28 @@ export function TransactionForm({
         allowPaidBefore={transactionType !== "repayment"}
         error={splitBillError}
       />
+    </div>
+  ) : null;
+
+  const SplitBillSection = SplitBillToggle ? (
+    <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-slate-800">
+          Participants
+        </h3>
+        {isSplitBill &&
+          (splitBillAutoSplit ? (
+            <span className="text-[10px] uppercase text-slate-400">
+              Even split
+            </span>
+          ) : (
+            <span className="text-[10px] uppercase text-amber-500">
+              Custom split
+            </span>
+          ))}
+      </div>
+      {SplitBillToggle}
+      {SplitBillSelection}
     </div>
   ) : null;
 
@@ -3476,17 +3501,37 @@ export function TransactionForm({
     </div>
   );
 
+  const isDebtForm =
+    transactionType === "debt" || transactionType === "repayment";
+
   const NoteInput = (
-    <div className="space-y-2">
+    <div
+      className={cn(
+        "space-y-2",
+        isDebtForm && "h-full flex flex-col",
+      )}
+    >
       <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
         <FileText className="h-4 w-4 text-slate-500" />
         Note
       </label>
-      <textarea
-        {...register("note")}
-        placeholder="Add a note..."
-        className="min-h-[60px] w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-      />
+      {isDebtForm ? (
+        <input
+          type="text"
+          {...register("note")}
+          placeholder="Add a note..."
+          className="h-11 w-full rounded-md border border-gray-300 px-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+        />
+      ) : (
+        <textarea
+          {...register("note")}
+          placeholder="Add a note..."
+          className={cn(
+            "w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200",
+            "min-h-[60px]",
+          )}
+        />
+      )}
       {errors.note && (
         <p className="text-sm text-red-600">{errors.note.message}</p>
       )}
@@ -3495,19 +3540,90 @@ export function TransactionForm({
 
   const INSTALLMENT_MIN_AMOUNT = 3_000_000; // 3 million VND threshold
   const showInstallmentToggle =
-    (transactionType === "debt" || transactionType === "repayment") &&
     !isRefundMode &&
-    (watchedAmount ?? 0) >= INSTALLMENT_MIN_AMOUNT;
+    (transactionType === "repayment"
+      ? true
+      : transactionType === "debt"
+        ? (watchedAmount ?? 0) >= INSTALLMENT_MIN_AMOUNT
+        : installments.length > 0 &&
+        (transactionType === "expense" || transactionType === "income"));
 
-  const InstallmentInput = showInstallmentToggle ? (
-    <div className="rounded-lg border border-slate-200 p-4 space-y-4 bg-slate-50/50">
+  const hasInstallmentPlans = installments.length > 0;
+
+  const InstallmentPlanPicker = watchedIsInstallment ? (
+    transactionType === "repayment" && hasInstallmentPlans ? (
+      <Controller
+        control={control}
+        name="installment_plan_id"
+        render={({ field }) => (
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-purple-700 uppercase tracking-wider">
+              Select Plan
+            </label>
+            <Combobox
+              items={installments.map((i) => ({
+                value: i.id,
+                label: i.name,
+                description: `Due: ${i.next_due_date ? format(new Date(i.next_due_date), "dd/MM/yyyy") : "N/A"} - ${numberFormatter.format(i.monthly_amount)}`,
+                icon: <Sparkles className="w-4 h-4 text-purple-500" />,
+              }))}
+              value={field.value}
+              onValueChange={(val: string | undefined) => {
+                if (!val) {
+                  field.onChange(undefined);
+                  return;
+                }
+                field.onChange(val);
+                const plan = installments.find((i) => i.id === val);
+                if (plan) {
+                  const currentAmt = form.getValues("amount");
+                  if (!currentAmt || currentAmt === 0) {
+                    form.setValue("amount", plan.monthly_amount);
+                  }
+
+                  const currentNote = form.getValues("note");
+                  if (!currentNote || currentNote.trim() === "") {
+                    const start = new Date(plan.start_date);
+                    const now = new Date();
+                    const diffMonths =
+                      (now.getFullYear() - start.getFullYear()) * 12 +
+                      (now.getMonth() - start.getMonth()) +
+                      1;
+                    const monthNum = Math.min(
+                      Math.max(1, diffMonths),
+                      plan.term_months,
+                    );
+                    form.setValue(
+                      "note",
+                      `${plan.name} (Month ${monthNum}/${plan.term_months})`,
+                    );
+                  }
+                }
+              }}
+              placeholder="Select Installment Plan..."
+              className="w-full bg-white border-purple-200"
+            />
+          </div>
+        )}
+      />
+    ) : (
+      <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+        New installment plan will be created on submit.
+      </div>
+    )
+  ) : null;
+
+  const InstallmentSection = showInstallmentToggle ? (
+    <div className="rounded-lg border border-slate-200 p-4 space-y-3 bg-slate-50/50">
       <div className="flex items-center justify-between">
         <div className="space-y-0.5">
           <label className="text-sm font-medium text-slate-900">
-            Installment Plan
+            {transactionType === "repayment" ? "Installment Repayment" : "Installment Plan"}
           </label>
           <p className="text-xs text-slate-500">
-            Convert this transaction into an installment plan
+            {transactionType === "repayment"
+              ? "Link this repayment to an installment plan"
+              : "Convert this transaction into an installment plan"}
           </p>
         </div>
         <Controller
@@ -3519,92 +3635,19 @@ export function TransactionForm({
               onCheckedChange={(checked) => {
                 field.onChange(checked);
                 setIsInstallment(checked);
+                if (!checked) {
+                  form.setValue("installment_plan_id", undefined, {
+                    shouldDirty: true,
+                  });
+                }
               }}
             />
           )}
         />
       </div>
+      {InstallmentPlanPicker}
     </div>
   ) : null;
-
-  const InstallmentRepaymentSelector =
-    (installments && installments.length > 0) ||
-      form.getValues("installment_plan_id") ? (
-      <div className="rounded-lg border border-purple-200 p-4 space-y-4 bg-purple-50/50">
-        <div className="flex items-center gap-2 mb-2">
-          <Sparkles className="w-4 h-4 text-purple-600" />
-          <h4 className="text-sm font-semibold text-purple-900">
-            Installment Repayment
-          </h4>
-        </div>
-        <Controller
-          control={control}
-          name="installment_plan_id"
-          render={({ field }) => (
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-purple-700 uppercase tracking-wider">
-                Select Plan
-              </label>
-              <Combobox
-                items={installments.map((i) => ({
-                  value: i.id,
-                  label: i.name,
-                  description: `Due: ${i.next_due_date ? format(new Date(i.next_due_date), "dd/MM/yyyy") : "N/A"} - ${numberFormatter.format(i.monthly_amount)}`,
-                  icon: <Sparkles className="w-4 h-4 text-purple-500" />,
-                }))}
-                value={field.value}
-                onValueChange={(val: string | undefined) => {
-                  if (!val) {
-                    field.onChange(undefined);
-                    return;
-                  }
-                  field.onChange(val);
-                  // Auto-fill details if plan selected details are available
-                  const plan = installments.find((i) => i.id === val);
-                  if (plan) {
-                    // If Amount is empty or 0, auto fill monthly amount
-                    const currentAmt = form.getValues("amount");
-                    if (!currentAmt || currentAmt === 0) {
-                      form.setValue("amount", plan.monthly_amount);
-                    }
-
-                    // Update Note if empty or generic
-                    const currentNote = form.getValues("note");
-                    if (!currentNote || currentNote.trim() === "") {
-                      // Calculate month index
-                      const start = new Date(plan.start_date);
-                      const now = new Date();
-                      // Rough month diff
-                      const diffMonths =
-                        (now.getFullYear() - start.getFullYear()) * 12 +
-                        (now.getMonth() - start.getMonth()) +
-                        1;
-                      const monthNum = Math.min(
-                        Math.max(1, diffMonths),
-                        plan.term_months,
-                      );
-                      form.setValue(
-                        "note",
-                        `${plan.name} (Month ${monthNum}/${plan.term_months})`,
-                      );
-                    }
-                  }
-                }}
-                placeholder="Select Installment Plan..."
-                className="w-full bg-white border-purple-200"
-                disabled={!installments.length && !!field.value} // Read-only if ID set but no list
-              />
-              {!installments.length && field.value && (
-                <p className="text-[10px] text-purple-600 italic">
-                  Linked to plan ID: {field.value.slice(0, 8)}... (List not
-                  loaded)
-                </p>
-              )}
-            </div>
-          )}
-        />
-      </div>
-    ) : null;
 
   const showCashbackSection =
     transactionType === "expense" ||
@@ -4295,66 +4338,74 @@ export function TransactionForm({
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-4">
-                {DateInput}
-                {SourceAccountInput}
-                {AmountInput}
-                {TagInput}
-              </div>
-              <div className="space-y-4">
-                {CategoryInput}
-                {ShopInput}
-                {SplitBillToggle}
-                {PersonInput}
-                {DestinationAccountInput}
-                {RefundStatusInput}
-              </div>
-            </div>
+            {isDebtForm ? (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    {PersonInput}
+                  </div>
+                  <div className="space-y-4">
+                    {NoteInput}
+                  </div>
+                </div>
 
-            {SplitBillSelection}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    {DateInput}
+                  </div>
+                  <div className="space-y-4">
+                    {TagInput}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    {CategoryInput}
+                  </div>
+                  <div className="space-y-4">
+                    {ShopInput}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    {SourceAccountInput}
+                  </div>
+                  <div className="space-y-4">
+                    {AmountInput}
+                  </div>
+                </div>
+
+                {InstallmentSection}
+                {SplitBillSection}
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    {DateInput}
+                    {SourceAccountInput}
+                    {AmountInput}
+                    {TagInput}
+                  </div>
+                  <div className="space-y-4">
+                    {CategoryInput}
+                    {ShopInput}
+                    {SplitBillToggle}
+                    {PersonInput}
+                    {DestinationAccountInput}
+                    {RefundStatusInput}
+                  </div>
+                </div>
+
+                {SplitBillSection}
+              </>
+            )}
 
             <div className="space-y-4 pt-2 border-t border-slate-100">
-              {/* Phase 7X: Explicit Installment Toggle */}
-              {(transactionType === "repayment" ||
-                transactionType === "expense" ||
-                transactionType === "income") &&
-                installments.length > 0 && (
-                  <div className="flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200">
-                    <div className="space-y-0.5">
-                      <Label
-                        htmlFor="is-installment-repay"
-                        className="text-sm font-medium text-slate-900"
-                      >
-                        Pay for Installment?
-                      </Label>
-                      <p className="text-xs text-slate-500">
-                        Link this {transactionType} to an active plan
-                      </p>
-                    </div>
-                    <Controller
-                      control={control}
-                      name="is_installment"
-                      render={({ field }) => (
-                        <Switch
-                          id="is-installment-repay"
-                          checked={field.value}
-                          onCheckedChange={(checked) => {
-                            field.onChange(checked);
-                            if (!checked) {
-                              form.setValue("installment_plan_id", undefined);
-                            }
-                          }}
-                        />
-                      )}
-                    />
-                  </div>
-                )}
-
-              {watchedIsInstallment && InstallmentRepaymentSelector}
-              {!watchedIsInstallment && InstallmentInput}
+              {!isDebtForm && InstallmentSection}
               {CashbackModeInput}
-              {NoteInput}
+              {!isDebtForm && NoteInput}
             </div>
           </div>
 

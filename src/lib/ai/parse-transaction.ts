@@ -7,7 +7,12 @@ type ParseMode = "gemini" | "rules";
 
 const DEFAULT_MODELS = ["gemini-1.5-flash", "gemini-1.5-pro"];
 
-const normalizeText = (value: string) => value.trim().toLowerCase();
+const normalizeText = (value: string) =>
+  value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
 
 const clampConfidence = (value: number) => {
   if (!Number.isFinite(value)) return 0;
@@ -31,6 +36,9 @@ const buildBaseResult = (): ParsedTransaction => ({
   shop_id: null,
   shop_name: null,
   note: null,
+  cashback_share_percent: null,
+  cashback_share_fixed: null,
+  cashback_mode: null,
   needs: [],
   confidence: 0,
 });
@@ -50,8 +58,14 @@ const detectIntent = (text: string) => {
   const lower = normalizeText(text);
   const rules: Array<{ intent: ParsedTransaction["intent"]; keywords: string[] }> = [
     { intent: "transfer", keywords: ["transfer", "moved", "move", "between"] },
-    { intent: "repay", keywords: ["repay", "repayment", "pay back", "payback"] },
-    { intent: "lend", keywords: ["lend", "loan", "lent", "owe", "debt", "borrow"] },
+    {
+      intent: "repay",
+      keywords: ["repay", "repayment", "pay back", "payback", "tra", "tra tien", "tra no", "hoan", "hoan tien"],
+    },
+    {
+      intent: "lend",
+      keywords: ["lend", "loan", "lent", "owe", "debt", "borrow", "cho muon", "muon tien"],
+    },
     { intent: "income", keywords: ["income", "salary", "bonus", "received", "receive"] },
     { intent: "expense", keywords: ["spent", "spend", "buy", "purchase", "paid", "expense"] },
   ];
@@ -78,6 +92,52 @@ const extractAmount = (text: string) => {
   const multiplier =
     suffix === "k" ? 1_000 : suffix === "m" ? 1_000_000 : suffix === "b" ? 1_000_000_000 : 1;
   return Math.abs(base) * multiplier;
+};
+
+const extractNoteFromComma = (text: string) => {
+  const index = text.indexOf(",");
+  if (index === -1) return null;
+  const note = text.slice(index + 1).trim();
+  return note || null;
+};
+
+const extractNotePrefix = (text: string) => {
+  const index = text.indexOf(",");
+  if (index === -1) return null;
+  const prefix = text.slice(0, index).trim();
+  if (!prefix) return null;
+  const cleaned = prefix
+    .replace(/[\d.,]+\s*(k|m|b|đ|vnd)?/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || null;
+};
+
+const extractCashback = (text: string) => {
+  const normalized = normalizeText(text);
+  const percentMatch = normalized.match(
+    /\b(?:cashback|back)\s*([0-9.,]+)\s*(%|percent|pct)\b/i,
+  );
+  if (percentMatch) {
+    const raw = percentMatch[1]?.replace(/,/g, "");
+    const value = raw ? Number(raw) : NaN;
+    return Number.isFinite(value) ? { percent: value, fixed: null } : null;
+  }
+
+  const fixedMatch = normalized.match(
+    /\b(?:cashback|back)\s*([0-9.,]+)\s*(k|m|b)?\b/i,
+  );
+  if (!fixedMatch) return null;
+  const raw = fixedMatch[1]?.replace(/,/g, "");
+  const base = raw ? Number(raw) : NaN;
+  if (!Number.isFinite(base)) return null;
+  const suffix = fixedMatch[2]?.toLowerCase();
+  if (!suffix) {
+    return { percent: base, fixed: null };
+  }
+  const multiplier =
+    suffix === "k" ? 1_000 : suffix === "m" ? 1_000_000 : 1_000_000_000;
+  return { percent: null, fixed: Math.abs(base) * multiplier };
 };
 
 const pad = (value: number) => value.toString().padStart(2, "0");
@@ -134,7 +194,8 @@ const findMatches = (text: string, options: Array<{ name: string }>) => {
     .map((option) => {
       const name = option.name.trim();
       if (!name) return null;
-      const index = lower.indexOf(name.toLowerCase());
+      const normalizedName = normalizeText(name);
+      const index = lower.indexOf(normalizedName);
       if (index === -1) return null;
       return { name, index };
     })
@@ -187,6 +248,8 @@ const simpleParse = (
   const intent = detectIntent(text);
   const amount = extractAmount(text);
   const occurred_at = extractDate(text);
+  const note = extractNoteFromComma(text);
+  const cashback = extractCashback(text);
   const peopleMatches = context?.people ? findMatches(text, context.people) : [];
   const groupMatches = context?.groups ? findMatches(text, context.groups) : [];
   const accountMatches = context?.accounts ? findMatches(text, context.accounts) : [];
@@ -209,7 +272,13 @@ const simpleParse = (
   }
 
   const category_name = categoryMatches[0]?.name ?? null;
-  const shop_name = shopMatches[0]?.name ?? null;
+  let shop_name: string | null = shopMatches[0]?.name ?? null;
+  if (!shop_name && context?.shops?.length) {
+    const defaultShop = context.shops.find((shop) =>
+      normalizeText(shop.name).includes("shopee"),
+    );
+    shop_name = defaultShop?.name ?? null;
+  }
 
   return normalizeResult(
     {
@@ -228,7 +297,10 @@ const simpleParse = (
       category_name,
       shop_id: null,
       shop_name,
-      note: null,
+      note,
+      cashback_share_percent: cashback?.percent ?? null,
+      cashback_share_fixed: cashback?.fixed ?? null,
+      cashback_mode: null,
       confidence: 0.2,
     },
     "rules",
@@ -276,6 +348,9 @@ const buildPrompt = (text: string, context?: ParseTransactionContext) => {
     '  "shop_id": null,',
     '  "shop_name": string|null,',
     '  "note": string|null,',
+    '  "cashback_share_percent": number|null,',
+    '  "cashback_share_fixed": number|null,',
+    '  "cashback_mode": "none_back|voluntary|real_fixed|real_percent"|null,',
     '  "needs": string[],',
     '  "confidence": number',
     "}",
@@ -346,6 +421,79 @@ const parseWithGemini = async (
   return null;
 };
 
+const applyPostProcessing = (
+  result: ParsedTransaction,
+  text: string,
+  context?: ParseTransactionContext,
+) => {
+  const normalizedText = normalizeText(text);
+  const notePrefix = extractNotePrefix(text);
+  const noteFromComma = extractNoteFromComma(text);
+  if (notePrefix) {
+    result.note = notePrefix;
+  } else if (noteFromComma) {
+    result.note = noteFromComma;
+  }
+
+  const cashback = extractCashback(text);
+  if (cashback) {
+    result.cashback_share_percent = cashback.percent ?? null;
+    result.cashback_share_fixed = cashback.fixed ?? null;
+  }
+
+  if (result.people.length > 0) {
+    const seen = new Set<string>();
+    result.people = result.people.filter((person) => {
+      const key = normalizeText(person.name);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  if (result.group_name && result.people.length > 0) {
+    const groupKey = normalizeText(result.group_name);
+    if (result.people.some((person) => normalizeText(person.name) === groupKey)) {
+      result.group_name = null;
+    }
+  }
+
+  const splitSignal = detectSplitBill(text, result.people.length, result.group_name);
+  if (!splitSignal && !result.group_name && result.people.length <= 1) {
+    result.split_bill = false;
+  }
+
+  if (result.people.length > 0 && (!result.intent || result.intent === "expense")) {
+    const shouldLend =
+      /\bcho\b/.test(normalizedText) ||
+      /\bfor\b/.test(normalizedText) ||
+      normalizedText.includes("back");
+    if (shouldLend) {
+      result.intent = "lend";
+    }
+  }
+
+  const hasLam = result.people.some((person) =>
+    normalizeText(person.name).includes("lam"),
+  );
+  if (
+    hasLam &&
+    result.cashback_share_percent === null &&
+    result.cashback_share_fixed === null
+  ) {
+    result.cashback_share_percent = 8;
+  }
+
+  if (!result.shop_name && context?.shops?.length) {
+    const defaultShop = context.shops.find((shop) =>
+      normalizeText(shop.name).includes("shopee"),
+    );
+    result.shop_name = defaultShop?.name ?? null;
+  }
+
+  result.needs = normalizeNeeds(result);
+};
+
 export async function parseTransaction(
   text: string,
   context?: ParseTransactionContext,
@@ -356,5 +504,7 @@ export async function parseTransaction(
   }
 
   const geminiResult = await parseWithGemini(trimmed, context);
-  return geminiResult ?? simpleParse(trimmed, context);
+  const parsed = geminiResult ?? simpleParse(trimmed, context);
+  applyPostProcessing(parsed, trimmed, context);
+  return parsed;
 }

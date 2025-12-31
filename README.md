@@ -52,6 +52,20 @@ If you encounter missing cycle data or incorrect caps in the Cashback Analysis v
 - Requires `person_cycle_sheets` table; apply migration `supabase/migrations/20251226193000_create_person_cycle_sheets.sql` to remove the PGRST205 warning and enable sheet storage.
 - Sheet create/sync runs server-side via `POST /api/sheets/manage` (apps script must support `create_cycle_sheet` action).
 
+## Quick Add Chatbot (Phase 2)
+- Floating Quick Add chat widget appears on Dashboard, Transactions, and People detail pages only.
+- Natural language wizard with follow-up questions; always requires review/confirm.
+- People detail context auto-prefills the person/group so prompts can omit the name.
+- Templates stored in `quick_add_templates` with normalized name keys (lowercase).
+- Temp review after Submit Now routes to `/transactions/temp-<transaction_id>` (non-persistent; refresh/close loses context).
+- Template save needs RLS policies applied: `supabase/migrations/20251231130000_add_quick_add_templates_policies.sql`.
+- API endpoints:
+  - `POST /api/ai/parse-transaction`
+  - `GET/POST /api/ai/templates`
+  - `POST /api/transactions/quick-add`
+  - `POST /api/bot/slack`
+  - `POST /api/bot/telegram`
+
 ## Recent Updates (Phase 8 - Google Sheets Sync)
 - Added per-person, per-cycle sheet creation + sync via Apps Script (`sheetScript/`) with `ensureSheet` and `syncTransactions` actions.
 - Manage Sheet UI now uses a dropdown popover, saves Script/Sheet links, and shows a sync completion modal.

@@ -16,6 +16,7 @@ import { EditPersonButton } from '@/components/people/edit-person-button'
 import { PersonDetailTabs } from '@/components/people/person-detail-tabs'
 import { ManageSheetButton } from '@/components/people/manage-sheet-button'
 import { toYYYYMMFromDate } from '@/lib/month-tag'
+import { QuickAddChat } from '@/components/ai/quick-add-chat'
 
 export const dynamic = 'force-dynamic'
 
@@ -190,6 +191,14 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
           />
         </div>
       </div>
+      <QuickAddChat
+        accounts={accounts}
+        categories={categories}
+        people={people}
+        shops={shops}
+        variant="floating"
+        contextPerson={profileRecord ?? null}
+      />
     </TagFilterProvider>
   )
 }

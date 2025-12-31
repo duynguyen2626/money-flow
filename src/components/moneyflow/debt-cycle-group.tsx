@@ -291,7 +291,7 @@ export function DebtCycleGroup({
 
             {/* Expanded Content */}
             {isExpanded && (
-                <div className="relative w-full border-t bg-background md:overflow-y-auto md:max-h-[60vh]">
+                <div className="relative w-full border-t bg-background overflow-y-auto max-h-[60vh]">
                     <UnifiedTransactionTable
                         transactions={filteredTxns}
                         accountType="debt"

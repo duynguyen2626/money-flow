@@ -26,8 +26,17 @@ function createAdminClient() {
  * Ensures a cashback cycle exists for the given account and tag.
  * Returns the cycle ID.
  */
-async function ensureCycle(accountId: string, cycleTag: string, accountConfig: any, fallbackTag?: string) {
-  const supabase = createClient();
+const hasServiceRole = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+const getCashbackClient = () => (hasServiceRole ? createAdminClient() : createClient());
+
+async function ensureCycle(
+  accountId: string,
+  cycleTag: string,
+  accountConfig: any,
+  fallbackTag?: string,
+  client = getCashbackClient(),
+) {
+  const supabase = client;
 
   // 1. Try to fetch existing
   const { data: existing } = await supabase
@@ -91,7 +100,7 @@ async function ensureCycle(accountId: string, cycleTag: string, accountConfig: a
 export async function upsertTransactionCashback(
   transaction: TransactionWithDetails
 ) {
-  const supabase = createClient();
+  const supabase = getCashbackClient();
   const { data: existingEntries } = await supabase
     .from('cashback_entries')
     .select('cycle_id, account_id')
@@ -157,7 +166,8 @@ export async function upsertTransactionCashback(
     account.id,
     cycleTag,
     account.cashback_config,
-    legacyCycleTag
+    legacyCycleTag,
+    supabase
   );
 
   // Persist the resolved tag to the transaction so recompute (summing logic) works.
@@ -276,7 +286,7 @@ export async function upsertTransactionCashback(
  * MF5.2 Engine: Deterministic Recomputation
  */
 export async function recomputeCashbackCycle(cycleId: string) {
-  const supabase = createClient();
+  const supabase = getCashbackClient();
 
   // 1. Fetch Cycle & Parent Account Info
   const { data: cycle } = await supabase

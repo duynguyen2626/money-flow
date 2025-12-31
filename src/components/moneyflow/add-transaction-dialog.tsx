@@ -7,6 +7,7 @@ import { TransactionForm, TransactionFormValues } from "./transaction-form";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Account, Category, Person, Shop } from "@/types/moneyflow.types";
 import { Installment } from "@/services/installment.service";
+import { ArrowLeft } from "lucide-react";
 
 type AddTransactionDialogProps = {
   accounts: Account[];
@@ -33,6 +34,8 @@ type AddTransactionDialogProps = {
   };
   isOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  onBackToChat?: () => void;
+  backToChatLabel?: string;
   // Edit Mode Props
   mode?: "create" | "edit" | "refund";
   transactionId?: string;
@@ -63,6 +66,8 @@ export function AddTransactionDialog({
   cloneInitialValues,
   isOpen,
   onOpenChange,
+  onBackToChat,
+  backToChatLabel = "Back to chat",
   mode = "create",
   transactionId,
   initialValues,
@@ -148,12 +153,14 @@ export function AddTransactionDialog({
 
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showCloseWarning, setShowCloseWarning] = useState(false);
+  const [closeAction, setCloseAction] = useState<"close" | "backToChat" | null>(null);
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     if (open) {
       setHasUnsavedChanges(false);
       setShowCloseWarning(false);
+      setCloseAction(null);
     }
   }, [open]);
 
@@ -172,6 +179,7 @@ export function AddTransactionDialog({
     // Only close if clicking directly on overlay, not on content
     if (event.target === event.currentTarget) {
       if (hasUnsavedChanges) {
+        setCloseAction("close");
         setShowCloseWarning(true);
       } else {
         closeDialog();
@@ -182,7 +190,24 @@ export function AddTransactionDialog({
   const confirmClose = () => {
     setShowCloseWarning(false);
     setHasUnsavedChanges(false);
+    const action = closeAction ?? "close";
+    setCloseAction(null);
     closeDialog();
+    if (action === "backToChat") {
+      onBackToChat?.();
+    }
+  };
+
+  const handleCloseRequest = (action: "close" | "backToChat") => {
+    if (hasUnsavedChanges) {
+      setCloseAction(action);
+      setShowCloseWarning(true);
+      return;
+    }
+    closeDialog();
+    if (action === "backToChat") {
+      onBackToChat?.();
+    }
   };
 
   const defaultClassName =
@@ -229,11 +254,7 @@ export function AddTransactionDialog({
                   <button
                     className="text-sm font-semibold text-slate-700"
                     onClick={() => {
-                      if (hasUnsavedChanges) {
-                        setShowCloseWarning(true);
-                      } else {
-                        closeDialog();
-                      }
+                      handleCloseRequest("close");
                     }}
                   >
                     Close
@@ -250,6 +271,18 @@ export function AddTransactionDialog({
                   </button>
                 </div>
               )}
+              {onBackToChat && (
+                <div className="flex items-center justify-between border-b bg-slate-50 px-4 py-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-900"
+                    onClick={() => handleCloseRequest("backToChat")}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                    {backToChatLabel}
+                  </button>
+                </div>
+              )}
               <TransactionForm
                 accounts={accounts}
                 categories={categories}
@@ -258,11 +291,7 @@ export function AddTransactionDialog({
                 installments={effectiveInstallments}
                 onSuccess={handleSuccess}
                 onCancel={() => {
-                  if (hasUnsavedChanges) {
-                    setShowCloseWarning(true);
-                  } else {
-                    closeDialog();
-                  }
+                  handleCloseRequest("close");
                 }}
                 onFormChange={setHasUnsavedChanges}
                 defaultTag={defaultTag}

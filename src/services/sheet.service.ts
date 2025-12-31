@@ -17,6 +17,7 @@ type SheetSyncTransaction = {
   cashback_share_fixed?: number | null
   cashback_share_amount?: number | null
   type?: string
+  img_url?: string | null
 }
 
 function isValidWebhook(url: string | null | undefined): url is string {
@@ -221,6 +222,7 @@ function buildPayload(txn: SheetSyncTransaction, action: 'create' | 'delete' | '
     fixed_back: fixedBack,
     total_back: totalBack,
     tag: txn.tag ?? undefined,
+    img: txn.img_url ?? undefined
   }
 }
 
@@ -232,10 +234,34 @@ export async function syncTransactionToSheet(
   try {
     const sheetLink = await getProfileSheetLink(personId)
     if (!sheetLink) return
+
+    const sheetId = extractSheetId(sheetLink)
+    const anhScriptId = process.env.ANH_SCRIPT
+    const isAnhScript = anhScriptId && sheetId === anhScriptId
+
+    // Fetch person's sheet_full_img if this is ANH_SCRIPT
+    let sheetFullImg: string | null = null
+    if (isAnhScript) {
+      console.log('[syncTransactionToSheet] Fetching sheet_full_img for ANH_SCRIPT, personId:', personId)
+      const supabase = await createClient()
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('sheet_full_img')
+        .eq('id', personId)
+        .single()
+      if (error) {
+        console.error('[syncTransactionToSheet] Error fetching sheet_full_img:', error)
+      }
+      sheetFullImg = data?.sheet_full_img ?? null
+      console.log('[syncTransactionToSheet] Fetched sheet_full_img:', sheetFullImg)
+    }
+
     const payload = {
       ...buildPayload(txn, action),
       person_id: personId,
       cycle_tag: txn.tag ?? undefined,
+      anh_script_mode: isAnhScript ? true : undefined,
+      img: isAnhScript && sheetFullImg ? sheetFullImg : undefined
     }
     console.log('Syncing to sheet for Person:', personId, 'Payload:', payload)
     const result = await postToSheet(sheetLink, payload)
@@ -298,7 +324,9 @@ export async function syncAllTransactions(personId: string) {
         cashback_share_percent,
         cashback_share_fixed,
         shop_id,
-        shops ( name )
+        shops ( name ),
+        account_id,
+        accounts!account_id ( name )
       `)
       .eq('person_id', personId)
       .neq('status', 'void')
@@ -323,12 +351,20 @@ export async function syncAllTransactions(personId: string) {
       cashback_share_fixed?: number | null
       shop_id: string | null
       shops: { name: string | null } | null
+      account_id: string | null
+      accounts: { name: string | null } | null
     }[]
 
     let sent = 0
     for (const txn of rows) {
       const shopData = txn.shops as any
-      const shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
+      let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
+
+      // Fallback for Repayment/Transfer if shop is empty -> Use Account Name (e.g. "Vpbank Lady", "Wallet A")
+      if (!shopName) {
+         const accData = txn.accounts as any
+         shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
+      }
 
       // Determine type: debt = lending out, repayment = receiving back
       const syncType = txn.type === 'repayment' ? 'In' : 'Debt'
@@ -469,7 +505,9 @@ export async function syncCycleTransactions(
         cashback_share_percent,
         cashback_share_fixed,
         shop_id,
-        shops ( name )
+        shops ( name ),
+        account_id,
+        accounts!account_id ( name )
       `)
       .eq('person_id', personId)
       .in('tag', tags)
@@ -484,7 +522,13 @@ export async function syncCycleTransactions(
     const rows = (data ?? []) as any[]
     const batchRows = rows.map((txn) => {
       const shopData = txn.shops as any
-      const shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
+      let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
+
+      // Fallback for Repayment/Transfer if shop is empty -> Use Account Name
+      if (!shopName) {
+         const accData = txn.accounts as any
+         shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
+      }
       const syncType = txn.type === 'repayment' ? 'In' : 'Debt'
 
       // We explicitly call buildPayload to get the formatted fields, 
@@ -510,13 +554,44 @@ export async function syncCycleTransactions(
 
     console.log(`[SheetSync] Sending batch of ${batchRows.length} transactions for ${cycleTag}`)
 
+    const extractedSheetId = extractSheetId(sheetLink)
+    const anhScriptEnv = process.env.ANH_SCRIPT
+    console.log('[syncCycleTransactions] ANH_SCRIPT check:', {
+      extractedSheetId,
+      anhScriptEnv,
+      sheetLink,
+      matches: extractedSheetId === anhScriptEnv
+    })
+    const isAnhScript = anhScriptEnv && extractedSheetId === anhScriptEnv
+    
+    // Fetch person's sheet_full_img if this is ANH_SCRIPT
+    let sheetFullImg: string | null = null
+    if (isAnhScript) {
+      console.log('[syncCycleTransactions] Fetching sheet_full_img for ANH_SCRIPT, personId:', personId)
+      const supabase = await createClient()
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('sheet_full_img')
+        .eq('id', personId)
+        .single()
+      if (error) {
+        console.error('[syncCycleTransactions] Error fetching sheet_full_img:', error)
+      }
+      sheetFullImg = data?.sheet_full_img ?? null
+      console.log('[syncCycleTransactions] Fetched sheet_full_img:', sheetFullImg)
+    }
+
     const payload = {
       action: 'syncTransactions',
       person_id: personId,
       cycle_tag: cycleTag,
       sheet_id: sheetId ?? undefined,
-      rows: batchRows
+      rows: batchRows,
+      anh_script_mode: isAnhScript ? true : undefined,
+      img: isAnhScript && sheetFullImg ? sheetFullImg : undefined
     }
+    
+    console.log('[syncCycleTransactions] Final payload:', { ...payload, rows: `[${payload.rows.length} rows]` })
 
     const result = await postToSheet(sheetLink, payload)
     

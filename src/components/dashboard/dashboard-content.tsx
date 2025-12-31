@@ -226,16 +226,6 @@ export function DashboardContent({
   return (
     <div className="h-full overflow-auto">
       <div className="max-w-screen-2xl mx-auto space-y-5 p-4">
-        <div className="flex justify-end">
-          <QuickAddChat
-            accounts={accounts}
-            categories={categories}
-            people={people}
-            shops={shops}
-          />
-        </div>
-
-
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {metricCards.map(card => (
             <div
@@ -566,6 +556,13 @@ export function DashboardContent({
           </div>
         </div>
       </div>
+      <QuickAddChat
+        accounts={accounts}
+        categories={categories}
+        people={people}
+        shops={shops}
+        variant="floating"
+      />
     </div>
   )
 }

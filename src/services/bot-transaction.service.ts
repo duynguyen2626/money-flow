@@ -24,6 +24,11 @@ export type BotTransactionDraft = {
   note?: string | null;
   split_bill?: boolean;
   created_by?: string | null;
+  category_id?: string | null;
+  shop_id?: string | null;
+  cashback_share_percent?: number | null;
+  cashback_share_fixed?: number | null;
+  cashback_mode?: string | null;
 };
 
 const SPLIT_BILL_SYSTEM_ACCOUNT_ID = "88888888-9999-9999-9999-888888888888";
@@ -50,6 +55,11 @@ const buildTransactionRow = async (
     tag?: string | null;
     metadata?: Json | null;
     created_by?: string | null;
+    category_id?: string | null;
+    shop_id?: string | null;
+    cashback_share_percent?: number | null;
+    cashback_share_fixed?: number | null;
+    cashback_mode?: string | null;
   },
 ): Promise<InsertRow> => {
   const normalizedAmount = await normalizeAmountForType(
@@ -77,16 +87,16 @@ const buildTransactionRow = async (
     type: input.type,
     account_id: input.source_account_id,
     target_account_id: targetAccountId,
-    category_id: null,
+    category_id: input.category_id ?? null,
     person_id: input.person_id ?? null,
     metadata: input.metadata ?? null,
-    shop_id: null,
+    shop_id: input.shop_id ?? null,
     persisted_cycle_tag: null,
     is_installment: false,
     installment_plan_id: null,
-    cashback_share_percent: null,
-    cashback_share_fixed: null,
-    cashback_mode: null,
+    cashback_share_percent: input.cashback_share_percent ?? null,
+    cashback_share_fixed: input.cashback_share_fixed ?? null,
+    cashback_mode: input.cashback_mode ?? null,
   };
 };
 
@@ -140,6 +150,11 @@ export async function createBotTransactions(
       note: draft.note ?? null,
       tag,
       created_by: draft.created_by ?? null,
+      category_id: draft.category_id ?? null,
+      shop_id: draft.shop_id ?? null,
+      cashback_share_percent: draft.cashback_share_percent ?? null,
+      cashback_share_fixed: draft.cashback_share_fixed ?? null,
+      cashback_mode: draft.cashback_mode ?? null,
     });
     await addTransaction(row);
     await recalcAccounts(supabase, impactedAccounts);
@@ -167,6 +182,11 @@ export async function createBotTransactions(
     note: baseNote,
     tag,
     created_by: draft.created_by ?? null,
+    category_id: draft.category_id ?? null,
+    shop_id: draft.shop_id ?? null,
+    cashback_share_percent: draft.cashback_share_percent ?? null,
+    cashback_share_fixed: draft.cashback_share_fixed ?? null,
+    cashback_mode: draft.cashback_mode ?? null,
     metadata: {
       is_split_bill_base: true,
       split_group_id: draft.group_id ?? null,
@@ -189,6 +209,8 @@ export async function createBotTransactions(
       note: childNoteBase,
       tag,
       created_by: draft.created_by ?? null,
+      category_id: draft.category_id ?? null,
+      shop_id: draft.shop_id ?? null,
       metadata: {
         split_parent_id: baseId,
         split_group_id: draft.group_id ?? null,

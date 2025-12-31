@@ -6,6 +6,7 @@ import { getShops } from '@/services/shop.service'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
 import { TagFilterProvider } from '@/context/tag-filter-context'
+import { QuickAddChat } from '@/components/ai/quick-add-chat'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,6 +34,13 @@ export default async function TransactionsPage() {
           </div>
         </div>
       </div>
+      <QuickAddChat
+        accounts={accounts}
+        categories={categories}
+        people={people}
+        shops={shops}
+        variant="floating"
+      />
     </TagFilterProvider>
   )
 }
