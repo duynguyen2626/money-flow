@@ -69,6 +69,7 @@ export async function updatePersonAction(
   console.log('[updatePersonAction] Result:', ok)
   if (ok) {
     revalidatePath('/people')
+    revalidatePath(`/people/${id}`)
   }
   return ok
 }
