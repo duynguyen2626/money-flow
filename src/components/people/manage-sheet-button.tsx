@@ -298,11 +298,11 @@ export function ManageSheetButton({
                 {/* Bank Account Toggle */}
                 <div className="flex items-center justify-between">
                   <div>
-                    <Label htmlFor="quick-bank" className="text-sm font-medium">Show bank account</Label>
+                    <Label htmlFor={`quick-bank-${personId}`} className="text-sm font-medium">Show bank account</Label>
                     <p className="text-[10px] text-muted-foreground">L6:N6 merged</p>
                   </div>
                   <Switch
-                    id="quick-bank"
+                    id={`quick-bank-${personId}`}
                     checked={currentShowBankAccount}
                     onCheckedChange={setCurrentShowBankAccount}
                     disabled={isSaving}
@@ -313,11 +313,11 @@ export function ManageSheetButton({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <Label htmlFor="quick-qr" className="text-sm font-medium">Send QR image</Label>
+                      <Label htmlFor={`quick-qr-${personId}`} className="text-sm font-medium">Send QR image</Label>
                       <p className="text-[10px] text-muted-foreground">L6</p>
                     </div>
                     <Switch
-                      id="quick-qr"
+                      id={`quick-qr-${personId}`}
                       checked={currentShowQrImage}
                       onCheckedChange={setCurrentShowQrImage}
                       disabled={isSaving}
