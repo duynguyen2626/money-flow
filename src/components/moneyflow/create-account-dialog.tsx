@@ -669,7 +669,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
             role="dialog"
             aria-modal="true"
             aria-label="Create new account"
-            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-12"
+            className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-12"
             onClick={() => closeDialog()}
           >
             <div

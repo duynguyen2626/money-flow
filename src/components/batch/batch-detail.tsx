@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -44,9 +44,16 @@ export function BatchDetail({
 
     const sourceAccount = accounts.find(a => a.id === batch.source_account_id)
 
-    // Filter items by status
-    const pendingItems = batch.batch_items?.filter((item: any) => item.status === 'pending' || !item.is_confirmed) || []
-    const confirmedItems = batch.batch_items?.filter((item: any) => item.status === 'confirmed' || item.is_confirmed) || []
+    // Memoize items to prevent unstable prop changes to ItemsTable
+    const pendingItems = useMemo(() =>
+        batch.batch_items?.filter((item: any) => item.status === 'pending' || !item.is_confirmed) || [],
+        [batch.batch_items]
+    )
+
+    const confirmedItems = useMemo(() =>
+        batch.batch_items?.filter((item: any) => item.status === 'confirmed' || item.is_confirmed) || [],
+        [batch.batch_items]
+    )
 
     async function handleSend() {
         if (!batch.sheet_link) {
@@ -292,6 +299,8 @@ export function BatchDetail({
                                 onSelectionChange={setSelectedItemIds}
                                 activeInstallmentAccounts={activeInstallmentAccounts}
                                 bankType={batch.bank_type || 'VIB'}
+                                accounts={accounts}
+                                bankMappings={bankMappings}
                             />
                         </TabsContent>
                         <TabsContent value="confirmed" className="mt-4">
@@ -301,6 +310,8 @@ export function BatchDetail({
                                 onSelectionChange={setSelectedItemIds}
                                 activeInstallmentAccounts={activeInstallmentAccounts}
                                 bankType={batch.bank_type || 'VIB'}
+                                accounts={accounts}
+                                bankMappings={bankMappings}
                             />
                         </TabsContent>
                     </Tabs>

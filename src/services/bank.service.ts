@@ -9,7 +9,7 @@ type BankMappingUpdate = Database['public']['Tables']['bank_mappings']['Update']
 /**
  * Get all bank mappings
  */
-export async function getBankMappings(): Promise<BankMapping[]> {
+export async function getBankMappings(bankType?: string): Promise<BankMapping[]> {
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
     let supabase
 
@@ -28,16 +28,21 @@ export async function getBankMappings(): Promise<BankMapping[]> {
         supabase = await createClient()
     }
 
-    const { data, error } = await supabase
+    let query = supabase
         .from('bank_mappings')
         .select('*')
-        .order('bank_name')
+
+    if (bankType) {
+        query = query.eq('bank_type', bankType)
+    }
+
+    const { data, error } = await query.order('bank_name')
 
     if (error) {
         console.error('getBankMappings error:', error)
         throw error
     }
-    console.log('getBankMappings: data length', data?.length)
+    console.log('getBankMappings: data length', data?.length, 'bankType:', bankType)
     return data || []
 }
 
@@ -177,16 +182,16 @@ export async function importBankMappingsFromExcel(excelData: string, bankType: '
             }
 
             const columns = line.split('\t')
-            
+
             // For VIB, we expect at least 2 columns (Code-Name | FullName) or (STT | Code-Name | FullName)
             if (bankType === 'VIB' && columns.length < 2) {
-                 results.errors.push(`Line ${i + 1}: Not enough columns for VIB format`)
-                 continue
+                results.errors.push(`Line ${i + 1}: Not enough columns for VIB format`)
+                continue
             }
             // For MBB, we allow 1 column if it parses correctly
             if (bankType === 'MBB' && columns.length < 1) {
-                 results.errors.push(`Line ${i + 1}: Empty line`)
-                 continue
+                results.errors.push(`Line ${i + 1}: Empty line`)
+                continue
             }
 
             let bankCode = ''
@@ -196,17 +201,17 @@ export async function importBankMappingsFromExcel(excelData: string, bankType: '
             if (bankType === 'MBB') {
                 // MBB Format: Check if any column has "Name (CODE)" pattern
                 // User input example: "Nông nghiệp và Phát triển nông thôn (VBA)"
-                
+
                 const possibleNameCol = columns[0].trim(); // Try first column
-                
+
                 // Regex for "text (CODE)" at end of string
-                const match = possibleNameCol.match(/(.+)\s+\(([^)]+)\)$/); 
-                
+                const match = possibleNameCol.match(/(.+)\s+\(([^)]+)\)$/);
+
                 if (match && match[2]) {
-                     bankCode = match[2].trim();
-                     // Group 1 is the name part before (Code)
-                     shortName = match[1].trim(); 
-                     fullName = shortName; // Use short name as full name fallback
+                    bankCode = match[2].trim();
+                    // Group 1 is the name part before (Code)
+                    shortName = match[1].trim();
+                    fullName = shortName; // Use short name as full name fallback
                 } else {
                     // Try column 1 if exists?
                     if (columns.length > 1) {
@@ -219,7 +224,7 @@ export async function importBankMappingsFromExcel(excelData: string, bankType: '
                         }
                     }
                 }
-                
+
                 // If Full Name provided in next col, use it
                 if (columns.length > 1 && !fullName) {
                     fullName = columns[1].trim();
@@ -228,11 +233,11 @@ export async function importBankMappingsFromExcel(excelData: string, bankType: '
                 // VIB (Legacy) Logic
                 // STT | Code - Name | Full Name
                 // OR: Code - Name | Full Name
-                
+
                 // If Col 0 is small integer, assume STT -> use Col 1.
                 let nameCol = columns[0];
                 let fullCol = columns[1];
-                
+
                 if (/^\d+$/.test(columns[0]) && columns.length >= 3) {
                     nameCol = columns[1];
                     fullCol = columns[2];
@@ -248,7 +253,7 @@ export async function importBankMappingsFromExcel(excelData: string, bankType: '
                     bankCode = codeNamePart
                     shortName = codeNamePart
                 }
-                
+
                 fullName = fullCol?.trim() || '';
             }
 
@@ -260,13 +265,16 @@ export async function importBankMappingsFromExcel(excelData: string, bankType: '
                     bank_code: bankCode,
                     short_name: shortName,
                     bank_name: fullName,
+                    bank_type: bankType,
                     updated_at: new Date().toISOString()
-                } as BankMappingInsert, { onConflict: 'bank_code' })
+                } as BankMappingInsert, {
+                    onConflict: 'bank_code,bank_type'  // Composite unique key
+                })
 
             if (error) throw error
             results.success++
         } catch (error: unknown) {
-             const msg = error instanceof Error ? error.message : 'Unknown error';
+            const msg = error instanceof Error ? error.message : 'Unknown error';
             results.errors.push(`Line ${i + 1}: ${msg}`)
         }
     }
