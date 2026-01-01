@@ -59,6 +59,7 @@ export type Account = {
   secured_by_account_id?: string | null;
   is_active?: boolean | null;
   image_url?: string | null;
+  receiver_name?: string | null;
   total_in?: number;
   total_out?: number;
   annual_fee?: number | null;

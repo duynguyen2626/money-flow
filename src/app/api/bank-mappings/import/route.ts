@@ -3,13 +3,13 @@ import { importBankMappingsFromExcel } from '@/services/bank.service'
 
 export async function POST(request: NextRequest) {
     try {
-        const { excelData } = await request.json()
+        const { excelData, bankType } = await request.json()
 
         if (!excelData) {
             return NextResponse.json({ error: 'No data provided' }, { status: 400 })
         }
 
-        const result = await importBankMappingsFromExcel(excelData)
+        const result = await importBankMappingsFromExcel(excelData, bankType || 'VIB')
         return NextResponse.json(result)
     } catch (error: any) {
         console.error('Import mappings error:', error)

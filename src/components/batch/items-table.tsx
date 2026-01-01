@@ -26,9 +26,10 @@ interface ItemsTableProps {
     batchId: string
     onSelectionChange?: (selectedIds: string[]) => void
     activeInstallmentAccounts?: string[]
+    bankType?: 'VIB' | 'MBB'
 }
 
-export function ItemsTable({ items: initialItems, batchId, onSelectionChange, activeInstallmentAccounts = [] }: ItemsTableProps) {
+export function ItemsTable({ items: initialItems, batchId, onSelectionChange, activeInstallmentAccounts = [], bankType = 'VIB' }: ItemsTableProps) {
     // Sort items: Nearest Due Date -> Created At (desc)
     const items = [...initialItems].sort((a, b) => {
         const getDaysUntilDue = (item: any) => {
@@ -139,10 +140,22 @@ export function ItemsTable({ items: initialItems, batchId, onSelectionChange, ac
                             />
                         </TableHead>
                         <TableHead className="w-[50px]">STT</TableHead>
-                        <TableHead>Receiver</TableHead>
-                        <TableHead>Number</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Note</TableHead>
+                        {bankType === 'MBB' ? (
+                            <>
+                                <TableHead>Number</TableHead>
+                                <TableHead>Receiver</TableHead>
+                                <TableHead>Bank</TableHead>
+                                <TableHead>Amount</TableHead>
+                                <TableHead>Note</TableHead>
+                            </>
+                        ) : (
+                            <>
+                                <TableHead>Receiver</TableHead>
+                                <TableHead>Number</TableHead>
+                                <TableHead>Amount</TableHead>
+                                <TableHead>Note</TableHead>
+                            </>
+                        )}
                         <TableHead>Account Flow</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Type</TableHead>
@@ -159,48 +172,100 @@ export function ItemsTable({ items: initialItems, batchId, onSelectionChange, ac
                                 />
                             </TableCell>
                             <TableCell>{index + 1}</TableCell>
-                            <TableCell>
-                                {item.receiver_name || 'Unknown'}
-                            </TableCell>
-                            <TableCell>{item.bank_number || '-'}</TableCell>
-                            <TableCell>{new Intl.NumberFormat('en-US').format(item.amount)}</TableCell>
-                            <TableCell>
-                                <div className="flex flex-col gap-1">
-                                    <span>{item.note}</span>
-                                    {item.target_account?.cashback_config && (
-                                        (() => {
-                                            const config = parseCashbackConfig(item.target_account.cashback_config)
-                                            if (config.dueDate) {
-                                                const today = new Date()
-                                                const currentDay = today.getDate()
-                                                const dueDay = config.dueDate
 
-                                                let daysDiff = dueDay - currentDay
-                                                if (daysDiff < 0) {
-                                                    daysDiff += 30 // Approximate next month
-                                                }
+                            {bankType === 'MBB' ? (
+                                <>
+                                    <TableCell>{item.bank_number || '-'}</TableCell>
+                                    <TableCell>
+                                        {item.receiver_name || 'Unknown'}
+                                    </TableCell>
+                                    <TableCell>{item.bank_name}</TableCell>
+                                    <TableCell>{new Intl.NumberFormat('en-US').format(item.amount)}</TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-col gap-1">
+                                            <span>{item.note}</span>
+                                            {item.target_account?.cashback_config && (
+                                                (() => {
+                                                    const config = parseCashbackConfig(item.target_account.cashback_config)
+                                                    if (config.dueDate) {
+                                                        const today = new Date()
+                                                        const currentDay = today.getDate()
+                                                        const dueDay = config.dueDate
 
-                                                let badgeClass = "text-slate-500 border-slate-200"
-                                                if (daysDiff <= 3) {
-                                                    badgeClass = "text-red-700 bg-red-50 border-red-200"
-                                                } else if (daysDiff <= 7) {
-                                                    badgeClass = "text-amber-700 bg-amber-50 border-amber-200"
-                                                } else {
-                                                    badgeClass = "text-emerald-700 bg-emerald-50 border-emerald-200"
-                                                }
+                                                        let daysDiff = dueDay - currentDay
+                                                        if (daysDiff < 0) {
+                                                            daysDiff += 30 // Approximate next month
+                                                        }
 
-                                                return (
-                                                    <Badge variant="outline" className={`w-fit gap-1 text-[10px] h-5 px-1.5 font-normal ${badgeClass}`}>
-                                                        <CalendarClock className="h-3 w-3" />
-                                                        Due in {daysDiff} days
-                                                    </Badge>
-                                                )
-                                            }
-                                            return null
-                                        })()
-                                    )}
-                                </div>
-                            </TableCell>
+                                                        let badgeClass = "text-slate-500 border-slate-200"
+                                                        if (daysDiff <= 3) {
+                                                            badgeClass = "text-red-700 bg-red-50 border-red-200"
+                                                        } else if (daysDiff <= 7) {
+                                                            badgeClass = "text-amber-700 bg-amber-50 border-amber-200"
+                                                        } else {
+                                                            badgeClass = "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                                        }
+
+                                                        return (
+                                                            <Badge variant="outline" className={`w-fit gap-1 text-[10px] h-5 px-1.5 font-normal ${badgeClass}`}>
+                                                                <CalendarClock className="h-3 w-3" />
+                                                                Due in {daysDiff} days
+                                                            </Badge>
+                                                        )
+                                                    }
+                                                    return null
+                                                })()
+                                            )}
+                                        </div>
+                                    </TableCell>
+                                </>
+                            ) : (
+                                <>
+                                    <TableCell>
+                                        {item.receiver_name || 'Unknown'}
+                                    </TableCell>
+                                    <TableCell>{item.bank_number || '-'}</TableCell>
+                                    <TableCell>{new Intl.NumberFormat('en-US').format(item.amount)}</TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-col gap-1">
+                                            <span>{item.note}</span>
+                                            {item.target_account?.cashback_config && (
+                                                (() => {
+                                                    const config = parseCashbackConfig(item.target_account.cashback_config)
+                                                    if (config.dueDate) {
+                                                        const today = new Date()
+                                                        const currentDay = today.getDate()
+                                                        const dueDay = config.dueDate
+
+                                                        let daysDiff = dueDay - currentDay
+                                                        if (daysDiff < 0) {
+                                                            daysDiff += 30 // Approximate next month
+                                                        }
+
+                                                        let badgeClass = "text-slate-500 border-slate-200"
+                                                        if (daysDiff <= 3) {
+                                                            badgeClass = "text-red-700 bg-red-50 border-red-200"
+                                                        } else if (daysDiff <= 7) {
+                                                            badgeClass = "text-amber-700 bg-amber-50 border-amber-200"
+                                                        } else {
+                                                            badgeClass = "text-emerald-700 bg-emerald-50 border-emerald-200"
+                                                        }
+
+                                                        return (
+                                                            <Badge variant="outline" className={`w-fit gap-1 text-[10px] h-5 px-1.5 font-normal ${badgeClass}`}>
+                                                                <CalendarClock className="h-3 w-3" />
+                                                                Due in {daysDiff} days
+                                                            </Badge>
+                                                        )
+                                                    }
+                                                    return null
+                                                })()
+                                            )}
+                                        </div>
+                                    </TableCell>
+                                </>
+                            )}
+
                             <TableCell>
                                 <div className="flex items-center gap-1 text-sm">
                                     <span className="text-muted-foreground">Draft Fund</span>

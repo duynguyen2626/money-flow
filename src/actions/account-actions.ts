@@ -18,6 +18,8 @@ export async function createAccount(payload: {
   imageUrl?: string | null;
   annualFee?: number | null;
   parentAccountId?: string | null;
+  accountNumber?: string | null;
+  receiverName?: string | null;
 }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -48,6 +50,8 @@ export async function createAccount(payload: {
       image_url: payload.imageUrl,
       annual_fee: payload.annualFee ?? 0,
       parent_account_id: payload.parentAccountId ?? null,
+      account_number: payload.accountNumber ?? null,
+      receiver_name: payload.receiverName ?? null,
     } as any
 
     const { data, error } = await supabase
@@ -80,6 +84,8 @@ export type UpdateAccountPayload = {
   imageUrl?: string | null
   annualFee?: number | null
   parentAccountId?: string | null
+  accountNumber?: string | null
+  receiverName?: string | null
 }
 
 export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
@@ -93,6 +99,8 @@ export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
     image_url?: string | null
     annual_fee?: number | null
     parent_account_id?: string | null
+    account_number?: string | null
+    receiver_name?: string | null
   } = {}
 
   if (typeof payload.name === 'string') {
@@ -128,6 +136,14 @@ export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
 
   if ('parentAccountId' in payload) {
     updatePayload.parent_account_id = payload.parentAccountId ?? null
+  }
+
+  if ('accountNumber' in payload) {
+    updatePayload.account_number = payload.accountNumber ?? null
+  }
+
+  if ('receiverName' in payload) {
+    updatePayload.receiver_name = payload.receiverName ?? null
   }
 
   return updateAccountConfig(payload.id, updatePayload)

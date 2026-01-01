@@ -20,28 +20,65 @@ export function NumberInputWithSuggestions({
 }: NumberInputWithSuggestionsProps) {
     const [isFocused, setIsFocused] = useState(false)
 
-    // Parse current value
+    // Parse current value and evaluate arithmetic if needed
     const numericValue = useMemo(() => {
-        const cleaned = value.replace(/[^0-9]/g, '')
-        return cleaned ? parseInt(cleaned, 10) : 0
+        const cleaned = value.replace(/,/g, '')
+        try {
+            // Basic arithmetic evaluation (+-*/)
+            // Only evaluate if it contains operators
+            if (/[+\-*/]/.test(cleaned)) {
+                // Safety check: only allow digits, dots, and operators
+                if (/^[0-9.+\-*/() ]+$/.test(cleaned)) {
+                    // eslint-disable-next-line no-eval
+                    const result = eval(cleaned)
+                    return typeof result === 'number' && isFinite(result) ? Math.round(result) : 0
+                }
+            }
+            const digits = cleaned.replace(/[^0-9.]/g, '')
+            return digits ? parseFloat(digits) : 0
+        } catch (e) {
+            return 0
+        }
     }, [value])
+
+    // Human readable label (e.g., 150 tr)
+    const humanLabel = useMemo(() => {
+        if (!numericValue || numericValue === 0) return null
+        if (numericValue >= 1000000) {
+            const millions = numericValue / 1000000
+            return `${millions.toLocaleString('en-US', { maximumFractionDigits: 2 })} tr`
+        }
+        if (numericValue >= 1000) {
+            const thousands = numericValue / 1000
+            return `${thousands.toLocaleString('en-US', { maximumFractionDigits: 2 })} k`
+        }
+        return null
+    }, [numericValue])
 
     // Generate suggestions
     const suggestions = useMemo(() => {
         if (!isFocused || numericValue === 0) return []
 
         const results: number[] = []
-        // Generate suggestions based on full value
-        for (let i = 0; i < maxSuggestions; i++) {
-            const multiplier = Math.pow(10, i)
-            const suggestion = numericValue * step * multiplier
-            if (suggestion !== numericValue) {
-                results.push(suggestion)
+
+        // Special logic: if value is small (< 10), assume millions if step is large
+        if (numericValue < 100 && step >= 1000000) {
+            results.push(numericValue * 1000000)
+            results.push(numericValue * 10000000)
+            results.push(numericValue * 100000000)
+        } else {
+            // Standard multiplier logic
+            for (let i = 0; i < maxSuggestions; i++) {
+                const multiplier = Math.pow(10, i)
+                const suggestion = numericValue * step * multiplier
+                if (suggestion !== numericValue && suggestion > 0) {
+                    results.push(suggestion)
+                }
             }
         }
 
-        return results.slice(0, maxSuggestions)
-    }, [value, numericValue, isFocused, step, maxSuggestions])
+        return [...new Set(results)].slice(0, maxSuggestions)
+    }, [numericValue, isFocused, step, maxSuggestions])
 
     const formatNumber = (num: number) => {
         return num.toLocaleString('en-US')
@@ -52,6 +89,12 @@ export function NumberInputWithSuggestions({
         setIsFocused(false)
     }
 
+    const evaluateExpression = () => {
+        if (numericValue !== 0) {
+            onChange(formatNumber(numericValue))
+        }
+    }
+
     return (
         <div className="relative">
             <input
@@ -59,11 +102,14 @@ export function NumberInputWithSuggestions({
                 value={value}
                 onChange={(e) => {
                     const input = e.target.value
-                    const cleaned = input.replace(/[^0-9]/g, '')
-                    if (cleaned) {
-                        onChange(formatNumber(parseInt(cleaned, 10)))
-                    } else {
-                        onChange('')
+                    // Allow digits, operators and dots for arithmetic
+                    if (/^[0-9.+\-*/(), ]*$/.test(input)) {
+                        onChange(input)
+                    }
+                }}
+                onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                        evaluateExpression()
                     }
                 }}
                 onFocus={(e) => {
@@ -72,7 +118,10 @@ export function NumberInputWithSuggestions({
                 }}
                 onBlur={(e) => {
                     // Delay to allow click on suggestions
-                    setTimeout(() => setIsFocused(false), 200)
+                    setTimeout(() => {
+                        setIsFocused(false)
+                        evaluateExpression()
+                    }, 200)
                     props.onBlur?.(e)
                 }}
                 placeholder={placeholder}
@@ -88,6 +137,13 @@ export function NumberInputWithSuggestions({
         `}
                 {...props}
             />
+
+            {/* Human readable label */}
+            {humanLabel && (
+                <div className="absolute right-3 top-[-18px] text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 rounded-sm border border-blue-100 animate-in fade-in slide-in-from-bottom-1">
+                    {humanLabel}
+                </div>
+            )}
 
             {/* Suggestions */}
             {isFocused && suggestions.length > 0 && (

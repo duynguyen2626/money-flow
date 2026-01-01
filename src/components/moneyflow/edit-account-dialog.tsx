@@ -6,7 +6,7 @@ import { createPortal } from 'react-dom'
 import { parseCashbackConfig, CashbackCycleType, CashbackLevel, normalizeCashbackConfig, CashbackCategoryRule } from '@/lib/cashback'
 import { getSharedLimitParentId } from '@/lib/account-utils'
 import { Account } from '@/types/moneyflow.types'
-import { updateAccountConfigAction, createAccount } from '@/actions/account-actions'
+import { updateAccountConfigAction } from '@/actions/account-actions'
 import type { Json } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
 import { Plus, Trash2, X, Copy, Info, Loader2 } from 'lucide-react'
@@ -166,22 +166,9 @@ function LevelItem({
               const val = parseFloat(e.target.value)
               onChange({ defaultRate: isNaN(val) ? null : val / 100 })
             }}
-            onFocus={e => {
-              e.target.select()
-              // Auto-clear if value is 0
-              if (e.target.value === '0') {
-                e.target.value = ''
-              }
-            }}
-            onInput={e => {
-              // Prevent leading zeros
-              const input = e.target as HTMLInputElement
-              if (input.value.startsWith('0') && input.value.length > 1 && input.value[1] !== '.') {
-                input.value = input.value.replace(/^0+/, '')
-              }
-            }}
+            onFocus={e => e.target.select()}
             className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-            placeholder="e.g., 0.1 for other categories"
+            placeholder="e.g., 0.1"
           />
         </div>
       </div>
@@ -201,7 +188,6 @@ function LevelItem({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {rules.map((rule, rIndex) => (
             <div key={rule.id || rIndex} className="relative group rounded-xl border-2 border-slate-100 bg-slate-50/50 p-4 transition-all hover:border-blue-200 hover:bg-white hover:shadow-md space-y-4">
-              {/* Delete Rule button - visible on hover */}
               <button
                 type="button"
                 onClick={() => setRuleToDelete(rIndex)}
@@ -210,7 +196,6 @@ function LevelItem({
                 <X className="h-3.5 w-3.5" />
               </button>
 
-              {/* Apply to Other Levels button - visible on hover */}
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -224,47 +209,38 @@ function LevelItem({
                   </TooltipTrigger>
                   <TooltipContent className="max-w-xs">
                     <p className="text-xs font-semibold mb-1">Copy this rule to other levels</p>
-                    <p className="text-xs text-slate-300">Useful when the same categories apply across levels with different rates (e.g., VPBank Lady: Education 15% for ≥15M, 7.5% for &lt;15M)</p>
+                    <p className="text-xs text-slate-300">Useful when the same categories apply across levels with different rates.</p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
 
-              {/* Row 1: Category */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                     Categories
-                    <FieldHint content="Select specific categories for this rule (e.g. Education, Insurance)." />
+                    <FieldHint content="Select specific categories for this rule." />
                   </label>
                 </div>
-                <p className="text-[10px] text-slate-500 italic mb-1">Select categories this rate applies to (e.g., Education, Insurance)</p>
                 <CategoryMultiSelect
                   options={categoryOptions}
                   selected={rule.categoryIds || []}
                   onChange={(cats) => updateRule(rIndex, { categoryIds: cats })}
                   onAddNew={() => {
-                    console.log('🔵 [DEBUG] Create New Category clicked in LevelItem')
-                    // Register this CategoryMultiSelect's onChange callback
                     if (activeCategoryCallback) {
                       activeCategoryCallback.current = (categoryId: string) => {
-                        console.log('🟢 [DEBUG] Auto-adding category to rule:', categoryId)
                         updateRule(rIndex, { categoryIds: [...(rule.categoryIds || []), categoryId] })
                       }
-                      console.log('🔵 [DEBUG] Callback registered for rule index:', rIndex)
-                    } else {
-                      console.error('🔴 [DEBUG] activeCategoryCallback is undefined!')
                     }
                     if (onAddCategory) onAddCategory()
                   }}
                 />
               </div>
 
-              {/* Row 2: Rate & Max Reward */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                     Rate (%)
-                    <FieldHint content="The percentage cashback for these categories (e.g. 15 for 15%)." />
+                    <FieldHint content="Cashback percentage." />
                   </label>
                   <div className="relative">
                     <input
@@ -276,21 +252,8 @@ function LevelItem({
                         const val = parseFloat(e.target.value)
                         updateRule(rIndex, { rate: isNaN(val) ? 0 : val / 100 })
                       }}
-                      onFocus={e => {
-                        e.target.select()
-                        // Auto-clear if value is 0
-                        if (e.target.value === '0') {
-                          e.target.value = ''
-                        }
-                      }}
-                      onInput={e => {
-                        // Prevent leading zeros
-                        const input = e.target as HTMLInputElement
-                        if (input.value.startsWith('0') && input.value.length > 1 && input.value[1] !== '.') {
-                          input.value = input.value.replace(/^0+/, '')
-                        }
-                      }}
-                      placeholder="e.g., 15 for 15%"
+                      onFocus={e => e.target.select()}
+                      placeholder="e.g., 15"
                     />
                     <span className="absolute right-3 top-2 text-slate-400 text-xs">%</span>
                   </div>
@@ -298,7 +261,7 @@ function LevelItem({
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
                     Max Reward
-                    <FieldHint content="Maximum cashback amount allowed for these categories per cycle (e.g. 300,000)." />
+                    <FieldHint content="Maximum cashback limit per cycle." />
                   </label>
                   <div className="relative">
                     <NumberInputWithSuggestions
@@ -338,19 +301,8 @@ function LevelItem({
   )
 }
 
-
-function CategoryMultiSelect({ options, selected, onChange, onAddNew, onCategoryCreated }: { options: CategoryOption[], selected: string[], onChange: (val: string[]) => void, onAddNew?: () => void, onCategoryCreated?: (categoryId: string) => void }) {
+function CategoryMultiSelect({ options, selected, onChange, onAddNew }: { options: CategoryOption[], selected: string[], onChange: (val: string[]) => void, onAddNew?: () => void }) {
   const expenseOptions = useMemo(() => options.filter(o => o.type === 'expense'), [options])
-
-  // Auto-add newly created category
-  const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null)
-
-  useEffect(() => {
-    if (pendingCategoryId && !selected.includes(pendingCategoryId)) {
-      onChange([...selected, pendingCategoryId])
-      setPendingCategoryId(null)
-    }
-  }, [pendingCategoryId, selected, onChange])
 
   const dropdownOptions = useMemo(() =>
     expenseOptions.map(opt => ({
@@ -398,24 +350,34 @@ function CategoryMultiSelect({ options, selected, onChange, onAddNew, onCategory
   )
 }
 
-function LevelList({
-  levels,
-  onChange,
+function CashbackLevelsList({
+  initialLevels,
+  onLevelsChange,
   categoryOptions,
   onAddCategory,
   activeCategoryCallback
 }: {
-  levels: CashbackLevel[]
-  onChange: (levels: CashbackLevel[]) => void
+  initialLevels: CashbackLevel[]
+  onLevelsChange: (levels: CashbackLevel[]) => void
   categoryOptions: CategoryOption[]
   onAddCategory?: () => void
   activeCategoryCallback?: React.MutableRefObject<((categoryId: string) => void) | null>
 }) {
+  const [levels, setLevels] = useState<CashbackLevel[]>(initialLevels)
   const [levelToDelete, setLevelToDelete] = useState<number | null>(null)
   const [applyingRule, setApplyingRule] = useState<{ levelIndex: number, ruleIndex: number, rule: CashbackCategoryRule } | null>(null)
 
+  useEffect(() => {
+    setLevels(initialLevels)
+  }, [initialLevels])
+
+  const notifyParent = (next: CashbackLevel[]) => {
+    setLevels(next)
+    onLevelsChange(next)
+  }
+
   const addLevel = () => {
-    onChange([
+    notifyParent([
       ...levels,
       { id: `lvl_${Date.now()}`, name: '', minTotalSpend: 0, defaultRate: null, rules: [] }
     ])
@@ -424,13 +386,13 @@ function LevelList({
   const removeLevel = (index: number) => {
     const next = [...levels]
     next.splice(index, 1)
-    onChange(next)
+    notifyParent(next)
   }
 
   const updateLevel = (index: number, updates: Partial<CashbackLevel>) => {
     const next = [...levels]
     next[index] = { ...next[index], ...updates }
-    onChange(next)
+    notifyParent(next)
   }
 
   const cloneLevel = (index: number) => {
@@ -439,7 +401,6 @@ function LevelList({
       ...levelToClone,
       id: `lvl_${Math.random().toString(36).substr(2, 9)}`,
       name: levelToClone.name ? `${levelToClone.name} (Copy)` : '',
-      // Clone rules but give them new IDs
       rules: levelToClone.rules?.map(rule => ({
         ...rule,
         id: `rule_${Math.random().toString(36).substr(2, 9)}`
@@ -447,15 +408,13 @@ function LevelList({
     }
     const next = [...levels]
     next.splice(index + 1, 0, clonedLevel)
-    onChange(next)
+    notifyParent(next)
   }
 
   const handleApplyRuleConfirm = (targetLevelIds: string[], mode: 'cat_only' | 'cat_rate') => {
     if (!applyingRule) return
-
     const { rule } = applyingRule
     const nextLevels = [...levels]
-
     targetLevelIds.forEach(targetId => {
       const targetIndex = nextLevels.findIndex(l => l.id === targetId)
       if (targetIndex !== -1) {
@@ -466,13 +425,11 @@ function LevelList({
           rate: mode === 'cat_rate' ? rule.rate : 0,
           maxReward: mode === 'cat_rate' ? rule.maxReward : null
         }
-
         targetLevel.rules = [...(targetLevel.rules || []), newRule]
         nextLevels[targetIndex] = targetLevel
       }
     })
-
-    onChange(nextLevels)
+    notifyParent(nextLevels)
     setApplyingRule(null)
   }
 
@@ -491,8 +448,6 @@ function LevelList({
           <Plus className="h-4 w-4" /> Add Level
         </button>
       </div>
-
-
 
       {levels.length === 0 && (
         <p className="text-sm text-slate-500 italic">No levels configured. Base rate applies.</p>
@@ -548,7 +503,6 @@ function LevelList({
   )
 }
 
-
 type EditAccountDialogProps = {
   account: Account
   collateralAccounts?: Account[]
@@ -566,7 +520,6 @@ type StatusMessage = {
   variant: 'success' | 'error'
 } | null
 
-
 const ASSET_TYPES: Account['type'][] = ['savings', 'investment', 'asset']
 
 type SavingsConfig = {
@@ -576,30 +529,17 @@ type SavingsConfig = {
 }
 
 function parseSavingsConfig(raw: Json | null | undefined): SavingsConfig {
-  if (!raw) {
-    return { interestRate: null, termMonths: null, maturityDate: null }
-  }
-
+  if (!raw) return { interestRate: null, termMonths: null, maturityDate: null }
   let parsed: Record<string, unknown> | null = null
   if (typeof raw === 'string') {
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      parsed = null
-    }
+    try { parsed = JSON.parse(raw) } catch { parsed = null }
   } else if (typeof raw === 'object') {
     parsed = raw as Record<string, unknown>
   }
-
-  if (!parsed) {
-    return { interestRate: null, termMonths: null, maturityDate: null }
-  }
-
+  if (!parsed) return { interestRate: null, termMonths: null, maturityDate: null }
   const parseNumber = (value: unknown) => {
-    const asNumber = Number(value)
-    return Number.isFinite(asNumber) ? asNumber : null
+    const asNumber = Number(value); return Number.isFinite(asNumber) ? asNumber : null
   }
-
   return {
     interestRate: parseNumber(parsed.interestRate),
     termMonths: parseNumber(parsed.termMonths ?? parsed.term),
@@ -630,19 +570,10 @@ export function EditAccountDialog({
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
   const activeCategoryCallback = useRef<((categoryId: string) => void) | null>(null)
 
-  // Protect against browser reload
   useUnsavedChanges(isDirty)
 
-  const normalizedCashback = useMemo(
-    () => normalizeCashbackConfig(account.cashback_config),
-    [account.cashback_config]
-  )
-  const parsedSavingsConfig = useMemo(
-    () => parseSavingsConfig(account.cashback_config),
-    [account.cashback_config]
-  )
-
-
+  const normalizedCashback = useMemo(() => normalizeCashbackConfig(account.cashback_config), [account.cashback_config])
+  const parsedSavingsConfig = useMemo(() => parseSavingsConfig(account.cashback_config), [account.cashback_config])
 
   const [name, setName] = useState(account.name)
   const [accountType, setAccountType] = useState<Account['type']>(account.type)
@@ -661,9 +592,14 @@ export function EditAccountDialog({
   const [termMonths, setTermMonths] = useState(toNumericString(parsedSavingsConfig.termMonths))
   const [maturityDate, setMaturityDate] = useState(parsedSavingsConfig.maturityDate ?? '')
   const [parentAccountId, setParentAccountId] = useState(getSharedLimitParentId(account.cashback_config) ?? '')
+  const [accountNumber, setAccountNumber] = useState(account.account_number ?? '')
+  const [receiverName, setReceiverName] = useState(account.receiver_name || 'NGUYEN THANH NAM')
   const [overrideParentSecured, setOverrideParentSecured] = useState(false)
 
-  // Secured Logic Inheritance with Override
+  const [levels, setLevels] = useState<CashbackLevel[]>(normalizedCashback.levels ?? [])
+  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([])
+  const [showAdvancedCashback, setShowAdvancedCashback] = useState((normalizedCashback.levels ?? []).length > 0)
+
   useEffect(() => {
     if (parentAccountId && !overrideParentSecured) {
       const parent = accounts.find(a => a.id === parentAccountId)
@@ -679,43 +615,21 @@ export function EditAccountDialog({
     }
   }, [parentAccountId, accounts, overrideParentSecured])
 
-  // Reset override if parent changes to empty
   useEffect(() => {
-    if (!parentAccountId) {
-      setOverrideParentSecured(false)
-    }
+    if (!parentAccountId) setOverrideParentSecured(false)
   }, [parentAccountId])
 
-  const [levels, setLevels] = useState<CashbackLevel[]>(normalizedCashback.levels ?? [])
-  const [categoryOptions, setCategoryOptions] = useState<CategoryOption[]>([])
-
-  // Tracking changes for isDirty
   useEffect(() => {
-    if (!open) {
-      setIsDirty(false)
-      return
-    }
-
-    const hasChanged =
-      name !== (account.name || '') ||
-      accountType !== account.type ||
-      securedByAccountId !== (account.secured_by_account_id || '') ||
-      imageUrl !== (account.image_url || '') ||
-      rate !== String(normalizedCashback.defaultRate * 100) ||
-      maxAmount !== formatWithSeparators(toNumericString(normalizedCashback.maxBudget)) ||
-      minSpend !== formatWithSeparators(toNumericString(normalizedCashback.minSpendTarget)) ||
-      cycleType !== normalizedCashback.cycleType ||
-      statementDay !== toNumericString(normalizedCashback.statementDay) ||
-      dueDate !== toNumericString(normalizedCashback.dueDate) ||
-      parentAccountId !== (getSharedLimitParentId(account.cashback_config) || '') ||
-      JSON.stringify(levels) !== JSON.stringify(normalizedCashback.levels ?? [])
-
+    if (!open) { setIsDirty(false); return }
+    const hasChanged = name !== (account.name || '') || accountType !== account.type ||
+      securedByAccountId !== (account.secured_by_account_id || '') || imageUrl !== (account.image_url || '') ||
+      rate !== String(normalizedCashback.defaultRate * 100) || maxAmount !== formatWithSeparators(toNumericString(normalizedCashback.maxBudget)) ||
+      minSpend !== formatWithSeparators(toNumericString(normalizedCashback.minSpendTarget)) || cycleType !== normalizedCashback.cycleType ||
+      statementDay !== toNumericString(normalizedCashback.statementDay) || dueDate !== toNumericString(normalizedCashback.dueDate) ||
+      parentAccountId !== (getSharedLimitParentId(account.cashback_config) || '') || accountNumber !== (account.account_number || '') ||
+      receiverName !== (account.receiver_name || '') || JSON.stringify(levels) !== JSON.stringify(normalizedCashback.levels ?? [])
     setIsDirty(hasChanged)
-  }, [
-    open, name, accountType, securedByAccountId, imageUrl, rate, maxAmount,
-    minSpend, cycleType, statementDay, dueDate, parentAccountId, levels,
-    account, normalizedCashback
-  ])
+  }, [open, name, accountType, securedByAccountId, imageUrl, rate, maxAmount, minSpend, cycleType, statementDay, dueDate, parentAccountId, levels, accountNumber, receiverName, account, normalizedCashback])
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -728,105 +642,55 @@ export function EditAccountDialog({
 
   const isCreditCard = accountType === 'credit_card'
   const isAssetAccount = ASSET_TYPES.includes(accountType)
-  const collateralOptions = useMemo(
-    () =>
-      (collateralAccounts ?? []).filter(
-        candidate => candidate.id !== account.id && ASSET_TYPES.includes(candidate.type)
-      ),
+  const collateralOptions = useMemo(() =>
+    (collateralAccounts ?? []).filter(candidate => candidate.id !== account.id && ASSET_TYPES.includes(candidate.type)),
     [collateralAccounts, account.id]
-  )
-  const accountTypeOptions = useMemo(
-    () => [
-      { value: 'credit_card', label: 'Credit card' },
-      { value: 'bank', label: 'Bank' },
-      { value: 'savings', label: 'Savings' },
-      { value: 'investment', label: 'Investment' },
-      { value: 'cash', label: 'Cash' },
-      { value: 'ewallet', label: 'E-wallet' },
-      { value: 'debt', label: 'Debt' },
-      { value: 'asset', label: 'Asset' },
-    ],
-    []
   )
 
   const resetForm = () => {
     const freshCashback = normalizeCashbackConfig(account.cashback_config)
     const freshSavings = parseSavingsConfig(account.cashback_config)
-    setName(account.name)
-    setAccountType(account.type)
-    setSecuredByAccountId(account.secured_by_account_id ?? '')
+    setName(account.name); setAccountType(account.type); setSecuredByAccountId(account.secured_by_account_id ?? '')
     setIsSecured(Boolean(account.secured_by_account_id))
     setCreditLimit(formatWithSeparators(toNumericString(account.credit_limit)))
     setAnnualFee(formatWithSeparators(toNumericString(account.annual_fee)))
     setRate(String(freshCashback.defaultRate * 100))
     setMaxAmount(formatWithSeparators(toNumericString(freshCashback.maxBudget)))
     setMinSpend(formatWithSeparators(toNumericString(freshCashback.minSpendTarget)))
-    setCycleType(freshCashback.cycleType)
-    setStatementDay(toNumericString(freshCashback.statementDay))
-    setDueDate(toNumericString(freshCashback.dueDate))
-    setInterestRate(toNumericString(freshSavings.interestRate))
-    setTermMonths(toNumericString(freshSavings.termMonths))
-    setMaturityDate(freshSavings.maturityDate ?? '')
-    setImageUrl(account.image_url ?? '')
-    setParentAccountId(getSharedLimitParentId(account.cashback_config) ?? '')
-    setLevels(freshCashback.levels ?? [])
-    setStatus(null)
+    setCycleType(freshCashback.cycleType); setStatementDay(toNumericString(freshCashback.statementDay))
+    setDueDate(toNumericString(freshCashback.dueDate)); setInterestRate(toNumericString(freshSavings.interestRate))
+    setTermMonths(toNumericString(freshSavings.termMonths)); setMaturityDate(freshSavings.maturityDate ?? '')
+    setImageUrl(account.image_url ?? ''); setParentAccountId(getSharedLimitParentId(account.cashback_config) ?? '')
+    setAccountNumber(account.account_number ?? ''); setReceiverName(account.receiver_name ?? '')
+    setLevels(freshCashback.levels ?? []); setStatus(null)
   }
 
   const closeDialog = (force = false) => {
-    if (isDirty && !force) {
-      setShowCloseWarning(true)
-      return
-    }
+    if (isDirty && !force) { setShowCloseWarning(true); return }
     setOpen(false)
     setIsDirty(false)
   }
 
-  const stopPropagation = (event?: MouseEvent<HTMLDivElement>) => {
-    event?.stopPropagation()
-  }
+  const stopPropagation = (event?: MouseEvent<HTMLDivElement>) => event?.stopPropagation()
 
-  const openDialog = () => {
-    onOpen?.()
-    resetForm()
-    setOpen(true)
-  }
+  const openDialog = () => { onOpen?.(); resetForm(); setOpen(true) }
 
-  // Filter out child accounts - only allow linking to parent or standalone cards
   const parentCandidates = useMemo(() =>
-    accounts.filter(acc => {
-      if (acc.id === account.id) return false
-      if (acc.type !== 'credit_card') return false
-      // Exclude child accounts (those with parent_account_id or parent_info)
-      const isChild = !!acc.parent_account_id || !!acc.relationships?.parent_info
-      return !isChild
-    }),
+    accounts.filter(acc => acc.id !== account.id && acc.type === 'credit_card' && !acc.parent_account_id && !acc.relationships?.parent_info),
     [accounts, account.id]
   )
 
-  // Smart Parent Suggestion - triggers on name change
-  // Always calculate suggestion, even if parent is already selected
   const suggestedParent = useMemo(() => {
     if (!isCreditCard || !name.trim()) return null
     const firstWord = name.trim().split(' ')[0]
     if (firstWord.length < 2) return null
-    const candidate = parentCandidates.find(acc =>
-      acc.name.toLowerCase().startsWith(firstWord.toLowerCase())
-    )
-    // Only show suggestion if it's different from current selection
-    if (candidate && candidate.id !== parentAccountId) {
-      return candidate
-    }
-    return null
+    const candidate = parentCandidates.find(acc => acc.name.toLowerCase().startsWith(firstWord.toLowerCase()))
+    return candidate && candidate.id !== parentAccountId ? candidate : null
   }, [name, isCreditCard, parentAccountId, parentCandidates])
 
   const parseStatementDayValue = (value: string) => {
     const parsed = parseOptionalNumber(value)
-    if (parsed === null) {
-      return null
-    }
-    const normalized = Math.min(Math.max(Math.floor(parsed), 1), 31)
-    return normalized
+    return parsed === null ? null : Math.min(Math.max(Math.floor(parsed), 1), 31)
   }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -850,9 +714,7 @@ export function EditAccountDialog({
           maxBudget: parseOptionalNumber(maxAmount),
           minSpendTarget: parseOptionalNumber(minSpend),
           cycleType,
-          statementDay: cycleType === 'statement_cycle'
-            ? parseStatementDayValue(statementDay)
-            : null,
+          statementDay: cycleType === 'statement_cycle' ? parseStatementDayValue(statementDay) : null,
           dueDate: parseStatementDayValue(dueDate),
           levels: levels.map(lvl => ({
             id: lvl.id,
@@ -879,67 +741,36 @@ export function EditAccountDialog({
 
     const securedBy = isCreditCard && isSecured ? (securedByAccountId || null) : null
 
-    // Import createAccount dynamically if needed, or assume it's imported at top (it's not, I will need to add import)
-    // Actually, I should add the import first. But I can't do two replaces in one step unless I use multi_replace.
-    // I'll use multi_replace for this file.
-
     startTransition(async () => {
       setStatus(null)
-
       try {
-        if (account.id === 'new' || account.id === 'new-account' || !account.id) {
-          // CREATE MODE
-          const result = await createAccount({
-            name: trimmedName,
-            type: accountType,
-            creditLimit: nextCreditLimit,
-            annualFee: nextAnnualFee,
-            cashbackConfig: configPayload,
-            securedByAccountId: securedBy,
-            imageUrl: cleanedLogoUrl,
-            parentAccountId: parentAccountId || null,
-            balance: 0  // Default, as dialog doesn't currently support balance input
-          })
-
-          if (result?.error) {
-            console.error('Create account failed:', result.error)
-            setStatus({ text: result.error.message || 'Could not create account.', variant: 'error' })
-            return
-          }
-
-          if (onSuccess && result.data && result.data[0]) {
-            onSuccess(result.data[0] as unknown as Account)
-          }
-        } else {
-          // UPDATE MODE
-          const success = await updateAccountConfigAction({
-            id: account.id,
-            name: trimmedName,
-            creditLimit: nextCreditLimit,
-            annualFee: nextAnnualFee,
-            cashbackConfig: configPayload,
-            type: accountType,
-            securedByAccountId: securedBy,
-            imageUrl: cleanedLogoUrl,
-            parentAccountId: parentAccountId || null,
-          })
-
-          if (!success) {
-            console.error("Update account action returned false (failure).")
-            setStatus({ text: 'Could not update account. Please try again.', variant: 'error' })
-            return
-          }
+        const success = await updateAccountConfigAction({
+          id: account.id,
+          name: trimmedName,
+          creditLimit: nextCreditLimit,
+          annualFee: nextAnnualFee,
+          cashbackConfig: configPayload,
+          type: accountType,
+          securedByAccountId: securedBy,
+          imageUrl: cleanedLogoUrl,
+          parentAccountId: parentAccountId || null,
+          accountNumber: accountNumber.trim() || null,
+          receiverName: receiverName.trim() || null,
+        })
+        if (!success) {
+          setStatus({ text: 'Could not update account. Please try again.', variant: 'error' })
+          return
         }
-
         setOpen(false)
         setIsDirty(false)
         router.refresh()
       } catch (error: any) {
-        console.error('Account save error:', error)
         setStatus({ text: error.message || 'An unexpected error occurred.', variant: 'error' })
       }
     })
   }
+
+  const bankOptions = useMemo(() => [], [])
 
   return (
     <>
@@ -947,595 +778,467 @@ export function EditAccountDialog({
         <span
           role="button"
           tabIndex={0}
-          className={
-            buttonClassName ??
-            (triggerContent
-              ? 'inline-flex items-center justify-center rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50'
-              : 'rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600')
-          }
-          onClick={event => {
-            event.stopPropagation()
-            onOpen?.()
-            openDialog()
-          }}
-          onKeyDown={event => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault()
-              onOpen?.()
-              openDialog()
-            }
-          }}
+          className={cn(
+            "transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
+            buttonClassName ?? (triggerContent ? 'inline-flex items-center justify-center rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50' : 'rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500')
+          )}
+          onClick={event => { event.stopPropagation(); onOpen?.(); openDialog() }}
+          onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen?.(); openDialog() } }}
         >
           {triggerContent ?? 'Settings'}
         </span>
       )}
 
-      {open &&
-        createPortal(
+      {open && createPortal(
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-12"
+          onClick={() => closeDialog()}
+        >
           <div
-            role="dialog"
-            aria-modal="true"
-            aria-label="Edit account configuration"
-            className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-12"
-            onClick={() => closeDialog()}
+            className="w-full max-w-5xl rounded-xl bg-white shadow-2xl flex flex-col"
+            style={{ maxHeight: '85vh', minHeight: '400px' }}
+            onClick={stopPropagation}
           >
-            <div
-              className="w-full max-w-5xl rounded-xl bg-white shadow-2xl flex flex-col"
-              style={{ maxHeight: '85vh', minHeight: '400px' }}
-              onClick={stopPropagation}
-            >
-              {/* Header */}
-              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 rounded-t-xl">
-                <h2 className="text-xl font-bold text-slate-900">Edit Account</h2>
-                <button
-                  type="button"
-                  className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
-                  onClick={() => closeDialog()}
-                  aria-label="Close dialog"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 rounded-t-xl">
+              <h2 className="text-xl font-bold text-slate-900">Edit {account.name}</h2>
+              <button
+                type="button"
+                className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                onClick={() => closeDialog()}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
-              <form className="flex flex-col flex-1 min-h-0" onSubmit={handleSubmit}>
-                <div className="flex-1 overflow-y-auto p-6">
-                  {/* Account Type Selection - Main Tabs */}
-                  <div className="mb-6 space-y-4">
-                    <label className="block text-sm font-medium text-slate-700">Account Type</label>
+            <form className="p-6 flex-1 overflow-y-auto" onSubmit={handleSubmit}>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                {/* Left Column */}
+                <div className="space-y-5">
+                  <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Basic Information</h3>
 
-                    {/* Main Category Tabs */}
-                    <div className="flex gap-2 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => setAccountType('credit_card')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${accountType === 'credit_card'
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                          }`}
-                      >
-                        💳 Credit Card
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAccountType('bank')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${accountType === 'bank'
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                          }`}
-                      >
-                        🏦 Bank
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!['savings', 'investment', 'asset'].includes(accountType)) {
-                            setAccountType('savings')
-                          }
-                        }}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${['savings', 'investment', 'asset'].includes(accountType)
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                          }`}
-                      >
-                        💰 Savings & Investment
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!['cash', 'ewallet', 'debt'].includes(accountType)) {
-                            setAccountType('cash')
-                          }
-                        }}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${['cash', 'ewallet', 'debt'].includes(accountType)
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                          }`}
-                      >
-                        📦 Others
-                      </button>
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-sm font-medium text-slate-600">Name</label>
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={event => setName(event.target.value)}
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                        placeholder="e.g. Vpbank Lady"
+                      />
                     </div>
 
-                    {/* Sub-tabs for Savings & Investment */}
-                    {['savings', 'investment', 'asset'].includes(accountType) && (
-                      <div className="flex gap-2 pl-4 border-l-2 border-blue-200">
-                        <button
-                          type="button"
-                          onClick={() => setAccountType('savings')}
-                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'savings'
-                            ? 'bg-blue-100 text-blue-700 font-semibold'
-                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                            }`}
-                        >
-                          Savings
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAccountType('investment')}
-                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'investment'
-                            ? 'bg-blue-100 text-blue-700 font-semibold'
-                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                            }`}
-                        >
-                          Investment
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAccountType('asset')}
-                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'asset'
-                            ? 'bg-blue-100 text-blue-700 font-semibold'
-                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                            }`}
-                        >
-                          Secured Asset
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Sub-tabs for Others */}
-                    {['cash', 'ewallet', 'debt'].includes(accountType) && (
-                      <div className="flex gap-2 pl-4 border-l-2 border-blue-200">
-                        <button
-                          type="button"
-                          onClick={() => setAccountType('cash')}
-                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'cash'
-                            ? 'bg-blue-100 text-blue-700 font-semibold'
-                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                            }`}
-                        >
-                          Cash
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAccountType('ewallet')}
-                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'ewallet'
-                            ? 'bg-blue-100 text-blue-700 font-semibold'
-                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                            }`}
-                        >
-                          E-wallet
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setAccountType('debt')}
-                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'debt'
-                            ? 'bg-blue-100 text-blue-700 font-semibold'
-                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                            }`}
-                        >
-                          Debt
-                        </button>
+                    {isCreditCard && (
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-sm font-medium text-slate-600">Parent Account (Shared Limit)</label>
+                          {suggestedParent && (
+                            <button
+                              type="button"
+                              onClick={() => setParentAccountId(suggestedParent.id)}
+                              className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium"
+                            >
+                              💡 Link to {suggestedParent.name}?
+                            </button>
+                          )}
+                        </div>
+                        <CustomDropdown
+                          options={[
+                            { value: '', label: 'None (Primary Card)' },
+                            ...parentCandidates.map(acc => ({ value: acc.id, label: acc.name }))
+                          ]}
+                          value={parentAccountId}
+                          onChange={setParentAccountId}
+                          className="w-full"
+                          placeholder="Select Primary Card"
+                        />
+                        {parentAccountId && (
+                          <p className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                            ℹ️ This card shares credit limit with parent
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
 
-                  {/* 2 Column Layout */}
-                  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                    {/* Left Column - Basic Info */}
-                    <div className="space-y-5">
-                      <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Basic Information</h3>
-
-                      <div className="space-y-1">
-                        <div className="flex justify-between items-center mb-1">
-                          <label className="text-sm font-medium text-slate-600">Name</label>
-                          {isCreditCard && (
-                            <span className={cn(
-                              "text-xs px-2.5 py-0.5 rounded-full font-bold border",
-                              parentAccountId
-                                ? "bg-purple-50 text-purple-700 border-purple-100"
-                                : "bg-slate-50 text-slate-700 border-slate-100"
-                            )}>
-                              {parentAccountId ? "Child Card" : "Primary Card"}
-                            </span>
-                          )}
-                        </div>
-                        <input
-                          type="text"
-                          value={name}
-                          onChange={event => setName(event.target.value)}
-                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                          placeholder="e.g. Vpbank Lady"
-                        />
+                  <div className="flex gap-4">
+                    <div className="flex-1 space-y-1">
+                      <label className="text-sm font-medium text-slate-600">Account Logo URL</label>
+                      <input
+                        type="text"
+                        value={imageUrl}
+                        onChange={e => setImageUrl(e.target.value)}
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                        placeholder="Paste image URL"
+                      />
+                    </div>
+                    {imageUrl && (
+                      <div className="shrink-0 self-end">
+                        <img src={imageUrl} alt="" className="h-auto max-h-[68px] w-auto max-w-[120px] object-contain" />
                       </div>
+                    )}
+                  </div>
 
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-600">Logo/Thumbnail URL</label>
-                        <div className="flex gap-3">
-                          <input
-                            type="text"
-                            value={imageUrl}
-                            onChange={e => setImageUrl(e.target.value)}
-                            className="flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            placeholder="https://example.com/logo.png"
-                          />
-                          <div className="h-10 w-10 shrink-0 rounded border border-slate-100 bg-slate-50 flex items-center justify-center overflow-hidden">
-                            {imageUrl ? (
-                              <img src={imageUrl} alt="Preview" className="h-full w-full object-contain rounded-none" />
-                            ) : (
-                              <span className="text-[10px] text-slate-400">No img</span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {isCreditCard && (
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium text-slate-600">Parent Account (Shared Limit)</label>
-                            {suggestedParent && (
-                              <button
-                                type="button"
-                                onClick={() => setParentAccountId(suggestedParent.id)}
-                                className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-                              >
-                                Link to {suggestedParent.name}?
-                              </button>
-                            )}
-                          </div>
-                          <CustomDropdown
-                            options={[
-                              { value: '', label: 'None (Primary Card)' },
-                              ...parentCandidates.map(acc => ({ value: acc.id, label: acc.name }))
-                            ]}
-                            value={parentAccountId}
-                            onChange={setParentAccountId}
-                            className="w-full"
-                          />
-                          <p className="text-xs text-slate-500">
-                            If this is a supplementary card, select the primary card here.
-                          </p>
-                        </div>
-                      )}
-
-
-                      {isCreditCard && (
-                        <>
-
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-600">Credit Limit</label>
+                  {/* Credit Limit - Show in Basic Info */}
+                  {isCreditCard && (
+                    <>
+                      {isSecured ? (
+                        /* When Secured ON: Show both Credit Limit and Annual Fee together */
+                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+                          <div className="space-y-4">
+                            <label className="text-sm font-medium text-slate-600 block">Credit Limit</label>
                             <NumberInputWithSuggestions
                               value={creditLimit}
-                              onChange={setCreditLimit}
+                              onChange={val => setCreditLimit(formatWithSeparators(val.replace(/,/g, '')))}
                               onFocus={e => e.target.select()}
                               className="w-full"
-                              placeholder="Credit limit"
+                              placeholder="Ex: 50M"
+                              step={1000000}
                               disabled={!!parentAccountId}
                             />
                             {parentAccountId && (
-                              <p className="text-xs text-amber-600">
-                                Shared limit with parent card
-                              </p>
+                              <p className="text-[10px] text-amber-600 italic mt-1">Shared with parent</p>
                             )}
                           </div>
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-600">Annual Fee</label>
+                          <div className="space-y-4">
+                            <label className="text-sm font-medium text-slate-600 block">Annual Fee</label>
                             <NumberInputWithSuggestions
                               value={annualFee}
-                              onChange={setAnnualFee}
+                              onChange={val => setAnnualFee(formatWithSeparators(val.replace(/,/g, '')))}
                               onFocus={e => e.target.select()}
                               className="w-full"
-                              placeholder="Annual fee"
+                              placeholder="Ex: 500k"
+                              step={100000}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        /* When Secured OFF: Show only Credit Limit here */
+                        <div className="pt-4 border-t border-slate-100">
+                          <div className="space-y-4">
+                            <label className="text-sm font-medium text-slate-600 block">Credit Limit</label>
+                            <NumberInputWithSuggestions
+                              value={creditLimit}
+                              onChange={val => setCreditLimit(formatWithSeparators(val.replace(/,/g, '')))}
+                              onFocus={e => e.target.select()}
+                              className="w-full"
+                              placeholder="Ex: 50M"
+                              step={1000000}
+                              disabled={!!parentAccountId}
+                            />
+                            {parentAccountId && (
+                              <p className="text-[10px] text-amber-600 italic mt-1">Shared with parent</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* Right Column */}
+                <div className="space-y-5">
+                  {isCreditCard && (
+                    <div className="space-y-5">
+                      <div>
+                        <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2 mb-4">Sync Information</h3>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1 col-span-2">
+                            <label className="text-sm font-medium text-slate-600">Bank Number</label>
+                            <input
+                              type="text"
+                              value={accountNumber}
+                              onChange={e => setAccountNumber(e.target.value)}
+                              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                              placeholder="Account number"
                             />
                           </div>
 
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-end gap-2 mb-1">
-                              <label className="text-xs text-slate-500 font-medium">Use different secured asset?</label>
+                          {/* Annual Fee - Aligned with Parent Account/Credit Limit */}
+                          {isCreditCard && !isSecured && (
+                            <div className="space-y-4 col-span-2">
+                              <label className="text-sm font-medium text-slate-600 block">Annual Fee</label>
+                              <NumberInputWithSuggestions
+                                value={annualFee}
+                                onChange={val => setAnnualFee(formatWithSeparators(val.replace(/,/g, '')))}
+                                onFocus={e => e.target.select()}
+                                className="w-full"
+                                placeholder="Ex: 500k"
+                                step={100000}
+                              />
+                            </div>
+                          )}
+
+                          <div className="space-y-1 col-span-2">
+                            <label className="text-sm font-medium text-slate-600">Receiver Name</label>
+                            <div className="relative">
+                              <input
+                                type="text"
+                                value={receiverName}
+                                onChange={e => setReceiverName(e.target.value)}
+                                className="w-full rounded-md border border-slate-200 px-3 py-2 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                                placeholder="NGUYEN THANH NAM"
+                              />
+                              {receiverName && (
+                                <button
+                                  type="button"
+                                  onClick={() => setReceiverName('')}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 h-full flex flex-col">
+                        <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-2">
+                          <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Collateral</label>
+                          {parentAccountId && (
+                            <div className="flex items-center gap-1.5">
+                              <label className="text-[10px] text-slate-500 font-medium whitespace-nowrap">Override?</label>
                               <Switch
                                 checked={overrideParentSecured}
                                 onCheckedChange={(checked) => {
                                   setOverrideParentSecured(checked);
-                                  // If turning ON override, force Secured to ON
-                                  if (checked) {
-                                    setIsSecured(true);
-                                  }
+                                  if (checked) setIsSecured(true);
                                 }}
                                 className="scale-75 origin-right"
                               />
                             </div>
-                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                              <div className="flex items-center justify-between">
-                                <label className="text-sm font-medium text-slate-700">
-                                  Secured (collateral)
-                                </label>
-                                <Switch
-                                  checked={isSecured}
-                                  disabled={!!parentAccountId && !overrideParentSecured}
-                                  onCheckedChange={(checked) => {
-                                    setIsSecured(checked)
-                                    if (!checked) setSecuredByAccountId('')
-                                  }}
-                                />
-                              </div>
+                          )}
+                        </div>
 
-                              {isSecured && (
-                                <div className="space-y-1 mt-3">
-                                  <label className="text-sm font-medium text-slate-600">Secured by</label>
-                                  <CustomDropdown
-                                    options={[
-                                      { value: '', label: 'None' },
-                                      ...collateralOptions.map(option => ({ value: option.id, label: option.name }))
-                                    ]}
-                                    value={securedByAccountId}
-                                    onChange={setSecuredByAccountId}
-                                    className="w-full"
-                                    disabled={!!parentAccountId && !overrideParentSecured}
-                                  />
-                                  {!overrideParentSecured && parentAccountId && (
-                                    <p className="text-xs text-slate-500">Inherited from parent card</p>
-                                  )}
-                                  {(!parentAccountId || overrideParentSecured) && (
-                                    <p className="text-xs text-slate-500">
-                                      Choose a savings/investment account as collateral for this card.
-                                    </p>
-                                  )}
-                                </div>
-                              )}
+                        {/* Top Toggle for consistency - Moved here as requested */}
+                        <div className="flex items-center justify-between bg-white rounded-lg p-3 border border-slate-200 shadow-sm mb-4">
+                          <label className="text-sm font-medium text-slate-700">Secured Account?</label>
+                          <Switch
+                            checked={isSecured}
+                            disabled={!!parentAccountId && !overrideParentSecured}
+                            onCheckedChange={(checked) => {
+                              setIsSecured(checked)
+                              if (!checked) setSecuredByAccountId('')
+                            }}
+                            className="scale-90"
+                          />
+                        </div>
+
+                        {!isSecured ? (
+                          /* Centered badge when Secured is OFF */
+                          <div className="flex-1 flex flex-col items-center justify-center space-y-4 min-h-[120px]">
+                            <div className="flex items-center gap-2 px-5 py-2.5 bg-white rounded-full border border-slate-200 shadow-sm animate-in fade-in zoom-in duration-300">
+                              <span className="text-lg">🔓</span>
+                              <span className="text-sm font-medium text-slate-700">Unsecured Account</span>
                             </div>
+                            <p className="text-xs text-center text-slate-500 italic max-w-[200px] leading-relaxed">
+                              This account is not backed by any collateral asset.
+                            </p>
                           </div>
-                        </>
-                      )}
-
-
-                    </div>
-
-                    {/* Right Column */}
-                    <div className="space-y-5">
-                      {isCreditCard && (
-                        <div className="space-y-5">
-                          <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Cashback Configuration</h3>
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-600">Rate (%)</label>
-                            <input
-                              type="number"
-                              step="any"
-                              min="0"
-                              max="100"
-                              value={rate}
-                              onChange={event => {
-                                // Allow any input, handled by state
-                                setRate(event.target.value)
-                              }}
-                              onFocus={e => e.target.select()}
-                              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                              placeholder="10"
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1">
-                              <label className="text-sm font-medium text-slate-600">Max amount</label>
-                              <NumberInputWithSuggestions
-                                value={maxAmount}
-                                onChange={setMaxAmount}
-                                onFocus={e => e.target.select()}
-                                className="w-full"
-                                placeholder="Ex: 100000"
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <label className="text-sm font-medium text-slate-600">Min spend</label>
-                              <NumberInputWithSuggestions
-                                value={minSpend}
-                                onChange={setMinSpend}
-                                onFocus={e => e.target.select()}
-                                className="w-full"
-                                placeholder="Ex: 500000"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-600">Cycle type</label>
+                        ) : (
+                          /* Dropdown when Secured is ON */
+                          <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide ml-1">Secured By Asset</label>
                             <CustomDropdown
                               options={[
-                                { value: 'calendar_month', label: 'Calendar month' },
-                                { value: 'statement_cycle', label: 'Statement cycle' }
+                                { value: '', label: 'Select asset...' },
+                                ...collateralOptions.map(option => ({ value: option.id, label: option.name }))
                               ]}
-                              value={cycleType ?? ''}
-                              onChange={(val) => setCycleType(val as CashbackCycleType)}
-                              className="w-full"
+                              value={securedByAccountId}
+                              onChange={setSecuredByAccountId}
+                              className="w-full bg-white shadow-sm"
+                              disabled={!!parentAccountId && !overrideParentSecured}
+                            />
+                            <p className="text-[10px] text-slate-400 italic ml-1">
+                              Select the savings or investment account linking to this card.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {isCreditCard && (
+                <div className="mt-8 pt-6 border-t border-slate-200">
+                  <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                      <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600 text-sm">💰</span>
+                        Cashback Policy
+                      </h3>
+                      <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-full border border-slate-100 shadow-inner">
+                        <span className="text-xs font-semibold text-slate-600">Advanced Levels?</span>
+                        <Switch
+                          checked={showAdvancedCashback}
+                          onCheckedChange={setShowAdvancedCashback}
+                          className="scale-90"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div className="space-y-6">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Base Rate (%)</label>
+                          <input
+                            type="number"
+                            step="any"
+                            min="0"
+                            max="100"
+                            value={rate}
+                            onChange={event => setRate(event.target.value)}
+                            onFocus={e => e.target.select()}
+                            className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-white shadow-sm h-[42px]"
+                            placeholder="e.g. 10"
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Max Budget</label>
+                            <NumberInputWithSuggestions
+                              value={maxAmount}
+                              onChange={setMaxAmount}
+                              className="w-full h-[42px]"
+                              placeholder="No Limit"
                             />
                           </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Min Spend</label>
+                            <NumberInputWithSuggestions
+                              value={minSpend}
+                              onChange={setMinSpend}
+                              className="w-full h-[42px]"
+                              placeholder="None"
+                            />
+                          </div>
+                        </div>
+                      </div>
 
-                          {cycleType === 'statement_cycle' && (
-                            <div className="space-y-1">
-                              <label className="text-sm font-medium text-slate-600">Statement day</label>
-                              <input
-                                type="number"
-                                min="1"
-                                max="31"
-                                step="1"
-                                value={statementDay}
-                                onChange={event => setStatementDay(event.target.value)}
-                                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                                placeholder="Day of month"
-                              />
-                            </div>
-                          )}
+                      <div className="space-y-6">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Cycle Type</label>
+                          <CustomDropdown
+                            options={[
+                              { value: 'calendar_month', label: 'Calendar month' },
+                              { value: 'statement_cycle', label: 'Statement cycle' }
+                            ]}
+                            value={cycleType ?? ''}
+                            onChange={(val) => setCycleType(val as CashbackCycleType)}
+                            className="w-full h-[42px]"
+                          />
+                        </div>
 
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-600">Due Date (Day)</label>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Statement Day</label>
                             <input
                               type="number"
                               min="1"
                               max="31"
-                              step="1"
+                              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-white disabled:bg-slate-50 disabled:text-slate-400"
+                              value={statementDay}
+                              onChange={event => setStatementDay(event.target.value)}
+                              disabled={cycleType !== 'statement_cycle'}
+                              placeholder="Day"
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Due Day</label>
+                            <input
+                              type="number"
+                              min="1"
+                              max="31"
+                              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-white"
                               value={dueDate}
                               onChange={event => setDueDate(event.target.value)}
-                              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                              placeholder="Day of month"
+                              placeholder="Day"
                             />
                           </div>
                         </div>
-                      )}
-
-                      {isAssetAccount && (
-                        <div className="space-y-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
-                          <h4 className="text-sm font-semibold text-slate-700">Interest Info</h4>
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-600">Interest rate (%)</label>
-                            <input
-                              type="number"
-                              step="any"
-                              min="0"
-                              value={interestRate}
-                              onChange={event => setInterestRate(event.target.value)}
-                              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                              placeholder="Ex: 7.2"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-600">Statement Day</label>
-                            <input
-                              type="number"
-                              min="1"
-                              max="31"
-                              value={statementDay}
-                              onChange={e => setStatementDay(e.target.value)}
-                              className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                              placeholder="Day (1-31)"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-600">Due Date</label>
-                            <input
-                              type="number"
-                              min="1"
-                              max="31"
-                              value={dueDate}
-                              onChange={e => setDueDate(e.target.value)}
-                              className="w-full rounded border border-slate-200 px-3 py-2 text-sm"
-                              placeholder="Day (1-31)"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-600">Term (months)</label>
-                            <input
-                              type="number"
-                              step="1"
-                              min="0"
-                              value={termMonths}
-                              onChange={event => setTermMonths(event.target.value)}
-                              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                              placeholder="Ex: 12"
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-sm font-medium text-slate-600">Maturity date</label>
-                            <input
-                              type="date"
-                              value={maturityDate}
-                              onChange={event => setMaturityDate(event.target.value)}
-                              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                            />
-                          </div>
-                        </div>
-                      )}
+                      </div>
                     </div>
+
+                    {showAdvancedCashback && (
+                      <div className="mt-8 pt-8 border-t border-slate-100">
+                        <CashbackLevelsList
+                          initialLevels={levels}
+                          onLevelsChange={setLevels}
+                          categoryOptions={categoryOptions}
+                          onAddCategory={() => setIsCategoryDialogOpen(true)}
+                          activeCategoryCallback={activeCategoryCallback}
+                        />
+                      </div>
+                    )}
                   </div>
-
-                  {/* Cashback Levels - Full Width */}
-                  {isCreditCard && (
-                    <div className="mt-6 pt-6 border-t border-slate-200">
-                      <LevelList
-                        levels={levels}
-                        onChange={setLevels}
-                        categoryOptions={categoryOptions}
-                        onAddCategory={() => setIsCategoryDialogOpen(true)}
-                        activeCategoryCallback={activeCategoryCallback}
-                      />
-                    </div>
-                  )}
-
-                  {status && (
-                    <p
-                      className={`mt-4 text-sm ${status.variant === 'error' ? 'text-red-600' : 'text-green-600'}`}
-                    >
-                      {status.text}
-                    </p>
-                  )}
-
                 </div>
-                <div className="flex justify-end gap-3 border-t border-slate-200 p-6 bg-white rounded-b-xl shrink-0">
-                  <button
-                    type="button"
-                    className="rounded-md border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
-                    onClick={() => closeDialog()}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isPending}
-                    className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isPending && <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" />}
-                    {isPending ? 'Saving...' : 'Save changes'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>,
-          document.body
-        )}
+              )}
 
-      <ConfirmationModal
-        isOpen={showCloseWarning}
-        onClose={() => setShowCloseWarning(false)}
-        onConfirm={() => closeDialog(true)}
-        title="Unsaved Changes"
-        description="You have unsaved changes. Are you sure you want to discard them and close?"
-        confirmText="Discard Changes"
-        cancelText="Keep Editing"
-      />
+              {status && (
+                <p className={cn(
+                  "mt-4 rounded-md p-3 text-sm font-medium",
+                  status.variant === 'error' ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-green-50 text-green-600 border border-green-100'
+                )}>
+                  {status.text}
+                </p>
+              )}
 
-      <CategoryDialog
-        open={isCategoryDialogOpen}
-        onOpenChange={setIsCategoryDialogOpen}
-        defaultType="expense"
-        onSuccess={async (newCategoryId) => {
-          console.log('🟡 [DEBUG] CategoryDialog onSuccess called with ID:', newCategoryId)
-          // Refresh category list
-          const supabase = createClient()
-          const { data } = await supabase.from('categories').select('id, name, type, icon, image_url').order('name')
-          console.log('🟡 [DEBUG] Refreshed categories, count:', data?.length)
-          if (data) setCategoryOptions(data as any)
+              <div className="mt-8 flex justify-end gap-3 border-t border-slate-200 pt-6">
+                <button
+                  type="button"
+                  className="rounded-md border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onClick={() => closeDialog()}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="rounded-md bg-blue-600 px-5 py-2.5 text-sm font-medium text-white shadow transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  {isPending && <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" />}
+                  {isPending ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form >
+          </div >
 
-          // Auto-add new category using registered callback
-          console.log('🟡 [DEBUG] Checking callback - newCategoryId:', newCategoryId, 'callback exists:', !!activeCategoryCallback.current)
-          if (newCategoryId && activeCategoryCallback.current) {
-            console.log('🟢 [DEBUG] Invoking registered callback with category ID:', newCategoryId)
-            activeCategoryCallback.current(newCategoryId)
-            activeCategoryCallback.current = null
-            console.log('🟢 [DEBUG] Callback invoked and cleared')
-          } else {
-            console.error('🔴 [DEBUG] Cannot invoke callback - newCategoryId:', newCategoryId, 'callback:', activeCategoryCallback.current)
-          }
-        }}
-      />
+          <ConfirmationModal
+            isOpen={showCloseWarning}
+            onClose={() => setShowCloseWarning(false)}
+            onConfirm={() => closeDialog(true)}
+            title="Unsaved Changes"
+            description="You have unsaved changes. Are you sure you want to discard them and close?"
+            confirmText="Discard Changes"
+            cancelText="Keep Editing"
+          />
+
+          <CategoryDialog
+            open={isCategoryDialogOpen}
+            onOpenChange={setIsCategoryDialogOpen}
+            defaultType="expense"
+            onSuccess={async (newCategoryId) => {
+              const supabase = createClient()
+              const { data } = await supabase.from('categories').select('id, name, type, icon, image_url').order('name')
+              if (data) setCategoryOptions(data as any)
+
+              if (newCategoryId && activeCategoryCallback.current) {
+                activeCategoryCallback.current(newCategoryId)
+                activeCategoryCallback.current = null
+              }
+            }}
+          />
+        </div >,
+        document.body
+      )
+      }
     </>
   )
 }

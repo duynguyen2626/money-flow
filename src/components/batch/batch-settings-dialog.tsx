@@ -31,6 +31,7 @@ const formSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     sheet_link: z.string().optional(),
     display_link: z.string().optional(),
+    display_name: z.string().optional(),
     sheet_name: z.string().optional(),
     is_template: z.boolean().optional(),
     auto_clone_day: z.number().min(1).max(31).optional().or(z.literal(0)),
@@ -47,6 +48,7 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
             name: batch.name,
             sheet_link: batch.sheet_link || '',
             display_link: batch.display_link || '',
+            display_name: batch.display_name || '',
             sheet_name: batch.sheet_name || '',
             is_template: batch.is_template || false,
             auto_clone_day: Number(batch.auto_clone_day) || 1,
@@ -59,6 +61,7 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
                 name: values.name,
                 sheet_link: values.sheet_link,
                 display_link: values.display_link,
+                display_name: values.display_name,
                 sheet_name: values.sheet_name,
                 is_template: values.is_template ?? false,
                 auto_clone_day: values.is_template ? (values.auto_clone_day ?? null) : null
@@ -143,13 +146,30 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
                         />
                         <FormField
                             control={form.control}
-                            name="sheet_name"
+                            name="display_name"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Display Name</FormLabel>
+                                    <FormLabel>Display Name (Link Label)</FormLabel>
                                     <FormControl>
                                         <Input {...field} placeholder="e.g. Google Sheet" />
                                     </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+
+                        <FormField
+                            control={form.control}
+                            name="sheet_name"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Target Sheet (Google Script)</FormLabel>
+                                    <FormControl>
+                                        <Input {...field} placeholder="e.g., eMB_BulkPayment" />
+                                    </FormControl>
+                                    <FormDescription>
+                                        The name of the tab in the spreadsheet where data will be sent.
+                                    </FormDescription>
                                     <FormMessage />
                                 </FormItem>
                             )}

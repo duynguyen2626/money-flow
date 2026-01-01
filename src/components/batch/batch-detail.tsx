@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AddItemDialog } from './add-item-dialog'
 import { ItemsTable } from './items-table'
-import { Loader2, CheckCircle2, DollarSign, Trash2, Send, ExternalLink, Settings, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Loader2, CheckCircle2, DollarSign, Trash2, Send, ExternalLink, Settings, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
 import { sendBatchToSheetAction, fundBatchAction, deleteBatchAction, confirmBatchItemAction, updateBatchCycleAction } from '@/actions/batch.actions'
 import { useRouter } from 'next/navigation'
 import { CloneBatchDialog } from './clone-batch-dialog'
@@ -18,6 +18,7 @@ import { formatCurrency } from '@/lib/account-utils'
 import { ConfirmSourceDialog } from './confirm-source-dialog'
 import { SYSTEM_ACCOUNTS } from '@/lib/constants'
 import { LinkSheetDialog } from './link-sheet-dialog'
+import { BatchAIImportDialog } from './batch-ai-import-dialog'
 
 export function BatchDetail({
     batch,
@@ -38,6 +39,7 @@ export function BatchDetail({
     const [selectedItemIds, setSelectedItemIds] = useState<string[]>([])
     const [showConfirmDialog, setShowConfirmDialog] = useState(false)
     const [linkDialogOpen, setLinkDialogOpen] = useState(false)
+    const [aiImportOpen, setAiImportOpen] = useState(false)
     const router = useRouter()
 
     const sourceAccount = accounts.find(a => a.id === batch.source_account_id)
@@ -161,7 +163,7 @@ export function BatchDetail({
                                     title={batch.display_link}
                                 >
                                     <ExternalLink className="h-4 w-4" />
-                                    {batch.sheet_name || "Sheet Link"}
+                                    {batch.display_name || "Sheet Link"}
                                 </a>
                                 <Button
                                     variant="ghost"
@@ -235,9 +237,30 @@ export function BatchDetail({
                         Send to Sheet
                     </Button>
 
-                    <AddItemDialog batchId={batch.id} batchName={batch.name} accounts={accounts} />
+                    <Button
+                        onClick={() => setAiImportOpen(true)}
+                        variant="ghost"
+                        className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                        title="AI Import"
+                    >
+                        <Sparkles className="h-4 w-4" />
+                    </Button>
+
+                    <AddItemDialog
+                        batchId={batch.id}
+                        batchName={batch.name}
+                        accounts={accounts}
+                        bankType={batch.bank_type || 'VIB'}
+                    />
                 </div>
             </div>
+
+            <BatchAIImportDialog
+                open={aiImportOpen}
+                onOpenChange={setAiImportOpen}
+                batchId={batch.id}
+                onSuccess={() => router.refresh()}
+            />
 
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
@@ -268,6 +291,7 @@ export function BatchDetail({
                                 batchId={batch.id}
                                 onSelectionChange={setSelectedItemIds}
                                 activeInstallmentAccounts={activeInstallmentAccounts}
+                                bankType={batch.bank_type || 'VIB'}
                             />
                         </TabsContent>
                         <TabsContent value="confirmed" className="mt-4">
@@ -276,6 +300,7 @@ export function BatchDetail({
                                 batchId={batch.id}
                                 onSelectionChange={setSelectedItemIds}
                                 activeInstallmentAccounts={activeInstallmentAccounts}
+                                bankType={batch.bank_type || 'VIB'}
                             />
                         </TabsContent>
                     </Tabs>
@@ -298,7 +323,7 @@ export function BatchDetail({
                 onClose={() => setLinkDialogOpen(false)}
                 batchId={batch.id}
                 initialLink={batch.display_link}
-                initialName={batch.sheet_name}
+                initialName={batch.display_name}
                 onSuccess={() => router.refresh()}
             />
         </div>

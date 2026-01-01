@@ -17,6 +17,7 @@ interface BankMappingImportDialogProps {
 export function BankMappingImportDialog({ open, onOpenChange, onSuccess }: BankMappingImportDialogProps) {
     const [excelData, setExcelData] = useState('')
     const [isLoading, setIsLoading] = useState(false)
+    const [bankType, setBankType] = useState<'VIB' | 'MBB'>('VIB')
 
     const handleImport = async () => {
         if (!excelData.trim()) {
@@ -29,7 +30,7 @@ export function BankMappingImportDialog({ open, onOpenChange, onSuccess }: BankM
             const response = await fetch('/api/bank-mappings/import', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ excelData })
+                body: JSON.stringify({ excelData, bankType })
             })
 
             const result = await response.json()
@@ -66,18 +67,49 @@ export function BankMappingImportDialog({ open, onOpenChange, onSuccess }: BankM
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>Import Bank Mappings</DialogTitle>
+                    <DialogTitle>Import Bank Mappings ({bankType})</DialogTitle>
                     <DialogDescription>
-                        Paste data from Excel: STT | Bank Code - Short Name | Full Bank Name
+                        Paste data from Excel.
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-4">
+                    <div className="flex items-center space-x-4">
+                        <Label>Format Type:</Label>
+                        <div className="flex items-center space-x-2">
+                            <input
+                                type="radio"
+                                id="vib"
+                                name="bankType"
+                                value="VIB"
+                                checked={bankType === 'VIB'}
+                                onChange={() => setBankType('VIB')}
+                                className="cursor-pointer"
+                            />
+                            <Label htmlFor="vib" className="cursor-pointer">VIB (Code - Name)</Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <input
+                                type="radio"
+                                id="mbb"
+                                name="bankType"
+                                value="MBB"
+                                checked={bankType === 'MBB'}
+                                onChange={() => setBankType('MBB')}
+                                className="cursor-pointer"
+                            />
+                            <Label htmlFor="mbb" className="cursor-pointer">MBB (Name (Code))</Label>
+                        </div>
+                    </div>
+
                     <div className="space-y-2">
                         <Label htmlFor="excel-data">Excel Data</Label>
                         <Textarea
                             id="excel-data"
-                            placeholder={'Paste data from Excel here...\n\nExample:\n1\t314 - NH Quốc tế VIB\tNH TMCP Quốc tế Việt Nam\n2\t203 - Vietcombank\tVCB - Ngoại Thương (Vietcombank)'}
+                            placeholder={bankType === 'VIB'
+                                ? 'Example:\n1\t314 - NH Quốc tế VIB\tNH TMCP Quốc tế Việt Nam'
+                                : 'Example:\n1\tNông nghiệp... (VBA)\tNH NN&PTNT Việt Nam'
+                            }
                             value={excelData}
                             onChange={(e) => setExcelData(e.target.value)}
                             className="min-h-[300px] font-mono text-sm"
@@ -88,14 +120,23 @@ export function BankMappingImportDialog({ open, onOpenChange, onSuccess }: BankM
                     </div>
 
                     <div className="rounded-lg bg-muted p-4 space-y-2">
-                        <h4 className="font-medium text-sm">Instructions:</h4>
+                        <h4 className="font-medium text-sm">Instructions ({bankType}):</h4>
                         <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-                            <li>Copy data from Excel (select 3 columns in order)</li>
+                            <li>Copy data from Excel (select columns)</li>
                             <li>Paste into the box above</li>
-                            <li>Column 1: STT (serial number)</li>
-                            <li>Column 2: Bank Code - Short Name (e.g., 314 - NH Quốc tế VIB)</li>
-                            <li>Column 3: Full Bank Name (e.g., NH TMCP Quốc tế Việt Nam)</li>
-                            <li>System will automatically extract bank codes and save to database</li>
+                            {bankType === 'VIB' ? (
+                                <>
+                                    <li>Column 1: STT (optional)</li>
+                                    <li>Column 2: Bank Code - Short Name (e.g., 314 - NH Quốc tế VIB)</li>
+                                    <li>Column 3: Full Bank Name</li>
+                                </>
+                            ) : (
+                                <>
+                                    <li>Column 1: Bank Name with Code in parens - e.g. &quot;Agribank (VBA)&quot;</li>
+                                    <li>(Optional) Column 2: Full Bank Name</li>
+                                </>
+                            )}
+                            <li>System will extract Code "314" (VIB) or "VBA" (MBB).</li>
                         </ul>
                     </div>
                 </div>

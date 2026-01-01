@@ -56,7 +56,7 @@ export function LinkSheetDialog({ isOpen, onClose, batchId, initialLink, initial
             // Update batch in DB
             await updateBatchAction(batchId, {
                 display_link: link,
-                sheet_name: name || "Sheet Link"
+                display_name: name || "Sheet Link"
             })
 
             onSuccess(link, name || "Sheet Link")
