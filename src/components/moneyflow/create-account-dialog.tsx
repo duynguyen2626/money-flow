@@ -14,7 +14,10 @@ import { CustomDropdown, type DropdownOption } from '@/components/ui/custom-drop
 import { ConfirmationModal } from '@/components/ui/confirmation-modal'
 import { useUnsavedChanges } from '@/hooks/use-unsaved-changes'
 import { NumberInputWithSuggestions } from '@/components/ui/number-input-suggestions'
+import { InputWithClear } from '@/components/ui/input-with-clear'
+import { SmartAmountInput } from '@/components/ui/smart-amount-input'
 import { CategoryDialog } from '@/components/moneyflow/category-dialog'
+import { formatShortVietnameseCurrency } from '@/lib/number-to-text'
 import { cn } from '@/lib/utils'
 
 type CategoryOption = { id: string; name: string; type: string; icon?: string | null; image_url?: string | null }
@@ -414,8 +417,8 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
   const [name, setName] = useState('')
   const [accountType, setAccountType] = useState<Account['type']>('credit_card')
   const [imageUrl, setImageUrl] = useState('')
-  const [creditLimit, setCreditLimit] = useState('')
-  const [annualFee, setAnnualFee] = useState('')
+  const [creditLimit, setCreditLimit] = useState<number | undefined>(undefined)
+  const [annualFee, setAnnualFee] = useState<number | undefined>(undefined)
   const [isSecured, setIsSecured] = useState(false)
   const [securedByAccountId, setSecuredByAccountId] = useState('')
   const [parentAccountId, setParentAccountId] = useState('')
@@ -466,8 +469,8 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
     return name !== '' ||
       accountType !== 'credit_card' ||
       imageUrl !== '' ||
-      creditLimit !== '' ||
-      annualFee !== '' ||
+      creditLimit !== undefined ||
+      annualFee !== undefined ||
       isSecured !== false ||
       securedByAccountId !== '' ||
       parentAccountId !== '' ||
@@ -493,14 +496,15 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
       return
     }
     setOpen(false)
+    setShowCloseWarning(false)
   }
 
   const resetForm = () => {
     setName('')
     setAccountType('credit_card')
     setImageUrl('')
-    setCreditLimit('')
-    setAnnualFee('')
+    setCreditLimit(undefined)
+    setAnnualFee(undefined)
     setIsSecured(false)
     setSecuredByAccountId('')
     setParentAccountId('')
@@ -575,8 +579,8 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
       return
     }
 
-    const nextCreditLimit = isCreditCard ? parseOptionalNumber(creditLimit) : null
-    const nextAnnualFee = isCreditCard ? parseOptionalNumber(annualFee) : null
+    const nextCreditLimit = isCreditCard ? (creditLimit ?? null) : null
+    const nextAnnualFee = isCreditCard ? (annualFee ?? null) : null
     const cleanedLogoUrl = imageUrl.trim() || null
 
     const rateValue = parseOptionalNumber(rate) ?? 0
@@ -684,507 +688,423 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
                 </button>
               </div>
 
-              <form className="p-6 flex-1 overflow-y-auto" onSubmit={handleSubmit}>
-                <div className="mb-6 space-y-4">
-                  <label className="block text-sm font-medium text-slate-700">Account Type</label>
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setAccountType('credit_card')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${accountType === 'credit_card'
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                    >
-                      💳 Credit Card
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAccountType('bank')}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${accountType === 'bank'
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                    >
-                      🏦 Bank
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!['savings', 'investment', 'asset'].includes(accountType)) {
-                          setAccountType('savings')
-                        }
-                      }}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${['savings', 'investment', 'asset'].includes(accountType)
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                    >
-                      💰 Savings & Investment
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!['cash', 'ewallet', 'debt'].includes(accountType)) {
-                          setAccountType('cash')
-                        }
-                      }}
-                      className={`px-4 py-2 rounded-lg text-sm font-medium transition ${['cash', 'ewallet', 'debt'].includes(accountType)
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                        }`}
-                    >
-                      📦 Others
-                    </button>
-                  </div>
-
-                  {['savings', 'investment', 'asset'].includes(accountType) && (
-                    <div className="flex gap-2 pl-4 border-l-2 border-blue-200">
+              <form className="flex flex-col flex-1 min-h-0" onSubmit={handleSubmit}>
+                <div className="flex-1 overflow-y-auto p-6">
+                  <div className="mb-6 space-y-4">
+                    <label className="block text-sm font-medium text-slate-700">Account Type</label>
+                    <div className="flex gap-2 flex-wrap">
                       <button
                         type="button"
-                        onClick={() => setAccountType('savings')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'savings'
-                          ? 'bg-blue-100 text-blue-700 font-semibold'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        onClick={() => setAccountType('credit_card')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${accountType === 'credit_card'
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                           }`}
                       >
-                        Savings
+                        💳 Credit Card
                       </button>
                       <button
                         type="button"
-                        onClick={() => setAccountType('investment')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'investment'
-                          ? 'bg-blue-100 text-blue-700 font-semibold'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        onClick={() => setAccountType('bank')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${accountType === 'bank'
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                           }`}
                       >
-                        Investment
+                        🏦 Bank
                       </button>
                       <button
                         type="button"
-                        onClick={() => setAccountType('asset')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'asset'
-                          ? 'bg-blue-100 text-blue-700 font-semibold'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                        onClick={() => {
+                          if (!['savings', 'investment', 'asset'].includes(accountType)) {
+                            setAccountType('savings')
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${['savings', 'investment', 'asset'].includes(accountType)
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                           }`}
                       >
-                        Secured Asset
+                        💰 Savings & Investment
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!['cash', 'ewallet', 'debt'].includes(accountType)) {
+                            setAccountType('cash')
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${['cash', 'ewallet', 'debt'].includes(accountType)
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                          }`}
+                      >
+                        📦 Others
                       </button>
                     </div>
-                  )}
 
-                  {['cash', 'ewallet', 'debt'].includes(accountType) && (
-                    <div className="flex gap-2 pl-4 border-l-2 border-blue-200">
-                      <button
-                        type="button"
-                        onClick={() => setAccountType('cash')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'cash'
-                          ? 'bg-blue-100 text-blue-700 font-semibold'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                          }`}
-                      >
-                        Cash
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAccountType('ewallet')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'ewallet'
-                          ? 'bg-blue-100 text-blue-700 font-semibold'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                          }`}
-                      >
-                        E-wallet
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setAccountType('debt')}
-                        className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'debt'
-                          ? 'bg-blue-100 text-blue-700 font-semibold'
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
-                          }`}
-                      >
-                        Debt
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                  {/* Left Column */}
-                  <div className="space-y-5">
-                    <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Basic Information</h3>
-
-                    <div className="space-y-4">
-                      <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-600">Name</label>
-                        <input
-                          type="text"
-                          value={name}
-                          onChange={event => setName(event.target.value)}
-                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
-                          placeholder="e.g. Vpbank Lady"
-                        />
+                    {['savings', 'investment', 'asset'].includes(accountType) && (
+                      <div className="flex gap-2 pl-4 border-l-2 border-blue-200">
+                        <button
+                          type="button"
+                          onClick={() => setAccountType('savings')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'savings'
+                            ? 'bg-blue-100 text-blue-700 font-semibold'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                          Savings
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAccountType('investment')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'investment'
+                            ? 'bg-blue-100 text-blue-700 font-semibold'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                          Investment
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAccountType('asset')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'asset'
+                            ? 'bg-blue-100 text-blue-700 font-semibold'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                          Secured Asset
+                        </button>
                       </div>
+                    )}
 
-                      {isCreditCard && (
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <label className="text-sm font-medium text-slate-600">Parent Account (Shared Limit)</label>
-                            {suggestedParent && (
-                              <button
-                                type="button"
-                                onClick={() => setParentAccountId(suggestedParent.id)}
-                                className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium"
-                              >
-                                💡 Link to {suggestedParent.name}?
-                              </button>
-                            )}
-                          </div>
-                          <CustomDropdown
-                            options={[
-                              { value: '', label: 'None (Primary Card)' },
-                              ...parentCandidates.map(acc => ({ value: acc.id, label: acc.name }))
-                            ]}
-                            value={parentAccountId}
-                            onChange={setParentAccountId}
-                            className="w-full"
-                            placeholder="Select Primary Card"
-                          />
-                          {parentAccountId && (
-                            <p className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100">
-                              ℹ️ This card shares credit limit with parent
-                            </p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex gap-4">
-                      <div className="flex-1 space-y-1">
-                        <label className="text-sm font-medium text-slate-600">Account Logo URL</label>
-                        <input
-                          type="text"
-                          value={imageUrl}
-                          onChange={e => setImageUrl(e.target.value)}
-                          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
-                          placeholder="Paste image URL"
-                        />
+                    {['cash', 'ewallet', 'debt'].includes(accountType) && (
+                      <div className="flex gap-2 pl-4 border-l-2 border-blue-200">
+                        <button
+                          type="button"
+                          onClick={() => setAccountType('cash')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'cash'
+                            ? 'bg-blue-100 text-blue-700 font-semibold'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                          Cash
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAccountType('ewallet')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'ewallet'
+                            ? 'bg-blue-100 text-blue-700 font-semibold'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                          E-wallet
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAccountType('debt')}
+                          className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${accountType === 'debt'
+                            ? 'bg-blue-100 text-blue-700 font-semibold'
+                            : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                            }`}
+                        >
+                          Debt
+                        </button>
                       </div>
-                      {imageUrl && (
-                        <div className="shrink-0 self-end">
-                          <img src={imageUrl} alt="" className="h-auto max-h-[68px] w-auto max-w-[120px] object-contain" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Credit Limit - Show in Basic Info */}
-                    {isCreditCard && (
-                      <>
-                        {isSecured ? (
-                          /* When Secured ON: Show both Credit Limit and Annual Fee together */
-                          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
-                            <div className="space-y-4">
-                              <label className="text-sm font-medium text-slate-600 block">Credit Limit</label>
-                              <NumberInputWithSuggestions
-                                value={creditLimit}
-                                onChange={val => setCreditLimit(formatWithSeparators(val.replace(/,/g, '')))}
-                                onFocus={e => e.target.select()}
-                                className="w-full"
-                                placeholder="Ex: 50M"
-                                step={1000000}
-                                disabled={!!parentAccountId}
-                              />
-                              {parentAccountId && (
-                                <p className="text-[10px] text-amber-600 italic">Shared with parent</p>
-                              )}
-                            </div>
-                            <div className="space-y-4">
-                              <label className="text-sm font-medium text-slate-600 block">Annual Fee</label>
-                              <NumberInputWithSuggestions
-                                value={annualFee}
-                                onChange={val => setAnnualFee(formatWithSeparators(val.replace(/,/g, '')))}
-                                onFocus={e => e.target.select()}
-                                className="w-full"
-                                placeholder="Ex: 500k"
-                                step={100000}
-                              />
-                            </div>
-                          </div>
-                        ) : (
-                          /* When Secured OFF: Show only Credit Limit here */
-                          <div className="pt-4 border-t border-slate-100">
-                            <div className="space-y-4">
-                              <label className="text-sm font-medium text-slate-600 block">Credit Limit</label>
-                              <NumberInputWithSuggestions
-                                value={creditLimit}
-                                onChange={val => setCreditLimit(formatWithSeparators(val.replace(/,/g, '')))}
-                                onFocus={e => e.target.select()}
-                                className="w-full"
-                                placeholder="Ex: 50M"
-                                step={1000000}
-                                disabled={!!parentAccountId}
-                              />
-                              {parentAccountId && (
-                                <p className="text-[10px] text-amber-600 italic mt-1">Shared with parent</p>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </>
                     )}
                   </div>
 
-                  {/* Right Column */}
-                  <div className="space-y-5">
-                    {isCreditCard && (
-                      <div className="space-y-5">
-                        <div>
-                          <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2 mb-4">Sync Information</h3>
-                          <div className="space-y-1 col-span-2">
-                            <label className="text-sm font-medium text-slate-600">Bank Number</label>
-                            <input
-                              type="text"
-                              value={accountNumber}
-                              onChange={e => setAccountNumber(e.target.value)}
-                              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
-                              placeholder="Account number"
+                  <div className="flex flex-col">
+                    {/* Row 1: Top Grid (Identity & Sync) */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                      {/* Left Top: Basic Information */}
+                      <div className="flex flex-col space-y-6">
+                        <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Basic Information</h3>
+                        <div className="space-y-4">
+                          <div className="space-y-1.5 flex-1">
+                            <label className="text-sm font-medium text-slate-700">Account Name</label>
+                            <InputWithClear
+                              value={name}
+                              onChange={e => setName(e.target.value)}
+                              onClear={() => setName('')}
+                              placeholder="Enter account name"
+                              autoFocus
                             />
                           </div>
 
-                          {/* Annual Fee - Aligned with Parent Account/Credit Limit */}
-                          {isCreditCard && !isSecured && (
-                            <div className="space-y-4 col-span-2">
-                              <label className="text-sm font-medium text-slate-600 block">Annual Fee</label>
-                              <NumberInputWithSuggestions
-                                value={annualFee}
-                                onChange={val => setAnnualFee(formatWithSeparators(val.replace(/,/g, '')))}
-                                onFocus={e => e.target.select()}
+                          {isCreditCard && (
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <label className="text-sm font-medium text-slate-600">Parent Account (Shared Limit)</label>
+                                {suggestedParent && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setParentAccountId(suggestedParent.id)}
+                                    className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-medium"
+                                  >
+                                    💡 Link to {suggestedParent.name}?
+                                  </button>
+                                )}
+                              </div>
+                              <CustomDropdown
+                                options={[
+                                  { value: '', label: 'None (Primary Card)' },
+                                  ...parentCandidates.map(acc => ({ value: acc.id, label: acc.name }))
+                                ]}
+                                value={parentAccountId}
+                                onChange={setParentAccountId}
                                 className="w-full"
-                                placeholder="Ex: 500k"
-                                step={100000}
+                                placeholder="Select Primary Card"
                               />
+                              {parentAccountId && (
+                                <p className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-100">
+                                  ℹ️ This card shares credit limit with parent
+                                </p>
+                              )}
                             </div>
                           )}
+                        </div>
+                      </div>
 
-                          <div className="space-y-1 col-span-2">
-                            <label className="text-sm font-medium text-slate-600">Receiver Name</label>
-                            <div className="relative">
-                              <input
-                                type="text"
+                      {/* Right Top: Sync Information (Only if Credit Card) */}
+                      {isCreditCard && (
+                        <div className="flex flex-col space-y-6">
+                          <h3 className="text-sm font-semibold text-slate-700 border-b border-slate-200 pb-2">Sync Information</h3>
+                          <div className="space-y-4">
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium text-slate-600">Bank Number</label>
+                              <InputWithClear
+                                value={accountNumber}
+                                onChange={e => setAccountNumber(e.target.value)}
+                                onClear={() => setAccountNumber('')}
+                                placeholder="Account number"
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <label className="text-sm font-medium text-slate-600">Receiver Name</label>
+                              <InputWithClear
                                 value={receiverName}
                                 onChange={e => setReceiverName(e.target.value)}
-                                className="w-full rounded-md border border-slate-200 px-3 py-2 pr-8 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                                onClear={() => setReceiverName('')}
                                 placeholder="NGUYEN THANH NAM"
                               />
-                              {receiverName && (
-                                <button
-                                  type="button"
-                                  onClick={() => setReceiverName('')}
-                                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
-                              )}
                             </div>
                           </div>
                         </div>
+                      )}
+                    </div>
 
-                        <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4 h-full flex flex-col">
-                          <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-2">
-                            <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Collateral</label>
-                            {parentAccountId && (
-                              <div className="flex items-center gap-1.5">
-                                <label className="text-[10px] text-slate-500 font-medium whitespace-nowrap">Override?</label>
-                                <Switch
-                                  checked={overrideParentSecured}
-                                  onCheckedChange={(checked) => {
-                                    setOverrideParentSecured(checked);
-                                    if (checked) setIsSecured(true);
-                                  }}
-                                  className="scale-75 origin-right"
-                                />
-                              </div>
-                            )}
-                          </div>
+                    {/* Row 3: Financials (Limit & Collateral) - Only if Credit Card */}
+                    {isCreditCard && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mt-8 items-end">
+                        {/* Left Bottom: Limits & Fees */}
+                        <div className="flex flex-col space-y-5">
+                          <SmartAmountInput
+                            label="Credit Limit"
+                            value={creditLimit}
+                            onChange={setCreditLimit}
+                            placeholder="Ex: 50M"
+                            className="w-full"
+                            disabled={!!parentAccountId}
+                          />
+                          <SmartAmountInput
+                            label="Annual Fee"
+                            value={annualFee}
+                            onChange={setAnnualFee}
+                            placeholder="Ex: 500k"
+                            className="w-full"
+                          />
+                        </div>
 
-                          {/* Top Toggle for consistency */}
-                          <div className="flex items-center justify-between bg-white rounded-lg p-3 border border-slate-200 shadow-sm mb-4">
-                            <label className="text-sm font-medium text-slate-700">Secured Account?</label>
-                            <Switch
-                              checked={isSecured}
-                              disabled={!!parentAccountId && !overrideParentSecured}
-                              onCheckedChange={(checked) => {
-                                setIsSecured(checked)
-                                if (!checked) setSecuredByAccountId('')
-                              }}
-                              className="scale-90"
-                            />
-                          </div>
-
-                          {!isSecured ? (
-                            /* Centered badge when Secured is OFF */
-                            <div className="flex-1 flex flex-col items-center justify-center space-y-4 min-h-[120px]">
-                              <div className="flex items-center gap-2 px-5 py-2.5 bg-white rounded-full border border-slate-200 shadow-sm animate-in fade-in zoom-in duration-300">
-                                <span className="text-lg">🔓</span>
-                                <span className="text-sm font-medium text-slate-700">Unsecured Account</span>
-                              </div>
-                              <p className="text-xs text-center text-slate-500 italic max-w-[200px] leading-relaxed">
-                                This account is not backed by any collateral asset.
-                              </p>
+                        {/* Right Bottom: Collateral */}
+                        <div>
+                          <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-2">
+                              <label className="text-sm font-bold text-slate-700 uppercase tracking-wider">Collateral</label>
+                              {parentAccountId && (
+                                <div className="flex items-center gap-1.5">
+                                  <label className="text-[10px] text-slate-500 font-medium whitespace-nowrap">Override?</label>
+                                  <Switch
+                                    checked={overrideParentSecured}
+                                    onCheckedChange={(checked) => {
+                                      setOverrideParentSecured(checked);
+                                      if (checked) setIsSecured(true);
+                                    }}
+                                    className="scale-75 origin-right"
+                                  />
+                                </div>
+                              )}
                             </div>
-                          ) : (
-                            /* Dropdown when Secured is ON */
-                            <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
-                              <label className="text-xs font-semibold text-slate-500 uppercase tracking-wide ml-1">Secured By Asset</label>
+
+                            {/* Top Toggle for consistency */}
+                            <div className="flex items-center justify-between bg-white rounded-lg p-2 border border-slate-200 shadow-sm mb-2">
+                              <label className="text-sm font-medium text-slate-700">Secured Account?</label>
+                              <Switch
+                                checked={isSecured}
+                                disabled={!!parentAccountId && !overrideParentSecured}
+                                onCheckedChange={(checked) => {
+                                  setIsSecured(checked)
+                                  if (!checked) setSecuredByAccountId('')
+                                }}
+                                className="scale-90"
+                              />
+                            </div>
+
+                            {/* Unified Secured Account UI: Always show dropdown, disable if OFF */}
+                            <div className="flex flex-col justify-start gap-1.5 mt-2">
+                              <label className={`text-[10px] font-bold uppercase tracking-wider ml-1 transition-colors ${isSecured ? 'text-slate-500' : 'text-slate-400'}`}>
+                                Secured By Asset
+                              </label>
                               <CustomDropdown
                                 options={[
                                   { value: '', label: 'Select asset...' },
-                                  ...collateralOptions.map(option => ({ value: option.id, label: option.name }))
+                                  ...collateralOptions.map(option => ({
+                                    value: option.id,
+                                    label: option.name,
+                                    image_url: option.image_url || undefined
+                                  }))
                                 ]}
                                 value={securedByAccountId}
                                 onChange={setSecuredByAccountId}
-                                className="w-full bg-white shadow-sm"
-                                disabled={!!parentAccountId && !overrideParentSecured}
+                                className={`w-full shadow-sm transition-all h-[38px] ${isSecured ? 'bg-white' : 'bg-blue-50/50 opacity-70'}`}
+                                disabled={!isSecured || (!!parentAccountId && !overrideParentSecured)}
+                                placeholder={!isSecured ? "Enable toggle above" : "Select asset..."}
                               />
-                              <p className="text-[10px] text-slate-400 italic ml-1">
-                                Select the savings or investment account linking to this card.
-                              </p>
                             </div>
-                          )}
+                          </div>
                         </div>
                       </div>
                     )}
                   </div>
+
+                  {isCreditCard && (
+                    <div className="mt-8 pt-6 border-t border-slate-200">
+                      <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                          <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600 text-sm">💰</span>
+                            Cashback Policy
+                          </h3>
+                          <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-full border border-slate-100 shadow-inner">
+                            <span className="text-xs font-semibold text-slate-600">Advanced Levels?</span>
+                            <Switch
+                              checked={showAdvancedCashback}
+                              onCheckedChange={setShowAdvancedCashback}
+                              className="scale-90"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div className="space-y-6">
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Base Rate (%)</label>
+                              <input
+                                type="number"
+                                step="any"
+                                min="0"
+                                max="100"
+                                value={rate ? (parseFloat(rate) * 100).toString() : ''}
+                                onChange={event => {
+                                  const val = parseFloat(event.target.value)
+                                  setRate(isNaN(val) ? '0' : (val / 100).toString())
+                                }}
+                                onFocus={e => e.target.select()}
+                                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-white shadow-sm h-[42px]"
+                                placeholder="e.g. 10"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Max Budget</label>
+                                <NumberInputWithSuggestions
+                                  value={maxAmount}
+                                  onChange={setMaxAmount}
+                                  className="w-full h-[42px]"
+                                  placeholder="No Limit"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Min Spend</label>
+                                <NumberInputWithSuggestions
+                                  value={minSpend}
+                                  onChange={setMinSpend}
+                                  className="w-full h-[42px]"
+                                  placeholder="None"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-6">
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Cycle Type</label>
+                              <CustomDropdown
+                                options={[
+                                  { value: 'calendar_month', label: 'Calendar month' },
+                                  { value: 'statement_cycle', label: 'Statement cycle' }
+                                ]}
+                                value={cycleType ?? ''}
+                                onChange={(val) => setCycleType(val as CashbackCycleType)}
+                                className="w-full h-[42px]"
+                              />
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Statement Day</label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="31"
+                                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-white disabled:bg-slate-50 disabled:text-slate-400"
+                                  value={statementDay}
+                                  onChange={event => setStatementDay(event.target.value)}
+                                  disabled={cycleType !== 'statement_cycle'}
+                                  placeholder="Day"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Due Day</label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  max="31"
+                                  className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-white"
+                                  value={dueDate}
+                                  onChange={event => setDueDate(event.target.value)}
+                                  placeholder="Day"
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {showAdvancedCashback && (
+                          <div className="mt-8 pt-8 border-t border-slate-100">
+                            <CashbackLevelsList
+                              levels={levels}
+                              setLevels={setLevels}
+                              categoryOptions={categoryOptions}
+                              onAddCategory={() => setIsCategoryDialogOpen(true)}
+                              activeCategoryCallback={activeCategoryCallback}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {status && (
+                    <p className={`mt-4 text-sm ${status.variant === 'error' ? 'text-red-600' : 'text-green-600'}`}>
+                      {status.text}
+                    </p>
+                  )}
                 </div>
 
-                {isCreditCard && (
-                  <div className="mt-8 pt-6 border-t border-slate-200">
-                    <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                      <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-                        <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 text-amber-600 text-sm">💰</span>
-                          Cashback Policy
-                        </h3>
-                        <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-full border border-slate-100 shadow-inner">
-                          <span className="text-xs font-semibold text-slate-600">Advanced Levels?</span>
-                          <Switch
-                            checked={showAdvancedCashback}
-                            onCheckedChange={setShowAdvancedCashback}
-                            className="scale-90"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-6">
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Base Rate (%)</label>
-                            <input
-                              type="number"
-                              step="any"
-                              min="0"
-                              max="100"
-                              value={rate ? (parseFloat(rate) * 100).toString() : ''}
-                              onChange={event => {
-                                const val = parseFloat(event.target.value)
-                                setRate(isNaN(val) ? '0' : (val / 100).toString())
-                              }}
-                              onFocus={e => e.target.select()}
-                              className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-white shadow-sm h-[42px]"
-                              placeholder="e.g. 10"
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Max Budget</label>
-                              <NumberInputWithSuggestions
-                                value={maxAmount}
-                                onChange={setMaxAmount}
-                                className="w-full h-[42px]"
-                                placeholder="No Limit"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Min Spend</label>
-                              <NumberInputWithSuggestions
-                                value={minSpend}
-                                onChange={setMinSpend}
-                                className="w-full h-[42px]"
-                                placeholder="None"
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-6">
-                          <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Cycle Type</label>
-                            <CustomDropdown
-                              options={[
-                                { value: 'calendar_month', label: 'Calendar month' },
-                                { value: 'statement_cycle', label: 'Statement cycle' }
-                              ]}
-                              value={cycleType ?? ''}
-                              onChange={(val) => setCycleType(val as CashbackCycleType)}
-                              className="w-full h-[42px]"
-                            />
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-1.5">
-                              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Statement Day</label>
-                              <input
-                                type="number"
-                                min="1"
-                                max="31"
-                                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-white disabled:bg-slate-50 disabled:text-slate-400"
-                                value={statementDay}
-                                onChange={event => setStatementDay(event.target.value)}
-                                disabled={cycleType !== 'statement_cycle'}
-                                placeholder="Day"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Due Day</label>
-                              <input
-                                type="number"
-                                min="1"
-                                max="31"
-                                className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 bg-white"
-                                value={dueDate}
-                                onChange={event => setDueDate(event.target.value)}
-                                placeholder="Day"
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {showAdvancedCashback && (
-                        <div className="mt-8 pt-8 border-t border-slate-100">
-                          <CashbackLevelsList
-                            levels={levels}
-                            setLevels={setLevels}
-                            categoryOptions={categoryOptions}
-                            onAddCategory={() => setIsCategoryDialogOpen(true)}
-                            activeCategoryCallback={activeCategoryCallback}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {status && (
-                  <p className={`mt-4 text-sm ${status.variant === 'error' ? 'text-red-600' : 'text-green-600'}`}>
-                    {status.text}
-                  </p>
-                )}
-
-                <div className="mt-8 flex justify-end gap-3 border-t border-slate-200 pt-6">
+                <div className="p-6 border-t border-slate-200 bg-white flex justify-end gap-3 shrink-0">
                   <button
                     type="button"
                     className="rounded-md border border-slate-300 px-5 py-2.5 text-sm font-medium text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
@@ -1202,8 +1122,8 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
                   </button>
                 </div>
               </form>
-            </div>
-          </div>,
+            </div >
+          </div >,
           document.body
         )
       }

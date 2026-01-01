@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, InputHTMLAttributes } from 'react'
+import { formatShortVietnameseCurrency } from '@/lib/number-to-text'
 
 type NumberInputWithSuggestionsProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value'> & {
     value: string
@@ -44,15 +45,7 @@ export function NumberInputWithSuggestions({
     // Human readable label (e.g., 150 tr)
     const humanLabel = useMemo(() => {
         if (!numericValue || numericValue === 0) return null
-        if (numericValue >= 1000000) {
-            const millions = numericValue / 1000000
-            return `${millions.toLocaleString('en-US', { maximumFractionDigits: 2 })} tr`
-        }
-        if (numericValue >= 1000) {
-            const thousands = numericValue / 1000
-            return `${thousands.toLocaleString('en-US', { maximumFractionDigits: 2 })} k`
-        }
-        return null
+        return formatShortVietnameseCurrency(numericValue)
     }, [numericValue])
 
     // Generate suggestions
@@ -61,11 +54,21 @@ export function NumberInputWithSuggestions({
 
         const results: number[] = []
 
-        // Special logic: if value is small (< 10), assume millions if step is large
-        if (numericValue < 100 && step >= 1000000) {
-            results.push(numericValue * 1000000)
-            results.push(numericValue * 10000000)
-            results.push(numericValue * 100000000)
+        // Special logic: if value is small (< 10), provide a wider range of magnitude suggestions
+        if (numericValue < 100) {
+            // Suggest x1,000 (Thousands)
+            results.push(numericValue * 1000)
+            // Suggest x10,000 (Ten thousands)
+            results.push(numericValue * 10000)
+            // Suggest x100,000 (Hundred thousands)
+            results.push(numericValue * 100000)
+
+            // Should success step be considered? If step is 1M, we definitely want Millions
+            if (step >= 1000000) {
+                results.push(numericValue * 1000000)
+                results.push(numericValue * 10000000)
+                results.push(numericValue * 100000000)
+            }
         } else {
             // Standard multiplier logic
             for (let i = 0; i < maxSuggestions; i++) {
@@ -77,8 +80,15 @@ export function NumberInputWithSuggestions({
             }
         }
 
-        return [...new Set(results)].slice(0, maxSuggestions)
-    }, [numericValue, isFocused, step, maxSuggestions])
+        // Filter out the raw numericValue if it's already in the suggestions
+        // Also ensure we don't return 0
+        const filteredResults = results.filter(s => s !== numericValue && s > 0)
+
+        // If no suggestions, maybe user wants something?
+        // But usually we just return empty.
+
+        return [...new Set(filteredResults)].slice(0, 5) // Increase limit to 5
+    }, [numericValue, isFocused, step])
 
     const formatNumber = (num: number) => {
         return num.toLocaleString('en-US')
@@ -126,7 +136,7 @@ export function NumberInputWithSuggestions({
                 }}
                 placeholder={placeholder}
                 className={`
-          w-full px-3 py-2 text-sm
+          w-full px-3 py-2 text-sm pr-24
           bg-white border border-slate-200 rounded-md
           shadow-sm
           transition-all duration-200
@@ -140,7 +150,7 @@ export function NumberInputWithSuggestions({
 
             {/* Human readable label */}
             {humanLabel && (
-                <div className="absolute right-3 top-[-18px] text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 rounded-sm border border-blue-100 animate-in fade-in slide-in-from-bottom-1">
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-sm border border-blue-100 animate-in fade-in zoom-in-50 pointer-events-none">
                     {humanLabel}
                 </div>
             )}

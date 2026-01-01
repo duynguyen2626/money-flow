@@ -58,3 +58,27 @@ export function formatVietnameseCurrencyText(amount: number): { value: string; u
 
     return parts;
 }
+
+export function formatShortVietnameseCurrency(amount: number): string {
+    if (!amount) return ''
+
+    const absAmount = Math.abs(amount)
+    if (absAmount >= 1_000_000_000) {
+        const billion = Math.floor(absAmount / 1_000_000_000)
+        const remainder = absAmount % 1_000_000_000
+        const million = Math.floor(remainder / 1_000_000)
+        return `${billion} tỷ${million > 0 ? ` ${million} triệu` : ''}`
+    }
+    if (absAmount >= 1_000_000) {
+        const million = Math.floor(absAmount / 1_000_000)
+        const remainder = absAmount % 1_000_000
+        const thousand = Math.floor(remainder / 1_000)
+        return `${million} triệu${thousand > 0 ? ` ${thousand} ngàn` : ''}`
+    }
+    if (absAmount >= 1_000) {
+        const thousand = Math.floor(absAmount / 1_000)
+        const remainder = absAmount % 1_000
+        return `${thousand} ngàn${remainder > 0 ? ` ${remainder}` : ''}`
+    }
+    return absAmount.toString()
+}
