@@ -104,7 +104,7 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
     useEffect(() => {
         async function fetchBanks() {
             try {
-                const response = await fetch('/api/banks')
+                const response = await fetch(`/api/banks?bank_type=${bankType}`)
                 if (response.ok) {
                     const data = await response.json()
                     setBankMappings(data)
@@ -114,7 +114,7 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
             }
         }
         fetchBanks()
-    }, [])
+    }, [bankType])
 
     const bankCode = form.watch('bank_code')
     const bankName = form.watch('bank_name')
@@ -124,25 +124,30 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
 
     const allAccountItems = [
         { value: 'none', label: 'None', description: 'Manual entry' },
-        ...accounts.map((a: any) => ({
-            value: a.id,
-            label: a.name,
-            description: a.account_number || 'No account number',
-            icon: a.image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={a.image_url} alt="" className="h-6 w-6 rounded-none object-contain" />
-            ) : (
-                <div className="flex h-6 w-6 items-center justify-center rounded-none bg-slate-200 text-[10px] font-semibold text-slate-700">
-                    {a.name?.[0]?.toUpperCase() ?? '?'}
-                </div>
-            ),
-        }))
+        ...accounts
+            .filter((a: any) => a.type !== 'debt' && a.type !== 'loan' && a.type !== 'savings') // Exclude Debt/Loan/Savings accounts
+            .map((a: any) => ({
+                value: a.id,
+                label: a.name,
+                description: a.account_number || 'No account number',
+                icon: a.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={a.image_url} alt="" className="h-6 w-6 rounded-none object-contain" />
+                ) : (
+                    <div className="flex h-6 w-6 items-center justify-center rounded-none bg-slate-200 text-[10px] font-semibold text-slate-700">
+                        {a.name?.[0]?.toUpperCase() ?? '?'}
+                    </div>
+                ),
+            }))
     ]
 
     const filteredAccountItems = [
         { value: 'none', label: 'None', description: 'Manual entry' },
         ...accounts
             .filter((a: any) => {
+                // exclude invalid types
+                if (a.type === 'debt' || a.type === 'loan' || a.type === 'savings') return false
+
                 if (!bankName && !bankCode) return true
 
                 const searchTerms = new Set<string>()
@@ -185,22 +190,52 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
             description: acc.receiverName || acc.name,
         }))
 
-    // Auto-fill card name from target account (take everything after the first token)
+    // Auto-fill Signature (Card Name) based on Bank Short Code + Date OR Target Account
+    // Format: {AccountName} {Month}{Year} OR {ShortCode} {Month}{Year}
     useEffect(() => {
-        if (!targetAccountId || targetAccountId === 'none') {
-            form.setValue('card_name', '')
-            return
+        // If target account is selected, priorize its name
+        if (targetAccountId && targetAccountId !== 'none') {
+            const target = accounts.find(a => a.id === targetAccountId)
+            if (target) {
+                const date = new Date()
+                const month = date.toLocaleString('en-US', { month: 'short' })
+                const year = date.getFullYear().toString().slice(-2)
+
+                // Card Name = Account Name (e.g., Vcb Signature)
+                const cardName = target.name
+                form.setValue('card_name', cardName)
+
+                // Note = Card Name + Date (e.g., Vcb Signature Jan26)
+                const note = `${cardName} ${month}${year}`
+                form.setValue('note', note)
+                return
+            }
         }
-        const target = accounts.find(a => a.id === targetAccountId)
-        if (!target?.name) return
 
-        const parts = target.name.split(/[\s-]+/).filter(Boolean)
-        // If it's a single word like "Cash", don't infer card name, or just use it.
-        // User example: "Vietcombank Diamond World" -> "Diamond World"
-        const inferredCardName = parts.length > 1 ? parts.slice(1).join(' ').trim() : ''
+        // Fallback to Bank Short Code if no account selected
+        let shortCode = ''
 
-        form.setValue('card_name', inferredCardName)
-    }, [accounts, form, targetAccountId])
+        if (bankCode) {
+            const mapping = bankMappings.find(b => b.bank_code === bankCode)
+            shortCode = mapping?.short_name || bankCode
+        } else if (bankName) {
+            const mapping = bankMappings.find(b => b.bank_name === bankName || b.short_name === bankName)
+            shortCode = mapping?.short_name || bankName
+        }
+
+        if (shortCode) {
+            const date = new Date()
+            const month = date.toLocaleString('en-US', { month: 'short' })
+            const year = date.getFullYear().toString().slice(-2)
+            const signature = `${shortCode} ${month}${year}`
+
+            // Only set if different to avoid infinite loops
+            if (form.getValues('card_name') !== signature) {
+                form.setValue('card_name', signature)
+                form.setValue('note', signature)
+            }
+        }
+    }, [bankCode, bankName, bankMappings, form, targetAccountId, accounts])
 
     // Auto-fill bank name when bank code is selected
     useEffect(() => {
@@ -219,7 +254,9 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
         }
         const target = accounts.find(a => a.id === targetAccountId)
         if (target) {
-            form.setValue('receiver_name', target.receiver_name || target.name || '')
+            if (target.receiver_name) {
+                form.setValue('receiver_name', target.receiver_name)
+            }
             if (target.account_number) {
                 form.setValue('bank_number', target.account_number)
             }
@@ -234,35 +271,6 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
             form.setValue('receiver_name', managed.receiverName || managed.name)
         }
     }, [bankNumber, managedAccounts, form])
-
-    // Smart Note Logic
-    useEffect(() => {
-        const fullBankMapping = bankMappings.find(b => b.bank_code === bankCode || b.short_name === bankName)
-        const bankPart = fullBankMapping ? fullBankMapping.short_name : (bankName ? bankName.split('-')[0].trim() : '')
-
-        const batchParts = batchName.split(' ')
-        const tag = batchParts.length > 1 ? batchParts[batchParts.length - 1] : ''
-
-        let noteValue = bankPart
-        if (cardName && cardName.trim()) {
-            noteValue += ` ${cardName.trim()}`
-        }
-
-        const managed = managedAccounts.find(acc => acc.bankNumber === bankNumber)
-        const receiver = managed?.receiverName || managed?.name || form.getValues('receiver_name')
-
-        if (receiver) {
-            noteValue = noteValue ? `${noteValue} ${receiver}` : receiver
-        }
-
-        if (tag && !noteValue.includes(tag)) {
-            noteValue += ` ${tag}`
-        }
-
-        if (noteValue.trim()) {
-            form.setValue('note', noteValue.trim())
-        }
-    }, [bankName, bankCode, cardName, batchName, form, managedAccounts, bankNumber, bankMappings])
 
     async function onSubmit(values: FormValues) {
         try {
@@ -308,7 +316,9 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
             bank_number: values.bank_number,
             card_name: values.card_name,
         })
-        setOpen(false)
+
+        toast.success('Item added successfully')
+
         form.reset({
             receiver_name: '',
             target_account_id: 'none',
@@ -319,7 +329,8 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
             bank_number: '',
             card_name: '',
         })
-        toast.success('Item added successfully')
+
+        setOpen(false)
     }
 
     const formatCurrency = (value: number) => {
@@ -343,67 +354,7 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
                     </DialogHeader>
                     <Form {...form}>
                         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                            <div className="rounded-xl bg-slate-50 p-4 border border-slate-200 space-y-4 shadow-sm">
-                                <FormField
-                                    control={form.control}
-                                    name="target_account_id"
-                                    render={({ field }) => (
-                                        <FormItem>
-                                            <div className="flex items-center justify-between">
-                                                <FormLabel className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                                    1. Target Internal Account
-                                                </FormLabel>
-                                                <div className="flex items-center gap-2">
-                                                    {field.value && field.value !== 'none' && (
-                                                        <EditAccountDialog
-                                                            account={accounts.find(a => a.id === field.value)}
-                                                            triggerContent={
-                                                                <span className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer">
-                                                                    <Edit className="h-3 w-3" /> Edit Info
-                                                                </span>
-                                                            }
-                                                        />
-                                                    )}
-                                                    <CreateAccountDialog
-                                                        trigger={
-                                                            <span className="text-[10px] text-green-600 hover:underline flex items-center gap-0.5 cursor-pointer">
-                                                                <Plus className="h-3 w-3" /> New Account
-                                                            </span>
-                                                        }
-                                                    />
-                                                </div>
-                                            </div>
-                                            <FormControl>
-                                                <Combobox
-                                                    items={accountTab === 'filtered' ? filteredAccountItems : allAccountItems}
-                                                    tabs={[
-                                                        { value: 'filtered', label: `Filtered (${filteredAccountItems.length - 1})`, active: accountTab === 'filtered', onClick: () => setAccountTab('filtered') },
-                                                        { value: 'all', label: `All (${allAccountItems.length - 1})`, active: accountTab === 'all', onClick: () => setAccountTab('all') }
-                                                    ]}
-                                                    value={field.value || 'none'}
-                                                    onValueChange={(val) => field.onChange(val ?? 'none')}
-                                                    placeholder="Select internal account to pull info"
-                                                    inputPlaceholder="Search accounts..."
-                                                    emptyState="No account found"
-                                                    className="bg-white border-blue-100 ring-2 ring-blue-50/50"
-                                                />
-                                            </FormControl>
-                                            <FormMessage />
-                                        </FormItem>
-                                    )}
-                                />
-
-                                {(!targetAccountId || targetAccountId === 'none') && (
-                                    <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 p-2 rounded-lg">
-                                        <Info className="h-4 w-4 text-blue-500 shrink-0" />
-                                        <p className="text-[10px] text-blue-700">
-                                            Tip: Select a Target Account above to auto-fill Bank Number and Receiver Name.
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4">
+                            <div className="grid grid-cols-2 gap-4 border-b border-slate-100 pb-4">
                                 {bankType === 'VIB' ? (
                                     <>
                                         <FormField
@@ -483,9 +434,9 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
                                                                 })
                                                                 .map(b => ({
                                                                     value: b.short_name,
-                                                                    label: b.short_name,
+                                                                    label: `${b.short_name} (${b.bank_code})`,
                                                                     description: b.bank_name,
-                                                                    searchValue: `${b.short_name} ${b.bank_name}`
+                                                                    searchValue: `${b.short_name} ${b.bank_name} ${b.bank_code}`
                                                                 }))
                                                         })()}
                                                         value={field.value}
@@ -506,6 +457,66 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
                                             </FormItem>
                                         )}
                                     />
+                                )}
+                            </div>
+
+                            <div className="rounded-xl bg-slate-50 p-4 border border-slate-200 space-y-4 shadow-sm">
+                                <FormField
+                                    control={form.control}
+                                    name="target_account_id"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <div className="flex items-center justify-between">
+                                                <FormLabel className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                                    Target Internal Account
+                                                </FormLabel>
+                                                <div className="flex items-center gap-2">
+                                                    {field.value && field.value !== 'none' && (
+                                                        <EditAccountDialog
+                                                            account={accounts.find(a => a.id === field.value)}
+                                                            triggerContent={
+                                                                <span className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5 cursor-pointer">
+                                                                    <Edit className="h-3 w-3" /> Edit Info
+                                                                </span>
+                                                            }
+                                                        />
+                                                    )}
+                                                    <CreateAccountDialog
+                                                        trigger={
+                                                            <span className="text-[10px] text-green-600 hover:underline flex items-center gap-0.5 cursor-pointer">
+                                                                <Plus className="h-3 w-3" /> New Account
+                                                            </span>
+                                                        }
+                                                    />
+                                                </div>
+                                            </div>
+                                            <FormControl>
+                                                <Combobox
+                                                    items={accountTab === 'filtered' ? filteredAccountItems : allAccountItems}
+                                                    tabs={[
+                                                        { value: 'filtered', label: `Filtered (${filteredAccountItems.length - 1})`, active: accountTab === 'filtered', onClick: () => setAccountTab('filtered') },
+                                                        { value: 'all', label: `All (${allAccountItems.length - 1})`, active: accountTab === 'all', onClick: () => setAccountTab('all') }
+                                                    ]}
+                                                    value={field.value || 'none'}
+                                                    onValueChange={(val) => field.onChange(val ?? 'none')}
+                                                    placeholder="Select internal account to pull info"
+                                                    inputPlaceholder="Search accounts..."
+                                                    emptyState="No account found"
+                                                    className="bg-white border-blue-100 ring-2 ring-blue-50/50"
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+
+                                {(!targetAccountId || targetAccountId === 'none') && (
+                                    <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 p-2 rounded-lg">
+                                        <Info className="h-4 w-4 text-blue-500 shrink-0" />
+                                        <p className="text-[10px] text-blue-700">
+                                            Tip: Select a Target Account above to auto-fill Bank Number and Receiver Name.
+                                        </p>
+                                    </div>
                                 )}
                             </div>
                             <div className="grid grid-cols-2 gap-4">

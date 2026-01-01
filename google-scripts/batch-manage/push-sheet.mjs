@@ -196,27 +196,44 @@ const main = async () => {
         scriptId = selected?.profile?.value ?? ''
     }
 
-    if (!scriptId && profiles.length) {
-        const selection = await chooseProfile(profiles)
-        if (selection && typeof selection === 'object' && selection.profile) {
-            selected = selection
-            scriptId = selection.profile.value
-        } else if (typeof selection === 'string') {
-            scriptId = selection
+    // If a specific script ID was identified (via args, env, or lifecycle), push to it.
+    if (scriptId) {
+        await pushToScript(scriptId, profiles, forceFlag, selected)
+    } else {
+        // Otherwise, if no specific ID provided, push to ALL profiles
+        if (profiles.length === 0) {
+            console.error('No profiles (script IDs) found in .env matching prefix. Aborting.')
+            process.exit(1)
+        }
+
+        console.log(`\nNo specific ID provided. Pushing to ALL ${profiles.length} detected profiles...\n`)
+
+        let errorCount = 0
+        for (const profile of profiles) {
+            const result = await pushToScript(profile.value, profiles, forceFlag, { profile })
+            if (result.status !== 0) errorCount++
+            console.log('---')
+        }
+
+        if (errorCount > 0) {
+            console.error(`\nCompleted with ${errorCount} errors.`)
+            process.exit(1)
+        } else {
+            console.log('\nAll pushes completed successfully.')
+            process.exit(0)
         }
     }
+}
 
-    if (!scriptId) {
-        scriptId = await ask('Enter Apps Script ID to push to: ')
-    }
-    if (!scriptId) {
-        console.error('Missing script ID. Aborting.')
-        process.exit(1)
-    }
-
+async function pushToScript(scriptId, profiles, forceFlag, selected) {
     if (selected?.profile?.key) {
         const indexLabel = selected.index ? `${selected.index}) ` : ''
-        console.log(`Selected: ${indexLabel}${selected.profile.key}`)
+        console.log(`Target: ${indexLabel}${selected.profile.key} (${scriptId})`)
+    } else {
+        // Try to find profile for nice logging
+        const p = profiles.find(x => x.value === scriptId)
+        if (p) console.log(`Target: ${p.key} (${scriptId})`)
+        else console.log(`Target: ${scriptId}`)
     }
 
     const raw = existsSync(claspPath) ? readFileSync(claspPath, 'utf8') : '{}'
@@ -232,13 +249,10 @@ const main = async () => {
         stdio: 'inherit',
     })
 
-    if (selected?.profile?.key) {
-        const indexLabel = selected.index ? `${selected.index}) ` : ''
-        const statusLabel = result.status === 0 ? 'PUSHED' : 'PUSH FAILED'
-        console.log(`${indexLabel}${selected.profile.key} ${statusLabel}`)
-    }
+    const statusLabel = result.status === 0 ? 'SUCCESS' : 'FAILED'
+    console.log(`Result: ${statusLabel}`)
 
-    process.exit(result.status ?? 0)
+    return result
 }
 
 main()

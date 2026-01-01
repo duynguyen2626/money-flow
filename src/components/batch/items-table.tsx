@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
     Table,
     TableBody,
@@ -26,36 +26,40 @@ interface ItemsTableProps {
     batchId: string
     onSelectionChange?: (selectedIds: string[]) => void
     activeInstallmentAccounts?: string[]
-    bankType?: 'VIB' | 'MBB'
+    bankType?: 'VIB' | 'MBB',
+    accounts: any[],
+    bankMappings?: any[]
 }
 
-export function ItemsTable({ items: initialItems, batchId, onSelectionChange, activeInstallmentAccounts = [], bankType = 'VIB' }: ItemsTableProps) {
+export function ItemsTable({ items: initialItems, batchId, onSelectionChange, activeInstallmentAccounts = [], bankType = 'VIB', accounts, bankMappings = [] }: ItemsTableProps) {
     // Sort items: Nearest Due Date -> Created At (desc)
-    const items = [...initialItems].sort((a, b) => {
-        const getDaysUntilDue = (item: any) => {
-            if (!item.target_account?.cashback_config) return 999
-            const config = parseCashbackConfig(item.target_account.cashback_config)
-            if (!config.dueDate) return 999
+    const items = useMemo(() => {
+        return [...initialItems].sort((a, b) => {
+            const getDaysUntilDue = (item: any) => {
+                if (!item.target_account?.cashback_config) return 999
+                const config = parseCashbackConfig(item.target_account.cashback_config)
+                if (!config.dueDate) return 999
 
-            const today = new Date()
-            const currentDay = today.getDate()
-            const dueDay = config.dueDate
+                const today = new Date()
+                const currentDay = today.getDate()
+                const dueDay = config.dueDate
 
-            let daysDiff = dueDay - currentDay
-            if (daysDiff < 0) {
-                // Due date has passed this month, so it's next month
-                // Approximate days in month as 30 for sorting
-                daysDiff += 30
+                let daysDiff = dueDay - currentDay
+                if (daysDiff < 0) {
+                    // Due date has passed this month, so it's next month
+                    // Approximate days in month as 30 for sorting
+                    daysDiff += 30
+                }
+                return daysDiff
             }
-            return daysDiff
-        }
 
-        const dueA = getDaysUntilDue(a)
-        const dueB = getDaysUntilDue(b)
+            const dueA = getDaysUntilDue(a)
+            const dueB = getDaysUntilDue(b)
 
-        if (dueA !== dueB) return dueA - dueB
-        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    })
+            if (dueA !== dueB) return dueA - dueB
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        })
+    }, [initialItems])
 
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [showConfirm, setShowConfirm] = useState(false)
@@ -321,7 +325,12 @@ export function ItemsTable({ items: initialItems, batchId, onSelectionChange, ac
                             </TableCell>
                             <TableCell>
                                 <div className="flex items-center gap-1">
-                                    <EditItemDialog item={item} />
+                                    <EditItemDialog
+                                        item={item}
+                                        accounts={accounts}
+                                        bankMappings={bankMappings}
+                                        bankType={bankType}
+                                    />
                                     {item.status !== 'confirmed' && (
                                         <>
                                             <Button

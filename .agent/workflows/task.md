@@ -1,104 +1,92 @@
 ---
-description: Sprint 1.2: Deep Debug Limit Field & Layout Alignment
+description: Canvas Sprint 2.1
 ---
 
-Sprint 1.2: Deep Debug Limit Field & Layout Alignment
+Sprint 2.1: Fix Layout & GAS Logic
 
-Context: The Limit field in Account Dialogs is behaving erratically (missing suggestions, aggressive auto-formatting like 44 -> 44,000) compared to the Amount field in "Add Transaction". Additionally, visual alignment between the "Collateral" card and the "Limit/Fee" fields is mismatched.
+Context: Feedback from Sprint 2 testing indicates persistent UI layout issues in /people, filtering logic errors in /batch modals, and a critical ReferenceError in the Google Apps Script backend.
 
-Role: Senior Frontend Engineer (Debugging & UI Specialist).
+Role: Full-stack Engineer (Frontend UI + Google Apps Script).
 
 Target Files:
 
-src/components/moneyflow/create-account-dialog.tsx (Fix Target)
+UI (People): src/components/people/person-card.tsx.
 
-src/components/moneyflow/transaction-form.tsx (Reference: Check how amount is handled here)
+UI (Batch): src/components/batch/add-item-dialog.tsx (Logic for filtering accounts).
 
-src/components/ui/smart-amount-input.tsx (Reference: Understand props like enableSuggestions, multiplier)
+Backend (GAS): google-scripts/Code.js (Fix bankType error).
 
-src/components/moneyflow/account-form-fields.tsx (If exists)
-
-0. Workflow & Branching
+0. Workflow
 
 Step 1: Branch Strategy
 
-ACTION: Initialize/Switch to branch:
+ACTION: Continue on current branch or check out:
 
-git checkout sprint-1/account-dialog-ui-ux-polish || git checkout -b sprint-1/account-dialog-ui-ux-polish
+git checkout sprint-2/people-batch-enhancements
 
 
-Step 2: Simulation Checklist (Run after each fix)
+Step 2: Validation
 
-Lint: npm run lint
+Frontend: npm run build.
 
-Build: npm run build
-
-Manual Check: Does typing "44" result in "44" or "44,000"? It MUST be "44" until user selects a suggestion.
+GAS: Review code logic (cannot run locally, rely on static analysis).
 
 Task Breakdown & Engineering Prompt
 
-1. 🛑 DEEP RESEARCH: Compare "Limit" vs "Transaction Amount"
+A. 🎨 People Card Layout Fix (Strict)
 
-Hypothesis: The Limit field implementation in CreateAccountDialog is missing specific props that TransactionForm uses, or SmartAmountInput has a default behavior that needs overriding.
-
-Action:
-
-Read src/components/moneyflow/transaction-form.tsx: Locate the <FormField name="amount" ... />. Note down exactly what component is used (SmartAmountInput? Input?) and ALL props passed to it.
-
-Read src/components/ui/smart-amount-input.tsx: Look for logic related to onChange and value parsing. Does it multiply by 1000 automatically if a certain prop is missing?
-
-Compare: Check src/components/moneyflow/create-account-dialog.tsx. Are we using the same component? Are we missing a suggestions prop or a currency config?
-
-2. 🐛 DEBUG & FIX: Limit Field Logic
-
-Issue:
-
-Typing "44" might be auto-converting to "44,000" immediately (Undesired).
-
-Dropdown suggestions (e.g., "44 k = 44,000", "44 m = 44,000,000") are NOT appearing.
+Issue: The "Subscription" (Youtube, iCloud) and "Script Connected" sections are still causing layout breakages or appearing inside scrollable areas where they shouldn't.
 
 Fix:
 
-Component: Ensure Limit uses the exact same component setup as TransactionForm.
+No Scroll: The Person Card content must fit naturally. Remove any internal overflow-y-auto that traps these small badges.
 
-Props: explicitly pass props to enable suggestions if they are opt-in.
+Icon-Only Mode: Force the Subscription indicators to be Icon Only (e.g., just the Youtube/Cloud SVG), removing the text labels to save width/height.
 
-Z-Index/Overflow: If suggestions are technically "there" but not visible, check if the Dialog content has overflow-hidden or if the suggestion popover's z-index is too low.
+Wrap & Flex: Ensure the container uses flex-wrap so items flow correctly without pushing boundaries.
 
-Goal: User types "44" -> Input shows "44". Suggestion box appears below showing "44k (44,000)". User selects suggestion -> Input updates.
+B. 🔍 Batch Modal Filtering Logic
 
-3. 📐 UI POLISH: Align "Limit/Fee" Bottom with "Collateral" Bottom
+1. Modal "Bank Name" Filter (Context Awareness):
 
-Issue: The visual bottom edge of the "Collateral" card (gray border) does not align with the bottom edge of the "Fee" input field next to it.
+Issue: When adding an item to an MBB Batch, the "Bank Name" dropdown/filter is showing VIB data (or mixing banks).
+
+Fix: In add-item-dialog.tsx, ensure the form is aware of the current Batch's context (e.g., batchId or bankId).
+
+Logic: If the modal is opened from an MBB Batch, strictly filter or pre-select options relevant to MBB only (if the field represents the Source). Note: If it represents the destination bank for a transfer, all banks should be allowed, but clarify the user's report regarding "lọc của cả vib". Assumption: User implies the Source Account selection or Mapping suggestions are leaking data. Inspect the accounts or mappings query hook.
+
+2. Target Internal Account Filtering:
+
+Issue: The "Target Account" dropdown includes irrelevant account types (e.g., Debt, System, or placeholder types).
+
+Fix: Filter the accounts list in the dropdown.
+
+Rule: account.type MUST be one of ['Asset', 'Liability', 'Cash', 'Wallet', 'Bank'] (or equivalent valid types). Exclude Debt, Unknown, or other non-transferable types.
+
+C. 🔥 CRITICAL: Fix Google Apps Script (bankType Error)
+
+Issue: API logs show: ReferenceError: bankType is not defined at doPost (Code:32:32).
+
+Analysis: The doPost function in google-scripts/Code.js is trying to access a variable named bankType that hasn't been declared or extracted from the request payload.
 
 Fix:
 
-Container Strategy:
+Read google-scripts/Code.js.
 
-The "Limit" and "Fee" fields are likely stacked vertically in one column, while "Collateral" is in the other column.
+Locate doPost(e).
 
-Apply flex flex-col h-full to the container of "Limit" and "Fee".
+Define bankType: It is likely meant to be extracted from the JSON payload:
 
-Use justify-between (or calculation) to push "Limit" to the top and "Fee" to the bottom.
+var data = JSON.parse(e.postData.contents);
+var bankType = data.bankType || data.type; // Check payload structure
 
-CRITICAL: Ensure the "Collateral" column and the "Fields" column have the same height. You might need items-stretch on the parent Grid/Flex row.
 
-Visual Check: The gray border bottom of "Collateral" == The border bottom of "Fee" input.
-
-4. 🧹 UX CLEANUP: Receiver Name & Input Clearing
-
-Refinement:
-
-Ensure "Receiver Name" input has the X clear button (as requested in Sprint 1.1).
-
-Verify the data is pre-filled (value={...}) correctly.
+Correction: Ensure bankType is defined before it is used in logic switches.
 
 Execution Plan:
 
-Research: Read Reference files FIRST.
+GAS Fix: Open google-scripts/Code.js and fix the ReferenceError first. This is a blocker.
 
-Logic Fix: Fix Limit field behavior (Suggestions + No auto-multiply).
+UI (People): Modify person-card.tsx to be icon-only and remove scrollbars.
 
-Layout Fix: Align the bottoms of the two columns.
-
-Verify: Run lint/build.
+UI (Batch): Update add-item-dialog.tsx to filter Target Accounts and restrict Bank Name context.

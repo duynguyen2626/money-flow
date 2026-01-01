@@ -141,9 +141,9 @@ function PersonCardComponent({
                         </div>
 
                         {/* Name + Owner Badge */}
-                        <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0 flex flex-col justify-between h-full py-0.5">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-base font-bold text-slate-900 truncate" title={person.name}>
+                                <span className="text-base font-bold text-slate-900 truncate block max-w-full" title={person.name}>
                                     {person.name}
                                 </span>
                                 {person.is_owner && (
@@ -151,52 +151,38 @@ function PersonCardComponent({
                                 )}
                             </div>
 
-                            {/* Service Badges in Header - Right aligned/Vertical */}
-                            <div className="mt-1 flex flex-col items-end gap-1.5">
-                                {services.map(service => (
-                                    <div key={service.id} className="inline-flex items-center gap-1 bg-white/80 border border-slate-200 rounded px-1.5 py-0.5 text-xs shadow-sm" title={service.name}>
-                                        {service.image_url ? (
-                                            // eslint-disable-next-line @next/next/no-img-element
-                                            <img src={service.image_url} alt="" className="h-3.5 w-3.5 object-cover rounded-sm" />
-                                        ) : (
-                                            <span className="text-[8px] font-bold text-slate-500 bg-slate-100 px-0.5 rounded">{service.name.substring(0, 1)}</span>
-                                        )}
-                                        <span className="font-medium text-slate-700 whitespace-nowrap">{service.name}: {service.slots}</span>
-                                    </div>
-                                ))}
-                            </div>
+                            {/* Service Badges - Horizontal Icons - No Text */}
+                            {services.length > 0 && (
+                                <div className="flex items-center gap-1 flex-wrap mt-1 overflow-hidden max-w-full">
+                                    {services.map(service => (
+                                        <CustomTooltip key={service.id} content={`${service.name}: ${service.slots} slot(s)`}>
+                                            <div className="relative group/service cursor-help shrink-0">
+                                                {service.image_url ? (
+                                                    // eslint-disable-next-line @next/next/no-img-element
+                                                    <img
+                                                        src={service.image_url}
+                                                        alt={service.name}
+                                                        className="h-5 w-5 rounded-full object-cover border border-white shadow-sm ring-1 ring-slate-100"
+                                                    />
+                                                ) : (
+                                                    <div className="h-5 w-5 rounded-full bg-slate-100 border border-white ring-1 ring-slate-100 flex items-center justify-center shadow-sm">
+                                                        <span className="text-[9px] font-bold text-slate-500 uppercase">
+                                                            {service.name.substring(0, 1)}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                {/* Slot count badge */}
+                                                {service.slots > 1 && (
+                                                    <span className="absolute -top-1 -right-1 flex h-2.5 min-w-[10px] items-center justify-center rounded-full bg-slate-600 px-[2px] text-[7px] font-bold text-white ring-1 ring-white">
+                                                        {service.slots}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </CustomTooltip>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                    </div>
-
-                    {/* HOVER OVERLAY - Smaller Buttons */}
-                    <div
-                        className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity z-10 rounded-lg"
-                        onClick={stopPropagation}
-                    >
-                        {/* Edit */}
-                        <button
-                            onClick={(e) => { e.stopPropagation(); setShowEditDialog(true) }}
-                            className="p-2 rounded-full bg-white text-slate-600 hover:bg-slate-100 shadow-lg transition-all hover:scale-110"
-                            title="Edit"
-                        >
-                            <Pencil className="h-4 w-4" />
-                        </button>
-                        {/* Lend */}
-                        <AddTransactionDialog
-                            {...dialogBaseProps}
-                            defaultType="debt"
-                            defaultPersonId={person.id}
-                            buttonClassName="p-2 rounded-full bg-white text-rose-600 hover:bg-rose-50 shadow-lg transition-all hover:scale-110"
-                            triggerContent={<ArrowUpRight className="h-4 w-4" />}
-                        />
-                        {/* Repay */}
-                        <AddTransactionDialog
-                            {...dialogBaseProps}
-                            defaultType="repayment"
-                            defaultPersonId={person.id}
-                            buttonClassName="p-2 rounded-full bg-white text-emerald-600 hover:bg-emerald-50 shadow-lg transition-all hover:scale-110"
-                            triggerContent={<ArrowDownLeft className="h-4 w-4" />}
-                        />
                     </div>
                 </div>
 
@@ -264,43 +250,39 @@ function PersonCardComponent({
 
                 </div>
 
-                {/* ROW 3: Sheets Linked Badge + Detail Arrow */}
-                <div className="px-3 pb-3 bg-white flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs">
-                        <span className="text-slate-500 font-medium">Sheets Linked:</span>
+                {/* ROW 3: Footer Status + Detail Link */}
+                <div className="px-3 pb-3 bg-white flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5">
                         {person.google_sheet_url ? (
-                            <div className="flex items-center gap-1">
-                                <a
-                                    href={person.google_sheet_url}
-                                    target='_blank'
-                                    rel='noopener noreferrer'
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded border border-green-200 hover:bg-green-100 transition-colors"
-                                >
-                                    <ExternalLink className="h-3 w-3" />
-                                    <span className="font-semibold">View Sheet</span>
-                                </a>
+                            <>
+                                <CustomTooltip content="Open Google Sheet">
+                                    <a
+                                        href={person.google_sheet_url}
+                                        target='_blank'
+                                        rel='noopener noreferrer'
+                                        onClick={stopPropagation}
+                                        className="inline-flex items-center justify-center p-1.5 rounded-md bg-green-50 text-green-700 border border-green-200 hover:bg-green-100 transition-colors"
+                                    >
+                                        <ExternalLink className="h-3.5 w-3.5" />
+                                    </a>
+                                </CustomTooltip>
+
                                 {person.sheet_link && (
-                                    <CustomTooltip content="Script Link (API)">
-                                        <a
-                                            href={person.sheet_link}
-                                            target='_blank'
-                                            rel='noopener noreferrer'
-                                            onClick={(e) => e.stopPropagation()}
-                                            className="flex items-center justify-center bg-blue-50 text-blue-700 p-1 rounded border border-blue-200 hover:bg-blue-100 transition-colors h-full aspect-square"
-                                        >
-                                            <Bot className="h-3 w-3" />
-                                        </a>
+                                    <CustomTooltip content="Script Connected">
+                                        <div className="inline-flex items-center justify-center p-1.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200">
+                                            <Bot className="h-3.5 w-3.5" />
+                                        </div>
                                     </CustomTooltip>
                                 )}
-                            </div>
+                            </>
                         ) : person.sheet_link ? (
-                            <span className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded border border-blue-200">
-                                <Check className="h-3 w-3" />
-                                <span className="font-semibold">Script Only</span>
-                            </span>
+                            <CustomTooltip content="Script Only (No Sheet URL)">
+                                <div className="inline-flex items-center justify-center p-1.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+                                    <Bot className="h-3.5 w-3.5" />
+                                </div>
+                            </CustomTooltip>
                         ) : (
-                            <span className="text-slate-400 italic">None Link</span>
+                            <span className="text-[10px] text-slate-300 italic">No Sync</span>
                         )}
                     </div>
 
