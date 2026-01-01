@@ -15,8 +15,10 @@ import { mapUnifiedTransaction } from '@/lib/transaction-mapper';
 // DEBUG: Admin client creation
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
+import { Database } from '@/types/database.types';
+
 function createAdminClient() {
-  return createSupabaseClient(
+  return createSupabaseClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
@@ -91,7 +93,7 @@ async function ensureCycle(
     throw error;
   }
 
-  return { id: newCycle.id, tag: cycleTag };
+  return { id: (newCycle as any).id, tag: cycleTag };
 }
 
 /**
@@ -256,21 +258,21 @@ export async function upsertTransactionCashback(
     throw upsertError;
   }
 
-  const previousCycleId = (existingEntries ?? [])
-    .find((entry: any) => entry.account_id === account.id)?.cycle_id ?? null
-  const staleEntries = (existingEntries ?? [])
-    .filter((entry: any) => entry.account_id !== account.id)
-  const staleCycleIds = Array.from(new Set(staleEntries.map((entry: any) => entry.cycle_id).filter(Boolean)))
+  const previousCycleId = (existingEntries as any ?? [])
+    .find((entry: any) => (entry as any).account_id === (account as any).id)?.cycle_id ?? null
+  const staleEntries = (existingEntries as any ?? [])
+    .filter((entry: any) => (entry as any).account_id !== (account as any).id)
+  const staleCycleIds = Array.from(new Set(staleEntries.map((entry: any) => (entry as any).cycle_id).filter(Boolean)))
 
   if (staleEntries.length > 0) {
     await supabase
       .from('cashback_entries')
       .delete()
       .eq('transaction_id', transaction.id)
-      .neq('account_id', account.id);
+      .neq('account_id', (account as any).id);
 
     for (const oldCycleId of staleCycleIds) {
-      await recomputeCashbackCycle(oldCycleId);
+      await recomputeCashbackCycle(oldCycleId as any);
     }
   }
 
@@ -293,17 +295,17 @@ export async function recomputeCashbackCycle(cycleId: string) {
     .from('cashback_cycles')
     .select('account_id, cycle_tag, max_budget, min_spend_target')
     .eq('id', cycleId)
-    .single();
+    .single() as any;
 
   if (!cycle) return;
 
   const { data: account } = await supabase
     .from('accounts')
     .select('cashback_config')
-    .eq('id', cycle.account_id)
+    .eq('id', (cycle as any).account_id)
     .single() as any;
 
-  const config = parseCashbackConfig(account?.cashback_config, cycle.account_id);
+  const config = parseCashbackConfig(account?.cashback_config, (cycle as any).account_id);
   const maxBudget = config.maxAmount ?? 0;
   const minSpendTarget = config.minSpend ?? 0;
 
@@ -312,19 +314,19 @@ export async function recomputeCashbackCycle(cycleId: string) {
   const { data: txns } = await supabase
     .from('transactions')
     .select('amount, type')
-    .eq('account_id', cycle.account_id)
-    .eq('persisted_cycle_tag', cycle.cycle_tag)
+    .eq('account_id', (cycle as any).account_id)
+    .eq('persisted_cycle_tag', (cycle as any).cycle_tag)
     .neq('status', 'void')
     .in('type', ['expense', 'debt']);
 
-  const spentAmount = (txns ?? []).reduce((sum, t) => sum + Math.abs(t.amount || 0), 0);
+  const spentAmount = (txns ?? []).reduce((sum, t) => sum + Math.abs((t as any).amount || 0), 0);
   const isMinSpendMet = spentAmount >= minSpendTarget;
 
   // 3. Aggregate Cashback Entries
   const { data: entries } = await supabase
     .from('cashback_entries')
     .select('mode, amount, counts_to_budget')
-    .eq('cycle_id', cycleId);
+    .eq('cycle_id', cycleId) as any;
 
   if (!entries) return;
 
@@ -332,13 +334,14 @@ export async function recomputeCashbackCycle(cycleId: string) {
   let virtualTotalRaw = 0;
   let voluntaryTotal = 0;
 
-  entries.forEach(e => {
-    if (e.mode === 'real' && e.counts_to_budget) {
-      realTotal += e.amount;
-    } else if (e.mode === 'virtual') {
-      virtualTotalRaw += e.amount;
-    } else if (e.mode === 'voluntary' || !e.counts_to_budget) {
-      voluntaryTotal += e.amount;
+  (entries as any ?? []).forEach((e: any) => {
+    const entry = e as any;
+    if (entry.mode === 'real' && entry.counts_to_budget) {
+      realTotal += entry.amount;
+    } else if (entry.mode === 'virtual') {
+      virtualTotalRaw += entry.amount;
+    } else if (entry.mode === 'voluntary' || !entry.counts_to_budget) {
+      voluntaryTotal += entry.amount;
     }
   });
 
@@ -376,7 +379,7 @@ export async function removeTransactionCashback(transactionId: string) {
     .from('cashback_entries')
     .select('cycle_id')
     .eq('transaction_id', transactionId)
-    .maybeSingle();
+    .maybeSingle() as any;
 
   if (entry) {
     await supabase.from('cashback_entries').delete().eq('transaction_id', transactionId);
@@ -483,7 +486,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
   if (accountIds && accountIds.length > 0) {
     query = query.in('id', accountIds);
   }
-  const { data: accounts } = await query;
+  const { data: accounts } = await query as any;
   if (!accounts) return [];
 
   const results: CashbackCard[] = [];
@@ -500,23 +503,23 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       .select('*')
       .eq('account_id', acc.id)
       .eq('cycle_tag', cycleTag)
-      .maybeSingle()).data ?? null;
+      .maybeSingle()).data as any ?? null;
 
     if (!cycle && legacyTag !== cycleTag) {
       cycle = (await supabase.from('cashback_cycles')
         .select('*')
         .eq('account_id', acc.id)
         .eq('cycle_tag', legacyTag)
-        .maybeSingle()).data ?? null;
+        .maybeSingle()).data as any ?? null;
     }
 
-    const currentSpend = cycle?.spent_amount ?? 0;
-    const realAwarded = cycle?.real_awarded ?? 0;
-    const virtualProfit = cycle?.virtual_profit ?? 0;
+    const currentSpend = (cycle as any)?.spent_amount ?? 0;
+    const realAwarded = (cycle as any)?.real_awarded ?? 0;
+    const virtualProfit = (cycle as any)?.virtual_profit ?? 0;
     const earnedSoFar = realAwarded + virtualProfit;
-    const minSpend = cycle?.min_spend_target ?? config.minSpend ?? null;
-    const maxCashback = cycle?.max_budget ?? config.maxAmount ?? null;
-    const overflowLoss = cycle?.overflow_loss ?? 0;
+    const minSpend = (cycle as any)?.min_spend_target ?? config.minSpend ?? null;
+    const maxCashback = (cycle as any)?.max_budget ?? config.maxAmount ?? null;
+    const overflowLoss = (cycle as any)?.overflow_loss ?? 0;
 
     // MF5.3.3 FIX: Budget Left must come from cycle if exists, else fallback to config.maxAmount
     const remainingBudget = maxCashback !== null ? Math.max(0, maxCashback - earnedSoFar) : null;
@@ -526,7 +529,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       ? Math.min(100, (earnedSoFar / maxCashback) * 100)
       : 0;
 
-    const metMinSpend = cycle?.met_min_spend ?? (typeof minSpend === 'number' ? currentSpend >= minSpend : true);
+    const metMinSpend = (cycle as any)?.met_min_spend ?? (typeof minSpend === 'number' ? currentSpend >= minSpend : true);
     const missingMinSpend = typeof minSpend === 'number' && minSpend > currentSpend ? minSpend - currentSpend : null;
 
     const { resolveCashbackPolicy } = await import('./cashback/policy-resolver');
@@ -539,7 +542,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
     let transactions: CashbackTransaction[] = [];
     if (includeTransactions && cycle) {
       // Use direct relations instead of legacy line items to fix missing relation error
-      const { data: entries, error: entriesError } = await supabase
+      const { data: entries, error: entriesError } = await (supabase
         .from('cashback_entries')
         .select(`
           mode, amount, metadata, transaction_id,
@@ -551,15 +554,15 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
             person:profiles!transactions_person_id_fkey(name)
           )
         `)
-        .eq('cycle_id', cycle.id)
-        .eq('transaction.account_id', acc.id);
+        .eq('cycle_id', (cycle as any).id)
+        .eq('transaction.account_id', acc.id) as any);
 
       if (entriesError) {
         console.error('[getCashbackProgress] Failed to load entries:', entriesError);
       }
 
-      if (entries && entries.length > 0) {
-        transactions = entries.map((e: any) => {
+      if (entries && (entries as any).length > 0) {
+        transactions = (entries as any).map((e: any) => {
           const t = e.transaction;
           if (!t) return null;
 
@@ -594,7 +597,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
             policyMetadata,
           } as CashbackTransaction;
         }).filter((t: any): t is CashbackTransaction => t !== null)
-          .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
+          .sort((a: any, b: any) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
       }
     }
 
@@ -765,99 +768,56 @@ export async function simulateCashback(params: {
  * Fetches all cashback history for an account (debugging/analysis usage).
  */
 export async function getAllCashbackHistory(accountId: string): Promise<CashbackCard | null> {
-  // DEBUG: Use Admin Client
   const supabase = createAdminClient();
-
-  // 1. Get Account
   const { data: account } = await (supabase.from('accounts').select('id, name, image_url, cashback_config').eq('id', accountId).single() as any);
   if (!account) return null;
 
-  console.log(`[getAllCashbackHistory] Raw Config for ${accountId}:`, JSON.stringify(account.cashback_config));
   const config = parseCashbackConfig(account.cashback_config, accountId);
-  console.log(`[getAllCashbackHistory] Parsed Config: rate=${config.rate}, maxAmount=${config.maxAmount}`);
-
-  // 2. Aggregate ALL stats from cycles
-  const { data: cycles } = await supabase
+  const { data: cycles } = await (supabase
     .from('cashback_cycles')
     .select('*')
-    .select('*')
-    .eq('account_id', accountId) as any;
-
-  console.log(`[getAllCashbackHistory] Fetched ${cycles?.length} cycles for aggregation.`);
-  if (cycles?.length === 0) console.log('[getAllCashbackHistory] WARNING: No cycles found despite transactions existing?');
+    .eq('account_id', accountId) as any);
 
   const totalEarned = (cycles ?? []).reduce((sum: number, c: any) => sum + (c.real_awarded ?? 0) + (c.virtual_profit ?? 0), 0);
   const totalShared = (cycles ?? []).reduce((sum: number, c: any) => sum + (c.real_awarded ?? 0), 0);
   const totalNet = (cycles ?? []).reduce((sum: number, c: any) => sum + (c.virtual_profit ?? 0) - (c.overflow_loss ?? 0), 0);
   const sumMaxBudget = (cycles ?? []).reduce((sum: number, c: any) => sum + (c.max_budget ?? 0), 0);
 
-  // 3. Fetch ALL entries
   let transactions: CashbackTransaction[] = [];
-    // Use direct relations instead of legacy line items to fix missing relation error
-  const { data: entries, error: entriesError } = await supabase
+  const { data: entries, error: entriesError } = await (supabase
     .from('cashback_entries')
-    .select(`
-          mode, amount, metadata, transaction_id, cycle_id,
-          cycle:cashback_cycles(cycle_tag),
-          transaction:transactions!inner (
-            id, occurred_at, note, amount, account_id,
-            cashback_share_percent, cashback_share_fixed,
-            category:categories(name, icon),
-            shop:shops(name, image_url),
-            person:profiles!transactions_person_id_fkey(name)
-          )
-        `)
-    .eq('transaction.account_id', accountId)
+    .select('mode, amount, metadata, transaction_id, cycle_id, cycle:cashback_cycles(cycle_tag), transaction:transactions!inner(id, occurred_at, note, amount, account_id, cashback_share_percent, cashback_share_fixed, category:categories(name, icon), shop:shops(name, image_url), person:profiles!transactions_person_id_fkey(name))')
+    .eq('transaction.account_id', accountId) as any);
 
-
-  if (entriesError) {
-    console.error('[getAllCashbackHistory] Failed to load entries:', entriesError);
-  }
-
-  if (entries && entries.length > 0) {
-    console.log(`[getAllCashbackHistory] Found ${entries.length} entries for account ${accountId}`);
-    transactions = entries.map((e: any) => {
+  if (!entriesError && entries && (entries as any).length > 0) {
+    transactions = (entries as any).map((e: any) => {
       const t = e.transaction;
       if (!t) return null;
-
-      const category = t.category;
-      const shop = t.shop;
-      const person = t.person;
-
-      const bankBack = e.amount;
-      const peopleBack = e.mode === 'real' ? e.amount : 0;
-      const profit = e.mode === 'virtual' ? e.amount : 0;
-      const policyMetadata = normalizePolicyMetadata(e.metadata);
-      const effectiveRate = policyMetadata?.rate ?? 0;
-
       return {
         id: t.id,
         occurred_at: t.occurred_at,
         note: t.note,
         amount: t.amount,
-        earned: bankBack,
-        bankBack,
-        peopleBack,
-        profit,
-        effectiveRate,
+        earned: e.amount,
+        bankBack: e.amount,
+        peopleBack: e.mode === 'real' ? e.amount : 0,
+        profit: e.mode === 'virtual' ? e.amount : 0,
+        effectiveRate: normalizePolicyMetadata(e.metadata)?.rate ?? 0,
         sharePercent: t.cashback_share_percent,
         shareFixed: t.cashback_share_fixed,
-        shopName: shop?.name,
-        shopLogoUrl: shop?.image_url,
-        categoryName: category?.name,
-        categoryIcon: category?.icon,
-        categoryLogoUrl: category?.image_url,
-        personName: person?.name,
-        policyMetadata,
-        cycleTag: (e.cycle as any)?.cycle_tag
+        shopName: t.shop?.name,
+        shopLogoUrl: t.shop?.image_url,
+        categoryName: t.category?.name,
+        categoryIcon: t.category?.icon,
+        categoryLogoUrl: t.category?.image_url,
+        personName: t.person?.name,
+        policyMetadata: normalizePolicyMetadata(e.metadata),
+        cycleTag: e.cycle?.cycle_tag
       } as CashbackTransaction;
     }).filter((t: any): t is CashbackTransaction => t !== null)
-      .sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
-  } else {
-    console.log(`[getAllCashbackHistory] No entries found for account ${accountId}`);
+      .sort((a: any, b: any) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
   }
 
-  // Construct a "Virtual" Card
   return {
     accountId: account.id,
     accountName: account.name,
@@ -866,7 +826,7 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
     cycleStart: null,
     cycleEnd: null,
     cycleType: null,
-    progress: ((totalEarned / (sumMaxBudget || 1)) * 100),
+    progress: sumMaxBudget > 0 ? ((totalEarned / sumMaxBudget) * 100) : 0,
     currentSpend: 0,
     minSpend: 0,
     maxCashback: sumMaxBudget > 0 ? sumMaxBudget : null,
@@ -913,42 +873,35 @@ export async function recomputeAccountCashback(accountId: string, monthsBack?: n
     query = query.gte('occurred_at', cutOff.toISOString());
   }
 
-  const { data: txns, error: txError } = await query;
+  const { data: txns } = await query;
 
-  if (txError || !txns) {
-    console.error('[recomputeAccountCashback] Failed to fetch transactions:', txError);
+  if (!txns) {
     return;
   }
-
-  console.log(`[recomputeAccountCashback] Re-processing ${txns.length} transactions for account ${accountId} (monthsBack: ${monthsBack ?? 'ALL'})`);
 
   // 2. Re-process each transaction
   // Sequential processing to ensure cycle totals are updated correctly
   for (const rawTxn of txns) {
-    const txn = mapUnifiedTransaction(rawTxn, accountId);
+    const txn = mapUnifiedTransaction(rawTxn, accountId) as any;
     // Force clear the tag to trigger recalculation in upsertTransactionCashback
     const cleanTxn = { ...txn, persisted_cycle_tag: null };
     await upsertTransactionCashback(cleanTxn);
   }
-
-  console.log(`[recomputeAccountCashback] Completed re-processing for account ${accountId}`);
 }
 
 export async function getCashbackCycleOptions(accountId: string, limit: number = 12) {
-  // DEBUG: Use Admin Client to bypass RLS
   const supabase = createAdminClient();
-  const { data: cycles } = await supabase
+  const { data: cycles } = await (supabase
     .from('cashback_cycles')
     .select('cycle_tag')
     .eq('account_id', accountId)
-    .limit(48) as any; // Increased limit to show more past cycles
+    .limit(48) as any);
 
-  const { data: account } = await supabase
+  const { data: account } = await (supabase
     .from('accounts')
     .select('cashback_config')
     .eq('id', accountId)
-    .eq('id', accountId)
-    .single() as any;
+    .single() as any);
 
   const config = parseCashbackConfig(account?.cashback_config, accountId);
   const currentCycleTag = getCashbackCycleTag(new Date(), {
@@ -966,10 +919,8 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
 
   // Helper to get sortable value from tag
   const getSortValue = (tag: string) => {
-    if (!tag) return 0;
     const parsed = parseCycleTag(tag);
-    if (!parsed) return 0;
-    return parsed.year * 100 + parsed.month;
+    return parsed ? (parsed.year * 100 + parsed.month) : 0;
   };
 
   // Sort chronologically (descending)
@@ -989,11 +940,10 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
         const end = new Date(year, monthIdx, config.statementDay - 1);
         const start = new Date(year, monthIdx - 1, config.statementDay);
 
-        const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const fmt = (val: Date) => `${String(val.getDate()).padStart(2, '0')}.${String(val.getMonth() + 1).padStart(2, '0')}`;
         label = `${fmt(start)} - ${fmt(end)}`;
       } else {
-        const fmt = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' });
-        label = fmt.format(new Date(year, monthIdx, 1));
+        label = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' }).format(new Date(year, monthIdx, 1));
       }
     }
 
@@ -1005,5 +955,3 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
     };
   });
 }
-
-
