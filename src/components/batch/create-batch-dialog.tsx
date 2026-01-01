@@ -31,9 +31,11 @@ import { createBatchAction } from '@/actions/batch.actions'
 const formSchema = z.object({
     name: z.string().min(1, 'Name is required'),
     sheet_link: z.string().optional(),
+    sheet_name: z.string().optional(),
     source_account_id: z.string().optional(),
     is_template: z.boolean().default(false),
     auto_clone_day: z.number().min(1).max(31).optional(),
+    bank_type: z.enum(['VIB', 'MBB']).default('VIB'),
 })
 
 type WebhookLink = { id: string; name: string; url: string }
@@ -47,9 +49,11 @@ export function CreateBatchDialog({ accounts, webhookLinks }: { accounts: any[],
         defaultValues: {
             name: '',
             sheet_link: '',
+            sheet_name: 'Danh sách chuyển tiền',
             source_account_id: '',
             is_template: false,
             auto_clone_day: 1,
+            bank_type: 'VIB',
         },
         mode: 'onChange',
     })
@@ -62,6 +66,16 @@ export function CreateBatchDialog({ accounts, webhookLinks }: { accounts: any[],
             form.setValue('name', `CKL ${tag}`)
         }
     }, [monthMode, open, form])
+
+    // Update sheet_name based on bank_type
+    useEffect(() => {
+        const bankType = form.watch('bank_type')
+        if (bankType === 'MBB') {
+            form.setValue('sheet_name', 'eMB_BulkPayment')
+        } else {
+            form.setValue('sheet_name', 'Danh sách chuyển tiền')
+        }
+    }, [form.watch('bank_type')])
 
     async function onSubmit(values: z.infer<typeof formSchema>) {
         try {
@@ -159,7 +173,40 @@ export function CreateBatchDialog({ accounts, webhookLinks }: { accounts: any[],
                                     />
                                 </FormItem>
                             )}
+
                         </div>
+                        <FormField
+                            control={form.control}
+                            name="bank_type"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Bank Type</FormLabel>
+                                    <Select
+                                        items={[
+                                            { value: 'VIB', label: 'VIB (Legacy)' },
+                                            { value: 'MBB', label: 'MB Bank' }
+                                        ]}
+                                        value={field.value}
+                                        onValueChange={field.onChange}
+                                        placeholder="Select bank type"
+                                    />
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="sheet_name"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Sheet Name (Target)</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="e.g., eMB_BulkPayment" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
                         <FormField
                             control={form.control}
                             name="source_account_id"

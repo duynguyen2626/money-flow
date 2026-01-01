@@ -1,20 +1,23 @@
-# Manage Sheet Settings + Sheet Sync (Completed)
+# Phase 4: Batch Import & Account UI Enhancements (Completed)
 
 ## Summary
-- Fixed stale settings in cycle list by including sheet settings in `getPeople()` mapping and the `Person` type.
-- Apps Script now honors the bank account toggle: merges L6:N6 only when enabled, clears L6:N6 when disabled, and keeps summary borders intact.
-- QR image sync uses a merged IMAGE() area and shifts based on whether the bank row is shown:
-  - No account row: M6:N31
-  - Account row enabled: L7:N31
-- Summary/transaction sorting clears image merges first to avoid shifts, then reapplies image placement.
+- **Batch Import Fixes**:
+  - Resolved duplicate batch entries and sheet naming conflicts.
+  - Added `display_name`, `sheet_name`, and `bank_type` fields to Batch table.
+  - Improved bank type handling in Apps Script push logic.
+- **Account Dialog UI Standardization**:
+  - Redesigned `CreateAccountDialog` and `EditAccountDialog` for consistency.
+  - **Collateral Section**: Dynamic layout (Unsecured = Centered Badge, Secured = Dropdown), with "Secured" toggle permanently at the top to prevent layout shifts.
+  - **Layout Constraints**: Enforced full width (`col-span-2`) for Bank Number, Annual Fee, and Receiver Name.
+  - **Receiver Name**: Defaults to "NGUYEN THANH NAM", added clear button.
+  - **Cashback Policy**: Enforced consistent `42px` height for all inputs (Base Rate, Limits, Cycle Type) to fix alignment.
+  - **Credit Limit/Annual Fee**: Restored real-time number formatting (separators) and proper invalid state handling.
 
 ## Key Files Updated
-- src/services/people.service.ts
-- src/types/moneyflow.types.ts
-- google-scripts/Code.js
-- google-scripts/push-sheet.mjs
-- package.json
+- `src/components/moneyflow/create-account-dialog.tsx`
+- `src/components/moneyflow/edit-account-dialog.tsx`
+- `supabase/migrations/*` (Batch schema updates)
 
 ## Notes / Next Steps
-- Push Apps Script: `pnpm run sheet:push:3` (or another index).
-- Sync cycle sheet to apply bank row + QR image changes.
+- [x] Verify Batch Import flow end-to-end with new schema fields.
+- [x] Fixed syntax error in `create-account-dialog.tsx` and verified clean build.

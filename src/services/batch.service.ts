@@ -45,13 +45,19 @@ export async function createBatch(batch: Database['public']['Tables']['batches']
         batch.source_account_id = SYSTEM_ACCOUNTS.DRAFT_FUND
     }
 
+    console.log('Creating batch with data:', JSON.stringify(batch, null, 2))
+
     const { data, error } = await supabase
         .from('batches')
         .insert(batch as any)
         .select()
         .single()
 
-    if (error) throw error
+    if (error) {
+        console.error('Error creating batch:', error)
+        throw error
+    }
+    console.log('Batch created successfully:', data)
     return data
 }
 
@@ -311,6 +317,15 @@ export async function importBatchItemsFromExcel(
     const lines = excelData.trim().split('\n')
     const results = { success: 0, errors: [] as string[] }
 
+    // 1. Fetch Batch to get Bank Type
+    const { data: batch, error: batchError } = await supabase
+        .from('batches')
+        .select('bank_type')
+        .eq('id', batchId)
+        .single()
+    
+    const bankType = batch?.bank_type || 'VIB' // Default to VIB
+
     // Get all accounts for lookup
     const { data: accounts } = await supabase
         .from('accounts')
@@ -319,67 +334,162 @@ export async function importBatchItemsFromExcel(
     const accountByName = new Map(accounts?.map((a: any) => [a.name.toLowerCase(), a.id]) || [])
     const accountByNumber = new Map(accounts?.map((a: any) => [a.account_number, a.id]) || [])
 
-    // Get all bank mappings for lookup
+    // Get all bank mappings for lookup (name -> code)
     const { data: bankMappings } = await supabase
         .from('bank_mappings')
         .select('*')
 
-    const bankCodeMap = new Map(bankMappings?.map((b: any) => [b.bank_code, b]) || [])
+    // Create lookup map: Normalized Name -> Code
+    const bankMap = new Map<string, string>();
+    bankMappings?.forEach((b: any) => {
+        if (b.bank_name) bankMap.set(b.bank_name.toLowerCase(), b.bank_code);
+        if (b.short_name) bankMap.set(b.short_name.toLowerCase(), b.bank_code);
+        if (b.bank_code) bankMap.set(b.bank_code.toLowerCase(), b.bank_code);
+    });
+
+    // Helper to find bank code (VIB style)
+    const findBankCode = (input: string): string => {
+        const lower = input.toLowerCase().trim();
+        if (bankMap.has(lower)) return bankMap.get(lower)!;
+        for (const [key, code] of bankMap.entries()) {
+            if (lower.includes(key)) return code;
+        }
+        return input;
+    };
+
+    // Helper to extract short name
+    const extractShortName = (fullName: string): string => {
+        const parts = fullName.trim().split(/\s+/);
+        return parts[parts.length - 1] || fullName;
+    };
+
+    // --- MBB Helper: Extract Code from "Name (Code)" ---
+    // Example: "Nông nghiệp... (VBA)" -> VBA
+    const extractMbbBankCode = (input: string): string => {
+        const match = input.match(/\(([^)]+)\)$/);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+        return input; // Fallback
+    };
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i].trim()
         if (!line) continue
 
-        // Skip header row if it contains "STT" or "Danh sách"
+        // Skip header
         if (line.toLowerCase().includes('stt') || line.toLowerCase().includes('danh sách')) {
             continue
         }
 
         try {
-            // Split by tab
             const columns = line.split('\t')
-
             if (columns.length < 3) {
-                results.errors.push(`Line ${i + 1}: Not enough columns (need at least 3)`)
+                results.errors.push(`Line ${i + 1}: Not enough columns`)
                 continue
             }
 
-            // Detect format:
-            // Format A: STT | Receiver | Bank Number | Bank Name | Amount | Note
-            // Format B: Receiver | Bank Number | Bank Name | Amount | Note
+            let receiverName = '';
+            let bankNumber = '';
+            let bankNameRaw = '';
+            let amount = 0;
+            let note = '';
+            let bankCode = '';
 
-            let offset = 0
-            // If first column is digits and we have enough columns, assume it's STT
-            if (/^\d+$/.test(columns[0]?.trim()) && columns.length >= 5) {
-                offset = 1
-            }
-
-            const receiverName = columns[offset]?.trim() || ''
-            const bankNumber = columns[offset + 1]?.trim() || ''
-            const bankName = columns[offset + 2]?.trim() || ''
-
-            const amountStr = columns[offset + 3]?.trim()
-            const amount = amountStr ? parseInt(amountStr.replace(/\D/g, '')) : 0
-
-            let note = columns[offset + 4]?.trim() || ''
-
-            // Append batch tag to note if present
-            if (batchTag) {
-                if (!note) {
-                    note = batchTag
-                } else if (!note.includes(batchTag)) {
-                    note = `${note} ${batchTag}`
+            if (bankType === 'MBB') {
+                // MBB Format: 
+                // Col 0: STT (Ord No)
+                // Col 1: Account No
+                // Col 2: Beneficiary Name
+                // Col 3: Beneficiary Bank (Name (Code))
+                // Col 4: Amount
+                // Col 5: Detail
+                
+                // Usually STT is first. Let's assume strict format:
+                // If columns[0] is digit, assume STT.
+                // MBB from user request: STT | Acc | Name | Bank | Amount | Content
+                
+                // Let's implement strict column mapping for MBB
+                // 1 | 999 | NAME | Bank(Code) | 1000 | Note
+                
+                // Sometimes the user might exclude STT? Let's check.
+                // If col 0 is digit and col 1 is digit -> likely Ok.
+                // If col 0 is digit(Acc) and col 1 is Text(Name) -> No STT?
+                
+                let offset = 0;
+                // Heuristic: If Col 0 is small digit (<1000) and Col 1 is Account No (Digits), it's STT
+                // But Account No is also digits.
+                // Let's rely on standard copy.
+                // Try offset logic similar to original but tuned for MBB.
+                
+                // Is Col 0 the Account No?
+                // Mbb: Col 1 is Acc No?
+                // Sample: "1" (STT) "Account" ...
+                
+                if (/^\d+$/.test(columns[0]) && columns.length >= 6) {
+                     // Check if Col 1 looks like Account Number
+                     offset = 1;
                 }
+                
+                bankNumber = columns[offset]?.trim() || '';
+                receiverName = columns[offset + 1]?.trim() || '';
+                bankNameRaw = columns[offset + 2]?.trim() || '';
+                const amountStr = columns[offset + 3]?.trim() || '0';
+                amount = parseInt(amountStr.replace(/\D/g, '')) || 0;
+                note = columns[offset + 4]?.trim() || '';
+                
+                bankCode = extractMbbBankCode(bankNameRaw);
+
+            } else {
+                // VIB (Legacy) / Default Logic
+                // Detect Format A vs B
+                
+                let offset = 0
+                if (/^\d+$/.test(columns[0]?.trim()) && columns.length >= 6) {
+                    offset = 1
+                }
+
+                const col1 = columns[offset]?.trim();
+                const col2 = columns[offset + 1]?.trim();
+                
+                const isCol1Digits = /^\d+$/.test(col1.replace(/\s/g, ''));
+                const isNewFormat = isCol1Digits; // Account No first
+
+                if (isNewFormat) {
+                    bankNumber = col1;
+                    receiverName = col2;
+                    bankNameRaw = columns[offset + 2]?.trim() || '';
+                    const amountStr = columns[offset + 3]?.trim();
+                    amount = amountStr ? parseInt(amountStr.replace(/\D/g, '')) : 0;
+                    note = columns[offset + 4]?.trim() || '';
+                } else {
+                    receiverName = col1;
+                    bankNumber = col2;
+                    bankNameRaw = columns[offset + 2]?.trim() || '';
+                    const amountStr = columns[offset + 3]?.trim();
+                    amount = amountStr ? parseInt(amountStr.replace(/\D/g, '')) : 0;
+                    note = columns[offset + 4]?.trim() || '';
+                }
+                
+                bankCode = findBankCode(bankNameRaw);
             }
 
-            // Try to find target account by bank number first, then name
+            // Common Logic for Note & Insertion
+            const finalBankName = bankCode !== bankNameRaw ? bankCode : bankNameRaw;
+            
+            if (batchTag) {
+                const shortName = extractShortName(receiverName);
+                const code = bankCode !== bankNameRaw ? bankCode : 'BANK';
+                const smartNote = `${code}-${shortName}-${batchTag}`;
+                note = smartNote.toUpperCase();
+            }
+
             let targetAccountId = accountByNumber.get(bankNumber)
             if (!targetAccountId) {
                 targetAccountId = accountByName.get(receiverName.toLowerCase())
             }
 
-            // Insert batch item
-            const { error: insertError } = await supabase
+             const { error: insertError } = await supabase
                 .from('batch_items')
                 .insert({
                     batch_id: batchId,
@@ -387,7 +497,7 @@ export async function importBatchItemsFromExcel(
                     target_account_id: targetAccountId || null,
                     amount: amount,
                     note: note,
-                    bank_name: bankName,
+                    bank_name: finalBankName,
                     bank_number: bankNumber,
                     card_name: '',
                     status: 'pending'
@@ -617,9 +727,7 @@ export async function sendBatchToSheet(batchId: string) {
     if (batchError || !batch) throw new Error('Batch not found')
     if (!batch.sheet_link) throw new Error('No sheet link configured')
 
-    const items = batch.batch_items || []
-
-    if (items.length === 0) return { success: true, count: 0 }
+    const items = (batch.batch_items || []).filter((item: any) => item.status === 'pending')
 
     // Fetch bank mappings to lookup codes
     const { data: bankMappings } = await supabase
@@ -633,13 +741,30 @@ export async function sendBatchToSheet(batchId: string) {
     })
 
     const payload = {
+        bank_type: batch.bank_type || 'VIB',
+        sheet_name: batch.sheet_name,
         items: items.map((item: any) => {
             let bankName = item.bank_name || ''
-            if (bankName && !bankName.includes(' - ')) {
+            // Only try to format if it doesn't look like it's already formatted
+            // VIB: "Code - Name", MBB: "Name (Code)"
+            const isVibFormatted = bankName.includes(' - ')
+            const isMbbFormatted = /\(.+\)$/.test(bankName)
+
+            if (bankName && !isVibFormatted && !isMbbFormatted) {
                 // Try to find code by name or short name
                 const code = bankMap.get(bankName.toLowerCase())
                 if (code) {
-                    bankName = `${code} - ${bankName}`
+                    if (batch.bank_type === 'MBB') {
+                        // MBB Format: Name (Code) - but usually "ShortName (Code)"?
+                        // User screenshot shows "Bank Name (Code)" in import, but for export let's follow the standard
+                        // Use ShortName if available? The map keys are lower case names.
+                        // Let's stick to appending code if we found it.
+                        // We might need to look up the OBJECT to get proper casing if needed, but bankName is usually proper case from UI.
+                        bankName = `${bankName} (${code})`
+                    } else {
+                        // VIB Format: Code - Name
+                        bankName = `${code} - ${bankName}`
+                    }
                 }
             }
 
@@ -654,12 +779,22 @@ export async function sendBatchToSheet(batchId: string) {
     }
 
     try {
-        await fetch(batch.sheet_link, {
+        const response = await fetch(batch.sheet_link, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         })
-        return { success: true, count: items.length }
+        
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+            const result = await response.json()
+            console.log('GAS Response:', result)
+            return { success: true, count: items.length, gasResult: result }
+        } else {
+            const text = await response.text()
+            console.error('GAS returned non-JSON response (likely HTML error or login page). First 200 chars:', text.substring(0, 200))
+            throw new Error('Google Script returned an invalid response (HTML). Check script deployment and permissions.')
+        }
     } catch (e) {
         console.error('Failed to send items to sheet', e)
         throw e
@@ -810,12 +945,11 @@ export async function updateBatchCycle(batchId: string, action: 'prev' | 'next')
     if (batchError || !batch) throw new Error('Batch not found')
 
     // 2. Detect Current Tag
-    const nameParts = batch.name.split(' ')
-    const currentTag =
-        nameParts.find((p: string) => isYYYYMM(p)) ??
-        nameParts.find((p: string) => isLegacyMMMYY(p))
+    const tagRegex = /(\d{4}-(0[1-9]|1[0-2]))|([A-Za-z]{3}\d{2})/
+    const match = batch.name.match(tagRegex)
+    const currentTag = match ? match[0] : null
 
-    if (!currentTag) throw new Error('Could not detect month tag (e.g. 2025-12) in batch name')
+    if (!currentTag) throw new Error('Could not detect month tag (e.g. 2025-12 or NOV24) in batch name')
 
     const normalizedCurrentTag = normalizeMonthTag(currentTag) ?? currentTag
     if (!isYYYYMM(normalizedCurrentTag)) {

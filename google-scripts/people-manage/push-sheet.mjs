@@ -7,7 +7,7 @@ import dotenv from 'dotenv'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const claspPath = join(__dirname, '.clasp.json')
-const repoRoot = join(__dirname, '..')
+const repoRoot = join(__dirname, '..', '..')
 
 const args = process.argv.slice(2)
 const getFlagValue = (flag) => {
@@ -45,20 +45,33 @@ const loadEnv = () => {
   }
 }
 
+const prefixArg = getFlagValue('--prefix')
+
 const buildProfiles = () => {
   const profiles = []
   for (const [key, value] of Object.entries(process.env)) {
     if (!value) continue
     if (!/script/i.test(key)) continue
+
+    // Filter by prefix if provided
+    if (prefixArg && !key.startsWith(prefixArg)) continue
+
     const trimmed = value.trim()
     if (!isLikelyScriptId(trimmed)) continue
     const lowerKey = key.toLowerCase()
-    const alias = lowerKey
+
+    // Create clean alias by removing prefix if present
+    let alias = lowerKey
+    if (prefixArg) {
+      alias = alias.replace(prefixArg.toLowerCase(), '')
+    }
+    alias = alias
       .replace(/^clasp_/, '')
       .replace(/^script_id_/, '')
       .replace(/^script_/, '')
       .replace(/_script_id$/, '')
       .replace(/_script$/, '')
+
     profiles.push({
       key,
       value: trimmed,
@@ -94,7 +107,13 @@ const selectionFromProfile = (profiles, profile) => {
 }
 
 const chooseProfile = async (profiles) => {
-  if (!profiles.length) return null
+  if (!profiles.length) {
+    if (prefixArg) {
+      console.log(`No profiles found matching prefix: "${prefixArg}".`)
+      console.log('Available keys in env:', Object.keys(process.env).filter(k => /script/i.test(k)).join(', '))
+    }
+    return null
+  }
   console.log('Available script IDs:')
   profiles.forEach((profile, index) => {
     console.log(`${index + 1}) ${profile.key}`)
@@ -118,8 +137,14 @@ const main = async () => {
   loadEnv()
   const profiles = buildProfiles()
 
+  if (profiles.length === 0 && prefixArg) {
+    console.log(`No profiles found matching prefix: "${prefixArg}".`)
+    const allEnvKeys = Object.keys(process.env).filter(k => /script/i.test(k))
+    console.log('Available keys in env (containing "script"):', allEnvKeys.join(', '))
+  }
+
   const lifecycleEvent = process.env.npm_lifecycle_event || ''
-  const lifecycleMatch = lifecycleEvent.match(/^sheet:push:(\d+)$/)
+  const lifecycleMatch = lifecycleEvent.match(/:(\d+)$/)
   const lifecycleIndex = lifecycleMatch ? toIndex(lifecycleMatch[1]) : null
 
   let selected = null

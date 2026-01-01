@@ -294,7 +294,8 @@ export async function getAccounts(): Promise<Account[]> {
       current_balance: item.current_balance ?? 0,
       credit_limit: item.credit_limit ?? 0,
       owner_id: item.owner_id ?? '',
-      account_number: null,
+      account_number: item.account_number ?? null,
+      receiver_name: item.receiver_name ?? null,
       parent_account_id: item.parent_account_id ?? null,
       secured_by_account_id: item.secured_by_account_id ?? null,
       cashback_config: normalizeCashbackConfig(item.cashback_config),
@@ -388,7 +389,8 @@ export async function getAccountDetails(id: string): Promise<Account | null> {
     current_balance: row.current_balance ?? 0,
     credit_limit: row.credit_limit ?? 0,
     owner_id: row.owner_id ?? '',
-    account_number: null,
+    account_number: row.account_number ?? null,
+    receiver_name: row.receiver_name ?? null,
     secured_by_account_id: row.secured_by_account_id ?? null,
     cashback_config: normalizeCashbackConfig(row.cashback_config),
     is_active: typeof row.is_active === 'boolean' ? row.is_active : null,
@@ -476,6 +478,8 @@ export async function updateAccountConfig(
     image_url?: string | null
     annual_fee?: number | null
     parent_account_id?: string | null
+    account_number?: string | null
+    receiver_name?: string | null
   }
 ): Promise<boolean> {
   // Guard clause to prevent 22P02 error (invalid input syntax for type uuid)
@@ -540,6 +544,14 @@ export async function updateAccountConfig(
 
   if (typeof data.image_url === 'string') {
     payload.image_url = data.image_url
+  }
+
+  if ('account_number' in data) {
+    payload.account_number = data.account_number ?? null
+  }
+
+  if ('receiver_name' in data) {
+    payload.receiver_name = data.receiver_name ?? null
   }
 
   if (Object.keys(payload).length === 0) {

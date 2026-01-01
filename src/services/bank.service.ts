@@ -11,12 +11,6 @@ type BankMappingUpdate = Database['public']['Tables']['bank_mappings']['Update']
  */
 export async function getBankMappings(): Promise<BankMapping[]> {
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    console.log('getBankMappings: serviceRoleKey exists?', !!serviceRoleKey)
-
-    // Debug: Log keys starting with SUPABASE
-    const envKeys = Object.keys(process.env).filter(key => key.startsWith('SUPABASE'));
-    console.log('Available SUPABASE env keys:', envKeys);
-
     let supabase
 
     if (serviceRoleKey) {
@@ -72,7 +66,7 @@ export async function createBankMapping(mapping: BankMappingInsert): Promise<Ban
     const supabase = await createClient()
     const { data, error } = await supabase
         .from('bank_mappings')
-        .insert(mapping as any)
+        .insert(mapping)
         .select()
         .single()
 
@@ -87,7 +81,7 @@ export async function updateBankMapping(
     id: string,
     mapping: BankMappingUpdate
 ): Promise<BankMapping> {
-    const supabase: any = await createClient()
+    const supabase = await createClient()
     const updateData: BankMappingUpdate = {
         ...mapping,
         updated_at: new Date().toISOString()
@@ -149,9 +143,8 @@ export async function searchBanks(query: string): Promise<BankMapping[]> {
  * Import bank mappings from Excel/Text data
  * Format: STT | Bank Code - Name | Full Bank Name
  */
-export async function importBankMappingsFromExcel(excelData: string) {
+export async function importBankMappingsFromExcel(excelData: string, bankType: 'VIB' | 'MBB' = 'VIB') {
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    console.log('Service Role Key available:', !!serviceRoleKey)
     let supabase
 
     if (serviceRoleKey) {
@@ -177,36 +170,89 @@ export async function importBankMappingsFromExcel(excelData: string) {
         if (!line) continue
 
         try {
-            const columns = line.split('\t')
-            if (columns.length < 3) {
-                // Try to be lenient if STT is missing
-                if (columns.length < 2) {
-                    throw new Error('Invalid format: Expected at least Code-Name and Full Name')
-                }
+            // Skip common headers
+            const lowerLine = line.toLowerCase();
+            if (lowerLine.includes('bank_name') || lowerLine.startsWith('stt')) {
+                continue;
             }
 
-            // Parse Column 1 (or 0 if STT missing): "314 - NH Quốc tế VIB"
-            // If STT exists (numeric first col), then index 1. Else index 0?
-            // Let's assume strict format: STT | Code - Name | Full Name
-            // So index 1 is Code-Name.
-
-            const codeNamePart = columns[1].trim()
-            const separatorIndex = codeNamePart.indexOf(' - ')
+            const columns = line.split('\t')
+            
+            // For VIB, we expect at least 2 columns (Code-Name | FullName) or (STT | Code-Name | FullName)
+            if (bankType === 'VIB' && columns.length < 2) {
+                 results.errors.push(`Line ${i + 1}: Not enough columns for VIB format`)
+                 continue
+            }
+            // For MBB, we allow 1 column if it parses correctly
+            if (bankType === 'MBB' && columns.length < 1) {
+                 results.errors.push(`Line ${i + 1}: Empty line`)
+                 continue
+            }
 
             let bankCode = ''
             let shortName = ''
+            let fullName = ''
 
-            if (separatorIndex !== -1) {
-                bankCode = codeNamePart.substring(0, separatorIndex).trim()
-                shortName = codeNamePart.substring(separatorIndex + 3).trim()
+            if (bankType === 'MBB') {
+                // MBB Format: Check if any column has "Name (CODE)" pattern
+                // User input example: "Nông nghiệp và Phát triển nông thôn (VBA)"
+                
+                const possibleNameCol = columns[0].trim(); // Try first column
+                
+                // Regex for "text (CODE)" at end of string
+                const match = possibleNameCol.match(/(.+)\s+\(([^)]+)\)$/); 
+                
+                if (match && match[2]) {
+                     bankCode = match[2].trim();
+                     // Group 1 is the name part before (Code)
+                     shortName = match[1].trim(); 
+                     fullName = shortName; // Use short name as full name fallback
+                } else {
+                    // Try column 1 if exists?
+                    if (columns.length > 1) {
+                        const col1 = columns[1].trim();
+                        const match1 = col1.match(/(.+)\s+\(([^)]+)\)$/);
+                        if (match1 && match1[2]) {
+                            bankCode = match1[2].trim();
+                            shortName = match1[1].trim();
+                            fullName = shortName;
+                        }
+                    }
+                }
+                
+                // If Full Name provided in next col, use it
+                if (columns.length > 1 && !fullName) {
+                    fullName = columns[1].trim();
+                }
             } else {
-                bankCode = codeNamePart
-                shortName = codeNamePart
+                // VIB (Legacy) Logic
+                // STT | Code - Name | Full Name
+                // OR: Code - Name | Full Name
+                
+                // If Col 0 is small integer, assume STT -> use Col 1.
+                let nameCol = columns[0];
+                let fullCol = columns[1];
+                
+                if (/^\d+$/.test(columns[0]) && columns.length >= 3) {
+                    nameCol = columns[1];
+                    fullCol = columns[2];
+                }
+
+                const codeNamePart = nameCol.trim()
+                const separatorIndex = codeNamePart.indexOf(' - ')
+
+                if (separatorIndex !== -1) {
+                    bankCode = codeNamePart.substring(0, separatorIndex).trim()
+                    shortName = codeNamePart.substring(separatorIndex + 3).trim()
+                } else {
+                    bankCode = codeNamePart
+                    shortName = codeNamePart
+                }
+                
+                fullName = fullCol?.trim() || '';
             }
 
-            const fullName = columns[2].trim()
-
-            if (!bankCode) throw new Error('Missing bank code')
+            if (!bankCode) throw new Error('Could not extract bank code')
 
             const { error } = await supabase
                 .from('bank_mappings')
@@ -215,12 +261,13 @@ export async function importBankMappingsFromExcel(excelData: string) {
                     short_name: shortName,
                     bank_name: fullName,
                     updated_at: new Date().toISOString()
-                } as any, { onConflict: 'bank_code' })
+                } as BankMappingInsert, { onConflict: 'bank_code' })
 
             if (error) throw error
             results.success++
-        } catch (error: any) {
-            results.errors.push(`Line ${i + 1}: ${error.message}`)
+        } catch (error: unknown) {
+             const msg = error instanceof Error ? error.message : 'Unknown error';
+            results.errors.push(`Line ${i + 1}: ${msg}`)
         }
     }
 

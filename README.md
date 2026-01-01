@@ -11,7 +11,20 @@ yarn dev
 # or
 pnpm dev
 # or
+# or
 bun dev
+```
+
+## Google Apps Script Commands
+
+Push scripts to Google Apps Script (requires `.env` or prompts for Script ID):
+
+```bash
+# Push People Management Script (google-scripts/people-manage)
+pnpm run sheet:people
+
+# Push Batch Management Script (google-scripts/batch-manage)
+pnpm run sheet:batch
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
@@ -78,6 +91,10 @@ If you encounter missing cycle data or incorrect caps in the Cashback Analysis v
 - Fixed stale sheet settings in the cycle list (settings now flow from `getPeople()`).
 - Apps Script now clears/merges the bank row based on toggle state and positions QR images in a merged summary area.
 - New `pnpm run sheet:push:<n>` shortcuts for faster Apps Script deploys.
+
+## Recent Updates (Phase 4 - Batch & Account UI)
+- **Batch Import**: Fixed duplicates, added `display_name`, `sheet_name`, `bank_type` to schema and UI.
+- **Account UI**: Standardized `Create` and `Edit` dialogs with full-width inputs, consistent heights, and fixed layouts for Collateral/Secured toggle.
 
 ## Learn More
 
