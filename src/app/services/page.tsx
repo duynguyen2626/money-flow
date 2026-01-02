@@ -1,8 +1,6 @@
 import { getServices } from '@/services/service-manager'
 import { getPeople } from '@/services/people.service'
-import { ServiceTable } from '@/components/services/service-table'
-import { ServiceCompactCard } from '@/components/services/service-compact-card'
-import { ServicesFAB } from '@/components/services/services-fab'
+import { ServicesPageContent } from '@/components/services/services-page-content'
 import { Bot } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -14,23 +12,7 @@ export default async function ServicesPage() {
     <div className="h-full overflow-auto p-4 md:p-6">
       <section className="space-y-4 max-w-7xl mx-auto">
         {services && services.length > 0 ? (
-          <>
-            {/* Desktop View */}
-            <div className="hidden md:block">
-              <ServiceTable services={services} people={people} />
-            </div>
-
-            {/* Mobile View */}
-            <div className="grid grid-cols-1 gap-2 md:hidden">
-              {services.map((service: any) => (
-                <ServiceCompactCard
-                  key={service.id}
-                  service={service}
-                  people={people}
-                />
-              ))}
-            </div>
-          </>
+          <ServicesPageContent services={services} people={people} />
         ) : (
           <div className="rounded-none border bg-white p-12 text-center shadow-none">
             <div className="h-12 w-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -43,9 +25,6 @@ export default async function ServicesPage() {
           </div>
         )}
       </section>
-
-      {/* Floating Action Buttons */}
-      <ServicesFAB />
     </div>
   )
 }

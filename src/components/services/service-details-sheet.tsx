@@ -231,7 +231,7 @@ export function ServiceDetailsSheet({ open, onOpenChange, service, members, allP
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl max-h-[85vh] p-0 gap-0 rounded-xl">
+            <DialogContent className="max-w-4xl max-h-[90vh] p-0 gap-0 rounded-xl flex flex-col">
                 <DialogHeader className="px-6 py-4 border-b">
                     <div className="flex items-center justify-between">
                         <DialogTitle className="text-xl font-bold flex items-center gap-2">
@@ -243,12 +243,24 @@ export function ServiceDetailsSheet({ open, onOpenChange, service, members, allP
                                 onClick={() => !showConfirmed && setIsPaymentDialogOpen(true)}
                                 disabled={showConfirmed}
                                 size="sm"
-                                className={cn("rounded-lg h-9", showConfirmed ? "bg-green-600 hover:bg-green-700 text-white" : "bg-green-100 hover:bg-green-200 text-green-700")}
+                                variant="outline"
+                                className={cn(
+                                    "rounded-lg h-9 transition-all",
+                                    showConfirmed
+                                        ? "bg-green-600 hover:bg-green-700 text-white border-green-600"
+                                        : "border-green-200 text-green-600 hover:bg-green-600 hover:text-white hover:border-green-600"
+                                )}
                             >
                                 {showConfirmed ? <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> : <Check className="mr-1.5 h-3.5 w-3.5" />}
                                 {showConfirmed ? 'Confirmed' : 'Confirm'}
                             </Button>
-                            <Button onClick={handleDistribute} disabled={isDistributing || watchedMembers.length === 0} size="sm" className="bg-purple-600 hover:bg-purple-700 text-white rounded-lg h-9">
+                            <Button
+                                onClick={handleDistribute}
+                                disabled={isDistributing || watchedMembers.length === 0}
+                                size="sm"
+                                variant="outline"
+                                className="border-purple-200 text-purple-600 hover:bg-purple-600 hover:text-white hover:border-purple-600 rounded-lg h-9 transition-all disabled:opacity-50"
+                            >
                                 {isDistributing ? <Loader2 className="animate-spin h-3.5 w-3.5 mr-1.5" /> : <Send className="h-3.5 w-3.5 mr-1.5" />}
                                 Distribute
                             </Button>
@@ -256,92 +268,11 @@ export function ServiceDetailsSheet({ open, onOpenChange, service, members, allP
                     </div>
                 </DialogHeader>
 
-                <Tabs defaultValue="members" className="flex-1 flex flex-col overflow-hidden">
-                    <TabsList className="w-full justify-start rounded-full border border-slate-200 bg-slate-100 p-1 h-auto">
-                        <TabsTrigger value="members" className="flex-1 rounded-full data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm text-slate-600 focus-visible:outline-none px-6 py-2.5">
-                            <Users className="h-4 w-4 mr-2" />
-                            Members
-                        </TabsTrigger>
-                        <TabsTrigger value="transactions" className="flex-1 rounded-full data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm text-slate-600 focus-visible:outline-none px-6 py-2.5">
-                            <CreditCard className="w-4 h-4 mr-2" />
-                            Transactions
-                        </TabsTrigger>
-                        <TabsTrigger value="settings" className="flex-1 rounded-full data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm text-slate-600 focus-visible:outline-none px-6 py-2.5">
-                            <Settings className="h-4 w-4 mr-2" />
-                            Settings
-                        </TabsTrigger>
-                    </TabsList>
-
-                    <div className="flex-1 overflow-y-auto">
-                        <TabsContent value="members" className="p-6 mt-0 space-y-4">
-                            <div className="flex items-center justify-between">
-                                <div className="text-sm text-slate-600">
-                                    {maxSlots > 0 && <span>{totalSlots} / {maxSlots} slots used</span>}
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="gap-2 rounded-lg border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300"
-                                    onClick={() => setIsAddMemberDialogOpen(true)}
-                                >
-                                    <UserPlus className="h-4 w-4" />
-                                    Add Member
-                                </Button>
-                            </div>
-
-                            <div className="grid gap-3">
-                                {watchedMembers.map((member) => (
-                                    <div
-                                        key={member.id || member.profile_id}
-                                        className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 cursor-pointer transition-all group"
-                                        onClick={() => router.push(`/people/${member.profile_id}`)}
-                                    >
-                                        <div className="flex items-center gap-4 flex-1 min-w-0">
-                                            <div className={cn("h-12 w-12 rounded-lg flex items-center justify-center text-lg font-bold flex-shrink-0",
-                                                member.profile.is_owner ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600')}>
-                                                {member.profile.avatar_url ? (
-                                                    <img src={member.profile.avatar_url} alt="" className="h-full w-full object-cover rounded-lg" />
-                                                ) : (
-                                                    member.profile.name.substring(0, 1).toUpperCase()
-                                                )}
-                                            </div>
-                                            <div className="flex flex-col min-w-0 flex-1">
-                                                <span className="text-base font-semibold text-slate-900 truncate">{member.profile.name}</span>
-                                                <span className="text-sm text-slate-500">{Math.round(unitCost * member.slots).toLocaleString()} ₫ per slot</span>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                                            <div className="flex items-center gap-2">
-                                                <Label className="text-sm text-slate-600">Slots:</Label>
-                                                <Input
-                                                    type="number"
-                                                    className="w-20 h-9 text-center rounded-lg"
-                                                    value={member.slots}
-                                                    onChange={(e) => handleUpdateMember(member.id, { slots: parseInt(e.target.value) || 0 })}
-                                                />
-                                            </div>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-9 w-9 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
-                                                onClick={() => handleRemoveMember(member.id)}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </TabsContent>
-
-                        <TabsContent value="transactions" className="p-6 mt-0">
-                            <ServiceTransactionsTable
-                                serviceId={service.id}
-                                serviceName={service.name}
-                            />
-                        </TabsContent>
-
-                        <TabsContent value="settings" className="p-6 mt-0 space-y-6">
+                {/* 2-Column Layout: Settings (Left) + People (Right) */}
+                <div className="flex-1 flex flex-col min-h-0">
+                    <div className="grid grid-cols-2 gap-4 p-6 overflow-hidden">
+                        {/* Left Column: Settings - Determines Height */}
+                        <div className="space-y-6">
                             <div className="space-y-4">
                                 <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">Service Information</h3>
                                 <div className="grid grid-cols-2 gap-4">
@@ -381,30 +312,126 @@ export function ServiceDetailsSheet({ open, onOpenChange, service, members, allP
                                         <div className="grid grid-cols-2 gap-3 pt-2">
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs text-slate-600">Run Day (1-31)</Label>
-                                                <Input type="number" min={1} max={31} value={botRunDay} onChange={(e) => setBotRunDay(parseInt(e.target.value))} className="rounded-lg h-9" />
+                                                <Input
+                                                    type="number"
+                                                    min={1}
+                                                    max={31}
+                                                    value={botRunDay || ''}
+                                                    onChange={(e) => {
+                                                        const val = parseInt(e.target.value)
+                                                        setBotRunDay(isNaN(val) ? 0 : val)
+                                                    }}
+                                                    className="rounded-lg h-9"
+                                                />
                                             </div>
                                             <div className="space-y-1.5">
                                                 <Label className="text-xs text-slate-600">Run Hour (0-23)</Label>
-                                                <Input type="number" min={0} max={23} value={botRunHour} onChange={(e) => setBotRunHour(parseInt(e.target.value))} className="rounded-lg h-9" />
+                                                <Input
+                                                    type="number"
+                                                    min={0}
+                                                    max={23}
+                                                    value={botRunHour === 0 ? 0 : (botRunHour || '')}
+                                                    onChange={(e) => {
+                                                        const val = parseInt(e.target.value)
+                                                        setBotRunHour(isNaN(val) ? 0 : val)
+                                                    }}
+                                                    className="rounded-lg h-9"
+                                                />
                                             </div>
                                         </div>
                                     )}
                                 </div>
                             </div>
+                        </div>
 
-                            <div className="flex gap-3 pt-4">
-                                <Button onClick={handleSaveSettings} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg h-11" disabled={isSavingDetails}>
-                                    {isSavingDetails ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
-                                    Save Settings
-                                </Button>
-                                <Button onClick={handleDelete} disabled={isDeleting} className="bg-red-100 hover:bg-red-200 text-red-700 rounded-lg h-11 px-6">
-                                    {isDeleting ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
-                                    Delete
-                                </Button>
+                        {/* Right Column: People List - Matches Height */}
+                        <div className="relative min-h-[300px]">
+                            <div className="absolute inset-0 overflow-y-auto overflow-x-hidden space-y-4 pr-1">
+                                <div className="flex items-center justify-between">
+                                    <div className="text-sm text-slate-600">
+                                        {maxSlots > 0 && <span>{totalSlots} / {maxSlots} slots used</span>}
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="gap-2 rounded-lg border-blue-200 text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all"
+                                        onClick={() => setIsAddMemberDialogOpen(true)}
+                                    >
+                                        <UserPlus className="h-4 w-4" />
+                                        Add Member
+                                    </Button>
+                                </div>
+
+                                <div className="grid gap-3">
+                                    {watchedMembers.map((member) => (
+                                        <div
+                                            key={member.id || member.profile_id}
+                                            className="flex items-center justify-between p-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 cursor-pointer transition-all group"
+                                            onClick={() => router.push(`/people/${member.profile_id}`)}
+                                        >
+                                            <div className="flex items-center gap-4 flex-1 min-w-0">
+                                                <div className={cn("h-12 w-12 rounded-lg flex items-center justify-center text-lg font-bold flex-shrink-0",
+                                                    member.profile.is_owner ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600')}>
+                                                    {member.profile.avatar_url ? (
+                                                        <img src={member.profile.avatar_url} alt="" className="h-full w-full object-cover rounded-lg" />
+                                                    ) : (
+                                                        member.profile.name.substring(0, 1).toUpperCase()
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col min-w-0 flex-1">
+                                                    <span className="text-base font-semibold text-slate-900 truncate">{member.profile.name}</span>
+                                                    <span className="text-sm text-slate-500">{Math.round(unitCost * member.slots).toLocaleString()} ₫ per slot</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-3 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                <div className="flex items-center gap-2">
+                                                    <Label className="text-sm text-slate-600">Slots:</Label>
+                                                    <Input
+                                                        type="number"
+                                                        className="w-20 h-9 text-center rounded-lg"
+                                                        value={member.slots}
+                                                        onChange={(e) => handleUpdateMember(member.id, { slots: parseInt(e.target.value) || 0 })}
+                                                    />
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-9 w-9 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                                                    onClick={() => handleRemoveMember(member.id)}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
-                        </TabsContent>
+                        </div>
                     </div>
-                </Tabs>
+                </div>
+
+                {/* Footer: Save/Delete buttons spanning both columns */}
+                <div className="border-t p-6 flex gap-3">
+                    <Button
+                        onClick={handleSaveSettings}
+                        variant="outline"
+                        className="flex-1 border-blue-200 text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600 rounded-lg h-11 transition-all"
+                        disabled={isSavingDetails}
+                    >
+                        {isSavingDetails ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : null}
+                        Save Settings
+                    </Button>
+                    <Button
+                        onClick={handleDelete}
+                        disabled={isDeleting}
+                        variant="outline"
+                        className="border-red-200 text-red-600 hover:bg-red-600 hover:text-white hover:border-red-600 rounded-lg h-11 px-6 transition-all"
+                    >
+                        {isDeleting ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                        Delete
+                    </Button>
+                </div>
+
 
 
 
@@ -471,6 +498,6 @@ export function ServiceDetailsSheet({ open, onOpenChange, service, members, allP
                     }}
                 />
             </DialogContent>
-        </Dialog>
+        </Dialog >
     )
 }
