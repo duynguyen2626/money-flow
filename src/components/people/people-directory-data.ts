@@ -79,10 +79,7 @@ export function buildPeopleDirectoryItems(people: Person[]): PeopleDirectoryItem
     const remains = Math.max(0, primary?.amount ?? 0)
     const paid = Math.max(0, primary?.total_repaid ?? 0)
     const isSettled = Math.abs(primary?.amount ?? 0) < 1
-    const additionalActiveCycles = Math.max(
-      0,
-      (result?.activeCount ?? 0) - (primary && primary.amount > 0 ? 1 : 0)
-    )
+    const additionalActiveCycles = Math.max(0, (result?.activeCount ?? 0) - 1)
     const cycleSheet = findCycleSheet(person.cycle_sheets, cycleTag)
     const hasScriptLink = isValidLink(person.sheet_link ?? null)
 
