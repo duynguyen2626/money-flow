@@ -705,7 +705,9 @@ export async function updateTransaction(
       samePerson: oldPersonId === newPersonId,
     });
 
-    // OPTIMIZATION: If person is the same, use 'update' action (mapped to 'edit')
+    // SHEET SYNC: Smart cycle-aware sync
+    // - If cycle changed: Full sync both old and new cycles
+    // - If same cycle: Fast single-row update
     if (oldPersonId && newPersonId && oldPersonId === newPersonId) {
       console.log(
         "[Sheet Sync] Updating existing entry for person:",
@@ -725,7 +727,6 @@ export async function updateTransaction(
 
       // Calculate final amount
       const originalAmount = Math.abs(input.amount);
-      // DB stores decimal (0.05). input is decimal.
       const decimalRate = Number(input.cashback_share_percent ?? 0);
       const percentForSheet = decimalRate * 100; // Sheet wants 5 for 5%
 
@@ -734,28 +735,68 @@ export async function updateTransaction(
       const finalAmount =
         input.type === "debt" ? originalAmount - cashback : originalAmount;
 
-      const updatePayload = {
-        id,
-        occurred_at: input.occurred_at,
-        note: input.note,
-        tag: input.tag,
-        shop_name: shopName,
-        amount: finalAmount,
-        original_amount: originalAmount,
-        cashback_share_percent: percentForSheet, // Send 5
-        cashback_share_fixed: fixedAmount,
-        type: input.type === "repayment" ? "In" : "Debt",
-      };
+      // Extract cycle tags from dates
+      const oldDate = new Date((existing as any).occurred_at);
+      const newDate = new Date(input.occurred_at);
+      const oldCycle = `${oldDate.getFullYear()}-${String(oldDate.getMonth() + 1).padStart(2, '0')}`;
+      const newCycle = `${newDate.getFullYear()}-${String(newDate.getMonth() + 1).padStart(2, '0')}`;
 
-      try {
-        await syncTransactionToSheet(
-          newPersonId,
-          updatePayload as any,
-          "update",
-        );
-        console.log("[Sheet Sync] Update completed");
-      } catch (err) {
-        console.error("[Sheet Sync] Update entry failed:", err);
+      const cycleChanged = oldCycle !== newCycle;
+
+      console.log("[Sheet Sync] Cycle check:", {
+        oldCycle,
+        newCycle,
+        cycleChanged,
+      });
+
+      if (cycleChanged) {
+        // CYCLE CHANGED: Full sync both cycles
+        console.log("[Sheet Sync] Cycle changed - triggering full sync for both cycles");
+
+        const { syncCycleTransactions } = await import("./sheet.service");
+
+        // Sync old cycle (remove this transaction)
+        try {
+          await syncCycleTransactions(newPersonId, oldCycle);
+          console.log(`[Sheet Sync] Synced old cycle: ${oldCycle}`);
+        } catch (err) {
+          console.error(`[Sheet Sync] Failed to sync old cycle ${oldCycle}:`, err);
+        }
+
+        // Sync new cycle (add this transaction)
+        try {
+          await syncCycleTransactions(newPersonId, newCycle);
+          console.log(`[Sheet Sync] Synced new cycle: ${newCycle}`);
+        } catch (err) {
+          console.error(`[Sheet Sync] Failed to sync new cycle ${newCycle}:`, err);
+        }
+      } else {
+        // SAME CYCLE: Fast single-row update
+        console.log("[Sheet Sync] Same cycle - using fast single-row update");
+
+        const updatePayload = {
+          id,
+          occurred_at: input.occurred_at,
+          note: input.note,
+          tag: input.tag,
+          shop_name: shopName,
+          amount: finalAmount,
+          original_amount: originalAmount,
+          cashback_share_percent: percentForSheet,
+          cashback_share_fixed: fixedAmount,
+          type: input.type === "repayment" ? "In" : "Debt",
+        };
+
+        try {
+          await syncTransactionToSheet(
+            newPersonId,
+            updatePayload as any,
+            "update",
+          );
+          console.log("[Sheet Sync] Single-row update completed");
+        } catch (err) {
+          console.error("[Sheet Sync] Update entry failed:", err);
+        }
       }
     } else {
       // Logic for DIFFERENT person (or one added/removed): Delete Old -> Create New

@@ -118,7 +118,14 @@ const chooseProfile = async (profiles) => {
   profiles.forEach((profile, index) => {
     console.log(`${index + 1}) ${profile.key}`)
   })
-  const answer = await ask('Choose a number or paste a Script ID: ')
+  console.log('Press Enter to push ALL, or choose a number/paste a Script ID:')
+  const answer = await ask('Choice: ')
+
+  // Empty answer = push all
+  if (!answer || answer.trim() === '') {
+    return 'ALL'
+  }
+
   const index = toIndex(answer)
   const byIndex = selectByIndex(profiles, index)
   if (byIndex) {
@@ -204,6 +211,45 @@ const main = async () => {
 
   if (!scriptId && profiles.length) {
     const selection = await chooseProfile(profiles)
+
+    // Handle push ALL
+    if (selection === 'ALL') {
+      console.log(`\nPushing to ALL ${profiles.length} profiles...\n`)
+      let successCount = 0
+      let failCount = 0
+
+      for (let i = 0; i < profiles.length; i++) {
+        const profile = profiles[i]
+        const indexLabel = `${i + 1}/${profiles.length}`
+
+        console.log(`\n[${indexLabel}] Pushing to ${profile.key}...`)
+
+        const raw = readFileSync(claspPath, 'utf8')
+        const config = JSON.parse(raw)
+        config.scriptId = profile.value
+        writeFileSync(claspPath, JSON.stringify(config, null, 2) + '\n')
+
+        const pushArgs = ['push']
+        if (forceFlag) pushArgs.push('--force')
+
+        const result = spawnSync('clasp', pushArgs, {
+          cwd: __dirname,
+          stdio: 'inherit',
+        })
+
+        if (result.status === 0) {
+          console.log(`[${indexLabel}] ${profile.key} ✅ PUSHED`)
+          successCount++
+        } else {
+          console.log(`[${indexLabel}] ${profile.key} ❌ PUSH FAILED`)
+          failCount++
+        }
+      }
+
+      console.log(`\n📊 Summary: ${successCount} succeeded, ${failCount} failed`)
+      process.exit(failCount > 0 ? 1 : 0)
+    }
+
     if (selection && typeof selection === 'object' && selection.profile) {
       selected = selection
       scriptId = selection.profile.value

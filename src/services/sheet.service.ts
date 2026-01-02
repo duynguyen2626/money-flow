@@ -242,7 +242,7 @@ export async function syncTransactionToSheet(
       .select('sheet_show_bank_account, sheet_show_qr_image, sheet_full_img')
       .eq('id', personId)
       .single()
-    
+
     if (personError) {
       console.error('[syncTransactionToSheet] Error fetching person preferences:', personError)
     }
@@ -364,8 +364,8 @@ export async function syncAllTransactions(personId: string) {
 
       // Fallback for Repayment/Transfer if shop is empty -> Use Account Name (e.g. "Vpbank Lady", "Wallet A")
       if (!shopName) {
-         const accData = txn.accounts as any
-         shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
+        const accData = txn.accounts as any
+        shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
       }
 
       // Determine type: debt = lending out, repayment = receiving back
@@ -436,9 +436,9 @@ export async function createTestSheet(personId: string): Promise<CycleSheetResul
     if (!response.success) {
       return { success: false, message: response.message ?? 'Test create failed' }
     }
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       sheetUrl: (response.json?.sheetUrl as string) ?? null,
       sheetId: (response.json?.sheetId as string) ?? null
     }
@@ -528,8 +528,8 @@ export async function syncCycleTransactions(
 
       // Fallback for Repayment/Transfer if shop is empty -> Use Account Name
       if (!shopName) {
-         const accData = txn.accounts as any
-         shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
+        const accData = txn.accounts as any
+        shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
       }
       const syncType = txn.type === 'repayment' ? 'In' : 'Debt'
 
@@ -550,7 +550,7 @@ export async function syncCycleTransactions(
         },
         'create' // Dummy action, ignored
       )
-      
+
       return payload
     })
 
@@ -563,7 +563,7 @@ export async function syncCycleTransactions(
       .select('sheet_show_bank_account, sheet_show_qr_image, sheet_full_img')
       .eq('id', personId)
       .single()
-    
+
     if (personError) {
       console.error('[syncCycleTransactions] Error fetching person preferences:', personError)
     }
@@ -588,11 +588,11 @@ export async function syncCycleTransactions(
       bank_account: showBankAccount ? 'TPBank 27888889999 NGUYEN THANH NAM' : '',
       img: showQrImage && qrImageUrl ? qrImageUrl : ''
     }
-    
+
     console.log('[syncCycleTransactions] Final payload:', { ...payload, rows: `[${payload.rows.length} rows]` })
 
     const result = await postToSheet(sheetLink, payload)
-    
+
     if (!result.success) {
       return { success: false, message: result.message ?? 'Sheet sync failed' }
     }
@@ -601,5 +601,78 @@ export async function syncCycleTransactions(
   } catch (error) {
     console.error('Sync cycle transactions failed:', error)
     return { success: false, message: 'Sync failed' }
+  }
+}
+
+/**
+ * Auto-sync cycle sheet after service distribution
+ * Only triggers if:
+ * 1. Person has sheet_link configured
+ * 2. Cycle sheet doesn't exist yet
+ */
+export async function autoSyncCycleSheetIfNeeded(personId: string, cycleTag: string): Promise<void> {
+  try {
+    console.log(`[AutoSync] Checking if auto-sync needed for ${personId} / ${cycleTag}`)
+
+    // 1. Check if person has sheet_link configured
+    const sheetLink = await getProfileSheetLink(personId)
+    if (!sheetLink) {
+      console.log(`[AutoSync] Skipping ${personId}: No sheet link configured`)
+      return
+    }
+
+    // 2. Check if cycle sheet already exists
+    const supabase = createClient()
+    const { data: existing } = await (supabase as any)
+      .from('person_cycle_sheets')
+      .select('id, sheet_id, sheet_url')
+      .eq('person_id', personId)
+      .eq('cycle_tag', cycleTag)
+      .maybeSingle()
+
+    if (existing?.sheet_id || existing?.sheet_url) {
+      console.log(`[AutoSync] Skipping ${personId}: Cycle sheet already exists`)
+      return
+    }
+
+    console.log(`[AutoSync] Triggering auto-sync for ${personId} / ${cycleTag}`)
+
+    // 3. Create cycle sheet
+    const createResult = await createCycleSheet(personId, cycleTag)
+    if (!createResult.success) {
+      console.error(`[AutoSync] Failed to create cycle sheet: ${createResult.message}`)
+      return
+    }
+
+    // 4. Sync transactions
+    const syncResult = await syncCycleTransactions(personId, cycleTag, createResult.sheetId)
+    if (!syncResult.success) {
+      console.error(`[AutoSync] Failed to sync transactions: ${syncResult.message}`)
+      return
+    }
+
+    // 5. Update database
+    const payload = {
+      person_id: personId,
+      cycle_tag: cycleTag,
+      sheet_id: createResult.sheetId,
+      sheet_url: createResult.sheetUrl,
+    }
+
+    if (existing?.id) {
+      await (supabase as any)
+        .from('person_cycle_sheets')
+        .update(payload)
+        .eq('id', existing.id)
+    } else {
+      await (supabase as any)
+        .from('person_cycle_sheets')
+        .insert(payload)
+    }
+
+    console.log(`[AutoSync] Successfully auto-synced ${personId} / ${cycleTag}`)
+  } catch (error) {
+    console.error(`[AutoSync] Error for ${personId} / ${cycleTag}:`, error)
+    // Silent fail - don't throw, just log
   }
 }
