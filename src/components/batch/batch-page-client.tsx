@@ -162,11 +162,11 @@ export function BatchPageClient({ batches, accounts, bankMappings, webhookLinks 
                     </TabsList>
 
                     <TabsContent value="processing" className="mt-6">
-                        <BatchList batches={processingBatches} mode="processing" />
+                        <BatchList batches={processingBatches} mode="processing" accounts={accounts} webhookLinks={webhookLinks} />
                     </TabsContent>
 
                     <TabsContent value="done" className="mt-6">
-                        <BatchList batches={doneBatches} mode="done" />
+                        <BatchList batches={doneBatches} mode="done" accounts={accounts} webhookLinks={webhookLinks} />
                     </TabsContent>
 
                     <TabsContent value="mappings" className="mt-6">
@@ -181,7 +181,7 @@ export function BatchPageClient({ batches, accounts, bankMappings, webhookLinks 
                     </TabsContent>
 
                     <TabsContent value="templates" className="mt-6">
-                        <BatchList batches={templateBatches} />
+                        <BatchList batches={templateBatches} accounts={accounts} webhookLinks={webhookLinks} />
                     </TabsContent>
 
                     <TabsContent value="webhooks" className="mt-6">

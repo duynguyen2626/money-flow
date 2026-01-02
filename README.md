@@ -15,6 +15,36 @@ pnpm dev
 bun dev
 ```
 
+## 🚨 Development Rules (Critical)
+
+Before committing any code, you **MUST** run the following commands to ensure quality:
+
+```bash
+# 1. Check for linting errors
+npm run lint
+
+# 2. Verify build succeeds
+npm run build
+```
+
+**Do not commit if either of these fails.**
+
+## Recent Updates (Phase 75 - Services Redesign & Bot)
+
+### 1. Services UI Overhaul
+- **Desktop**: New table-based layout with "All Services" and individual service tabs.
+- **Mobile**: Simplified list view.
+- **Modal**: redesigned "Service Details" sheet:
+    - 2-column layout (Settings | People).
+    - People column height constrained to Settings height.
+    - Improved button styling (Outline -> Color on Hover).
+    - Fixed horizontal scroll issues (max-w-4xl).
+
+### 2. Service Bot
+- **Auto-Distribution**: Configurable "Run Day" and "Run Hour".
+- **Bot Logic**: Timezone-aware (GMT+7) and idempotent checks to prevent double-charging.
+
+
 ## Google Apps Script Commands
 
 Push scripts to Google Apps Script (requires `.env` or prompts for Script ID):

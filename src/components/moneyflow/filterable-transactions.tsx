@@ -47,6 +47,7 @@ type FilterableTransactionsProps = {
     // Controlled Props Support
     selectedType?: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay'
     onTypeChange?: (type: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay') => void
+    className?: string
 }
 
 type BulkActionState = {
@@ -78,7 +79,9 @@ export function FilterableTransactions({
     context,
     selectedType: externalType,
     onTypeChange,
-}: FilterableTransactionsProps) {
+    className,
+    variant = 'page',
+}: FilterableTransactionsProps & { variant?: 'page' | 'embedded' }) {
     const { selectedTag, setSelectedTag } = useTagFilter()
     const [searchTermInternal, setSearchTermInternal] = useState('');
     const searchTerm = externalSearch ?? searchTermInternal
@@ -120,13 +123,21 @@ export function FilterableTransactions({
             back_info: false,
             final_price: true,
             id: false,
+            people: false, // Default hidden
         }
         return initial
     })
 
+    // Default order from definitions
+    const [columnOrder, setColumnOrder] = useState<ColumnKey[]>(defaultColumns.map(c => c.key))
+
     const handleBulkActionStateChange = useCallback((next: BulkActionState) => {
         setBulkActions(next);
     }, [])
+
+    // ... (existing code)
+
+
 
     const router = useRouter()
     const pathname = usePathname()
@@ -648,9 +659,17 @@ export function FilterableTransactions({
         return sortedTransactions.slice(start, start + pageSize)
     }, [sortedTransactions, currentPage, pageSize])
 
+    const isEmbedded = variant === 'embedded'
     return (
-        <div className="flex flex-col h-full overflow-hidden bg-slate-50/50 w-full">
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className={cn(
+            "flex flex-col w-full bg-slate-50/50",
+            isEmbedded ? "h-auto overflow-visible" : "h-full overflow-hidden",
+            className
+        )}>
+            <div className={cn(
+                "flex-1 flex flex-col min-h-0",
+                isEmbedded ? "overflow-visible" : "overflow-hidden"
+            )}>
                 <div className="w-full px-4 lg:px-10 py-4 space-y-4 flex flex-col min-h-0">
                     {/* Header Row */}
                     <div className="hidden lg:flex flex-row items-center justify-between gap-4">
@@ -714,6 +733,8 @@ export function FilterableTransactions({
                                 <TableViewOptions
                                     visibleColumns={visibleColumns}
                                     onVisibilityChange={setVisibleColumns}
+                                    columnOrder={columnOrder}
+                                    onOrderChange={setColumnOrder}
                                 />
                                 {/* Add Transaction (Desktop) */}
                                 {!context && !isExcelMode && (
@@ -1080,7 +1101,8 @@ export function FilterableTransactions({
                                 onBulkActionStateChange={handleBulkActionStateChange}
                                 sortState={sortState}
                                 onSortChange={setSortState}
-                                hiddenColumns={[]}
+                                hiddenColumns={(Object.keys(visibleColumns) as ColumnKey[]).filter(key => !visibleColumns[key])}
+                                columnOrder={columnOrder}
                                 isExcelMode={isExcelMode}
 
                                 currentPage={currentPage}

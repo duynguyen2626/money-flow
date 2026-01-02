@@ -1,4 +1,4 @@
-﻿# .agent/rules/gravityrules.md
+# .agent/rules/gravityrules.md
 # Purpose: core workflow and UI rules.
 
 ## Operating mode
@@ -23,6 +23,10 @@
 - Use a phase/scope branch naming convention.
 - Commit message style: `PHASE {PHASE_ID} - {TITLE}`.
 - Never push directly to main; open PR.
+- **CRITICAL**: Before committing, YOU MUST run:
+  - `npm run lint`
+  - `npm run build`
+  - Only commit if both pass.
 
 ## UI changes must be screenshot-locked
 

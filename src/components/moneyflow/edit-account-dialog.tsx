@@ -795,18 +795,18 @@ export function EditAccountDialog({
       )}
 
       {open && createPortal(
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 pt-12"
-          onClick={() => closeDialog()}
-        >
+        <div className="fixed inset-0 z-[45] flex items-center justify-center p-4 sm:p-6">
           <div
-            className="w-full max-w-5xl rounded-xl bg-white shadow-2xl flex flex-col"
-            style={{ maxHeight: '85vh', minHeight: '400px' }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
+            onClick={() => closeDialog()}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="relative flex max-h-full w-full max-w-4xl flex-col rounded-xl bg-slate-50 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
             onClick={stopPropagation}
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 rounded-t-xl">
+            <div className="flex bg-white items-center justify-between border-b border-slate-200 px-6 py-4 shrink-0">
               <h2 className="text-xl font-bold text-slate-900">Edit {account.name}</h2>
               <button
                 type="button"
@@ -1132,6 +1132,64 @@ export function EditAccountDialog({
                   </p>
                 )}
 
+                {/* Danger Zone */}
+                <div className="border-t border-slate-100 bg-slate-50 p-6">
+                  <h3 className="mb-4 text-xs font-bold uppercase tracking-wider text-slate-500">Account Status</h3>
+                  <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-white p-4">
+                    <div>
+                      <h4 className="text-sm font-medium text-slate-900">
+                        {account.is_active ? 'Close this account' : 'Reopen this account'}
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                        {account.is_active
+                          ? 'Closing will hide it from main views but preserve history.'
+                          : 'Reopening will make it visible in main views again.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const newStatus = !account.is_active
+                        // Optimistic update isn't enough, we need to call server action
+                        // But we want to confirm first? Maybe just a simple toggle for now as per requirements.
+                        // Actually requirements said verify Close/Archive functionality.
+                        // We'll trust updateAccountConfigAction to handle it.
+                        try {
+                          setStatus(null)
+                          const success = await updateAccountConfigAction({
+                            id: account.id,
+                            isActive: newStatus
+                          })
+                          if (!success) {
+                            setStatus({ text: 'Failed to update status', variant: 'error' })
+                          } else {
+                            setStatus({
+                              text: `Account ${newStatus ? 'reopened' : 'closed'} successfully`,
+                              variant: 'success'
+                            })
+                            // Refresh router to reflect changes in background
+                            router.refresh()
+                            // Close dialog after short delay if closing
+                            if (!newStatus) {
+                              setTimeout(() => closeDialog(true), 1000)
+                            }
+                          }
+                        } catch (err) {
+                          console.error('Failed to toggle status', err)
+                          setStatus({ text: 'Error updating status', variant: 'error' })
+                        }
+                      }}
+                      className={cn(
+                        "rounded-md px-3 py-1.5 text-xs font-medium transition-colors border",
+                        account.is_active
+                          ? "border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-300"
+                          : "border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200 hover:border-slate-300"
+                      )}
+                    >
+                      {account.is_active ? 'Close Account' : 'Reopen Account'}
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="p-6 border-t border-slate-200 bg-white flex justify-end gap-3 shrink-0">

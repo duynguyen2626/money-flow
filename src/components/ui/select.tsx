@@ -4,7 +4,7 @@ import * as React from 'react'
 import { Check, ChevronDown } from 'lucide-react'
 import * as PopoverPrimitive from '@radix-ui/react-popover'
 
-const cn = (...classes: (string | undefined)[]) => classes.filter(Boolean).join(' ')
+import { cn } from '@/lib/utils'
 
 export type SelectItem = {
   value: string

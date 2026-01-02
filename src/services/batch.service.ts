@@ -119,6 +119,54 @@ export async function deleteBatchItem(id: string) {
     if (error) throw error
 }
 
+export async function deleteBatchItemsBulk(ids: string[]) {
+    if (!ids || ids.length === 0) return
+    const supabase: any = createClient()
+    const { error } = await supabase
+        .from('batch_items')
+        .delete()
+        .in('id', ids)
+
+    if (error) throw error
+}
+
+export async function cloneBatchItem(id: string) {
+    const supabase: any = createClient()
+
+    // 1. Fetch original
+    const { data: item, error: fetchError } = await supabase
+        .from('batch_items')
+        .select('*')
+        .eq('id', id)
+        .single()
+
+    if (fetchError || !item) throw new Error('Item not found')
+
+    // 2. Prepare clone (remove ID and timestamps, reset status)
+    const {
+        id: _id,
+        created_at: _created_at,
+        updated_at: _updated_at,
+        status: _status,
+        is_confirmed: _is_confirmed,
+        transaction_id: _transaction_id,
+        ...cloneData
+    } = item
+
+    // 3. Insert as new
+    const { data: newItem, error: insertError } = await supabase
+        .from('batch_items')
+        .insert({
+            ...cloneData,
+            status: 'pending'
+        })
+        .select()
+        .single()
+
+    if (insertError) throw insertError
+    return newItem
+}
+
 export async function confirmBatchItem(itemId: string, targetAccountId?: string) {
     const supabase: any = createClient()
 
@@ -871,7 +919,7 @@ export async function confirmBatchSource(batchId: string, realAccountId: string)
     return true
 }
 
-export async function cloneBatch(batchId: string, newTag: string) {
+export async function cloneBatch(batchId: string, overrides: Partial<Database['public']['Tables']['batches']['Insert']> = {}) {
     const supabase: any = createClient()
 
     const { data: originalBatch, error: batchError } = await supabase
@@ -882,28 +930,16 @@ export async function cloneBatch(batchId: string, newTag: string) {
 
     if (batchError || !originalBatch) throw new Error('Original batch not found')
 
-    let newName = originalBatch.name
-    const nameParts = originalBatch.name.split(' ')
-    const lastPart = nameParts[nameParts.length - 1]
-
-    const normalizedNewTag = normalizeMonthTag(newTag) ?? newTag
-    const hasMonthTagAtEnd = isYYYYMM(lastPart) || isLegacyMMMYY(lastPart)
-
-    if (hasMonthTagAtEnd) {
-        nameParts[nameParts.length - 1] = normalizedNewTag
-        newName = nameParts.join(' ')
-    } else {
-        newName = `${originalBatch.name} ${normalizedNewTag}`
-    }
-
     const { data: newBatch, error: createError } = await supabase
         .from('batches')
         .insert({
-            name: newName,
-            sheet_link: originalBatch.sheet_link,
-            source_account_id: originalBatch.source_account_id,
-            status: 'draft',
-            is_template: false
+            name: overrides.name || `${originalBatch.name} (Clone)`,
+            sheet_link: overrides.sheet_link || originalBatch.sheet_link,
+            source_account_id: overrides.source_account_id || originalBatch.source_account_id,
+            status: overrides.status || 'draft',
+            is_template: overrides.is_template ?? false,
+            bank_type: overrides.bank_type || originalBatch.bank_type,
+            sheet_name: overrides.sheet_name || originalBatch.sheet_name,
         })
         .select()
         .single()

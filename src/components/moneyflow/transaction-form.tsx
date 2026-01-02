@@ -61,6 +61,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { cn, getAccountInitial } from "@/lib/utils";
+import { DatePicker } from "@/components/ui/date-picker";
 import { SmartAmountInput } from "@/components/ui/smart-amount-input";
 import {
   SplitBillTable,
@@ -96,6 +97,9 @@ const formSchema = z
     cashback_share_percent: z.coerce.number().min(0).optional(),
     cashback_share_fixed: z.coerce.number().min(0).optional(),
     shop_id: z.string().optional(),
+    shop_name: z.string().optional(),
+    shop_image_url: z.string().optional(),
+    category_name: z.string().optional(),
     is_voluntary: z.boolean().optional(),
     is_installment: z.boolean().optional(),
     installment_plan_id: z.string().optional(),
@@ -524,6 +528,10 @@ export function TransactionForm({
 
   const applyDefaultPersonSelection = useCallback(() => {
     if (!defaultPersonId) {
+      return;
+    }
+    // Prevent overwriting if initialValues (e.g. from Clone) already provide a person
+    if (initialValues?.person_id) {
       return;
     }
     const direct = personMap.get(defaultPersonId);
@@ -1556,6 +1564,10 @@ export function TransactionForm({
         (!isRefundMode || refundStatus !== "pending")
       )
         return false;
+
+      // ALWAYS include the currently selected account, even if it matches other exclusion criteria
+      if (acc.id === form.getValues("source_account_id")) return true;
+
       if (transactionType === "transfer" && acc.type === "credit_card")
         return false;
       return true;
@@ -1785,7 +1797,8 @@ export function TransactionForm({
       filteredShops = shopsState.filter(
         (s) =>
           !s.default_category_id ||
-          s.default_category_id === selectedCategoryId,
+          s.default_category_id === selectedCategoryId ||
+          s.id === form.getValues("shop_id"), // ALWAYS keep the currently selected shop
       );
     }
 
@@ -3253,62 +3266,11 @@ export function TransactionForm({
         control={control}
         name="occurred_at"
         render={({ field }) => (
-          <div className="relative">
-            <input
-              type="text"
-              inputMode="numeric"
-              placeholder="yyyy-mm-dd"
-              value={dateInputValue}
-              onChange={(event) => {
-                const nextValue = event.target.value;
-                setDateInputValue(nextValue);
-                const parsed = parseDateInput(nextValue);
-                if (parsed) {
-                  field.onChange(parsed);
-                }
-              }}
-              onBlur={() => {
-                const parsed = parseDateInput(dateInputValue);
-                if (!parsed && field.value) {
-                  setDateInputValue(format(field.value, "yyyy-MM-dd"));
-                }
-              }}
-              className="h-11 w-full rounded-md border border-gray-300 px-3 py-2 pr-10 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                const input = hiddenDateInputRef.current;
-                if (!input) return;
-                const picker = input as HTMLInputElement & { showPicker?: () => void };
-                if (typeof picker.showPicker === "function") {
-                  picker.showPicker();
-                } else {
-                  input.focus();
-                  input.click();
-                }
-              }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-500 hover:text-slate-700"
-              aria-label="Open date picker"
-            >
-              <Calendar className="h-4 w-4" />
-            </button>
-            <input
-              ref={hiddenDateInputRef}
-              type="date"
-              value={field.value ? format(field.value, "yyyy-MM-dd") : ""}
-              onChange={(event) => {
-                const dateStr = event.target.value;
-                if (!dateStr) return;
-                const [y, m, d] = dateStr.split("-").map(Number);
-                const newDate = new Date(y, m - 1, d, 12, 0, 0);
-                field.onChange(newDate);
-              }}
-              className="absolute h-0 w-0 opacity-0 pointer-events-none"
-              tabIndex={-1}
-              aria-hidden="true"
-            />
-          </div>
+          <DatePicker
+            value={field.value}
+            onChange={field.onChange}
+            className="w-full h-11 border-gray-300 shadow-sm"
+          />
         )}
       />
       {errors.occurred_at && (
@@ -3646,6 +3608,145 @@ export function TransactionForm({
         />
       </div>
       {InstallmentPlanPicker}
+    </div>
+  ) : null;
+
+  const showVolunteerToggle = transactionType === "debt";
+
+  const VolunteerSection = showVolunteerToggle ? (
+    <div className="rounded-lg border border-slate-200 p-4 space-y-3 bg-slate-50/50 mb-4">
+      <div className="flex items-center justify-between">
+        <div className="space-y-0.5">
+          <label className="text-sm font-medium text-slate-900">
+            Volunteer Cashback
+          </label>
+          <p className="text-xs text-slate-500">
+            Enable volunteer cashback for this lending
+          </p>
+        </div>
+        <Controller
+          control={control}
+          name="cashback_mode"
+          render={({ field }) => (
+            <Switch
+              checked={field.value === "voluntary"}
+              onCheckedChange={(checked) => {
+                field.onChange(checked ? "voluntary" : "none_back");
+              }}
+            />
+          )}
+        />
+      </div>
+    </div>
+  ) : null;
+
+
+
+  const VolunteerInputs = watchedCashbackMode === "voluntary" ? (
+    <div className="space-y-3 animate-in fade-in slide-in-from-top-1 bg-amber-50/50 p-3 rounded-md border border-amber-100 shadow-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Voluntary Percent */}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-amber-700">
+            % Voluntary
+          </label>
+          <Controller
+            control={control}
+            name="cashback_share_percent"
+            render={({ field }) => (
+              <SmartAmountInput
+                value={field.value}
+                unit="%"
+                onChange={(val) => {
+                  // Total cannot exceed Amount
+                  // Also Cap % by Card Rate
+                  const currentFixed =
+                    form.getValues("cashback_share_fixed") || 0;
+                  const remainingForPercent = Math.max(
+                    0,
+                    amountValue - currentFixed,
+                  );
+                  let safePercent = val;
+
+                  // 1. Cap by Card Rate (if exists)
+                  if (
+                    safePercent !== undefined &&
+                    rateLimitPercent !== null &&
+                    safePercent > rateLimitPercent
+                  ) {
+                    safePercent = rateLimitPercent;
+                  }
+
+                  // 2. Cap by Remaining Amount Space
+                  if (safePercent !== undefined && amountValue > 0) {
+                    const impliedAmount = (amountValue * safePercent) / 100;
+                    if (impliedAmount > remainingForPercent) {
+                      safePercent =
+                        (remainingForPercent / amountValue) * 100;
+                    }
+                  }
+                  field.onChange(safePercent);
+                }}
+                placeholder="%"
+                className="w-full border-amber-200 focus-visible:ring-amber-200"
+              />
+            )}
+          />
+        </div>
+
+        {/* Voluntary Fixed */}
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-amber-700">
+            Amount Voluntary
+          </label>
+          <Controller
+            control={control}
+            name="cashback_share_fixed"
+            render={({ field }) => (
+              <SmartAmountInput
+                value={field.value}
+                onChange={(val) => {
+                  // Total cannot exceed Amount
+                  const currentPercent =
+                    form.getValues("cashback_share_percent") || 0;
+                  const percentAmount =
+                    (amountValue * currentPercent) / 100;
+                  const remainingForFixed = Math.max(
+                    0,
+                    amountValue - percentAmount,
+                  );
+
+                  let safeVal = val;
+                  if (val !== undefined && val > remainingForFixed) {
+                    safeVal = remainingForFixed;
+                  }
+                  field.onChange(safeVal);
+                }}
+                placeholder="Overflow Amount"
+                className="w-full border-amber-200 focus-visible:ring-amber-200"
+              />
+            )}
+          />
+        </div>
+      </div>
+
+      {/* Voluntary Real-time Display */}
+      <div className="flex justify-between items-center px-2 py-1 bg-amber-100/50 rounded border border-amber-200/50">
+        <span className="text-xs font-medium text-amber-700">
+          Total Overflow:
+        </span>
+        <span className="text-sm font-bold text-amber-800">
+          {numberFormatter.format(
+            (amountValue * (watchedCashbackPercent || 0)) / 100 +
+            (watchedCashbackFixed || 0),
+          )}
+        </span>
+      </div>
+
+      <p className="text-[10px] text-amber-600 italic">
+        * This amount is tracked as overflow loss and does not count towards
+        standard budget.
+      </p>
     </div>
   ) : null;
 
@@ -4013,113 +4114,8 @@ export function TransactionForm({
         )}
 
       {/* Voluntary Mode: Decoupled Logic with Total Validated against Amount */}
-      {watchedCashbackMode === "voluntary" && (
-        <div className="space-y-3 animate-in fade-in slide-in-from-top-1 bg-amber-50/50 p-3 rounded-md border border-amber-100 shadow-sm">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Voluntary Percent */}
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-amber-700">
-                % Voluntary
-              </label>
-              <Controller
-                control={control}
-                name="cashback_share_percent"
-                render={({ field }) => (
-                  <SmartAmountInput
-                    value={field.value}
-                    unit="%"
-                    onChange={(val) => {
-                      // Total cannot exceed Amount
-                      // Also Cap % by Card Rate
-                      const currentFixed =
-                        form.getValues("cashback_share_fixed") || 0;
-                      const remainingForPercent = Math.max(
-                        0,
-                        amountValue - currentFixed,
-                      );
-                      let safePercent = val;
-
-                      // 1. Cap by Card Rate (if exists)
-                      if (
-                        safePercent !== undefined &&
-                        rateLimitPercent !== null &&
-                        safePercent > rateLimitPercent
-                      ) {
-                        safePercent = rateLimitPercent;
-                      }
-
-                      // 2. Cap by Remaining Amount Space
-                      if (safePercent !== undefined && amountValue > 0) {
-                        const impliedAmount = (amountValue * safePercent) / 100;
-                        if (impliedAmount > remainingForPercent) {
-                          safePercent =
-                            (remainingForPercent / amountValue) * 100;
-                        }
-                      }
-                      field.onChange(safePercent);
-                    }}
-                    placeholder="%"
-                    className="w-full border-amber-200 focus-visible:ring-amber-200"
-                  />
-                )}
-              />
-            </div>
-
-            {/* Voluntary Fixed */}
-            <div className="space-y-1">
-              <label className="text-xs font-medium text-amber-700">
-                Amount Voluntary
-              </label>
-              <Controller
-                control={control}
-                name="cashback_share_fixed"
-                render={({ field }) => (
-                  <SmartAmountInput
-                    value={field.value}
-                    onChange={(val) => {
-                      // Total cannot exceed Amount
-                      const currentPercent =
-                        form.getValues("cashback_share_percent") || 0;
-                      const percentAmount =
-                        (amountValue * currentPercent) / 100;
-                      const remainingForFixed = Math.max(
-                        0,
-                        amountValue - percentAmount,
-                      );
-
-                      let safeVal = val;
-                      if (val !== undefined && val > remainingForFixed) {
-                        safeVal = remainingForFixed;
-                      }
-                      field.onChange(safeVal);
-                    }}
-                    placeholder="Overflow Amount"
-                    className="w-full border-amber-200 focus-visible:ring-amber-200"
-                  />
-                )}
-              />
-            </div>
-          </div>
-
-          {/* Voluntary Real-time Display */}
-          <div className="flex justify-between items-center px-2 py-1 bg-amber-100/50 rounded border border-amber-200/50">
-            <span className="text-xs font-medium text-amber-700">
-              Total Overflow:
-            </span>
-            <span className="text-sm font-bold text-amber-800">
-              {numberFormatter.format(
-                (amountValue * (watchedCashbackPercent || 0)) / 100 +
-                (watchedCashbackFixed || 0),
-              )}
-            </span>
-          </div>
-
-          <p className="text-[10px] text-amber-600 italic">
-            * This amount is tracked as overflow loss and does not count towards
-            standard budget.
-          </p>
-        </div>
-      )}
+      {/* Voluntary Mode: Decoupled Logic - Reusable */}
+      {VolunteerInputs}
 
       {/* Stats / Info - Always Visible if Useful */}
       <div className="pt-2 border-t border-slate-200/60 space-y-2">
@@ -4376,6 +4372,8 @@ export function TransactionForm({
                   </div>
                 </div>
 
+                {VolunteerSection}
+                {VolunteerInputs}
                 {InstallmentSection}
                 {SplitBillSection}
               </>

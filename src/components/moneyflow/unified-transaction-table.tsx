@@ -12,6 +12,7 @@ import {
   Copy,
   CheckCheck,
   Sigma,
+  CopyPlus,
   Link2,
   Info,
   ShoppingBasket,
@@ -59,6 +60,11 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { TransactionForm, TransactionFormValues } from "./transaction-form"
 import {
   restoreTransaction,
@@ -77,17 +83,9 @@ import { ConfirmRefundDialog } from "./confirm-refund-dialog"
 import { TransactionHistoryModal } from './transaction-history-modal'
 import { AddTransactionDialog } from "./add-transaction-dialog"
 import { ExcelStatusBar } from "@/components/ui/excel-status-bar"
+import { ColumnKey } from "@/components/app/table/transactionColumns"
 
-type ColumnKey =
-  | "date"
-  | "shop" // Merged Shop/Note
-  | "category"
-  | "tag"
-  | "note" // Added Note Column
-  | "account" // Merged Flow & Entity
-  | "amount" // VALUE column (merged Amount + Final Price)
-  | "back_info"
-  | "id"
+
 
 type SortKey = 'date' | 'amount'
 type SortDir = 'asc' | 'desc'
@@ -147,7 +145,7 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     destinationAccountId = txn.target_account_id ?? undefined;
   }
 
-  return {
+  const result = {
     occurred_at: txn.occurred_at ? new Date(txn.occurred_at) : new Date(),
     type: derivedType,
     amount: Math.abs(baseAmount ?? 0),
@@ -158,14 +156,31 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     person_id: txn.person_id ?? undefined,
     debt_account_id: destinationAccountId,
     shop_id: txn.shop_id ?? undefined,
+    // Pass raw names for duplicate/edit scenarios where IDs might be missing but we want to preserve visual info or allow fuzzy match
+    shop_name: txn.shop_name,
+    shop_image_url: txn.shop_image_url,
+    category_name: txn.category_name,
     cashback_share_percent:
       percentValue !== undefined && percentValue !== null ? percentValue : undefined,
     cashback_share_fixed:
       txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined ? Number(txn.cashback_share_fixed) : undefined,
     is_installment: txn.is_installment ?? false,
-    cashback_mode: (percentValue !== undefined && percentValue !== null && Number(percentValue) > 0) ? 'real_percent' :
-      (txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined && Number(txn.cashback_share_fixed) > 0) ? 'real_fixed' : 'none_back',
+    cashback_mode: ((percentValue !== undefined && percentValue !== null && Number(percentValue) > 0) ? 'real_percent' :
+      (txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined && Number(txn.cashback_share_fixed) > 0) ? 'real_fixed' : 'none_back') as 'none_back' | 'real_fixed' | 'real_percent' | 'voluntary',
   };
+
+  // Diagnostic logging for duplicate form issue
+  console.log('[buildEditInitialValues] Transaction:', {
+    id: txn.id,
+    shop_id: txn.shop_id,
+    shop_name: txn.shop_name,
+    account_id: txn.account_id,
+    source_name: txn.source_name,
+    result_shop_id: result.shop_id,
+    result_source_account_id: result.source_account_id,
+  });
+
+  return result;
 }
 
 interface ColumnConfig {
@@ -191,12 +206,12 @@ interface UnifiedTransactionTableProps {
   shops?: Shop[]
   activeTab?: 'active' | 'void' | 'pending'
   hiddenColumns?: ColumnKey[]
+  columnOrder?: ColumnKey[]
   onBulkActionStateChange?: (state: BulkActionState) => void
   sortState?: { key: SortKey; dir: SortDir }
   onSortChange?: (state: { key: SortKey; dir: SortDir }) => void
   context?: 'account' | 'person' | 'general'
   isExcelMode?: boolean
-  // Pagination Props
   showPagination?: boolean
   currentPage?: number
   totalPages?: number
@@ -241,6 +256,7 @@ export function UnifiedTransactionTable({
   shops = [],
   activeTab,
   hiddenColumns = [],
+  columnOrder,
   onBulkActionStateChange,
   sortState: externalSortState,
   onSortChange,
@@ -259,6 +275,7 @@ export function UnifiedTransactionTable({
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 160, minWidth: 140 },
     { key: "shop", label: "Note", defaultWidth: 250, minWidth: 180 },
+    { key: "people", label: "People", defaultWidth: 150, minWidth: 120 },
     { key: "account", label: "Flow & Entity", defaultWidth: 280, minWidth: 220 },
     { key: "amount", label: "Value", defaultWidth: 140, minWidth: 120 },
     { key: "category", label: "Category", defaultWidth: 180 },
@@ -280,7 +297,9 @@ export function UnifiedTransactionTable({
       account: true,
       amount: true, // VALUE column (merged Amount + Final Price)
       back_info: false, // Merged into Amount column (not in defaultColumns)
+      final_price: true,
       id: false,
+      people: false,
     }
 
     if (hiddenColumns.length > 0) {
@@ -291,6 +310,8 @@ export function UnifiedTransactionTable({
 
     return initial
   })
+  // ... (skipping some lines for brevity in replacing, but need to be careful with context)
+  // Actually I will target the defaultColumns block first.
   const [isMobile, setIsMobile] = useState(false)
   const [columnWidths, setColumnWidths] = useState<Record<ColumnKey, number>>(() => {
     const map = {} as Record<ColumnKey, number>
@@ -1037,7 +1058,7 @@ export function UnifiedTransactionTable({
             setActionMenuOpen(null);
           }}
         >
-          <Copy className="h-4 w-4" />
+          <CopyPlus className="h-4 w-4" />
           <span>Duplicate</span>
         </button>
         <button
@@ -1132,34 +1153,68 @@ export function UnifiedTransactionTable({
     }
 
     return (
-      <div className="relative flex" data-action-menu-wrapper>
+      <div className="flex items-center gap-1" data-action-menu-wrapper onClick={(e) => e.stopPropagation()}>
+        {/* Quick Actions */}
         <button
-          id={`action-btn-${txn.id}`}
-          type="button"
-          data-action-trigger
-          className="inline-flex items-center justify-center rounded-md p-0.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-          disabled={isExcelMode}
-          onClick={event => {
-            event.stopPropagation()
-            setActionMenuOpen(isMenuOpen ? null : txn.id)
-          }}
+          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+          onClick={(e) => { e.stopPropagation(); setEditingTxn(txn); }}
+          title="Edit"
         >
-          <Wrench className="h-4 w-4 pointer-events-none" />
+          <Edit className="h-3.5 w-3.5" />
         </button>
-        {isMenuOpen && (
-          <div
-            data-action-menu
-            className="absolute right-0 top-7 z-50 w-48 rounded-md border border-slate-200 bg-white p-1 text-sm shadow-lg"
+        <CustomTooltip content="Duplicate">
+          <button
+            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+            onClick={(e) => { e.stopPropagation(); handleDuplicate(txn); }}
+          >
+            <CopyPlus className="h-3.5 w-3.5" />
+          </button>
+        </CustomTooltip>
+
+        <Popover open={isMenuOpen} onOpenChange={(open) => setActionMenuOpen(open ? txn.id : null)}>
+          <PopoverTrigger asChild>
+            <button
+              id={`action-btn-${txn.id}`}
+              type="button"
+              data-action-trigger
+              className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              disabled={isExcelMode}
+              onClick={event => {
+                event.stopPropagation()
+              }}
+            >
+              <Wrench className="h-3.5 w-3.5 pointer-events-none" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            className="w-48 p-1 z-[100]"
+            align="end"
+            side="bottom"
+            sideOffset={5}
             onClick={(e) => e.stopPropagation()}
           >
-            {renderActionMenuItems(txn, isVoided, 'popover')}
-          </div>
-        )}
+            <div className="flex flex-col">
+              {renderActionMenuItems(txn, isVoided, 'popover')}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
     )
+
   }
 
 
+
+  const effectiveColumnOrder = columnOrder ?? defaultColumns.map(c => c.key)
+  const displayedColumns = useMemo(() => {
+    if (isMobile) {
+      return mobileColumnOrder.map(key => defaultColumns.find(col => col.key === key)).filter(Boolean).filter(col => visibleColumns[col!.key]) as ColumnConfig[]
+    }
+
+    return effectiveColumnOrder
+      .map(key => defaultColumns.find(col => col.key === key))
+      .filter((col): col is ColumnConfig => !!col && visibleColumns[col.key] !== false)
+  }, [isMobile, effectiveColumnOrder, visibleColumns, mobileColumnOrder, defaultColumns])
 
   if (tableData.length === 0 && activeTab === 'active') {
     return (
@@ -1170,9 +1225,7 @@ export function UnifiedTransactionTable({
     );
   }
 
-
   const isAllSelected = displayedTransactions.length > 0 && selection.size >= displayedTransactions.length
-  const displayedColumns = (isMobile ? mobileColumnOrder.map(key => defaultColumns.find(col => col.key === key)).filter(Boolean) as ColumnConfig[] : defaultColumns).filter(col => visibleColumns[col.key])
 
   return (
     <div className="relative flex flex-col w-full h-full min-h-0">
@@ -1342,23 +1395,14 @@ export function UnifiedTransactionTable({
                       case "date": {
                         const d = new Date(txn.occurred_at ?? txn.created_at ?? Date.now())
                         const day = String(d.getDate()).padStart(2, '0')
-                        const monthShort = d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()
-                        const year = d.getFullYear()
+                        const month = String(d.getMonth() + 1).padStart(2, '0')
                         const timeStr = d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
                         const fullDateStr = d.toLocaleDateString('vi-VN', {
                           weekday: 'short', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
                         })
 
-                        // Determine badge color for Date - Match Type Badge Style
-                        let dateBadgeColors = "bg-slate-50 text-slate-700 border-slate-300";
-                        if (txn.type === 'debt') dateBadgeColors = "bg-amber-50 text-amber-700 border-amber-300";
-                        else if (txn.type === 'repayment') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-300";
-                        else if (txn.type === 'transfer') dateBadgeColors = "bg-sky-50 text-sky-700 border-sky-300";
-                        else if (txn.type === 'income') dateBadgeColors = "bg-emerald-50 text-emerald-700 border-emerald-300";
-                        else if (txn.type === 'expense') dateBadgeColors = "bg-red-50 text-red-700 border-red-300";
-
                         return (
-                          <div className="flex items-center gap-2 overflow-visible">
+                          <div className="flex items-center gap-3 overflow-visible w-full">
                             <input
                               type="checkbox"
                               className="rounded border-slate-300 pointer-events-auto"
@@ -1367,16 +1411,15 @@ export function UnifiedTransactionTable({
                               onChange={(e) => handleSelectOne(txn.id, e.target.checked)}
                               disabled={isExcelMode}
                             />
-                            {/* Calendar Tile with Year */}
-                            <div className={cn("flex flex-col items-center justify-center px-2 py-1 rounded-md border min-w-[70px]", dateBadgeColors)}>
-                              <span className="text-[9px] font-bold leading-none tracking-wide">{monthShort} {year}</span>
-                              <span className="text-lg font-bold leading-none mt-0.5">{day}</span>
-                            </div>
-                            {/* Time with Clock Icon */}
+
                             <CustomTooltip content={fullDateStr}>
-                              <div className="flex items-center gap-1 text-slate-500 cursor-help min-w-0 flex-1">
-                                <Clock className="h-3 w-3 flex-shrink-0" />
-                                <span className="text-xs font-medium truncate">{timeStr}</span>
+                              <div className="flex flex-col items-start justify-center cursor-help rounded px-0.5 group min-w-[34px]">
+                                <span className="text-sm font-bold text-slate-700 leading-none group-hover:text-blue-600 transition-colors">
+                                  {day}-{month}
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-medium leading-tight mt-0.5 group-hover:text-blue-500 transition-colors">
+                                  {timeStr}
+                                </span>
                               </div>
                             </CustomTooltip>
 
@@ -1449,26 +1492,10 @@ export function UnifiedTransactionTable({
                               </div>
                             )}
 
-                            <div className="flex flex-col min-w-0 flex-1">
-                              {/* Note with tooltip */}
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                {txn.note ? (
-                                  <CustomTooltip content={txn.note}>
-                                    <span
-                                      className="text-slate-900 font-semibold truncate cursor-help"
-                                      style={{ fontSize: `${fontSize}px` }}
-                                    >
-                                      {txn.note}
-                                    </span>
-                                  </CustomTooltip>
-                                ) : (
-                                  <span className="text-sm text-slate-400 italic">No note</span>
-                                )}
-                              </div>
-
-                              {/* Transaction ID Badge + Refund/Installment Badges (all clickable to copy) */}
-                              <div className="flex items-center gap-1 mt-0.5">
-                                {/* ID Badge - Clickable */}
+                            <div className="flex flex-col min-w-0 flex-1 justify-center">
+                              {/* Row 1: ID (Compact) + Note */}
+                              <div className="flex items-center gap-1.5 min-w-0 w-full mb-0.5">
+                                {/* ID Badge - Moved Up & Compact - 2 characters + ellipsis? Or just icon? User said "align sau img [7e...] làm gọn lại" */}
                                 <CustomTooltip content={`Click to copy: ${txnIdFull}`}>
                                   <button
                                     onClick={(e) => {
@@ -1478,23 +1505,39 @@ export function UnifiedTransactionTable({
                                       setTimeout(() => setCopiedId(null), 2000);
                                     }}
                                     className={cn(
-                                      "inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors",
+                                      "inline-flex items-center gap-0.5 px-0.5 py-0 rounded text-[9px] font-mono transition-colors shrink-0 h-4",
                                       copiedId === txn.id
                                         ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
-                                        : "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200"
+                                        : "bg-slate-100 text-slate-400 border border-slate-200 hover:bg-slate-200"
                                     )}
                                   >
-                                    {txnIdShort}
-                                    {copiedId === txn.id ? <Check className="h-2.5 w-2.5" /> : <Copy className="h-2.5 w-2.5" />}
+                                    <span className="max-w-[30px] truncate">{txnIdShort}</span>
+                                    {copiedId === txn.id ? <Check className="h-2 w-2" /> : <Copy className="h-2 w-2" />}
                                   </button>
                                 </CustomTooltip>
 
-                                {/* Installment Badge */}
-                                {installmentBadge}
-
-                                {/* Refund Badge - Clickable to copy refund ID */}
-                                {refundBadge}
+                                {/* Note Content - Same Line */}
+                                {txn.note ? (
+                                  <CustomTooltip content={txn.note}>
+                                    <span
+                                      className="text-slate-900 font-bold truncate cursor-help block flex-1"
+                                      style={{ fontSize: `0.9em` }} // Match Flow
+                                    >
+                                      {txn.note}
+                                    </span>
+                                  </CustomTooltip>
+                                ) : (
+                                  <span className="text-slate-400 italic text-[0.9em]">No note</span>
+                                )}
                               </div>
+
+                              {/* Row 2: Badges (Installment/Refund) - kept below or move up? User focus was ID. I'll keep secondary badges below if they exist to avoid clutter */}
+                              {(installmentBadge || refundBadge) && (
+                                <div className="flex items-center gap-1">
+                                  {installmentBadge}
+                                  {refundBadge}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -1525,9 +1568,8 @@ export function UnifiedTransactionTable({
                             {/* Note Content */}
                             <div className="flex items-center gap-2 truncate flex-1">
                               <span
-                                className="truncate text-slate-700 font-medium"
-                                title={txn.note ?? ''}
-                                style={{ fontSize: `${fontSize}px` }}
+                                className="text-slate-900 font-bold truncate cursor-help block flex-1"
+                                style={{ fontSize: `0.9em` }} // Match Flow
                               >
                                 {txn.note}
                               </span>
@@ -1557,6 +1599,21 @@ export function UnifiedTransactionTable({
                           </div>
                         );
                       }
+                      case "people": {
+                        const personName = (txn as any).person_name ?? people.find(p => p.id === txn.person_id)?.name
+                        if (!personName) return <span className="text-slate-400 italic text-xs">-</span>
+
+                        return (
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex items-center justify-center h-6 w-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">
+                              {personName.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]" title={personName}>
+                              {personName}
+                            </span>
+                          </div>
+                        )
+                      }
                       case "category": {
                         // 1. Determine Type Badge
                         let typeLabel = "EXPENSE"; // Default
@@ -1573,7 +1630,7 @@ export function UnifiedTransactionTable({
                           typeLabel = "LEND";
                           typeColor = "bg-orange-100 text-orange-700 border-orange-200";
                           typeTextColor = "text-orange-700";
-                          typeIcon = <ArrowUpRight className="h-3 w-3" />;
+                          typeIcon = <ArrowUpRight className="h-3 w-3 shrink-0" />;
                         } else if (txn.type === 'transfer') {
                           typeLabel = "TF";
                           typeColor = "bg-sky-100 text-sky-700 border-sky-200";
@@ -1608,7 +1665,7 @@ export function UnifiedTransactionTable({
                           ? new Date(occurredDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
                           : null;
 
-                        const catBadgeColor = "bg-white border-slate-200";
+                        const catBadgeColor = "bg-slate-100 border-slate-200 text-slate-700";
 
                         return (
                           <div className="flex w-full flex-col gap-1">
@@ -1642,15 +1699,15 @@ export function UnifiedTransactionTable({
                                 </div>
                               </CustomTooltip>
 
-                              {/* 2. Type Badge */}
-                              <span className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 h-6 text-[10px] font-extrabold whitespace-nowrap min-w-[50px] justify-center shrink-0", typeColor)}>
+                              {/* 2. Type Badge - Fixed defined Width */}
+                              <span className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 h-6 text-[10px] font-extrabold whitespace-nowrap w-[60px] justify-center shrink-0", typeColor)}>
                                 {typeIcon} {typeLabel}
                               </span>
 
-                              {/* 3. Category Name Badge - same style & font as type, with tooltip and consistent width */}
+                              {/* 3. Category Name Badge - Align Start */}
                               <CustomTooltip content={displayCategory}>
                                 <span
-                                  className={cn("inline-flex items-center justify-center rounded-md border px-1.5 font-extrabold truncate w-[85px] h-6 leading-none cursor-help shrink-0", catBadgeColor, typeTextColor)}
+                                  className={cn("inline-flex items-center justify-start rounded-md border px-1.5 font-extrabold truncate w-[85px] h-6 leading-none cursor-help shrink-0 pl-1.5", catBadgeColor, typeTextColor)}
                                   style={{ fontSize: `${fontSize}px` }}
                                 >
                                   {displayCategory}
@@ -1767,9 +1824,11 @@ export function UnifiedTransactionTable({
                                 <div className="flex items-center gap-1.5 min-w-0">
                                   {/* From/To Badge */}
                                   {contextBadge}
-                                  <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1 text-right" title={name}>
-                                    {name}
-                                  </span>
+                                  <CustomTooltip content={name}>
+                                    <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1 text-right cursor-help">
+                                      {name}
+                                    </span>
+                                  </CustomTooltip>
                                 </div>
                                 {badges.length > 0 && (
                                   <div className="flex flex-wrap gap-1 mt-0.5 justify-end">
@@ -1811,9 +1870,11 @@ export function UnifiedTransactionTable({
                                   {/* From/To Badge */}
                                   {contextBadge}
 
-                                  <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1" title={name}>
-                                    {name}
-                                  </span>
+                                  <CustomTooltip content={name}>
+                                    <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1 cursor-help">
+                                      {name}
+                                    </span>
+                                  </CustomTooltip>
                                 </div>
                                 {badges.length > 0 && (
                                   <div className="flex flex-wrap gap-1 mt-0.5">
@@ -2084,11 +2145,8 @@ export function UnifiedTransactionTable({
                             {/* Amount with Cashback Badges - NO +/- signs */}
                             <div className="flex items-center gap-1.5">
                               <span
-                                className={cn(
-                                  "font-bold tabular-nums tracking-tight",
-                                  isIncome ? "text-emerald-600" : "text-red-600"
-                                )}
-                                style={{ fontSize: `${fontSize}px` }}
+                                className={cn("font-bold tabular-nums tracking-tight truncate", amountClass)}
+                                style={{ fontSize: `0.9em` }} // Standardized to 0.9em
                               >
                                 {numberFormatter.format(Math.abs(amount))}
                               </span>
