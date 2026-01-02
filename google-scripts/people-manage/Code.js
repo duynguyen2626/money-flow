@@ -1,6 +1,7 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 4.2 (QR IMAGE MERGED CELL PLACEMENT)
-// Task: place QR via IMAGE() in merged summary area with bank-row-aware positioning.
+// VERSION: 4.3 (SMART CYCLE-AWARE SYNC)
+// Task: Handle edited transactions with smart cycle detection - full sync when cycle changes, fast update when same cycle.
+
 
 /*
 function onOpen() {
@@ -157,7 +158,9 @@ function handleSyncTransactions(payload) {
 
 function handleSingleTransaction(payload, action) {
     var personId = payload.personId || payload.person_id || null;
-    var cycleTag = getCycleTagFromDate(new Date(payload.date));
+    // CRITICAL: Use payload.cycle_tag if provided (for edited transactions)
+    // Otherwise calculate from date (for new transactions)
+    var cycleTag = payload.cycle_tag || payload.cycleTag || getCycleTagFromDate(new Date(payload.date));
     var ss = getOrCreateSpreadsheet(personId, payload);
     var sheet = getOrCreateCycleTab(ss, cycleTag);
     var syncOptions = buildSheetSyncOptions(payload);
@@ -253,7 +256,8 @@ function getOrCreateCycleTab(ss, cycleTag) {
 
 function setupNewSheet(sheet, summaryOptions) {
     SpreadsheetApp.flush();
-    sheet.getRange('A1').setNote('Script Version: 4.2');
+    sheet.getRange('A1').setNote('Script Version: 4.3');
+
 
     sheet.getRange('A:O').setFontSize(12);
 

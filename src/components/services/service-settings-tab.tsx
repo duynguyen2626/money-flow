@@ -73,7 +73,8 @@ export function ServiceSettingsTab({ service }: ServiceSettingsTabProps) {
         try {
             const result = await distributeServiceAction(service.id, undefined, noteTemplate)
             if (result.success) {
-                toast.success(`Distribution successful! Created ${result.transactions?.length || 0} transactions.`)
+                const count = Array.isArray(result.transactions) ? result.transactions.length : 0
+                toast.success(`Distribution successful! Created ${count} transactions.`)
             } else {
                 toast.error(result.error)
             }

@@ -34,7 +34,7 @@ function isValidLink(value: string | null | undefined): boolean {
 function sheetStatus(item: PeopleDirectoryItem) {
   const hasSheetUrl = isValidLink(item.sheetUrl)
   if (hasSheetUrl) {
-    return { label: 'Script Connected', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' }
+    return { label: 'Connected', className: 'border-emerald-200 bg-emerald-50 text-emerald-700' }
   }
   if (item.hasScriptLink) {
     return { label: 'Script Only', className: 'border-blue-200 bg-blue-50 text-blue-700' }
@@ -102,10 +102,11 @@ export function PeopleDirectoryDesktop({
                       )}
                     </div>
                     {item.subscriptions.length > 0 && (
-                      <div className="mt-1 flex max-w-full flex-nowrap gap-1.5 overflow-x-auto pb-1">
+                      <div className="mt-1 flex max-w-full flex-nowrap gap-1.5 overflow-x-visible pb-1">
                         {item.subscriptions.map((service) => (
                           <span
                             key={service.id}
+                            title={`${service.name}: ${service.slots} slot${service.slots > 1 ? 's' : ''}`}
                             className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600"
                           >
                             {service.image_url ? (
@@ -120,7 +121,8 @@ export function PeopleDirectoryDesktop({
                                 {service.name.slice(0, 1)}
                               </span>
                             )}
-                            {service.name}: {service.slots}
+                            <span className="hidden xl:inline">{service.name}: {service.slots}</span>
+                            <span className="hidden lg:inline xl:hidden">{service.name.slice(0, 3)}: {service.slots}</span>
                           </span>
                         ))}
                       </div>
@@ -286,23 +288,55 @@ export function PeopleDirectoryDesktop({
               {debtModalItem ? `${debtModalItem.name} outstanding cycles` : 'Outstanding cycles'}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 max-h-[350px] overflow-y-auto">
+          <div className="space-y-4 max-h-[400px] overflow-y-auto">
             {modalDebts.length === 0 && (
               <p className="text-sm text-slate-500">No outstanding cycles.</p>
             )}
-            {modalDebts.map((debt, index) => (
-              <div
-                key={`${debt.tagLabel ?? debt.tag ?? 'cycle'}-${index}`}
-                className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-3 py-2"
-              >
-                <span className="text-sm font-semibold text-slate-700">
-                  {debt.tagLabel || debt.tag || 'Cycle'}
-                </span>
-                <span className="text-sm font-bold text-amber-700">
-                  {formatter.format(Number(debt.amount ?? 0))}
-                </span>
-              </div>
-            ))}
+            {modalDebts.length > 0 && (
+              <>
+                {/* Current Cycle (shown on card) */}
+                <div>
+                  <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                    Current (shown on card)
+                  </h4>
+                  <div className="flex items-center justify-between rounded-lg border-2 border-emerald-200 bg-emerald-50 px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <ChevronRight className="h-4 w-4 text-emerald-600" />
+                      <span className="text-sm font-semibold text-emerald-700">
+                        {modalDebts[0].tagLabel || modalDebts[0].tag || 'Cycle'}
+                      </span>
+                    </div>
+                    <span className="text-sm font-bold text-emerald-700">
+                      {formatter.format(Number(modalDebts[0].amount ?? 0))}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Previous Cycles */}
+                {modalDebts.length > 1 && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                      Previous Cycles
+                    </h4>
+                    <div className="space-y-2">
+                      {modalDebts.slice(1).map((debt, index) => (
+                        <div
+                          key={`${debt.tagLabel ?? debt.tag ?? 'cycle'}-${index}`}
+                          className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                        >
+                          <span className="text-sm font-semibold text-slate-700">
+                            {debt.tagLabel || debt.tag || 'Cycle'}
+                          </span>
+                          <span className="text-sm font-bold text-amber-700">
+                            {formatter.format(Number(debt.amount ?? 0))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
           <DialogFooter className="pt-3">
             {debtModalItem && (

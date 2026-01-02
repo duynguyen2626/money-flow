@@ -28,7 +28,7 @@ export async function upsertServiceAction(serviceData: any) {
 
 export async function distributeServiceAction(serviceId: string, customDate?: string, customNoteFormat?: string) {
   try {
-    const transactions = await distributeService(serviceId, customDate, customNoteFormat)
+    const result = await distributeService(serviceId, customDate, customNoteFormat)
 
     // Recalculate balance for DRAFT_FUND as it's the account used
     const { recalculateBalance } = await import('@/services/account.service')
@@ -37,9 +37,9 @@ export async function distributeServiceAction(serviceId: string, customDate?: st
     revalidatePath('/services')
     revalidatePath('/')
     revalidatePath('/transactions')
-    return { success: true, transactions }
+    return { success: true, transactions: result.transactions }
   } catch (error: any) {
-    return { success: false, error: error.message }
+    return { success: false, error: error.message, transactions: [] }
   }
 }
 
@@ -177,6 +177,6 @@ export async function runAllServiceDistributionsAction(date?: string) {
     return result
   } catch (error: any) {
     console.error('Error running all distributions:', error)
-    return { success: 0, failed: 0, total: 0, error: error.message }
+    return { success: 0, failed: 0, skipped: 0, total: 0, reports: [], error: error.message }
   }
 }

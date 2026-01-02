@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Zap, Calendar as CalendarIcon } from 'lucide-react'
+import { Send, Calendar as CalendarIcon } from 'lucide-react'
 import { runAllServiceDistributionsAction } from '@/actions/service-actions'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -51,9 +51,9 @@ export function DistributeAllButton() {
             <DialogTrigger asChild>
                 <Button
                     variant="default"
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                    className="bg-purple-600 hover:bg-purple-700 text-white rounded-lg"
                 >
-                    <Zap className="mr-2 h-4 w-4" />
+                    <Send className="mr-2 h-4 w-4" />
                     Distribute All
                 </Button>
             </DialogTrigger>

@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { SYSTEM_ACCOUNTS, SYSTEM_CATEGORIES } from '@/lib/constants'
 import { toLegacyMMMYYFromDate, toYYYYMMFromDate } from '@/lib/month-tag'
+import { autoSyncCycleSheetIfNeeded } from './sheet.service'
 
 // TODO: The 'service_members' table is not in database.types.ts. 
 // This is a temporary type definition.
@@ -126,9 +127,13 @@ export async function distributeService(serviceId: string, customDate?: string, 
   const unitCost = initialPrice / totalSlots
   console.log('Unit cost:', unitCost)
 
-  const createdTransactions: any[] = []
+  // [Sprint 3] Timezone Fix: Force Asia/Ho_Chi_Minh
+  const now = new Date();
+  const vnTimeStr = now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const vnNow = new Date(vnTimeStr);
 
-  const transactionDate = customDate ? new Date(customDate).toISOString() : new Date().toISOString()
+  const createdTransactions: any[] = []
+  const transactionDate = customDate ? new Date(customDate).toISOString() : vnNow.toISOString()
 
   // [M2-SP2] Tag Format: YYYY-MM (e.g., 2025-12)
   const dateObj = new Date(transactionDate)
@@ -277,7 +282,30 @@ export async function distributeService(serviceId: string, customDate?: string, 
     }
   }
 
-  return createdTransactions;
+  // Update service bot status after successful distribution
+  try {
+    const now = new Date()
+    const nextMonth = new Date(now)
+    nextMonth.setMonth(nextMonth.getMonth() + 1)
+    nextMonth.setDate((service as any).due_day || 1)
+
+    await supabase
+      .from('subscriptions')
+      .update({
+        last_distribution_date: now.toISOString(),
+        next_distribution_date: nextMonth.toISOString(),
+        distribution_status: 'completed'
+      })
+      .eq('id', serviceId)
+
+    console.log(`[Bot Status] Updated service ${serviceId}: completed, next run ${nextMonth.toISOString()}`)
+  } catch (statusError) {
+    console.error('[Bot Status] Failed to update service status:', statusError)
+    // Don't fail the distribution if status update fails
+  }
+
+  // Return created transactions with person IDs for auto-sync
+  return { transactions: createdTransactions, personIds: Array.from(new Set(members.map(m => m.profile_id).filter(Boolean))) };
 }
 
 export async function getServices() {
@@ -411,12 +439,22 @@ export async function saveServiceBotConfig(serviceId: string, config: any) {
 
 export async function distributeAllServices(customDate?: string) {
   const supabase: any = createClient()
-  console.log('Starting batch distribution for all active services...', customDate ? `Date: ${customDate}` : 'Date: Current')
+
+  // [Sprint 3] Timezone Fix: Force Asia/Ho_Chi_Minh
+  const now = new Date();
+  const vnTimeStr = now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const vnNow = new Date(vnTimeStr);
+  const todayDay = vnNow.getDate();
+
+  const activeDate = customDate ? new Date(customDate) : vnNow;
+  const monthTag = toYYYYMMFromDate(activeDate);
+
+  console.log(`Starting batch distribution for all active services... Tag: ${monthTag}, Today VN: ${vnNow.toISOString()}`)
 
   // 1. Fetch all active services
   const { data: services, error } = await supabase
     .from('subscriptions')
-    .select('id, name')
+    .select('*')
     .eq('is_active', true)
 
   if (error) {
@@ -426,25 +464,76 @@ export async function distributeAllServices(customDate?: string) {
 
   if (!services || services.length === 0) {
     console.log('No active services found.')
-    return { success: 0, failed: 0, total: 0 }
+    return { success: 0, failed: 0, skipped: 0, total: 0, reports: [] }
   }
 
   console.log(`Found ${services.length} active services.`)
 
   let successCount = 0
   let failedCount = 0
+  let skippedCount = 0
+  const reports: any[] = []
 
   // 2. Distribute each service
   for (const service of services) {
     try {
-      await distributeService(service.id, customDate)
+      const dueDay = service.due_day || 1;
+
+      // [Sprint 3] Missed Day Recovery: today >= dueDay
+      // If we are testing with customDate, we bypass the dueDay check or use the customDate's day
+      const checkDay = customDate ? activeDate.getDate() : todayDay;
+
+      if (checkDay < dueDay) {
+        console.log(`Skipping ${service.name}: due on ${dueDay}, today is ${checkDay}`);
+        skippedCount++;
+        reports.push({ name: service.name, status: 'skipped', reason: `Due on day ${dueDay}` });
+        continue;
+      }
+
+      // [Sprint 3] Idempotency Check: Check if ALREADY distributed this month
+      // We check if ANY transaction exists for this service and monthTag
+      const { data: existingTx } = await supabase
+        .from('transactions')
+        .select('id')
+        .contains('metadata', { service_id: service.id, month_tag: monthTag })
+        .limit(1);
+
+      if (existingTx && existingTx.length > 0) {
+        console.log(`Skipping ${service.name}: already distributed for ${monthTag}`);
+        skippedCount++;
+        reports.push({ name: service.name, status: 'skipped', reason: `Already distributed for ${monthTag}` });
+        continue;
+      }
+
+      const result = await distributeService(service.id, customDate)
       successCount++
+      reports.push({ name: service.name, status: 'success' });
+
+      // [Service Sheet Integration] Auto-sync cycle sheets for people with sheet settings
+      if (result.personIds && result.personIds.length > 0) {
+        console.log(`[AutoSync] Triggering auto-sync for ${result.personIds.length} people from service ${service.name}`)
+        for (const personId of result.personIds) {
+          try {
+            await autoSyncCycleSheetIfNeeded(personId, monthTag)
+          } catch (autoSyncError) {
+            console.error(`[AutoSync] Failed for person ${personId}:`, autoSyncError)
+            // Don't fail the distribution if auto-sync fails
+          }
+        }
+      }
     } catch (err) {
       console.error(`Failed to distribute service ${service.name} (${service.id}):`, err)
       failedCount++
+      reports.push({ name: service.name, status: 'failed', reason: (err as any).message });
     }
   }
 
-  console.log(`Batch distribution completed. Success: ${successCount}, Failed: ${failedCount}`)
-  return { success: successCount, failed: failedCount, total: services.length }
+  console.log(`Batch distribution completed. Success: ${successCount}, Failed: ${failedCount}, Skipped: ${skippedCount}`)
+  return {
+    success: successCount,
+    failed: failedCount,
+    skipped: skippedCount,
+    total: services.length,
+    reports
+  }
 }

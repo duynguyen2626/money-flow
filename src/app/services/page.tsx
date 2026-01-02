@@ -1,11 +1,7 @@
 import { getServices } from '@/services/service-manager'
 import { getPeople } from '@/services/people.service'
-import { ServiceCard } from '@/components/services/service-card'
-import { ServiceCreateDialog } from '@/components/services/service-create-dialog'
-import { PlusCircle } from 'lucide-react'
-import { buttonVariants } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { DistributeAllButton } from '@/components/services/distribute-all-button'
+import { ServicesPageContent } from '@/components/services/services-page-content'
+import { Bot } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,44 +9,18 @@ export default async function ServicesPage() {
   const [services, people] = await Promise.all([getServices(), getPeople()])
 
   return (
-    <div className="h-full overflow-auto p-6">
-      <section className="space-y-4">
-        <header className="rounded-lg border bg-white px-6 py-5 shadow-sm">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-wider text-slate-500">Service Control Center</p>
-              <h1 className="text-2xl font-semibold text-slate-900">Quản lý Dịch vụ</h1>
-              <p className="text-sm text-slate-500">Manage your services and allocations.</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <DistributeAllButton />
-              <ServiceCreateDialog
-                trigger={
-                  <div className={cn(buttonVariants({ variant: 'outline' }), 'flex items-center gap-2')}>
-                    <PlusCircle size={18} />
-                    New Service
-                  </div>
-                }
-              />
-            </div>
-          </div>
-        </header>
-
+    <div className="h-full overflow-auto p-4 md:p-6">
+      <section className="space-y-4 max-w-7xl mx-auto">
         {services && services.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {services.map((service: any) => (
-              <ServiceCard
-                key={service.id}
-                service={service}
-                members={service.service_members}
-                allPeople={people}
-              />
-            ))}
-          </div>
+          <ServicesPageContent services={services} people={people} />
         ) : (
-          <div className="rounded-lg border bg-white p-6 shadow">
-            <p className="text-center text-sm text-slate-500">
-              No services found. Create a new one to get started.
+          <div className="rounded-none border bg-white p-12 text-center shadow-none">
+            <div className="h-12 w-12 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Bot className="text-slate-300" />
+            </div>
+            <h3 className="font-bold text-slate-900">No Services Yet</h3>
+            <p className="text-sm text-slate-500 mt-1">
+              Create a new service to start distributing costs.
             </p>
           </div>
         )}

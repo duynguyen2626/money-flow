@@ -18,6 +18,8 @@ CREATE TABLE public.accounts (
     total_out numeric DEFAULT 0,
     annual_fee numeric DEFAULT 0,
     cashback_config_version integer NOT NULL DEFAULT 1,
+    receiver_name text,
+    account_number text,
     CONSTRAINT accounts_pkey PRIMARY KEY (id),
     CONSTRAINT accounts_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id),
     CONSTRAINT accounts_secured_by_account_id_fkey FOREIGN KEY (secured_by_account_id) REFERENCES public.accounts(id),
@@ -33,12 +35,13 @@ CREATE TABLE public.auth_users (
 );
 CREATE TABLE public.bank_mappings (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
-    bank_code text NOT NULL UNIQUE,
+    bank_code text NOT NULL,
     bank_name text NOT NULL,
     short_name text NOT NULL,
     image_url text,
     created_at timestamp with time zone DEFAULT now(),
     updated_at timestamp with time zone DEFAULT now(),
+    bank_type text DEFAULT 'VIB'::text,
     CONSTRAINT bank_mappings_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.batch_items (
@@ -72,7 +75,13 @@ CREATE TABLE public.batches (
     is_template boolean,
     auto_clone_day integer,
     last_cloned_month_tag text,
+    bank_type text NOT NULL DEFAULT 'VIB'::text CHECK (
+        bank_type = ANY (ARRAY ['VIB'::text, 'MBB'::text])
+    ),
+    funding_transaction_id uuid,
+    display_name text,
     CONSTRAINT batches_pkey PRIMARY KEY (id),
+    CONSTRAINT batches_funding_transaction_id_fkey FOREIGN KEY (funding_transaction_id) REFERENCES public.transactions(id),
     CONSTRAINT batches_source_account_id_fkey FOREIGN KEY (source_account_id) REFERENCES public.accounts(id)
 );
 CREATE TABLE public.bot_configs (
@@ -88,6 +97,19 @@ CREATE TABLE public.bot_configs (
     created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
     is_enabled boolean DEFAULT false,
     CONSTRAINT bot_configs_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.bot_user_links (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    platform text NOT NULL CHECK (
+        platform = ANY (ARRAY ['telegram'::text, 'slack'::text])
+    ),
+    platform_user_id text NOT NULL,
+    profile_id uuid NOT NULL,
+    state jsonb,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT bot_user_links_pkey PRIMARY KEY (id),
+    CONSTRAINT bot_user_links_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.cashback_cycles (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -170,6 +192,17 @@ CREATE TABLE public.installments (
     CONSTRAINT installments_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.profiles(id),
     CONSTRAINT installments_debtor_id_fkey FOREIGN KEY (debtor_id) REFERENCES public.profiles(id)
 );
+CREATE TABLE public.person_cycle_sheets (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    person_id uuid NOT NULL,
+    cycle_tag text NOT NULL,
+    sheet_id text,
+    sheet_url text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT person_cycle_sheets_pkey PRIMARY KEY (id),
+    CONSTRAINT person_cycle_sheets_person_id_fkey FOREIGN KEY (person_id) REFERENCES public.profiles(id)
+);
 CREATE TABLE public.profiles (
     id uuid NOT NULL,
     name text NOT NULL,
@@ -182,7 +215,22 @@ CREATE TABLE public.profiles (
     is_owner boolean DEFAULT false,
     is_archived boolean DEFAULT false,
     google_sheet_url text,
-    CONSTRAINT profiles_pkey PRIMARY KEY (id)
+    group_parent_id uuid,
+    sheet_full_img text,
+    sheet_show_bank_account boolean DEFAULT false,
+    sheet_show_qr_image boolean DEFAULT false,
+    CONSTRAINT profiles_pkey PRIMARY KEY (id),
+    CONSTRAINT profiles_group_parent_id_fkey FOREIGN KEY (group_parent_id) REFERENCES public.profiles(id)
+);
+CREATE TABLE public.quick_add_templates (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    profile_id uuid NOT NULL,
+    name text NOT NULL,
+    payload jsonb NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT quick_add_templates_pkey PRIMARY KEY (id),
+    CONSTRAINT quick_add_templates_profile_id_fkey FOREIGN KEY (profile_id) REFERENCES public.profiles(id)
 );
 CREATE TABLE public.service_members (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
