@@ -9,7 +9,7 @@ import { SmartFilterBar } from '@/components/moneyflow/smart-filter-bar'
 import { DebtCycleList } from '@/components/moneyflow/debt-cycle-list'
 import { SplitBillManager } from '@/components/people/split-bill-manager'
 import { SheetSyncControls } from '@/components/people/sheet-sync-controls'
-import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
+import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
 
 interface PersonDetailTabsProps {
     accounts: Account[]
@@ -132,7 +132,7 @@ export function PersonDetailTabs({
 
                 {activeTab === 'history' && (
                     <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                        <UnifiedTransactionTable
+                        <FilterableTransactions
                             transactions={transactions}
                             accounts={accounts}
                             categories={categories}
@@ -140,8 +140,8 @@ export function PersonDetailTabs({
                             shops={shops}
                             context="person"
                             contextId={personId}
-                            showPagination={true}
-                            pageSize={20}
+                            variant="embedded"
+                            hidePeopleColumn={true}
                         />
                     </div>
                 )}

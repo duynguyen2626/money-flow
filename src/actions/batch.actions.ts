@@ -16,10 +16,17 @@ import {
     confirmBatchSource,
     sendBatchToSheet,
     cloneBatch,
+    cloneBatchItem,
+    deleteBatchItemsBulk,
     Batch,
     BatchItem
 } from '@/services/batch.service'
 import { revalidatePath } from 'next/cache'
+
+export async function cloneBatchItemAction(itemId: string, batchId: string) {
+    await cloneBatchItem(itemId)
+    revalidatePath(`/batch/${batchId}`)
+}
 
 export async function confirmBatchItemAction(itemId: string, batchId: string, targetAccountId?: string) {
     await confirmBatchItem(itemId, targetAccountId)
@@ -34,6 +41,11 @@ export async function voidBatchItemAction(itemId: string, batchId: string) {
 
 export async function deleteBatchItemAction(itemId: string, batchId: string) {
     await deleteBatchItem(itemId)
+    revalidatePath(`/batch/${batchId}`)
+}
+
+export async function deleteBatchItemsBulkAction(itemIds: string[], batchId: string) {
+    await deleteBatchItemsBulk(itemIds)
     revalidatePath(`/batch/${batchId}`)
 }
 
@@ -107,8 +119,8 @@ export async function createBatchAction(data: any) {
     return result
 }
 
-export async function cloneBatchAction(batchId: string, newTag: string) {
-    const result = await cloneBatch(batchId, newTag)
+export async function cloneBatchAction(batchId: string, overrides: any = {}) {
+    const result = await cloneBatch(batchId, overrides)
     revalidatePath('/batch')
     return result
 }

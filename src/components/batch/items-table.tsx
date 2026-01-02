@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table'
 import { Button } from '@/components/ui/button'
 import { Trash2, CheckCircle2, Ban, CreditCard, CalendarClock } from 'lucide-react'
-import { deleteBatchItemAction, updateBatchItemAction, confirmBatchItemAction, voidBatchItemAction } from '@/actions/batch.actions'
+import { deleteBatchItemAction, updateBatchItemAction, confirmBatchItemAction, voidBatchItemAction, deleteBatchItemsBulkAction, cloneBatchItemAction } from '@/actions/batch.actions'
 import { Checkbox } from '@/components/ui/checkbox'
 import { EditItemDialog } from './edit-item-dialog'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
@@ -95,6 +95,31 @@ export function ItemsTable({ items: initialItems, batchId, onSelectionChange, ac
         setShowConfirm(true)
     }
 
+    async function handleBulkDelete() {
+        const confirmedSelected = items.filter(i => selectedIds.includes(i.id) && i.status === 'confirmed')
+        if (confirmedSelected.length > 0) {
+            setConfirmConfig({
+                title: 'Cannot Delete Selected',
+                description: `${confirmedSelected.length} selected items are already confirmed. Please unselect them first.`,
+                onConfirm: () => { },
+                variant: 'destructive'
+            })
+            setShowConfirm(true)
+            return
+        }
+
+        setConfirmConfig({
+            title: 'Delete Selected Items',
+            description: `Are you sure you want to delete ${selectedIds.length} items? This action cannot be undone.`,
+            onConfirm: async () => {
+                await deleteBatchItemsBulkAction(selectedIds, batchId)
+                setSelectedIds([])
+            },
+            variant: 'destructive'
+        })
+        setShowConfirm(true)
+    }
+
     function openTransferDialog(item: any) {
         setSelectedItemForTransfer(item)
         setShowTransferDialog(true)
@@ -118,6 +143,10 @@ export function ItemsTable({ items: initialItems, batchId, onSelectionChange, ac
         setShowConfirm(true)
     }
 
+    async function handleClone(id: string) {
+        await cloneBatchItemAction(id, batchId)
+    }
+
     const handleSelectAll = (checked: boolean) => {
         const newSelectedIds = checked ? items.map(i => i.id) : []
         setSelectedIds(newSelectedIds)
@@ -134,6 +163,32 @@ export function ItemsTable({ items: initialItems, batchId, onSelectionChange, ac
 
     return (
         <>
+            {selectedIds.length > 0 && (
+                <div className="flex items-center gap-2 mb-4 p-2 bg-slate-50 border border-slate-200 rounded-md sticky top-0 z-10 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                    <span className="text-sm font-medium ml-2">
+                        {selectedIds.length} items selected
+                    </span>
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleBulkDelete}
+                        className="ml-auto"
+                    >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Selected
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                            setSelectedIds([])
+                            onSelectionChange?.([])
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                </div>
+            )}
             <Table>
                 <TableHeader>
                     <TableRow>
@@ -341,6 +396,29 @@ export function ItemsTable({ items: initialItems, batchId, onSelectionChange, ac
                                                 title="Confirm Transfer"
                                             >
                                                 <CheckCircle2 className="h-4 w-4" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleClone(item.id)}
+                                                className="text-slate-500 hover:text-slate-600 hover:bg-slate-50"
+                                                title="Duplicate"
+                                            >
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    width="16"
+                                                    height="16"
+                                                    viewBox="0 0 24 24"
+                                                    fill="none"
+                                                    stroke="currentColor"
+                                                    strokeWidth="2"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    className="h-4 w-4"
+                                                >
+                                                    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                                                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                                                </svg>
                                             </Button>
                                             <Button
                                                 variant="ghost"

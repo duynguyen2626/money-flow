@@ -7,10 +7,11 @@ import { Button } from '@/components/ui/button'
 import { Trash2, ExternalLink } from 'lucide-react'
 import { deleteBatchAction } from '@/actions/batch.actions'
 import { useRouter } from 'next/navigation'
+import { CloneBatchDialog } from './clone-batch-dialog'
 
-type BatchListProps = { batches: any[]; mode?: 'processing' | 'done' }
+type BatchListProps = { batches: any[]; mode?: 'processing' | 'done'; accounts?: any[]; webhookLinks?: any[] }
 
-export function BatchList({ batches, mode }: BatchListProps) {
+export function BatchList({ batches, mode, accounts = [], webhookLinks = [] }: BatchListProps) {
     const router = useRouter()
 
     if (!batches || batches.length === 0) {
@@ -40,14 +41,17 @@ export function BatchList({ batches, mode }: BatchListProps) {
                             <CardTitle className="text-base font-medium truncate pr-8">
                                 {batch.name}
                             </CardTitle>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 text-muted-foreground hover:text-red-600"
-                                onClick={(e) => handleDelete(e, batch.id)}
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <div className="absolute top-2 right-2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <CloneBatchDialog batch={batch} accounts={accounts} webhookLinks={webhookLinks} />
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-red-600"
+                                    onClick={(e) => handleDelete(e, batch.id)}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </CardHeader>
                         <CardContent>
                             <div className="flex justify-between items-start">
@@ -81,7 +85,7 @@ export function BatchList({ batches, mode }: BatchListProps) {
                     </Card>
                 </div>
             ))}
-        </div>
+        </div >
     )
 
     if (mode === 'processing') {

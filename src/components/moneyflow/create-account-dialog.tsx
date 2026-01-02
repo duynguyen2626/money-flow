@@ -832,6 +832,36 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
                             />
                           </div>
 
+                          <div className="space-y-1.5 flex-1">
+                            <label className="text-sm font-medium text-slate-700 flex justify-between">
+                              <span>Account Logo URL</span>
+                              {imageUrl && (
+                                <span className="text-xs text-green-600 font-normal">Preview active</span>
+                              )}
+                            </label>
+                            <div className="flex gap-3">
+                              <InputWithClear
+                                value={imageUrl}
+                                onChange={e => setImageUrl(e.target.value)}
+                                onClear={() => setImageUrl('')}
+                                placeholder="Paste image URL"
+                              />
+                              {imageUrl && (
+                                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-md border border-slate-200 bg-white">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img
+                                    src={imageUrl}
+                                    alt="Preview"
+                                    className="h-full w-full object-contain p-1"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).src = 'https://ui-avatars.com/api/?name=?'
+                                    }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
                           {isCreditCard && (
                             <div className="space-y-1">
                               <div className="flex items-center justify-between">

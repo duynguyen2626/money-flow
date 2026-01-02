@@ -10,6 +10,7 @@ export type ColumnKey =
   | "back_info"
   | "final_price"
   | "id"
+  | "people"
 
 export interface ColumnConfig {
   key: ColumnKey
@@ -24,6 +25,7 @@ export const defaultColumns: ColumnConfig[] = [
   { key: "account", label: "Flow & Entity", defaultWidth: 280, minWidth: 200 },
   { key: "amount", label: "Value", defaultWidth: 140, minWidth: 120 }, // Merged column
   { key: "category", label: "Category", defaultWidth: 180 },
+  { key: "people", label: "People", defaultWidth: 150 },
   { key: "id", label: "ID", defaultWidth: 100 },
 ]
 

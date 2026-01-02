@@ -24,11 +24,13 @@ export function BatchDetail({
     batch,
     accounts,
     bankMappings,
+    webhookLinks = [],
     activeInstallmentAccounts = []
 }: {
     batch: any,
     accounts: any[],
     bankMappings?: any[],
+    webhookLinks?: any[],
     activeInstallmentAccounts?: string[]
 }) {
     const [sending, setSending] = useState(false)
@@ -210,7 +212,7 @@ export function BatchDetail({
                 </div>
                 <div className="flex gap-2">
                     <BatchSettingsDialog batch={batch} />
-                    <CloneBatchDialog batchId={batch.id} batchName={batch.name} />
+                    <CloneBatchDialog batch={batch} accounts={accounts} webhookLinks={webhookLinks} />
 
                     <Button onClick={handleDelete} disabled={deleting} variant="outline" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-50" title="Delete Batch">
                         {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
