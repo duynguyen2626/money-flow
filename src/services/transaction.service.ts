@@ -1465,3 +1465,274 @@ export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
     linked_transaction_id: row.metadata?.original_transaction_id,
   }));
 }
+
+/**
+ * SPLIT BILL MANAGEMENT
+ */
+
+/**
+ * Get all transactions related to a split bill (base + children)
+ */
+export async function getSplitBillTransactions(baseTransactionId: string) {
+  const supabase = createClient();
+
+  // Get base transaction
+  const { data: baseTransaction, error: baseError } = await supabase
+    .from("transactions")
+    .select("*")
+    .eq("id", baseTransactionId)
+    .maybeSingle();
+
+  if (baseError) {
+    console.error("Error fetching base transaction:", baseError);
+    return { base: null, children: [] };
+  }
+
+  // Get all child transactions using JSONB query
+  const { data: childTransactions, error: childError } = await supabase
+    .from("transactions")
+    .select("*")
+    .contains("metadata", { split_parent_id: baseTransactionId } as any);
+
+  if (childError) {
+    console.error("Error fetching child transactions:", childError);
+    return { base: baseTransaction, children: [] };
+  }
+
+  return {
+    base: baseTransaction,
+    children: childTransactions || [],
+  };
+}
+
+/**
+ * Delete an entire split bill (base transaction + all child transactions)
+ * Returns the number of transactions deleted
+ */
+export async function deleteSplitBill(
+  baseTransactionId: string,
+): Promise<{ success: boolean; deletedCount?: number; error?: string }> {
+  const supabase = createClient();
+
+  try {
+    // First, get all transactions to know which accounts to recalculate
+    const { base, children } = await getSplitBillTransactions(baseTransactionId);
+
+    if (!base) {
+      return { success: false, error: "Base transaction not found" };
+    }
+
+    // Collect all affected accounts
+    const affectedAccounts = new Set<string>();
+    affectedAccounts.add((base as any).account_id);
+    if ((base as any).target_account_id) {
+      affectedAccounts.add((base as any).target_account_id);
+    }
+
+    children.forEach((child: any) => {
+      affectedAccounts.add(child.account_id);
+      if (child.target_account_id) {
+        affectedAccounts.add(child.target_account_id);
+      }
+    });
+
+    // Delete cashback_entries first (foreign key constraint)
+    const allTransactionIds = [baseTransactionId, ...children.map((c: any) => c.id)];
+    const { error: cashbackDeleteError } = await supabase
+      .from("cashback_entries")
+      .delete()
+      .in("transaction_id", allTransactionIds);
+
+    if (cashbackDeleteError) {
+      console.error("Error deleting cashback entries:", cashbackDeleteError);
+      // Continue anyway, cashback entries might not exist
+    }
+
+    // Delete child transactions
+    const { error: childDeleteError } = await supabase
+      .from("transactions")
+      .delete()
+      .contains("metadata", { split_parent_id: baseTransactionId } as any);
+
+    if (childDeleteError) {
+      console.error("Error deleting child transactions:", childDeleteError);
+      return {
+        success: false,
+        error: `Failed to delete child transactions: ${childDeleteError.message}`,
+      };
+    }
+
+    // Delete base transaction
+    const { error: baseDeleteError } = await supabase
+      .from("transactions")
+      .delete()
+      .eq("id", baseTransactionId);
+
+    if (baseDeleteError) {
+      console.error("Error deleting base transaction:", baseDeleteError);
+      return {
+        success: false,
+        error: `Failed to delete base transaction: ${baseDeleteError.message}`,
+      };
+    }
+
+    // Recalculate balances for all affected accounts
+    await recalcForAccounts(affectedAccounts);
+
+    const deletedCount = 1 + children.length; // base + children
+
+    return { success: true, deletedCount };
+  } catch (error) {
+    console.error("Unhandled error in deleteSplitBill:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Update split bill amounts and participants
+ */
+export async function updateSplitBillAmounts(
+  baseTransactionId: string,
+  updates: {
+    title?: string;
+    note?: string;
+    qrImageUrl?: string | null;
+    participants: Array<{
+      personId: string;
+      amount: number;
+      isNew?: boolean;
+      isRemoved?: boolean;
+      transactionId?: string;
+    }>;
+  },
+): Promise<{ success: boolean; error?: string }> {
+  const supabase = createClient();
+
+  try {
+    // Get base transaction
+    const { data: baseTransaction, error: baseError } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("id", baseTransactionId)
+      .maybeSingle();
+
+    if (baseError || !baseTransaction) {
+      return { success: false, error: "Base transaction not found" };
+    }
+
+    const baseMeta = (baseTransaction as any).metadata || {};
+
+    // Calculate new total from non-removed participants
+    const newTotal = updates.participants
+      .filter((p) => !p.isRemoved)
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    // Collect affected accounts
+    const affectedAccounts = new Set<string>();
+    affectedAccounts.add((baseTransaction as any).account_id);
+    if ((baseTransaction as any).target_account_id) {
+      affectedAccounts.add((baseTransaction as any).target_account_id);
+    }
+
+    // Update base transaction
+    const { error: baseUpdateError } = await supabase
+      .from("transactions")
+      .update({
+        amount: -Math.abs(newTotal), // Negative for expense
+        note: updates.note || (baseTransaction as any).note,
+        metadata: {
+          ...baseMeta,
+          split_qr_image_url: updates.qrImageUrl ?? baseMeta.split_qr_image_url,
+          split_group_name: updates.title || baseMeta.split_group_name,
+        },
+      } as any)
+      .eq("id", baseTransactionId);
+
+    if (baseUpdateError) {
+      console.error("Error updating base transaction:", baseUpdateError);
+      return {
+        success: false,
+        error: `Failed to update base transaction: ${baseUpdateError.message}`,
+      };
+    }
+
+    // Update existing participants
+    for (const p of updates.participants.filter((p) => !p.isNew && !p.isRemoved)) {
+      if (!p.transactionId) continue;
+
+      const { error: updateError } = await supabase
+        .from("transactions")
+        .update({ amount: -Math.abs(p.amount) } as any) // Negative for debt
+        .eq("id", p.transactionId);
+
+      if (updateError) {
+        console.error(`Error updating participant ${p.personId}:`, updateError);
+      }
+
+      // Track affected account
+      const { data: txn } = await supabase
+        .from("transactions")
+        .select("account_id")
+        .eq("id", p.transactionId)
+        .single();
+      if (txn) affectedAccounts.add((txn as any).account_id);
+    }
+
+    // Void removed participants
+    for (const p of updates.participants.filter((p) => p.isRemoved)) {
+      if (!p.transactionId) continue;
+
+      const { error: voidError } = await supabase
+        .from("transactions")
+        .update({ status: "void" } as any)
+        .eq("id", p.transactionId);
+
+      if (voidError) {
+        console.error(`Error voiding participant ${p.personId}:`, voidError);
+      }
+    }
+
+    // Create new participants
+    for (const p of updates.participants.filter((p) => p.isNew)) {
+      const newChildPayload = {
+        occurred_at: (baseTransaction as any).occurred_at,
+        note: updates.note || (baseTransaction as any).note,
+        status: "posted",
+        tag: (baseTransaction as any).tag,
+        created_by: (baseTransaction as any).created_by,
+        type: "debt",
+        amount: -Math.abs(p.amount), // Negative for debt
+        account_id: (baseTransaction as any).account_id,
+        target_account_id: null,
+        category_id: (baseTransaction as any).category_id,
+        person_id: p.personId,
+        metadata: {
+          split_parent_id: baseTransactionId,
+          split_group_name: updates.title || baseMeta.split_group_name,
+        },
+      };
+
+      const { error: createError } = await supabase
+        .from("transactions")
+        .insert(newChildPayload as any);
+
+      if (createError) {
+        console.error(`Error creating new participant ${p.personId}:`, createError);
+      }
+    }
+
+    // Recalculate balances
+    await recalcForAccounts(affectedAccounts);
+
+    return { success: true };
+  } catch (error) {
+    console.error("Unhandled error in updateSplitBillAmounts:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}

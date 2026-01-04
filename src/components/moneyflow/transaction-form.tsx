@@ -57,6 +57,7 @@ import {
   Sparkles,
   Loader2,
   Users,
+  Info,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -830,6 +831,118 @@ export function TransactionForm({
           return;
         }
 
+        // Smart 2-Person Split Logic
+        const isTwoPersonSplit = splitParticipants.length === 2;
+
+        if (isTwoPersonSplit) {
+          // Handle 2-person split differently: create main expense + lend transaction
+          const myShare = splitParticipants.find(p => p.personId === "me" || p.name.toLowerCase() === "me (mine)");
+          const otherPerson = splitParticipants.find(p => p.personId !== "me" && p.name.toLowerCase() !== "me (mine)");
+
+          if (!myShare || !otherPerson) {
+            setStatus({ type: "error", text: "Invalid 2-person split configuration. Please ensure you and one other person are included." });
+            return;
+          }
+
+          const otherDebtAccountId = debtAccountByPerson.get(otherPerson.personId);
+          if (!otherDebtAccountId) {
+            setStatus({ type: "error", text: `Missing debt account for ${otherPerson.name}. Please create one first.` });
+            return;
+          }
+
+          // 1. Create main expense transaction (full amount for bank reconciliation)
+          const mainExpensePayload: Parameters<typeof createTransaction>[0] = {
+            occurred_at: restValues.occurred_at.toISOString(),
+            type: restValues.type === "repayment" ? "income" : restValues.type,
+            amount: totalAmount,
+            source_account_id: restValues.source_account_id,
+            category_id: restValues.category_id ?? undefined,
+            shop_id: restValues.shop_id ?? undefined,
+            note: restValues.note || "Shared expense",
+            tag: restValues.tag,
+            metadata: {
+              ...(restValues.installment_plan_id ? { installment_id: restValues.installment_plan_id } : {}),
+              ...(initialValues?.metadata || {}),
+              is_two_person_split: true,
+              my_share: myShare.amount,
+              other_share: otherPerson.amount,
+              other_person_id: otherPerson.personId,
+              other_person_name: otherPerson.name,
+            },
+            is_installment: isInstallment,
+            installment_plan_id: restValues.installment_plan_id ?? undefined,
+            cashback_share_percent: Number(restValues.cashback_share_percent ?? 0) / 100,
+            cashback_share_fixed: Number(restValues.cashback_share_fixed ?? 0),
+            cashback_mode: restValues.cashback_mode,
+          };
+
+          const mainExpenseId = await createTransaction(mainExpensePayload);
+          if (!mainExpenseId) {
+            setStatus({ type: "error", text: "Failed to create main expense transaction." });
+            return;
+          }
+
+          // 2. Create Lend transaction for other person's share
+          const lendPayload: Parameters<typeof createTransaction>[0] = {
+            occurred_at: restValues.occurred_at.toISOString(),
+            type: "debt", // Lending money
+            amount: otherPerson.amount,
+            source_account_id: restValues.source_account_id,
+            person_id: otherPerson.personId,
+            debt_account_id: otherDebtAccountId,
+            note: `[2-Split] ${restValues.note || "Shared expense"} - ${otherPerson.name}'s share`,
+            tag: restValues.tag,
+            metadata: {
+              linked_expense_id: mainExpenseId,
+              is_two_person_split_lend: true,
+              original_total: totalAmount,
+              my_share: myShare.amount,
+            },
+          };
+
+          const lendId = await createTransaction(lendPayload);
+          if (!lendId) {
+            setStatus({
+              type: "error",
+              text: "Main expense created, but failed to create lend transaction. Please create it manually."
+            });
+            router.refresh();
+            return;
+          }
+
+          // Success!
+          router.refresh();
+          form.reset({
+            ...baseDefaults,
+            occurred_at: new Date(),
+            amount: 0,
+            note: "",
+            tag: defaultTag ?? generateTag(new Date()),
+            source_account_id: defaultSourceAccountId ?? undefined,
+            category_id: undefined,
+            person_id: undefined,
+            debt_account_id: defaultDebtAccountId ?? undefined,
+            shop_id: undefined,
+            cashback_share_percent: undefined,
+            cashback_share_fixed: undefined,
+            split_bill: false,
+          });
+          setManualTagMode(Boolean(defaultTag));
+          setIsInstallment(false);
+          setSplitGroupId(undefined);
+          setSplitParticipants([]);
+          setSplitBillAutoSplit(true);
+          setSplitBillError(null);
+          setStatus({
+            type: "success",
+            text: `2-person split created: Main expense (${numberFormatter.format(totalAmount)}) + Lend to ${otherPerson.name} (${numberFormatter.format(otherPerson.amount)})`,
+          });
+          onSuccess?.();
+          return;
+        }
+
+        // Continue with existing group split logic for 3+ people
+
         const rawPercent = Number(restValues.cashback_share_percent ?? 0);
         const percentValue = rawPercent / 100;
         const fixedTotal = Number(restValues.cashback_share_fixed ?? 0);
@@ -851,14 +964,10 @@ export function TransactionForm({
           ? splitBillGroupMap.get(splitGroupId)?.name
           : undefined;
         const billTitle = (restValues.note ?? "").trim() || "Split Bill";
-        const splitPrefix =
-          restValues.type === "repayment" ? "[SplitRepay]" : "[SplitBill]";
-        const basePrefix =
-          restValues.type === "repayment"
-            ? "[SplitRepay Base]"
-            : "[SplitBill Base]";
-        const childNoteBase = `${splitPrefix} ${groupName ?? "Group"} | ${billTitle}`;
-        const baseNote = `${basePrefix} ${groupName ?? "Group"} | ${billTitle}`;
+
+        // Clean notes without prefix - badges provide visual indication
+        const childNoteBase = `${groupName ?? "Group"} | ${billTitle}`;
+        const baseNote = `${groupName ?? "Group"} | ${billTitle}`;
         const baseMetadata = {
           ...(restValues.installment_plan_id
             ? { installment_id: restValues.installment_plan_id }
@@ -2919,10 +3028,9 @@ export function TransactionForm({
     ) : null;
 
   const PersonInput =
-    !isSplitBill &&
-      (transactionType === "debt" ||
-        transactionType === "repayment" ||
-        (transactionType === "income" && !isRefundMode)) ? (
+    (transactionType === "debt" ||
+      transactionType === "repayment" ||
+      (transactionType === "income" && !isRefundMode)) ? (
       <div className="space-y-3">
         <div className="space-y-2">
           <label className="text-sm font-medium text-gray-700">Person</label>
@@ -2948,15 +3056,22 @@ export function TransactionForm({
                 className="h-11"
                 onAddNew={() => setIsPersonDialogOpen(true)}
                 addLabel="New Person"
+                disabled={isSplitBill}
               />
             )}
           />
+          {isSplitBill && (
+            <p className="text-xs text-slate-500 flex items-center gap-1">
+              <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-600 text-[10px] font-bold">i</span>
+              Person is managed by Split Bill participants
+            </p>
+          )}
           {errors.person_id && (
             <p className="text-sm text-red-600 font-medium mt-1 animate-pulse">
               ⚠️ {errors.person_id.message}
             </p>
           )}
-          {debtAccountName && (
+          {debtAccountName && !isSplitBill && (
             <div className="flex flex-wrap gap-2 mt-1">
               <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
                 {debtAccountName}
@@ -2966,7 +3081,7 @@ export function TransactionForm({
         </div>
 
         {/* Payer Name Input for Group Debt Repayments/Lending */}
-        {(transactionType === "repayment" || transactionType === "debt") &&
+        {!isSplitBill && (transactionType === "repayment" || transactionType === "debt") &&
           watchedPersonId &&
           (() => {
             const selectedPerson = personMap.get(watchedPersonId);
@@ -2992,7 +3107,7 @@ export function TransactionForm({
             ) : null;
           })()}
 
-        {watchedPersonId && !debtAccountByPerson.get(watchedPersonId) ? (
+        {!isSplitBill && watchedPersonId && !debtAccountByPerson.get(watchedPersonId) ? (
           <div className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
             <div className="space-y-1">
               <p className="font-semibold">
@@ -3015,7 +3130,7 @@ export function TransactionForm({
               {isEnsuringDebt ? "Creating..." : "Create & Link Now"}
             </button>
           </div>
-        ) : watchedPersonId && debtAccountByPerson.get(watchedPersonId) ? (
+        ) : !isSplitBill && watchedPersonId && debtAccountByPerson.get(watchedPersonId) ? (
           <div className="flex items-center gap-2 mt-2">
             <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
               Linked
@@ -3030,7 +3145,7 @@ export function TransactionForm({
             </a>
           </div>
         ) : null}
-        {errors.debt_account_id && (
+        {!isSplitBill && errors.debt_account_id && (
           <p className="text-sm text-red-600 font-medium mt-1 animate-pulse">
             ⚠️ {errors.debt_account_id.message}
           </p>
@@ -3188,6 +3303,29 @@ export function TransactionForm({
           )}
         </div>
       </div>
+
+      {/* 2-Person Split Info Banner */}
+      {splitParticipants.length === 2 && (() => {
+        const myShare = splitParticipants.find(p => p.personId === "me" || p.name.toLowerCase() === "me (mine)");
+        const otherPerson = splitParticipants.find(p => p.personId !== "me" && p.name.toLowerCase() !== "me (mine)");
+
+        if (!myShare || !otherPerson) return null;
+
+        return (
+          <div className="rounded-md bg-blue-50 border border-blue-200 p-3">
+            <div className="flex gap-2">
+              <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+              <div className="text-xs text-blue-800">
+                <p className="font-semibold">2-Person Split Detected</p>
+                <p className="mt-1">
+                  Your expense ({numberFormatter.format(myShare.amount)}) will be recorded with the full amount for bank reconciliation.
+                  A "Lend" transaction ({numberFormatter.format(otherPerson.amount)}) will be created for {otherPerson.name}.
+                </p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       <SplitBillTable
         participants={splitParticipants}
