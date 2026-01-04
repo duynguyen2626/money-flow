@@ -916,11 +916,11 @@ export function SplitBillRow({
       <EditSplitBillDialog
         isOpen={showEditDialog}
         onClose={() => setShowEditDialog(false)}
-        baseTransactionId={bill.baseTransactionId}
+        baseTransactionId={bill.baseTransactionId ?? null}
         initialData={{
           title: bill.title,
           note: bill.baseNote || bill.title,
-          qrImageUrl: bill.qrImageUrl,
+          qrImageUrl: bill.qrImageUrl ?? null,
           participants: bill.participants.map(p => ({
             personId: p.personId,
             name: p.name,
