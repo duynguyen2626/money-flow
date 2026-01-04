@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { format } from 'date-fns'
-import { ArrowDownLeft, ChevronDown, ChevronUp, Copy, DollarSign } from 'lucide-react'
+import { ArrowDownLeft, ChevronDown, ChevronUp, Copy, DollarSign, Trash2, Edit } from 'lucide-react'
 import html2canvas from 'html2canvas'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import { updateTransactionMetadata } from '@/actions/transaction-actions'
+import { updateTransactionMetadata, deleteSplitBillAction } from '@/actions/transaction-actions'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
+import { EditSplitBillDialog, EditSplitBillParticipant } from './edit-split-bill-dialog'
 import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 
 export type SplitBillParticipant = {
@@ -53,6 +54,9 @@ export function SplitBillRow({
   const [isSavingQr, setIsSavingQr] = useState(false)
   const [capturePreviewUrl, setCapturePreviewUrl] = useState<string | null>(null)
   const [qrInput, setQrInput] = useState(bill.qrImageUrl ?? '')
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showEditDialog, setShowEditDialog] = useState(false)
   const detailRef = useRef<HTMLDivElement>(null)
   const qrPreviewRef = useRef<HTMLImageElement | null>(null)
 
@@ -328,6 +332,229 @@ export function SplitBillRow({
     setIsSavingQr(false)
   }
 
+  const handleCopyCombined = async () => {
+    if (!qrInput || !qrInput.trim()) {
+      toast.error('QR image URL is required')
+      return
+    }
+
+    setIsCapturing(true)
+
+    try {
+      // 1. Fetch QR image as blob to bypass CORS
+      const imageUrl = qrInput.trim()
+      const response = await fetch(imageUrl)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch image: ${response.status}`)
+      }
+
+      const blob = await response.blob()
+      const objectUrl = URL.createObjectURL(blob)
+
+      // 2. Load QR image
+      const qrImage = new Image()
+      qrImage.src = objectUrl
+
+      await new Promise((resolve, reject) => {
+        qrImage.onload = resolve
+        qrImage.onerror = () => reject(new Error('Failed to load QR image'))
+      })
+      URL.revokeObjectURL(objectUrl)
+
+      // 3. Setup Canvas dimensions (High DPI)
+      const scaleFactor = 2 // 2x resolution for sharpness
+
+      const tableWidth = 500 // Even wider
+      const padding = 60 // More breathing room
+      const lineHeight = 44 // Taller lines
+
+      // Calculate table height
+      const headerHeight = 220 - lineHeight
+      const rowsHeight = bill.participants.length * lineHeight
+      const contentHeight = headerHeight + rowsHeight + padding * 2
+
+      // Image dimensions logic
+      const targetQrWidth = 400
+      const imgScale = targetQrWidth / qrImage.width
+      const imgW = qrImage.width * imgScale
+      const imgH = qrImage.height * imgScale
+
+      const logicalTotalWidth = tableWidth + padding + imgW + padding
+      const logicalTotalHeight = Math.max(contentHeight, imgH + padding * 2)
+
+      const canvas = document.createElement('canvas')
+      canvas.width = logicalTotalWidth * scaleFactor
+      canvas.height = logicalTotalHeight * scaleFactor
+      const ctx = canvas.getContext('2d')!
+
+      ctx.scale(scaleFactor, scaleFactor)
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = 'high'
+
+      ctx.fillStyle = 'white'
+      ctx.fillRect(0, 0, logicalTotalWidth, logicalTotalHeight)
+
+      const tableY = logicalTotalHeight > contentHeight
+        ? (logicalTotalHeight - contentHeight) / 2
+        : 0
+
+      let y = Math.max(0, tableY) + padding + 15
+
+      ctx.fillStyle = '#0f172a'
+      ctx.font = 'bold 36px sans-serif' // Giant Title
+      ctx.fillText('Bill Details', padding, y)
+
+      y += 60
+
+      // Metadata
+      const drawRow = (label: string, value: string, isTotal = false) => {
+        const labelWidth = 120
+        ctx.fillStyle = '#64748b'
+        ctx.font = isTotal ? 'bold 24px sans-serif' : '20px sans-serif' // Very legible
+        ctx.fillText(label, padding, y)
+
+        ctx.fillStyle = isTotal ? '#0f172a' : '#334155'
+        ctx.font = isTotal ? 'bold 24px sans-serif' : '22px sans-serif'
+        ctx.fillText(value, padding + labelWidth, y)
+        y += lineHeight
+      }
+
+      const formattedDate = format(new Date(bill.occurredAt), 'dd MMM yyyy')
+      drawRow('Date:', formattedDate)
+      drawRow('Note:', noteToShow)
+
+      y += 20
+      drawRow('Total:', numberFormatter.format(totalAmount), true)
+
+      y += 20
+      ctx.strokeStyle = '#e2e8f0'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(padding, y)
+      ctx.lineTo(tableWidth, y)
+      ctx.stroke()
+      y += 50
+
+      ctx.font = 'bold 22px sans-serif'
+      ctx.fillStyle = '#334155'
+      ctx.fillText('Participants', padding, y)
+      y += 40
+
+      bill.participants.forEach(p => {
+        ctx.font = '22px sans-serif'
+        ctx.fillStyle = '#334155'
+        const personName = p.name
+        ctx.fillText(personName, padding, y)
+
+        const amt = numberFormatter.format(p.amount)
+        const amtWidth = ctx.measureText(amt).width
+        ctx.fillText(amt, tableWidth - amtWidth, y)
+
+        y += lineHeight
+      })
+
+      // 5. Draw Image (Right side, vertically centered)
+      const imgX = tableWidth + padding
+      const imgY = (logicalTotalHeight - imgH) / 2
+      ctx.drawImage(qrImage, imgX, imgY, imgW, imgH)
+
+      // 6. Copy to clipboard
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          toast.error('Failed to create image')
+          setIsCapturing(false)
+          return
+        }
+
+        navigator.clipboard
+          .write([new ClipboardItem({ 'image/png': blob })])
+          .then(() => {
+            toast.success('Copied! 📋')
+            setIsCapturing(false)
+          })
+          .catch((err) => {
+            console.error('Clipboard error:', err)
+            // Fallback for some browsers?
+            toast.error('Failed to copy to clipboard')
+            setIsCapturing(false)
+          })
+      }, 'image/png')
+    } catch (error) {
+      console.error('Copy Error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      toast.error(`Failed to copy: ${errorMessage}`)
+      setIsCapturing(false)
+    }
+  }
+
+  const handleDeleteSplitBill = async () => {
+    setIsDeleting(true)
+
+    try {
+      if (bill.baseTransactionId) {
+        // New split bills with base transaction
+        const result = await deleteSplitBillAction(bill.baseTransactionId)
+        setIsDeleting(false)
+
+        if (result.success) {
+          toast.success(`Deleted split bill: ${result.deletedCount} transactions removed`)
+          setShowDeleteConfirm(false)
+          window.location.reload()
+        } else {
+          toast.error(result.error || 'Failed to delete split bill')
+        }
+      } else {
+        // Legacy split bills without base transaction
+        // Delete all child transactions by finding them through participant IDs
+        const supabase = (await import('@/lib/supabase/client')).createClient()
+
+        // Get all transaction IDs from participants
+        const participantIds = bill.participants.map(p => p.personId)
+
+        // Find all transactions for these participants with matching note pattern
+        const { data: transactions } = await supabase
+          .from('transactions')
+          .select('id')
+          .in('person_id', participantIds)
+          .ilike('note', `%${bill.title}%`)
+
+        if (!transactions || transactions.length === 0) {
+          toast.error('No transactions found to delete')
+          setIsDeleting(false)
+          return
+        }
+
+        const transactionIds = transactions.map((t: any) => t.id)
+
+        // Delete cashback entries first
+        await supabase
+          .from('cashback_entries')
+          .delete()
+          .in('transaction_id', transactionIds)
+
+        // Delete transactions
+        const { error } = await supabase
+          .from('transactions')
+          .delete()
+          .in('id', transactionIds)
+
+        setIsDeleting(false)
+
+        if (error) {
+          toast.error(`Failed to delete: ${error.message}`)
+        } else {
+          toast.success(`Deleted ${transactionIds.length} transactions`)
+          setShowDeleteConfirm(false)
+          window.location.reload()
+        }
+      }
+    } catch (error) {
+      setIsDeleting(false)
+      toast.error('An error occurred while deleting')
+      console.error(error)
+    }
+  }
+
   return (
     <div className="border rounded-lg bg-white overflow-hidden transition-all duration-200 shadow-sm hover:shadow-md">
       <div
@@ -373,6 +600,32 @@ export function SplitBillRow({
         <div className="border-t border-slate-100 p-4 space-y-3 animate-in slide-in-from-top-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-500">Split details</span>
+            <div className="flex items-center gap-2">
+              {/* Edit button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowEditDialog(true)
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100 transition-colors"
+              >
+                <Edit className="h-3 w-3" />
+                Edit
+              </button>
+              {/* Delete button */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowDeleteConfirm(true)
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100 transition-colors"
+              >
+                <Trash2 className="h-3 w-3" />
+                Delete
+              </button>
+            </div>
           </div>
 
           <div
@@ -402,6 +655,18 @@ export function SplitBillRow({
                     >
                       <Copy className="h-3 w-3 mr-1" />
                       {isCapturing ? 'Capturing...' : 'Copy Table'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void handleCopyCombined()
+                      }}
+                      disabled={isCapturing || !qrInput}
+                      className="inline-flex h-7 items-center rounded-md border border-purple-200 bg-purple-50 px-2.5 text-[11px] font-semibold text-purple-700 hover:bg-purple-100 disabled:opacity-60"
+                      title="Copy table + cropped QR"
+                    >
+                      📋 {isCapturing ? 'Processing...' : 'Copy Combined'}
                     </button>
                   </div>
                 </div>
@@ -567,13 +832,15 @@ export function SplitBillRow({
                 data-capture-qr
                 className="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white p-2"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  crossOrigin="anonymous"
-                  src={qrInput}
-                  alt="QR code"
-                  className="block h-auto w-auto max-h-[320px] max-w-[420px] object-contain"
-                />
+                {qrInput && (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    crossOrigin="anonymous"
+                    src={qrInput}
+                    alt="QR code"
+                    className="block h-auto w-auto max-h-[320px] max-w-[420px] object-contain"
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -598,6 +865,72 @@ export function SplitBillRow({
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="p-4 border-b border-slate-200">
+              <h3 className="text-lg font-semibold text-slate-900">Delete Split Bill?</h3>
+            </div>
+            <div className="p-4 space-y-3">
+              <p className="text-sm text-slate-700">
+                This will permanently delete:
+              </p>
+              <ul className="text-sm text-slate-600 space-y-1 ml-4 list-disc">
+                <li>1 base transaction</li>
+                <li>{bill.participants.length} child transactions</li>
+              </ul>
+              <p className="text-sm font-semibold text-slate-900">
+                Total: {bill.participants.length + 1} transactions
+              </p>
+              <div className="rounded-md bg-red-50 border border-red-200 p-3">
+                <p className="text-xs text-red-800 font-semibold">
+                  ⚠️ This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="p-4 border-t border-slate-200 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-semibold text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSplitBill}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50"
+              >
+                {isDeleting ? 'Deleting...' : 'Delete All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Split Bill Dialog */}
+      <EditSplitBillDialog
+        isOpen={showEditDialog}
+        onClose={() => setShowEditDialog(false)}
+        baseTransactionId={bill.baseTransactionId ?? null}
+        initialData={{
+          title: bill.title,
+          note: bill.baseNote || bill.title,
+          qrImageUrl: bill.qrImageUrl ?? null,
+          participants: bill.participants.map(p => ({
+            personId: p.personId,
+            name: p.name,
+            amount: Math.abs(p.amount),
+            transactionId: undefined, // Will be fetched by service
+          })),
+          baseAmount: bill.participants.reduce((sum, p) => sum + Math.abs(p.amount), 0),
+        }}
+        allPeople={people}
+      />
     </div>
   )
 }

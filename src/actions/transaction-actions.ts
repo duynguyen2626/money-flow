@@ -1056,3 +1056,78 @@ export async function getUnifiedTransactions(accountId?: string, limit: number =
   return (data as any[]).map(txn => mapUnifiedTransaction(txn, accountId));
 }
 
+/**
+ * SPLIT BILL MANAGEMENT ACTIONS
+ */
+
+/**
+ * Delete an entire split bill (base + all child transactions)
+ */
+export async function deleteSplitBillAction(
+  baseTransactionId: string
+): Promise<{ success: boolean; deletedCount?: number; error?: string }> {
+  try {
+    const { deleteSplitBill } = await import('@/services/transaction.service');
+    const result = await deleteSplitBill(baseTransactionId);
+
+    if (result.success) {
+      // Revalidate all relevant pages
+      const { revalidatePath } = await import('next/cache');
+      revalidatePath('/transactions');
+      revalidatePath('/accounts');
+      revalidatePath('/people');
+      // Revalidate all people detail pages (can't target specific ID without knowing it)
+      revalidatePath('/people/[id]', 'page');
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Delete Split Bill Action Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Update split bill amounts and participants
+ */
+export async function updateSplitBillAction(
+  baseTransactionId: string,
+  updates: {
+    title?: string;
+    note?: string;
+    qrImageUrl?: string | null;
+    participants: Array<{
+      personId: string;
+      amount: number;
+      isNew?: boolean;
+      isRemoved?: boolean;
+      transactionId?: string;
+    }>;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { updateSplitBillAmounts } = await import('@/services/transaction.service');
+    const result = await updateSplitBillAmounts(baseTransactionId, updates);
+
+    if (result.success) {
+      // Revalidate all relevant pages
+      const { revalidatePath } = await import('next/cache');
+      revalidatePath('/transactions');
+      revalidatePath('/accounts');
+      revalidatePath('/people');
+      revalidatePath('/people/[id]', 'page');
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Update Split Bill Action Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
