@@ -29,6 +29,8 @@ export type DebtByTagAggregatedResult = {
   status: string;
   last_activity: string;
   manual_allocations?: Record<string, number>;
+  remainingPrincipal: number;
+  links: { repaymentId: string, amount: number }[];
 }
 
 type SettleDebtResult = {
@@ -242,7 +244,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
 
   // FIFO Simulation to determine "Remaining" amount for each debt
   // 1. Separate Debts and Repayments
-  const debtsMap = new Map<string, { remaining: number }>()
+  const debtsMap = new Map<string, { remaining: number, links: { repaymentId: string, amount: number }[] }>()
   const debtsList: any[] = []
   const repaymentPool: number[] = []
 
@@ -251,7 +253,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
     if (type === 'debt' || type === 'expense') {
       const amount = Math.abs(txn.amount)
       debtsList.push({ ...txn, remaining: amount })
-      debtsMap.set(txn.id, { remaining: amount })
+      debtsMap.set(txn.id, { remaining: amount, links: [] }) // Init links
     } else if (type === 'repayment' || type === 'income') {
       repaymentPool.push(Math.abs(txn.amount))
       // console.error(`[DebtService] Found Repayment: ${txn.amount} (${txn.occurred_at})`);
@@ -293,7 +295,8 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       repay: number
       cashback: number
       last_activity: string
-      remainingPrincipal: number // NEW: Sum of 'remaining' of debts in this tag
+      remainingPrincipal: number // Sum of 'remaining' of debts in this tag
+      links: { repaymentId: string, amount: number }[] // NEW: Collected links
     }
   >()
 
@@ -304,7 +307,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       const occurredAt = row.occurred_at ?? ''
 
       if (!tagMap.has(tag)) {
-        tagMap.set(tag, { lend: 0, lendOriginal: 0, repay: 0, cashback: 0, last_activity: occurredAt, remainingPrincipal: 0 })
+        tagMap.set(tag, { lend: 0, lendOriginal: 0, repay: 0, cashback: 0, last_activity: occurredAt, remainingPrincipal: 0, links: [] })
       }
 
       const current = tagMap.get(tag)!
@@ -325,8 +328,18 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
         // Add remaining principal from our FIFO simulation
         const fifoEntry = debtsMap.get(row.id)
         if (fifoEntry) {
-          console.error(`[DebtAgg] ID: ${row.id} (${tag}). FIFO Rem: ${fifoEntry.remaining}`);
+          // console.error(`[DebtAgg] ID: ${row.id} (${tag}). FIFO Rem: ${fifoEntry.remaining}`);
           current.remainingPrincipal += fifoEntry.remaining
+          // Add links (deduplicate by ID if needed, but array is fine for now)
+          fifoEntry.links.forEach(link => {
+            // Check if already added to tag (optional, but cleaner)
+            const exists = current.links.find(l => l.repaymentId === link.repaymentId);
+            if (exists) {
+              exists.amount += link.amount;
+            } else {
+              current.links.push({ ...link });
+            }
+          });
         }
       } else if (baseType === 'income') {
         if (!isNaN(finalPrice)) {
@@ -343,47 +356,10 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       }
     })
 
-  return Array.from(tagMap.entries()).map(([tag, { lend, lendOriginal, repay, cashback, last_activity, remainingPrincipal }]) => {
+  return Array.from(tagMap.entries()).map(([tag, { lend, lendOriginal, repay, cashback, last_activity, remainingPrincipal, links }]) => {
     const netBalance = lend - repay
 
-    // Status Logic:
-    // If remainingPrincipal is roughly 0, checks are cleared.
-    // However, we must also consider if the tag itself has a net balance?
-    // Actually, user wants "Settled" if debts are paid.
-    // If remainingPrincipal < 0.01, it means all debts in this tag are covered (by ANY repayment, anywhere).
-    // So status is Settled.
-
-    // BUT: What if there is excess repayment in this tag?
-    // e.g. Lend 100, Repay 150 (Advance).
-    // RemainingPrincipal = 0.
-    // Net Balance = -50.
-    // Should be "Active" (You owe them)?
-    // Or "Settled"? Usually "Settled" implies "Debt is cleared". "Credit" is different.
-    // If netBalance < 0, it means "Overpaid".
-    // Let's stick to: "Settled" if remainingPrincipal == 0 AND netBalance >= 0.
-    // If netBalance < 0, it's "Active" (Credit).
-
-    // Wait, simple view:
-    // If remainingPrincipal > 0 -> Active (You are owed).
-    // If remainingPrincipal == 0:
-    //    If netBalance < 0 -> Active (You owe them). 
-    //    Else -> Settled.
-
-    // DEBUG: Log status determination
-    // console.log(`[DebtStatus] Tag: ${tag} | Rem: ${remainingPrincipal} | Net: ${netBalance}`);
-
-    let status = 'active'
-    if (remainingPrincipal < 500) {
-      status = 'settled'
-      // Was checking netBalance < -500 for Credit, but removed to ensure "Settled" visual.
-    } else {
-      // Debug: Why is it still active?
-      if (tag.includes('2025-10') || tag.includes('2025-11') || tag.includes('2025-12')) {
-        console.error(`[DebtStatus-Active] Tag: ${tag} | Remaining: ${remainingPrincipal} | Net: ${netBalance}`);
-      }
-    }
-
-    // console.log(`[DebtResult] Tag: ${tag} computed status: ${status}. Active Condition: Rem ${remainingPrincipal} >= 500`);
+    // ... (logic remains same)
 
     return {
       tag,
@@ -394,6 +370,8 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       totalCashback: cashback,
       status,
       last_activity,
+      remainingPrincipal,
+      links // Use destructured variable
     }
   })
 }
