@@ -97,6 +97,23 @@ If you encounter missing cycle data or incorrect caps in the Cashback Analysis v
 - Requires `person_cycle_sheets` table; apply migration `supabase/migrations/20251226193000_create_person_cycle_sheets.sql` to remove the PGRST205 warning and enable sheet storage.
 - Sheet create/sync runs server-side via `POST /api/sheets/manage` (apps script must support `create_cycle_sheet` action).
 
+
+## Recent Updates (Phase 10 - Scope 4: Split Bill & Debt)
+
+### Scope 4.1: Split Bill UX (Completed)
+- **Edit Split Bill**: Full dialog to edit amounts, participants (add/remove), and metadata.
+- **Copy Combined**: Robust "Canvas-based" generation of Bill + QR image.
+    - Solved `lab()` color crash in `html2canvas`.
+    - High-DPI rendering (2x scale) for sharp QR codes.
+    - Large text typography for better readability.
+- **Cleanup**: Removed legacy `[SplitBill]` prefixes.
+
+### Scope 4.2: Consolidated Debt Repayment (Planned)
+- **Problem**: Repaying multi-month debt requires multiple transactions.
+- **Solution**: "Surplus Cascading" logic.
+    - Overpay in current month -> Surplus automatically "fills" older debt months.
+    - UI updates to show "Settled via Surplus".
+
 ## Quick Add Chatbot (Phase 2)
 - Floating Quick Add chat widget appears on Dashboard, Transactions, and People detail pages only.
 - Natural language wizard with follow-up questions; always requires review/confirm.
