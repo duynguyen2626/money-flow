@@ -4872,166 +4872,154 @@ export function TransactionForm({
                                 </div>
                               );
                             })}
-                          handleOverrideChange(debt.id, 0);
-                          return;
-                              }
-                          const val = parseFloat(raw);
-                          if (!isNaN(val)) {
-                            handleOverrideChange(debt.id, val);
-                              }
-                            }}
-                          />
-                        </div>
-                      </div>
-                    );
-                          })}
 
-                    {allocationPreview && allocationPreview.remainingRepayment > 0.1 && (
-                      <div className="flex justify-between text-xs text-orange-600 font-medium pt-1">
-                        <span>Unallocated Remaining:</span>
-                        <span>{numberFormatter.format(allocationPreview.remainingRepayment)}</span>
+
+                          {allocationPreview && allocationPreview.remainingRepayment > 0.1 && (
+                            <div className="flex justify-between text-xs text-orange-600 font-medium pt-1">
+                              <span>Unallocated Remaining:</span>
+                              <span>{numberFormatter.format(allocationPreview.remainingRepayment)}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>
-                      </div>
-            )}
-          </div>
-          ) : (
-          /* LENDING LAYOUT (Original) */
-          <div className="space-y-4">
-            {/* Row 1: Date - Tag */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-              <div>{DateInput}</div>
-              <div>{TagInput}</div>
-            </div>
-            {/* Row 2: Person - Note */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-              <div>{PersonInput}</div>
-              <div>{NoteInput}</div>
-            </div>
-            {/* Row 3: Category - Shop */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-              <div>{CategoryInput}</div>
-              <div>{ShopInput}</div>
-            </div>
-            {/* Row 4: Account - Amount */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-              <div>{SourceAccountInput}</div>
-              <div>{AmountInput}</div>
-            </div>
-          </div>
+                ) : (
+                  /* LENDING LAYOUT (Original) */
+                  <div className="space-y-4">
+                    {/* Row 1: Date - Tag */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                      <div>{DateInput}</div>
+                      <div>{TagInput}</div>
+                    </div>
+                    {/* Row 2: Person - Note */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                      <div>{PersonInput}</div>
+                      <div>{NoteInput}</div>
+                    </div>
+                    {/* Row 3: Category - Shop */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                      <div>{CategoryInput}</div>
+                      <div>{ShopInput}</div>
+                    </div>
+                    {/* Row 4: Account - Amount */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                      <div>{SourceAccountInput}</div>
+                      <div>{AmountInput}</div>
+                    </div>
+                  </div>
                 )}
 
-          {VolunteerSection}
-          {VolunteerInputs}
-          {InstallmentSection}
-          {SplitBillSection}
-        </div>
-      ) : transactionType === "income" ? (
-      <div className="space-y-4">
-        {/* Row 1: Date - Notes */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-          <div>
-            {DateInput}
-          </div>
-          <div>
-            {NoteInput}
-          </div>
-        </div>
+                {VolunteerSection}
+                {VolunteerInputs}
+                {InstallmentSection}
+                {SplitBillSection}
+              </div>
+            ) : transactionType === "income" ? (
+              <div className="space-y-4">
+                {/* Row 1: Date - Notes */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                  <div>
+                    {DateInput}
+                  </div>
+                  <div>
+                    {NoteInput}
+                  </div>
+                </div>
 
-        {/* Row 2: To Account - Category */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-          <div>
-            {SourceAccountInput}
-          </div>
-          <div>
-            {CategoryInput}
-          </div>
-        </div>
+                {/* Row 2: To Account - Category */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                  <div>
+                    {SourceAccountInput}
+                  </div>
+                  <div>
+                    {CategoryInput}
+                  </div>
+                </div>
 
-        {/* Row 3: Amount (Full Width) */}
-        <div className="w-full">
-          {AmountInput}
-        </div>
+                {/* Row 3: Amount (Full Width) */}
+                <div className="w-full">
+                  {AmountInput}
+                </div>
 
-        {SplitBillSection}
-      </div>
-      ) : (
-      <>
-        <div className="space-y-4 mb-4">
-          {AmountInput}
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-4">
-            {DateInput}
-            {NoteInput}
-            {TagInput}
-          </div>
-          <div className="space-y-4">
-            {SourceAccountInput}
-            {CategoryInput}
-            {ShopInput}
-            {SplitBillToggle}
-            {DestinationAccountInput}
-            {RefundStatusInput}
-          </div>
-        </div>
+                {SplitBillSection}
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4 mb-4">
+                  {AmountInput}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-4">
+                    {DateInput}
+                    {NoteInput}
+                    {TagInput}
+                  </div>
+                  <div className="space-y-4">
+                    {SourceAccountInput}
+                    {CategoryInput}
+                    {ShopInput}
+                    {SplitBillToggle}
+                    {DestinationAccountInput}
+                    {RefundStatusInput}
+                  </div>
+                </div>
 
-        {SplitBillSection}
-      </>
+                {SplitBillSection}
+              </>
             )}
 
-      <div className="space-y-4 pt-2 border-t border-slate-100">
-        {/* Allocation Preview removed from here (moved to Repayment block) */}
+            <div className="space-y-4 pt-2 border-t border-slate-100">
+              {/* Allocation Preview removed from here (moved to Repayment block) */}
 
-        {!isDebtForm && InstallmentSection}
-        {CashbackModeInput}
-      </div>
-    </div >
+              {!isDebtForm && InstallmentSection}
+              {CashbackModeInput}
+            </div>
+          </div >
 
 
-      {/* FIXED FOOTER */ }
-      < div className = "sticky bottom-0 z-20 bg-white border-t border-slate-100 px-5 py-4 flex-none" >
-        <div className="flex justify-end gap-3">
-          {isEditMode && (
-            <button
-              type="button"
-              // Add delete handler logic here if needed, or if it was supposed to be here
-              className="mr-auto text-rose-600 text-sm font-medium hover:underline"
-            >
-              Delete
-            </button>
-          )}
+          {/* FIXED FOOTER */}
+          < div className="sticky bottom-0 z-20 bg-white border-t border-slate-100 px-5 py-4 flex-none" >
+            <div className="flex justify-end gap-3">
+              {isEditMode && (
+                <button
+                  type="button"
+                  // Add delete handler logic here if needed, or if it was supposed to be here
+                  className="mr-auto text-rose-600 text-sm font-medium hover:underline"
+                >
+                  Delete
+                </button>
+              )}
 
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isSubmitting || cashbackExceedsAmount}
-            className={cn(
-              "rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-700",
-            )}
-            title={
-              cashbackExceedsAmount
-                ? "Cashback must be less than amount"
-                : undefined
-            }
-          >
-            {isSubmitting && (
-              <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" />
-            )}
-            {submitLabel}
-          </button>
-        </div>
+              <button
+                type="button"
+                onClick={onCancel}
+                className="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmitting || cashbackExceedsAmount}
+                className={cn(
+                  "rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-700",
+                )}
+                title={
+                  cashbackExceedsAmount
+                    ? "Cashback must be less than amount"
+                    : undefined
+                }
+              >
+                {isSubmitting && (
+                  <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" />
+                )}
+                {submitLabel}
+              </button>
+            </div>
           </div >
         </form >
       )
-}
+      }
 
 
       <CategoryDialog
