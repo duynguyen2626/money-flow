@@ -466,6 +466,8 @@ export function TransactionForm({
   );
   const [outstandingDebts, setOutstandingDebts] = useState<any[]>([]);
   const [allocationPreview, setAllocationPreview] = useState<AllocationResult | null>(null);
+  const [allocationOverrides, setAllocationOverrides] = useState<Record<string, number>>({});
+  const [ignoredDebtIds, setIgnoredDebtIds] = useState<Set<string>>(new Set());
 
 
 
@@ -1496,13 +1498,16 @@ export function TransactionForm({
       return;
     }
 
+    // Filter out ignored (deleted) debts
+    const activeDebts = outstandingDebts.filter(d => !ignoredDebtIds.has(d.id));
+
     const allocation = allocateTransactionRepayment(
-      outstandingDebts,
+      activeDebts,
       Math.abs(watchedAmount),
       allocationOverrides // Pass overrides
     );
     setAllocationPreview(allocation);
-  }, [bulkRepayment, outstandingDebts, watchedAmount, allocationOverrides]);
+  }, [bulkRepayment, outstandingDebts, watchedAmount, allocationOverrides, ignoredDebtIds]);
 
   // Sync Shop with Account for Repayment - One-way sync on Account Change
   useEffect(() => {
@@ -4769,9 +4774,12 @@ export function TransactionForm({
                           <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => setAllocationOverrides({})}
+                              onClick={() => {
+                                setAllocationOverrides({});
+                                setIgnoredDebtIds(new Set());
+                              }}
                               className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline"
-                              title="Reset to Grid (FIFO)"
+                              title="Reset and Restore All"
                             >
                               <RotateCcw className="w-3 h-3" />
                               Reset
@@ -4785,201 +4793,221 @@ export function TransactionForm({
                         </div>
 
                         <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
-                          {outstandingDebts.map((debt: TransactionWithDetails) => {
-                            const allocEntry = allocationPreview?.paidDebts.find((p: any) => p.transaction.id === debt.id);
-                            const allocatedAmount = allocEntry?.allocatedAmount || 0;
-                            // const isManual = allocEntry?.isManual || false;
-                            const isOverpaid = allocatedAmount > Math.abs(debt.amount);
+                          {outstandingDebts
+                            .filter(d => !ignoredDebtIds.has(d.id))
+                            .map((debt: TransactionWithDetails) => {
+                              const allocEntry = allocationPreview?.paidDebts.find((p: any) => p.transaction.id === debt.id);
+                              const allocatedAmount = allocEntry?.allocatedAmount || 0;
+                              // const isManual = allocEntry?.isManual || false;
+                              const isOverpaid = allocatedAmount > Math.abs(debt.amount);
 
-                            return (
-                              <div key={debt.id} className="flex items-center gap-2 text-xs text-slate-700 border-b border-blue-100/50 pb-1 last:border-0 last:pb-0">
-                                <div className="flex-1">
-                                  <span>
-                                    {format(parseISO(debt.occurred_at), "dd.MM.yyyy")} - {debt.note || "No Note"}
-                                  </span>
-                                  <div className="text-[10px] text-slate-500 flex gap-2">
-                                    <span>Total: {numberFormatter.format(Math.abs(debt.amount))}</span>
-                                    {isOverpaid && (
-                                      <span className="text-red-600 font-bold flex items-center gap-0.5">
-                                        <AlertCircle className="w-3 h-3" /> Overpay! (+{numberFormatter.format(allocatedAmount - Math.abs(debt.amount))})
-                                      </span>
-                                    )}
+                              return (
+                                <div key={debt.id} className="flex items-center gap-2 text-xs text-slate-700 border-b border-blue-100/50 pb-1 last:border-0 last:pb-0">
+                                  <div className="flex-1">
+                                    <span>
+                                      {format(parseISO(debt.occurred_at), "dd.MM.yyyy")} - {debt.note || "No Note"}
+                                    </span>
+                                    <div className="text-[10px] text-slate-500 flex gap-2">
+                                      <span>Total: {numberFormatter.format(Math.abs(debt.amount))}</span>
+                                    </div>
                                   </div>
-                                </div>
-                                <div className="w-24">
-                                  <input
-                                    type="text"
-                                    className={cn(
-                                      "w-full h-7 px-2 text-right text-xs rounded border border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 font-sans",
-                                      allocationOverrides[debt.id] !== undefined && "bg-yellow-50 border-yellow-300 font-semibold",
-                                      isOverpaid && "text-red-600 border-red-300 bg-red-50"
-                                    )}
-                                    // Use formatted string. If 0, show "0".
-                                    value={numberFormatter.format(allocatedAmount)}
-                                    onChange={(e) => {
-                                      // Remove commas to parse
-                                      const raw = e.target.value.replace(/,/g, '');
-                                      if (raw === "") {
-                                        handleOverrideChange(debt.id, 0);
-                                        return;
-                                      }
-                                      const val = parseFloat(raw);
-                                      if (!isNaN(val)) {
-                                        handleOverrideChange(debt.id, val);
-                                      }
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newSet = new Set(ignoredDebtIds);
+                                      newSet.add(debt.id);
+                                      setIgnoredDebtIds(newSet);
+
+                                      const newOverrides = { ...allocationOverrides };
+                                      delete newOverrides[debt.id];
+                                      setAllocationOverrides(newOverrides);
                                     }}
-                                  />
+                                    className="text-slate-400 hover:text-rose-500 p-1 rounded hover:bg-rose-50 transition-colors"
+                                    title="Remove from allocation"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>                                    <span>Total: {numberFormatter.format(Math.abs(debt.amount))}</span>
+                                  {isOverpaid && (
+                                    <span className="text-red-600 font-bold flex items-center gap-0.5">
+                                      <AlertCircle className="w-3 h-3" /> Overpay! (+{numberFormatter.format(allocatedAmount - Math.abs(debt.amount))})
+                                    </span>
+                                  )}
                                 </div>
-                              </div>
-                            );
+                                </div>
+                        <div className="w-24">
+                          <input
+                            type="text"
+                            className={cn(
+                              "w-full h-7 px-2 text-right text-xs rounded border border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 font-sans",
+                              allocationOverrides[debt.id] !== undefined && "bg-yellow-50 border-yellow-300 font-semibold",
+                              isOverpaid && "text-red-600 border-red-300 bg-red-50"
+                            )}
+                            // Use formatted string. If 0, show "0".
+                            value={numberFormatter.format(allocatedAmount)}
+                            onChange={(e) => {
+                              // Remove commas to parse
+                              const raw = e.target.value.replace(/,/g, '');
+                              if (raw === "") {
+                                handleOverrideChange(debt.id, 0);
+                                return;
+                              }
+                              const val = parseFloat(raw);
+                              if (!isNaN(val)) {
+                                handleOverrideChange(debt.id, val);
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
                           })}
 
-                          {allocationPreview && allocationPreview.remainingRepayment > 0.1 && (
-                            <div className="flex justify-between text-xs text-orange-600 font-medium pt-1">
-                              <span>Unallocated Remaining:</span>
-                              <span>{numberFormatter.format(allocationPreview.remainingRepayment)}</span>
-                            </div>
-                          )}
-                        </div>
+                    {allocationPreview && allocationPreview.remainingRepayment > 0.1 && (
+                      <div className="flex justify-between text-xs text-orange-600 font-medium pt-1">
+                        <span>Unallocated Remaining:</span>
+                        <span>{numberFormatter.format(allocationPreview.remainingRepayment)}</span>
                       </div>
                     )}
                   </div>
-                ) : (
-                  /* LENDING LAYOUT (Original) */
-                  <div className="space-y-4">
-                    {/* Row 1: Date - Tag */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                      <div>{DateInput}</div>
-                      <div>{TagInput}</div>
-                    </div>
-                    {/* Row 2: Person - Note */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                      <div>{PersonInput}</div>
-                      <div>{NoteInput}</div>
-                    </div>
-                    {/* Row 3: Category - Shop */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                      <div>{CategoryInput}</div>
-                      <div>{ShopInput}</div>
-                    </div>
-                    {/* Row 4: Account - Amount */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                      <div>{SourceAccountInput}</div>
-                      <div>{AmountInput}</div>
-                    </div>
-                  </div>
-                )}
-
-                {VolunteerSection}
-                {VolunteerInputs}
-                {InstallmentSection}
-                {SplitBillSection}
-              </div>
-            ) : transactionType === "income" ? (
-              <div className="space-y-4">
-                {/* Row 1: Date - Notes */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                  <div>
-                    {DateInput}
-                  </div>
-                  <div>
-                    {NoteInput}
-                  </div>
-                </div>
-
-                {/* Row 2: To Account - Category */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
-                  <div>
-                    {SourceAccountInput}
-                  </div>
-                  <div>
-                    {CategoryInput}
-                  </div>
-                </div>
-
-                {/* Row 3: Amount (Full Width) */}
-                <div className="w-full">
-                  {AmountInput}
-                </div>
-
-                {SplitBillSection}
-              </div>
-            ) : (
-              <>
-                <div className="space-y-4 mb-4">
-                  {AmountInput}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-4">
-                    {DateInput}
-                    {NoteInput}
-                    {TagInput}
-                  </div>
-                  <div className="space-y-4">
-                    {SourceAccountInput}
-                    {CategoryInput}
-                    {ShopInput}
-                    {SplitBillToggle}
-                    {DestinationAccountInput}
-                    {RefundStatusInput}
-                  </div>
-                </div>
-
-                {SplitBillSection}
-              </>
+                      </div>
             )}
-
-            <div className="space-y-4 pt-2 border-t border-slate-100">
-              {/* Allocation Preview removed from here (moved to Repayment block) */}
-
-              {!isDebtForm && InstallmentSection}
-              {CashbackModeInput}
+          </div>
+          ) : (
+          /* LENDING LAYOUT (Original) */
+          <div className="space-y-4">
+            {/* Row 1: Date - Tag */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              <div>{DateInput}</div>
+              <div>{TagInput}</div>
+            </div>
+            {/* Row 2: Person - Note */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              <div>{PersonInput}</div>
+              <div>{NoteInput}</div>
+            </div>
+            {/* Row 3: Category - Shop */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              <div>{CategoryInput}</div>
+              <div>{ShopInput}</div>
+            </div>
+            {/* Row 4: Account - Amount */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+              <div>{SourceAccountInput}</div>
+              <div>{AmountInput}</div>
             </div>
           </div>
-
-
-          {/* FIXED FOOTER */}
-          < div className="sticky bottom-0 z-20 bg-white border-t border-slate-100 px-5 py-4 flex-none" >
-            <div className="flex justify-end gap-3">
-              {isEditMode && (
-                <button
-                  type="button"
-                  // Add delete handler logic here if needed, or if it was supposed to be here
-                  className="mr-auto text-rose-600 text-sm font-medium hover:underline"
-                >
-                  Delete
-                </button>
-              )}
-
-              <button
-                type="button"
-                onClick={onCancel}
-                className="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting || cashbackExceedsAmount}
-                className={cn(
-                  "rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-700",
                 )}
-                title={
-                  cashbackExceedsAmount
-                    ? "Cashback must be less than amount"
-                    : undefined
-                }
-              >
-                {isSubmitting && (
-                  <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" />
-                )}
-                {submitLabel}
-              </button>
-            </div>
+
+          {VolunteerSection}
+          {VolunteerInputs}
+          {InstallmentSection}
+          {SplitBillSection}
+        </div>
+      ) : transactionType === "income" ? (
+      <div className="space-y-4">
+        {/* Row 1: Date - Notes */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+          <div>
+            {DateInput}
+          </div>
+          <div>
+            {NoteInput}
+          </div>
+        </div>
+
+        {/* Row 2: To Account - Category */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+          <div>
+            {SourceAccountInput}
+          </div>
+          <div>
+            {CategoryInput}
+          </div>
+        </div>
+
+        {/* Row 3: Amount (Full Width) */}
+        <div className="w-full">
+          {AmountInput}
+        </div>
+
+        {SplitBillSection}
+      </div>
+      ) : (
+      <>
+        <div className="space-y-4 mb-4">
+          {AmountInput}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-4">
+            {DateInput}
+            {NoteInput}
+            {TagInput}
+          </div>
+          <div className="space-y-4">
+            {SourceAccountInput}
+            {CategoryInput}
+            {ShopInput}
+            {SplitBillToggle}
+            {DestinationAccountInput}
+            {RefundStatusInput}
+          </div>
+        </div>
+
+        {SplitBillSection}
+      </>
+            )}
+
+      <div className="space-y-4 pt-2 border-t border-slate-100">
+        {/* Allocation Preview removed from here (moved to Repayment block) */}
+
+        {!isDebtForm && InstallmentSection}
+        {CashbackModeInput}
+      </div>
+    </div >
+
+
+      {/* FIXED FOOTER */ }
+      < div className = "sticky bottom-0 z-20 bg-white border-t border-slate-100 px-5 py-4 flex-none" >
+        <div className="flex justify-end gap-3">
+          {isEditMode && (
+            <button
+              type="button"
+              // Add delete handler logic here if needed, or if it was supposed to be here
+              className="mr-auto text-rose-600 text-sm font-medium hover:underline"
+            >
+              Delete
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-lg px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-100 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={isSubmitting || cashbackExceedsAmount}
+            className={cn(
+              "rounded-lg px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-700",
+            )}
+            title={
+              cashbackExceedsAmount
+                ? "Cashback must be less than amount"
+                : undefined
+            }
+          >
+            {isSubmitting && (
+              <Loader2 className="mr-2 inline-block h-4 w-4 animate-spin" />
+            )}
+            {submitLabel}
+          </button>
+        </div>
           </div >
         </form >
       )
-      }
+}
 
 
       <CategoryDialog
