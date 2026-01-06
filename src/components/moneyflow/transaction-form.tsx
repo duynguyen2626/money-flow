@@ -63,6 +63,7 @@ import {
   Users,
   Info,
   AlertCircle,
+  Trash2,
 } from "lucide-react";
 import { getOutstandingDebts } from "@/services/debt.service";
 import { allocateTransactionRepayment, AllocationResult } from "@/lib/debt-allocation";
