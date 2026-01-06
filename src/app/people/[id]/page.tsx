@@ -5,18 +5,21 @@ import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
 import { getServices } from '@/services/service-manager'
-import { getPersonDetails } from '@/services/debt.service'
+import { getPersonDetails, getDebtByTags } from '@/services/debt.service'
 import { getTransactionsByPeople, getUnifiedTransactions } from '@/services/transaction.service'
 import { getPersonCycleSheets } from '@/services/person-cycle-sheet.service'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 import { TagFilterProvider } from '@/context/tag-filter-context'
-import { Plus, CheckCheck, ChevronLeft } from 'lucide-react'
+import { Plus, CheckCheck, ChevronLeft, Edit } from 'lucide-react'
 import { ResyncButton } from '@/components/people/resync-button'
+import { MigrateDataButton } from '@/components/people/migrate-data-button'
 import { EditPersonButton } from '@/components/people/edit-person-button'
 import { PersonDetailTabs } from '@/components/people/person-detail-tabs'
 import { ManageSheetButton } from '@/components/people/manage-sheet-button'
 import { toYYYYMMFromDate } from '@/lib/month-tag'
 import { QuickAddChat } from '@/components/ai/quick-add-chat'
+import { Button } from "@/components/ui/button"
+import { getPersonWithSubs } from '@/services/people.service'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,17 +27,24 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
   const { id: personId } = await params
 
   // First, get person details to determine the actual debt account ID
-  const person = await getPersonDetails(personId)
+  const person = await getPersonWithSubs(personId)
 
   if (!person) {
-    return notFound()
+    notFound()
   }
 
+  // DEBUG: Fetch tags to inspect status
+  const debtTags = await getDebtByTags(personId);
+  const debugInfo = debtTags.map(t => ({ tag: t.tag, status: t.status, net: t.netBalance, rem: (t as any).remainingPrincipal }));
+
+
+  // Use the debt account ID (person.id) for fetching transactions and debt cycles
+  // This ensures we get the correct data regardless of whether the URL has Profile ID or Account ID
   // Use the debt account ID (person.id) for fetching transactions and debt cycles
   // This ensures we get the correct data regardless of whether the URL has Profile ID or Account ID
   const actualAccountId = person.id
 
-  const sheetProfileId = person.owner_id ?? personId
+  const sheetProfileId = person.id // person.owner_id doesn't exist on Person type, assuming person.id is the profile id
 
   const [accounts, categories, people, shops, subscriptions, cycleSheets] = await Promise.all([
     getAccounts(),
@@ -61,12 +71,12 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
     ? await getTransactionsByPeople(groupPersonIds, 1000)
     : await getUnifiedTransactions({
       accountId: actualAccountId,
-      personId: person.owner_id ?? undefined,
+      personId: person.id, // Fixed: Use person.id instead of owner_id
       limit: 1000,
       context: 'person',
     })
 
-  const balance = person.current_balance ?? 0
+  const balance = person.balance ?? 0 // Fixed: Use person.balance
   const balanceLabel = balance > 0 ? 'They owe you' : balance < 0 ? 'You owe them' : 'Settled'
   const balanceClass = balance > 0 ? 'text-rose-600' : balance < 0 ? 'text-emerald-600' : 'text-slate-600'
   const currentCycleTag = toYYYYMMFromDate(new Date())
@@ -116,6 +126,21 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                   subscriptions={subscriptions}
                 />
                 <ResyncButton accountId={actualAccountId} />
+                <div className="flex items-center gap-2">
+                  <MigrateDataButton personId={person.id} />
+                  {person.debt_account_id && <ResyncButton accountId={person.debt_account_id} />}
+                  <Button asChild variant="outline">
+                    <Link href={`/people/${person.id}/edit`}>
+                      <Edit className="mr-2 h-4 w-4" />
+                      Edit
+                    </Link>
+                  </Button>
+                </div>
+
+                {/* DEBUG OUTPUT */}
+                <div className="p-4 bg-slate-100 rounded text-xs font-mono hidden">
+                  <pre id="debug-debt-info">{JSON.stringify(debugInfo, null, 2)}</pre>
+                </div>
                 <ManageSheetButton
                   personId={sheetProfileId}
                   cycleTag={currentCycleTag}
@@ -139,7 +164,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                   defaultType="repayment"
                   defaultPersonId={actualAccountId}
                   defaultAmount={Math.abs(balance)}
-                  buttonClassName="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-md shadow-sm transition-colors flex items-center gap-2 text-xs md:px-3 md:py-2 md:text-sm"
+                  buttonClassName="bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1.5 rounded-md shadow-sm transition-colors flex items-center gap-2 text-xs md:px-3 md:py-2 md:text-sm"
                   triggerContent={
                     <>
                       <CheckCheck className="h-4 w-4" />
@@ -152,7 +177,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                   buttonText="Repay"
                   defaultType="repayment"
                   defaultPersonId={actualAccountId}
-                  buttonClassName="bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1.5 rounded-md shadow-sm transition-colors flex items-center gap-2 text-xs md:px-3 md:py-2 md:text-sm"
+                  buttonClassName="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1.5 rounded-md shadow-sm transition-colors flex items-center gap-2 text-xs md:px-3 md:py-2 md:text-sm"
                   triggerContent={
                     <>
                       <Plus className="h-4 w-4" />

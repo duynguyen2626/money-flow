@@ -1,0 +1,13 @@
+
+const { getDebtByTags } = require('./src/services/debt.service');
+const { createClient } = require('@supabase/supabase-js');
+
+// Mock env if needed or assume .env.local is loaded by running with dot-env
+// But typical node run might fail with aliases.
+// Better: Use a simple script I can run via `npx code-runner` or similar?
+// Or just modify the page component to dump the data into a hidden div?
+
+// Creating a test script in the project structure might be hard due to imports.
+// Let's modify the Page Component to log to console (which might show in terminal output if I run next dev).
+
+console.log("Debug Debt Script Planned. Skipping actual file creation to avoid Environment Hell.");

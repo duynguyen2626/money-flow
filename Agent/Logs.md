@@ -1,240 +1,93 @@
-## Error Type
-Console Error
+A. react-refresh-runtime.development.js:428  Something has shimmed the React DevTools global hook (__REACT_DEVTOOLS_GLOBAL_HOOK__). Fast Refresh is not compatible with this shim and will be disabled.
+injectIntoGlobalHook @ react-refresh-runtime.development.js:428
+module evaluation @ runtime.ts:14
+(anonymous) @ dev-base.ts:244
+runModuleExecutionHooks @ dev-base.ts:291
+instantiateModule @ dev-base.ts:238
+getOrInstantiateRuntimeModule @ dev-base.ts:128
+registerChunk @ runtime-backend-dom.ts:57
+await in registerChunk
+registerChunk @ dev-base.ts:1149
+(anonymous) @ dev-backend-dom.ts:126
+(anonymous) @ dev-backend-dom.ts:126
+[NEW] Explain Console errors by using Copilot in Edge: click
+         
+         to explain an error. 
+        Learn more
+        Don't show again
+forward-logs-shared.ts:95 [HMR] connected
+index.ts:31 Auto Clicker - AutoFill No config found http://localhost:3000/people/dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248
+index.ts:31 Auto Clicker - AutoFill No config found http://localhost:3000/people/dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248
+unified-transaction-table.tsx:174 [buildEditInitialValues] Transaction: {id: '329db70d-0552-494d-91e9-6d265822af79', shop_id: null, shop_name: null, account_id: '3a532c54-685b-406d-9527-1d19c2acc5ae', source_name: 'Vpbank', …}
+unified-transaction-table.tsx:174 [buildEditInitialValues] Transaction: {id: '329db70d-0552-494d-91e9-6d265822af79', shop_id: null, shop_name: null, account_id: '3a532c54-685b-406d-9527-1d19c2acc5ae', source_name: 'Vpbank', …}
+dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248:1  Access to XMLHttpRequest at 'https://dc.services.visualstudio.com/v2/track' from origin 'http://localhost:3000' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: It does not have HTTP ok status.
+polyfills.js:1   POST https://dc.services.visualstudio.com/v2/track net::ERR_FAILED
+S @ polyfills.js:1
+e.scheduleTask @ polyfills.js:1
+n.scheduleTask @ polyfills.js:1
+n.scheduleMacroTask @ polyfills.js:1
+g @ polyfills.js:1
+(anonymous) @ polyfills.js:1
+N.n.<computed> @ polyfills.js:1
+(anonymous) @ vendor-3rdparty.js:1
+pt @ vendor-3rdparty.js:1
+Qe @ vendor-3rdparty.js:1
+e._addHook.e.<computed> @ vendor-3rdparty.js:1
+e.<computed> @ vendor-3rdparty.js:1
+r @ vendor-3rdparty.js:1
+(anonymous) @ vendor-3rdparty.js:1
+(anonymous) @ vendor-3rdparty.js:1
+f.<computed> @ vendor-3rdparty.js:1
+u.<computed> @ polyfills.js:1
+e.invokeTask @ polyfills.js:1
+n.runTask @ polyfills.js:1
+t.invokeTask @ polyfills.js:1
+u.useG.invoke @ polyfills.js:1
+r.args.<computed> @ polyfills.js:1
 
-## Error Message
-Encountered two children with the same key, `eccde148-a84e-455f-ba96-c8aa0b149ac8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
-
-
-    at span (<anonymous>:null:null)
-    at <unknown> (src/components/moneyflow/transaction-form.tsx:3091:19)
-    at Array.map (<anonymous>:null:null)
-    at TransactionForm (src/components/moneyflow/transaction-form.tsx:3090:41)
-    at AddTransactionDialog (src/components/moneyflow/add-transaction-dialog.tsx:253:15)
-    at QuickAddChat (src/components/ai/quick-add-chat.tsx:1648:7)
-    at DashboardContent (src/components/dashboard/dashboard-content.tsx:230:11)
-    at Home (src\app\page.tsx:43:5)
-
-## Code Frame
-  3089 |               <div className="flex flex-wrap items-center gap-2">
-  3090 |                 {splitExtraParticipants.map((participant) => (
-> 3091 |                   <span
-       |                   ^
-  3092 |                     key={participant.personId}
-  3093 |                     className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
-  3094 |                   >
-
-Next.js version: 16.0.10 (Turbopack)
-## Error Type
-Console Error
-
-## Error Message
-Encountered two children with the same key, `eccde148-a84e-455f-ba96-c8aa0b149ac8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
-
-
-    at tr (<anonymous>:null:null)
-    at <unknown> (src/components/moneyflow/split-bill-table.tsx:107:15)
-    at Array.map (<anonymous>:null:null)
-    at SplitBillTable (src/components/moneyflow/split-bill-table.tsx:106:27)
-    at TransactionForm (src/components/moneyflow/transaction-form.tsx:3176:7)
-    at AddTransactionDialog (src/components/moneyflow/add-transaction-dialog.tsx:253:15)
-    at QuickAddChat (src/components/ai/quick-add-chat.tsx:1648:7)
-    at DashboardContent (src/components/dashboard/dashboard-content.tsx:230:11)
-    at Home (src\app\page.tsx:43:5)
-
-## Code Frame
-  105 |           <tbody className="divide-y divide-slate-100">
-  106 |             {participants.map((row) => (
-> 107 |               <tr key={row.personId} className="bg-white">
-      |               ^
-  108 |                 <td className="px-3 py-2 text-slate-800">{row.name}</td>
-  109 |                 <td className="px-3 py-2">
-  110 |                   <Input
-
-Next.js version: 16.0.10 (Turbopack)
-## Error Type
-Console Error
-
-## Error Message
-Encountered two children with the same key, `eccde148-a84e-455f-ba96-c8aa0b149ac8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
-
-
-    at div (<anonymous>:null:null)
-    at <unknown> (src/components/moneyflow/split-bill-table.tsx:174:11)
-    at Array.map (<anonymous>:null:null)
-    at SplitBillTable (src/components/moneyflow/split-bill-table.tsx:173:23)
-    at TransactionForm (src/components/moneyflow/transaction-form.tsx:3176:7)
-    at AddTransactionDialog (src/components/moneyflow/add-transaction-dialog.tsx:253:15)
-    at QuickAddChat (src/components/ai/quick-add-chat.tsx:1648:7)
-    at DashboardContent (src/components/dashboard/dashboard-content.tsx:230:11)
-    at Home (src\app\page.tsx:43:5)
-
-## Code Frame
-  172 |       <div className="space-y-3 md:hidden">
-  173 |         {participants.map((row) => (
-> 174 |           <div
-      |           ^
-  175 |             key={row.personId}
-  176 |             className="rounded-lg border border-slate-200 bg-white p-3 space-y-2"
-  177 |           >
-
-Next.js version: 16.0.10 (Turbopack)
-## Error Type
-Console Error
-
-## Error Message
-Encountered two children with the same key, `eccde148-a84e-455f-ba96-c8aa0b149ac8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
-
-
-    at span (<anonymous>:null:null)
-    at <unknown> (src/components/moneyflow/transaction-form.tsx:3091:19)
-    at Array.map (<anonymous>:null:null)
-    at TransactionForm (src/components/moneyflow/transaction-form.tsx:3090:41)
-    at AddTransactionDialog (src/components/moneyflow/add-transaction-dialog.tsx:253:15)
-    at QuickAddChat (src/components/ai/quick-add-chat.tsx:1648:7)
-    at DashboardContent (src/components/dashboard/dashboard-content.tsx:230:11)
-    at Home (src\app\page.tsx:43:5)
-
-## Code Frame
-  3089 |               <div className="flex flex-wrap items-center gap-2">
-  3090 |                 {splitExtraParticipants.map((participant) => (
-> 3091 |                   <span
-       |                   ^
-  3092 |                     key={participant.personId}
-  3093 |                     className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
-  3094 |                   >
-
-Next.js version: 16.0.10 (Turbopack)
-## Error Type
-Console Error
-
-## Error Message
-Encountered two children with the same key, `eccde148-a84e-455f-ba96-c8aa0b149ac8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
-
-
-    at tr (<anonymous>:null:null)
-    at <unknown> (src/components/moneyflow/split-bill-table.tsx:107:15)
-    at Array.map (<anonymous>:null:null)
-    at SplitBillTable (src/components/moneyflow/split-bill-table.tsx:106:27)
-    at TransactionForm (src/components/moneyflow/transaction-form.tsx:3176:7)
-    at AddTransactionDialog (src/components/moneyflow/add-transaction-dialog.tsx:253:15)
-    at QuickAddChat (src/components/ai/quick-add-chat.tsx:1648:7)
-    at DashboardContent (src/components/dashboard/dashboard-content.tsx:230:11)
-    at Home (src\app\page.tsx:43:5)
-
-## Code Frame
-  105 |           <tbody className="divide-y divide-slate-100">
-  106 |             {participants.map((row) => (
-> 107 |               <tr key={row.personId} className="bg-white">
-      |               ^
-  108 |                 <td className="px-3 py-2 text-slate-800">{row.name}</td>
-  109 |                 <td className="px-3 py-2">
-  110 |                   <Input
-
-Next.js version: 16.0.10 (Turbopack)
-## Error Type
-Console Error
-
-## Error Message
-Encountered two children with the same key, `eccde148-a84e-455f-ba96-c8aa0b149ac8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
-
-
-    at div (<anonymous>:null:null)
-    at <unknown> (src/components/moneyflow/split-bill-table.tsx:174:11)
-    at Array.map (<anonymous>:null:null)
-    at SplitBillTable (src/components/moneyflow/split-bill-table.tsx:173:23)
-    at TransactionForm (src/components/moneyflow/transaction-form.tsx:3176:7)
-    at AddTransactionDialog (src/components/moneyflow/add-transaction-dialog.tsx:253:15)
-    at QuickAddChat (src/components/ai/quick-add-chat.tsx:1648:7)
-    at DashboardContent (src/components/dashboard/dashboard-content.tsx:230:11)
-    at Home (src\app\page.tsx:43:5)
-
-## Code Frame
-  172 |       <div className="space-y-3 md:hidden">
-  173 |         {participants.map((row) => (
-> 174 |           <div
-      |           ^
-  175 |             key={row.personId}
-  176 |             className="rounded-lg border border-slate-200 bg-white p-3 space-y-2"
-  177 |           >
-
-Next.js version: 16.0.10 (Turbopack)
-## Error Type
-Console Error
-
-## Error Message
-Encountered two children with the same key, `eccde148-a84e-455f-ba96-c8aa0b149ac8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
-
-
-    at span (<anonymous>:null:null)
-    at <unknown> (src/components/moneyflow/transaction-form.tsx:3091:19)
-    at Array.map (<anonymous>:null:null)
-    at TransactionForm (src/components/moneyflow/transaction-form.tsx:3090:41)
-    at AddTransactionDialog (src/components/moneyflow/add-transaction-dialog.tsx:253:15)
-    at QuickAddChat (src/components/ai/quick-add-chat.tsx:1648:7)
-    at DashboardContent (src/components/dashboard/dashboard-content.tsx:230:11)
-    at Home (src\app\page.tsx:43:5)
-
-## Code Frame
-  3089 |               <div className="flex flex-wrap items-center gap-2">
-  3090 |                 {splitExtraParticipants.map((participant) => (
-> 3091 |                   <span
-       |                   ^
-  3092 |                     key={participant.personId}
-  3093 |                     className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
-  3094 |                   >
-
-Next.js version: 16.0.10 (Turbopack)
-## Error Type
-Console Error
-
-## Error Message
-Encountered two children with the same key, `eccde148-a84e-455f-ba96-c8aa0b149ac8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
-
-
-    at tr (<anonymous>:null:null)
-    at <unknown> (src/components/moneyflow/split-bill-table.tsx:107:15)
-    at Array.map (<anonymous>:null:null)
-    at SplitBillTable (src/components/moneyflow/split-bill-table.tsx:106:27)
-    at TransactionForm (src/components/moneyflow/transaction-form.tsx:3176:7)
-    at AddTransactionDialog (src/components/moneyflow/add-transaction-dialog.tsx:253:15)
-    at QuickAddChat (src/components/ai/quick-add-chat.tsx:1648:7)
-    at DashboardContent (src/components/dashboard/dashboard-content.tsx:230:11)
-    at Home (src\app\page.tsx:43:5)
-
-## Code Frame
-  105 |           <tbody className="divide-y divide-slate-100">
-  106 |             {participants.map((row) => (
-> 107 |               <tr key={row.personId} className="bg-white">
-      |               ^
-  108 |                 <td className="px-3 py-2 text-slate-800">{row.name}</td>
-  109 |                 <td className="px-3 py-2">
-  110 |                   <Input
-
-Next.js version: 16.0.10 (Turbopack)
-## Error Type
-Console Error
-
-## Error Message
-Encountered two children with the same key, `eccde148-a84e-455f-ba96-c8aa0b149ac8`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.
-
-
-    at div (<anonymous>:null:null)
-    at <unknown> (src/components/moneyflow/split-bill-table.tsx:174:11)
-    at Array.map (<anonymous>:null:null)
-    at SplitBillTable (src/components/moneyflow/split-bill-table.tsx:173:23)
-    at TransactionForm (src/components/moneyflow/transaction-form.tsx:3176:7)
-    at AddTransactionDialog (src/components/moneyflow/add-transaction-dialog.tsx:253:15)
-    at QuickAddChat (src/components/ai/quick-add-chat.tsx:1648:7)
-    at DashboardContent (src/components/dashboard/dashboard-content.tsx:230:11)
-    at Home (src\app\page.tsx:43:5)
-
-## Code Frame
-  172 |       <div className="space-y-3 md:hidden">
-  173 |         {participants.map((row) => (
-> 174 |           <div
-      |           ^
-  175 |             key={row.personId}
-  176 |             className="rounded-lg border border-slate-200 bg-white p-3 space-y-2"
-  177 |           >
-
-Next.js version: 16.0.10 (Turbopack)
+B. react-refresh-runtime.development.js:428  Something has shimmed the React DevTools global hook (__REACT_DEVTOOLS_GLOBAL_HOOK__). Fast Refresh is not compatible with this shim and will be disabled.
+injectIntoGlobalHook @ react-refresh-runtime.development.js:428
+module evaluation @ runtime.ts:14
+(anonymous) @ dev-base.ts:244
+runModuleExecutionHooks @ dev-base.ts:291
+instantiateModule @ dev-base.ts:238
+getOrInstantiateRuntimeModule @ dev-base.ts:128
+registerChunk @ runtime-backend-dom.ts:57
+await in registerChunk
+registerChunk @ dev-base.ts:1149
+(anonymous) @ dev-backend-dom.ts:126
+(anonymous) @ dev-backend-dom.ts:126
+[NEW] Explain Console errors by using Copilot in Edge: click
+         
+         to explain an error. 
+        Learn more
+        Don't show again
+forward-logs-shared.ts:95 [HMR] connected
+index.ts:31 Auto Clicker - AutoFill No config found http://localhost:3000/people/dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248
+index.ts:31 Auto Clicker - AutoFill No config found http://localhost:3000/people/dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248
+unified-transaction-table.tsx:174 [buildEditInitialValues] Transaction: {id: '329db70d-0552-494d-91e9-6d265822af79', shop_id: null, shop_name: null, account_id: '3a532c54-685b-406d-9527-1d19c2acc5ae', source_name: 'Vpbank', …}
+unified-transaction-table.tsx:174 [buildEditInitialValues] Transaction: {id: '329db70d-0552-494d-91e9-6d265822af79', shop_id: null, shop_name: null, account_id: '3a532c54-685b-406d-9527-1d19c2acc5ae', source_name: 'Vpbank', …}
+dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248:1  Access to XMLHttpRequest at 'https://dc.services.visualstudio.com/v2/track' from origin 'http://localhost:3000' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: It does not have HTTP ok status.
+polyfills.js:1   POST https://dc.services.visualstudio.com/v2/track net::ERR_FAILED
+S @ polyfills.js:1
+e.scheduleTask @ polyfills.js:1
+n.scheduleTask @ polyfills.js:1
+n.scheduleMacroTask @ polyfills.js:1
+g @ polyfills.js:1
+(anonymous) @ polyfills.js:1
+N.n.<computed> @ polyfills.js:1
+(anonymous) @ vendor-3rdparty.js:1
+pt @ vendor-3rdparty.js:1
+Qe @ vendor-3rdparty.js:1
+e._addHook.e.<computed> @ vendor-3rdparty.js:1
+e.<computed> @ vendor-3rdparty.js:1
+r @ vendor-3rdparty.js:1
+(anonymous) @ vendor-3rdparty.js:1
+(anonymous) @ vendor-3rdparty.js:1
+f.<computed> @ vendor-3rdparty.js:1
+u.<computed> @ polyfills.js:1
+e.invokeTask @ polyfills.js:1
+n.runTask @ polyfills.js:1
+t.invokeTask @ polyfills.js:1
+u.useG.invoke @ polyfills.js:1
+r.args.<computed> @ polyfills.js:1

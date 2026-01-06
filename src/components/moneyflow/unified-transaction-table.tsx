@@ -69,6 +69,7 @@ import { TransactionForm, TransactionFormValues } from "./transaction-form"
 import {
   restoreTransaction,
   deleteTransaction,
+  getTransactionById,
 } from "@/services/transaction.service"
 import {
   voidTransactionAction,
@@ -167,6 +168,7 @@ function buildEditInitialValues(txn: TransactionWithDetails): Partial<Transactio
     is_installment: txn.is_installment ?? false,
     cashback_mode: ((percentValue !== undefined && percentValue !== null && Number(percentValue) > 0) ? 'real_percent' :
       (txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined && Number(txn.cashback_share_fixed) > 0) ? 'real_fixed' : 'none_back') as 'none_back' | 'real_fixed' | 'real_percent' | 'voluntary',
+    metadata: parseMetadata(txn.metadata),
   };
 
   // Diagnostic logging for duplicate form issue
@@ -781,6 +783,21 @@ export function UnifiedTransactionTable({
       setIsDeleting(false)
     }
   }
+
+  const handleOpenLinkedDebt = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const txn = await getTransactionById(id);
+      if (txn) {
+        setEditingTxn(txn);
+      } else {
+        toast.error("Linked transaction not found.");
+      }
+    } catch (err) {
+      console.error("Failed to fetch linked transaction", err);
+      toast.error("Failed to load linked transaction.");
+    }
+  };
 
   const executeBulk = async (mode: 'void' | 'restore' | 'delete') => {
     if (selection.size === 0) return
@@ -1667,6 +1684,36 @@ export function UnifiedTransactionTable({
                           <div className="flex items-center gap-1.5">
                             <div className="flex items-center justify-center h-6 w-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">
                               {personName.charAt(0).toUpperCase()}
+                              {/* Repayment Counter Badge */}
+                              {(() => {
+                                const metadata = txn.metadata as any;
+                                const bulkAllocation = metadata?.bulk_allocation;
+                                if (txn.type === 'repayment' && bulkAllocation?.debts && bulkAllocation.debts.length > 0) {
+                                  const debts = bulkAllocation.debts as { id: string, amount: number, tag?: string, note?: string }[];
+                                  const count = debts.length;
+
+                                  return (
+                                    <CustomTooltip
+                                      content={
+                                        <div className="flex flex-col gap-1">
+                                          <span className="font-semibold border-b border-slate-600 pb-1 mb-1">Repayment for {count} items:</span>
+                                          {debts.map((d, i) => (
+                                            <div key={i} className="flex justify-between gap-4 text-xs">
+                                              <span>{d.tag || 'Unknown Period'}:</span>
+                                              <span className="font-mono">{numberFormatter.format(d.amount)}</span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      }
+                                    >
+                                      <div className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold border border-indigo-200 cursor-help hover:bg-indigo-200 transition-colors ml-2">
+                                        +{count}
+                                      </div>
+                                    </CustomTooltip>
+                                  );
+                                }
+                                return null;
+                              })()}
                             </div>
                             <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]" title={personName}>
                               {personName}
@@ -1780,6 +1827,10 @@ export function UnifiedTransactionTable({
                                 <span className="text-[10px] text-slate-500 leading-tight">{mobileDateLabel}</span>
                               )}
                             </div>
+
+                            {/* Linked Repayment Badges REMOVED from Category Column */}
+                            {(() => null)()}
+
                             {isMobile && mobileDateLabel && (
                               <div className="flex w-full justify-start">
                                 <span className="text-[11px] text-slate-500 leading-tight block pl-14">{mobileDateLabel}</span>
@@ -1983,6 +2034,42 @@ export function UnifiedTransactionTable({
                         const toBadge = <span key="to" className="inline-flex items-center rounded-md bg-sky-100 px-1.5 h-5 text-[0.7em] font-extrabold text-sky-700 border border-sky-200">TO</span>
 
 
+                        // 6. Paid Badges Logic (Moved from Category)
+                        let paidBadges: React.ReactNode = null;
+                        const metadata = txn.metadata as any;
+                        const bulkAllocation = metadata?.bulk_allocation;
+                        if (txn.type === 'repayment' && bulkAllocation?.debts) {
+                          const debts = bulkAllocation.debts as { id: string, amount: number, tag?: string, note?: string }[];
+                          paidBadges = (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <div
+                                  className="inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold border border-indigo-200 cursor-pointer hover:bg-indigo-200 transition-colors ml-1"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  +{debts.length} Paid
+                                </div>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-64 p-2" align="end" side="left">
+                                <div className="flex flex-col gap-1.5">
+                                  <div className="text-xs font-semibold text-slate-700 border-b pb-1 mb-0.5">
+                                    Paid {debts.length} items
+                                  </div>
+                                  {debts.map((d, i) => (
+                                    <div key={i} className="flex justify-between items-start text-xs hover:bg-slate-50 p-1 rounded transition-colors cursor-pointer" onClick={(e) => handleOpenLinkedDebt(d.id, e)}>
+                                      <div className="flex flex-col">
+                                        <span className="font-medium text-indigo-700">{d.tag || 'Unknown'}</span>
+                                        {d.note && <span className="text-slate-400 text-[10px] italic">{d.note}</span>}
+                                      </div>
+                                      <span className="font-mono text-slate-600">{numberFormatter.format(d.amount)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )
+                        }
+
                         // --- 5. Main Render Switch ---
 
                         // SCENARIO 1: VIEWING PERSON PAGE (Context = Person)
@@ -2000,7 +2087,7 @@ export function UnifiedTransactionTable({
                                     name={accountEntity.name}
                                     icon={accountEntity.icon}
                                     link={accountEntity.link}
-                                    badges={[tagBadge, cycleBadge]}
+                                    badges={[tagBadge, cycleBadge, paidBadges]}
                                     contextBadge={toBadge}
                                     isTarget={true}
                                   />

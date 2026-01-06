@@ -57,7 +57,7 @@ export function PersonDetailTabs({
     const tabs = [
         { id: 'details' as const, label: 'Details', icon: <LayoutDashboard className="h-4 w-4" /> },
         { id: 'history' as const, label: 'History', icon: <History className="h-4 w-4" /> },
-        { id: 'sheet' as const, label: 'Sheet Link', icon: <LinkIcon className="h-4 w-4" /> },
+        // { id: 'sheet' as const, label: 'Sheet Link', icon: <LinkIcon className="h-4 w-4" /> },
         { id: 'split-bill' as const, label: 'Split Bill', icon: <DollarSign className="h-4 w-4" /> },
     ]
 

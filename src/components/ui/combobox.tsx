@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { Check, ChevronDown, Lock, Plus } from 'lucide-react'
+import { Check, ChevronDown, Lock, Plus, Eye } from 'lucide-react'
 import * as PopoverPrimitive from '@radix-ui/react-popover'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList, CommandGroup } from 'cmdk'
 
@@ -33,12 +33,14 @@ type ComboboxProps = {
   triggerClassName?: string
   onAddNew?: () => void
   addLabel?: string
+  onDetailClick?: () => void
   tabs?: {
     value: string
     label: string
     onClick: () => void
     active: boolean
   }[]
+  onSearchChange?: (value: string) => void
 }
 
 export function Combobox({
@@ -54,7 +56,9 @@ export function Combobox({
   triggerClassName,
   onAddNew,
   addLabel,
+  onDetailClick,
   tabs,
+  onSearchChange,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
   const [mounted, setMounted] = React.useState(false)
@@ -93,35 +97,51 @@ export function Combobox({
   return (
     <PopoverPrimitive.Root open={open} onOpenChange={setOpen}>
       <PopoverPrimitive.Trigger asChild>
-        <button
-          type="button"
-          disabled={disabled}
-          className={cn(
-            'flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm text-slate-600 shadow-sm transition hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-0',
-            open ? 'border-blue-500' : '',
-            disabled ? 'bg-gray-100 text-slate-500 cursor-not-allowed' : '',
-            className,
-            triggerClassName
-          )}
-          title={disabled ? 'This field is locked in Refund mode' : undefined}
-          aria-expanded={open}
-        >
-          <span className="flex items-center gap-2 min-w-0 flex-1">
-            {selectedItem?.icon && <span className="text-slate-500 flex-shrink-0">{selectedItem.icon}</span>}
-            <span className="flex flex-col gap-0.5 min-w-0 flex-1">
-              <span className="text-sm font-medium text-slate-900 truncate">
-                {selectedItem ? selectedItem.label : placeholder}
+        <div className="relative w-full">
+          <button
+            type="button"
+            disabled={disabled}
+            className={cn(
+              'flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm text-slate-600 shadow-sm transition hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-0',
+              open ? 'border-blue-500' : '',
+              disabled ? 'bg-gray-100 text-slate-500 cursor-not-allowed' : '',
+              className,
+              triggerClassName
+            )}
+            title={disabled ? 'This field is locked in Refund mode' : undefined}
+            aria-expanded={open}
+          >
+            <span className="flex items-center gap-2 min-w-0 flex-1">
+              {selectedItem?.icon && <span className="text-slate-500 flex-shrink-0">{selectedItem.icon}</span>}
+              <span className="flex flex-col gap-0.5 min-w-0 flex-1">
+                <span className="text-sm font-medium text-slate-900 truncate">
+                  {selectedItem ? selectedItem.label : placeholder}
+                </span>
+                {selectedItem?.description && (
+                  <span className="text-[11px] text-slate-500 truncate">{selectedItem.description}</span>
+                )}
               </span>
-              {selectedItem?.description && (
-                <span className="text-[11px] text-slate-500 truncate">{selectedItem.description}</span>
-              )}
             </span>
-          </span>
-          <span className="flex items-center gap-1 flex-shrink-0 ml-2">
-            {disabled && <Lock className="h-4 w-4 text-slate-400" aria-hidden />}
-            <ChevronDown className="h-4 w-4 text-slate-500" />
-          </span>
-        </button>
+            <span className="flex items-center gap-1 flex-shrink-0 ml-2">
+              {disabled && <Lock className="h-4 w-4 text-slate-400" aria-hidden />}
+              <ChevronDown className="h-4 w-4 text-slate-500" />
+            </span>
+          </button>
+
+          {onDetailClick && selectedItem && !disabled && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onDetailClick()
+              }}
+              className="absolute right-8 top-1/2 -translate-y-1/2 p-1.5 hover:bg-slate-100 rounded-full text-slate-400 hover:text-blue-600 transition-colors z-10"
+              title="View Details"
+            >
+              <Eye className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </PopoverPrimitive.Trigger>
       <PopoverPrimitive.Content
         align="start"
@@ -144,6 +164,11 @@ export function Combobox({
           <CommandInput
             className="border-b border-slate-100 px-3 py-2 text-sm outline-none"
             placeholder={inputPlaceholder}
+            onValueChange={(val) => {
+              if (onSearchChange) {
+                onSearchChange(val)
+              }
+            }}
           />
           {tabs && tabs.length > 0 && (
             <div className="flex items-center gap-1 p-2 border-b border-slate-100 bg-slate-50/50">
