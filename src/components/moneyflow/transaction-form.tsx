@@ -1438,7 +1438,7 @@ export function TransactionForm({
   }, [transactionType, watchedPersonId, bulkRepayment, transactionId]);
 
   // Sprint 5 Refine: Manual Allocation Overrides
-  const [allocationOverrides, setAllocationOverrides] = useState<Record<string, number>>({});
+
 
   const handleOverrideChange = (transactionId: string, amount: number) => {
     setAllocationOverrides(prev => ({
