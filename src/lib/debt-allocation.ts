@@ -91,13 +91,40 @@ export function allocateTransactionRepayment(
     // Note: If pure FIFO stops early, but we have manual overrides later, the list might "skip" 
     // debts in the middle that get 0 allocation. This is acceptable.
 
-    // Sort final list by occurred_at again to keep visual order? 
-    // They are already processed in order, so push order is correct.
+    // 4. Auto-Absorb Strategy:
+    // If there is still remaining money (surplus) and we have eligible debts,
+    // the user wants this surplus to be automatically absorbed by the NEWEST (last) debt.
+    if (remainingMoney > 0.01 && sortedDebts.length > 0) {
+        const newestDebt = sortedDebts[sortedDebts.length - 1];
+
+        // Find if it's already in paidDebts
+        const existingEntry = paidDebts.find(p => p.transaction.id === newestDebt.id);
+
+        if (existingEntry) {
+            existingEntry.allocatedAmount += remainingMoney;
+            existingEntry.remainingAfterAllocation = Math.abs(newestDebt.amount) - existingEntry.allocatedAmount;
+            // Recalculate fully paid? It might be Overpaid now.
+            existingEntry.isFullyPaid = existingEntry.allocatedAmount >= Math.abs(newestDebt.amount) - 0.01;
+        } else {
+            // It wasn't allocated anything (maybe 0 overrides or money ran out exactly before it?)
+            // Add it now.
+            paidDebts.push({
+                transaction: newestDebt,
+                allocatedAmount: remainingMoney,
+                remainingAfterAllocation: Math.abs(newestDebt.amount) - remainingMoney,
+                isFullyPaid: remainingMoney >= Math.abs(newestDebt.amount) - 0.01
+            });
+        }
+
+        // Update totals
+        totalAllocated += remainingMoney;
+        remainingMoney = 0;
+    }
 
     return {
         paidDebts,
         totalAllocated: totalAllocated,
-        remainingRepayment: Math.max(0, remainingMoney) // Should be 0 if fully used
+        remainingRepayment: Math.max(0, remainingMoney)
     };
 }
 

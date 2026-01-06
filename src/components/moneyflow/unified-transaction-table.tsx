@@ -2045,7 +2045,10 @@ export function UnifiedTransactionTable({
                               <PopoverTrigger asChild>
                                 <div
                                   className="inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold border border-indigo-200 cursor-pointer hover:bg-indigo-200 transition-colors ml-1"
-                                  onClick={(e) => e.stopPropagation()}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                  }}
                                 >
                                   +{debts.length} Paid
                                 </div>
