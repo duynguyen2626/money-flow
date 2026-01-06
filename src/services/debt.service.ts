@@ -261,7 +261,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
 
   // 2. Apply Repayments (FIFO Queue Pattern)
   const repaymentQueue = (data as any[])
-    .filter(t => resolveBaseType(t.type) === 'income' && (t.type === 'repayment' || t.category_name?.toLowerCase().includes('thu nợ')))
+    .filter(t => resolveBaseType(t.type) === 'income') // Allow ALL income/repayment types to pay off debt
     .map(t => ({
       id: t.id,
       amount: calculateFinalPrice(t as any),

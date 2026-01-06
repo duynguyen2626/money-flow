@@ -2041,7 +2041,7 @@ export function UnifiedTransactionTable({
                         if (txn.type === 'repayment' && bulkAllocation?.debts) {
                           const debts = bulkAllocation.debts as { id: string, amount: number, tag?: string, note?: string }[];
                           paidBadges = (
-                            <Popover>
+                            <Popover key="paid-badges">
                               <PopoverTrigger asChild>
                                 <div
                                   className="inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold border border-indigo-200 cursor-pointer hover:bg-indigo-200 transition-colors ml-1"
