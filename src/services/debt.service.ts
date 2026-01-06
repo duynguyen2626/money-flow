@@ -300,6 +300,8 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       entry.remaining -= payAmount;
       currentRepayment.amount -= payAmount;
 
+      console.log(`[DebtFIFO-UPDATE] ${debt.tag} New Rem: ${entry.remaining}`);
+
       // If Repayment exhausted, remove from queue
       if (currentRepayment.amount < 1) {
         repaymentQueue.shift();
@@ -349,7 +351,9 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
         // Add remaining principal from our FIFO simulation
         const fifoEntry = debtsMap.get(row.id)
         if (fifoEntry) {
-          // console.error(`[DebtAgg] ID: ${row.id} (${tag}). FIFO Rem: ${fifoEntry.remaining}`);
+          if (row.tag?.includes('2025-10')) {
+            console.log(`[DebtAgg-DEBUG] ID: ${row.id} | Tag: ${row.tag} | MapRem: ${fifoEntry.remaining}`);
+          }
           current.remainingPrincipal += fifoEntry.remaining
           // Add links (deduplicate by ID if needed, but array is fine for now)
           fifoEntry.links.forEach(link => {
