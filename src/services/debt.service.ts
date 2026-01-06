@@ -232,7 +232,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
   const supabase = createClient()
   const { data, error } = await supabase
     .from('transactions')
-    .select('tag, occurred_at, amount, type, person_id, status, cashback_share_percent, cashback_share_fixed, final_price, id')
+    .select('tag, occurred_at, amount, type, person_id, status, cashback_share_percent, cashback_share_fixed, final_price, id, metadata')
     .eq('person_id', personId)
     .neq('status', 'void')
     .order('occurred_at', { ascending: true }) // Oldest first for FIFO
@@ -246,7 +246,16 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
   // 1. Separate Debts and Repayments
   const debtsMap = new Map<string, { remaining: number, links: { repaymentId: string, amount: number }[] }>()
   const debtsList: any[] = []
-  const repaymentPool: number[] = []
+
+  // Repayment objects that we will process
+  type RepaymentItem = {
+    id: string;
+    amount: number;
+    initialAmount: number;
+    date: string;
+    metadata: any;
+  };
+  const repaymentList: RepaymentItem[] = [];
 
   data.forEach((txn: any) => {
     const type = txn.type
@@ -255,40 +264,86 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       debtsList.push({ ...txn, remaining: amount })
       debtsMap.set(txn.id, { remaining: amount, links: [] }) // Init links
     } else if (type === 'repayment' || type === 'income') {
-      repaymentPool.push(Math.abs(txn.amount))
+      repaymentList.push({
+        id: txn.id,
+        amount: calculateFinalPrice(txn as any),
+        initialAmount: calculateFinalPrice(txn as any),
+        date: txn.occurred_at,
+        metadata: txn.metadata
+      });
     }
   })
 
-  // 2. Apply Repayments (FIFO Queue Pattern)
-  const repaymentQueue = (data as any[])
-    .filter(t => {
-      const base = resolveBaseType(t.type);
-      if (t.type === 'repayment') console.log(`[DebtFIFO-DEBUG] Candidate: ${t.id} | Type: ${t.type} | Base: ${base} | Amount: ${t.amount}`);
-      return base === 'income';
-    })
-    .map(t => ({
-      id: t.id,
-      amount: calculateFinalPrice(t as any),
-      date: t.occurred_at
-    }))
-    .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Oldest Repayment First
+  // Sort lists
+  // Debts: Oldest First (FIFO targets)
+  debtsList.sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime());
+  // Repayments: Oldest First
+  repaymentList.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  // Apply to debts OLDER to NEWER
+  // === PHASE 1: PRE-ALLOCATED (TARGETED) REPAYMENTS ===
+  // If a repayment has metadata specifying which debts it covers, apply that first.
+  for (const repay of repaymentList) {
+    const targets = repay.metadata?.bulk_allocation?.debts;
+    if (Array.isArray(targets) && targets.length > 0) {
+      targets.forEach((target: any) => {
+        const debtId = target.id;
+        const targetAmount = Number(target.amount || 0); // The amount allocated to this debt
+
+        if (debtId && targetAmount > 0) {
+          const debtEntry = debtsMap.get(debtId);
+
+          // Verify debt exists and repay has balance
+          if (debtEntry && repay.amount > 0) {
+            // Determine how much to pay: 
+            // We trust the `targetAmount` from metadata, BUT we are limited by available funds 
+            // and the debt's actual size (though metadata *should* be accurate).
+            // Actually, if user "Overpays" in UI, targetAmount might > debt.remaining.
+            // We should record the payment even if it exceeds remaining? 
+            // For "remainingPrincipal" calculation, we floor at 0. 
+            // But for "links", we record what was paid.
+
+            // Let's cap at repayment balance.
+            const pay = Math.min(targetAmount, repay.amount);
+
+            // Apply
+            debtEntry.remaining -= pay;
+            if (debtEntry.remaining < 0) debtEntry.remaining = 0; // Cap floor
+
+            repay.amount -= pay;
+
+            // Link
+            debtEntry.links.push({ repaymentId: repay.id, amount: pay });
+
+            console.log(`[DebtFIFO-TARGET] Pay ${pay} to ${debtId} from ${repay.id}. RepayRem: ${repay.amount}`);
+          }
+        }
+      });
+    }
+  }
+
+  // === PHASE 2: GENERAL FIFO (Waterfalls) ===
+  // Apply any remaining repayment balance to any remaining debt balance (Oldest First)
+  // This covers:
+  // 1. Repayments without metadata (legacy)
+  // 2. Repayments with "Unallocated" surplus
+  // 3. Debts that weren't fully covered by targets
+
+  const generalQueue = repaymentList.filter(r => r.amount > 0.01);
+
   for (const debt of debtsList) {
     const entry = debtsMap.get(debt.id)!
 
-    // While debt has remaining amount AND we have repayments available
-    while (entry.remaining > 0 && repaymentQueue.length > 0) {
-      const currentRepayment = repaymentQueue[0]; // Peek
-      const payAmount = Math.min(Number(currentRepayment.amount), entry.remaining);
+    // While debt has remaining amount AND we have general money available
+    while (entry.remaining > 0.01 && generalQueue.length > 0) {
+      const currentRepayment = generalQueue[0]; // Peek
+
+      // Strict FIFO: Apply whatever is available to this debt
+      const payAmount = Math.min(currentRepayment.amount, entry.remaining);
 
       if (payAmount <= 0) {
-        repaymentQueue.shift();
+        generalQueue.shift();
         continue;
       }
-
-      // Log payment
-      console.log(`[DebtFIFO-DEBUG] Paying ${payAmount} for ${debt.tag} (Rem: ${entry.remaining}) using Repay ${currentRepayment.id} (Rem: ${currentRepayment.amount})`);
 
       // Record Link
       entry.links.push({
@@ -299,12 +354,13 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       // Update Balances
       entry.remaining -= payAmount;
       currentRepayment.amount -= payAmount;
+      if (entry.remaining < 0) entry.remaining = 0;
 
-      console.log(`[DebtFIFO-UPDATE] ${debt.tag} New Rem: ${entry.remaining}`);
+      console.log(`[DebtFIFO-GENERAL] Pay ${payAmount} for ${debt.tag} (Rem: ${entry.remaining})`);
 
       // If Repayment exhausted, remove from queue
-      if (currentRepayment.amount < 1) {
-        repaymentQueue.shift();
+      if (currentRepayment.amount < 0.01) {
+        generalQueue.shift();
       }
     }
   }
