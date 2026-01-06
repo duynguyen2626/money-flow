@@ -274,9 +274,11 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
     console.error(`[DebtDebug] Processing ${debt.tag} (${debt.occurred_at}). Rem: ${entry.remaining}. Pool: ${totalRepayment}. Paying: ${amountToPay}`);
 
     if (totalRepayment >= entry.remaining) {
+      // console.log(`[DebtDebug] ${debt.tag} Fully Paid. Setting 0.`);
       totalRepayment -= entry.remaining
       entry.remaining = 0
     } else {
+      // console.log(`[DebtDebug] ${debt.tag} Partially Paid. New Rem: ${entry.remaining - totalRepayment}`);
       entry.remaining -= totalRepayment
       totalRepayment = 0
     }
@@ -323,6 +325,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
         // Add remaining principal from our FIFO simulation
         const fifoEntry = debtsMap.get(row.id)
         if (fifoEntry) {
+          console.error(`[DebtAgg] ID: ${row.id} (${tag}). FIFO Rem: ${fifoEntry.remaining}`);
           current.remainingPrincipal += fifoEntry.remaining
         }
       } else if (baseType === 'income') {

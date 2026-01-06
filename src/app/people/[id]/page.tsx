@@ -216,6 +216,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
             googleSheetUrl={person.google_sheet_url}
             transactions={transactions}
             cycleSheets={cycleSheets}
+            debtTags={debtTags}
           />
         </div>
       </div>

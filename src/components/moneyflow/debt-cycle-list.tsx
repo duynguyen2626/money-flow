@@ -16,6 +16,7 @@ interface DebtCycleListProps {
     cycleSheets: PersonCycleSheet[]
     filterType: 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer'
     searchTerm: string
+    debtTags?: any[]
 }
 
 export function DebtCycleList({
@@ -28,8 +29,16 @@ export function DebtCycleList({
     sheetProfileId,
     cycleSheets,
     filterType,
-    searchTerm
+    searchTerm,
+    debtTags = []
 }: DebtCycleListProps) {
+
+    // Map for O(1) lookup of Server Side Status
+    const debtTagsMap = useMemo(() => {
+        const m = new Map<string, any>();
+        debtTags.forEach(t => m.set(t.tag, t));
+        return m;
+    }, [debtTags]);
 
     // 1. Filter Transactions based on Smart Filter & Search
     const filteredTransactions = useMemo(() => {
