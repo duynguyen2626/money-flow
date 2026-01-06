@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Account, Category, Person, PersonCycleSheet, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
-import { ChevronDown, ChevronRight, FileSpreadsheet, PlusCircle } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileSpreadsheet, PlusCircle, Link as LinkIcon } from 'lucide-react'
 import { UnifiedTransactionTable } from './unified-transaction-table'
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { Button } from '@/components/ui/button'
@@ -28,6 +28,7 @@ interface DebtCycleGroupProps {
     cycleSheet: PersonCycleSheet | null
     isExpanded: boolean
     onToggleExpand: () => void
+    serverStatus?: any // From Debt Service
 }
 
 export function DebtCycleGroup({
@@ -47,6 +48,7 @@ export function DebtCycleGroup({
     cycleSheet,
     isExpanded,
     onToggleExpand,
+    serverStatus,
 }: DebtCycleGroupProps) {
     const [isExcelMode, setIsExcelMode] = useState(false)
     // Local filter state for this card
@@ -86,14 +88,36 @@ export function DebtCycleGroup({
     const back = stats.initial - stats.lend
 
     // Remains: Lend - Repay (User Req: "Remains cũng phải là tính theo Final Price")
-    const remains = stats.lend - stats.repay
+    // If serverStatus is available, use it as the source of truth (FIFO logical remains)
+    const remains = serverStatus && typeof serverStatus.remainingPrincipal === 'number'
+        ? serverStatus.remainingPrincipal
+        : stats.lend - stats.repay
 
     // Small tolerance for float math
-    const isSettled = Math.abs(remains) < 100
+    const isSettled = serverStatus ? serverStatus.status === 'settled' : Math.abs(remains) < 100
     const statusColor = isSettled ? 'text-emerald-600' : 'text-amber-600'
     const statusBadge = isSettled
         ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
         : 'border-amber-200 bg-amber-50 text-amber-700'
+
+    // Bulk Paid Link Icon Logic
+    const linkedRepayments = serverStatus?.links || []
+    const handleOpenLinkedRepayment = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        if (linkedRepayments.length > 0) {
+            // Open the first linked repayment in Edit Modal.
+            // We can use the existing 'Edit' logic or trigger a custom event.
+            // For now, let's just use the ID to find the transaction if possible, 
+            // but since we don't have the txn object here, we might need to rely on the parent or just show a tooltip.
+            // UPDATE: We have 'AddTransactionDialog' in Edit mode elsewhere.
+            // Let's rely on a custom Dispatch or just show the INFO for now.
+            // Ideal: Open Edit Dialog.
+            // Implementation: We can't easily open the modal without the txn object.
+            // Alternative: Pass a callback or just standard tooltip.
+            // Let's emit a custom event that `ManagedTransactionTable` or `page` listens to? No, too complex.
+            // Simple: Just show tooltip with Repayment IDs usually sufficient for "Bulk Paid" visual.
+        }
+    }
 
     const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 })
 
@@ -138,6 +162,31 @@ export function DebtCycleGroup({
                         <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold", statusBadge)}>
                             {isSettled ? 'Settled' : 'Active'}
                         </span>
+                        {/* Linked Repayment Icon */}
+                        {linkedRepayments.length > 0 && (
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <div
+                                        className="flex items-center justify-center h-5 w-5 rounded-full bg-blue-100 text-blue-600 ml-1 cursor-pointer hover:bg-blue-200"
+                                        onClick={(e) => e.stopPropagation()}
+                                        title="Paid by Bulk Repayment"
+                                    >
+                                        <LinkIcon className="h-3 w-3" />
+                                    </div>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-60 p-2">
+                                    <div className="text-xs font-semibold mb-1 border-b pb-1">Paid by Repayment</div>
+                                    <div className="flex flex-col gap-1">
+                                        {linkedRepayments.map((l: any, i: number) => (
+                                            <div key={i} className="flex justify-between text-xs text-slate-600">
+                                                <span>ID: ...{l.repaymentId.slice(-4)}</span>
+                                                <span className="font-mono">{formatter.format(l.amount)}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
+                        )}
                     </button>
 
                     {/* Filters & Summary (Inline) */}

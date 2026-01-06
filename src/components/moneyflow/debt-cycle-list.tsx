@@ -16,6 +16,7 @@ interface DebtCycleListProps {
     cycleSheets: PersonCycleSheet[]
     filterType: 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer'
     searchTerm: string
+    debtTags?: any[]
 }
 
 export function DebtCycleList({
@@ -28,8 +29,16 @@ export function DebtCycleList({
     sheetProfileId,
     cycleSheets,
     filterType,
-    searchTerm
+    searchTerm,
+    debtTags = []
 }: DebtCycleListProps) {
+
+    // Map for O(1) lookup of Server Side Status
+    const debtTagsMap = useMemo(() => {
+        const m = new Map<string, any>();
+        debtTags.forEach(t => m.set(t.tag, t));
+        return m;
+    }, [debtTags]);
 
     // 1. Filter Transactions based on Smart Filter & Search
     const filteredTransactions = useMemo(() => {
@@ -211,27 +220,39 @@ export function DebtCycleList({
 
     return (
         <div className="space-y-3 md:space-y-4">
-            {displayCycles.map((group) => (
-                <DebtCycleGroup
-                    key={group.tag}
-                    tag={group.tag}
-                    transactions={group.transactions}
-                    accounts={accounts}
-                    categories={categories}
-                    people={people}
-                    shops={shops}
-                    personId={personId}
-                    sheetProfileId={sheetProfileId}
-                    scriptLink={scriptLink}
-                    googleSheetUrl={googleSheetUrl}
-                    sheetFullImg={people.find(p => p.id === sheetProfileId)?.sheet_full_img ?? null}
-                    showBankAccount={people.find(p => p.id === sheetProfileId)?.sheet_show_bank_account ?? false}
-                    showQrImage={people.find(p => p.id === sheetProfileId)?.sheet_show_qr_image ?? false}
-                    cycleSheet={cycleSheets.find(sheet => normalizeMonthTag(sheet.cycle_tag) === group.tag) ?? null}
-                    isExpanded={group.tag === activeTag}
-                    onToggleExpand={() => handleToggle(group.tag)}
-                />
-            ))}
+            {displayCycles.map((group) => {
+                const tag = group.tag;
+
+                // Try exact match first, then normalized for legacy/different formats
+                let serverStatus = debtTagsMap.get(tag);
+                if (!serverStatus) {
+                    const normalized = normalizeMonthTag(tag);
+                    if (normalized) serverStatus = debtTagsMap.get(normalized);
+                }
+
+                return (
+                    <DebtCycleGroup
+                        key={group.tag}
+                        tag={group.tag}
+                        transactions={group.transactions}
+                        accounts={accounts}
+                        categories={categories}
+                        people={people}
+                        shops={shops}
+                        personId={personId}
+                        sheetProfileId={sheetProfileId}
+                        scriptLink={scriptLink}
+                        googleSheetUrl={googleSheetUrl}
+                        sheetFullImg={people.find(p => p.id === sheetProfileId)?.sheet_full_img ?? null}
+                        showBankAccount={people.find(p => p.id === sheetProfileId)?.sheet_show_bank_account ?? false}
+                        showQrImage={people.find(p => p.id === sheetProfileId)?.sheet_show_qr_image ?? false}
+                        cycleSheet={cycleSheets.find(sheet => normalizeMonthTag(sheet.cycle_tag) === group.tag) ?? null}
+                        isExpanded={group.tag === activeTag}
+                        onToggleExpand={() => handleToggle(group.tag)}
+                        serverStatus={serverStatus}
+                    />
+                )
+            })}
         </div>
     )
 }

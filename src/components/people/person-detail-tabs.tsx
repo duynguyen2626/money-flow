@@ -22,6 +22,7 @@ interface PersonDetailTabsProps {
     googleSheetUrl?: string | null
     transactions: any[]
     cycleSheets?: PersonCycleSheet[]
+    debtTags?: any[] // New Prop
 }
 
 export function PersonDetailTabs({
@@ -35,10 +36,13 @@ export function PersonDetailTabs({
     googleSheetUrl,
     transactions,
     cycleSheets = [],
+    debtTags = [],
 }: PersonDetailTabsProps) {
     const searchParams = useSearchParams()
 
     const resolveTab = (value: string | null) => {
+        // ... (skip unchanged lines) ...
+
         if (value === 'sheet' || value === 'details' || value === 'split-bill') {
             return value
         }
@@ -57,7 +61,7 @@ export function PersonDetailTabs({
     const tabs = [
         { id: 'details' as const, label: 'Details', icon: <LayoutDashboard className="h-4 w-4" /> },
         { id: 'history' as const, label: 'History', icon: <History className="h-4 w-4" /> },
-        { id: 'sheet' as const, label: 'Sheet Link', icon: <LinkIcon className="h-4 w-4" /> },
+        // { id: 'sheet' as const, label: 'Sheet Link', icon: <LinkIcon className="h-4 w-4" /> },
         { id: 'split-bill' as const, label: 'Split Bill', icon: <DollarSign className="h-4 w-4" /> },
     ]
 
@@ -125,6 +129,7 @@ export function PersonDetailTabs({
                                 cycleSheets={cycleSheets}
                                 filterType={filterType}
                                 searchTerm={searchTerm}
+                                debtTags={debtTags}
                             />
                         </div>
                     </div>

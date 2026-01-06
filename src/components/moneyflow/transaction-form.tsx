@@ -27,7 +27,7 @@ import {
   previewCashbackAction,
   CashbackPreviewResult,
 } from "@/actions/cashback-preview.action";
-import { Account, Category, Person, Shop } from "@/types/moneyflow.types";
+import { Account, Category, Person, Shop, TransactionWithDetails } from "@/types/moneyflow.types";
 import { createClient as createSupabaseClient } from "@/lib/supabase/client";
 import { getDisplayBalance } from "@/lib/display-balance";
 import {
@@ -48,6 +48,10 @@ import {
   FileText,
   Percent,
   ArrowRightLeft,
+  User,
+  Eye,
+  ArrowUp,
+  LayoutList,
   ArrowDownLeft,
   ArrowUpRight,
   RotateCcw,
@@ -58,7 +62,12 @@ import {
   Loader2,
   Users,
   Info,
+  AlertCircle,
+  Trash2,
+  ArrowDownToLine,
 } from "lucide-react";
+import { getOutstandingDebts } from "@/services/debt.service";
+import { allocateTransactionRepayment, AllocationResult } from "@/lib/debt-allocation";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { cn, getAccountInitial } from "@/lib/utils";
@@ -98,8 +107,8 @@ const formSchema = z
     cashback_share_percent: z.coerce.number().min(0).optional(),
     cashback_share_fixed: z.coerce.number().min(0).optional(),
     shop_id: z.string().optional(),
-    shop_name: z.string().optional(),
-    shop_image_url: z.string().optional(),
+    shop_name: z.string().nullish(),
+    shop_image_url: z.string().nullish(),
     category_name: z.string().optional(),
     is_voluntary: z.boolean().optional(),
     is_installment: z.boolean().optional(),
@@ -416,7 +425,8 @@ export function TransactionForm({
   >(initialValues?.type || defaultType || "expense");
   const [accountFilter, setAccountFilter] = useState<
     "credit" | "account" | "other" | "all"
-  >("credit");
+  >(initialValues?.type === "repayment" ? "account" : "credit");
+  const [accountSearch, setAccountSearch] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [payerName, setPayerName] = useState<string>("");
   const [isInstallment, setIsInstallment] = useState(false);
@@ -435,12 +445,41 @@ export function TransactionForm({
   const [persistedMetadata, setPersistedMetadata] =
     useState<CashbackPolicyMetadata | null>(null);
 
+  // When transaction type changes, set default account filter
+  useEffect(() => {
+    if (transactionType === 'repayment') {
+      setAccountFilter('account');
+    } else if (transactionType === 'expense') {
+      setAccountFilter('credit');
+    }
+  }, [transactionType]);
+
   const [splitGroupId, setSplitGroupId] = useState<string | undefined>(undefined);
   const [splitParticipants, setSplitParticipants] = useState<
     SplitBillParticipant[]
   >([]);
+  const [splitBillAutoSplit, setSplitBillAutoSplit] = useState(false);
+  const [splitTotalDiff, setSplitTotalDiff] = useState(0);
+
+  // Sprint 5 Features
+  const [bulkRepayment, setBulkRepayment] = useState(
+    Boolean(initialValues?.metadata?.bulk_allocation) || false
+  );
+  const [outstandingDebts, setOutstandingDebts] = useState<any[]>([]);
+  const [allocationPreview, setAllocationPreview] = useState<AllocationResult | null>(null);
+  const [allocationOverrides, setAllocationOverrides] = useState<Record<string, number>>({});
+  const [ignoredDebtIds, setIgnoredDebtIds] = useState<Set<string>>(new Set());
+
+
+
+  const handleDetailClick = (type: 'person' | 'account' | 'shop', id?: string) => {
+    if (!id) return;
+    const url = `/${type === 'shop' ? 'shops' : type === 'account' ? 'accounts' : 'people'}/${id}`;
+    // Open in new tab or modal. For now new tab.
+    window.open(url, '_blank');
+  };
+
   const [splitBillError, setSplitBillError] = useState<string | null>(null);
-  const [splitBillAutoSplit, setSplitBillAutoSplit] = useState(true);
   const [splitPersonInput, setSplitPersonInput] = useState("");
   const [splitPersonError, setSplitPersonError] = useState<string | null>(null);
   const [splitPersonDropdownOpen, setSplitPersonDropdownOpen] = useState(false);
@@ -630,6 +669,7 @@ export function TransactionForm({
     } else {
       console.log(
         "[TransactionForm] Resetting form with new values (Clone/Edit update)",
+        JSON.stringify(initialValues.metadata)
       );
       form.reset(newValues, { keepDirty: false });
       setManualTagMode(true);
@@ -639,8 +679,21 @@ export function TransactionForm({
         form.setValue("installment_plan_id", initialValues.installment_plan_id, { shouldDirty: false });
       }
       initialValuesRef.current = initialValues;
+      // Sprint 5 Refine: Restore Bulk Repayment Toggle state
+      setBulkRepayment(Boolean(initialValues.metadata?.bulk_allocation));
     }
   }, [baseDefaults, form, initialValues, allAccounts]);
+
+  // Sprint 7 Fix: Aggressively restore Bulk Repayment Toggle 
+  // This ensures that even if reset logic is skipped/bypassed, the toggle is ON if metadata exists.
+  useEffect(() => {
+    if (initialValues?.metadata?.bulk_allocation && transactionType === 'repayment') {
+      if (!bulkRepayment) {
+        console.log("Forcing Bulk Repayment ON (Metadata Found)", initialValues.metadata);
+        setBulkRepayment(true);
+      }
+    }
+  }, [initialValues, transactionType, bulkRepayment]);
 
   // Bug Fix: Update account filter to ensure the selected account is visible in Edit Mode
   useEffect(() => {
@@ -852,7 +905,7 @@ export function TransactionForm({
 
           // 1. Create main expense transaction (full amount for bank reconciliation)
           const mainExpensePayload: Parameters<typeof createTransaction>[0] = {
-            occurred_at: restValues.occurred_at.toISOString(),
+            occurred_at: restValues.occurred_at?.toISOString() ?? new Date().toISOString(),
             type: restValues.type === "repayment" ? "income" : restValues.type,
             amount: totalAmount,
             source_account_id: restValues.source_account_id,
@@ -884,7 +937,7 @@ export function TransactionForm({
 
           // 2. Create Lend transaction for other person's share
           const lendPayload: Parameters<typeof createTransaction>[0] = {
-            occurred_at: restValues.occurred_at.toISOString(),
+            occurred_at: restValues.occurred_at?.toISOString() ?? new Date().toISOString(),
             type: "debt", // Lending money
             amount: otherPerson.amount,
             source_account_id: restValues.source_account_id,
@@ -979,7 +1032,7 @@ export function TransactionForm({
           restValues.type === "repayment" ? "income" : restValues.type;
 
         const basePayload: Parameters<typeof createTransaction>[0] = {
-          occurred_at: restValues.occurred_at.toISOString(),
+          occurred_at: restValues.occurred_at?.toISOString() ?? new Date().toISOString(),
           note: baseNote,
           type: baseType,
           source_account_id: restValues.source_account_id,
@@ -1037,7 +1090,7 @@ export function TransactionForm({
             }
 
             const payload: Parameters<typeof createTransaction>[0] = {
-              occurred_at: restValues.occurred_at.toISOString(),
+              occurred_at: restValues.occurred_at?.toISOString() ?? new Date().toISOString(),
               note: noteParts.join(" | "),
               type: restValues.type,
               source_account_id: SPLIT_BILL_SYSTEM_ACCOUNT_ID,
@@ -1135,7 +1188,7 @@ export function TransactionForm({
 
       const payload: Parameters<typeof createTransaction>[0] = {
         ...restValues,
-        occurred_at: restValues.occurred_at.toISOString(),
+        occurred_at: restValues.occurred_at?.toISOString() ?? new Date().toISOString(),
         shop_id: restValues.shop_id ?? undefined,
         note: finalNote,
         destination_account_id:
@@ -1149,6 +1202,22 @@ export function TransactionForm({
             ? { installment_id: restValues.installment_plan_id }
             : {}),
           ...(initialValues?.metadata || {}),
+          // Sprint 6: Persist Bulk Allocation details
+          ...(transactionType === "repayment" && bulkRepayment && allocationPreview
+            ? {
+              bulk_allocation: {
+                total_allocated: allocationPreview.totalAllocated,
+                debts: allocationPreview.paidDebts.map((p) => ({
+                  id: p.transaction.id,
+                  amount: p.allocatedAmount,
+                  tag: p.transaction.tag,
+                  note: p.transaction.note ? p.transaction.note.substring(0, 20) : undefined
+                  // original_amount: p.transaction.amount (optional for audit)
+                }))
+              }
+            }
+            : {}
+          ),
         },
       };
 
@@ -1223,6 +1292,13 @@ export function TransactionForm({
   const watchedIsInstallment = useWatch({ control, name: "is_installment" });
 
   useEffect(() => {
+    if (transactionType === ("repayment")) {
+      // Clear shop_id in repayment mode so the placeholder "To: Account" shows up
+      form.setValue("shop_id", "", { shouldDirty: false });
+    }
+  }, [transactionType, form]);
+
+  useEffect(() => {
     if (isEditMode) return;
 
     const currentCategoryId = form.getValues("category_id");
@@ -1264,8 +1340,16 @@ export function TransactionForm({
       // Auto-set Money Transfer category
       const moneyTransferId = "e0000000-0000-0000-0000-000000000080";
       form.setValue("category_id", moneyTransferId, { shouldDirty: false });
+    } else if (transactionType === "income" && !currentCategoryId) {
+      // Auto-set Income category if available
+      const incomeCat = categories.find(
+        (c) => c.name === "Income" || c.name === "Thu nhập" || c.name === "Salary"
+      );
+      if (incomeCat) {
+        form.setValue("category_id", incomeCat.id, { shouldDirty: false });
+      }
     }
-  }, [transactionType, categories, shops, form, isEditMode]);
+  }, [transactionType, categories, shops, form, isEditMode, allAccounts]);
 
   const watchedCategoryId = useWatch({
     control,
@@ -1299,6 +1383,151 @@ export function TransactionForm({
     control,
     name: "occurred_at",
   });
+
+  const watchedPersonId = useWatch({
+    control,
+    name: "person_id",
+  });
+
+  // Sprint 5 Refine: Persist defaults for Repay Account & Person
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    // Auto-fill Account for Repayment from history
+    // Fix: Always load history when entering Repayment mode
+    if (transactionType === "repayment") {
+      const lastRepayAccount = localStorage.getItem("moneyflow_last_repay_account_id");
+      // Ensure account exists in current list? Optional but safer.
+      if (lastRepayAccount) {
+        form.setValue("source_account_id", lastRepayAccount, { shouldDirty: false });
+      }
+    }
+
+    // Auto-fill Person from history (if not provided via props/defaults)
+    if (!watchedPersonId) {
+      const lastPerson = localStorage.getItem("moneyflow_last_person_id");
+      if (lastPerson) {
+        form.setValue("person_id", lastPerson, { shouldDirty: false });
+      }
+    }
+  }, [transactionType]); // Run when type switches or mounts
+
+  // Save Defaults
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (transactionType === "repayment" && watchedAccountId) {
+      localStorage.setItem("moneyflow_last_repay_account_id", watchedAccountId);
+    }
+  }, [transactionType, watchedAccountId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (watchedPersonId) {
+      localStorage.setItem("moneyflow_last_person_id", watchedPersonId);
+    }
+  }, [watchedPersonId]);
+
+  // Sprint 5: Fetch outstanding debts for bulk repayment
+  useEffect(() => {
+    if (transactionType === "repayment" && watchedPersonId && bulkRepayment) {
+      getOutstandingDebts(watchedPersonId, transactionId).then((debts) => {
+        setOutstandingDebts(debts);
+      });
+    } else {
+      setOutstandingDebts([]);
+    }
+  }, [transactionType, watchedPersonId, bulkRepayment, transactionId]);
+
+  // Sprint 5 Refine: Manual Allocation Overrides
+
+
+  const handleOverrideChange = (transactionId: string, amount: number) => {
+    setAllocationOverrides(prev => ({
+      ...prev,
+      [transactionId]: amount
+    }));
+  };
+
+  // Sprint 6 Restore Logic: Apply overrides from metadata once debts are loaded
+  useEffect(() => {
+    if (
+      initialValues?.metadata?.bulk_allocation &&
+      outstandingDebts.length > 0 &&
+      Object.keys(allocationOverrides).length === 0
+    ) {
+      const savedDebts = initialValues.metadata.bulk_allocation.debts as { id: string, amount: number }[];
+      const restoredOverrides: Record<string, number> = {};
+
+      savedDebts.forEach(d => {
+        restoredOverrides[d.id] = d.amount;
+      });
+
+      outstandingDebts.forEach(d => {
+        const saved = savedDebts.find(s => s.id === d.id);
+        if (saved) {
+          restoredOverrides[d.id] = saved.amount;
+        } else {
+          restoredOverrides[d.id] = 0; // Explicitly do not pay others
+        }
+      });
+
+      if (Object.keys(restoredOverrides).length > 0) {
+        setAllocationOverrides(restoredOverrides);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outstandingDebts, initialValues]);
+
+  // Sprint 5: Calculate allocation preview
+  useEffect(() => {
+    // Reset overrides if critical context changes
+    // Actually, we usually want to keep them if just amount changes? 
+    // If person changes, definitely reset.
+    // If Bulk mode toggled off, reset?
+  }, [watchedPersonId, bulkRepayment]);
+  // Let's rely on manual reset or simple effect specific to reset.
+
+  useEffect(() => {
+    if (transactionType !== "repayment" || !watchedPersonId || !bulkRepayment) {
+      setAllocationOverrides({});
+    }
+  }, [transactionType, watchedPersonId, bulkRepayment]);
+
+  useEffect(() => {
+    if (!bulkRepayment || outstandingDebts.length === 0 || !watchedAmount) {
+      setAllocationPreview(null);
+      return;
+    }
+
+    // Filter out ignored (deleted) debts
+    const activeDebts = outstandingDebts.filter(d => !ignoredDebtIds.has(d.id));
+
+    const allocation = allocateTransactionRepayment(
+      activeDebts,
+      Math.abs(watchedAmount),
+      allocationOverrides // Pass overrides
+    );
+    setAllocationPreview(allocation);
+  }, [bulkRepayment, outstandingDebts, watchedAmount, allocationOverrides, ignoredDebtIds]);
+
+  // Sync Shop with Account for Repayment - One-way sync on Account Change
+  useEffect(() => {
+    if (transactionType === "repayment" && watchedAccountId) {
+      const account = allAccounts.find(a => a.id === watchedAccountId);
+      if (account) {
+        // Try to find a shop with the precise account name
+        const matchingShop = shops.find(s => s.name.toLowerCase() === account.name.toLowerCase());
+
+        // If found, select it. If not found, clear it so "To: Account Name" placeholder shows
+        if (matchingShop) {
+          form.setValue("shop_id", matchingShop.id, { shouldDirty: false });
+        } else {
+          // Clear it to trigger the placeholder state "To: [Account Name]"
+          form.setValue("shop_id", "", { shouldDirty: false });
+        }
+      }
+    }
+  }, [transactionType, watchedAccountId, allAccounts, shops, form]);
 
   useEffect(() => {
     let active = true;
@@ -1349,10 +1578,7 @@ export function TransactionForm({
     setDateInputValue(format(watchedDate, "yyyy-MM-dd"));
   }, [watchedDate]);
 
-  const watchedPersonId = useWatch({
-    control,
-    name: "person_id",
-  });
+
 
   const watchedSplitBill = useWatch({
     control,
@@ -1648,7 +1874,7 @@ export function TransactionForm({
   const { accountOptions, accountOptionGroups } = useMemo(() => {
     const accountTypes = {
       credit: new Set(["credit_card"]),
-      account: new Set(["bank", "cash", "ewallet"]),
+      account: new Set(["bank", "cash", "ewallet", "stock"]),
       save: new Set(["savings", "investment", "asset"]),
     };
 
@@ -1666,6 +1892,12 @@ export function TransactionForm({
 
     const eligibleAccounts = sourceAccountsState.filter((acc) => {
       if (acc.type === "system" || acc.type === "debt") return false;
+
+      // Global Search: If searching (and search term is long enough), ignore tabs
+      // NOTE: accountSearch is passed from Combobox via state
+      if (accountSearch && accountSearch.trim().length > 0) return true;
+
+      // Otherwise, respect the tab filter
       if (!matchesFilter(acc)) return false;
 
       if (
@@ -1674,7 +1906,7 @@ export function TransactionForm({
       )
         return false;
 
-      // ALWAYS include the currently selected account, even if it matches other exclusion criteria
+      // ALWAYS include the currently selected account
       if (acc.id === form.getValues("source_account_id")) return true;
 
       if (transactionType === "transfer" && acc.type === "credit_card")
@@ -2035,6 +2267,31 @@ export function TransactionForm({
       form.setValue("shop_id", undefined, { shouldDirty: false });
     }
   }, [transactionType, form]);
+
+  // Sprint 5: Auto-sync Shop with "To Account" in Repayment mode
+  useEffect(() => {
+    if (transactionType !== "repayment") return;
+    if (!watchedAccountId) {
+      form.setValue("shop_id", undefined, { shouldDirty: false });
+      return;
+    }
+
+    const account = allAccounts.find((acc) => acc.id === watchedAccountId);
+    if (!account) return;
+
+    // Find existing shop matching the account name
+    const matchingShop = shopsState.find(
+      (shop) => shop.name.toLowerCase() === account.name.toLowerCase()
+    );
+
+    if (matchingShop) {
+      // Auto-select the matching shop
+      form.setValue("shop_id", matchingShop.id, { shouldDirty: false });
+    } else {
+      // Clear shop if no match (user can manually create one if needed)
+      form.setValue("shop_id", undefined, { shouldDirty: false });
+    }
+  }, [transactionType, watchedAccountId, allAccounts, shopsState, form]);
 
   useEffect(() => {
     if (transactionType === "debt" || transactionType === "repayment") {
@@ -2575,7 +2832,7 @@ export function TransactionForm({
     setProgressError(null);
 
     fetch(
-      `/api/cashback/progress?accountId=${selectedAccount.id}&date=${watchedDate.toISOString()}`,
+      `/api/cashback/progress?accountId=${selectedAccount.id}&date=${watchedDate ? watchedDate.toISOString() : new Date().toISOString()}`,
       {
         cache: "no-store",
         signal: controller.signal,
@@ -2846,7 +3103,7 @@ export function TransactionForm({
             }}
             className="w-full"
           >
-            <TabsList className="grid w-full grid-cols-5 p-1 bg-slate-100/80 rounded-xl h-auto">
+            <TabsList className="sticky top-0 z-10 bg-background grid w-full grid-cols-5 p-1 bg-slate-100/80 rounded-xl h-auto -mx-1 w-[calc(100%_+_0.5rem)]">
               <TabsTrigger
                 value="expense"
                 className="data-[state=active]:bg-rose-100 data-[state=active]:text-rose-700 data-[state=active]:shadow-none rounded-lg flex flex-col sm:flex-row items-center justify-center gap-1.5 py-2 text-xs font-semibold transition-all"
@@ -2980,9 +3237,11 @@ export function TransactionForm({
     ) : null;
 
   const debtAccountForRepayment = useMemo(() => {
-    if (transactionType !== "repayment" || !watchedDebtAccountId) return null;
-    return allAccounts.find((acc) => acc.id === watchedDebtAccountId) ?? null;
-  }, [transactionType, watchedDebtAccountId, allAccounts]);
+    // For Repayment, the "To Account" UI maps to source_account_id (watchedAccountId)
+    // The money goes FROM User Link Account (source) -> TO Creditor/Bank
+    if (transactionType !== "repayment" || !watchedAccountId) return null;
+    return allAccounts.find((acc) => acc.id === watchedAccountId) ?? null;
+  }, [transactionType, watchedAccountId, allAccounts]);
 
   const ShopInput =
     transactionType === "expense" ||
@@ -3004,6 +3263,7 @@ export function TransactionForm({
               value={field.value}
               onValueChange={field.onChange}
               items={shopOptions}
+              disabled={transactionType === "repayment"}
               placeholder={
                 debtAccountForRepayment && !field.value ? (
                   <span className="flex items-center gap-2">
@@ -3033,7 +3293,10 @@ export function TransactionForm({
       (transactionType === "income" && !isRefundMode)) ? (
       <div className="space-y-3">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">Person</label>
+          <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+            <User className="h-4 w-4 text-slate-500" />
+            Person
+          </label>
           <Controller
             control={control}
             name="person_id"
@@ -3057,6 +3320,7 @@ export function TransactionForm({
                 onAddNew={() => setIsPersonDialogOpen(true)}
                 addLabel="New Person"
                 disabled={isSplitBill}
+                onDetailClick={() => handleDetailClick('person', field.value)}
               />
             )}
           />
@@ -3071,13 +3335,7 @@ export function TransactionForm({
               ⚠️ {errors.person_id.message}
             </p>
           )}
-          {debtAccountName && !isSplitBill && (
-            <div className="flex flex-wrap gap-2 mt-1">
-              <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                {debtAccountName}
-              </span>
-            </div>
-          )}
+
         </div>
 
         {/* Payer Name Input for Group Debt Repayments/Lending */}
@@ -3130,21 +3388,7 @@ export function TransactionForm({
               {isEnsuringDebt ? "Creating..." : "Create & Link Now"}
             </button>
           </div>
-        ) : !isSplitBill && watchedPersonId && debtAccountByPerson.get(watchedPersonId) ? (
-          <div className="flex items-center gap-2 mt-2">
-            <span className="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">
-              Linked
-            </span>
-            <a
-              href={`/people/${watchedPersonId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-            >
-              View Details <ExternalLink className="h-3 w-3" />
-            </a>
-          </div>
-        ) : null}
+        ) : !isSplitBill && watchedPersonId && debtAccountByPerson.get(watchedPersonId) ? null : null}
         {!isSplitBill && errors.debt_account_id && (
           <p className="text-sm text-red-600 font-medium mt-1 animate-pulse">
             ⚠️ {errors.debt_account_id.message}
@@ -3219,9 +3463,9 @@ export function TransactionForm({
           </label>
           <div className="min-h-[44px] rounded-md border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
             <div className="flex flex-wrap items-center gap-2">
-              {splitExtraParticipants.map((participant) => (
+              {splitExtraParticipants.map((participant, index) => (
                 <span
-                  key={participant.personId}
+                  key={`${participant.personId}-${index}`}
                   className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-semibold text-slate-600"
                 >
                   {participant.name}
@@ -3564,6 +3808,8 @@ export function TransactionForm({
                 setIsAccountDialogOpen(true);
               }}
               addLabel="New Account"
+              onDetailClick={() => handleDetailClick('account', field.value)}
+              onSearchChange={setAccountSearch}
             />
           )}
         />
@@ -3608,14 +3854,14 @@ export function TransactionForm({
     <div
       className={cn(
         "space-y-2",
-        isDebtForm && "h-full flex flex-col",
+        (isDebtForm || transactionType === "income") && "h-full flex flex-col",
       )}
     >
       <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
         <FileText className="h-4 w-4 text-slate-500" />
         Note
       </label>
-      {isDebtForm ? (
+      {isDebtForm || transactionType === "income" ? (
         <input
           type="text"
           {...register("note")}
@@ -4369,7 +4615,7 @@ export function TransactionForm({
             </div>
           )}
       </div>
-    </div>
+    </div >
   ) : null;
 
   const submitLabel = isSubmitting
@@ -4465,7 +4711,7 @@ export function TransactionForm({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 min-h-[500px]">
             {status?.type === "error" && (
               <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
                 {status.text}
@@ -4473,62 +4719,266 @@ export function TransactionForm({
             )}
 
             {isDebtForm ? (
-              <>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-4">
+                {transactionType === "repayment" ? (
                   <div className="space-y-4">
-                    {PersonInput}
-                  </div>
-                  <div className="space-y-4">
-                    {NoteInput}
-                  </div>
-                </div>
+                    {/* REPAYMENT LAYOUT */}
+                    {/* Row 1: Date - Tag */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                      <div>{DateInput}</div>
+                      <div>{TagInput}</div>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-4">
-                    {DateInput}
-                  </div>
-                  <div className="space-y-4">
-                    {TagInput}
-                  </div>
-                </div>
+                    {/* Row 2: To Account (Source) - Shop */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                      <div>{SourceAccountInput}</div>
+                      <div>{ShopInput}</div>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-4">
-                    {CategoryInput}
-                  </div>
-                  <div className="space-y-4">
-                    {ShopInput}
-                  </div>
-                </div>
+                    {/* Row 3: Category - Person */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                      <div>{CategoryInput}</div>
+                      <div>{PersonInput}</div>
+                    </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-4">
-                    {SourceAccountInput}
+                    {/* Row 4: Amount - Note */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                      <div>{AmountInput}</div>
+                      <div>{NoteInput}</div>
+                    </div>
+
+                    {/* Bulk Repayment Mode (Bottom) */}
+                    <div className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="bulk-repay" className="text-sm font-medium text-slate-900">
+                          Bulk Repayment Mode
+                        </Label>
+                        <p className="text-xs text-slate-500">
+                          Automatically allocate to oldest debts first. Manually edit to override.
+                        </p>
+                      </div>
+                      <Switch
+                        id="bulk-repay"
+                        checked={bulkRepayment}
+                        onCheckedChange={setBulkRepayment}
+                      />
+                    </div>
+
+                    {/* Interactive Allocation Preview */}
+                    {bulkRepayment && outstandingDebts.length > 0 && (
+                      <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-bold text-blue-700 uppercase tracking-wide flex items-center gap-2">
+                            <LayoutList className="w-3 h-3" />
+                            Allocation Preview
+                          </h4>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAllocationOverrides({});
+                                setIgnoredDebtIds(new Set());
+                              }}
+                              className="text-[10px] text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline"
+                              title="Reset and Restore All"
+                            >
+                              <RotateCcw className="w-3 h-3" />
+                              Reset
+                            </button>
+                            <span className="text-xs font-medium text-blue-600">
+                              {allocationPreview ? (
+                                `Allocated: ${numberFormatter.format(allocationPreview.totalAllocated)} / ${numberFormatter.format(watchedAmount || 0)}`
+                              ) : "Calculating..."}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
+                          {outstandingDebts
+                            .filter(d => !ignoredDebtIds.has(d.id))
+                            .map((debt: TransactionWithDetails) => {
+                              const allocEntry = allocationPreview?.paidDebts.find((p: any) => p.transaction.id === debt.id);
+                              const allocatedAmount = allocEntry?.allocatedAmount || 0;
+                              // const isManual = allocEntry?.isManual || false;
+                              const isOverpaid = allocatedAmount > Math.abs(debt.amount);
+
+                              return (
+                                <div key={debt.id} className="flex items-center gap-2 text-xs text-slate-700 border-b border-blue-100/50 pb-1 last:border-0 last:pb-0">
+                                  {/* INFO */}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="truncate font-medium">
+                                      {format(parseISO(debt.occurred_at), "dd.MM.yyyy")} - {debt.note || "No Note"}
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 flex flex-wrap gap-2">
+                                      <span>Total: {numberFormatter.format(Math.abs(debt.amount))}</span>
+                                      {/* Overpay Warning */}
+                                      {isOverpaid && (
+                                        <span className="text-red-600 font-bold flex items-center gap-0.5">
+                                          <AlertCircle className="w-3 h-3" /> Overpay! (+{numberFormatter.format(allocatedAmount - Math.abs(debt.amount))})
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Trash Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newSet = new Set(ignoredDebtIds);
+                                      newSet.add(debt.id);
+                                      setIgnoredDebtIds(newSet);
+
+                                      // Clear any manual override
+                                      const newOverrides = { ...allocationOverrides };
+                                      delete newOverrides[debt.id];
+                                      setAllocationOverrides(newOverrides);
+                                    }}
+                                    className="text-slate-400 hover:text-rose-500 p-1.5 rounded-md hover:bg-rose-50 transition-colors flex-none"
+                                    title="Exclude from allocation"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Absorb Remaining Button */}
+                                  {allocationPreview?.remainingRepayment && allocationPreview.remainingRepayment > 0.1 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const remaining = allocationPreview.remainingRepayment;
+                                        const newTotal = allocatedAmount + remaining;
+                                        const newOverrides = { ...allocationOverrides };
+                                        newOverrides[debt.id] = newTotal;
+                                        setAllocationOverrides(newOverrides);
+                                      }}
+                                      className="text-emerald-500 hover:text-emerald-700 p-1.5 rounded-md hover:bg-emerald-50 transition-colors flex-none"
+                                      title="Absorb all remaining amount"
+                                    >
+                                      <ArrowDownToLine className="w-3.5 h-3.5" />
+                                    </button>
+                                  ) : null}
+
+                                  {/* INPUT */}
+                                  <div className="w-24 flex-none">
+                                    <input
+                                      type="text"
+                                      className={cn(
+                                        "w-full h-7 px-2 text-right text-xs rounded border border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 font-sans",
+                                        allocationOverrides[debt.id] !== undefined && "bg-yellow-50 border-yellow-300 font-semibold",
+                                        isOverpaid && "text-red-600 border-red-300 bg-red-50"
+                                      )}
+                                      value={numberFormatter.format(allocatedAmount)}
+                                      onChange={(e) => {
+                                        const raw = e.target.value.replace(/,/g, '');
+                                        if (raw === "") {
+                                          const newOverrides = { ...allocationOverrides };
+                                          newOverrides[debt.id] = 0;
+                                          setAllocationOverrides(newOverrides);
+                                          return;
+                                        }
+                                        const val = parseInt(raw, 10);
+                                        if (!isNaN(val)) {
+                                          const newOverrides = { ...allocationOverrides };
+                                          newOverrides[debt.id] = val;
+                                          setAllocationOverrides(newOverrides);
+                                        }
+                                      }}
+                                      onBlur={() => {
+                                        // Optional: On blur, if 0 and auto would be 0, maybe clear override?
+                                        // For now keep it simple.
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+
+                          {allocationPreview && allocationPreview.remainingRepayment > 0.1 && (
+                            <div className="flex justify-between text-xs text-orange-600 font-medium pt-1">
+                              <span>Unallocated Remaining:</span>
+                              <span>{numberFormatter.format(allocationPreview.remainingRepayment)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  /* LENDING LAYOUT (Original) */
                   <div className="space-y-4">
-                    {AmountInput}
+                    {/* Row 1: Date - Tag */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                      <div>{DateInput}</div>
+                      <div>{TagInput}</div>
+                    </div>
+                    {/* Row 2: Person - Note */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                      <div>{PersonInput}</div>
+                      <div>{NoteInput}</div>
+                    </div>
+                    {/* Row 3: Category - Shop */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                      <div>{CategoryInput}</div>
+                      <div>{ShopInput}</div>
+                    </div>
+                    {/* Row 4: Account - Amount */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                      <div>{SourceAccountInput}</div>
+                      <div>{AmountInput}</div>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {VolunteerSection}
                 {VolunteerInputs}
                 {InstallmentSection}
                 {SplitBillSection}
-              </>
+              </div>
+            ) : transactionType === "income" ? (
+              <div className="space-y-4">
+                {/* Row 1: Date - Notes */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                  <div>
+                    {DateInput}
+                  </div>
+                  <div>
+                    {NoteInput}
+                  </div>
+                </div>
+
+                {/* Row 2: To Account - Category */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                  <div>
+                    {SourceAccountInput}
+                  </div>
+                  <div>
+                    {CategoryInput}
+                  </div>
+                </div>
+
+                {/* Row 3: Amount (Full Width) */}
+                <div className="w-full">
+                  {AmountInput}
+                </div>
+
+                {SplitBillSection}
+              </div>
             ) : (
               <>
+                <div className="space-y-4 mb-4">
+                  {AmountInput}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-4">
                     {DateInput}
-                    {SourceAccountInput}
-                    {AmountInput}
+                    {NoteInput}
                     {TagInput}
                   </div>
                   <div className="space-y-4">
+                    {SourceAccountInput}
                     {CategoryInput}
                     {ShopInput}
                     {SplitBillToggle}
-                    {PersonInput}
                     {DestinationAccountInput}
                     {RefundStatusInput}
                   </div>
@@ -4539,11 +4989,12 @@ export function TransactionForm({
             )}
 
             <div className="space-y-4 pt-2 border-t border-slate-100">
+              {/* Allocation Preview removed from here (moved to Repayment block) */}
+
               {!isDebtForm && InstallmentSection}
               {CashbackModeInput}
-              {!isDebtForm && NoteInput}
             </div>
-          </div>
+          </div >
 
 
           {/* FIXED FOOTER */}
