@@ -4803,14 +4803,23 @@ export function TransactionForm({
 
                               return (
                                 <div key={debt.id} className="flex items-center gap-2 text-xs text-slate-700 border-b border-blue-100/50 pb-1 last:border-0 last:pb-0">
-                                  <div className="flex-1">
-                                    <span>
+                                  {/* INFO */}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="truncate font-medium">
                                       {format(parseISO(debt.occurred_at), "dd.MM.yyyy")} - {debt.note || "No Note"}
-                                    </span>
-                                    <div className="text-[10px] text-slate-500 flex gap-2">
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 flex flex-wrap gap-2">
                                       <span>Total: {numberFormatter.format(Math.abs(debt.amount))}</span>
+                                      {/* Overpay Warning */}
+                                      {isOverpaid && (
+                                        <span className="text-red-600 font-bold flex items-center gap-0.5">
+                                          <AlertCircle className="w-3 h-3" /> Overpay! (+{numberFormatter.format(allocatedAmount - Math.abs(debt.amount))})
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
+
+                                  {/* Trash Button */}
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -4818,42 +4827,57 @@ export function TransactionForm({
                                       newSet.add(debt.id);
                                       setIgnoredDebtIds(newSet);
 
+                                      // Clear any manual override
                                       const newOverrides = { ...allocationOverrides };
                                       delete newOverrides[debt.id];
                                       setAllocationOverrides(newOverrides);
                                     }}
-                                    className="text-slate-400 hover:text-rose-500 p-1 rounded hover:bg-rose-50 transition-colors"
-                                    title="Remove from allocation"
+                                    className="text-slate-400 hover:text-rose-500 p-1.5 rounded-md hover:bg-rose-50 transition-colors flex-none"
+                                    title="Exclude from allocation"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
-                                  </button>                                    <span>Total: {numberFormatter.format(Math.abs(debt.amount))}</span>
-                                  {isOverpaid && (
-                                    <span className="text-red-600 font-bold flex items-center gap-0.5">
-                                      <AlertCircle className="w-3 h-3" /> Overpay! (+{numberFormatter.format(allocatedAmount - Math.abs(debt.amount))})
-                                    </span>
-                                  )}
+                                  </button>
+
+                                  {/* INPUT */}
+                                  <div className="w-24 flex-none">
+                                    <input
+                                      type="text"
+                                      className={cn(
+                                        "w-full h-7 px-2 text-right text-xs rounded border border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 font-sans",
+                                        allocationOverrides[debt.id] !== undefined && "bg-yellow-50 border-yellow-300 font-semibold",
+                                        isOverpaid && "text-red-600 border-red-300 bg-red-50"
+                                      )}
+                                      value={numberFormatter.format(allocatedAmount)}
+                                      onChange={(e) => {
+                                        const raw = e.target.value.replace(/,/g, '');
+                                        if (raw === "") {
+                                          const newOverrides = { ...allocationOverrides };
+                                          newOverrides[debt.id] = 0;
+                                          setAllocationOverrides(newOverrides);
+                                          return;
+                                        }
+                                        const val = parseInt(raw, 10);
+                                        if (!isNaN(val)) {
+                                          const newOverrides = { ...allocationOverrides };
+                                          newOverrides[debt.id] = val;
+                                          setAllocationOverrides(newOverrides);
+                                        }
+                                      }}
+                                      onBlur={() => {
+                                        // Optional: On blur, if 0 and auto would be 0, maybe clear override?
+                                        // For now keep it simple.
+                                      }}
+                                    />
+                                  </div>
                                 </div>
-                                </div>
-                        <div className="w-24">
-                          <input
-                            type="text"
-                            className={cn(
-                              "w-full h-7 px-2 text-right text-xs rounded border border-blue-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 font-sans",
-                              allocationOverrides[debt.id] !== undefined && "bg-yellow-50 border-yellow-300 font-semibold",
-                              isOverpaid && "text-red-600 border-red-300 bg-red-50"
-                            )}
-                            // Use formatted string. If 0, show "0".
-                            value={numberFormatter.format(allocatedAmount)}
-                            onChange={(e) => {
-                              // Remove commas to parse
-                              const raw = e.target.value.replace(/,/g, '');
-                              if (raw === "") {
-                                handleOverrideChange(debt.id, 0);
-                                return;
+                              );
+                            })}
+                          handleOverrideChange(debt.id, 0);
+                          return;
                               }
-                              const val = parseFloat(raw);
-                              if (!isNaN(val)) {
-                                handleOverrideChange(debt.id, val);
+                          const val = parseFloat(raw);
+                          if (!isNaN(val)) {
+                            handleOverrideChange(debt.id, val);
                               }
                             }}
                           />
