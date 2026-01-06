@@ -42,19 +42,7 @@ export function PersonDetailTabs({
 
     const resolveTab = (value: string | null) => {
         // ... (skip unchanged lines) ...
-        <DebtCycleList
-            transactions={transactions}
-            accounts={accounts}
-            categories={categories}
-            people={people}
-            shops={shops}
-            personId={personId}
-            sheetProfileId={sheetProfileId}
-            cycleSheets={cycleSheets}
-            filterType={filterType}
-            searchTerm={searchTerm}
-            debtTags={debtTags}
-        />
+
         if (value === 'sheet' || value === 'details' || value === 'split-bill') {
             return value
         }
@@ -141,6 +129,7 @@ export function PersonDetailTabs({
                                 cycleSheets={cycleSheets}
                                 filterType={filterType}
                                 searchTerm={searchTerm}
+                                debtTags={debtTags}
                             />
                         </div>
                     </div>

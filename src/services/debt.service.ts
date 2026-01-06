@@ -205,7 +205,7 @@ export async function getPersonDetails(id: string): Promise<{
   }
 
   if (error || !data) {
-    if (error) console.error('Error fetching person details:', error)
+    if (error) console.log('Error fetching person details:', error)
     return null
   }
 
@@ -232,13 +232,13 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
   const supabase = createClient()
   const { data, error } = await supabase
     .from('transactions')
-    .select('tag, occurred_at, amount, type, person_id, status, cashback_share_percent, cashback_share_fixed, final_price, id')
+    .select('tag, occurred_at, amount, type, person_id, status, cashback_share_percent, cashback_share_fixed, final_price, category_name, id')
     .eq('person_id', personId)
     .neq('status', 'void')
     .order('occurred_at', { ascending: true }) // Oldest first for FIFO
 
   if (error || !data) {
-    if (error) console.error('Error fetching debt by tags:', error)
+    if (error) console.log('Error fetching debt by tags:', error)
     return []
   }
 
@@ -256,33 +256,47 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       debtsMap.set(txn.id, { remaining: amount, links: [] }) // Init links
     } else if (type === 'repayment' || type === 'income') {
       repaymentPool.push(Math.abs(txn.amount))
-      // console.error(`[DebtService] Found Repayment: ${txn.amount} (${txn.occurred_at})`);
     }
   })
 
-  // 2. Apply Repayments
-  let totalRepayment = repaymentPool.reduce((a, b) => a + b, 0)
-
-  console.error(`[DebtService] Person: ${personId} | Total Debt Items: ${debtsList.length} | Total Repayment Pool: ${totalRepayment}`);
+  // 2. Apply Repayments (FIFO Queue Pattern)
+  const repaymentQueue = (data as any[])
+    .filter(t => resolveBaseType(t.type) === 'income' && (t.type === 'repayment' || t.category_name?.toLowerCase().includes('thu nợ')))
+    .map(t => ({
+      id: t.id,
+      amount: calculateFinalPrice(t as any),
+      date: t.occurred_at
+    }))
+    .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Oldest Repayment First
 
   // Apply to debts OLDER to NEWER
   for (const debt of debtsList) {
-    if (totalRepayment <= 0) break
-
     const entry = debtsMap.get(debt.id)!
-    const amountToPay = Math.min(totalRepayment, entry.remaining);
 
-    // Debug Log
-    console.error(`[DebtDebug] Processing ${debt.tag} (${debt.occurred_at}). Rem: ${entry.remaining}. Pool: ${totalRepayment}. Paying: ${amountToPay}`);
+    // While debt has remaining amount AND we have repayments available
+    while (entry.remaining > 0 && repaymentQueue.length > 0) {
+      const currentRepayment = repaymentQueue[0]; // Peek
+      const payAmount = Math.min(Number(currentRepayment.amount), entry.remaining);
 
-    if (totalRepayment >= entry.remaining) {
-      // console.log(`[DebtDebug] ${debt.tag} Fully Paid. Setting 0.`);
-      totalRepayment -= entry.remaining
-      entry.remaining = 0
-    } else {
-      // console.log(`[DebtDebug] ${debt.tag} Partially Paid. New Rem: ${entry.remaining - totalRepayment}`);
-      entry.remaining -= totalRepayment
-      totalRepayment = 0
+      if (payAmount <= 0) {
+        repaymentQueue.shift();
+        continue;
+      }
+
+      // Record Link
+      entry.links.push({
+        repaymentId: currentRepayment.id,
+        amount: payAmount
+      });
+
+      // Update Balances
+      entry.remaining -= payAmount;
+      currentRepayment.amount -= payAmount;
+
+      // If Repayment exhausted, remove from queue
+      if (currentRepayment.amount < 1) {
+        repaymentQueue.shift();
+      }
     }
   }
 
@@ -359,7 +373,16 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
   return Array.from(tagMap.entries()).map(([tag, { lend, lendOriginal, repay, cashback, last_activity, remainingPrincipal, links }]) => {
     const netBalance = lend - repay
 
-    // ... (logic remains same)
+    // Status Logic:
+    let status = 'active'
+    if (remainingPrincipal < 500) {
+      status = 'settled'
+    } else {
+      // Debug: Why is it still active?
+      // if (tag.includes('2025-10') || tag.includes('2025-11') || tag.includes('2025-12')) {
+      //   console.log(`[DebtStatus-Active] Tag: ${tag} | Remaining: ${remainingPrincipal} | Net: ${netBalance}`);
+      // }
+    }
 
     return {
       tag,
@@ -413,29 +436,6 @@ export async function getOutstandingDebts(personId: string, excludeTransactionId
   if (!personId) return []
   const supabase = createClient()
 
-  // Fetch transactions that are debts (expense) or repayments (income)
-  // We want individual debt transactions (expenses with person_id)
-  // And maybe calculate their remaining amount? 
-  // FIFO usually applies to Debts (Lending).
-  // We strictly look for type='debt' (Lending) or 'expense' (Legacy Lending?)
-  // And we ignore 'repayment' here because we want to allocate AGAINST debts.
-  // Although repayments REDUCE the pool.
-  // The FIFO logic needs "Active Debts".
-  // A debt is active if it hasn't been fully paid.
-  // But our system aggregates.
-  // If we want to simulate FIFO, we fetch ALL debt transactions, sorted by date.
-  // And we fetch ALL repayment transactions.
-  // Then we apply repayments to debts in order.
-  // And return which debts are still unpaid.
-  // This is complex for a simple "Preview".
-  // Simplified approach: Return ALL 'debt' transactions.
-  // The Preview Logic will handle the "Remaining Check" locally?
-  // No, `allocateDebtRepayment` takes `debts` and `repaymentAmount`.
-  // It assumes `debts` are what needs to be paid.
-  // But if some are already paid, we shouldn't show them?
-  // Correct.
-  // So we need to apply PAST repayments first to find "Current Open Debts".
-
   const { data, error } = await supabase
     .from('transactions')
     .select('*')
@@ -480,10 +480,6 @@ export async function getOutstandingDebts(personId: string, excludeTransactionId
     if (repaymentPool >= amount) {
       repaymentPool -= amount
       debt.remaining = 0
-      // Fully paid, don't include in active list?
-      // Or include with 0? 
-      // Usually we want OUTSTANDING debts.
-      // So ignore.
     } else {
       debt.remaining -= repaymentPool
       repaymentPool = 0
