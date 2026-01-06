@@ -64,6 +64,7 @@ import {
   Info,
   AlertCircle,
   Trash2,
+  ArrowDownToLine,
 } from "lucide-react";
 import { getOutstandingDebts } from "@/services/debt.service";
 import { allocateTransactionRepayment, AllocationResult } from "@/lib/debt-allocation";
@@ -4837,6 +4838,24 @@ export function TransactionForm({
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>
+
+                                  {/* Absorb Remaining Button */}
+                                  {allocationPreview?.remainingRepayment && allocationPreview.remainingRepayment > 0.1 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const remaining = allocationPreview.remainingRepayment;
+                                        const newTotal = allocatedAmount + remaining;
+                                        const newOverrides = { ...allocationOverrides };
+                                        newOverrides[debt.id] = newTotal;
+                                        setAllocationOverrides(newOverrides);
+                                      }}
+                                      className="text-emerald-500 hover:text-emerald-700 p-1.5 rounded-md hover:bg-emerald-50 transition-colors flex-none"
+                                      title="Absorb all remaining amount"
+                                    >
+                                      <ArrowDownToLine className="w-3.5 h-3.5" />
+                                    </button>
+                                  ) : null}
 
                                   {/* INPUT */}
                                   <div className="w-24 flex-none">
