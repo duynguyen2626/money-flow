@@ -232,7 +232,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
   const supabase = createClient()
   const { data, error } = await supabase
     .from('transactions')
-    .select('tag, occurred_at, amount, type, person_id, status, cashback_share_percent, cashback_share_fixed, final_price, category_name, id')
+    .select('tag, occurred_at, amount, type, person_id, status, cashback_share_percent, cashback_share_fixed, final_price, id')
     .eq('person_id', personId)
     .neq('status', 'void')
     .order('occurred_at', { ascending: true }) // Oldest first for FIFO
