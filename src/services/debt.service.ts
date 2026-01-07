@@ -360,8 +360,13 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
   // 1. Repayments without metadata (legacy)
   // 2. Repayments with "Unallocated" surplus
   // 3. Debts that weren't fully covered by targets
+  // FIX: Exclude tagged repayments from waterfall. If tagged, they stay in their tag bucket.
 
-  const generalQueue = repaymentList.filter(r => r.amount > 0.01);
+  const generalQueue = repaymentList.filter(r => {
+    if (r.amount <= 0.01) return false;
+    const tag = normalizeMonthTag(r.metadata?.tag || r.tag);
+    return !tag; // Only include untagged repayments
+  });
 
   for (const debt of debtsList) {
     const entry = debtsMap.get(debt.id)!

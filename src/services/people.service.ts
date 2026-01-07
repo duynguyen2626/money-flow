@@ -515,7 +515,14 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     }
 
     // === PHASE 2: GENERAL FIFO ===
-    const generalQueue = personRepayments.filter(r => r.amount > 0.01);
+    // Only process repayments effectively without tags (or whose tags failed to match anything in Phase 1.5?)
+    // User Request: Tagged repayments should NOT shift cycles.
+    // If a repayment has a tag, it should stick to that tag. Use strict mode.
+    const generalQueue = personRepayments.filter(r => {
+      if (r.amount <= 0.01) return false;
+      const tag = normalizeMonthTag(r.metadata?.tag || r.tag);
+      return !tag; // Only include untagged repayments
+    });
 
     for (const debt of personDebts) {
       while (debt.remaining > 0.01 && generalQueue.length > 0) {

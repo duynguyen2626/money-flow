@@ -2298,9 +2298,26 @@ export function TransactionForm({
       return;
     }
     setDebtEnsureError(null);
+    setDebtEnsureError(null);
     const linkedAccountId = debtAccountByPerson.get(watchedPersonId);
-    form.setValue("debt_account_id", linkedAccountId ?? undefined, { shouldDirty: false });
-  }, [transactionType, watchedPersonId, debtAccountByPerson, form, isSplitBill]);
+
+    if (linkedAccountId) {
+      form.setValue("debt_account_id", linkedAccountId, { shouldDirty: false });
+    } else {
+      // Fix: If no linked account, try to create/fetch it immediately
+      // This solves "Destination account is required" error for legacy persons without debt accounts
+      const person = peopleState.find(p => p.id === watchedPersonId);
+      if (person) {
+        startEnsuringDebt(async () => {
+          const accountId = await ensureDebtAccountAction(person.id, person.name);
+          if (accountId) {
+            updatePersonState(person.id, { debt_account_id: accountId });
+            form.setValue("debt_account_id", accountId, { shouldDirty: false });
+          }
+        });
+      }
+    }
+  }, [transactionType, watchedPersonId, debtAccountByPerson, form, isSplitBill, peopleState, startEnsuringDebt, updatePersonState]);
 
   useEffect(() => {
     if (
