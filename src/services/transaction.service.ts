@@ -310,14 +310,14 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
 
 // buildSyntheticLines removed as legacy line items are deprecated.
 
-function mapTransactionRow(
+export async function mapTransactionRow(
   row: FlatTransactionRow,
   options: {
     lookups: LookupMaps;
     contextAccountId?: string;
     contextMode?: "person" | "account" | "general";
   },
-): TransactionWithDetails {
+): Promise<TransactionWithDetails> {
   const { lookups, contextAccountId } = options;
   const baseType = resolveBaseType(row.type);
   const account = lookups.accounts.get(row.account_id) ?? null;
@@ -463,12 +463,14 @@ export async function loadTransactions(options: {
 
   const rows = data as unknown as FlatTransactionRow[];
   const lookups = await fetchLookups(rows);
-  return rows.map((row) =>
-    mapTransactionRow(row, {
-      lookups,
-      contextAccountId: options.accountId,
-      contextMode: options.context ?? "general",
-    }),
+  return Promise.all(
+    rows.map((row) =>
+      mapTransactionRow(row, {
+        lookups,
+        contextAccountId: options.accountId,
+        contextMode: options.context ?? "general",
+      }),
+    )
   );
 }
 

@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { MonthlyDebtSummary, Person, PersonCycleSheet } from '@/types/moneyflow.types'
-import { normalizeMonthTag, toYYYYMMFromDate } from '@/lib/month-tag'
+import { toYYYYMMFromDate, normalizeMonthTag } from '@/lib/month-tag'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type ProfileInsert = Database['public']['Tables']['profiles']['Insert']
@@ -19,6 +19,30 @@ type ServiceMemberRow = {
   slots: number;
   subscriptions?: { name: string };
 };
+
+function resolveBaseType(type: string | null | undefined): 'income' | 'expense' | 'transfer' {
+  if (type === 'repayment') return 'income'
+  if (type === 'debt') return 'expense'
+  if (type === 'transfer') return 'transfer'
+  if (type === 'income') return 'income'
+  return 'expense'
+}
+
+function calculateFinalPrice(row: any): number {
+  if (row.final_price !== undefined && row.final_price !== null) {
+    const parsed = Number(row.final_price)
+    if (!isNaN(parsed)) return Math.abs(parsed)
+  }
+
+  const rawAmount = Math.abs(Number(row.amount ?? 0))
+  const percentVal = Number(row.cashback_share_percent ?? 0)
+  const fixedVal = Number(row.cashback_share_fixed ?? 0)
+  const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
+  const safePercent = isNaN(normalizedPercent) ? 0 : normalizedPercent
+  const cashback = (rawAmount * safePercent) + fixedVal
+
+  return rawAmount - cashback
+}
 
 function buildDebtAccountName(personName: string) {
   const safeName = personName?.trim() || 'Nguoi moi'
@@ -355,13 +379,17 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     })
   }
 
-  const monthlyDebtMap = new Map<string, Map<string, MonthlyDebtSummary>>()
+  // FIFO Logic Implementation
+  const monthlyDebtsByPerson = new Map<string, MonthlyDebtSummary[]>()
 
-  // Fetch debt transactions for monthly breakdown
+  let allDebtTxns: any[] = []
+  let allRepayTxns: any[] = []
+
+  // 1. Fetch Debt Transactions
   if (personIds.length > 0) {
     const { data: monthlyTxns, error: monthlyTxnsError } = await supabase
       .from('transactions')
-      .select('person_id, target_account_id, amount, occurred_at, tag, status, cashback_share_percent, cashback_share_fixed, final_price')
+      .select('id, metadata, person_id, target_account_id, amount, occurred_at, tag, status, cashback_share_percent, cashback_share_fixed, final_price')
       .eq('type', 'debt')
       .neq('status', 'void')
       .order('occurred_at', { ascending: false })
@@ -369,144 +397,220 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     if (monthlyTxnsError) {
       console.error('Error fetching monthly debt lines:', JSON.stringify(monthlyTxnsError, null, 2))
     } else {
-      (monthlyTxns as any[])?.forEach(txn => {
-        // Determine which person this belongs to
-        let ownerId: string | null = null
-
-        if (txn.person_id && personIds.includes(txn.person_id)) {
-          ownerId = txn.person_id
-        } else if (txn.target_account_id && debtAccountToPersonMap.has(txn.target_account_id)) {
-          ownerId = debtAccountToPersonMap.get(txn.target_account_id) ?? null
-        }
-
-        if (!ownerId) return
-
-        const tagValue = normalizeMonthTag(txn.tag) ?? txn.tag ?? null
-        const occurredAt = txn.occurred_at ?? null
-        const parsedDate = occurredAt ? new Date(occurredAt) : null
-        const validDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null
-        const fallbackKey = validDate ? toYYYYMMFromDate(validDate) : null
-        const groupingKey = tagValue ?? fallbackKey ?? 'unknown'
-        const label = groupingKey === 'unknown' ? 'Debt' : groupingKey
-
-        // Calculate final price using DB column if available
-        let finalPrice = 0
-        const rawAmount = Math.abs(txn.amount)
-        const percentVal = Number(txn.cashback_share_percent ?? 0)
-        const fixedVal = Number(txn.cashback_share_fixed ?? 0)
-        const normalizedPercent = percentVal > 1 ? percentVal / 100 : percentVal
-        const cashback = (rawAmount * normalizedPercent) + fixedVal
-
-        if (typeof (txn as any).final_price === 'number') {
-          finalPrice = Math.abs((txn as any).final_price)
-        } else {
-          finalPrice = rawAmount - cashback
-        }
-
-        const personMap = monthlyDebtMap.get(ownerId) ?? new Map<string, MonthlyDebtSummary>()
-        const existing = personMap.get(groupingKey)
-
-        const updated: MonthlyDebtSummary = existing
-          ? {
-            ...existing,
-            amount: existing.amount + finalPrice, // Keep Net Debt Balance
-            total_debt: (existing.total_debt ?? 0) + rawAmount,
-            total_cashback: (existing.total_cashback ?? 0) + cashback,
-            occurred_at: existing.occurred_at ?? (validDate ? validDate.toISOString() : occurredAt),
-            last_activity: !existing.last_activity || (occurredAt && occurredAt > existing.last_activity) ? (occurredAt || undefined) : existing.last_activity,
-          }
-          : {
-            tag: tagValue ?? undefined,
-            tagLabel: label,
-            amount: finalPrice,
-            total_debt: rawAmount,
-            total_cashback: cashback,
-            total_repaid: 0,
-            status: 'active',
-            occurred_at: validDate ? validDate.toISOString() : occurredAt ?? undefined,
-            last_activity: occurredAt ?? undefined,
-          }
-
-        personMap.set(groupingKey, updated)
-        monthlyDebtMap.set(ownerId, personMap)
-      })
+      allDebtTxns = monthlyTxns as any[]
     }
   }
 
-  // 2. Fetch Repayments (to update balance & total_repaid)
+  // 2. Fetch Repayment Transactions
   if (personIds.length > 0) {
     const { data: repayTxns, error: repayError } = await supabase
       .from('transactions')
-      .select('person_id, amount, occurred_at, tag, status')
+      .select('id, metadata, person_id, amount, occurred_at, tag, status')
       .eq('type', 'repayment')
       .neq('status', 'void')
 
-    if (!repayError && repayTxns) {
-      (repayTxns as any[]).forEach(txn => {
-        if (!txn.person_id || !personIds.includes(txn.person_id)) return
-
-        const ownerId = txn.person_id
-        const amount = Math.abs(txn.amount)
-        const tagValue = normalizeMonthTag(txn.tag) ?? txn.tag ?? null
-        const occurredAt = txn.occurred_at ?? null
-        const parsedDate = occurredAt ? new Date(occurredAt) : null
-        const validDate = parsedDate && !Number.isNaN(parsedDate.getTime()) ? parsedDate : null
-        const fallbackKey = validDate ? toYYYYMMFromDate(validDate) : null
-        // Repayments should match the tag of the debt if possible, or fallback to date
-        // Ideally repayments have the SAME TAG as the debt they are repaying.
-        const groupingKey = tagValue ?? fallbackKey ?? 'unknown'
-        const label = groupingKey === 'unknown' ? 'Repayment' : groupingKey
-
-        // Update current cycle debt if repayment is in current cycle
-        const currentMonthTag = toYYYYMMFromDate(new Date())
-        const normalizedTag = normalizeMonthTag(txn.tag) ?? txn.tag
-        const isCurrentCycle = (validDate && validDate >= currentMonthStart) || (normalizedTag === currentMonthTag)
-
-        if (isCurrentCycle) {
-          const currentCycle = currentCycleDebtByPerson.get(ownerId) ?? 0
-          currentCycleDebtByPerson.set(ownerId, currentCycle - amount)
-        }
-
-        const personMap = monthlyDebtMap.get(ownerId) ?? new Map<string, MonthlyDebtSummary>()
-        const existing = personMap.get(groupingKey)
-
-        // For repayments, we subtract from balance (amount) and add to total_repaid
-        const updated: MonthlyDebtSummary = existing
-          ? {
-            ...existing,
-            amount: existing.amount - amount,
-            total_repaid: (existing.total_repaid ?? 0) + amount,
-            last_activity: !existing.last_activity || (occurredAt && occurredAt > existing.last_activity) ? (occurredAt || undefined) : existing.last_activity,
-          }
-          : {
-            tag: tagValue ?? undefined,
-            tagLabel: label,
-            amount: -amount, // Negative balance if no debt yet (overpaid?)
-            total_debt: 0,
-            total_cashback: 0,
-            total_repaid: amount,
-            status: 'active',
-            occurred_at: validDate ? validDate.toISOString() : occurredAt ?? undefined,
-            last_activity: occurredAt ?? undefined,
-          }
-
-        personMap.set(groupingKey, updated)
-        monthlyDebtMap.set(ownerId, personMap)
-      })
+    if (repayError) {
+      console.error('Error fetching repayments:', repayError)
+    } else {
+      allRepayTxns = repayTxns as any[]
     }
   }
 
-  const monthlyDebtsByPerson = new Map<string, MonthlyDebtSummary[]>()
-  monthlyDebtMap.forEach((tagMap, personId) => {
-    const entries = Array.from(tagMap.values())
-      .sort((a, b) => {
-        const dateA = a.occurred_at ? new Date(a.occurred_at).getTime() : 0
-        const dateB = b.occurred_at ? new Date(b.occurred_at).getTime() : 0
-        return dateB - dateA
-      })
-      .slice(0, 5) // Keep more for expandable list
+  // 3. Process FIFO per Person
+  personIds.forEach(personId => {
+    // Filter transactions for this person
+    const personDebts: any[] = []
+    const personRepayments: any[] = []
 
-    monthlyDebtsByPerson.set(personId, entries)
+    allDebtTxns.forEach(txn => {
+      let isForPerson = false
+      if (txn.person_id === personId) isForPerson = true
+      else if (txn.target_account_id && debtAccountToPersonMap.get(txn.target_account_id) === personId) isForPerson = true
+
+      if (isForPerson) {
+        personDebts.push({
+          ...txn,
+          remaining: Math.abs(txn.amount),
+          links: [] as { repaymentId: string, amount: number }[]
+        })
+      }
+    })
+
+    allRepayTxns.forEach(txn => {
+      if (txn.person_id === personId) {
+        const amount = Math.abs(txn.amount)
+        // Side Effect: Update Current Cycle Debt Badge
+        const currentMonthTag = toYYYYMMFromDate(new Date())
+        const normalizedTag = normalizeMonthTag(txn.tag) ?? txn.tag
+        const occurredAt = txn.occurred_at ? new Date(txn.occurred_at) : null
+        const isCurrentCycle = (occurredAt && occurredAt >= currentMonthStart) || (normalizedTag === currentMonthTag)
+
+        if (isCurrentCycle) {
+          const currentCycle = currentCycleDebtByPerson.get(personId) ?? 0
+          currentCycleDebtByPerson.set(personId, currentCycle - amount)
+        }
+
+        personRepayments.push({
+          id: txn.id || 'unknown',
+          amount: calculateFinalPrice(txn),
+          initialAmount: calculateFinalPrice(txn),
+          date: txn.occurred_at,
+          metadata: txn.metadata,
+          tag: txn.tag
+        })
+      }
+    })
+
+    // Sort by Date Ascending for FIFO processing
+    personDebts.sort((a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime())
+    personRepayments.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+
+    // Map for Phase 1
+    const debtsMap = new Map<string, any>()
+    personDebts.forEach(d => debtsMap.set(d.id, d))
+
+    // === PHASE 1: TARGETED REPAYMENTS ===
+    for (const repay of personRepayments) {
+      const targets = repay.metadata?.bulk_allocation?.debts;
+      if (Array.isArray(targets) && targets.length > 0) {
+        targets.forEach((target: any) => {
+          const debtId = target.id;
+          const targetAmount = Number(target.amount || 0);
+          if (debtId && targetAmount > 0) {
+            const debtEntry = debtsMap.get(debtId);
+            if (debtEntry && repay.amount > 0) {
+              const pay = Math.min(targetAmount, repay.amount);
+              debtEntry.remaining -= pay;
+              if (debtEntry.remaining < 0) debtEntry.remaining = 0;
+              repay.amount -= pay;
+              debtEntry.links.push({ repaymentId: repay.id, amount: pay });
+            }
+          }
+        });
+      }
+    }
+
+    // === PHASE 1.5: TAG MATCHING ===
+    // If a repayment has a tag, prioritize paying debts with SAME tag
+    for (const repay of personRepayments) {
+      if (repay.amount <= 0.01) continue;
+      const repayTag = normalizeMonthTag(repay.metadata?.tag || repay.tag);
+
+      if (repayTag) {
+        for (const debt of personDebts) {
+          if (debt.remaining <= 0.01) continue;
+
+          const debtTag = normalizeMonthTag(debt.tag);
+          if (debtTag === repayTag) {
+            const pay = Math.min(repay.amount, debt.remaining);
+            debt.remaining -= pay;
+            repay.amount -= pay;
+            if (debt.remaining < 0) debt.remaining = 0;
+            debt.links.push({ repaymentId: repay.id, amount: pay });
+
+            if (repay.amount <= 0.01) break;
+          }
+        }
+      }
+    }
+
+    // === PHASE 2: GENERAL FIFO ===
+    // Only process repayments effectively without tags (or whose tags failed to match anything in Phase 1.5?)
+    // User Request: Tagged repayments should NOT shift cycles.
+    // If a repayment has a tag, it should stick to that tag. Use strict mode.
+    const generalQueue = personRepayments.filter(r => {
+      if (r.amount <= 0.01) return false;
+      const tag = normalizeMonthTag(r.metadata?.tag || r.tag);
+      return !tag; // Only include untagged repayments
+    });
+
+    for (const debt of personDebts) {
+      while (debt.remaining > 0.01 && generalQueue.length > 0) {
+        const currentRepayment = generalQueue[0];
+        const payAmount = Math.min(currentRepayment.amount, debt.remaining);
+
+        if (payAmount <= 0) {
+          generalQueue.shift();
+          continue;
+        }
+
+        debt.links.push({ repaymentId: currentRepayment.id, amount: payAmount });
+
+        debt.remaining -= payAmount;
+        currentRepayment.amount -= payAmount;
+        if (debt.remaining < 0) debt.remaining = 0;
+
+        if (currentRepayment.amount < 0.01) {
+          generalQueue.shift();
+        }
+      }
+    }
+
+    // === AGGREGATE BY TAG ===
+    const tagMap = new Map<string, MonthlyDebtSummary>()
+
+    personDebts.forEach(debt => {
+      const tagValue = normalizeMonthTag(debt.tag) ?? debt.tag ?? null
+      const occurredAt = debt.occurred_at ?? null
+      const validDate = occurredAt ? new Date(occurredAt) : null
+      const fallbackKey = validDate ? toYYYYMMFromDate(validDate) : null
+      const groupingKey = tagValue ?? fallbackKey ?? 'unknown'
+      const label = groupingKey === 'unknown' ? 'Debt' : groupingKey
+
+      const finalPrice = calculateFinalPrice(debt)
+      const rawAmount = Math.abs(Number(debt.amount ?? 0))
+      const cashback = rawAmount - finalPrice
+
+      if (!tagMap.has(groupingKey)) {
+        tagMap.set(groupingKey, {
+          tag: tagValue ?? undefined,
+          tagLabel: label,
+          amount: 0,
+          total_debt: 0,
+          total_cashback: 0,
+          total_repaid: 0,
+          status: 'active',
+          occurred_at: validDate ? validDate.toISOString() : occurredAt,
+          last_activity: occurredAt,
+          links: []
+        })
+      }
+
+      const current = tagMap.get(groupingKey)!
+
+      if (debt.links && debt.links.length > 0) {
+        (current as any).links = (current as any).links || [];
+        debt.links.forEach((l: any) => {
+          const exist = (current as any).links.find((x: any) => x.repaymentId === l.repaymentId);
+          if (exist) exist.amount += l.amount;
+          else (current as any).links.push({ ...l });
+        });
+      }
+
+      current.amount += debt.remaining
+      current.total_debt = (current.total_debt ?? 0) + finalPrice
+      current.total_cashback = (current.total_cashback ?? 0) + cashback
+
+      if (occurredAt && (!current.last_activity || occurredAt > current.last_activity)) {
+        current.last_activity = occurredAt
+      }
+    })
+
+    const entries = Array.from(tagMap.values()).map(summary => {
+      const inferredRepaid = (summary.total_debt ?? 0) - summary.amount
+      return {
+        ...summary,
+        total_repaid: Math.max(0, inferredRepaid)
+      }
+    })
+
+    entries.sort((a, b) => {
+      const dateA = a.occurred_at ? new Date(a.occurred_at).getTime() : 0
+      const dateB = b.occurred_at ? new Date(b.occurred_at).getTime() : 0
+      return dateB - dateA
+    })
+
+    monthlyDebtsByPerson.set(personId, entries.slice(0, 5))
   })
 
   const subscriptionMap = new Map<string, Array<{ id: string; name: string; slots: number; image_url?: string | null }>>()
@@ -541,9 +645,37 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   const mapped = (profiles as unknown as ProfileRow[] | null)?.map(person => {
     const debtInfo = debtAccountMap.get(person.id)
     const subs = subscriptionMap.get(person.id) ?? []
-    const balance = debtInfo?.balance ?? 0
-    const currentCycleDebt = debtInfo?.currentCycleDebt ?? 0
-    const outstandingDebt = Math.max(0, balance - currentCycleDebt)
+
+    // OLD LOGIC (Simple Net Balance) - Keeping 'balance' for reference/Display if needed, but FIFO is source of truth for debt structure.
+    // Actually, 'balance' from DB (debtInfo.balance) is the REAL physical balance (Money lent - Money returned).
+    // FIFO is a simulation of "Which debt is unpaid".
+    // If FIFO Remaining > Balance, it means we have "General Repayment" that is not yet applied?
+    // No, FIFO Logic Phase 2 allocates general repayment.
+    // So FIFO Remaining SUM should equal Balance (approx).
+    // Discrepancy comes when Balance triggers "Settled" (0) but FIFO says "Remains" (Partitioning issue).
+    // We want 'outstanding_debt' to reflect the FIFO "Previous Cycles Remaining".
+
+    // Use FIFO Data for Outstanding Calculation
+    const personFifoDebts = monthlyDebtsByPerson.get(person.id) ?? []
+    const fifoTotalRemaining = personFifoDebts.reduce((sum, d) => sum + d.amount, 0)
+
+    // Identify Current Cycle Amount in FIFO
+    // We match tag or date
+    const fifoCurrentCycle = personFifoDebts
+      .filter(d => {
+        const isTagMatch = d.tag === currentCycleLabel
+        const isDateMatch = d.occurred_at && new Date(d.occurred_at) >= currentMonthStart
+        return isTagMatch || (!d.tag && isDateMatch)
+      })
+      .reduce((sum, d) => sum + d.amount, 0)
+
+    const outstandingDebt = Math.max(0, fifoTotalRemaining - fifoCurrentCycle)
+
+    // We can still use debtInfo.balance for the 'balance' field if we want the "Account Balance",
+    // or use fifoTotalRemaining.
+    // Usually 'balance' = 'Total Debt Load'.
+    // Let's use fifoTotalRemaining to be 100% consistent with the card list.
+    const displayBalance = fifoTotalRemaining
 
     return {
       id: person.id,
@@ -560,8 +692,8 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       is_group: (person as any).is_group ?? null,
       group_parent_id: (person as any).group_parent_id ?? null,
       debt_account_id: debtInfo?.id ?? null,
-      balance: balance,
-      current_cycle_debt: currentCycleDebt,
+      balance: displayBalance,
+      current_cycle_debt: fifoCurrentCycle,
       outstanding_debt: outstandingDebt,
       current_cycle_label: currentCycleLabel,
       subscription_count: subs.length,
@@ -680,7 +812,7 @@ export async function updatePerson(
 
   if (Object.keys(payload).length > 0) {
     let { error, data: updateData } = await (supabase.from('profiles').update as any)(payload).eq('id', id).select()
-    
+
     if (error?.code === '42703' || error?.code === 'PGRST204') {
       const {
         is_archived: _ignoreArchived,

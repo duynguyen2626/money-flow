@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { DebtAccount } from '@/types/moneyflow.types'
+import { toYYYYMMFromDate, normalizeMonthTag } from '@/lib/month-tag'
 import { CreateTransactionInput, createTransaction } from './transaction.service'
 
 type TransactionType = 'income' | 'expense' | 'transfer' | 'debt' | 'repayment'
@@ -254,6 +255,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
     initialAmount: number;
     date: string;
     metadata: any;
+    tag?: string | null;
   };
   const repaymentList: RepaymentItem[] = [];
 
@@ -269,7 +271,8 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
         amount: calculateFinalPrice(txn as any),
         initialAmount: calculateFinalPrice(txn as any),
         date: txn.occurred_at,
-        metadata: txn.metadata
+        metadata: txn.metadata,
+        tag: txn.tag
       });
     }
   })
@@ -321,14 +324,49 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
     }
   }
 
+  // === PHASE 1.5: TAG MATCHING ===
+  // If a repayment has a tag (e.g. "2024-05"), prioritize paying debts with the SAME tag.
+  for (const repay of repaymentList) {
+    if (repay.amount <= 0.01) continue;
+
+    const repayTag = normalizeMonthTag(repay.metadata?.tag || repay.tag);
+
+    if (repayTag) {
+      // Find debts with matching tag (Oldest First)
+      for (const debt of debtsList) {
+        const entry = debtsMap.get(debt.id)!;
+        if (entry.remaining <= 0.01) continue;
+
+        const debtTag = normalizeMonthTag(debt.tag);
+        if (debtTag === repayTag) {
+          const pay = Math.min(repay.amount, entry.remaining);
+
+          entry.remaining -= pay;
+          repay.amount -= pay;
+          if (entry.remaining < 0) entry.remaining = 0;
+
+          entry.links.push({ repaymentId: repay.id, amount: pay });
+          console.log(`[DebtFIFO-TAGGED] Pay ${pay} to ${debt.id} from ${repay.id} (Tag: ${debtTag})`);
+
+          if (repay.amount <= 0.01) break; // Repayment exhausted
+        }
+      }
+    }
+  }
+
   // === PHASE 2: GENERAL FIFO (Waterfalls) ===
   // Apply any remaining repayment balance to any remaining debt balance (Oldest First)
   // This covers:
   // 1. Repayments without metadata (legacy)
   // 2. Repayments with "Unallocated" surplus
   // 3. Debts that weren't fully covered by targets
+  // FIX: Exclude tagged repayments from waterfall. If tagged, they stay in their tag bucket.
 
-  const generalQueue = repaymentList.filter(r => r.amount > 0.01);
+  const generalQueue = repaymentList.filter(r => {
+    if (r.amount <= 0.01) return false;
+    const tag = normalizeMonthTag(r.metadata?.tag || r.tag);
+    return !tag; // Only include untagged repayments
+  });
 
   for (const debt of debtsList) {
     const entry = debtsMap.get(debt.id)!
@@ -380,7 +418,8 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
   >()
 
     ; (data as unknown as (DebtTransactionRow & { id: string })[]).forEach(row => {
-      const tag = row.tag ?? 'UNTAGGED'
+      const normalizedTag = normalizeMonthTag(row.tag)
+      const tag = normalizedTag?.trim() ? normalizedTag.trim() : (row.tag?.trim() ? row.tag.trim() : 'UNTAGGED')
       const baseType = resolveBaseType(row.type)
       const finalPrice = calculateFinalPrice(row)
       const occurredAt = row.occurred_at ?? ''

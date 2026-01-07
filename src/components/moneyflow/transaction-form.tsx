@@ -319,13 +319,24 @@ export function TransactionForm({
 
   const debtAccountByPerson = useMemo(() => {
     const map = new Map<string, string>();
+    // 1. Map explicit links from peopleState
     peopleState.forEach((person) => {
       if (person.debt_account_id) {
         map.set(person.id, person.debt_account_id);
       }
     });
+
+    // 2. Map by owner_id from allAccounts (Debt accounts specifically)
+    // This handles cases where peopleState link is missing but Account.owner_id is correct
+    allAccounts.forEach((account) => {
+      if (account.type === 'debt' && account.owner_id) {
+        if (!map.has(account.owner_id)) {
+          map.set(account.owner_id, account.id);
+        }
+      }
+    });
     return map;
-  }, [peopleState]);
+  }, [peopleState, allAccounts]);
 
   const defaultPayerName = useMemo(() => {
     const owner = peopleState.find((person) => person.is_owner);
@@ -454,6 +465,8 @@ export function TransactionForm({
     }
   }, [transactionType]);
 
+
+
   const [splitGroupId, setSplitGroupId] = useState<string | undefined>(undefined);
   const [splitParticipants, setSplitParticipants] = useState<
     SplitBillParticipant[]
@@ -563,6 +576,26 @@ export function TransactionForm({
     onFormChange?.(form.formState.isDirty);
   }, [form.formState.isDirty, onFormChange]);
 
+  // Handle Initial Values Reset (Especially when fetching Parent Transaction)
+  // MOVED HERE: Must be after 'form' definition to avoid ReferenceError
+  useEffect(() => {
+    if (initialValues) {
+      // Force type update if provided (critical for Parent Repayment redirect)
+      if (initialValues.type && initialValues.type !== transactionType) {
+        setTransactionType(initialValues.type);
+      }
+
+      // Ensure form resets with new values
+      const timer = setTimeout(() => {
+        form.reset({
+          ...baseDefaults,
+          ...initialValues,
+        });
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [initialValues, form]);
+
   // Prompt unsaved changes on refresh/close
   useUnsavedChanges(form.formState.isDirty);
 
@@ -647,14 +680,36 @@ export function TransactionForm({
 
     if (isRepayment || (isIncomeWithPerson && !isDebt)) {
       newValues.type = "repayment";
+
       const sourceId = newValues.source_account_id;
       const sourceAcc = allAccounts.find((a) => a.id === sourceId);
 
+      // Fix: ONLY swap if the source account is a DEBT account (meaning we are lending FROM debt?? No, repayment usually means User PAYS Debt).
+      // If we are editing a Repayment:
+      // Source = Bank (Money Out)
+      // Destination (Debt Account) = Target Account (Money In)
+      // The mapper sets debt_account_id = target_account_id.
+
+      // If source is Debt, it implies inverted logic or raw mapping.
       if (sourceAcc?.type === "debt") {
-        if (newValues.debt_account_id) {
+        // If we have a valid debt_account_id, trust it but ensure it's not the same as source (unless swapping)
+        if (newValues.debt_account_id && newValues.debt_account_id !== sourceId) {
           const temp = newValues.source_account_id;
           newValues.source_account_id = newValues.debt_account_id;
           newValues.debt_account_id = temp;
+        } else {
+          // If source is debt and no valid destination, move source to debt
+          newValues.debt_account_id = sourceId;
+          newValues.source_account_id = undefined;
+        }
+      }
+
+      // CRITICAL FIX: If debt_account_id is missing BUT we have a person_id, try to fill it
+      // This handles cases where "Reset" wipes debt_account_id or mapper didn't find it.
+      if (!newValues.debt_account_id && newValues.person_id) {
+        const person = peopleState.find(p => p.id === newValues.person_id);
+        if (person?.debt_account_id) {
+          newValues.debt_account_id = person.debt_account_id;
         }
       }
     }
@@ -668,8 +723,12 @@ export function TransactionForm({
       // Same values, do nothing
     } else {
       console.log(
-        "[TransactionForm] Resetting form with new values (Clone/Edit update)",
-        JSON.stringify(initialValues.metadata)
+        "[Form Debug] Resetting form with initialValues:",
+        JSON.stringify({
+          person_id: initialValues.person_id,
+          debt_account_id: initialValues.debt_account_id,
+          type: initialValues.type
+        })
       );
       form.reset(newValues, { keepDirty: false });
       setManualTagMode(true);
@@ -2004,7 +2063,13 @@ export function TransactionForm({
 
   const destinationAccountOptions = useMemo(() => {
     const filteredAccounts = allAccounts.filter((acc) => {
-      if (acc.type === "system" || acc.type === "debt") return false;
+      if (acc.type === "system") return false;
+      // Allow debt accounts only for relevant transaction types or if currently selected
+      if (acc.type === "debt") {
+        const isRelatedType = transactionType === "debt" || transactionType === "repayment";
+        const isCurrent = form.getValues("debt_account_id") === acc.id;
+        if (!isRelatedType && !isCurrent) return false;
+      }
       if (watchedAccountId && acc.id === watchedAccountId) return false;
       return true;
     });
@@ -2239,24 +2304,7 @@ export function TransactionForm({
     applyDefaultPersonSelection();
   }, [applyDefaultPersonSelection, defaultPersonId, form, isSplitBill]);
 
-  useEffect(() => {
-    if (isSplitBill) {
-      setDebtEnsureError(null);
-      return;
-    }
-    if (transactionType !== "debt" && transactionType !== "repayment") {
-      setDebtEnsureError(null);
-      return;
-    }
-    if (!watchedPersonId) {
-      form.setValue("debt_account_id", undefined, { shouldDirty: false });
-      setDebtEnsureError(null);
-      return;
-    }
-    setDebtEnsureError(null);
-    const linkedAccountId = debtAccountByPerson.get(watchedPersonId);
-    form.setValue("debt_account_id", linkedAccountId ?? undefined, { shouldDirty: false });
-  }, [transactionType, watchedPersonId, debtAccountByPerson, form, isSplitBill]);
+
 
   useEffect(() => {
     if (
@@ -2424,6 +2472,74 @@ export function TransactionForm({
     },
     [splitGroupId, startCreatingSplitPerson, updatePersonState],
   );
+
+  useEffect(() => {
+    if (isSplitBill) {
+      setDebtEnsureError(null);
+      return;
+    }
+    if (transactionType !== "debt" && transactionType !== "repayment") {
+      setDebtEnsureError(null);
+      return;
+    }
+    if (!watchedPersonId) return;
+
+    const currentVal = form.getValues("debt_account_id");
+    const linkedAccountId = debtAccountByPerson.get(watchedPersonId);
+
+    // Aggressive Auto-Pick: If we have a match, force it, even in Edit mode
+    if (linkedAccountId) {
+      if (currentVal !== linkedAccountId) {
+        console.log("[Auto-Pick] Forcing correct debt_account_id:", linkedAccountId);
+        form.setValue("debt_account_id", linkedAccountId, {
+          shouldValidate: true,
+          shouldDirty: false
+        });
+      }
+      return;
+    }
+
+    if (currentVal && currentVal !== "") return; // Fallback only if no value set yet
+
+    // Secondary fallback: explicit search in allAccounts
+    const person = peopleState.find(p => p.id === watchedPersonId);
+    if (person) {
+      const likelyName = `Receivable - ${person.name}`;
+      const fallbackAccount = allAccounts.find(
+        (a) => (a.owner_id === person.id || a.name === likelyName || a.name === person.name) && a.type === "debt"
+      );
+
+      if (fallbackAccount) {
+        console.log("[Auto-Pick] Found account by fallback search:", fallbackAccount.name);
+        form.setValue("debt_account_id", fallbackAccount.id, {
+          shouldValidate: true,
+          shouldDirty: false
+        });
+      }
+    }
+  }, [transactionType, watchedPersonId, debtAccountByPerson, form, allAccounts, peopleState, isSplitBill]);
+
+  // Separate effect for "Ensuring" missing accounts (Async)
+  useEffect(() => {
+    if (transactionType !== "debt" && transactionType !== "repayment") return;
+    if (isSplitBill) return;
+    if (!watchedPersonId) return;
+
+    const currentVal = form.getValues("debt_account_id");
+    if (currentVal) return;
+
+    const person = peopleState.find(p => p.id === watchedPersonId);
+    if (person && !debtAccountByPerson.has(watchedPersonId)) {
+      console.log("[Auto-Pick] Truly missing account, triggering ensure...");
+      startEnsuringDebt(async () => {
+        const accountId = await ensureDebtAccountAction(person.id, person.name);
+        if (accountId) {
+          updatePersonState(person.id, { debt_account_id: accountId });
+          form.setValue("debt_account_id", accountId, { shouldValidate: true, shouldDirty: false });
+        }
+      });
+    }
+  }, [transactionType, watchedPersonId, debtAccountByPerson.size, form, peopleState, startEnsuringDebt, updatePersonState, isSplitBill]);
 
   const handleAddSplitParticipant = useCallback(
     (person: Person) => {
@@ -3607,36 +3723,77 @@ export function TransactionForm({
     </div>
   ) : null;
 
-  const DestinationAccountInput =
-    transactionType === "transfer" ? (
+  const DestinationAccountInput = (() => {
+    const isRelatedType = transactionType === "repayment" || transactionType === "debt" || transactionType === "transfer";
+    if (!isRelatedType) return null;
+
+    const currentId = form.getValues("debt_account_id");
+    const personLinkedId = watchedPersonId ? debtAccountByPerson.get(watchedPersonId) : null;
+    const isAutoLinked = personLinkedId && currentId === personLinkedId;
+
+    const selectedAccount = allAccounts.find(a => a.id === currentId);
+
+    // If auto-linked or transfer, show a nice descriptive UI or the combobox
+    return (
       <div className="space-y-3">
         <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700">
-            Destination account
-          </label>
-          <Controller
-            control={control}
-            name="debt_account_id"
-            render={({ field }) => (
-              <Combobox
-                value={field.value}
-                onValueChange={field.onChange}
-                items={destinationAccountOptions}
-                placeholder="Select destination"
-                inputPlaceholder="Search account..."
-                emptyState="No account found"
-                className="h-11"
-              />
+          <label className="text-sm font-medium text-gray-700 flex items-center justify-between">
+            <span>Destination account</span>
+            {isAutoLinked && (
+              <span className="text-[10px] text-emerald-600 font-bold uppercase flex items-center gap-1">
+                <Sparkles className="h-3 w-3" /> Auto-Linked
+              </span>
             )}
-          />
-          {errors.debt_account_id && (
-            <p className="text-sm text-red-600">
-              {errors.debt_account_id.message}
-            </p>
+          </label>
+
+          {isAutoLinked && selectedAccount ? (
+            <div className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-md shadow-sm">
+              <div className="flex items-center gap-2">
+                {selectedAccount.image_url ? (
+                  <img src={selectedAccount.image_url} alt="" className="h-6 w-6 object-contain" />
+                ) : (
+                  <div className="h-6 w-6 bg-slate-100 rounded flex items-center justify-center text-[10px] font-bold">
+                    {getAccountInitial(selectedAccount.name)}
+                  </div>
+                )}
+                <span className="font-medium text-slate-800">{selectedAccount.name}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => form.setValue("debt_account_id", "", { shouldDirty: true })}
+                className="text-[10px] text-slate-400 hover:text-slate-600 underline"
+              >
+                Change
+              </button>
+            </div>
+          ) : (
+            <>
+              <Controller
+                control={control}
+                name="debt_account_id"
+                render={({ field }) => (
+                  <Combobox
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    items={destinationAccountOptions}
+                    placeholder="Select destination"
+                    inputPlaceholder="Search account..."
+                    emptyState="No account found"
+                    className="h-11"
+                  />
+                )}
+              />
+              {errors.debt_account_id && (
+                <p className="text-sm text-red-600">
+                  {errors.debt_account_id.message}
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>
-    ) : null;
+    );
+  })();
 
   const DateInput = (
     <div className="space-y-2">
@@ -4642,17 +4799,24 @@ export function TransactionForm({
       ) : (
         <form
           id="transaction-form"
-          onSubmit={handleSubmit(onSubmit, (errors) => {
-            console.error(
-              "[Form Validation Error]",
-              JSON.stringify(errors, null, 2),
-            );
-            // Optionally set a status error to inform user why nothing happened
-            setStatus({
-              type: "error",
-              text: "Please fix the errors in the form.",
-            });
-          })}
+          onSubmit={handleSubmit(
+            (values) => {
+              console.log("[Form Submit] Valid values:", JSON.stringify(values, null, 2));
+              return onSubmit(values);
+            },
+            (errors) => {
+              console.error(
+                "[Form Validation Error]",
+                JSON.stringify(errors, null, 2),
+              );
+              console.log("[Form Values at Failure]", JSON.stringify(form.getValues(), null, 2));
+              // Optionally set a status error to inform user why nothing happened
+              setStatus({
+                type: "error",
+                text: "Please fix the errors in the form.",
+              });
+            }
+          )}
           className="flex flex-col h-full overflow-hidden"
         >
           {/* STICKY HEADER */}
@@ -4735,11 +4899,28 @@ export function TransactionForm({
                       <div>{ShopInput}</div>
                     </div>
 
-                    {/* Row 3: Category - Person */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                       <div>{CategoryInput}</div>
                       <div>{PersonInput}</div>
                     </div>
+
+                    {/* Destination Account Link Section */}
+                    {(transactionType === "repayment" || transactionType === "debt" || transactionType === "transfer") && (
+                      <div className={cn(
+                        "p-3 rounded-lg border transition-all",
+                        (!form.getValues("debt_account_id") || errors.debt_account_id)
+                          ? "bg-amber-50 border-amber-200"
+                          : "bg-slate-50 border-slate-200"
+                      )}>
+                        {(!form.getValues("debt_account_id") || errors.debt_account_id) && !isSplitBill && (
+                          <div className="flex items-center gap-2 mb-2">
+                            <AlertCircle className="h-3 w-3 text-amber-500" />
+                            <span className="text-[10px] font-bold text-amber-600 uppercase">Manual Link Required</span>
+                          </div>
+                        )}
+                        {DestinationAccountInput}
+                      </div>
+                    )}
 
                     {/* Row 4: Amount - Note */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
@@ -4776,6 +4957,7 @@ export function TransactionForm({
                             <button
                               type="button"
                               onClick={() => {
+                                console.log("[Form Debug] Allocation Reset clicked");
                                 setAllocationOverrides({});
                                 setIgnoredDebtIds(new Set());
                               }}
@@ -4963,7 +5145,38 @@ export function TransactionForm({
 
                 {SplitBillSection}
               </div>
+            ) : transactionType === "expense" ? (
+              <div className="space-y-4">
+                {/* EXPENSE LAYOUT (New) */}
+                {/* Row 1: Date - Note */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                  <div>{DateInput}</div>
+                  <div>{NoteInput}</div>
+                </div>
+
+                {/* Row 2: From Account - Category */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                  <div>{SourceAccountInput}</div>
+                  <div>{CategoryInput}</div>
+                </div>
+
+                {/* Row 3: Shop */}
+                <div className="w-full">
+                  {ShopInput}
+                </div>
+
+                {/* Row 4: Amount */}
+                <div className="w-full">
+                  {AmountInput}
+                </div>
+
+                {/* Extras */}
+                {SplitBillToggle}
+                {RefundStatusInput}
+                {SplitBillSection}
+              </div>
             ) : (
+              /* TRANSFER LAYOUT (Original Fallback) */
               <>
                 <div className="space-y-4 mb-4">
                   {AmountInput}

@@ -1,4 +1,9 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Money Flow 3.0
+
+> [!IMPORTANT]
+> **Handover Status (Sprint 5.1):**
+> Current objective: Forcing Debt Account Auto-Selection in `TransactionForm.tsx`.
+> **Blocker:** Không update được Receivable accounts (Auto-pick failed). The aggressive auto-selection logic is written but awaiting successful build to verify.
 
 ## Getting Started
 

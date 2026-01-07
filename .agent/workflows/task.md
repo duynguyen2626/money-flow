@@ -2,12 +2,19 @@
 description: Sprint 5 (New): Debt Repayment Overhaul & UI Polish
 ---
 
-Sprint 5 (New): Debt Repayment Overhaul & UI Polish
+# Sprint 5 Handover Status (2026-01-07)
 
-Context:
-We are consolidating previous efforts into a definitive sprint to finalize the Debt Repayment flow. The previous implementation had visual bugs (jumping layout, visible comments in UI) and missing logic for the "Bulk Repayment" toggle.
+> [!WARNING]
+> **Current Blocker:** Không update được Receivable accounts (Auto-pick failed).
+> Aggressive auto-pick logic was implemented but the build failed with a syntax error (`d })`) in generated routes, preventing verification of the latest changes in the UI.
 
-Target Branch: sprint-5/debt-repayment-overhaul (Reset/Continue from here).
+## Progress Summary
+- [x] Implement robust `debt_account_id` sync logic via `owner_id` matching.
+- [x] Replace dropdown with read-only badge + "Change" button for auto-picked accounts.
+- [ ] Investigate and fix Build Error: `routes.d.ts:115:3 d })` which appeared after UI changes.
+- [ ] Finalize "Manual Link Required" fallback behavior verification.
+
+Target Branch: sprint-5.1
 
 Target Files:
 

@@ -102,6 +102,7 @@ export type MonthlyDebtSummary = {
   total_debt?: number // Gross accumulated debt (before cashback)
   total_repaid?: number // Total amount repaid
   total_cashback?: number // Total cashback accumulated
+  links?: { repaymentId: string, amount: number }[]
 }
 
 export type PersonCycleSheet = {

@@ -1,63 +1,31 @@
-# .agent/rules/gravityrules.md
-# Purpose: core workflow and UI rules.
+﻿# Gravity Rules
 
-## Operating mode
+## Mandatory Quality Checks (CRITICAL)
 
-- Read existing implementation before coding.
-- Prefer minimal refactors.
-- Do not introduce breaking changes.
-- Keep changes small and reviewable.
+Before every git commit and git push, you MUST run the following commands and they MUST pass. No exceptions.
 
-## Build / quality rules (critical)
+\\\ash
+# 1. Clean build check
+npm run build
+\\\
 
-- Run `npm run build` (or project build) before marking task complete.
-- If build fails locally or on Vercel, fix it and re-run build.
+> [!IMPORTANT]
+> Failure to run npm run build before committing is a violation of project integrity. If Vercel build fails due to a TypeScript error you should have caught locally, you MUST fix it immediately.
 
-## Month tag standard (critical)
+## Development Workflow
 
-- Canonical month tag format: `YYYY-MM`.
-- Never generate/store/display legacy formats.
+- **Branching**: Always work on a feature/sprint branch (sprint-X.Y).
+- **Commits**: Use descriptive commit messages.
+- **Vibe Coding**: While speed is encouraged, quality via npm run build is non-negotiable.
 
-## Commit / PR workflow
+## UI & Design
 
-- Use a phase/scope branch naming convention.
-- Commit message style: `PHASE {PHASE_ID} - {TITLE}`.
-- Never push directly to main; open PR.
-- **CRITICAL**: Before committing, YOU MUST run:
-  - `npm run lint`
-  - `npm run build`
-  - Only commit if both pass.
+- **Sticky Tabs**: In TransactionForm, the type tabs must be sticky top-0.
+- **Layout Jumping**: Ensure TransactionForm has a stable min-height to prevent layout shifts.
+- **Avatars**: Use square avatars (rounded-none) for people.
+- **Rectangular Icons**: Bank and shop logos should be rectangular, not forced into circles.
 
-## UI changes must be screenshot-locked
+## Domain Logic
 
-- If the user provides mock screenshots or reference UI images, treat them as the source of truth.
-- Do not introduce new sections, cards, or rearrange header layout unless explicitly requested.
-- If something is ambiguous, choose the option that matches the screenshot layout.
-
-## Do not mix desktop and mobile rendering logic in one table
-
-- For complex tables or dense rows:
-  - Desktop table layout remains desktop-first.
-  - Mobile must use a dedicated list/card layout component.
-- Mobile list/card must show correct data mapping (no shifted columns, no missing fields).
-
-## Styling constraints
-
-- Avoid creative rounding:
-  - Do not force `rounded-full` on rectangular images/logos.
-  - Only use rounding where the domain requires it:
-    - People avatars can be rounded.
-    - Card/account logos should remain rectangular with `object-contain`.
-- Keep icon sizes consistent across a page (define a small set: 16/20/24/32/48).
-
-## Change scope discipline
-
-- Prefer small incremental refactors:
-  - Create new components first
-  - Switch consumers
-  - Delete old code only after the new path is verified
-- Do not refactor unrelated files because it is nicer.
-
-## Project-specific UI scope
-
-- Quick Add chat widget is limited to Dashboard, Transactions, and People detail pages.
+- **FIFO Repayment**: Always follow the FIFO cascading logic for debt repayments as defined in domain_logic.md.
+- **Auto-Selection**: Receivable accounts MUST be auto-selected based on owner_id when a person is picked.
