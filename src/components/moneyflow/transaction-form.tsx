@@ -1507,35 +1507,8 @@ export function TransactionForm({
     }));
   };
 
-  // Sprint 6 Restore Logic: Apply overrides from metadata once debts are loaded
-  useEffect(() => {
-    if (
-      initialValues?.metadata?.bulk_allocation &&
-      outstandingDebts.length > 0 &&
-      Object.keys(allocationOverrides).length === 0
-    ) {
-      const savedDebts = initialValues.metadata.bulk_allocation.debts as { id: string, amount: number }[];
-      const restoredOverrides: Record<string, number> = {};
+  // Sprint 6 Restore Logic: Moved to later effect with REF gate
 
-      savedDebts.forEach(d => {
-        restoredOverrides[d.id] = d.amount;
-      });
-
-      outstandingDebts.forEach(d => {
-        const saved = savedDebts.find(s => s.id === d.id);
-        if (saved) {
-          restoredOverrides[d.id] = saved.amount;
-        } else {
-          restoredOverrides[d.id] = 0; // Explicitly do not pay others
-        }
-      });
-
-      if (Object.keys(restoredOverrides).length > 0) {
-        setAllocationOverrides(restoredOverrides);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [outstandingDebts, initialValues]);
 
   // Sprint 5: Calculate allocation preview
   useEffect(() => {
@@ -1783,11 +1756,44 @@ export function TransactionForm({
     watchedAmount,
     watchedCategoryId,
     watchedAccountId,
-    watchedDate,
+    watchedDate ? watchedDate.getTime() : 0,
     transactionType,
-    allAccounts,
-    form,
+    // form and allAccounts removed to prevent infinite loops; they are stable enough for this effect's purpose
   ]);
+
+  // Sprint 6 Restore Logic: Apply overrides from metadata once debts are loaded
+  // Use a ref to track if we've already restored to prevent re-running on every render
+  const restoreAttemptedRef = useRef(false);
+  useEffect(() => {
+    if (restoreAttemptedRef.current) return;
+
+    if (
+      initialValues?.metadata?.bulk_allocation &&
+      outstandingDebts.length > 0 &&
+      Object.keys(allocationOverrides).length === 0
+    ) {
+      restoreAttemptedRef.current = true;
+      const savedDebts = initialValues.metadata.bulk_allocation.debts as { id: string, amount: number }[];
+      const restoredOverrides: Record<string, number> = {};
+
+      savedDebts.forEach(d => {
+        restoredOverrides[d.id] = d.amount;
+      });
+
+      outstandingDebts.forEach(d => {
+        const saved = savedDebts.find(s => s.id === d.id);
+        if (saved) {
+          restoredOverrides[d.id] = saved.amount;
+        } else {
+          restoredOverrides[d.id] = 0; // Explicitly do not pay others
+        }
+      });
+
+      if (Object.keys(restoredOverrides).length > 0) {
+        setAllocationOverrides(restoredOverrides);
+      }
+    }
+  }, [outstandingDebts, initialValues]); // We use the ref to gate this, so dependencies matter less, but still good to keep.
 
   const watchedDebtAccountId = useWatch({
     control,
@@ -2934,7 +2940,7 @@ export function TransactionForm({
     return () => {
       controller.abort();
     };
-  }, [isRefundMode, watchedAccountId, watchedDate, watchedCategoryId]);
+  }, [isRefundMode, watchedAccountId, watchedDate ? watchedDate.getTime() : 0, watchedCategoryId]);
 
   useEffect(() => {
     if (!selectedAccount?.id) {
@@ -2981,7 +2987,7 @@ export function TransactionForm({
     return () => {
       controller.abort();
     };
-  }, [selectedAccount?.id, watchedDate]);
+  }, [selectedAccount?.id, watchedDate ? watchedDate.getTime() : 0]);
 
   // Fetch persisted metadata for existing transactions
   useEffect(() => {
@@ -3729,68 +3735,53 @@ export function TransactionForm({
 
     const currentId = form.getValues("debt_account_id");
     const personLinkedId = watchedPersonId ? debtAccountByPerson.get(watchedPersonId) : null;
-    const isAutoLinked = personLinkedId && currentId === personLinkedId;
+
+    // STRICT MODE for Repayment: Always force auto-link visibility if Person has account
+    const isRepaymentStrict = transactionType === "repayment" || transactionType === "debt";
 
     const selectedAccount = allAccounts.find(a => a.id === currentId);
 
-    // If auto-linked or transfer, show a nice descriptive UI or the combobox
+    // If Repayment/Debt and we have a linked account, FORCE READ ONLY
+    if (isRepaymentStrict && watchedPersonId) {
+      // If we have a linked account, or if manual fallback found one
+      const effectiveAccount = selectedAccount ?? (personLinkedId ? allAccounts.find(a => a.id === personLinkedId) : null);
+
+      if (effectiveAccount) {
+        // User requested to HIDE this field visually for Repayment/Debt if it's auto-linked.
+        // We still render the hidden input so the form works.
+        return (
+          <>
+            {/* Hidden input to ensure form submission still works */}
+            <input type="hidden" {...form.register("debt_account_id")} value={effectiveAccount.id} />
+          </>
+        );
+      }
+    }
+
+    // Default Fallback (Transfer, or Debt without person selected yet)
     return (
       <div className="space-y-3">
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-gray-700 flex items-center justify-between">
-            <span>Destination account</span>
-            {isAutoLinked && (
-              <span className="text-[10px] text-emerald-600 font-bold uppercase flex items-center gap-1">
-                <Sparkles className="h-3 w-3" /> Auto-Linked
-              </span>
-            )}
-          </label>
-
-          {isAutoLinked && selectedAccount ? (
-            <div className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-md shadow-sm">
-              <div className="flex items-center gap-2">
-                {selectedAccount.image_url ? (
-                  <img src={selectedAccount.image_url} alt="" className="h-6 w-6 object-contain" />
-                ) : (
-                  <div className="h-6 w-6 bg-slate-100 rounded flex items-center justify-center text-[10px] font-bold">
-                    {getAccountInitial(selectedAccount.name)}
-                  </div>
-                )}
-                <span className="font-medium text-slate-800">{selectedAccount.name}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => form.setValue("debt_account_id", "", { shouldDirty: true })}
-                className="text-[10px] text-slate-400 hover:text-slate-600 underline"
-              >
-                Change
-              </button>
-            </div>
-          ) : (
-            <>
-              <Controller
-                control={control}
-                name="debt_account_id"
-                render={({ field }) => (
-                  <Combobox
-                    value={field.value}
-                    onValueChange={field.onChange}
-                    items={destinationAccountOptions}
-                    placeholder="Select destination"
-                    inputPlaceholder="Search account..."
-                    emptyState="No account found"
-                    className="h-11"
-                  />
-                )}
-              />
-              {errors.debt_account_id && (
-                <p className="text-sm text-red-600">
-                  {errors.debt_account_id.message}
-                </p>
-              )}
-            </>
+        <label className="text-sm font-medium text-gray-700">Destination account</label>
+        <Controller
+          control={control}
+          name="debt_account_id"
+          render={({ field }) => (
+            <Combobox
+              value={field.value}
+              onValueChange={field.onChange}
+              items={destinationAccountOptions}
+              placeholder="Select destination"
+              inputPlaceholder="Search account..."
+              emptyState="No account found"
+              className="h-11"
+            />
           )}
-        </div>
+        />
+        {errors.debt_account_id && (
+          <p className="text-sm text-red-600">
+            {errors.debt_account_id.message}
+          </p>
+        )}
       </div>
     );
   })();
