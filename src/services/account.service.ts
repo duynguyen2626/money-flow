@@ -12,8 +12,6 @@ import {
 } from '@/lib/cashback'
 import { computeAccountTotals, getCreditCardAvailableBalance, getCreditCardUsage } from '@/lib/account-balance'
 import {
-  TransactionRow,
-  mapTransactionRow,
   mapUnifiedTransaction
 } from '@/lib/transaction-mapper'
 import { Database, Json } from '@/types/database.types'
@@ -686,10 +684,10 @@ export async function recalculateBalanceWithClient(
   const { error: updateError } = await (supabase
     .from('accounts')
     .update as any)({
-    current_balance: currentBalance,
-    total_in: totalIn,
-    total_out: totalOut,
-  })
+      current_balance: currentBalance,
+      total_in: totalIn,
+      total_out: totalOut,
+    })
     .eq('id', accountId)
 
   if (updateError) {

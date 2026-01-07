@@ -130,11 +130,12 @@ export function AddTransactionDialog({
           const parsedMeta = parseMetadata(firstTxn.metadata);
 
           // Re-check parent ID from the fresh fetch
-          const trueParentId = parsedMeta?.parent_transaction_id;
+          const trueParentId = (parsedMeta as any)?.parent_transaction_id;
 
-          if (trueParentId) {
+          if (typeof trueParentId === 'string' && trueParentId) {
             console.log("[AddTransactionDialog] Child transaction detected. Redirecting to Parent:", trueParentId);
-            const parentTxns = await loadTransactions({ transactionId: trueParentId });
+            const service = await import("@/services/transaction.service");
+            const parentTxns = await service.loadTransactions({ transactionId: trueParentId });
 
             if (parentTxns && parentTxns.length > 0) {
               const parentRaw = parentTxns[0];

@@ -3,7 +3,6 @@
 ## Rules for Next Agent
 - **Fix Build First:** Priority #1.
 - **Verification:** Do not mark as "Fixed" until auto-pick is verified in browser.
-- **FIFO:** Follow `domain_logic.md` for cascaded repayments.
 
 ## 🎯 Prompts dành cho Agent tiếp theo
 

@@ -980,7 +980,7 @@ export async function confirmRefund(
 
   const pendingMeta = parseMetadata((pending as any).metadata)
   const originalTransactionId =
-    typeof pendingMeta.original_transaction_id === 'string' ? pendingMeta.original_transaction_id : null
+    typeof pendingMeta?.original_transaction_id === 'string' ? pendingMeta.original_transaction_id : null
 
   if (originalTransactionId) {
     try {
