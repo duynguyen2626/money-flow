@@ -1502,6 +1502,9 @@ export function UnifiedTransactionTable({
                                       if (bulkAllocation?.debts && bulkAllocation.debts.length > 0) {
                                         const debts = bulkAllocation.debts as { id: string, amount: number, tag?: string, note?: string }[];
                                         const count = debts.length;
+                                        // Only show badge if count > 1 (True Bulk). Single item is redundant context.
+                                        if (count <= 1) return null;
+
                                         return (
                                           <CustomTooltip
                                             content={

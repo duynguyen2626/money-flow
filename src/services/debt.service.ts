@@ -418,7 +418,8 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
   >()
 
     ; (data as unknown as (DebtTransactionRow & { id: string })[]).forEach(row => {
-      const tag = row.tag ?? 'UNTAGGED'
+      const normalizedTag = normalizeMonthTag(row.tag)
+      const tag = normalizedTag?.trim() ? normalizedTag.trim() : (row.tag?.trim() ? row.tag.trim() : 'UNTAGGED')
       const baseType = resolveBaseType(row.type)
       const finalPrice = calculateFinalPrice(row)
       const occurredAt = row.occurred_at ?? ''
