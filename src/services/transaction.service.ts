@@ -78,7 +78,7 @@ type NormalizedTransaction = Omit<FlatTransactionRow, "id" | "created_at">;
 type LookupMaps = {
   accounts: Map<
     string,
-    { id: string; name: string; image_url: string | null; type: string | null }
+    { id: string; name: string; image_url: string | null; type: string | null; owner_id: string | null }
   >;
   categories: Map<
     string,
@@ -220,7 +220,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
     accountIds.size
       ? supabase
         .from("accounts")
-        .select("id, name, image_url, type")
+        .select("id, name, image_url, type, owner_id")
         .in("id", Array.from(accountIds))
       : Promise.resolve({ data: [] as any[], error: null }),
     categoryIds.size
@@ -245,7 +245,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
 
   const accounts = new Map<
     string,
-    { id: string; name: string; image_url: string | null; type: string | null }
+    { id: string; name: string; image_url: string | null; type: string | null; owner_id: string | null }
   >();
   const categories = new Map<
     string,
@@ -273,6 +273,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
       name: row.name,
       image_url: row.image_url ?? null,
       type: row.type ?? null,
+      owner_id: row.owner_id ?? null,
     });
   });
 

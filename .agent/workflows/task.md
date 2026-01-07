@@ -1,106 +1,66 @@
 ---
-description: Sprint 5 (New): Debt Repayment Overhaul & UI Polish
+description: TASK: Fix Repayment Debt Account Auto-Link (Sprint 5.2)
 ---
 
-# Sprint 5 Handover Status (2026-01-07)
+TASK: Fix Repayment Debt Account Auto-Link (Sprint 5.2)
 
-> [!WARNING]
-> **Current Blocker:** Không update được Receivable accounts (Auto-pick failed).
-> Aggressive auto-pick logic was implemented but the build failed with a syntax error (`d })`) in generated routes, preventing verification of the latest changes in the UI.
+1. Context & Objective
 
-## Progress Summary
-- [x] Implement robust `debt_account_id` sync logic via `owner_id` matching.
-- [x] Replace dropdown with read-only badge + "Change" button for auto-picked accounts.
-- [ ] Investigate and fix Build Error: `routes.d.ts:115:3 d })` which appeared after UI changes.
-- [ ] Finalize "Manual Link Required" fallback behavior verification.
+We are transitioning from Sprint 5.1 to 5.2.
+Current Issue: When editing a Repayment transaction, the system fails to automatically select the corresponding debt account associated with the person (profile). It requires manual selection, which is error-prone.
+Goal: Automate the mapping logic so that any Lend or Repay action (add/edit) automatically links to the correct debt account based on the selected Profile (owner_id).
 
-Target Branch: sprint-5.1
+2. Branch Convention (Sprint 5)
 
-Target Files:
+Branch Name: fix/sprint-5.2-repayment-context-binding
 
-src/components/moneyflow/transaction-form.tsx (Main UI).
+Commit Message Format: [Sprint 5.2] <type>: <subject> (e.g., [Sprint 5.2] fix: auto-bind debt account on repayment edit)
 
-src/components/moneyflow/repay-debt-section.tsx (New logic for Bulk mode).
+3. Data Context (Reproducible Sample)
 
-src/lib/debt-allocation.ts (FIFO Algorithm).
+Use the following SQL to set up your local environment for debugging. notice the relationship between profiles.id and accounts.owner_id.
 
-src/actions/transaction-actions.ts.
+-- Profile: Ngọc
+INSERT INTO "public"."profiles" ("id", "name", "email", "role", "is_group", "avatar_url", "created_at", "sheet_link", "is_owner", "is_archived", "google_sheet_url", "group_parent_id", "sheet_full_img", "sheet_show_bank_account", "sheet_show_qr_image") 
+VALUES ('dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248', 'Ngọc', null, 'member', 'false', '[https://ui-avatars.com/api/?name=Ngọc&background=random](https://ui-avatars.com/api/?name=Ngọc&background=random)', '2025-11-30 11:52:25.371122+00', null, 'false', 'false', null, null, null, 'false', 'false');
 
-1. Critical UI/UX Fixes (The "Must Haves")
+-- Account: Receivable - Ngọc (Linked via owner_id)
+INSERT INTO "public"."accounts" ("id", "name", "type", "currency", "credit_limit", "current_balance", "owner_id", "cashback_config", "is_active", "created_at", "secured_by_account_id", "image_url", "parent_account_id", "total_in", "total_out", "annual_fee", "cashback_config_version", "receiver_name", "account_number") 
+VALUES ('3b3ae4a2-c64e-4edc-88a4-7d538f776786', 'Receivable - Ngọc', 'debt', 'VND', '0.00', '0.00', 'dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248', null, 'true', '2025-11-30 12:11:00.118276+00', null, '[https://img.icons8.com/fluency/48/receive-cash.png](https://img.icons8.com/fluency/48/receive-cash.png)', null, '0.00', '0.00', '0.00', '1', null, null);
 
-A. Anti-Jumping Layout (Fixed Header)
 
-Problem: Switching between Expense (many fields) and Repay (few fields) causes the Tab Bar to jump up/down.
+4. Business Rules (Mandatory)
 
-Fix:
+Strict Debt Linking: Any code related to Lend or Repay (Transaction Types) MUST resolve the debt account.
 
-The DialogContent or form container must have a min-height (e.g., min-h-[500px]) to accommodate the tallest tab.
+If creating a new Person -> Ensure a debt account is created.
 
-The Tab List (Income | Expense | Transfer | Repay) must be Sticky (sticky top-0 z-10 bg-background pt-2) so it never moves relative to the screen.
+If Adding/Editing a Transaction -> Lookup accounts where owner_id = profile_id AND type = 'debt'.
 
-Remove Garbage: Scan for and remove any // comments that were accidentally rendered as text in the JSX.
+No "Guessing": Do not assume the account ID is passed from the frontend. Verify it against the database/store using the owner_id.
 
-B. Field Logic: "To Account" & Shop Sync
+5. Technical Constraints & Verification
 
-Trigger: When User selects an asset in "To Account" (e.g., VIB) AND type === 'repayment'.
+File to Study: transaction.service.ts (or equivalent backend logic file).
 
-Action:
+Critical Question: logic regarding mapTransactionRow.
 
-Auto-Fill Shop: The "Shop" field must programmaticallly receive the id, name, and image_url of the selected Account.
+Async Requirement: You must understand why mapping rows might need to be async (Hint: Database lookups for foreign keys).
 
-Disable Interaction: The Shop field becomes readOnly or disabled visually, so the user knows it's locked to the account.
+6. Implementation Steps
 
-Visual: It must look like a Shop card (Logo + Name), NOT a generic input.
+Analyze: Read the codebase to find where Repayment editing logic resides.
 
-C. Bulk Repayment Toggle (The "Missing Feature")
+Reproduction: Create a test case using the SQL above. Try to edit a repayment for "Ngọc" and observe the account field.
 
-State: Add isBulkRepay boolean state.
+Fix: Implement the lookup logic to pre-fill the debt account.
 
-UI Behavior:
+Verify: Ensure no regression on normal expense transactions.
 
-OFF (Default): Show "Tag" dropdown to select a single specific debt cycle.
+7. Definition of Done
 
-ON: HIDE the "Tag" dropdown. SHOW a "Repayment Preview Card".
+[ ] User opens "Edit Transaction" for a Repayment.
 
-This card listens to amount and person_id.
+[ ] The system automatically selects "Receivable - Ngọc" as the account.
 
-It calls allocateDebtRepayment helper to calculate: "If I pay 500k, which months get settled?".
-
-Display: A list of months (e.g., "Oct 2025: 50k (Done)", "Nov 2025: 450k (Partial)").
-
-2. Logic & Database
-
-A. Database Migration
-
-File: supabase/migrations/20260107_relax_transaction_constraints.sql
-
-Command: ALTER TABLE transactions ALTER COLUMN account_id DROP NOT NULL; (To support virtual debt adjustments).
-
-B. Backend Action (repayBatchDebt)
-
-Input: totalAmount, person_id, accountId (Money Source).
-
-Logic:
-
-Insert 1 Parent Transaction (Real money flow to Bank).
-
-Use FIFO logic to find outstanding debt cycles.
-
-Insert N Child Transactions (Virtual debt entries) linked to Parent.
-
-3. Execution Prompt
-
-@.agent/workflows/task.md @src/components/moneyflow/transaction-form.tsx
-
-I am restarting Sprint 5.
-1. **Migration:** Generate `supabase/migrations/20260107_relax_transaction_constraints.sql`.
-2. **UI Layout:** Refactor `TransactionForm`.
-   - Set `min-h-[550px]` on the content container.
-   - Make Tabs `sticky top-0`.
-   - **REMOVE** any text comments like `//` from the JSX.
-3. **Repay Logic:**
-   - Move "To Account" field up.
-   - Implement the `useEffect` hook: If Repay mode & Account changes -> Update "Shop" to match Account (and disable it).
-4. **Bulk Mode:**
-   - If Toggle ON: Hide "Tag" select. Show `<RepaymentPreview amount={amount} personId={personId} />`.
-   - Implement `src/lib/debt-allocation.ts` for the preview logic.
+[ ] Code passes all linting rules defined in .agent/rules/gravityrules.md.
