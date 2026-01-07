@@ -75,7 +75,11 @@ export function AddTransactionDialog({
   const [internalOpen, setInternalOpen] = useState(false);
   const open = isOpen ?? internalOpen;
 
-  // Phase 7X: Fetch installments if not provided (fixes toggle missing issue)
+  // New: Internal state for fetched initial values
+  const [fetchedInitialValues, setFetchedInitialValues] = useState<Partial<TransactionFormValues> | undefined>(undefined);
+  const [isFetchingTransaction, setIsFetchingTransaction] = useState(false);
+
+  // Phase 7X: Fetch installments if not provided
   const [fetchedInstallments, setFetchedInstallments] = useState<Installment[]>([]);
   useEffect(() => {
     if (open && installments.length === 0) {
@@ -86,6 +90,83 @@ export function AddTransactionDialog({
       });
     }
   }, [open, installments.length]);
+
+  // Fix: Fetch transaction details if ID is provided but initialValues are missing (e.g. from Debt Cycle Popover)
+  // OR if initialValues indicate this is a child transaction (needs redirection to parent)
+  useEffect(() => {
+    // Only proceed if dialog is open and we have a transactionId in edit mode
+    if (!open || !transactionId || mode !== 'edit') return;
+
+    // Check if we need to redirect to parent
+    const meta = (initialValues as any)?.metadata;
+    // Helper to safely check property existence in varied meta shapes
+    const parentIdFromMeta =
+      meta?.parent_transaction_id ||
+      (typeof meta === 'string' && meta.includes('parent_transaction_id') ? JSON.parse(meta).parent_transaction_id : undefined);
+
+    const isChild = !!parentIdFromMeta;
+
+    // If we have initialValues AND it's not a child that needs redirection, we can skip fetching
+    if (initialValues && !isChild) {
+      if (fetchedInitialValues) {
+        // If we switched from a child (fetched) back to a normal txn that has initialValues, 
+        // we might want to clear fetched, but for now, rely on parent to pass correct initialValues
+      }
+      return;
+    }
+
+    setIsFetchingTransaction(true);
+    setFetchedInitialValues(undefined); // Clear previous
+
+    const fetchDetails = async () => {
+      try {
+        const { loadTransactions } = await import("@/services/transaction.service");
+        const txns = await loadTransactions({ transactionId });
+
+        if (txns && txns.length > 0) {
+          const { buildEditInitialValues, parseMetadata } = await import("@/lib/transaction-mapper");
+
+          const firstTxn = txns[0];
+          const parsedMeta = parseMetadata(firstTxn.metadata);
+
+          // Re-check parent ID from the fresh fetch
+          const trueParentId = parsedMeta?.parent_transaction_id;
+
+          if (trueParentId) {
+            console.log("[AddTransactionDialog] Child transaction detected. Redirecting to Parent:", trueParentId);
+            const parentTxns = await loadTransactions({ transactionId: trueParentId });
+
+            if (parentTxns && parentTxns.length > 0) {
+              const parentRaw = parentTxns[0];
+              // Ensure we force the type to 'repayment' for the parent of a debt repayment
+              // This is handled in 'buildEditInitialValues', but we can be defensive
+              const parentFormatted = buildEditInitialValues(parentRaw);
+              console.log("[AddTransactionDialog] Parent details loaded:", parentFormatted);
+              setFetchedInitialValues(parentFormatted);
+              return;
+            } else {
+              console.warn("[AddTransactionDialog] Parent transaction found but failed to load data:", trueParentId);
+            }
+          }
+
+          // Fallback: Just load the requested transaction
+          console.log("[AddTransactionDialog] Loading transaction directly:", firstTxn.id);
+          const formatted = buildEditInitialValues(firstTxn);
+          setFetchedInitialValues(formatted);
+
+        } else {
+          console.warn("[AddTransactionDialog] Transaction not found:", transactionId);
+        }
+      } catch (error) {
+        console.error("[AddTransactionDialog] Failed to load transaction:", error);
+      } finally {
+        setIsFetchingTransaction(false);
+      }
+    };
+
+    fetchDetails();
+
+  }, [open, transactionId, initialValues, mode]);
 
   const effectiveInstallments = installments.length > 0 ? installments : fetchedInstallments;
 
@@ -241,7 +322,7 @@ export function AddTransactionDialog({
             role="dialog"
             aria-modal="true"
             aria-label="Add Transaction"
-            className="fixed inset-0 z-50 flex items-start md:items-center justify-center bg-black/60 px-0 md:px-4 py-4 backdrop-blur-sm"
+            className="fixed inset-0 z-[100] flex items-start md:items-center justify-center bg-black/60 px-0 md:px-4 py-4 backdrop-blur-sm"
             onClick={handleOverlayClick}
           >
             <div
@@ -283,31 +364,39 @@ export function AddTransactionDialog({
                   </button>
                 </div>
               )}
-              <TransactionForm
-                accounts={accounts}
-                categories={categories}
-                people={people}
-                shops={shops}
-                installments={effectiveInstallments}
-                onSuccess={handleSuccess}
-                onCancel={() => {
-                  handleCloseRequest("close");
-                }}
-                onFormChange={setHasUnsavedChanges}
-                defaultTag={defaultTag}
-                defaultPersonId={urlValues?.person_id ?? defaultPersonId}
-                defaultType={defaultType}
-                defaultSourceAccountId={defaultSourceAccountId}
-                defaultDebtAccountId={defaultDebtAccountId}
-                transactionId={transactionId}
-                mode={mode}
-                initialValues={{
-                  ...urlValues,
-                  ...(defaultAmount ? { amount: defaultAmount } : {}),
-                  ...(cloneInitialValues || {}),
-                  ...(initialValues || {}),
-                }}
-              />
+              {isFetchingTransaction ? (
+                <div className="flex flex-col items-center justify-center p-12 space-y-4 h-[400px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                  <p className="text-sm text-slate-500 font-medium">Loading transaction details...</p>
+                </div>
+              ) : (
+                <TransactionForm
+                  accounts={accounts}
+                  categories={categories}
+                  people={people}
+                  shops={shops}
+                  installments={effectiveInstallments}
+                  onSuccess={handleSuccess}
+                  onCancel={() => {
+                    handleCloseRequest("close");
+                  }}
+                  onFormChange={setHasUnsavedChanges}
+                  defaultTag={defaultTag}
+                  defaultPersonId={urlValues?.person_id ?? defaultPersonId}
+                  defaultType={defaultType}
+                  defaultSourceAccountId={defaultSourceAccountId}
+                  defaultDebtAccountId={defaultDebtAccountId}
+                  transactionId={transactionId}
+                  mode={mode}
+                  initialValues={{
+                    ...urlValues,
+                    ...(defaultAmount ? { amount: defaultAmount } : {}),
+                    ...(cloneInitialValues || {}),
+                    ...(initialValues || {}),
+                    ...(fetchedInitialValues || {}),
+                  }}
+                />
+              )}
             </div>
 
             {/* Unsaved Changes Warning Dialog */}

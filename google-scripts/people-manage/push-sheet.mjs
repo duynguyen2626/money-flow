@@ -232,9 +232,11 @@ const main = async () => {
         const pushArgs = ['push']
         if (forceFlag) pushArgs.push('--force')
 
-        const result = spawnSync('clasp', pushArgs, {
+        const claspCmd = process.platform === 'win32' ? 'clasp.cmd' : 'clasp'
+        const result = spawnSync(claspCmd, pushArgs, {
           cwd: __dirname,
           stdio: 'inherit',
+          shell: true,
         })
 
         if (result.status === 0) {
@@ -279,9 +281,11 @@ const main = async () => {
   const pushArgs = ['push']
   if (forceFlag) pushArgs.push('--force')
 
-  const result = spawnSync('clasp', pushArgs, {
+  const claspCmd = process.platform === 'win32' ? 'clasp.cmd' : 'clasp'
+  const result = spawnSync(claspCmd, pushArgs, {
     cwd: __dirname,
     stdio: 'inherit',
+    shell: true,
   })
 
   if (selected?.profile?.key) {

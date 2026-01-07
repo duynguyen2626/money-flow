@@ -454,6 +454,8 @@ export function TransactionForm({
     }
   }, [transactionType]);
 
+
+
   const [splitGroupId, setSplitGroupId] = useState<string | undefined>(undefined);
   const [splitParticipants, setSplitParticipants] = useState<
     SplitBillParticipant[]
@@ -562,6 +564,26 @@ export function TransactionForm({
   useEffect(() => {
     onFormChange?.(form.formState.isDirty);
   }, [form.formState.isDirty, onFormChange]);
+
+  // Handle Initial Values Reset (Especially when fetching Parent Transaction)
+  // MOVED HERE: Must be after 'form' definition to avoid ReferenceError
+  useEffect(() => {
+    if (initialValues) {
+      // Force type update if provided (critical for Parent Repayment redirect)
+      if (initialValues.type && initialValues.type !== transactionType) {
+        setTransactionType(initialValues.type);
+      }
+
+      // Ensure form resets with new values
+      const timer = setTimeout(() => {
+        form.reset({
+          ...baseDefaults,
+          ...initialValues,
+        });
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [initialValues, form]);
 
   // Prompt unsaved changes on refresh/close
   useUnsavedChanges(form.formState.isDirty);
@@ -4963,7 +4985,38 @@ export function TransactionForm({
 
                 {SplitBillSection}
               </div>
+            ) : transactionType === "expense" ? (
+              <div className="space-y-4">
+                {/* EXPENSE LAYOUT (New) */}
+                {/* Row 1: Date - Note */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                  <div>{DateInput}</div>
+                  <div>{NoteInput}</div>
+                </div>
+
+                {/* Row 2: From Account - Category */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                  <div>{SourceAccountInput}</div>
+                  <div>{CategoryInput}</div>
+                </div>
+
+                {/* Row 3: Shop */}
+                <div className="w-full">
+                  {ShopInput}
+                </div>
+
+                {/* Row 4: Amount */}
+                <div className="w-full">
+                  {AmountInput}
+                </div>
+
+                {/* Extras */}
+                {SplitBillToggle}
+                {RefundStatusInput}
+                {SplitBillSection}
+              </div>
             ) : (
+              /* TRANSFER LAYOUT (Original Fallback) */
               <>
                 <div className="space-y-4 mb-4">
                   {AmountInput}

@@ -34,8 +34,12 @@ import {
   User,
   RefreshCcw,
   MoveRight,
-  Wrench
+  Wrench,
+  Pencil,
+  ClipboardPaste
 } from "lucide-react"
+
+import { buildEditInitialValues, parseMetadata } from '@/lib/transaction-mapper';
 
 import { MobileTransactionsSimpleList } from "./mobile/MobileTransactionsSimpleList"
 import { useRouter } from "next/navigation"
@@ -106,84 +110,7 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
 });
 
-function buildEditInitialValues(txn: TransactionWithDetails): Partial<TransactionFormValues> {
-  const baseAmount =
-    typeof txn.original_amount === "number" ? txn.original_amount : txn.amount ?? 0;
-  const percentValue =
-    typeof txn.cashback_share_percent === "number" ? txn.cashback_share_percent : undefined;
 
-  let derivedType: TransactionFormValues["type"] = (txn.type as any) === 'repayment' ? 'repayment' : txn.type as TransactionFormValues["type"] || "expense";
-
-  const categoryName = txn.category_name?.toLowerCase() ?? '';
-
-  if (txn.person_id) {
-    if (categoryName.includes('thu nợ') || categoryName.includes('repayment')) {
-      derivedType = 'repayment';
-    } else {
-      derivedType = 'debt';
-    }
-  } else if (categoryName.includes('cashback') || categoryName.includes('income') || categoryName.includes('refund')) {
-    derivedType = 'income';
-  } else if (categoryName.includes('money transfer') || categoryName.includes('chuyển tiền')) {
-    derivedType = 'transfer';
-  } else if (!txn.category_id && !txn.category_name) {
-    derivedType = 'transfer';
-  } else if (txn.type === 'income') {
-    derivedType = 'income';
-  } else if (txn.type === 'expense') {
-    derivedType = 'expense';
-  }
-
-  let sourceAccountId = txn.account_id ?? undefined;
-  let destinationAccountId =
-    derivedType === "transfer" || derivedType === "debt"
-      ? txn.target_account_id ?? undefined
-      : undefined;
-
-  if (derivedType === 'repayment') {
-    // For repayment: source is bank, destination is debt
-    sourceAccountId = txn.account_id ?? undefined;
-    destinationAccountId = txn.target_account_id ?? undefined;
-  }
-
-  const result = {
-    occurred_at: txn.occurred_at ? new Date(txn.occurred_at) : new Date(),
-    type: derivedType,
-    amount: Math.abs(baseAmount ?? 0),
-    note: txn.note ?? "",
-    tag: txn.tag ?? generateTag(new Date()),
-    source_account_id: sourceAccountId,
-    category_id: txn.category_id ?? undefined,
-    person_id: txn.person_id ?? undefined,
-    debt_account_id: destinationAccountId,
-    shop_id: txn.shop_id ?? undefined,
-    // Pass raw names for duplicate/edit scenarios where IDs might be missing but we want to preserve visual info or allow fuzzy match
-    shop_name: txn.shop_name,
-    shop_image_url: txn.shop_image_url,
-    category_name: txn.category_name,
-    cashback_share_percent:
-      percentValue !== undefined && percentValue !== null ? percentValue : undefined,
-    cashback_share_fixed:
-      txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined ? Number(txn.cashback_share_fixed) : undefined,
-    is_installment: txn.is_installment ?? false,
-    cashback_mode: ((percentValue !== undefined && percentValue !== null && Number(percentValue) > 0) ? 'real_percent' :
-      (txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined && Number(txn.cashback_share_fixed) > 0) ? 'real_fixed' : 'none_back') as 'none_back' | 'real_fixed' | 'real_percent' | 'voluntary',
-    metadata: parseMetadata(txn.metadata),
-  };
-
-  // Diagnostic logging for duplicate form issue
-  console.log('[buildEditInitialValues] Transaction:', {
-    id: txn.id,
-    shop_id: txn.shop_id,
-    shop_name: txn.shop_name,
-    account_id: txn.account_id,
-    source_name: txn.source_name,
-    result_shop_id: result.shop_id,
-    result_source_account_id: result.source_account_id,
-  });
-
-  return result;
-}
 
 interface ColumnConfig {
   key: ColumnKey
@@ -225,22 +152,7 @@ interface UnifiedTransactionTableProps {
 }
 
 
-function parseMetadata(value: TransactionWithDetails['metadata']) {
-  if (!value) return null
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value) as Record<string, unknown>
-    } catch {
-      return null
-    }
-  }
 
-  if (typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>
-  }
-
-  return null
-}
 
 export function UnifiedTransactionTable({
   data,
@@ -1064,7 +976,7 @@ export function UnifiedTransactionTable({
             setActionMenuOpen(null);
           }}
         >
-          <Edit className="h-4 w-4" />
+          <Pencil className="h-4 w-4" />
           <span>Edit</span>
         </button>
         <button
@@ -1075,7 +987,7 @@ export function UnifiedTransactionTable({
             setActionMenuOpen(null);
           }}
         >
-          <CopyPlus className="h-4 w-4" />
+          <ClipboardPaste className="h-4 w-4" />
           <span>Duplicate</span>
         </button>
         <button
@@ -1177,14 +1089,14 @@ export function UnifiedTransactionTable({
           onClick={(e) => { e.stopPropagation(); setEditingTxn(txn); }}
           title="Edit"
         >
-          <Edit className="h-3.5 w-3.5" />
+          <Pencil className="h-3.5 w-3.5" />
         </button>
         <CustomTooltip content="Duplicate">
           <button
             className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
             onClick={(e) => { e.stopPropagation(); handleDuplicate(txn); }}
           >
-            <CopyPlus className="h-3.5 w-3.5" />
+            <ClipboardPaste className="h-3.5 w-3.5" />
           </button>
         </CustomTooltip>
 
@@ -1432,7 +1344,7 @@ export function UnifiedTransactionTable({
                             <CustomTooltip content={fullDateStr}>
                               <div className="flex flex-col items-start justify-center cursor-help rounded px-0.5 group min-w-[34px]">
                                 <span className="text-sm font-bold text-slate-700 leading-none group-hover:text-blue-600 transition-colors">
-                                  {day}-{month}
+                                  {day}.{month}
                                 </span>
                                 <span className="text-[10px] text-slate-400 font-medium leading-tight mt-0.5 group-hover:text-blue-500 transition-colors">
                                   {timeStr}
@@ -1550,7 +1462,7 @@ export function UnifiedTransactionTable({
 
                               {/* Row 2: Badges (Installment/Refund/Split) */}
                               {(() => {
-                                const metadata = txn.metadata as any;
+                                const metadata = (typeof txn.metadata === 'string' ? JSON.parse(txn.metadata) : txn.metadata) as any;
                                 const isSplitBase = metadata?.is_split_bill_base;
                                 const isSplitChild = metadata?.split_parent_id;
                                 const splitGroupName = metadata?.split_group_name;
@@ -1577,11 +1489,48 @@ export function UnifiedTransactionTable({
                                   );
                                 }
 
-                                return (installmentBadge || refundBadge || splitBadge) && (
+                                const hasBulkDebts = (metadata?.bulk_allocation?.debts?.length > 0) || (metadata?.bulkAllocation?.debts?.length > 0);
+                                return (installmentBadge || refundBadge || splitBadge || hasBulkDebts) && (
                                   <div className="flex items-center gap-1">
                                     {installmentBadge}
                                     {refundBadge}
                                     {splitBadge}
+                                    {/* Repayment Counter Badge (Added to Shop Column) */}
+                                    {hasBulkDebts && (() => {
+                                      const bulkAllocation = metadata?.bulk_allocation || metadata?.bulkAllocation;
+
+                                      if (bulkAllocation?.debts && bulkAllocation.debts.length > 0) {
+                                        const debts = bulkAllocation.debts as { id: string, amount: number, tag?: string, note?: string }[];
+                                        const count = debts.length;
+                                        return (
+                                          <CustomTooltip
+                                            content={
+                                              <div className="flex flex-col gap-1">
+                                                <span className="font-semibold border-b border-slate-600 pb-1 mb-1">Repayment for {count} items:</span>
+                                                {debts.map((d, i) => (
+                                                  <div key={i} className="flex justify-between gap-4 text-xs">
+                                                    <span>{d.tag || 'Unknown Period'}:</span>
+                                                    <span className="font-mono">{numberFormatter.format(d.amount)}</span>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            }
+                                          >
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setEditingTxn(txn);
+                                              }}
+                                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-100 border border-indigo-200 text-indigo-700 w-fit cursor-pointer hover:bg-indigo-300 transition-colors"
+                                            >
+                                              <span className="text-[10px] font-bold">+{count} Paid</span>
+                                            </button>
+                                          </CustomTooltip>
+                                        );
+                                      }
+                                      return null;
+                                    })()}
                                   </div>
                                 );
                               })()}
@@ -1613,49 +1562,56 @@ export function UnifiedTransactionTable({
                             )}
 
                             {/* Note Content */}
-                            <div className="flex items-center gap-2 truncate flex-1">
-                              <span
-                                className="text-slate-900 font-bold truncate cursor-help block flex-1"
-                                style={{ fontSize: `0.9em` }} // Match Flow
-                              >
-                                {txn.note}
-                              </span>
+                            {/* Note Content & Badges Container */}
+                            <div className="flex flex-col items-start min-w-0 flex-1 gap-0.5">
+                              <div className="flex items-center gap-2 truncate w-full">
+                                <span
+                                  className="text-slate-900 font-bold truncate cursor-help block flex-1"
+                                  style={{ fontSize: `0.9em` }} // Match Flow
+                                >
+                                  {txn.note}
+                                </span>
 
-                              {/* Split Bill Indicator */}
-                              {(() => {
-                                const metadata = txn.metadata as any;
-                                const isSplitBase = metadata?.is_split_bill_base;
-                                const isSplitChild = metadata?.split_parent_id;
-                                const splitGroupName = metadata?.split_group_name;
+                                {/* Split Bill Indicator */}
+                                {(() => {
+                                  const metadata = txn.metadata as any;
+                                  const isSplitBase = metadata?.is_split_bill_base;
+                                  const isSplitChild = metadata?.split_parent_id;
+                                  const splitGroupName = metadata?.split_group_name;
 
-                                if (!isSplitBase && !isSplitChild) return null;
+                                  if (!isSplitBase && !isSplitChild) return null;
 
-                                const badgeText = isSplitBase ? "Split Base" : "Split";
-                                const badgeColor = isSplitBase
-                                  ? "bg-blue-100 text-blue-700 border-blue-200"
-                                  : "bg-emerald-100 text-emerald-700 border-emerald-200";
-                                const tooltipText = splitGroupName
-                                  ? `${badgeText} - Group: ${splitGroupName}`
-                                  : badgeText;
+                                  const badgeText = isSplitBase ? "Split Base" : "Split";
+                                  const badgeColor = isSplitBase
+                                    ? "bg-blue-100 text-blue-700 border-blue-200"
+                                    : "bg-emerald-100 text-emerald-700 border-emerald-200";
+                                  const tooltipText = splitGroupName
+                                    ? `${badgeText} - Group: ${splitGroupName}`
+                                    : badgeText;
 
-                                return (
-                                  <CustomTooltip content={tooltipText}>
-                                    <span className={cn(
-                                      "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold whitespace-nowrap",
-                                      badgeColor
-                                    )}>
-                                      {isSplitBase ? "📊" : "🔗"} {badgeText}
-                                    </span>
+                                  return (
+                                    <CustomTooltip content={tooltipText}>
+                                      <span className={cn(
+                                        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold whitespace-nowrap",
+                                        badgeColor
+                                      )}>
+                                        {isSplitBase ? "📊" : "🔗"} {badgeText}
+                                      </span>
+                                    </CustomTooltip>
+                                  );
+                                })()}
+
+                                {txn.note && (
+                                  <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
+                                    <Info className="h-3 w-3 text-slate-400 flex-shrink-0" />
                                   </CustomTooltip>
-                                );
-                              })()}
+                                )}
+                              </div>
 
-                              {txn.note && (
-                                <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
-                                  <Info className="h-3 w-3 text-slate-400 flex-shrink-0" />
-                                </CustomTooltip>
-                              )}
+
                             </div>
+
+
 
                             {/* Transaction ID Copy */}
                             <button
@@ -1684,36 +1640,6 @@ export function UnifiedTransactionTable({
                           <div className="flex items-center gap-1.5">
                             <div className="flex items-center justify-center h-6 w-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">
                               {personName.charAt(0).toUpperCase()}
-                              {/* Repayment Counter Badge */}
-                              {(() => {
-                                const metadata = txn.metadata as any;
-                                const bulkAllocation = metadata?.bulk_allocation;
-                                if (txn.type === 'repayment' && bulkAllocation?.debts && bulkAllocation.debts.length > 0) {
-                                  const debts = bulkAllocation.debts as { id: string, amount: number, tag?: string, note?: string }[];
-                                  const count = debts.length;
-
-                                  return (
-                                    <CustomTooltip
-                                      content={
-                                        <div className="flex flex-col gap-1">
-                                          <span className="font-semibold border-b border-slate-600 pb-1 mb-1">Repayment for {count} items:</span>
-                                          {debts.map((d, i) => (
-                                            <div key={i} className="flex justify-between gap-4 text-xs">
-                                              <span>{d.tag || 'Unknown Period'}:</span>
-                                              <span className="font-mono">{numberFormatter.format(d.amount)}</span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      }
-                                    >
-                                      <div className="inline-flex items-center justify-center min-w-[20px] h-5 px-1 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold border border-indigo-200 cursor-help hover:bg-indigo-200 transition-colors ml-2">
-                                        +{count}
-                                      </div>
-                                    </CustomTooltip>
-                                  );
-                                }
-                                return null;
-                              })()}
                             </div>
                             <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]" title={personName}>
                               {personName}
@@ -2034,44 +1960,7 @@ export function UnifiedTransactionTable({
                         const toBadge = <span key="to" className="inline-flex items-center rounded-md bg-sky-100 px-1.5 h-5 text-[0.7em] font-extrabold text-sky-700 border border-sky-200">TO</span>
 
 
-                        // 6. Paid Badges Logic (Moved from Category)
-                        let paidBadges: React.ReactNode = null;
-                        const metadata = txn.metadata as any;
-                        const bulkAllocation = metadata?.bulk_allocation;
-                        if (txn.type === 'repayment' && bulkAllocation?.debts) {
-                          const debts = bulkAllocation.debts as { id: string, amount: number, tag?: string, note?: string }[];
-                          paidBadges = (
-                            <Popover key="paid-badges">
-                              <PopoverTrigger asChild>
-                                <div
-                                  className="inline-flex items-center justify-center h-5 px-1.5 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold border border-indigo-200 cursor-pointer hover:bg-indigo-200 transition-colors ml-1"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                  }}
-                                >
-                                  +{debts.length} Paid
-                                </div>
-                              </PopoverTrigger>
-                              <PopoverContent className="w-64 p-2" align="end" side="left">
-                                <div className="flex flex-col gap-1.5">
-                                  <div className="text-xs font-semibold text-slate-700 border-b pb-1 mb-0.5">
-                                    Paid {debts.length} items
-                                  </div>
-                                  {debts.map((d, i) => (
-                                    <div key={i} className="flex justify-between items-start text-xs hover:bg-slate-50 p-1 rounded transition-colors cursor-pointer" onClick={(e) => handleOpenLinkedDebt(d.id, e)}>
-                                      <div className="flex flex-col">
-                                        <span className="font-medium text-indigo-700">{d.tag || 'Unknown'}</span>
-                                        {d.note && <span className="text-slate-400 text-[10px] italic">{d.note}</span>}
-                                      </div>
-                                      <span className="font-mono text-slate-600">{numberFormatter.format(d.amount)}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </PopoverContent>
-                            </Popover>
-                          )
-                        }
+                        // 6. Paid Badges Logic (Moved from Category) -> REMOVED from here.
 
                         // --- 5. Main Render Switch ---
 
@@ -2090,7 +1979,7 @@ export function UnifiedTransactionTable({
                                     name={accountEntity.name}
                                     icon={accountEntity.icon}
                                     link={accountEntity.link}
-                                    badges={[tagBadge, cycleBadge, paidBadges]}
+                                    badges={[tagBadge, cycleBadge]}
                                     contextBadge={toBadge}
                                     isTarget={true}
                                   />
@@ -2481,9 +2370,10 @@ export function UnifiedTransactionTable({
               </TableBody >
 
             </table>
-          </div>
-        )}
-      </div>
+          </div >
+        )
+        }
+      </div >
 
       {/* Footer - Outside scroll container */}
       {/* Footer - Outside scroll container */}
