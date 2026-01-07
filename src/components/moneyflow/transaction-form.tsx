@@ -669,14 +669,38 @@ export function TransactionForm({
 
     if (isRepayment || (isIncomeWithPerson && !isDebt)) {
       newValues.type = "repayment";
+
+      // Fix: ONLY swap if the source account is a DEBT account (meaning we are lending FROM debt?? No, repayment usually means User PAYS Debt).
+      // If we are editing a Repayment:
+      // Source = Bank (Money Out)
+      // Destination (Debt Account) = Target Account (Money In)
+
+      // Existing logic swapped if source was debt. This handles "accidental debt selected as source".
       const sourceId = newValues.source_account_id;
       const sourceAcc = allAccounts.find((a) => a.id === sourceId);
 
+      // If Source is Debt, it implies the direction was inverted or mapped raw.
       if (sourceAcc?.type === "debt") {
-        if (newValues.debt_account_id) {
+        // If we have a debt account ID already, swapping might be valid if they are inverted
+        if (newValues.debt_account_id && newValues.debt_account_id !== sourceId) {
           const temp = newValues.source_account_id;
           newValues.source_account_id = newValues.debt_account_id;
           newValues.debt_account_id = temp;
+        } else {
+          // If source is debt and no debt_account_id, maybe move source to debt?
+          // But we need a valid payment source. Do nothing for now to avoid losing data.
+          // Rely on the user to fix the source.
+          // OR: If we have a debt_account_id, trust it.
+          newValues.debt_account_id = sourceId;
+          newValues.source_account_id = undefined; // Force user to select bank
+        }
+      }
+
+      // CRITICAL FIX: If debt_account_id is missing BUT we have a person_id, try to fill it
+      if (!newValues.debt_account_id && newValues.person_id) {
+        const person = peopleState.find(p => p.id === newValues.person_id);
+        if (person?.debt_account_id) {
+          newValues.debt_account_id = person.debt_account_id;
         }
       }
     }
