@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Account, Category, Person, PersonCycleSheet, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
-import { ChevronDown, ChevronRight, FileSpreadsheet, PlusCircle, Link as LinkIcon, Pencil, Copy, ExternalLink, ClipboardPaste, Eye } from 'lucide-react'
+import { FileSpreadsheet, PlusCircle, Link as LinkIcon, Pencil, Copy, ExternalLink, ClipboardPaste, Eye, ChevronDown } from 'lucide-react'
 import { UnifiedTransactionTable } from './unified-transaction-table'
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { Button } from '@/components/ui/button'
@@ -135,27 +135,17 @@ export function DebtCycleGroup({
         <div ref={containerRef} className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden transition-all duration-200">
             {/* Header - Single Row Layout */}
             <div
-                className={cn(
-                    "flex flex-wrap items-center justify-between gap-3 p-3",
-                    isExpanded ? "bg-slate-50 border-b border-slate-200" : "hover:bg-slate-50"
-                )}
+                className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 border-b border-slate-200"
             >
-                {/* Left Group: Expand + Title + Badge + Filters */}
+                {/* Left Group: Title + Badge + Filters */}
                 <div className="flex flex-wrap items-center gap-2">
-                    {/* Expand Control */}
-                    <button
-                        onClick={onToggleExpand}
-                        className="flex items-center gap-2 text-slate-700 hover:text-slate-900 group"
-                    >
-                        <div className="text-slate-400 group-hover:text-slate-600">
-                            {isExpanded ? <ChevronDown className="h-5 w-5" /> : <ChevronRight className="h-5 w-5" />}
-                        </div>
+                    {/* Title & Badge */}
+                    <div className="flex items-center gap-2 text-slate-900">
                         <span className="text-base font-semibold md:text-lg">{displayTag}</span>
                         <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold", statusBadge)}>
                             {isSettled ? 'Settled' : 'Active'}
                         </span>
-                    </button>
-
+                    </div>
 
                     {/* Filters & Summary (Inline) */}
                     <div className="flex items-center gap-2 ml-2" onClick={(e) => e.stopPropagation()}>
