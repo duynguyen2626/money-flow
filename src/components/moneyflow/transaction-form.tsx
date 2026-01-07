@@ -754,6 +754,36 @@ export function TransactionForm({
     }
   }, [initialValues, transactionType, bulkRepayment]);
 
+  // Auto-populate Person field when defaultPersonId is provided (LEND/REPAY buttons)
+  useEffect(() => {
+    // Only apply in create mode, not edit mode
+    if (mode !== 'create' || !defaultPersonId) return;
+
+    // Don't override if initialValues already has a person
+    if (initialValues?.person_id) return;
+
+    // Use setTimeout to ensure form and Select components are fully mounted
+    const timer = setTimeout(() => {
+      // Check if person_id is already set
+      const currentPersonId = form.getValues('person_id');
+      if (currentPersonId) return;
+
+      // Find the person by ID
+      const person = peopleState.find(p => p.id === defaultPersonId);
+      if (person) {
+        console.log('[TransactionForm] Auto-populating person:', person.name, person.id);
+        form.setValue('person_id', person.id, { shouldDirty: false, shouldValidate: true });
+
+        // Also set debt_account_id if available
+        if (person.debt_account_id) {
+          form.setValue('debt_account_id', person.debt_account_id, { shouldDirty: false });
+        }
+      }
+    }, 100); // Small delay to ensure components are mounted
+
+    return () => clearTimeout(timer);
+  }, [defaultPersonId, mode, initialValues?.person_id, form, peopleState]);
+
   // Bug Fix: Update account filter to ensure the selected account is visible in Edit Mode
   useEffect(() => {
     const sourceId = initialValues?.source_account_id || defaultSourceAccountId;

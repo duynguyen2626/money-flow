@@ -1,6 +1,6 @@
 "use client";
 
-import { MouseEvent, ReactNode, useState, useEffect } from "react";
+import { MouseEvent, ReactNode, useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Slot } from "@radix-ui/react-slot";
 import { TransactionForm, TransactionFormValues } from "./transaction-form";
@@ -249,13 +249,95 @@ export function AddTransactionDialog({
   useEffect(() => {
     const updateIsMobile = () => {
       if (typeof window !== "undefined") {
-        setIsMobile(window.innerWidth < 640);
+        setIsMobile(window.innerWidth < 768);
       }
     };
     updateIsMobile();
     window.addEventListener("resize", updateIsMobile);
     return () => window.removeEventListener("resize", updateIsMobile);
   }, []);
+
+  // Memoize initialValues to prevent recalculation on every render (which was clearing user input)
+  const memoizedInitialValues = useMemo(() => ({
+    ...urlValues,
+    ...(defaultAmount ? { amount: defaultAmount } : {}),
+    ...(defaultPersonId && !initialValues?.person_id ? { person_id: defaultPersonId } : {}),
+    // Auto-populate Category based on type
+    ...(!initialValues?.category_id && defaultType ? (() => {
+      if (defaultType === 'repayment') {
+        const repaymentCat = categories.find(c =>
+          c.name.toLowerCase().includes('thu nợ') ||
+          c.name.toLowerCase().includes('repayment')
+        );
+        return repaymentCat ? { category_id: repaymentCat.id } : {};
+      } else if (defaultType === 'debt') {
+        const shoppingCat = categories.find(c =>
+          c.name.toLowerCase().includes('people shopping') ||
+          c.name.toLowerCase() === 'shopping'
+        );
+        return shoppingCat ? { category_id: shoppingCat.id } : {};
+      }
+      return {};
+    })() : {}),
+    // Auto-populate Shop based on type
+    ...(!initialValues?.shop_id && defaultType === 'debt' ? (() => {
+      const shopeeShop = shops.find(s =>
+        s.name.toLowerCase().includes('shopee')
+      );
+      return shopeeShop ? { shop_id: shopeeShop.id } : {};
+    })() : {}),
+    // Auto-populate Source Account (smart defaults based on type)
+    ...(!initialValues?.source_account_id && !defaultSourceAccountId ? (() => {
+      if (typeof window !== 'undefined') {
+        try {
+          const recentStr = localStorage.getItem('recentAccountIds');
+          if (recentStr) {
+            const recentIds = JSON.parse(recentStr) as string[];
+            const recentAccount = accounts.find(a => a.id === recentIds[0]);
+            if (recentAccount && recentAccount.is_active !== false) {
+              return { source_account_id: recentAccount.id };
+            }
+          }
+        } catch (e) {
+          // Ignore localStorage errors
+        }
+      }
+
+      // Fallback: Smart defaults based on transaction type
+      if (defaultType === 'debt') {
+        const creditCard = accounts.find(a =>
+          a.type === 'credit_card' && a.is_active !== false
+        );
+        if (creditCard) {
+          return { source_account_id: creditCard.id };
+        }
+      } else if (defaultType === 'repayment') {
+        const bankAccount = accounts.find(a =>
+          (a.type === 'bank' || a.type === 'ewallet') && a.is_active !== false
+        );
+        if (bankAccount) {
+          return { source_account_id: bankAccount.id };
+        }
+      }
+
+      return {};
+    })() : {}),
+    ...(cloneInitialValues || {}),
+    ...(initialValues || {}),
+    ...(fetchedInitialValues || {}),
+  }), [
+    urlValues,
+    defaultAmount,
+    defaultPersonId,
+    defaultType,
+    defaultSourceAccountId,
+    categories,
+    shops,
+    accounts,
+    cloneInitialValues,
+    initialValues,
+    fetchedInitialValues,
+  ]);
 
   const handleOverlayClick = (event: MouseEvent<HTMLDivElement>) => {
     // Only close if clicking directly on overlay, not on content
@@ -327,7 +409,7 @@ export function AddTransactionDialog({
             onClick={handleOverlayClick}
           >
             <div
-              className={`flex w-full flex-col bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden ${isMobile ? "h-[100dvh] max-w-none rounded-none" : "max-w-2xl md:max-w-3xl rounded-2xl"}`}
+              className={`flex w-full flex-col bg-white shadow-2xl ring-1 ring-black/5 overflow-hidden ${isMobile ? "h-[100dvh] max-w-none rounded-none" : "max-w-2xl md:max-w-3xl rounded-2xl"} `}
               style={{ maxHeight: isMobile ? "none" : "90vh" }}
               onClick={stopPropagation}
             >
@@ -383,19 +465,13 @@ export function AddTransactionDialog({
                   }}
                   onFormChange={setHasUnsavedChanges}
                   defaultTag={defaultTag}
-                  defaultPersonId={urlValues?.person_id ?? defaultPersonId}
+                  defaultPersonId={defaultPersonId}
                   defaultType={defaultType}
                   defaultSourceAccountId={defaultSourceAccountId}
                   defaultDebtAccountId={defaultDebtAccountId}
                   transactionId={transactionId}
                   mode={mode}
-                  initialValues={{
-                    ...urlValues,
-                    ...(defaultAmount ? { amount: defaultAmount } : {}),
-                    ...(cloneInitialValues || {}),
-                    ...(initialValues || {}),
-                    ...(fetchedInitialValues || {}),
-                  }}
+                  initialValues={memoizedInitialValues}
                 />
               )}
             </div>
