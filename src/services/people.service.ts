@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
 import { Database } from '@/types/database.types'
 import { MonthlyDebtSummary, Person, PersonCycleSheet } from '@/types/moneyflow.types'
-import { normalizeMonthTag, toYYYYMMFromDate } from '@/lib/month-tag'
+import { toYYYYMMFromDate, normalizeMonthTag } from '@/lib/month-tag'
 
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type ProfileInsert = Database['public']['Tables']['profiles']['Insert']
@@ -431,7 +431,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
         personDebts.push({
           ...txn,
           remaining: Math.abs(txn.amount),
-          links: []
+          links: [] as { repaymentId: string, amount: number }[]
         })
       }
     })
@@ -455,7 +455,8 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
           amount: calculateFinalPrice(txn),
           initialAmount: calculateFinalPrice(txn),
           date: txn.occurred_at,
-          metadata: txn.metadata
+          metadata: txn.metadata,
+          tag: txn.tag
         })
       }
     })
@@ -482,9 +483,34 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
               debtEntry.remaining -= pay;
               if (debtEntry.remaining < 0) debtEntry.remaining = 0;
               repay.amount -= pay;
+              debtEntry.links.push({ repaymentId: repay.id, amount: pay });
             }
           }
         });
+      }
+    }
+
+    // === PHASE 1.5: TAG MATCHING ===
+    // If a repayment has a tag, prioritize paying debts with SAME tag
+    for (const repay of personRepayments) {
+      if (repay.amount <= 0.01) continue;
+      const repayTag = normalizeMonthTag(repay.metadata?.tag || repay.tag);
+
+      if (repayTag) {
+        for (const debt of personDebts) {
+          if (debt.remaining <= 0.01) continue;
+
+          const debtTag = normalizeMonthTag(debt.tag);
+          if (debtTag === repayTag) {
+            const pay = Math.min(repay.amount, debt.remaining);
+            debt.remaining -= pay;
+            repay.amount -= pay;
+            if (debt.remaining < 0) debt.remaining = 0;
+            debt.links.push({ repaymentId: repay.id, amount: pay });
+
+            if (repay.amount <= 0.01) break;
+          }
+        }
       }
     }
 
@@ -500,6 +526,8 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
           generalQueue.shift();
           continue;
         }
+
+        debt.links.push({ repaymentId: currentRepayment.id, amount: payAmount });
 
         debt.remaining -= payAmount;
         currentRepayment.amount -= payAmount;
@@ -537,10 +565,20 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
           status: 'active',
           occurred_at: validDate ? validDate.toISOString() : occurredAt,
           last_activity: occurredAt,
+          links: []
         })
       }
 
       const current = tagMap.get(groupingKey)!
+
+      if (debt.links && debt.links.length > 0) {
+        (current as any).links = (current as any).links || [];
+        debt.links.forEach((l: any) => {
+          const exist = (current as any).links.find((x: any) => x.repaymentId === l.repaymentId);
+          if (exist) exist.amount += l.amount;
+          else (current as any).links.push({ ...l });
+        });
+      }
 
       current.amount += debt.remaining
       current.total_debt = (current.total_debt ?? 0) + finalPrice

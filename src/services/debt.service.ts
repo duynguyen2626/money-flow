@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { DebtAccount } from '@/types/moneyflow.types'
+import { toYYYYMMFromDate, normalizeMonthTag } from '@/lib/month-tag'
 import { CreateTransactionInput, createTransaction } from './transaction.service'
 
 type TransactionType = 'income' | 'expense' | 'transfer' | 'debt' | 'repayment'
@@ -254,6 +255,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
     initialAmount: number;
     date: string;
     metadata: any;
+    tag?: string | null;
   };
   const repaymentList: RepaymentItem[] = [];
 
@@ -269,7 +271,8 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
         amount: calculateFinalPrice(txn as any),
         initialAmount: calculateFinalPrice(txn as any),
         date: txn.occurred_at,
-        metadata: txn.metadata
+        metadata: txn.metadata,
+        tag: txn.tag
       });
     }
   })
@@ -318,6 +321,36 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
           }
         }
       });
+    }
+  }
+
+  // === PHASE 1.5: TAG MATCHING ===
+  // If a repayment has a tag (e.g. "2024-05"), prioritize paying debts with the SAME tag.
+  for (const repay of repaymentList) {
+    if (repay.amount <= 0.01) continue;
+
+    const repayTag = normalizeMonthTag(repay.metadata?.tag || repay.tag);
+
+    if (repayTag) {
+      // Find debts with matching tag (Oldest First)
+      for (const debt of debtsList) {
+        const entry = debtsMap.get(debt.id)!;
+        if (entry.remaining <= 0.01) continue;
+
+        const debtTag = normalizeMonthTag(debt.tag);
+        if (debtTag === repayTag) {
+          const pay = Math.min(repay.amount, entry.remaining);
+
+          entry.remaining -= pay;
+          repay.amount -= pay;
+          if (entry.remaining < 0) entry.remaining = 0;
+
+          entry.links.push({ repaymentId: repay.id, amount: pay });
+          console.log(`[DebtFIFO-TAGGED] Pay ${pay} to ${debt.id} from ${repay.id} (Tag: ${debtTag})`);
+
+          if (repay.amount <= 0.01) break; // Repayment exhausted
+        }
+      }
     }
   }
 
