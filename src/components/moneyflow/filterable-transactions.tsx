@@ -45,8 +45,8 @@ type FilterableTransactionsProps = {
     hidePeopleColumn?: boolean
     context?: 'person' | 'account' | 'general'
     // Controlled Props Support
-    selectedType?: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay'
-    onTypeChange?: (type: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay') => void
+    selectedType?: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay' | 'cashback'
+    onTypeChange?: (type: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay' | 'cashback') => void
     className?: string
 }
 
