@@ -82,7 +82,7 @@ export function PersonDetailTabs({
         // previous logic used transactions.
         const debts = transactions.filter(t => t.type === 'debt' && (Number(t.amount) < 0 || (t.final_price !== null && Number(t.final_price) !== 0)))
         debts.forEach(t => {
-            const tag = normalizeMonthTag(t.tag || '')
+            const tag = normalizeMonthTag(t.tag || '') || ''
             if (isYYYYMM(tag)) {
                 years.add(tag.split('-')[0])
             }
@@ -93,7 +93,7 @@ export function PersonDetailTabs({
     const availableYears = useMemo(() => {
         const years = new Set<string>()
         transactions.forEach(txn => {
-            const normalizedTag = normalizeMonthTag(txn.tag)
+            const normalizedTag = normalizeMonthTag(txn.tag || '')
             const tag = normalizedTag?.trim() ? normalizedTag.trim() : (txn.tag?.trim() || '')
             if (isYYYYMM(tag)) {
                 years.add(tag.split('-')[0])
