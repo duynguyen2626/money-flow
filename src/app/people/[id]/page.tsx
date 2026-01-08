@@ -11,7 +11,7 @@ import { getPersonCycleSheets } from '@/services/person-cycle-sheet.service'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 import { Plus, CheckCheck, ChevronLeft, Edit } from 'lucide-react'
-import { ResyncButton } from '@/components/people/resync-button'
+
 import { MigrateDataButton } from '@/components/people/migrate-data-button'
 import { EditPersonButton } from '@/components/people/edit-person-button'
 import { PersonDetailTabs } from '@/components/people/person-detail-tabs'
@@ -125,39 +125,13 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                   person={{ ...person, id: sheetProfileId, owner_id: sheetProfileId } as any}
                   subscriptions={subscriptions}
                 />
-                <ResyncButton accountId={actualAccountId} />
-                <div className="flex items-center gap-2">
-                  <MigrateDataButton personId={person.id} />
-                  {person.debt_account_id && <ResyncButton accountId={person.debt_account_id} />}
-                  <Button asChild variant="outline">
-                    <Link href={`/people/${person.id}/edit`}>
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit
-                    </Link>
-                  </Button>
-                </div>
+
 
                 {/* DEBUG OUTPUT */}
                 <div className="p-4 bg-slate-100 rounded text-xs font-mono hidden">
                   <pre id="debug-debt-info">{JSON.stringify(debugInfo, null, 2)}</pre>
                 </div>
-                <ManageSheetButton
-                  personId={sheetProfileId}
-                  cycleTag={currentCycleTag}
-                  initialSheetUrl={null}
-                  scriptLink={person.sheet_link}
-                  googleSheetUrl={person.google_sheet_url}
-                  sheetFullImg={person.sheet_full_img}
-                  showBankAccount={person.sheet_show_bank_account ?? false}
-                  showQrImage={person.sheet_show_qr_image ?? false}
-                  connectHref={`/people/${sheetProfileId}?tab=sheet`}
-                  size="sm"
-                  linkedLabel="Manage Sheet"
-                  unlinkedLabel="Manage Sheet"
-                  showViewLink={false}
-                  showCycleAction={false}
-                  buttonClassName="h-8 border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:border-blue-300 hover:text-blue-700"
-                />
+
                 <AddTransactionDialog
                   {...dialogBaseProps}
                   buttonText="Settle"

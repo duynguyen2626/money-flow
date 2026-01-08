@@ -1,93 +1,85 @@
-A. react-refresh-runtime.development.js:428  Something has shimmed the React DevTools global hook (__REACT_DEVTOOLS_GLOBAL_HOOK__). Fast Refresh is not compatible with this shim and will be disabled.
-injectIntoGlobalHook @ react-refresh-runtime.development.js:428
-module evaluation @ runtime.ts:14
-(anonymous) @ dev-base.ts:244
-runModuleExecutionHooks @ dev-base.ts:291
-instantiateModule @ dev-base.ts:238
-getOrInstantiateRuntimeModule @ dev-base.ts:128
-registerChunk @ runtime-backend-dom.ts:57
-await in registerChunk
-registerChunk @ dev-base.ts:1149
-(anonymous) @ dev-backend-dom.ts:126
-(anonymous) @ dev-backend-dom.ts:126
-[NEW] Explain Console errors by using Copilot in Edge: click
-         
-         to explain an error. 
-        Learn more
-        Don't show again
-forward-logs-shared.ts:95 [HMR] connected
-index.ts:31 Auto Clicker - AutoFill No config found http://localhost:3000/people/dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248
-index.ts:31 Auto Clicker - AutoFill No config found http://localhost:3000/people/dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248
-unified-transaction-table.tsx:174 [buildEditInitialValues] Transaction: {id: '329db70d-0552-494d-91e9-6d265822af79', shop_id: null, shop_name: null, account_id: '3a532c54-685b-406d-9527-1d19c2acc5ae', source_name: 'Vpbank', …}
-unified-transaction-table.tsx:174 [buildEditInitialValues] Transaction: {id: '329db70d-0552-494d-91e9-6d265822af79', shop_id: null, shop_name: null, account_id: '3a532c54-685b-406d-9527-1d19c2acc5ae', source_name: 'Vpbank', …}
-dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248:1  Access to XMLHttpRequest at 'https://dc.services.visualstudio.com/v2/track' from origin 'http://localhost:3000' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: It does not have HTTP ok status.
-polyfills.js:1   POST https://dc.services.visualstudio.com/v2/track net::ERR_FAILED
-S @ polyfills.js:1
-e.scheduleTask @ polyfills.js:1
-n.scheduleTask @ polyfills.js:1
-n.scheduleMacroTask @ polyfills.js:1
-g @ polyfills.js:1
-(anonymous) @ polyfills.js:1
-N.n.<computed> @ polyfills.js:1
-(anonymous) @ vendor-3rdparty.js:1
-pt @ vendor-3rdparty.js:1
-Qe @ vendor-3rdparty.js:1
-e._addHook.e.<computed> @ vendor-3rdparty.js:1
-e.<computed> @ vendor-3rdparty.js:1
-r @ vendor-3rdparty.js:1
-(anonymous) @ vendor-3rdparty.js:1
-(anonymous) @ vendor-3rdparty.js:1
-f.<computed> @ vendor-3rdparty.js:1
-u.<computed> @ polyfills.js:1
-e.invokeTask @ polyfills.js:1
-n.runTask @ polyfills.js:1
-t.invokeTask @ polyfills.js:1
-u.useG.invoke @ polyfills.js:1
-r.args.<computed> @ polyfills.js:1
+## Error Type
+Console Error
 
-B. react-refresh-runtime.development.js:428  Something has shimmed the React DevTools global hook (__REACT_DEVTOOLS_GLOBAL_HOOK__). Fast Refresh is not compatible with this shim and will be disabled.
-injectIntoGlobalHook @ react-refresh-runtime.development.js:428
-module evaluation @ runtime.ts:14
-(anonymous) @ dev-base.ts:244
-runModuleExecutionHooks @ dev-base.ts:291
-instantiateModule @ dev-base.ts:238
-getOrInstantiateRuntimeModule @ dev-base.ts:128
-registerChunk @ runtime-backend-dom.ts:57
-await in registerChunk
-registerChunk @ dev-base.ts:1149
-(anonymous) @ dev-backend-dom.ts:126
-(anonymous) @ dev-backend-dom.ts:126
-[NEW] Explain Console errors by using Copilot in Edge: click
-         
-         to explain an error. 
-        Learn more
-        Don't show again
-forward-logs-shared.ts:95 [HMR] connected
-index.ts:31 Auto Clicker - AutoFill No config found http://localhost:3000/people/dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248
-index.ts:31 Auto Clicker - AutoFill No config found http://localhost:3000/people/dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248
-unified-transaction-table.tsx:174 [buildEditInitialValues] Transaction: {id: '329db70d-0552-494d-91e9-6d265822af79', shop_id: null, shop_name: null, account_id: '3a532c54-685b-406d-9527-1d19c2acc5ae', source_name: 'Vpbank', …}
-unified-transaction-table.tsx:174 [buildEditInitialValues] Transaction: {id: '329db70d-0552-494d-91e9-6d265822af79', shop_id: null, shop_name: null, account_id: '3a532c54-685b-406d-9527-1d19c2acc5ae', source_name: 'Vpbank', …}
-dcb5f10f-37e9-4ea1-86f4-fe2c51b0a248:1  Access to XMLHttpRequest at 'https://dc.services.visualstudio.com/v2/track' from origin 'http://localhost:3000' has been blocked by CORS policy: Response to preflight request doesn't pass access control check: It does not have HTTP ok status.
-polyfills.js:1   POST https://dc.services.visualstudio.com/v2/track net::ERR_FAILED
-S @ polyfills.js:1
-e.scheduleTask @ polyfills.js:1
-n.scheduleTask @ polyfills.js:1
-n.scheduleMacroTask @ polyfills.js:1
-g @ polyfills.js:1
-(anonymous) @ polyfills.js:1
-N.n.<computed> @ polyfills.js:1
-(anonymous) @ vendor-3rdparty.js:1
-pt @ vendor-3rdparty.js:1
-Qe @ vendor-3rdparty.js:1
-e._addHook.e.<computed> @ vendor-3rdparty.js:1
-e.<computed> @ vendor-3rdparty.js:1
-r @ vendor-3rdparty.js:1
-(anonymous) @ vendor-3rdparty.js:1
-(anonymous) @ vendor-3rdparty.js:1
-f.<computed> @ vendor-3rdparty.js:1
-u.<computed> @ polyfills.js:1
-e.invokeTask @ polyfills.js:1
-n.runTask @ polyfills.js:1
-t.invokeTask @ polyfills.js:1
-u.useG.invoke @ polyfills.js:1
-r.args.<computed> @ polyfills.js:1
+## Error Message
+In HTML, <button> cannot be a descendant of <button>.
+This will cause a hydration error.
+
+  ...
+    <SegmentViewNode type="page" pagePath="/money-flo...">
+      <SegmentTrieNode>
+      <PeopleDetailPage>
+        <TagFilterProvider>
+          <div className="flex flex-...">
+            <div>
+            <div className="flex-1 min...">
+              <PersonDetailTabs accounts={[...]} categories={[...]} people={[...]} shops={[...]} personId="eccde148-a..." ...>
+                <div className="flex flex-...">
+                  <div>
+                  <div className="px-4 pb-8 ...">
+                    <div className="flex flex-...">
+                      <div className="flex flex-...">
+                        <div>
+                        <div className="flex flex-...">
+                          <SmartFilterBar>
+                          <div>
+                          <div className="flex items...">
+                            <AddTransactionDialog accounts={[...]} categories={[...]} people={[...]} shops={[...]} ...>
+>                             <button
+>                               type="button"
+>                               className="inline-flex items-center justify-center rounded-md p-0 bg-transparent text-..."
+>                               onMouseDown={undefined}
+>                               onClick={function onClick}
+>                               aria-label="Add Transaction"
+>                             >
+                                <_c variant="outline" size="sm" className="h-9 text-r...">
+>                                 <button
+>                                   className="inline-flex items-center justify-center whitespace-nowrap text-sm font-..."
+>                                   ref={null}
+>                                 >
+                            ...
+                          ...
+                      ...
+          ...
+    ...
+
+
+
+    at button (<anonymous>:null:null)
+    at _c (src/components/ui/button.tsx:46:7)
+    at PersonDetailTabs (src/components/people/person-detail-tabs.tsx:243:45)
+    at PeopleDetailPage (src\app\people\[id]\page.tsx:182:11)
+
+## Code Frame
+  44 |     const Comp = asChild ? Slot : "button"
+  45 |     return (
+> 46 |       <Comp
+     |       ^
+  47 |         className={cn(buttonVariants({ variant, size, className }))}
+  48 |         ref={ref}
+  49 |         {...props}
+
+Next.js version: 16.0.10 (Turbopack)
+## Error Type
+Console Error
+
+## Error Message
+<button> cannot contain a nested <button>.
+See this log for the ancestor stack trace.
+
+
+    at button (<anonymous>:null:null)
+    at AddTransactionDialog (src/components/moneyflow/add-transaction-dialog.tsx:386:7)
+    at PersonDetailTabs (src/components/people/person-detail-tabs.tsx:235:37)
+    at PeopleDetailPage (src\app\people\[id]\page.tsx:182:11)
+
+## Code Frame
+  384 |   return (
+  385 |     <>
+> 386 |       <Comp
+      |       ^
+  387 |         type={asChild ? undefined : "button"}
+  388 |         className={buttonClassName || defaultClassName}
+  389 |         onMouseDown={onOpen}
+
+Next.js version: 16.0.10 (Turbopack)

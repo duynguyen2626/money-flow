@@ -146,7 +146,14 @@ export async function updateAccountConfigAction(payload: UpdateAccountPayload) {
     updatePayload.receiver_name = payload.receiverName ?? null
   }
 
-  return updateAccountConfig(payload.id, updatePayload)
+  const result = await updateAccountConfig(payload.id, updatePayload)
+
+  if (result) {
+    revalidatePath('/accounts')
+    revalidatePath(`/accounts/${payload.id}`)
+  }
+
+  return result
 }
 
 export async function recalculateAccountBalanceAction(accountId: string) {

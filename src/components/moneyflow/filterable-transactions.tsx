@@ -45,8 +45,8 @@ type FilterableTransactionsProps = {
     hidePeopleColumn?: boolean
     context?: 'person' | 'account' | 'general'
     // Controlled Props Support
-    selectedType?: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay'
-    onTypeChange?: (type: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay') => void
+    selectedType?: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay' | 'cashback'
+    onTypeChange?: (type: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay' | 'cashback') => void
     className?: string
 }
 
@@ -88,7 +88,7 @@ export function FilterableTransactions({
     const setSearchTerm = onSearchChange ?? setSearchTermInternal
 
     // Controlled Type State
-    const [selectedTypeInternal, setSelectedTypeInternal] = useState<'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay'>('all')
+    const [selectedTypeInternal, setSelectedTypeInternal] = useState<'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay' | 'cashback'>('all')
     const selectedType = externalType ?? selectedTypeInternal
     const setSelectedType = onTypeChange ?? setSelectedTypeInternal
 
@@ -1086,7 +1086,7 @@ export function FilterableTransactions({
                         {/* Table Region */}
                         <div className="flex-1 overflow-hidden relative">
                             <UnifiedTransactionTable
-                                transactions={paginatedTransactions}
+                                data={paginatedTransactions}
                                 accountType={accountType}
                                 accountId={accountId}
                                 contextId={contextId ?? accountId}
