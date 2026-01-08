@@ -66,10 +66,13 @@ export function PeopleGrid({ people, subscriptions, accounts, categories, shops 
   const groupPeople = filteredPeople.filter(person => person.is_group)
 
   // Get current tab data
-  const currentPeople = activeTab === 'debt' ? activePeople
-    : activeTab === 'settled' ? settledPeople
-      : activeTab === 'archived' ? archivedPeople
-        : groupPeople
+  // Get current tab data
+  const currentPeople = searchQuery.trim()
+    ? filteredPeople
+    : activeTab === 'debt' ? activePeople
+      : activeTab === 'settled' ? settledPeople
+        : activeTab === 'archived' ? archivedPeople
+          : groupPeople
 
   const recentPeople = useMemo(() => {
     if (searchQuery.trim() !== '' || activeTab !== 'debt') return []

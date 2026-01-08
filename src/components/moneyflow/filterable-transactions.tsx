@@ -1086,7 +1086,7 @@ export function FilterableTransactions({
                         {/* Table Region */}
                         <div className="flex-1 overflow-hidden relative">
                             <UnifiedTransactionTable
-                                transactions={paginatedTransactions}
+                                data={paginatedTransactions}
                                 accountType={accountType}
                                 accountId={accountId}
                                 contextId={contextId ?? accountId}

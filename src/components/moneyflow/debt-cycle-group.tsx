@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { Account, Category, Person, PersonCycleSheet, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
-import { FileSpreadsheet, PlusCircle, Link as LinkIcon, Pencil, Copy, ExternalLink, ClipboardPaste, Eye, ChevronDown } from 'lucide-react'
+import { FileSpreadsheet, UserMinus, Plus, Link as LinkIcon, Pencil, Copy, ExternalLink, ClipboardPaste, Eye, ChevronDown } from 'lucide-react'
 import { UnifiedTransactionTable } from './unified-transaction-table'
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { Button } from '@/components/ui/button'
@@ -51,7 +51,6 @@ export function DebtCycleGroup({
     onToggleExpand,
     serverStatus,
 }: DebtCycleGroupProps) {
-    const [isExcelMode, setIsExcelMode] = useState(false)
     // Local filter state for this card
     const [localFilter, setLocalFilter] = useState<'all' | 'lend' | 'repay'>('all')
     const containerRef = useRef<HTMLDivElement>(null)
@@ -132,252 +131,60 @@ export function DebtCycleGroup({
     const canManageSheet = isYYYYMM(tag)
 
     return (
-        <div ref={containerRef} className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden transition-all duration-200">
-            {/* Header - Single Row Layout */}
-            <div
-                className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50 border-b border-slate-200"
-            >
-                {/* Left Group: Title + Badge + Filters */}
-                <div className="flex flex-wrap items-center gap-2">
-                    {/* Title & Badge */}
-                    <div className="flex items-center gap-2 text-slate-900">
-                        <span className="text-base font-semibold md:text-lg">{displayTag}</span>
-                        <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold", statusBadge)}>
-                            {isSettled ? 'Settled' : 'Active'}
-                        </span>
-                    </div>
+        <div className="relative min-h-[400px]">
 
-                    {/* Filters & Summary (Inline) */}
-                    <div className="flex items-center gap-2 ml-2" onClick={(e) => e.stopPropagation()}>
-                        <button
-                            type="button"
-                            className={cn(
-                                "flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold transition-colors",
-                                localFilter === 'lend'
-                                    ? "border-rose-200 bg-rose-50 text-rose-700"
-                                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                            )}
-                            onClick={() => setLocalFilter(localFilter === 'lend' ? 'all' : 'lend')}
-                        >
-                            Lend: {formatter.format(stats.lend)}
-                        </button>
-                        <button
-                            type="button"
-                            className={cn(
-                                "flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-semibold transition-colors",
-                                localFilter === 'repay'
-                                    ? "border-blue-200 bg-blue-50 text-blue-700"
-                                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
-                            )}
-                            onClick={() => setLocalFilter(localFilter === 'repay' ? 'all' : 'repay')}
-                        >
-                            Repay: {formatter.format(stats.repay)}
-                        </button>
-
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <button
-                                    type="button"
-                                    className="flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                                >
-                                    Financial Summary
-                                    <ChevronDown className="h-3 w-3" />
-                                </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-56 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700">
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-slate-500">Initial</span>
-                                        <span className="font-semibold">{formatter.format(stats.initial)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-slate-500">Lend</span>
-                                        <span className="font-semibold">{formatter.format(stats.lend)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-slate-500">Back</span>
-                                        <span className="font-semibold">{formatter.format(back)}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-slate-500">Repay</span>
-                                        <span className="font-semibold">{formatter.format(stats.repay)}</span>
-                                    </div>
-                                </div>
-                            </PopoverContent>
-                        </Popover>
-
-                        {/* Bulk Paid Badge (User Request: "Back of Financial Summary") */}
-                        {linkedRepayments.length > 0 && (
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <button
-                                        type="button"
-                                        className="flex items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
-                                        onClick={(e) => e.stopPropagation()}
-                                    >
-                                        +{linkedRepayments.length} Paid
-                                    </button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-72 p-0 rounded-lg overflow-hidden border-slate-200 shadow-xl" align="start">
-                                    <div className="bg-indigo-50 px-3 py-2 border-b border-indigo-100 flex justify-between items-center">
-                                        <div className="text-xs font-bold text-indigo-900">Linked Repayments</div>
-                                        <button
-                                            type="button"
-                                            className="p-1 hover:bg-indigo-100 rounded-md transition-colors cursor-pointer group"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                const firstLink = linkedRepayments[0];
-                                                if (firstLink) {
-                                                    console.log("Clicked Header Eye, opening repayment:", firstLink.repaymentId);
-                                                    setEditingRepaymentId(firstLink.repaymentId);
-                                                }
-                                            }}
-                                            title="View Original Transaction"
-                                        >
-                                            <Eye className="h-3.5 w-3.5 text-indigo-400 group-hover:text-indigo-600" />
-                                        </button>
-                                    </div>
-                                    <div className="flex flex-col max-h-[200px] overflow-y-auto p-1">
-                                        {linkedRepayments.map((l: any, i: number) => (
-                                            <button
-                                                key={i}
-                                                type="button"
-                                                className="w-full flex justify-between items-center text-xs hover:bg-slate-100 p-2 rounded transition-colors group cursor-pointer text-left"
-                                                onClick={(e) => {
-                                                    e.stopPropagation(); // Stop default button behavior/bubbling
-                                                    console.log("Clicked repayment:", l.repaymentId);
-                                                    setEditingRepaymentId(l.repaymentId);
-                                                }}
-                                                title="Click to Edit Parent Transaction"
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-mono text-slate-500 text-[10px]">...{l.repaymentId.slice(-4)}</span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-mono font-bold text-slate-700">{formatter.format(l.amount)}</span>
-                                                </div>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
-                        )}
-                    </div>
-                </div>
-
-                {/* Right Group: Remains + Actions */}
-                <div className="flex flex-wrap items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex flex-col items-end mr-1">
-                        <span className="text-[10px] uppercase text-slate-500 font-bold">Remains</span>
-                        <span className={cn("text-lg font-bold tabular-nums md:text-xl md:min-w-[4rem] text-right", statusColor)}>
-                            {formatter.format(Math.max(0, remains))}
-                        </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                        <AddTransactionDialog
-                            accounts={accounts}
-                            categories={categories}
-                            people={people}
-                            shops={shops}
-                            buttonText=""
-                            defaultType="debt"
-                            defaultPersonId={personId}
-                            defaultTag={canManageSheet ? tag : undefined}
-                            buttonClassName=""
-                            asChild
-                            triggerContent={
-                                <Button variant="default" size="sm" className="h-8 text-xs bg-rose-600 hover:bg-rose-700">
-                                    Quick Debt
-                                </Button>
-                            }
-                        />
-                        <AddTransactionDialog
-                            accounts={accounts}
-                            categories={categories}
-                            people={people}
-                            shops={shops}
-                            buttonText=""
-                            defaultType="repayment"
-                            defaultPersonId={personId}
-                            defaultTag={canManageSheet ? tag : undefined}
-                            buttonClassName=""
-                            asChild
-                            triggerContent={
-                                <Button variant="default" size="sm" className="h-8 text-xs bg-emerald-600 hover:bg-emerald-700">
-                                    <PlusCircle className="h-3.5 w-3.5 mr-1.5" />
-                                    Repay
-                                </Button>
-                            }
-                        />
-                        <ManageSheetButton
-                            personId={sheetProfileId}
-                            cycleTag={tag}
-                            initialSheetUrl={cycleSheet?.sheet_url ?? null}
-                            scriptLink={scriptLink ?? null}
-                            googleSheetUrl={googleSheetUrl ?? null}
-                            sheetFullImg={sheetFullImg}
-                            showBankAccount={showBankAccount}
-                            showQrImage={showQrImage}
-                            connectHref={`/people/${sheetProfileId}?tab=sheet`}
-                            size="sm"
-                            disabled={!canManageSheet}
-                            linkedLabel="Manage Sheet"
-                            unlinkedLabel="Manage Sheet"
-                            showViewLink={false}
-                        />
-                        {isExpanded && (
-                            <Button
-                                variant={isExcelMode ? "secondary" : "outline"}
-                                size="sm"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setIsExcelMode(!isExcelMode);
-                                }}
-                                className={cn(
-                                    "h-8 text-xs border-slate-200",
-                                    isExcelMode && "bg-green-100 text-green-700 border-green-200 hover:bg-green-200 hover:text-green-800"
-                                )}
-                            >
-                                <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5" />
-                                Excel Mode
-                            </Button>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Expanded Content */}
-            {isExpanded && (
-                <div className="relative w-full border-t bg-background overflow-y-auto max-h-[60vh]">
+            {/* Content: Only the Table or Empty State */}
+            <div className="w-full border-t bg-background">
+                {filteredTxns.length > 0 ? (
                     <UnifiedTransactionTable
                         transactions={filteredTxns}
                         accountType="debt"
                         accountId={personId}
                         contextId={personId}
                         context="person"
-                        isExcelMode={isExcelMode}
+                        isExcelMode={false}
                         accounts={accounts}
                         categories={categories}
                         people={people}
                         shops={shops}
+                        hiddenColumns={['people']}
+
                     />
-                </div>
-            )}
+                ) : (
+                    <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                        <div className="w-16 h-16 mb-4 opacity-50">
+                            <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            >
+                                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                            </svg>
+                        </div>
+                        <p className="text-sm font-medium">There was nothing to show</p>
+                    </div>
+                )}
+            </div>
+
 
             {/* Edit Transaction Modal */}
             {editingRepaymentId && (
                 <AddTransactionDialog
-                    key={editingRepaymentId}
-                    isOpen={!!editingRepaymentId}
-                    onOpenChange={(open) => !open && setEditingRepaymentId(null)}
-                    transactionId={editingRepaymentId}
                     accounts={accounts}
                     categories={categories}
                     people={people}
                     shops={shops}
-                    mode="edit"
-                    triggerContent={<span className="hidden"></span>}
+                    buttonText=""
+                    defaultType="repayment"
+                    defaultPersonId={personId}
+                    transactionId={editingRepaymentId}
+                    isOpen={true}
+                    onOpenChange={(open) => !open && setEditingRepaymentId(null)}
+                    buttonClassName="hidden"
                 />
             )}
         </div>

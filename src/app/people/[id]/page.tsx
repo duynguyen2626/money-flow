@@ -11,7 +11,7 @@ import { getPersonCycleSheets } from '@/services/person-cycle-sheet.service'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 import { Plus, CheckCheck, ChevronLeft, Edit } from 'lucide-react'
-import { ResyncButton } from '@/components/people/resync-button'
+
 import { MigrateDataButton } from '@/components/people/migrate-data-button'
 import { EditPersonButton } from '@/components/people/edit-person-button'
 import { PersonDetailTabs } from '@/components/people/person-detail-tabs'
@@ -125,13 +125,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                   person={{ ...person, id: sheetProfileId, owner_id: sheetProfileId } as any}
                   subscriptions={subscriptions}
                 />
-                <ResyncButton accountId={actualAccountId} />
-                <div className="flex items-center gap-2">
-                  {/* Resync Button for Debt Account if separate - simplifying to just main sync for now or keeping if distinct */}
-                  {person.debt_account_id && person.debt_account_id !== actualAccountId && (
-                    <ResyncButton accountId={person.debt_account_id} />
-                  )}
-                </div>
+
 
                 {/* DEBUG OUTPUT */}
                 <div className="p-4 bg-slate-100 rounded text-xs font-mono hidden">

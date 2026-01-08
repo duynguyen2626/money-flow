@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { TransactionWithDetails } from '@/types/moneyflow.types'
 import { cn } from '@/lib/utils'
 
-type FilterType = 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer'
+type FilterType = 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer' | 'cashback'
 
 interface SmartFilterBarProps {
     transactions: TransactionWithDetails[]
@@ -27,37 +27,35 @@ export function SmartFilterBar({
         return transactions.reduce(
             (acc, txn) => {
                 const type = txn.type
-                const amount = txn.amount ?? 0
+                const amount = Number(txn.amount) || 0
                 const absAmount = Math.abs(amount)
                 const isDebt = type === 'debt'
-                const isRepayment = type === 'repayment'
-                // Check for "implied" debt/repayment (e.g. income/expense with person_id)
-                // For simplicity in this specific "Smart Filter", we'll stick to core types + sign + person context if needed.
-                // The prompt asked for: Lend (Debt < 0), Repay (Debt > 0).
 
-                // Debt < 0 => Lend (You lent money / They owe you)
-                // Debt > 0 => Borrow (You borrowed / You owe them) - Wait, "Repay" in Money Flow 3 usually means "Settlement" or "Repayment" type.
-                // Let's follow requirement: "Lend: (Debt < 0)", "Repay: (Debt > 0)"?
-                // Actually, in many systems:
-                // Debt (Negative) -> You gave money (Lend)
-                // Debt (Positive) -> You received money (Borrow)
-                // Repayment -> Settle.
-                // Let's stick to the prompt's explicit instruction:
-                // "Lend: {amount}"
-                // "Repay: {amount}"
-                // And Prompt Logic says: "Lend (Debt < 0), Repay (Debt > 0)". This implies Repay covers Positive Debt transactions (which might be "Debt" type with positive amount, or "Repayment").
-
-                // Let's adhere to the definition:
-                // Lend = All negative values that are debt-related.
-                // Repay = All positive values that are debt-related or repayments.
-
-                // NOTE: In Money Flow, "Repayment" type is usually positive.
-
+                // Aligning with DebtCycleList logic
                 const isLend = (isDebt && amount < 0) || (type === 'expense' && !!txn.person_id)
                 const isRepay = (isDebt && amount > 0) || type === 'repayment' || (type === 'income' && !!txn.person_id)
+                // New: Cashback Calculation
+                // Cashback is the difference between original amount and final price if set
+                // Or explicitly defined in cashback fields
+                // Usually for expenses where person benefited from cashback
+                let cashback = 0
+                if (txn.final_price !== null && txn.final_price !== undefined) {
+                    const effectiveFinal = Math.abs(Number(txn.final_price))
+                    if (absAmount > effectiveFinal) {
+                        cashback = absAmount - effectiveFinal
+                    }
+                } else if (txn.cashback_share_amount) {
+                    cashback = Number(txn.cashback_share_amount)
+                } else if (txn.cashback_share_percent && txn.cashback_share_percent > 0) {
+                    cashback = absAmount * txn.cashback_share_percent
+                }
 
                 if (isLend) {
-                    acc.lend += absAmount
+                    // Use final price for Lend total if available (Net Lend)
+                    const effectiveLend = txn.final_price !== null && txn.final_price !== undefined
+                        ? Math.abs(Number(txn.final_price))
+                        : absAmount
+                    acc.lend += effectiveLend
                 } else if (isRepay) {
                     acc.repay += absAmount
                 } else if (type === 'income') {
@@ -66,9 +64,13 @@ export function SmartFilterBar({
                     acc.expense += absAmount
                 }
 
+                if (cashback > 0) {
+                    acc.cashback += cashback
+                }
+
                 return acc
             },
-            { income: 0, expense: 0, lend: 0, repay: 0 }
+            { income: 0, expense: 0, lend: 0, repay: 0, cashback: 0 }
         )
     }, [transactions])
 
@@ -102,6 +104,13 @@ export function SmartFilterBar({
             activeClass: 'bg-indigo-50 border-indigo-200 text-indigo-700 font-semibold',
             inactiveClass: 'hover:bg-indigo-50 hover:text-indigo-700',
         },
+        {
+            id: 'cashback',
+            label: `Cashback: ${numberFormatter.format(totals.cashback)}`,
+            show: totals.cashback > 0,
+            activeClass: 'bg-orange-50 border-orange-200 text-orange-700 font-semibold',
+            inactiveClass: 'hover:bg-orange-50 hover:text-orange-700',
+        }
     ] as const
 
     return (
