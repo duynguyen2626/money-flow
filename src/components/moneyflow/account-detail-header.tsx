@@ -308,210 +308,185 @@ export function AccountDetailHeader({
     : 'bg-slate-100 text-slate-600'
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
-      {/* HEADER: Identity & Balance & Actions */}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-
-        {/* LEFT: Back + Identity */}
-        <div className="flex items-start gap-3">
+    <div className="space-y-3">
+      {/* MAIN HEADER ROW - Borderless, Clean */}
+      <div className="flex items-center justify-between gap-4 py-2">
+        {/* LEFT: Back + Image + Identity */}
+        <div className="flex items-center gap-3">
           <Link
             href={backHref}
-            className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 mt-1"
+            className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 transition-colors"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-4 w-4" />
           </Link>
 
-          <div className="relative pt-1">
-            {/* Image - Uncropped Square */}
-            <div className="w-14 h-14 rounded-lg bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center">
+          <div className="relative">
+            {/* Image - Clean, No Background */}
+            <div className="w-12 h-12 rounded-lg overflow-hidden flex items-center justify-center">
               {account.image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={account.image_url} alt="" className="w-full h-full object-contain p-1" />
               ) : (
-                <div className="text-xl font-bold text-slate-400">{account.name.charAt(0)}</div>
+                <div className="text-lg font-bold text-slate-400">{account.name.charAt(0)}</div>
               )}
             </div>
-            {/* Secured Badge Small Overlay */}
+            {/* Secured Badge */}
             {account.secured_by_account_id && (
-              <div className="absolute -bottom-1 -right-1 bg-emerald-50 text-emerald-700 p-0.5 rounded-full border border-emerald-100 shadow-sm">
-                <Lock className="w-3 h-3" />
+              <div className="absolute -bottom-0.5 -right-0.5 bg-emerald-50 text-emerald-700 p-0.5 rounded-full border border-emerald-100 shadow-sm">
+                <Lock className="w-2.5 h-2.5" />
               </div>
             )}
           </div>
 
-          <div className="flex flex-col min-w-0">
-            <div className="flex flex-wrap items-center gap-2 mb-1">
-              <h1 className="text-lg font-bold text-slate-900 leading-tight">{account.name}</h1>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${statusBadge}`}>
+          <div className="flex flex-col justify-center min-w-0">
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-bold text-slate-900 leading-none">{account.name}</h1>
+              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${statusBadge}`}>
                 {isCurrentlyActive ? 'Active' : 'Closed'}
               </span>
             </div>
-            <p className="text-sm text-slate-500 font-medium flex items-center gap-1.5">
+            <p className="text-xs text-slate-500 font-medium mt-1 leading-none">
               {getAccountTypeLabel(account.type)}
               {account.type === 'credit_card' && (
-                <span className="text-xs text-slate-400">• Limit: {formatPlain(account.credit_limit || 0)}</span>
+                <span className="text-[11px] text-slate-400 ml-1">• Limit: {formatPlain(account.credit_limit || 0)}</span>
               )}
             </p>
-
-            {/* Pending / Confirm Badges (Mobile: below name) */}
-            <div className="flex flex-wrap gap-2 mt-2">
-              {hasPending && (
-                <button
-                  onClick={handleConfirmPending}
-                  disabled={isConfirmingPending}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 text-[10px] font-bold uppercase tracking-wider border border-amber-200 animate-pulse"
-                >
-                  {isConfirmingPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clock4 className="w-3 h-3" />}
-                  {waitingAmount > 0 ? `Verify ${formatPlain(waitingAmount)}` : 'Pending'}
-                </button>
-              )}
-              {confirmedAmount > 0 && (
-                <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-wider border border-blue-200">
-                  <CheckCircle2 className="w-3 h-3" />
-                  Ready {formatPlain(confirmedAmount)}
-                </div>
-              )}
-
-              {/* Secured By Link */}
-              {account.secured_by_account_id && collateralAccount && (
-                <Link href={`/accounts/${collateralAccount.id}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-wider border border-emerald-200 hover:bg-emerald-100">
-                  <PiggyBank className="w-3 h-3" />
-                  By {collateralAccount.name}
-                </Link>
-              )}
-            </div>
           </div>
         </div>
 
-        {/* RIGHT: Balance & Toggle */}
-        <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-start gap-3 mt-2 md:mt-0 pl-14 md:pl-0">
-          <div className={cn(
-            "text-2xl font-black tracking-tight tabular-nums",
-            displayBalance > 0
-              ? (account.type === 'credit_card' ? 'text-red-600' : 'text-emerald-700')
-              : (displayBalance < 0 ? (account.type === 'credit_card' ? 'text-emerald-600' : 'text-red-600') : 'text-slate-900')
-          )}>
-            {formatPlain(displayBalance)} <span className="text-sm font-medium text-slate-400">₫</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setCollapsed(!collapsed)} className="h-8 w-8 p-0 rounded-full">
-              {collapsed ? <ChevronDown className="w-5 h-5 text-slate-400" /> : <ChevronUp className="w-5 h-5 text-slate-400" />}
-            </Button>
-          </div>
-        </div>
-
-      </div>
-
-      {/* ACTION BAR: Grid on Mobile, Flex on Desktop */}
-      <div className="grid grid-cols-4 gap-2 md:flex md:gap-3 border-t border-slate-100 pt-4">
-        {/* 1. Income */}
-        <AddTransactionDialog
-          {...dialogBaseProps}
-          defaultType="income"
-          defaultSourceAccountId={account.id}
-          triggerContent={
-            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-emerald-50/50 hover:bg-emerald-100/50 border border-emerald-100 cursor-pointer transition-colors group">
-              <div className="p-1.5 rounded-full bg-emerald-100 text-emerald-600 group-hover:bg-emerald-200 group-hover:text-emerald-700"><Plus className="w-4 h-4" /></div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Income</span>
-            </div>
-          }
-        />
-        {/* 2. Expense */}
-        <AddTransactionDialog
-          {...dialogBaseProps}
-          defaultType="expense"
-          defaultSourceAccountId={account.id}
-          triggerContent={
-            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-rose-50/50 hover:bg-rose-100/50 border border-rose-100 cursor-pointer transition-colors group">
-              <div className="p-1.5 rounded-full bg-rose-100 text-rose-600 group-hover:bg-rose-200 group-hover:text-rose-700"><Minus className="w-4 h-4" /></div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-rose-700">Expense</span>
-            </div>
-          }
-        />
-        {/* 3. Transfer / Pay */}
-        {account.type === 'credit_card' ? (
+        {/* MIDDLE: Quick Action Buttons - Inline with name */}
+        <div className="flex flex-wrap items-center gap-2">
           <AddTransactionDialog
             {...dialogBaseProps}
-            defaultType="transfer"
-            defaultDebtAccountId={account.id}
-            triggerContent={
-              <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-amber-50/50 hover:bg-amber-100/50 border border-amber-100 cursor-pointer transition-colors group">
-                <div className="p-1.5 rounded-full bg-amber-100 text-amber-600 group-hover:bg-amber-200 group-hover:text-amber-700"><CreditCard className="w-4 h-4" /></div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700">Pay Bill</span>
-              </div>
-            }
-          />
-        ) : (
-          <AddTransactionDialog
-            {...dialogBaseProps}
-            defaultType="transfer"
+            defaultType="income"
             defaultSourceAccountId={account.id}
             triggerContent={
-              <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-blue-50/50 hover:bg-blue-100/50 border border-blue-100 cursor-pointer transition-colors group">
-                <div className="p-1.5 rounded-full bg-blue-100 text-blue-600 group-hover:bg-blue-200 group-hover:text-blue-700"><ArrowLeftRight className="w-4 h-4" /></div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 md:whitespace-nowrap">Transfer</span>
+              <div className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-emerald-200 hover:bg-emerald-50 text-emerald-600 hover:text-emerald-700 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer">
+                <Plus className="w-3 h-3" />Income
               </div>
             }
           />
-        )}
-        {/* 4. Lend */}
-        <AddTransactionDialog
-          {...dialogBaseProps}
-          defaultType="debt"
-          defaultDebtAccountId={account.id}
-          defaultSourceAccountId={account.id}
-          triggerContent={
-            <div className="flex flex-col items-center gap-1 p-2 rounded-lg bg-purple-50/50 hover:bg-purple-100/50 border border-purple-100 cursor-pointer transition-colors group">
-              <div className="p-1.5 rounded-full bg-purple-100 text-purple-600 group-hover:bg-purple-200 group-hover:text-purple-700"><User className="w-4 h-4" /></div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700">Lend</span>
-            </div>
-          }
-        />
-
-        {/* Secondary Actions - Hidden on small mobile, visible on expansion or desktop? Or just flex wrap? */}
-        <div className="hidden md:flex items-center gap-2 ml-auto">
-          <button
-            type="button"
-            onClick={handleRecalculateBalance}
-            disabled={isRecalculating}
-            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-50 transition-colors"
-            title="Sync Balance"
-          >
-            <RefreshCw className={cn("w-4 h-4", isRecalculating && "animate-spin")} />
-          </button>
+          <AddTransactionDialog
+            {...dialogBaseProps}
+            defaultType="expense"
+            defaultSourceAccountId={account.id}
+            triggerContent={
+              <div className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-rose-200 hover:bg-rose-50 text-rose-600 hover:text-rose-700 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer">
+                <Minus className="w-3 h-3" />Expense
+              </div>
+            }
+          />
+          {account.type === 'credit_card' ? (
+            <AddTransactionDialog
+              {...dialogBaseProps}
+              defaultType="transfer"
+              defaultDebtAccountId={account.id}
+              triggerContent={
+                <div className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-amber-200 hover:bg-amber-50 text-amber-600 hover:text-amber-700 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer">
+                  <CreditCard className="w-3 h-3" />Pay Bill
+                </div>
+              }
+            />
+          ) : (
+            <AddTransactionDialog
+              {...dialogBaseProps}
+              defaultType="transfer"
+              defaultSourceAccountId={account.id}
+              triggerContent={
+                <div className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-blue-200 hover:bg-blue-50 text-blue-600 hover:text-blue-700 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer">
+                  <ArrowLeftRight className="w-3 h-3" />Transfer
+                </div>
+              }
+            />
+          )}
+          <AddTransactionDialog
+            {...dialogBaseProps}
+            defaultType="debt"
+            defaultDebtAccountId={account.id}
+            defaultSourceAccountId={account.id}
+            triggerContent={
+              <div className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-purple-200 hover:bg-purple-50 text-purple-600 hover:text-purple-700 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer">
+                <User className="w-3 h-3" />Lend
+              </div>
+            }
+          />
           <EditAccountDialog
             account={account}
             collateralAccounts={savingsAccounts}
             accounts={allAccounts}
             triggerContent={
-              <button className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-50 transition-colors" title="Settings">
-                <Settings className="w-4 h-4" />
+              <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-600 hover:text-slate-700 text-[10px] font-bold uppercase tracking-wider transition-colors">
+                <Settings className="w-3 h-3" />Settings
               </button>
             }
           />
+          {hasPending && waitingAmount > 0 && (
+            <button
+              onClick={handleConfirmPending}
+              disabled={isConfirmingPending}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-[10px] font-bold border border-amber-200 hover:bg-amber-100 transition-colors animate-pulse"
+            >
+              {isConfirmingPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Clock4 className="w-3.5 h-3.5" />}
+              Verify {formatPlain(waitingAmount)}
+            </button>
+          )}
+        </div>
+
+        {/* RIGHT: Balance + Collapse Toggle */}
+        <div className="flex items-center gap-3">
+          <div className={cn(
+            "text-xl font-black tracking-tight tabular-nums",
+            displayBalance >= 0 ? "text-emerald-600" : "text-rose-600"
+          )}>
+            {formatPlain(displayBalance)}
+          </div>
+
+          <button
+            onClick={() => setCollapsed(!collapsed)}
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm hover:bg-slate-50 transition-colors"
+            aria-label={collapsed ? "Expand" : "Collapse"}
+          >
+            {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+          </button>
         </div>
       </div>
 
-      {/* Mobile Secondary Actions Row */}
+      {/* EXPANDABLE SECTION - Only Badges */}
+      {!collapsed && (
+        <div className="py-2 border-b border-slate-100">
+          {/* Badges Row */}
+          <div className="flex flex-wrap items-center gap-2">
+            {confirmedAmount > 0 && (
+              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[10px] font-bold uppercase tracking-wider border border-blue-200">
+                <CheckCircle2 className="w-3 h-3" />
+                Ready {formatPlain(confirmedAmount)}
+              </div>
+            )}
+
+            {/* Secured By Link */}
+            {account.secured_by_account_id && collateralAccount && (
+              <Link href={`/accounts/${collateralAccount.id}`} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold uppercase tracking-wider border border-emerald-200 hover:bg-emerald-100">
+                <PiggyBank className="w-3 h-3" />
+                By {collateralAccount.name}
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+
+
+
+      {/* Mobile Utility Actions Row */}
       <div className="flex md:hidden items-center justify-end gap-2 border-t border-slate-50 pt-2">
         <button
           type="button"
           onClick={handleRecalculateBalance}
           disabled={isRecalculating}
           className="p-2 text-slate-400 hover:text-slate-600"
+          title="Sync Balance"
         >
           <RefreshCw className={cn("w-4 h-4", isRecalculating && "animate-spin")} />
         </button>
-        <EditAccountDialog
-          account={account}
-          collateralAccounts={savingsAccounts}
-          accounts={allAccounts}
-          triggerContent={
-            <button className="p-2 text-slate-400 hover:text-slate-600">
-              <Settings className="w-4 h-4" />
-            </button>
-          }
-        />
         <Button
           type="button"
           variant="ghost"
@@ -525,126 +500,128 @@ export function AccountDetailHeader({
 
 
       {/* EXPANDED CONTENT */}
-      {collapsed ? null : (
-        <div className="pt-4 border-t border-slate-100 transition-all">
-          {/* Layer 2: Cashback Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-            {showQualifyingCard && (
-              <div className="flex flex-col gap-2 rounded-lg px-3 py-3 shadow-sm border bg-white">
-                <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
-                  <span className="uppercase tracking-wide text-[10px] text-slate-500">Qualifying Status</span>
-                  <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${isQualified ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
-                    {isQualified ? 'Qualified' : 'In progress'}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-700">
-                  <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1">Min: <span className="font-bold">{formatPlain(minSpend ?? 0)}</span></span>
-                  <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1">Current: <span className="font-bold">{formatPlain(currentSpend)}</span></span>
-                  {!isQualified && (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-amber-700 border border-amber-200">
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      Need {formatPlain(needAmount)}
+      {
+        collapsed ? null : (
+          <div className="pt-4 border-t border-slate-100 transition-all">
+            {/* Layer 2: Cashback Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+              {showQualifyingCard && (
+                <div className="flex flex-col gap-2 rounded-lg px-3 py-3 shadow-sm border bg-white">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                    <span className="uppercase tracking-wide text-[10px] text-slate-500">Qualifying Status</span>
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${isQualified ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                      {isQualified ? 'Qualified' : 'In progress'}
                     </span>
-                  )}
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Progress value={progressValue} className="h-2" />
-                </div>
-              </div>
-            )}
-
-            {hasCashbackConfig && (
-              <div className={`flex flex-col gap-2 rounded-lg px-3 py-3 shadow-sm border ${rewardBg}`}>
-                <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
-                  <span className="uppercase tracking-wide text-[10px] text-slate-500">{rewardLabel}</span>
-                  {rewardBadge && (
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
-                      {rewardBadge}
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className={`text-3xl font-extrabold tabular-nums ${rewardTone}`}>
-                    {formatPlain(rewardValue)}
                   </div>
-                  {!isQualified && (
-                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 border border-amber-200">
-                      Need {formatPlain(needAmount)}
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 gap-2 text-[11px] text-slate-600 md:grid-cols-2">
-                  <div className="space-y-1">
-                    <div className="font-semibold text-slate-700">Generated: <span className="font-bold">{formatPlain(earnedSoFar)}</span></div>
-                    <div className="font-semibold text-slate-700">{isQualified ? 'Shared' : 'Temp share'}: <span className="font-bold">{formatPlain(sharedDisplay)}</span></div>
-                  </div>
-                  <div className="space-y-1">
-                    {hasMinRequirement && (
-                      <div className="text-slate-600">
-                        Target: <span className="font-bold">{formatPlain(minSpend ?? 0)}</span> | Current: <span className="font-bold">{formatPlain(currentSpend)}</span>
-                      </div>
+                  <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-slate-700">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1">Min: <span className="font-bold">{formatPlain(minSpend ?? 0)}</span></span>
+                    <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1">Current: <span className="font-bold">{formatPlain(currentSpend)}</span></span>
+                    {!isQualified && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-amber-700 border border-amber-200">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        Need {formatPlain(needAmount)}
+                      </span>
                     )}
                   </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Progress value={progressValue} className="h-2" />
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Combined legacy info card */}
-            <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-700">Batch Status</span>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8 px-2 text-[11px] font-semibold"
-                    onClick={handleConfirmPending}
-                    disabled={isConfirmingPending || isPendingLoading || !hasPending}
-                  >
-                    {isConfirmingPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <BookOpen className="mr-1.5 h-4 w-4" />}
-                    Confirm
-                  </Button>
-                  {pendingRefundAmount > 0 && (
+              {hasCashbackConfig && (
+                <div className={`flex flex-col gap-2 rounded-lg px-3 py-3 shadow-sm border ${rewardBg}`}>
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                    <span className="uppercase tracking-wide text-[10px] text-slate-500">{rewardLabel}</span>
+                    {rewardBadge && (
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-200 text-slate-700">
+                        {rewardBadge}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className={`text-3xl font-extrabold tabular-nums ${rewardTone}`}>
+                      {formatPlain(rewardValue)}
+                    </div>
+                    {!isQualified && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 border border-amber-200">
+                        Need {formatPlain(needAmount)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 text-[11px] text-slate-600 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <div className="font-semibold text-slate-700">Generated: <span className="font-bold">{formatPlain(earnedSoFar)}</span></div>
+                      <div className="font-semibold text-slate-700">{isQualified ? 'Shared' : 'Temp share'}: <span className="font-bold">{formatPlain(sharedDisplay)}</span></div>
+                    </div>
+                    <div className="space-y-1">
+                      {hasMinRequirement && (
+                        <div className="text-slate-600">
+                          Target: <span className="font-bold">{formatPlain(minSpend ?? 0)}</span> | Current: <span className="font-bold">{formatPlain(currentSpend)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Combined legacy info card */}
+              <div className="flex flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-700">Batch Status</span>
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       className="h-8 px-2 text-[11px] font-semibold"
-                      onClick={() => router.push('/refunds')}
+                      onClick={handleConfirmPending}
+                      disabled={isConfirmingPending || isPendingLoading || !hasPending}
                     >
-                      <Hourglass className="mr-1.5 h-4 w-4" />
-                      Refunds
+                      {isConfirmingPending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <BookOpen className="mr-1.5 h-4 w-4" />}
+                      Confirm
                     </Button>
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                <div className="flex flex-col gap-1 rounded-md bg-amber-50 border border-amber-100 px-2.5 py-2">
-                  <div className="flex items-center justify-between text-[11px] font-semibold text-amber-700">
-                    <span>Pending</span>
-                    <Clock4 className="h-3.5 w-3.5" />
+                    {pendingRefundAmount > 0 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-2 text-[11px] font-semibold"
+                        onClick={() => router.push('/refunds')}
+                      >
+                        <Hourglass className="mr-1.5 h-4 w-4" />
+                        Refunds
+                      </Button>
+                    )}
                   </div>
-                  <div className="text-2xl font-extrabold text-amber-700 tabular-nums">{formatPlain(pendingTotal)}</div>
-                  <div className="text-[11px] text-amber-700/90 space-y-0.5">
-                    <div className="inline-flex items-center gap-1 rounded-md bg-white/60 px-2 py-1 font-semibold text-amber-700 border border-amber-100">
-                      Pending: {formatPlain(waitingAmount)}
+                </div>
+                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                  <div className="flex flex-col gap-1 rounded-md bg-amber-50 border border-amber-100 px-2.5 py-2">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-amber-700">
+                      <span>Pending</span>
+                      <Clock4 className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="text-2xl font-extrabold text-amber-700 tabular-nums">{formatPlain(pendingTotal)}</div>
+                    <div className="text-[11px] text-amber-700/90 space-y-0.5">
+                      <div className="inline-flex items-center gap-1 rounded-md bg-white/60 px-2 py-1 font-semibold text-amber-700 border border-amber-100">
+                        Pending: {formatPlain(waitingAmount)}
+                      </div>
                     </div>
                   </div>
-                </div>
-                <div className="flex flex-col gap-1 rounded-md bg-blue-50 border border-blue-100 px-2.5 py-2">
-                  <div className="flex items-center justify-between text-[11px] font-semibold text-blue-700">
-                    <span>Confirmed</span>
-                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  <div className="flex flex-col gap-1 rounded-md bg-blue-50 border border-blue-100 px-2.5 py-2">
+                    <div className="flex items-center justify-between text-[11px] font-semibold text-blue-700">
+                      <span>Confirmed</span>
+                      <CheckCircle2 className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="text-lg font-bold text-blue-700 tabular-nums">{formatPlain(confirmedAmount)}</div>
+                    <span className="text-[11px] text-blue-700/80">Batch</span>
                   </div>
-                  <div className="text-lg font-bold text-blue-700 tabular-nums">{formatPlain(confirmedAmount)}</div>
-                  <span className="text-[11px] text-blue-700/80">Batch</span>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   )
 }

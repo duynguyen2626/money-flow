@@ -65,8 +65,8 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-slate-50">
       <TagFilterProvider>
-        {/* Header - Increased Spacing */}
-        <div className="mx-6 mt-6 mb-8 space-y-6">
+        {/* Header - Reduced Spacing */}
+        <div className="mx-6 mt-6 mb-3 space-y-3">
           <AccountDetailHeader
             account={account}
             categories={categories}
@@ -86,7 +86,7 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 mt-2 bg-white">
+        <div className="flex-1 bg-white">
           {activeTab === 'transactions' ? (
             <FilterableTransactions
               transactions={transactions}
