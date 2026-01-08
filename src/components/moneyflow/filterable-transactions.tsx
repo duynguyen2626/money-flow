@@ -88,7 +88,7 @@ export function FilterableTransactions({
     const setSearchTerm = onSearchChange ?? setSearchTermInternal
 
     // Controlled Type State
-    const [selectedTypeInternal, setSelectedTypeInternal] = useState<'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay'>('all')
+    const [selectedTypeInternal, setSelectedTypeInternal] = useState<'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay' | 'cashback'>('all')
     const selectedType = externalType ?? selectedTypeInternal
     const setSelectedType = onTypeChange ?? setSelectedTypeInternal
 
