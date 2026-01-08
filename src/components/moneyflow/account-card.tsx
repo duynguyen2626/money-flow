@@ -33,6 +33,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { AddTransactionDialog } from "./add-transaction-dialog";
 import { EditAccountDialog } from "./edit-account-dialog";
 import { QuickPeopleSettingsDialog } from "./quick-people-settings-dialog";
@@ -237,357 +239,208 @@ function AccountCardComponent({
 
   return (
     <>
-      <div
+      <Card
         onClick={handleCardClick}
         className={cn(
-          "group relative flex flex-col w-full rounded-[2rem] border-2 bg-white transition-all hover:shadow-lg hover:border-slate-300 cursor-pointer overflow-hidden",
-          borderColor,
+          "group relative flex flex-col w-full rounded-xl border transition-all hover:shadow-md cursor-pointer overflow-hidden bg-white p-3 gap-3",
+          cardState.badges.due ? "border-rose-200" : cardState.badges.spend ? "border-amber-200" : "border-slate-100",
           className
         )}
       >
-        {/* TOP SECTION: Header + Split Body */}
-        <div className="px-5 pt-3 pb-3">
-
-          {/* 1. HEADER ROW: Due Date & Security */}
-          <div className="flex items-center justify-between mb-3 min-h-[24px]">
-            {/* Due Date - Larger & Cleaner */}
+        {/* HEADER: Status Badges & Edit */}
+        <div className="flex items-center justify-between min-h-[24px]">
+          <div className="flex items-center gap-2">
+            {/* Due Date Badge */}
             {stats?.due_date ? (
-              <div className={cn(
-                "flex items-center gap-2",
-                getDaysDiff(stats.due_date) <= 5 ? "text-rose-600" : "text-amber-600"
-              )}>
-                <div className={cn("p-1.5 rounded-full", getDaysDiff(stats.due_date) <= 5 ? "bg-rose-100" : "bg-amber-100")}>
-                  <CalendarClock className="w-4 h-4" />
+              getDaysDiff(stats.due_date) <= 5 ? (
+                <Badge variant="secondary" className="bg-rose-50 text-rose-600 border-rose-100 text-[9px] px-1.5 h-6 rounded-md font-bold flex items-center gap-1">
+                  <CalendarClock className="w-3 h-3" />
+                  {getDaysDiff(stats.due_date)} Days
+                </Badge>
+              ) : (
+                <div className="flex items-center gap-1.5 text-slate-400">
+                  <CheckCircle className="w-3.5 h-3.5 text-slate-300" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider">
+                    {stats.due_date_display || "Due Soon"}
+                  </span>
                 </div>
-                <div className="flex flex-col leading-none">
-                  <span className="text-[10px] font-bold uppercase tracking-wider opacity-70">Due in</span>
-                  <span className="text-sm font-black tracking-tight">{getDaysDiff(stats.due_date)} Days</span>
-                </div>
-              </div>
+              )
             ) : (
-              <div className="flex items-center gap-2 text-slate-300">
-                <div className="p-1.5 rounded-full bg-slate-50"><CheckCircle className="w-4 h-4" /></div>
-                <span className="text-xs font-bold">No Due Date</span>
-              </div>
-            )}
-
-            {/* Secured Badge & Edit */}
-            {isCreditCard && (
-              <div className="flex items-center gap-2">
-                {account.secured_by_account_id ? (
-                  <TooltipProvider>
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-100 cursor-help transition-colors hover:bg-emerald-100">
-                          <Lock className="w-3 h-3" /> Secured
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent side="bottom" className="text-xs font-medium">
-                        Secured by: <span className="font-bold text-emerald-400">{securingAccount?.name || "Unknown Asset"}</span>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                ) : (
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100">
-                    <Unlock className="w-3 h-3" /> Unsecured
-                  </div>
-                )}
-
-                <div onClick={(e) => e.stopPropagation()} className="bg-slate-50 hover:bg-slate-100 p-1.5 rounded-full text-slate-400 hover:text-slate-700 transition-colors">
-                  <EditAccountDialog
-                    account={account}
-                    accounts={accounts}
-                    collateralAccounts={collateralAccounts}
-                    triggerContent={<Edit className="w-3.5 h-3.5" />}
-                    buttonClassName=""
-                  />
-                </div>
-              </div>
-            )}
-            {!isCreditCard && (
-              <div onClick={(e) => e.stopPropagation()} className="ml-auto bg-slate-50 hover:bg-slate-100 p-1.5 rounded-full text-slate-400 hover:text-slate-700 transition-colors">
-                <EditAccountDialog
-                  account={account}
-                  accounts={accounts}
-                  collateralAccounts={collateralAccounts}
-                  triggerContent={<Edit className="w-3.5 h-3.5" />}
-                  buttonClassName=""
-                />
+              <div className="flex items-center gap-1.5 text-slate-300">
+                <CheckCircle className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">No Due Date</span>
               </div>
             )}
           </div>
 
-          {/* 2. SPLIT BODY: LEFT IMAGE | RIGHT INFO */}
-          <div className="flex gap-4">
-            {/* LEFT: Card Image - Uncropped Aspect Ratio */}
-            {/* Using aspect-square container (or 2/3) but object-contain to avoid crop */}
-            <div className="w-[30%] shrink-0 self-start">
-              <div className="relative w-full aspect-[2/3] rounded-2xl bg-slate-100 overflow-hidden shadow-sm border border-slate-200 flex items-center justify-center">
-                {account.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={account.image_url}
-                    alt=""
-                    className={cn(
-                      "w-full h-full transition-transform origin-center",
-                      account.type === 'credit_card' ? "object-contain -rotate-90 scale-150" : "object-cover"
-                    )}
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-slate-300">
-                    {getAccountIcon(account.type)}
-                  </div>
-                )}
+          <div className="flex items-center gap-2">
+            {/* Secured Badge */}
+            {isCreditCard && account.secured_by_account_id && (
+              <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 border-emerald-100 text-[9px] px-1.5 h-6 rounded-md font-bold flex items-center gap-1">
+                <Lock className="w-3 h-3" /> Secured
+              </Badge>
+            )}
+            {isCreditCard && !account.secured_by_account_id && !hideSecuredBadge && (
+              <div className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase text-slate-300 border border-slate-100 flex items-center gap-1">
+                <Unlock className="w-3 h-3" /> Unsecured
               </div>
-            </div>
+            )}
 
-            {/* RIGHT: Info Block */}
-            <div className="flex-1 flex flex-col min-w-0">
-              {/* Name & Badges Inline */}
-              <div className="mb-1 flex flex-wrap items-start gap-x-2 gap-y-1">
-                <h3 className="font-bold text-slate-900 text-base leading-tight">
-                  {account.name}
-                </h3>
-                {/* Parent/Child Badges Logic */}
-                {(isClusterParent || isClusterChild) && (
-                  <div className="inline-flex items-center self-center">
-                    {isClusterParent && (
-                      <TooltipProvider>
-                        <Tooltip delayDuration={0}>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-indigo-100 text-indigo-700 border border-indigo-200 cursor-help md:hover:bg-indigo-200 transition-colors">
-                              Parent +{childCount}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="text-xs p-2 bg-indigo-900 text-indigo-50 border-indigo-800">
-                            <p className="font-semibold mb-1 border-b border-indigo-700 pb-1">Children Accounts:</p>
-                            <ul className="space-y-0.5">
-                              {account.relationships?.child_accounts.map(c => (
-                                <li key={c.id} className="flex items-center gap-1.5">
-                                  <div className="w-1 h-1 rounded-full bg-indigo-400"></div>
-                                  {c.name}
-                                </li>
-                              ))}
-                            </ul>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                    {isClusterChild && (
-                      <TooltipProvider>
-                        <Tooltip delayDuration={0}>
-                          <TooltipTrigger asChild>
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-purple-100 text-purple-700 border border-purple-200 cursor-help md:hover:bg-purple-200 transition-colors">
-                              Child
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom" className="text-xs bg-purple-900 text-purple-50 border-purple-800">
-                            Linked to: <span className="font-bold">{account.relationships?.parent_info?.name || 'Parent'}</span>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Balance */}
-              <div className="text-2xl font-black text-slate-900 tracking-tight mb-3">
-                {formatCurrency(displayBalance)} <span className="text-sm text-slate-400 font-bold">₫</span>
-              </div>
-
-              {/* UNIFIED STATS BLOCK */}
-              <div className="mt-auto bg-slate-50/50 rounded-xl p-3 border border-slate-100">
-                {/* Need / Spent Columns - Larger Typography */}
-                <div className="flex items-center justify-between mb-3">
-                  {/* LEFT COL: Need (Min Spend) OR Remains (Cap) */}
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                      {(stats?.missing_for_min ?? 0) > 0 ? "Need (Min)" : (stats?.remains_cap != null ? "Remains" : "Need")}
-                      {/* Show Rate if available */}
-                      {cashbackConfig?.defaultRate > 0 && (
-                        <span className="ml-1 text-[9px] font-normal text-emerald-600 bg-emerald-50 px-1 rounded">
-                          {(cashbackConfig!.defaultRate * 100).toFixed(1)}%
-                        </span>
-                      )}
-                      <ArrowDownLeft className="w-2.5 h-2.5" />
-                    </span>
-                    <span className={cn(
-                      "text-sm font-bold",
-                      (stats?.missing_for_min ?? 0) > 0 ? "text-indigo-600" : (stats?.remains_cap != null ? "text-emerald-600" : "text-slate-400")
-                    )}>
-                      {(stats?.missing_for_min ?? 0) > 0
-                        ? formatCurrency(stats!.missing_for_min!)
-                        : (stats?.remains_cap != null ? formatCurrency(stats.remains_cap) : "Done")}
-                    </span>
-                  </div>
-
-                  <div className="w-px h-8 bg-slate-200 mx-2" />
-
-                  {/* RIGHT COL: Spent OR Need (Cap) */}
-                  <div className="flex flex-col items-end">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                      {(stats?.missing_for_min ?? 0) <= 0 && stats?.remains_cap != null ? "Need (Cap)" : "Spent"} <ArrowUpRight className="w-2.5 h-2.5" />
-                    </span>
-                    <span className="text-sm font-bold text-slate-700">
-                      {(stats?.missing_for_min ?? 0) <= 0 && stats?.remains_cap != null && cashbackConfig?.defaultRate
-                        ? formatCurrency(stats!.remains_cap / (cashbackConfig.defaultRate || 0.01))
-                        : formatCurrency(stats?.spent_this_cycle ?? 0)}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Progress Bar (Only if Need > 0) */}
-                {(stats?.missing_for_min ?? 0) > 0 && (
-                  <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden w-full mb-2">
-                    <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.max(5, Math.min(100, 100 - ((stats?.missing_for_min ?? 0) / (stats?.min_spend || 1) * 100)))}%` }} />
-                  </div>
-                )}
-
-                {/* Cycle Date - Full Width Below Progress Bar - Centered */}
-                {stats?.cycle_range && (
-                  <div className="w-full pt-2 border-t border-slate-200/50 flex justify-center">
-                    <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
-                      Cycle: {stats.cycle_range}
-                    </span>
-                  </div>
-                )}
-
-                {/* Smart Cashback Display */}
-                {/* Rule: If defaultRate > 0, show fixed rate. Else if levels, show active level or next goal. */}
-                {cashbackConfig && cashbackConfig.hasAdvanced && (
-                  <TooltipProvider>
-                    <Tooltip delayDuration={0}>
-                      <TooltipTrigger asChild>
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-200/50 cursor-help group/cb">
-                          <div className="flex items-center gap-2 text-xs">
-                            <div className="bg-emerald-100 text-emerald-600 p-0.5 rounded-full"><ShieldCheck className="w-3 h-3" /></div>
-                            <span className="font-bold text-slate-700 group-hover/cb:text-emerald-700 transition-colors">
-                              {cashbackConfig?.defaultRate && cashbackConfig.defaultRate > 0
-                                ? `${(cashbackConfig.defaultRate * 100).toFixed(1)}% ${cashbackConfig.levels?.[0]?.rules?.[0]?.maxReward || (account.cashback_config as any)?.maxAmount ? 'Limit' : 'Unlimited'}`
-                                : (
-                                  // Find active level
-                                  (() => {
-                                    const spend = stats?.spent_this_cycle ?? 0;
-                                    const activeLevel = [...cashbackConfig.levels].reverse().find((l: any) => spend >= l.minTotalSpend);
-                                    return activeLevel ? `Tier: ${activeLevel.name} Active` : "Tier 0 (Start)";
-                                  })()
-                                )
-                              }
-                            </span>
-                          </div>
-                          <Info className="w-3 h-3 text-slate-300" />
-                        </div>
-                      </TooltipTrigger>
-                      <TooltipContent className="p-0 border-none shadow-xl">
-                        <div className="bg-white rounded-xl border border-slate-100 p-3 w-64">
-                          <h4 className="text-xs font-bold text-slate-900 border-b border-slate-100 pb-2 mb-2 flex items-center gap-2">
-                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Cashback Rules
-                          </h4>
-                          <div className="space-y-2">
-                            {cashbackConfig.defaultRate > 0 && (
-                              <div className="flex justify-between text-xs">
-                                <span className="text-slate-500">Base Rate</span>
-                                <span className="font-bold text-emerald-600">{(cashbackConfig.defaultRate * 100).toFixed(2)}%</span>
-                              </div>
-                            )}
-                            {cashbackConfig.levels.map((lvl: any, idx: number) => (
-                              <div key={idx} className={cn(
-                                "p-2 rounded-lg text-xs border",
-                                (stats?.spent_this_cycle ?? 0) >= lvl.minTotalSpend ? "bg-emerald-50 border-emerald-100" : "bg-slate-50 border-slate-100 opacity-70"
-                              )}>
-                                <div className="flex justify-between font-bold mb-1">
-                                  <span>{lvl.name}</span>
-                                  <span>{lvl.rules?.length || 0} Rules</span>
-                                </div>
-                                <div className="text-[10px] text-slate-500">Min Spend: {formatCurrency(lvl.minTotalSpend)}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-
-              </div>
+            {/* Edit Button */}
+            <div onClick={(e) => e.stopPropagation()} className="text-slate-300 hover:text-slate-600 transition-colors">
+              <EditAccountDialog
+                account={account}
+                accounts={accounts}
+                collateralAccounts={collateralAccounts}
+                triggerContent={<Edit className="w-3.5 h-3.5" />}
+                buttonClassName=""
+              />
             </div>
           </div>
         </div>
 
-        {/* BOTTOM SECTION: Full Width Features */}
-        <div className="mt-auto">
-          {/* Live Cashback Banner */}
-          {cashbackById?.[account.id]?.potential_earned && (cashbackById?.[account.id]?.potential_earned ?? 0) !== 0 ? (
-            <div className="w-full bg-gradient-to-r from-emerald-50 to-emerald-100/50 border-t border-emerald-100 px-5 py-2 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="bg-white p-1 rounded-full shadow-sm text-emerald-600"><TrendingUp className="w-3 h-3" /></div>
-                <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider">
-                  {(cashbackById?.[account.id]?.potential_earned || 0) / (cashbackById?.[account.id]?.total_spend_eligible || 1) * 100 > 0 ? `${((cashbackById?.[account.id]?.potential_earned || 0) / (cashbackById?.[account.id]?.total_spend_eligible || 1) * 100).toFixed(1)}% Yield` : "Active"}
-                </span>
-              </div>
-              <div className="text-sm font-bold text-emerald-700">
-                +{formatCurrency(cashbackById?.[account.id]?.potential_earned)}
-              </div>
-            </div>
-          ) : null}
-
-          {/* LIMIT BAR */}
-          {isCreditCard && (
-            <div className="bg-white px-5 py-2.5 border-t border-slate-50">
-              <div className="flex justify-between items-center mb-1.5">
-                <div className="flex items-center gap-1.5 text-slate-500">
-                  <CalendarClock className="w-3.5 h-3.5" />
-                  <span className="text-[10px] font-bold uppercase tracking-wider">
-                    {stats?.due_date_display || "No Due Date"}
-                  </span>
-                </div>
-                <span className={cn("text-[10px] font-bold", usageData.percent > 90 ? "text-red-600" : "text-slate-900")}>
-                  {usageData.percent.toFixed(0)}%
-                </span>
-              </div>
-              <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div className={cn("h-full rounded-full transition-all duration-500", usageData.percent > 90 ? "bg-red-500" : "bg-slate-800")} style={{ width: `${Math.min(100, usageData.percent)}%` }} />
-              </div>
-            </div>
-          )}
-
-          {/* ACTION BAR - Compact & Colored */}
-          <div className="flex border-t border-slate-100 divide-x divide-slate-100">
-            {/* 1. Income/Repay (Green) */}
-            <div className="flex-1 py-3 flex items-center justify-center hover:bg-emerald-50 cursor-pointer group/btn transition-colors" onClick={(e) => { e.stopPropagation(); setActiveDialog("income"); }}>
-              <div className="p-1.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 shadow-sm group-hover/btn:bg-emerald-100 group-hover/btn:border-emerald-200 transition-all">
-                <UserPlus className="w-4 h-4" strokeWidth={2.5} />
-              </div>
-            </div>
-            {/* 2. Expense (Red) */}
-            <div className="flex-1 py-3 flex items-center justify-center hover:bg-rose-50 cursor-pointer group/btn transition-colors" onClick={(e) => { e.stopPropagation(); setActiveDialog("expense"); }}>
-              <div className="p-1.5 rounded-full bg-rose-50 text-rose-600 border border-rose-100 shadow-sm group-hover/btn:bg-rose-100 group-hover/btn:border-rose-200 transition-all">
-                <ArrowUpRight className="w-4 h-4" strokeWidth={2.5} />
-              </div>
-            </div>
-            {/* 3. Transfer (Blue/Amber) */}
-            <div className="flex-1 py-3 flex items-center justify-center hover:bg-amber-50 cursor-pointer group/btn transition-colors" onClick={(e) => { e.stopPropagation(); setActiveDialog("paid"); }}>
-              {isCreditCard ? (
-                <div className="p-1.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100 shadow-sm group-hover/btn:bg-amber-100 group-hover/btn:border-amber-200 transition-all">
-                  <CheckCircle className="w-4 h-4" strokeWidth={2.5} />
-                </div>
+        {/* BODY: Image & Info */}
+        <div className="flex gap-3 items-stretch">
+          {/* LEFT: Card Image (Compact, Rounded, No Border) */}
+          <div className="w-20 shrink-0 flex flex-col justify-start">
+            <div className="relative w-full aspect-[2/3] rounded-lg bg-slate-50 overflow-hidden flex items-center justify-center shadow-inner">
+              {account.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={account.image_url}
+                  alt=""
+                  className={cn(
+                    "w-full h-full transition-transform origin-center",
+                    isCreditCard ? "object-contain -rotate-90 scale-[1.4]" : "object-cover"
+                  )}
+                />
               ) : (
-                <div className="p-1.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100 shadow-sm group-hover/btn:bg-blue-100 group-hover/btn:border-blue-200 transition-all" onClick={(e) => { e.stopPropagation(); setActiveDialog("transfer"); }}>
-                  <ArrowRightLeft className="w-4 h-4" strokeWidth={2.5} />
+                <div className="flex h-full w-full items-center justify-center text-slate-300">
+                  {getAccountIcon(account.type)}
                 </div>
               )}
             </div>
-            {/* 4. Lend (Red) */}
-            <div className="flex-1 py-3 flex items-center justify-center hover:bg-red-50 cursor-pointer group/btn transition-colors" onClick={(e) => { e.stopPropagation(); setActiveDialog("debt"); }}>
-              <div className="p-1.5 rounded-full bg-red-50 text-red-500 border border-red-100 shadow-sm group-hover/btn:bg-red-100 group-hover/btn:border-red-200 transition-all">
-                <UserMinus className="w-4 h-4" strokeWidth={2.5} />
+            {/* Tiny Cycle Info under image if space? No, keep layout clean */}
+          </div>
+
+          {/* RIGHT: Stats */}
+          <div className="flex-1 min-w-0 flex flex-col justify-between">
+            {/* Name */}
+            <div>
+              <div className="flex items-center gap-1.5 mb-1">
+                <h3 className="font-bold text-slate-900 text-sm leading-tight truncate">
+                  {account.name}
+                </h3>
+                {/* Parent/Child Badge */}
+                {(isClusterParent || isClusterChild) && (
+                  <span className={cn(
+                    "text-[9px] font-extrabold uppercase px-1 rounded",
+                    isClusterParent ? "bg-indigo-50 text-indigo-600" : "bg-purple-50 text-purple-600"
+                  )}>
+                    {isClusterParent ? "Parent" : "Child"}
+                  </span>
+                )}
+                {!account.is_active && (
+                  <span className="text-[9px] font-extrabold uppercase px-1 rounded bg-slate-100 text-slate-500">
+                    Archived
+                  </span>
+                )}
+              </div>
+              {/* Balance */}
+              <div className="flex items-baseline gap-1">
+                <span className="text-xl font-black text-slate-900 tracking-tight">
+                  {formatCurrency(displayBalance)}
+                </span>
+                <span className="text-xs font-bold text-slate-400">₫</span>
+              </div>
+            </div>
+
+            {/* Mini Stats Grid */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 p-2 bg-slate-50/50 rounded-lg border border-slate-100/50">
+              {/* Need / Remains */}
+              <div className="flex flex-col">
+                <span className="text-[8px] font-bold uppercase tracking-wider text-slate-400">
+                  {(stats?.missing_for_min ?? 0) > 0 ? "Need (Min)" : "Remains"}
+                </span>
+                <span className={cn(
+                  "text-xs font-bold tabular-nums",
+                  (stats?.missing_for_min ?? 0) > 0 ? "text-indigo-600" : "text-emerald-600"
+                )}>
+                  {(stats?.missing_for_min ?? 0) > 0
+                    ? formatCurrency(stats!.missing_for_min!)
+                    : (stats?.remains_cap != null ? formatCurrency(stats.remains_cap) : "Done")}
+                </span>
+              </div>
+              {/* Cap / Spent */}
+              <div className="flex flex-col items-end">
+                <span className="text-[8px] font-bold uppercase tracking-wider text-slate-400">
+                  {(stats?.missing_for_min ?? 0) <= 0 && stats?.remains_cap != null ? "Need (Cap)" : "Spent"}
+                </span>
+                <span className="text-xs font-bold text-slate-700 tabular-nums">
+                  {(stats?.missing_for_min ?? 0) <= 0 && stats?.remains_cap != null && cashbackConfig?.defaultRate
+                    ? formatCurrency(stats!.remains_cap / (cashbackConfig.defaultRate || 0.01))
+                    : formatCurrency(stats?.spent_this_cycle ?? 0)}
+                </span>
+              </div>
+
+              {/* Progress / Cycle */}
+              <div className="col-span-2 pt-1.5 border-t border-slate-200/50 flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  {/* Shield Icon or Rate */}
+                  {cashbackConfig?.defaultRate && cashbackConfig.defaultRate > 0 && (
+                    <span className="flex items-center gap-1 text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
+                      <ShieldCheck className="w-2.5 h-2.5" /> {(cashbackConfig.defaultRate * 100).toFixed(1)}%
+                    </span>
+                  )}
+                  <span className="text-[9px] font-bold text-slate-400 flex items-center gap-1">
+                    {usageData.percent > 0 && (
+                      <span className={usageData.percent > 90 ? "text-rose-500" : "text-slate-500"}>
+                        {usageData.percent.toFixed(0)}% Use
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <span className="text-[9px] font-medium text-slate-400">
+                  {stats?.cycle_range?.split(' to ')[0]} - {stats?.cycle_range?.split(' to ')[1]}
+                </span>
               </div>
             </div>
           </div>
         </div>
 
-      </div>
+        {/* FOOTER: Action Buttons Grid */}
+        <div className="grid grid-cols-4 gap-1.5 mt-auto pt-2 border-t border-slate-50">
+          {/* Income */}
+          <div onClick={(e) => { e.stopPropagation(); setActiveDialog("income"); }}
+            className="flex items-center justify-center p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors cursor-pointer border border-emerald-100"
+            title="Add Income"
+          >
+            <UserPlus className="w-3.5 h-3.5" strokeWidth={2.5} />
+          </div>
+          {/* Expense */}
+          <div onClick={(e) => { e.stopPropagation(); setActiveDialog("expense"); }}
+            className="flex items-center justify-center p-1.5 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors cursor-pointer border border-rose-100"
+            title="Add Expense"
+          >
+            <ArrowUpRight className="w-3.5 h-3.5" strokeWidth={2.5} />
+          </div>
+          {/* Transfer/Paid */}
+          <div onClick={(e) => { e.stopPropagation(); setActiveDialog(isCreditCard ? "paid" : "transfer"); }}
+            className="flex items-center justify-center p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors cursor-pointer border border-blue-100"
+            title={isCreditCard ? "Pay Balance" : "Transfer"}
+          >
+            {isCreditCard ? <CheckCircle className="w-3.5 h-3.5" strokeWidth={2.5} /> : <ArrowRightLeft className="w-3.5 h-3.5" strokeWidth={2.5} />}
+          </div>
+          {/* Lend */}
+          <div onClick={(e) => { e.stopPropagation(); setActiveDialog("debt"); }}
+            className="flex items-center justify-center p-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors cursor-pointer border border-amber-100"
+            title="Lend"
+          >
+            <UserMinus className="w-3.5 h-3.5" strokeWidth={2.5} />
+          </div>
+        </div>
+
+      </Card>
 
       {/* Controlled Dialogs */}
       {/* Income */}
