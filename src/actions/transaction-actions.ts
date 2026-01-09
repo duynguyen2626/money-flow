@@ -170,7 +170,7 @@ function buildSheetPayload(
 
 // syncRepaymentTransaction removed
 
-export async function createTransaction(input: CreateTransactionInput): Promise<boolean> {
+export async function createTransaction(input: CreateTransactionInput): Promise<string | null> {
   const supabase = createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -235,7 +235,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
 
   if (txnError || !txn) {
     console.error('Error creating transaction:', txnError);
-    return false;
+    return null;
   }
 
   const shopInfo = await loadShopInfo(supabase, input.shop_id)
@@ -304,7 +304,7 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     console.error('Failed to upsert cashback entry (action):', cbError);
   }
 
-  return true;
+  return txn.id;
 }
 
 export async function voidTransactionAction(id: string): Promise<boolean> {
@@ -1131,3 +1131,26 @@ export async function updateSplitBillAction(
   }
 }
 
+
+export async function getSplitChildrenAction(parentId: string) {
+  const supabase = createClient();
+
+  // Fetch transactions where metadata->parent_transaction_id == parentId
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('id, amount, person_id, note, metadata, profiles:person_id(name)')
+    .eq('metadata->>parent_transaction_id', parentId);
+
+  if (error) {
+    console.error('Error fetching split children:', error);
+    return [];
+  }
+
+  return (data || []).map((txn: any) => ({
+    id: txn.id,
+    amount: txn.amount,
+    personId: txn.person_id,
+    name: (txn.profiles as any)?.name ?? 'Unknown',
+    note: txn.note
+  }));
+}

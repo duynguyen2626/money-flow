@@ -42,3 +42,5 @@ next-env.d.ts
 
 # logs
 server.log
+
+.clasprc.json

@@ -415,9 +415,9 @@ export function AccountDetailHeader({
             collateralAccounts={savingsAccounts}
             accounts={allAccounts}
             triggerContent={
-              <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-600 hover:text-slate-700 text-[10px] font-bold uppercase tracking-wider transition-colors">
+              <div className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-600 hover:text-slate-700 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer">
                 <Settings className="w-3 h-3" />Settings
-              </button>
+              </div>
             }
           />
           {hasPending && waitingAmount > 0 && (

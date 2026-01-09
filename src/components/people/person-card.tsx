@@ -17,12 +17,14 @@ import {
     TrendingUp,
     TrendingDown,
     Pencil,
-    Loader2
+    Loader2,
+    FileSpreadsheet
 } from 'lucide-react'
 
 import { Account, Category, Person, Shop, Subscription, MonthlyDebtSummary } from '@/types/moneyflow.types'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 import { EditPersonDialog } from '@/components/people/edit-person-dialog'
+import { ManageSheetButton } from '@/components/people/manage-sheet-button'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
 import {
     Dialog,
@@ -255,26 +257,26 @@ function PersonCardComponent({
 
                 </div>
 
-                {/* Footer Actions */}
-                <div className="grid grid-cols-[1fr_1fr_auto] gap-1.5 mt-auto">
-                    {/* Lend Button - Using div wrapper to avoid nested button */}
+                {/* Footer Actions - 4 buttons: LEND, REPAY, Sheet, Eye */}
+                <div className="grid grid-cols-4 gap-1.5 mt-auto">
+                    {/* Lend Button - Reduced size */}
                     <div onClick={stopPropagation}>
                         <AddTransactionDialog
                             {...dialogBaseProps}
                             defaultType="debt"
                             defaultPersonId={person.id}
                             defaultDebtAccountId={person.debt_account_id ?? undefined}
-                            buttonClassName="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100 shadow-sm h-8 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1"
+                            buttonClassName="w-full bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100 shadow-sm h-8 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5"
                             triggerContent={
                                 <>
-                                    <HandCoins className="w-3.5 h-3.5" />
+                                    <HandCoins className="w-3 h-3" />
                                     LEND
                                 </>
                             }
                         />
                     </div>
 
-                    {/* Repay Button */}
+                    {/* Repay Button - Reduced size */}
                     <div onClick={stopPropagation}>
                         <AddTransactionDialog
                             {...dialogBaseProps}
@@ -282,13 +284,29 @@ function PersonCardComponent({
                             defaultPersonId={person.id}
                             defaultDebtAccountId={person.debt_account_id ?? undefined}
                             defaultAmount={displayCycleBalance > 0 ? displayCycleBalance : undefined}
-                            buttonClassName="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-100 shadow-sm h-8 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1"
+                            buttonClassName="w-full bg-emerald-50 hover:bg-emerald-100 text-emerald-600 border border-emerald-100 shadow-sm h-8 rounded-lg text-[9px] font-bold flex items-center justify-center gap-0.5"
                             triggerContent={
                                 <>
-                                    <Banknote className="w-3.5 h-3.5" />
+                                    <Banknote className="w-3 h-3" />
                                     REPAY
                                 </>
                             }
+                        />
+                    </div>
+
+                    {/* Sheet Icon Button - Opens Manage Sheet Dialog */}
+                    <div onClick={stopPropagation} className="w-full">
+                        <ManageSheetButton
+                            personId={person.id}
+                            cycleTag={person.current_cycle_label ?? ''}
+                            initialSheetUrl={person.sheet_link ?? null}
+                            scriptLink={person.google_sheet_url ?? null}
+                            googleSheetUrl={person.google_sheet_url ?? null}
+                            sheetFullImg={person.sheet_full_img ?? null}
+                            showBankAccount={person.sheet_show_bank_account ?? false}
+                            showQrImage={person.sheet_show_qr_image ?? false}
+                            buttonClassName="h-8 w-full rounded-lg border border-slate-100 bg-white shadow-sm text-emerald-500 hover:text-emerald-600 hover:border-emerald-200 flex items-center justify-center transition-colors"
+                            iconOnly={true}
                         />
                     </div>
 
@@ -296,7 +314,7 @@ function PersonCardComponent({
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 rounded-lg border border-slate-100 bg-white shadow-sm text-slate-600 hover:text-blue-600 hover:border-blue-100"
+                        className="h-8 w-full rounded-lg border border-slate-100 bg-white shadow-sm text-blue-500 hover:text-blue-600 hover:border-blue-200 transition-colors"
                         onClick={(e) => openDetails(e)}
                         title="View Details"
                         disabled={isPending}

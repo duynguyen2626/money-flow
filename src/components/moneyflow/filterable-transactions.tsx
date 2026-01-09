@@ -48,6 +48,8 @@ type FilterableTransactionsProps = {
     selectedType?: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay' | 'cashback'
     onTypeChange?: (type: 'all' | 'income' | 'expense' | 'transfer' | 'lend' | 'repay' | 'cashback') => void
     className?: string
+    hideStatusTabs?: boolean // Hide Active/Void/Pending tabs when managed by parent
+    hideTypeFilters?: boolean // Hide All/Income/Expense/Lend/Repay filters
 }
 
 type BulkActionState = {
@@ -81,6 +83,8 @@ export function FilterableTransactions({
     onTypeChange,
     className,
     variant = 'page',
+    hideStatusTabs = false,
+    hideTypeFilters = false,
 }: FilterableTransactionsProps & { variant?: 'page' | 'embedded' }) {
     const { selectedTag, setSelectedTag } = useTagFilter()
     const [searchTermInternal, setSearchTermInternal] = useState('');
@@ -691,31 +695,35 @@ export function FilterableTransactions({
                                 onChange={setSearchTerm}
                             />
 
-                            <div className="hidden lg:flex items-center gap-1 bg-slate-100/50 p-1 rounded-lg shrink-0">
-                                {(['all', 'income', 'expense', 'lend', 'repay'] as const).map(type => (
-                                    <button
-                                        key={type}
-                                        onClick={() => setSelectedType(type)}
-                                        className={cn(
-                                            "px-2.5 py-1 text-[11px] font-bold rounded-md transition-all capitalize",
-                                            selectedType === type
-                                                ? "bg-white text-slate-900 shadow-sm ring-1 ring-black/5"
-                                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-                                        )}
-                                    >
-                                        {type}
-                                    </button>
-                                ))}
-                            </div>
+                            {!hideTypeFilters && (
+                                <div className="hidden lg:flex items-center gap-1 bg-slate-100/50 p-1 rounded-lg shrink-0">
+                                    {(['all', 'income', 'expense', 'lend', 'repay'] as const).map(type => (
+                                        <button
+                                            key={type}
+                                            onClick={() => setSelectedType(type)}
+                                            className={cn(
+                                                "px-2.5 py-1 text-[11px] font-bold rounded-md transition-all capitalize",
+                                                selectedType === type
+                                                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-black/5"
+                                                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                                            )}
+                                        >
+                                            {type}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
 
                         {/* RIGHT: Actions & Controls */}
                         <div className="flex items-center gap-2 shrink-0">
-                            <QuickTabs
-                                activeTab={activeTab}
-                                onTabChange={setActiveTab}
-                                className="mr-2"
-                            />
+                            {!hideStatusTabs && (
+                                <QuickTabs
+                                    activeTab={activeTab}
+                                    onTabChange={setActiveTab}
+                                    className="mr-2"
+                                />
+                            )}
 
                             <DateRangeControl
                                 dateFrom={dateFrom}
@@ -756,11 +764,13 @@ export function FilterableTransactions({
                     <div className="flex lg:hidden flex-col gap-3">
                         {/* Row 1: Tabs + Icons */}
                         <div className="flex items-center justify-between gap-2">
-                            <QuickTabs
-                                activeTab={activeTab}
-                                onTabChange={setActiveTab}
-                                size="xs"
-                            />
+                            {!hideStatusTabs && (
+                                <QuickTabs
+                                    activeTab={activeTab}
+                                    onTabChange={setActiveTab}
+                                    size="xs"
+                                />
+                            )}
 
                             <div className="flex items-center gap-1.5">
                                 <DateRangeControl
@@ -1118,6 +1128,6 @@ export function FilterableTransactions({
                     </div>
                 </div>
             </div>
-        </div>
+        </div >
     )
 }

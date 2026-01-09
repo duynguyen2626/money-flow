@@ -24,7 +24,8 @@ import {
   Wallet,
   Cloud,
   Database,
-  Undo2
+  Undo2,
+  Banknote
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -50,7 +51,7 @@ const navItems: NavItem[] = [
   { title: "Categories", href: "/categories", icon: <Tags className="h-5 w-5" /> },
   { title: "Shops", href: "/shops", icon: <ShoppingBag className="h-5 w-5" /> },
   { title: "People", href: "/people", icon: <Users className="h-5 w-5" /> },
-  { title: "Cashback", href: "/cashback", icon: <Wallet className="h-5 w-5" /> },
+  { title: "Cashback", href: "/cashback", icon: <Banknote className="h-5 w-5" /> },
   { title: "Batches", href: "/batch", icon: <Database className="h-5 w-5" /> },
   { title: "Services", href: "/services", icon: <Cloud className="h-5 w-5" /> },
   { title: "Refunds", href: "/refunds", icon: <Undo2 className="h-5 w-5" /> },

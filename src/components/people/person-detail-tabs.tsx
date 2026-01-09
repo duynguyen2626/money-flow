@@ -10,7 +10,7 @@ import { Account, Category, Person, PersonCycleSheet, Shop } from '@/types/money
 import { SmartFilterBar } from '@/components/moneyflow/smart-filter-bar'
 import { DebtCycleList } from '@/components/moneyflow/debt-cycle-list'
 import { SplitBillManager } from '@/components/people/split-bill-manager'
-import { SheetSyncControls } from '@/components/people/sheet-sync-controls'
+import { ManageSheetButton } from '@/components/people/manage-sheet-button'
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { isYYYYMM, normalizeMonthTag } from '@/lib/month-tag'
@@ -25,6 +25,9 @@ interface PersonDetailTabsProps {
     sheetProfileId: string
     sheetLink?: string | null
     googleSheetUrl?: string | null
+    sheetFullImg?: string | null
+    showBankAccount?: boolean
+    showQrImage?: boolean
     transactions: any[]
     cycleSheets?: PersonCycleSheet[]
     debtTags?: any[]
@@ -39,19 +42,25 @@ export function PersonDetailTabs({
     sheetProfileId,
     sheetLink,
     googleSheetUrl,
+    sheetFullImg,
+    showBankAccount = false,
+    showQrImage = false,
     transactions,
     cycleSheets = [],
     debtTags = [],
 }: PersonDetailTabsProps) {
     const searchParams = useSearchParams()
 
-    const resolveTab = (tab: string | null): 'details' | 'split-bill' => {
+    const resolveTab = (tab: string | null): 'details' | 'active' | 'void' | 'pending' | 'split-bill' => {
         if (tab === 'split-bill') return 'split-bill'
+        if (tab === 'active') return 'active'
+        if (tab === 'void') return 'void'
+        if (tab === 'pending') return 'pending'
         return 'details'
     }
 
     const initialTab = resolveTab(searchParams.get('tab'))
-    const [activeTab, setActiveTab] = useState<'details' | 'split-bill'>(initialTab)
+    const [activeTab, setActiveTab] = useState<'details' | 'active' | 'void' | 'pending' | 'split-bill'>(initialTab)
     const [viewMode, setViewMode] = useState<'timeline' | 'all'>('timeline')
     const [isLoadingMode, setIsLoadingMode] = useState(false)
     const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer' | 'cashback'>('all')
@@ -126,7 +135,8 @@ export function PersonDetailTabs({
             result = result.filter(txn => {
                 const note = txn.note?.toLowerCase() || ''
                 const amount = txn.amount?.toString() || ''
-                return note.includes(lower) || amount.includes(lower)
+                const id = txn.id?.toLowerCase() || '' // Added ID search
+                return note.includes(lower) || amount.includes(lower) || id.includes(lower)
             })
         }
 
@@ -135,6 +145,9 @@ export function PersonDetailTabs({
 
     const tabs = [
         { id: 'details' as const, label: 'Details', icon: <LayoutDashboard className="h-4 w-4" /> },
+        { id: 'active' as const, label: 'Active', icon: <History className="h-4 w-4" /> },
+        { id: 'void' as const, label: 'Void', icon: <History className="h-4 w-4" /> },
+        { id: 'pending' as const, label: 'Pending', icon: <History className="h-4 w-4" /> },
         { id: 'split-bill' as const, label: 'Split Bill', icon: <DollarSign className="h-4 w-4" /> },
     ]
 
@@ -150,7 +163,8 @@ export function PersonDetailTabs({
                             "flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap",
                             activeTab === tab.id
                                 ? "border-slate-900 text-slate-900"
-                                : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+                                : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300",
+                            tab.id === 'split-bill' && "ml-auto"
                         )}
                     >
                         {tab.icon}
@@ -220,13 +234,16 @@ export function PersonDetailTabs({
 
                             {/* Right: Stats & Actions */}
                             <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto xl:justify-end">
-                                {/* Stats Bar (Scrollable on mobile) */}
-                                <SmartFilterBar
-                                    transactions={filteredTransactions}
-                                    selectedType={filterType}
-                                    onSelectType={setFilterType}
-                                    className="overflow-x-auto max-w-full pb-1 md:pb-0"
-                                />
+
+                                {/* Stats Bar - Only visible in Timeline */}
+                                {viewMode === 'timeline' && (
+                                    <SmartFilterBar
+                                        transactions={filteredTransactions}
+                                        selectedType={filterType}
+                                        onSelectType={setFilterType}
+                                        className="overflow-x-auto max-w-full pb-1 md:pb-0"
+                                    />
+                                )}
 
                                 <div className="h-6 w-px bg-slate-200 hidden xl:block" />
 
@@ -263,6 +280,24 @@ export function PersonDetailTabs({
                                 </div>
 
                                 <div className="h-6 w-px bg-slate-200 hidden xl:block" />
+
+                                {/* Manage Sheet */}
+                                <ManageSheetButton
+                                    personId={personId}
+                                    cycleTag={
+                                        selectedYear
+                                            ? `${selectedYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+                                            : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+                                    }
+                                    scriptLink={sheetLink}
+                                    googleSheetUrl={googleSheetUrl}
+                                    sheetFullImg={sheetFullImg}
+                                    showBankAccount={showBankAccount}
+                                    showQrImage={showQrImage}
+                                    buttonClassName="h-9 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 hover:border-emerald-300"
+                                    size="sm"
+                                    showCycleAction={true}
+                                />
 
                                 {/* View Toggle */}
                                 <div className="flex rounded-lg border border-slate-200 p-1 bg-slate-100 gap-1 h-9 items-center">
@@ -324,9 +359,73 @@ export function PersonDetailTabs({
                                     hidePeopleColumn={true}
                                     searchTerm={searchTerm}
                                     onSearchChange={setSearchTerm}
+                                    hideTypeFilters={true}
                                 />
                             )}
                         </div>
+                    </div>
+                )}
+
+                {/* Active Tab */}
+                {activeTab === 'active' && (
+                    <div className="flex flex-col space-y-4">
+                        <FilterableTransactions
+                            transactions={filteredTransactions.filter(t => t.status === 'posted')}
+                            accounts={accounts}
+                            categories={categories}
+                            people={people}
+                            shops={shops}
+                            context="person"
+                            contextId={personId}
+                            variant="embedded"
+                            hidePeopleColumn={true}
+                            searchTerm={searchTerm}
+                            onSearchChange={setSearchTerm}
+                            hideStatusTabs={true}
+                            hideTypeFilters={true}
+                        />
+                    </div>
+                )}
+
+                {/* Void Tab */}
+                {activeTab === 'void' && (
+                    <div className="flex flex-col space-y-4">
+                        <FilterableTransactions
+                            transactions={filteredTransactions.filter(t => t.status === 'void')}
+                            accounts={accounts}
+                            categories={categories}
+                            people={people}
+                            shops={shops}
+                            context="person"
+                            contextId={personId}
+                            variant="embedded"
+                            hidePeopleColumn={true}
+                            searchTerm={searchTerm}
+                            onSearchChange={setSearchTerm}
+                            hideStatusTabs={true}
+                            hideTypeFilters={true}
+                        />
+                    </div>
+                )}
+
+                {/* Pending Tab */}
+                {activeTab === 'pending' && (
+                    <div className="flex flex-col space-y-4">
+                        <FilterableTransactions
+                            transactions={filteredTransactions.filter(t => t.status === 'pending')}
+                            accounts={accounts}
+                            categories={categories}
+                            people={people}
+                            shops={shops}
+                            context="person"
+                            contextId={personId}
+                            variant="embedded"
+                            hidePeopleColumn={true}
+                            searchTerm={searchTerm}
+                            onSearchChange={setSearchTerm}
+                            hideStatusTabs={true}
+                            hideTypeFilters={true}
+                        />
                     </div>
                 )}
 

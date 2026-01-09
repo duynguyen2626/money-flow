@@ -161,12 +161,14 @@ export function buildEditInitialValues(txn: TransactionWithDetails): Partial<Tra
         shop_image_url: txn.shop_image_url,
         category_name: txn.category_name,
         cashback_share_percent:
-            percentValue !== undefined && percentValue !== null ? percentValue : undefined,
+            percentValue !== undefined && percentValue !== null ? percentValue * 100 : undefined, // Multiply by 100 for UI (0.01 → 1%)
         cashback_share_fixed:
             txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined ? Number(txn.cashback_share_fixed) : undefined,
         is_installment: txn.is_installment ?? false,
-        cashback_mode: ((percentValue !== undefined && percentValue !== null && Number(percentValue) > 0) ? 'real_percent' :
-            (txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined && Number(txn.cashback_share_fixed) > 0) ? 'real_fixed' : 'none_back') as 'none_back' | 'real_fixed' | 'real_percent' | 'voluntary',
+        // CRITICAL: Preserve cashback_mode from database (especially 'voluntary'), don't auto-infer
+        cashback_mode: (txn.cashback_mode as 'none_back' | 'real_fixed' | 'real_percent' | 'voluntary') ||
+            ((percentValue !== undefined && percentValue !== null && Number(percentValue) > 0) ? 'real_percent' :
+                (txn.cashback_share_fixed !== null && txn.cashback_share_fixed !== undefined && Number(txn.cashback_share_fixed) > 0) ? 'real_fixed' : 'none_back'),
         metadata: meta,
     };
 

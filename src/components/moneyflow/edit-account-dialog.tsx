@@ -770,6 +770,7 @@ export function EditAccountDialog({
         setIsDirty(false)
         router.refresh()
       } catch (error: any) {
+        console.error('[EditAccountDialog] Submit Error:', error);
         setStatus({ text: error.message || 'An unexpected error occurred.', variant: 'error' })
       }
     })

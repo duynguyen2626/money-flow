@@ -188,6 +188,9 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
             sheetProfileId={sheetProfileId}
             sheetLink={person.sheet_link}
             googleSheetUrl={person.google_sheet_url}
+            sheetFullImg={person.sheet_full_img}
+            showBankAccount={person.sheet_show_bank_account ?? undefined}
+            showQrImage={person.sheet_show_qr_image ?? undefined}
             transactions={transactions}
             cycleSheets={cycleSheets}
             debtTags={debtTags}
