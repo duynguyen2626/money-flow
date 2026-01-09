@@ -525,7 +525,6 @@ export async function createTransaction(
         // So 'input.cashback_share_percent' IS ALREADY DECIMAL (e.g. 0.05).
 
         const decimalRate = Number(input.cashback_share_percent ?? 0);
-        const percentForSheet = decimalRate * 100; // Sheet wants 5 for 5%
 
         const fixedAmount = Math.max(
           0,
@@ -543,7 +542,7 @@ export async function createTransaction(
           shop_name: shopName,
           amount: finalAmount,
           original_amount: originalAmount,
-          cashback_share_percent: percentForSheet, // Send 5 (not 0.05)
+          cashback_share_percent: decimalRate,
           cashback_share_fixed: fixedAmount,
           type: input.type === "repayment" ? "In" : "Debt",
         };
@@ -731,7 +730,6 @@ export async function updateTransaction(
       // Calculate final amount
       const originalAmount = Math.abs(input.amount);
       const decimalRate = Number(input.cashback_share_percent ?? 0);
-      const percentForSheet = decimalRate * 100; // Sheet wants 5 for 5%
 
       const fixedAmount = Math.max(0, Number(input.cashback_share_fixed ?? 0));
       const cashback = originalAmount * decimalRate + fixedAmount;
@@ -785,7 +783,7 @@ export async function updateTransaction(
           shop_name: shopName,
           amount: finalAmount,
           original_amount: originalAmount,
-          cashback_share_percent: percentForSheet,
+          cashback_share_percent: decimalRate,
           cashback_share_fixed: fixedAmount,
           type: input.type === "repayment" ? "In" : "Debt",
         };
@@ -842,7 +840,6 @@ export async function updateTransaction(
 
         const originalAmount = Math.abs(input.amount);
         const decimalRate = Number(input.cashback_share_percent ?? 0);
-        const percentForSheet = decimalRate * 100;
 
         const fixedAmount = Math.max(
           0,
@@ -860,7 +857,7 @@ export async function updateTransaction(
           shop_name: shopName,
           amount: finalAmount,
           original_amount: originalAmount,
-          cashback_share_percent: percentForSheet,
+          cashback_share_percent: decimalRate,
           cashback_share_fixed: fixedAmount,
           type: input.type === "repayment" ? "In" : "Debt",
         };

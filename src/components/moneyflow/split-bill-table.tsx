@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, Plus } from "lucide-react";
+import { X, Plus, ExternalLink } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -12,6 +12,7 @@ export type SplitBillParticipant = {
   paidBy: string;
   note: string;
   paidBefore?: number;
+  linkedTransactionId?: string; // New: ID of the child transaction if it exists
 };
 
 type SplitBillTableProps = {
@@ -24,6 +25,7 @@ type SplitBillTableProps = {
   onRemove: (personId: string) => void;
   allowPaidBefore?: boolean;
   error?: string | null;
+  onEditTransaction?: (transactionId: string) => void; // New: Callback to edit child
 };
 
 const numberFormatter = new Intl.NumberFormat("en-US", {
@@ -48,6 +50,7 @@ export function SplitBillTable({
   onRemove,
   allowPaidBefore = true,
   error,
+  onEditTransaction,
 }: SplitBillTableProps) {
   const [paidBeforeModal, setPaidBeforeModal] = useState<{
     personId: string;
@@ -105,7 +108,23 @@ export function SplitBillTable({
           <tbody className="divide-y divide-slate-100">
             {participants.map((row) => (
               <tr key={row.personId} className="bg-white">
-                <td className="px-3 py-2 text-slate-800">{row.name}</td>
+                <td className="px-3 py-2 text-slate-800">
+                  <div className="flex items-center gap-2">
+                    {row.name}
+                    {row.linkedTransactionId && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEditTransaction?.(row.linkedTransactionId!);
+                        }}
+                        className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 hover:bg-blue-100 ring-1 ring-inset ring-blue-700/10"
+                      >
+                        Edit <ExternalLink className="ml-1 h-3 w-3" />
+                      </button>
+                    )}
+                  </div>
+                </td>
                 <td className="px-3 py-2">
                   <Input
                     value={row.amount.toString()}

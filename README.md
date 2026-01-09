@@ -1,5 +1,29 @@
 # Money Flow 3.0
 
+## 💰 Split Bill Architecture (Important for Devs/Agents)
+
+### Data Model
+- **Parent Transaction (Expense)**:
+  - Records the **TOTAL** bill amount (e.g., 791k) to match Bank Statement.
+  - `person_id`: `null`.
+  - `metadata.is_split_bill`: `true`.
+  - `metadata.my_share`: The actual personal expense amount (e.g., 395k).
+  - `metadata.original_total_amount`: Same as Amount.
+
+- **Child Transactions (Debt)**:
+  - Linked to Parent via `metadata.parent_transaction_id`.
+  - Represent money owed by others.
+  - `type`: `debt` (Lending).
+  - `metadata.skip_wallet_deduction`: `true` (Future proofing balance logic).
+
+### 📊 Reporting Logic
+When calculating "My Expense" in reports:
+1. Check if `is_split_bill` is true.
+2. If true, use `metadata.my_share` as the expense amount.
+3. If false, use `amount`.
+
+---
+
 > [!IMPORTANT]
 > **Handover Status (Sprint 5.1):**
 > Current objective: Forcing Debt Account Auto-Selection in `TransactionForm.tsx`.

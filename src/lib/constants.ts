@@ -46,4 +46,7 @@ export const SYSTEM_CATEGORIES = {
 
     // Danh mục Money Transfer (for Transfer quick-add)
     MONEY_TRANSFER: 'e0000000-0000-0000-0000-000000000080',
+
+    // Danh mục Hoàn tiền (Cashback)
+    CASHBACK: 'e0000000-0000-0000-0000-000000000092',
 };

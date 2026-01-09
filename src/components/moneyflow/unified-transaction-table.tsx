@@ -185,7 +185,45 @@ export function UnifiedTransactionTable({
   fontSize: externalFontSize,
   onFontSizeChange,
 }: UnifiedTransactionTableProps) {
-  const tableData = useMemo(() => data ?? transactions ?? [], [data, transactions])
+  const [tableData, setTableData] = useState<TransactionWithDetails[]>(() => data ?? transactions ?? [])
+  const [updatingTxnIds, setUpdatingTxnIds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    setTableData(data ?? transactions ?? [])
+  }, [data, transactions])
+
+  const handleOptimisticUpdate = useCallback((optimisticTxn: TransactionWithDetails) => {
+    // Safety check: if no ID, cannot update
+    if (!optimisticTxn?.id) {
+      console.warn('[Optimistic Update] Transaction has no ID, skipping update');
+      return;
+    }
+
+    setUpdatingTxnIds(prev => {
+      const next = new Set(prev)
+      next.add(optimisticTxn.id)
+      return next
+    })
+
+    setTableData(prev => {
+      const index = prev.findIndex(t => t.id === optimisticTxn.id)
+      if (index >= 0) {
+        const next = [...prev]
+        next[index] = optimisticTxn
+        return next
+      } else {
+        return [optimisticTxn, ...prev]
+      }
+    })
+
+    setTimeout(() => {
+      setUpdatingTxnIds(prev => {
+        const next = new Set(prev)
+        next.delete(optimisticTxn.id)
+        return next
+      })
+    }, 2000)
+  }, [])
   const defaultColumns: ColumnConfig[] = [
     { key: "date", label: "Date", defaultWidth: 160, minWidth: 140 },
     { key: "shop", label: "Note", defaultWidth: 250, minWidth: 180 },
@@ -2297,7 +2335,8 @@ export function UnifiedTransactionTable({
                       className={cn(
                         "border-b border-slate-200 transition-colors text-base",
                         isMenuOpen ? "bg-blue-50" : rowBgColor,
-                        !isExcelMode && "hover:bg-slate-50/50"
+                        !isExcelMode && "hover:bg-slate-50/50",
+                        updatingTxnIds.has(txn.id) && "opacity-70 animate-pulse bg-slate-50"
                       )}
                     >
                       {displayedColumns.map(col => {
@@ -2514,6 +2553,15 @@ export function UnifiedTransactionTable({
             people={people}
             shops={shops}
             triggerContent={<span className="hidden"></span>}
+            onSuccess={(txn) => {
+              // CRITICAL: Always close modal first, then try optimistic update
+              setEditingTxn(null);
+
+              // Try optimistic update if txn is provided
+              if (txn) {
+                handleOptimisticUpdate(txn);
+              }
+            }}
           />
         )
       }

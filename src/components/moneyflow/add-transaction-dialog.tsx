@@ -43,6 +43,7 @@ type AddTransactionDialogProps = {
     split_group_id?: string;
     split_person_ids?: string[];
   };
+  onSuccess?: (txn?: any) => void;
 };
 
 export function AddTransactionDialog({
@@ -71,6 +72,7 @@ export function AddTransactionDialog({
   mode = "create",
   transactionId,
   initialValues,
+  onSuccess,
 }: AddTransactionDialogProps) {
   const [internalOpen, setInternalOpen] = useState(false);
   const open = isOpen ?? internalOpen;
@@ -91,11 +93,29 @@ export function AddTransactionDialog({
     }
   }, [open, installments.length]);
 
+  // Internal state for handling navigation between transactions (Parent <-> Child)
+  const [activeTransactionId, setActiveTransactionId] = useState<string | undefined>(transactionId);
+
+  // Reset active ID when prop changes (new open)
+  useEffect(() => {
+    setActiveTransactionId(transactionId);
+  }, [transactionId, open]);
+
+  // Handle switching transaction (e.g. from Child back to Parent, or Parent to Child)
+  const handleSwitchTransaction = (newId: string | undefined) => {
+    console.log("[AddTransactionDialog] Switching to transaction:", newId);
+    setFetchedInitialValues(undefined); // Clear old values
+    setIsFetchingTransaction(true); // Trigger loading
+    setActiveTransactionId(newId); // Update ID to trigger fetch effect
+    // The existing fetch effect below depends on `activeTransactionId` (which we update in the next effect)
+  };
+
   // Fix: Fetch transaction details if ID is provided but initialValues are missing (e.g. from Debt Cycle Popover)
   // OR if initialValues indicate this is a child transaction (needs redirection to parent)
   useEffect(() => {
     // Only proceed if dialog is open and we have a transactionId in edit mode
-    if (!open || !transactionId || mode !== 'edit') return;
+    // Use activeTransactionId instead of prop transactionId
+    if (!open || !activeTransactionId || mode !== 'edit') return;
 
     // Check if we need to redirect to parent
     const meta = (initialValues as any)?.metadata;
@@ -107,10 +127,10 @@ export function AddTransactionDialog({
     const isChild = !!parentIdFromMeta;
 
     // If we have initialValues AND it's not a child that needs redirection, we can skip fetching
-    if (initialValues && !isChild) {
+    // BUT only if we haven't switched IDs (activeTransactionId === transactionId)
+    if (initialValues && !isChild && activeTransactionId === transactionId) {
       if (fetchedInitialValues) {
-        // If we switched from a child (fetched) back to a normal txn that has initialValues, 
-        // we might want to clear fetched, but for now, rely on parent to pass correct initialValues
+        // keep
       }
       return;
     }
@@ -121,7 +141,8 @@ export function AddTransactionDialog({
     const fetchDetails = async () => {
       try {
         const { loadTransactions } = await import("@/services/transaction.service");
-        const txns = await loadTransactions({ transactionId });
+        // Load the ACTIVE transaction
+        const txns = await loadTransactions({ transactionId: activeTransactionId });
 
         if (txns && txns.length > 0) {
           const { buildEditInitialValues, parseMetadata } = await import("@/lib/transaction-mapper");
@@ -129,34 +150,64 @@ export function AddTransactionDialog({
           const firstTxn = txns[0];
           const parsedMeta = parseMetadata(firstTxn.metadata);
 
-          // Re-check parent ID from the fresh fetch
+          // Re-check parent ID from the fresh fetch (only if we are initially loading and want auto-redirect)
+          // tailored logic: if we explicitly switched to a child, don't auto redirect back?
+          // Actually, we want to allow editing the child. The "Redirect to Parent" logic was mainly for the initial load?
+          // Let's assume if we are manually switching, we trust the ID. 
+          // If it's the very first load (activeTransactionId === transactionId), we might want to redirect.
+
+          /* 
+             NOTE: The previous logic forced redirect to Parent.
+             Now we want to allow editing Child, but show a "Back" button.
+             So we should disable the auto-redirect if we want to edit the child.
+             BUT, if the user requested to edit a child from the Table, maybe they EXPECT to see the full bill?
+             Current logic: "Redirecting to Parent".
+             If we want to support "Edit Child" specifically, we should maybe ONLY redirect if it's the specific "Split Bill" view we want.
+             
+             Let's KEEP the redirect for the *initial* open if it's a child, assuming the user likely wants to see the whole context.
+             BUT if we switched explicitly (activeTransactionId !== transactionId), we presume intent.
+          */
+
           const trueParentId = (parsedMeta as any)?.parent_transaction_id;
+          const isInitialLoad = activeTransactionId === transactionId;
 
-          if (typeof trueParentId === 'string' && trueParentId) {
+          // Only auto-redirect on initial load if we prefer Parent view. 
+          // However, user might have clicked "Edit" on a specific Child row.
+          // If we redirect, we assume Parent edit is better.
+          // Let's keep existing behavior for now, but ensure we can "Switch" to child later.
+          // Wait, if we redirect to Parent, how do we edit Child?
+          // We need to render the Child form.
+          // So actually, for the new flow, we might NOT want auto-redirect anymore?
+          // Or we redirect, but then "Open Child" switches back.
+
+          if (isInitialLoad && typeof trueParentId === 'string' && trueParentId) {
+            // ... existing redirect logic ...
+            // We can let it setFetchedInitialValues to Parent
+            // AND setActiveTransactionId(trueParentId) to match?
+            // If we just set fetchedInitialValues, the Form receives Parent data but ID is Child ID? Mismatch.
+
             console.log("[AddTransactionDialog] Child transaction detected. Redirecting to Parent:", trueParentId);
-            const service = await import("@/services/transaction.service");
-            const parentTxns = await service.loadTransactions({ transactionId: trueParentId });
-
-            if (parentTxns && parentTxns.length > 0) {
-              const parentRaw = parentTxns[0];
-              // Ensure we force the type to 'repayment' for the parent of a debt repayment
-              // This is handled in 'buildEditInitialValues', but we can be defensive
-              const parentFormatted = buildEditInitialValues(parentRaw);
-              console.log("[AddTransactionDialog] Parent details loaded:", parentFormatted);
-              setFetchedInitialValues(parentFormatted);
-              return;
-            } else {
-              console.warn("[AddTransactionDialog] Parent transaction found but failed to load data:", trueParentId);
-            }
+            setActiveTransactionId(trueParentId); // Restart effect with Parent ID
+            return;
           }
 
           // Fallback: Just load the requested transaction
-          console.log("[AddTransactionDialog] Loading transaction directly:", firstTxn.id);
+          console.log("[AddTransactionDialog] Loading transaction details:", firstTxn.id);
           const formatted = buildEditInitialValues(firstTxn);
+
+          // Fix: Ensure debt_account_id is populated if missing but person is known
+          if (formatted.person_id && !formatted.debt_account_id && people) {
+            const p = people.find(x => x.id === formatted.person_id);
+            if (p?.debt_account_id) {
+              console.log("[AddTransactionDialog] Backfilling missing debt_account_id from person:", p.name);
+              formatted.debt_account_id = p.debt_account_id;
+            }
+          }
+
           setFetchedInitialValues(formatted);
 
         } else {
-          console.warn("[AddTransactionDialog] Transaction not found:", transactionId);
+          console.warn("[AddTransactionDialog] Transaction not found:", activeTransactionId);
         }
       } catch (error) {
         console.error("[AddTransactionDialog] Failed to load transaction:", error);
@@ -167,7 +218,7 @@ export function AddTransactionDialog({
 
     fetchDetails();
 
-  }, [open, transactionId, initialValues, mode]);
+  }, [open, activeTransactionId, transactionId, initialValues, mode]);
 
   const effectiveInstallments = installments.length > 0 ? installments : fetchedInstallments;
 
@@ -218,10 +269,11 @@ export function AddTransactionDialog({
     }
   }, [listenToUrlParams, searchParams, shops]);
 
-  const handleSuccess = () => {
+  const handleSuccess = (txn?: any) => {
     handleOpenChange(false);
     setUrlValues(null); // Reset
     router.refresh();
+    onSuccess?.(txn);
   };
 
   const closeDialog = () => {
@@ -469,7 +521,8 @@ export function AddTransactionDialog({
                   defaultType={defaultType}
                   defaultSourceAccountId={defaultSourceAccountId}
                   defaultDebtAccountId={defaultDebtAccountId}
-                  transactionId={transactionId}
+                  transactionId={activeTransactionId} // Use active ID
+                  onSwitchTransaction={handleSwitchTransaction} // Pass switcher
                   mode={mode}
                   initialValues={memoizedInitialValues}
                 />
