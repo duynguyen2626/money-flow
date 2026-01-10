@@ -11,6 +11,7 @@ import { ManageSheetButton } from '@/components/people/manage-sheet-button'
 import { cn } from '@/lib/utils'
 import { isYYYYMM } from '@/lib/month-tag'
 import { toast } from 'sonner' // or assume available context
+import { RolloverDebtDialog } from '@/components/people/rollover-debt-dialog'
 
 interface DebtCycleGroupProps {
     tag: string
@@ -133,8 +134,53 @@ export function DebtCycleGroup({
     return (
         <div className="relative min-h-[400px]">
 
+            {/* Header: Cycle Info & Stats */}
+            <div className="bg-white p-4 border-b flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-baseline gap-3">
+                    <h2 className="text-lg font-bold text-slate-900 tracking-tight">
+                        {tag && isYYYYMM(tag) ? (
+                            <>
+                                {new Date(parseInt(tag.split('-')[0]), parseInt(tag.split('-')[1]) - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                            </>
+                        ) : tag}
+                    </h2>
+                    <div className={cn("text-2xl font-extrabold tabular-nums", statusColor)}>
+                        {formatter.format(remains)}
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <ManageSheetButton
+                        personId={personId}
+                        cycleTag={tag}
+                        scriptLink={scriptLink}
+                        googleSheetUrl={googleSheetUrl}
+                        sheetFullImg={sheetFullImg}
+                        showBankAccount={showBankAccount}
+                        showQrImage={showQrImage}
+                        iconOnly={true}
+                        size={'sm'}
+                        className="h-8 w-8"
+                        showCycleAction={true}
+                    />
+
+                    <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", statusBadge)}>
+                        {isSettled ? 'Settled' : 'Unsettled'}
+                    </span>
+
+                    {/* Rollover Button - Only if Unsettled and Positive Debt */}
+                    {!isSettled && remains > 1000 && (
+                        <RolloverDebtDialog
+                            personId={personId}
+                            currentCycle={tag}
+                            remains={remains}
+                        />
+                    )}
+                </div>
+            </div>
+
             {/* Content: Only the Table or Empty State */}
-            <div className="w-full border-t bg-background">
+            <div className="w-full bg-background">
                 {filteredTxns.length > 0 ? (
                     <UnifiedTransactionTable
                         transactions={filteredTxns}

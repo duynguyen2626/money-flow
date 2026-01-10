@@ -7,29 +7,25 @@ import { cn } from '@/lib/utils'
 
 type AccountTabsProps = {
   accountId: string
-  activeTab: 'transactions' | 'cashback'
+  activeTab: 'transactions' // Simplified type
 }
 
 export function AccountTabs({ accountId, activeTab }: AccountTabsProps) {
   const router = useRouter()
-  const [currentTab, setCurrentTab] = useState(activeTab)
+  // Simplified state - strictly 'transactions'
+  const [currentTab, setCurrentTab] = useState<'transactions'>('transactions')
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
-    setCurrentTab(activeTab)
+    // No-op if only one tab
   }, [activeTab])
 
-  const handleTabChange = (tab: 'transactions' | 'cashback') => {
-    if (tab === currentTab) return
-    setCurrentTab(tab)
-    startTransition(() => {
-      router.push(`/accounts/${accountId}?tab=${tab}`)
-    })
+  const handleTabChange = (tab: 'transactions') => {
+    // No-op
   }
 
   const tabs = [
     { key: 'transactions' as const, label: 'Transactions' },
-    { key: 'cashback' as const, label: 'Cashback Analysis' },
   ]
 
   return (
@@ -47,9 +43,7 @@ export function AccountTabs({ accountId, activeTab }: AccountTabsProps) {
                 className={cn(
                   'px-4 py-2 text-sm font-medium border-b-2 transition-colors disabled:opacity-70',
                   isActive
-                    ? tab.key === 'cashback'
-                      ? 'border-emerald-500 text-emerald-600'
-                      : 'border-blue-500 text-blue-600'
+                    ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-slate-500 hover:text-slate-700'
                 )}
               >

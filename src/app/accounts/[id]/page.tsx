@@ -9,7 +9,6 @@ import { AccountDetailHeader } from '@/components/moneyflow/account-detail-heade
 import { FilterableTransactions } from '@/components/moneyflow/filterable-transactions'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 
-import { CashbackAnalysisView } from '@/components/moneyflow/cashback-analysis-view'
 import { AccountTabs } from '@/components/moneyflow/account-tabs'
 
 type PageProps = {
@@ -23,8 +22,8 @@ type PageProps = {
 
 export default async function AccountPage({ params, searchParams }: PageProps) {
   const { id } = await params
-  const { tab } = await searchParams
-  const activeTab = tab === 'cashback' ? 'cashback' : 'transactions'
+  // Removed cashback tab logic
+  const activeTab = 'transactions'
 
   if (!id || id === 'undefined') {
     return (
@@ -51,11 +50,7 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
     getShops(),
     getAccountBatchStats(id),
     getAccountSpendingStats(id, new Date()),
-    // Only load transactions if we are in transactions tab to save performance, 
-    // although FilterableTransactions might do its own fetching? 
-    // Wait, the original code fetched 1000 transactions upfront.
-    // CashbackAnalysisView fetches its own data.
-    activeTab === 'transactions' ? loadTransactions({ accountId: id, context: 'account', limit: 1000 }) : Promise.resolve([]),
+    loadTransactions({ accountId: id, context: 'account', limit: 1000 }),
   ])
 
   // Derived data for header
@@ -87,29 +82,17 @@ export default async function AccountPage({ params, searchParams }: PageProps) {
 
         {/* Content Area */}
         <div className="flex-1 bg-white">
-          {activeTab === 'transactions' ? (
-            <FilterableTransactions
-              transactions={transactions}
-              accounts={allAccounts}
-              categories={categories}
-              people={people}
-              shops={shops}
-              accountId={account.id}
-              accountType={account.type}
-              contextId={account.id}
-              context="account"
-            />
-          ) : (
-            <div className="h-full overflow-y-auto p-6">
-              <CashbackAnalysisView
-                accountId={account.id}
-                accounts={allAccounts}
-                categories={categories}
-                people={people}
-                shops={shops}
-              />
-            </div>
-          )}
+          <FilterableTransactions
+            transactions={transactions}
+            accounts={allAccounts}
+            categories={categories}
+            people={people}
+            shops={shops}
+            accountId={account.id}
+            accountType={account.type}
+            contextId={account.id}
+            context="account"
+          />
         </div>
       </TagFilterProvider>
     </div>

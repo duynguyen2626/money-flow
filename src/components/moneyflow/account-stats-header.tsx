@@ -29,6 +29,7 @@ type AccountStatsHeaderProps = {
   isAssetAccount: boolean
   assetConfig: AssetConfig
   batchStats?: { waiting: number; confirmed: number }
+  variant?: 'default' | 'compact'
 }
 
 export function AccountStatsHeader({
@@ -39,10 +40,12 @@ export function AccountStatsHeader({
   isAssetAccount,
   assetConfig,
   batchStats,
+  variant = 'default'
 }: AccountStatsHeaderProps) {
   const router = useRouter()
   const [isUpdating, setIsUpdating] = useState(false)
   const [liveBatchStats, setLiveBatchStats] = useState(batchStats)
+  const [isExpanded, setIsExpanded] = useState(false) // For compact mode expansion
 
   useEffect(() => {
     setLiveBatchStats(batchStats)
@@ -109,8 +112,6 @@ export function AccountStatsHeader({
 
   if (resolvedStats) {
     const waitingAmount = Math.max(0, resolvedStats.waiting)
-    // Always show Pending/Confirmed blocks even if 0, to maintain layout? 
-    // Or just push them. User wants "3 cụm".
 
     statItems.push({
       label: 'Pending',
@@ -171,6 +172,89 @@ export function AccountStatsHeader({
     } finally {
       setIsUpdating(false)
     }
+  }
+
+  if (variant === 'compact') {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {account.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={account.image_url} alt="" className="h-10 w-10 object-contain" />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center bg-slate-200 text-sm font-semibold text-slate-700">
+                {account.name.charAt(0).toUpperCase()}
+              </div>
+            )}
+
+            <div>
+              <h1 className="text-base font-semibold text-slate-900">{account.name}</h1>
+              <div className="flex gap-2">
+                <span className="text-[10px] text-slate-500 uppercase font-medium">{getAccountTypeLabel(account.type)}</span>
+                <span className={`text-[10px] uppercase font-bold ${account.is_active !== false ? 'text-emerald-600' : 'text-slate-500'}`}>
+                  {account.is_active !== false ? 'Active' : 'Closed'}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="text-right">
+            <span className={`text-xl font-bold tabular-nums ${balanceTone}`}>
+              {formatCurrency(displayBalance ?? 0)}
+            </span>
+          </div>
+        </div>
+
+        {/* Expand Toggle */}
+        <div className="flex justify-center">
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            className="text-xs text-slate-400 hover:text-slate-600 flex items-center gap-1 transition-colors"
+          >
+            {isExpanded ? 'Hide Details' : 'Show Details'}
+            {isExpanded ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+          </button>
+        </div>
+
+        {isExpanded && (
+          <div className="pt-2 border-t border-slate-100 animate-in fade-in slide-in-from-top-1 duration-200">
+            {/* Layer 2: Cashback (Reuse logic if needed, or simplified) */}
+            {/* Only showing Action Toolbar for compact expanded for now, or minimal stats */}
+            <div className="flex flex-wrap gap-2 items-center justify-center pt-2">
+              {/* Sync Button */}
+              <button
+                onClick={() => router.refresh()}
+                className="inline-flex items-center gap-1.5 h-7 px-2 text-xs font-medium rounded border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+              >
+                <RefreshCw className="h-3 w-3" />
+                Sync
+              </button>
+
+              {account.is_active !== false ? (
+                <button
+                  onClick={handleToggleAccountStatus}
+                  disabled={isUpdating}
+                  className="inline-flex items-center gap-1 h-7 px-2 text-xs font-medium rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <Archive className="h-3 w-3" />
+                  Close
+                </button>
+              ) : (
+                <button
+                  onClick={handleToggleAccountStatus}
+                  disabled={isUpdating}
+                  className="inline-flex items-center gap-1 h-7 px-2 text-xs font-medium rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  Reopen
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
