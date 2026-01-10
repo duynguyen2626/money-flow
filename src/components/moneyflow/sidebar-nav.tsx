@@ -12,7 +12,6 @@ import {
   ArrowLeftRight, // Transactions
   Hourglass, // Installments
   Tags, // Categories
-  Wallet, // Cashback
   Users, // People
   Settings,
   Database, // Batch
@@ -67,7 +66,6 @@ export function SidebarNav({ className }: SidebarNavProps) {
       ]
     },
     { title: "People", href: "/people", icon: Users },
-    { title: "Cashback", href: "/cashback", icon: Wallet }, // Updated Icon
     { title: "Batch Import", href: "/batch", icon: Database },
     { title: "Services", href: "/services", icon: Cloud }, // Updated Icon
     { title: "Settings", href: "/settings", icon: Settings },

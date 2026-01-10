@@ -392,7 +392,7 @@ function setupSummaryTable(sheet, summaryOptions) {
     sheet.getRange('N2').setFormula('=SUMIFS(J:J;B:B;"In")');
     sheet.getRange('N3').setFormula('=SUM(I2:I)');
     sheet.getRange('N4').setFormula('=SUMIFS(J:J;B:B;"Out")');
-    sheet.getRange('N5').setFormula('=N4+N2');
+    sheet.getRange('N5').setFormula('=SUMIFS(F:F;B:B;"Out") - SUMIFS(F:F;B:B;"In") - N3');
 
     sheet.getRange('N2:N5').setNumberFormat('#,##0').setFontWeight('bold');
     sheet.getRange('L2:N5').setBorder(true, true, true, true, true, true);

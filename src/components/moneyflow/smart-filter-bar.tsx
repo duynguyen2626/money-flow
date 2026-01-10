@@ -123,10 +123,13 @@ export function SmartFilterBar({
                         key={filter.id}
                         onClick={() => onSelectType(filter.id as FilterType)}
                         className={cn(
-                            "rounded-md border px-3 py-1.5 text-xs font-medium transition-all whitespace-nowrap",
+                            "h-9 rounded-full border px-4 py-1.5 text-xs font-bold transition-all whitespace-nowrap shadow-sm flex items-center gap-1",
                             isActive
-                                ? (filter.activeClass || 'bg-slate-100 border-slate-300 text-slate-900 font-semibold')
-                                : cn("bg-white border-slate-200 text-slate-500", filter.inactiveClass || 'hover:bg-slate-50 hover:text-slate-900')
+                                ? (filter.activeClass || 'bg-slate-900 border-slate-900 text-white shadow-md transform scale-105')
+                                : cn(
+                                    "bg-white border-slate-200 text-slate-600",
+                                    filter.inactiveClass || 'hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
+                                )
                         )}
                     >
                         {filter.label}

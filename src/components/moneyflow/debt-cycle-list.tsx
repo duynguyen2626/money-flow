@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Account, Category, Person, PersonCycleSheet, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { isYYYYMM, normalizeMonthTag } from '@/lib/month-tag'
 import { DebtCycleGroup } from './debt-cycle-group'
@@ -23,6 +23,8 @@ interface DebtCycleListProps {
     debtTags?: any[]
     selectedYear?: string | null
     onYearChange?: (year: string) => void
+    activeTag?: string | null
+    onTagChange?: (tag: string | null) => void
 }
 
 export function DebtCycleList({
@@ -38,7 +40,9 @@ export function DebtCycleList({
     searchTerm,
     debtTags = [],
     selectedYear = null,
-    onYearChange
+    onYearChange,
+    activeTag: controlledActiveTag,
+    onTagChange
 }: DebtCycleListProps) {
 
     // Map for O(1) lookup of Server Side Status
@@ -206,15 +210,7 @@ export function DebtCycleList({
             const now = new Date()
             const currentTag = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
-            // Priority: Current Month OR Unsettled (Remains > 0)
-            // Note: Empty months (remains=0) are treated as settled/low priority
-            const isPriorityA = (a.tag === currentTag) || (!a.isSettled && Math.abs(a.remains) > 100)
-            const isPriorityB = (b.tag === currentTag) || (!b.isSettled && Math.abs(b.remains) > 100)
-
-            if (isPriorityA && !isPriorityB) return -1
-            if (!isPriorityA && isPriorityB) return 1
-
-            // Secondary Sort: Date Descending
+            // Priority: Date Descending
             if (a.tagDateVal > 0 && b.tagDateVal > 0) return b.tagDateVal - a.tagDateVal
             if (a.tagDateVal > 0) return -1
             if (b.tagDateVal > 0) return 1
@@ -231,7 +227,13 @@ export function DebtCycleList({
         })
     }, [groupedCycles, selectedYear])
 
-    const [activeTag, setActiveTag] = useState<string | null>(null)
+    const [internalActiveTag, setInternalActiveTag] = useState<string | null>(null)
+    const activeTag = controlledActiveTag !== undefined ? controlledActiveTag : internalActiveTag
+    const setActiveTag = (tag: string | null) => {
+        if (onTagChange) onTagChange(tag)
+        else setInternalActiveTag(tag)
+    }
+
     const [linkedModalTag, setLinkedModalTag] = useState<string | null>(null)
     const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null)
     const [showAllSettled, setShowAllSettled] = useState(false)
@@ -248,33 +250,18 @@ export function DebtCycleList({
     }, [selectedYear])
 
     const defaultVisibleCycles = useMemo(() => {
-        const now = new Date()
-        const currentTag = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-
-        return filteredCycles.filter(group => {
-            const isPriority = (group.tag === currentTag) || (!group.isSettled && Math.abs(group.remains) > 100)
-            return isPriority
-        })
+        // Show everything by default in horizontal scroll, unless we want to hide "old settled"
+        // But horizontal scroll handles many items well.
+        return filteredCycles
     }, [filteredCycles])
 
-    const hasHiddenItems = isCurrentYear && filteredCycles.length > defaultVisibleCycles.length
-
-    const visibleCycles = useMemo(() => {
-        // If not current year, always show all
-        if (!isCurrentYear) return filteredCycles
-
-        // If user expanded, show all
-        if (showAllSettled) return filteredCycles
-
-        return defaultVisibleCycles
-    }, [filteredCycles, isCurrentYear, showAllSettled, defaultVisibleCycles])
-
-    const hiddenCount = filteredCycles.length - visibleCycles.length
+    // Legacy support for "Show More" if we decide to truncate but for pills we usually just scroll
+    const visibleCycles = defaultVisibleCycles
 
     // Calculate outstanding debts from previous years
     const outstandingFromPreviousYears = useMemo(() => {
         if (!selectedYear || selectedYear === 'Other') return []
-
+        // ... Logic same as before if needed, or simplified
         const currentYear = parseInt(selectedYear)
         if (isNaN(currentYear)) return []
 
@@ -285,18 +272,12 @@ export function DebtCycleList({
             remains: number
         }> = []
 
-        // Scan all cycles for years < currentYear
         groupedCycles.forEach(cycle => {
             if (!isYYYYMM(cycle.tag)) return
-
             const [yearStr, monthStr] = cycle.tag.split('-')
             const year = parseInt(yearStr)
             const month = parseInt(monthStr)
 
-            // Only include if:
-            // 1. Year is before current selected year
-            // 2. Not settled
-            // 3. Has outstanding balance > 100
             if (year < currentYear && !cycle.isSettled && Math.abs(cycle.remains) > 100) {
                 previousYearsData.push({
                     year,
@@ -306,8 +287,6 @@ export function DebtCycleList({
                 })
             }
         })
-
-        // Sort by year desc, then month desc (most recent first)
         return previousYearsData.sort((a, b) => {
             if (a.year !== b.year) return b.year - a.year
             return b.month - a.month
@@ -322,58 +301,24 @@ export function DebtCycleList({
 
 
     // Set initial active tag to the first of the selected year
-    useMemo(() => {
+    useEffect(() => {
         if (visibleCycles.length > 0) {
             const isActiveVisible = visibleCycles.some(g => g.tag === activeTag)
-            if (!isActiveVisible) {
-                setActiveTag(visibleCycles[0].tag)
+            if (!isActiveVisible && !activeTag) {
+                // Determine 'default' active tag (latest non-empty cycle or just latest?)
+                // Default to current month or latest available
+                const now = new Date()
+                const currentTag = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+                const match = visibleCycles.find(c => c.tag === currentTag)
+                setActiveTag(match ? match.tag : visibleCycles[0].tag)
             }
-        } else if (filteredCycles.length > 0 && !activeTag) {
-            // If everything is hidden but we have data, defaulting to first visible might not work if list is empty?
-            // But logical fallthrough
-        } else {
-            // Keep active tag if possible?
         }
-    }, [visibleCycles, activeTag])
+    }, [visibleCycles, activeTag, setActiveTag])
 
 
     const activeGroup = useMemo(() =>
         groupedCycles.find(g => g.tag === activeTag),
         [groupedCycles, activeTag])
-
-    // Calculate stats for active group
-    const activeGroupStats = useMemo(() => {
-        if (!activeGroup) return { lend: 0, repay: 0, back: 0 }
-
-        const stats = activeGroup.transactions.reduce(
-            (acc, txn) => {
-                const amount = Math.abs(Number(txn.amount) || 0)
-                const type = txn.type
-                const isOutboundDebt = (type === 'debt' && (Number(txn.amount) || 0) < 0) || (type === 'expense' && !!txn.person_id)
-
-                if (isOutboundDebt) {
-                    acc.initial += amount
-                    const effectiveFinal = txn.final_price !== null && txn.final_price !== undefined ? Math.abs(Number(txn.final_price)) : amount
-                    acc.lend += effectiveFinal
-                }
-
-                if (type === 'repayment') {
-                    acc.repay += amount
-                } else if (type === 'debt' && (Number(txn.amount) || 0) > 0) {
-                    acc.repay += amount
-                } else if (type === 'income' && !!txn.person_id) {
-                    acc.repay += amount
-                }
-
-                return acc
-            },
-            { initial: 0, lend: 0, repay: 0 }
-        )
-
-        const back = stats.initial - stats.lend
-        return { lend: stats.lend, repay: stats.repay, back }
-    }, [activeGroup])
-
 
     const formatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }) // Full number
     const compactFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0, notation: 'compact', compactDisplay: 'short' })
@@ -395,11 +340,11 @@ export function DebtCycleList({
 
     return (
         <div className="flex flex-col gap-4">
-            {/* Compact 2-Line Grid Cards - 6 per row on large screens */}
-            <div className="flex flex-col gap-2">
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-3">
+            {/* Horizontal Scrollable Pills */}
+            <div className="relative">
+                <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide px-1 snap-x items-center">
 
-                    {/* Back to Current Year Card (First Item) */}
+                    {/* Back to Current Year */}
                     {!isCurrentYear && (
                         <button
                             onClick={() => {
@@ -409,36 +354,13 @@ export function DebtCycleList({
                                 }
                                 setActiveTag(null)
                             }}
-                            className="flex items-center justify-center gap-2 p-3 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 transition-all text-center group shadow-sm min-w-[120px]"
-                            title="Return to Current Year"
+                            className="flex-shrink-0 flex items-center justify-center h-11 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors whitespace-nowrap text-xs font-bold text-slate-600 snap-start uppercase tracking-wider"
                         >
-                            <span className="text-base">↩️</span>
-                            <span className="text-xs font-bold text-slate-600">Back to {new Date().getFullYear()}</span>
+                            ↩ {new Date().getFullYear()}
                         </button>
                     )}
 
-                    {/* Expand/Collapse Toggle (Second Item) */}
-                    {(hasHiddenItems || showAllSettled) && (
-                        <button
-                            onClick={() => setShowAllSettled(!showAllSettled)}
-                            className="flex items-center justify-center gap-2 p-3 rounded-lg border-2 border-dashed border-slate-200 bg-slate-50/50 hover:bg-slate-100 hover:border-slate-300 text-slate-500 hover:text-slate-700 transition-all group min-w-[120px]"
-                            title={showAllSettled ? "Collapse" : `Show ${hiddenCount} more`}
-                        >
-                            {showAllSettled ? (
-                                <>
-                                    <span className="text-base opacity-50 group-hover:opacity-100 transition-opacity">⬆️</span>
-                                    <span className="text-xs font-medium whitespace-nowrap">Collapse</span>
-                                </>
-                            ) : (
-                                <>
-                                    <span className="text-base opacity-50 group-hover:opacity-100 transition-opacity">⬇️</span>
-                                    <span className="text-xs font-medium whitespace-nowrap">+{hiddenCount} More</span>
-                                </>
-                            )}
-                        </button>
-                    )}
-
-                    {/* Outstanding Debt Cards - Compact Integrated Style */}
+                    {/* Previous Outstanding */}
                     {hasOutstandingFromPrevious && outstandingFromPreviousYears.map(item => (
                         <button
                             key={item.tag}
@@ -448,78 +370,74 @@ export function DebtCycleList({
                                 }
                                 setActiveTag(item.tag)
                             }}
-                            className="flex items-center justify-between gap-2 p-3 rounded-lg border-2 border-amber-300 bg-amber-50 hover:bg-amber-100 hover:border-amber-400 transition-all text-left group min-w-[120px] shadow-sm"
-                            title="Outstanding from previous year"
+                            className="flex-shrink-0 flex items-center gap-2 h-11 px-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 font-bold text-xs whitespace-nowrap snap-start shadow-sm hover:border-amber-300 min-w-[120px]"
                         >
-                            <span className="text-xs font-bold text-amber-700 flex items-center gap-1 whitespace-nowrap">
-                                ⚠️ {getMonthName(item.tag)} '{item.year.toString().slice(2)}
-                            </span>
-                            <span className="text-xs font-extrabold text-amber-800 tabular-nums whitespace-nowrap">
-                                {formatter.format(Math.abs(item.remains))}
-                            </span>
+                            <span>{getMonthName(item.tag).toUpperCase()} '{item.year.toString().slice(2)}</span>
+                            <span className="bg-amber-100 px-1.5 py-0.5 rounded text-[10px] tracking-wide">UNPAID</span>
                         </button>
                     ))}
+
 
                     {visibleCycles.map((group) => {
                         const isSettled = group.isSettled
                         const isActive = activeTag === group.tag
                         const linkedRepaymentsCount = group.serverStatus?.links?.length || 0
 
-                        const tagYear = isYYYYMM(group.tag) ? parseInt(group.tag.split('-')[0]) : 0;
-                        const currentYear = new Date().getFullYear();
-                        const isOldYear = tagYear > 0 && tagYear < currentYear;
-
                         return (
                             <button
                                 key={group.tag}
                                 onClick={() => setActiveTag(group.tag)}
                                 className={cn(
-                                    "flex items-center justify-between gap-2 p-3 rounded-lg border transition-all text-left group min-w-[120px]",
+                                    "flex-shrink-0 flex items-center gap-2 h-11 px-4 rounded-lg border transition-all whitespace-nowrap snap-start",
                                     isActive
-                                        ? "border-blue-500 bg-blue-50 ring-1 ring-blue-200 shadow-sm"
-                                        : !isSettled && isOldYear
-                                            ? "border-amber-300 bg-amber-50 hover:border-amber-400 hover:bg-amber-100"
-                                            : isSettled
-                                                ? "border-emerald-200 bg-emerald-50 hover:border-emerald-300 hover:bg-emerald-100"
-                                                : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                                        ? "bg-[#1e1b4b] border-[#1e1b4b] text-white shadow-lg shadow-indigo-900/20"
+                                        : isSettled
+                                            ? "bg-white border-slate-200 text-slate-400 opacity-80 hover:opacity-100 hover:border-slate-300"
+                                            : "bg-white border-slate-200 text-slate-800 hover:border-slate-300 hover:bg-slate-50"
                                 )}
                             >
-                                <div className="flex items-center gap-2 min-w-0">
-                                    <span className={cn(
-                                        "text-xs font-bold whitespace-nowrap",
-                                        isActive ? "text-blue-700" : "text-slate-600"
-                                    )}>
-                                        {getMonthName(group.tag)}:
+                                {/* Month */}
+                                <span className={cn("text-xs font-bold uppercase tracking-wider", isActive ? "text-indigo-200" : isSettled ? "text-slate-400" : "text-slate-500")}>
+                                    {getMonthName(group.tag).toUpperCase()} '{group.tag.split('-')[0].slice(2)}
+                                </span>
+
+                                {/* Amount or Settled */}
+                                {isSettled ? (
+                                    <span className={cn("text-[10px] font-bold uppercase tracking-wide", isActive ? "text-emerald-300" : "text-emerald-600")}>
+                                        SETTLED
                                     </span>
+                                ) : (
+                                    <span className={cn("text-sm font-bold tabular-nums", isActive ? "text-white" : "text-slate-900")}>
+                                        {compactFormatter.format(Math.max(0, group.remains))}
+                                    </span>
+                                )}
 
-                                    {isSettled ? (
-                                        <span className="text-emerald-700 font-bold text-xs whitespace-nowrap">✓ Done</span>
-                                    ) : (
-                                        <span className={cn(
-                                            "text-xs font-extrabold tabular-nums whitespace-nowrap",
-                                            isActive ? "text-blue-900" : "text-slate-900"
-                                        )}>
-                                            {formatter.format(Math.max(0, group.remains))}
-                                        </span>
-                                    )}
-                                </div>
-
+                                {/* Linked Badge */}
                                 {linkedRepaymentsCount > 0 && (
-                                    <span
-                                        className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-700 hover:bg-indigo-200 transition-colors flex-shrink-0 whitespace-nowrap"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setLinkedModalTag(group.tag);
-                                        }}
-                                        title="View Linked Transactions"
-                                    >
-                                        +{linkedRepaymentsCount} Paid
+                                    <span className={cn(
+                                        "flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold",
+                                        isActive ? "bg-indigo-500 text-white" : "bg-indigo-100 text-indigo-700"
+                                    )}>
+                                        {linkedRepaymentsCount}
                                     </span>
                                 )}
                             </button>
                         )
                     })}
+
+                    {/* Unpaid Badge (Global) - Placeholder based on request */}
+                    {/* The prompt asked to move "Unpaid" badge to the end. I'll add a summary pill styled as badge */}
+                    <div className="flex-shrink-0 flex items-center justify-center h-11 px-4 rounded-lg bg-amber-50 border border-amber-100 text-amber-600 text-xs font-bold uppercase tracking-wide snap-start">
+                        Unpaid
+                    </div>
+
+                    {/* More Button */}
+                    <button className="flex-shrink-0 flex items-center justify-center h-11 px-5 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 text-xs font-bold hover:bg-slate-100 transition-colors uppercase tracking-wider snap-start">
+                        More &gt;
+                    </button>
                 </div>
+                {/* Fade Gradients for Scroll Hint */}
+                <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none md:hidden" />
             </div>
 
             {/* Detail View */}

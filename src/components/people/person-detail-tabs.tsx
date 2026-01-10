@@ -51,18 +51,16 @@ export function PersonDetailTabs({
 }: PersonDetailTabsProps) {
     const searchParams = useSearchParams()
 
-    const resolveTab = (tab: string | null): 'details' | 'active' | 'void' | 'pending' | 'split-bill' => {
+    const resolveTab = (tab: string | null): 'timeline' | 'history' | 'split-bill' => {
         if (tab === 'split-bill') return 'split-bill'
-        if (tab === 'active') return 'active'
-        if (tab === 'void') return 'void'
-        if (tab === 'pending') return 'pending'
-        return 'details'
+        if (tab === 'history') return 'history'
+        if (['active', 'void', 'pending', 'all'].includes(tab || '')) return 'history'
+        return 'timeline'
     }
 
     const initialTab = resolveTab(searchParams.get('tab'))
-    const [activeTab, setActiveTab] = useState<'details' | 'active' | 'void' | 'pending' | 'split-bill'>(initialTab)
-    const [viewMode, setViewMode] = useState<'timeline' | 'all'>('timeline')
-    const [isLoadingMode, setIsLoadingMode] = useState(false)
+    const [activeTab, setActiveTab] = useState<'timeline' | 'history' | 'split-bill'>(initialTab)
+    const [activeCycleTag, setActiveCycleTag] = useState<string | null>(null)
     const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer' | 'cashback'>('all')
     const [searchTerm, setSearchTerm] = useState('')
     const [selectedYear, setSelectedYear] = useState<string | null>(null)
@@ -73,13 +71,6 @@ export function PersonDetailTabs({
         const tab = resolveTab(searchParams.get('tab'))
         setActiveTab(tab)
     }, [searchParams])
-
-    const handleModeChange = async (mode: 'timeline' | 'all') => {
-        setIsLoadingMode(true)
-        setViewMode(mode)
-        await new Promise(resolve => setTimeout(resolve, 300))
-        setIsLoadingMode(false)
-    }
 
     const person = people.find(p => p.id === personId) || ({} as Person)
 
@@ -144,10 +135,8 @@ export function PersonDetailTabs({
     }, [transactions, selectedYear, searchTerm])
 
     const tabs = [
-        { id: 'details' as const, label: 'Details', icon: <LayoutDashboard className="h-4 w-4" /> },
-        { id: 'active' as const, label: 'Active', icon: <History className="h-4 w-4" /> },
-        { id: 'void' as const, label: 'Void', icon: <History className="h-4 w-4" /> },
-        { id: 'pending' as const, label: 'Pending', icon: <History className="h-4 w-4" /> },
+        { id: 'timeline' as const, label: 'Timeline', icon: <LayoutDashboard className="h-4 w-4" /> },
+        { id: 'history' as const, label: 'All History', icon: <History className="h-4 w-4" /> },
         { id: 'split-bill' as const, label: 'Split Bill', icon: <DollarSign className="h-4 w-4" /> },
     ]
 
@@ -175,7 +164,7 @@ export function PersonDetailTabs({
 
             {/* Content Area */}
             <div className="px-4 pb-8 flex-1">
-                {activeTab === 'details' && (
+                {activeTab === 'timeline' && (
                     <div className="flex flex-col space-y-4">
                         {/* Unified Header: Search | Filter | Stats | Actions */}
                         <div className="flex flex-col xl:flex-row gap-4 items-start xl:items-center justify-between bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
@@ -194,23 +183,34 @@ export function PersonDetailTabs({
 
                                 <Popover open={isFilterOpen} onOpenChange={setIsFilterOpen}>
                                     <PopoverTrigger asChild>
-                                        <Button variant="outline" size="sm" className={cn("h-9 border-slate-200 bg-slate-50 min-w-[100px]", selectedYear && "bg-blue-50 border-blue-200 text-blue-700")}>
-                                            <Filter className="h-4 w-4 mr-2" />
-                                            {selectedYear || 'All Years'}
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className={cn(
+                                                "h-10 rounded-full border bg-white px-4 flex items-center gap-2 text-sm font-medium transition-all shadow-sm",
+                                                selectedYear
+                                                    ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300"
+                                                    : "border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300"
+                                            )}
+                                        >
+                                            <Filter className="h-4 w-4" />
+                                            <span>{selectedYear || '2026'}</span> {/* Default to current year or All? Prompt Mockup shows "2026" */}
+                                            <span className="opacity-50 text-xs ml-1">▼</span>
                                         </Button>
                                     </PopoverTrigger>
-                                    <PopoverContent className="w-40 p-0" align="start">
-                                        <div className="max-h-[300px] overflow-y-auto">
+                                    <PopoverContent className="w-56 p-2 rounded-xl" align="start">
+                                        <div className="max-h-[300px] overflow-y-auto space-y-1">
                                             <button
-                                                className={cn("w-full text-left px-4 py-2 text-sm hover:bg-slate-50", !selectedYear && "bg-slate-100 font-medium")}
+                                                className={cn("w-full text-left px-3 py-2 rounded-lg text-sm transition-colors", !selectedYear ? "bg-slate-100 font-bold text-slate-900" : "hover:bg-slate-50 text-slate-600")}
                                                 onClick={() => { setSelectedYear(null); setIsFilterOpen(false); }}
                                             >
                                                 All Years
                                             </button>
+                                            <div className="h-px bg-slate-100 my-1" />
                                             {availableYears.map(year => (
                                                 <button
                                                     key={year}
-                                                    className={cn("w-full text-left px-4 py-2 text-sm hover:bg-slate-50", selectedYear === year && "bg-blue-50 text-blue-700 font-medium")}
+                                                    className={cn("w-full text-left px-3 py-2 rounded-lg text-sm transition-colors", selectedYear === year ? "bg-blue-50 text-blue-700 font-bold" : "hover:bg-slate-50 text-slate-600")}
                                                     onClick={() => { setSelectedYear(year); setIsFilterOpen(false); }}
                                                 >
                                                     {year}
@@ -236,14 +236,12 @@ export function PersonDetailTabs({
                             <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto xl:justify-end">
 
                                 {/* Stats Bar - Only visible in Timeline */}
-                                {viewMode === 'timeline' && (
-                                    <SmartFilterBar
-                                        transactions={filteredTransactions}
-                                        selectedType={filterType}
-                                        onSelectType={setFilterType}
-                                        className="overflow-x-auto max-w-full pb-1 md:pb-0"
-                                    />
-                                )}
+                                <SmartFilterBar
+                                    transactions={filteredTransactions}
+                                    selectedType={filterType}
+                                    onSelectType={setFilterType}
+                                    className="overflow-x-auto max-w-full pb-1 md:pb-0"
+                                />
 
                                 <div className="h-6 w-px bg-slate-200 hidden xl:block" />
 
@@ -285,9 +283,11 @@ export function PersonDetailTabs({
                                 <ManageSheetButton
                                     personId={personId}
                                     cycleTag={
-                                        selectedYear
-                                            ? `${selectedYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
-                                            : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
+                                        activeCycleTag // Use the active cycle tag if selected
+                                            ? activeCycleTag
+                                            : selectedYear
+                                                ? `${selectedYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}` // Fallback if no cycle selected
+                                                : `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`
                                     }
                                     scriptLink={sheetLink}
                                     googleSheetUrl={googleSheetUrl}
@@ -298,79 +298,38 @@ export function PersonDetailTabs({
                                     size="sm"
                                     showCycleAction={true}
                                 />
-
-                                {/* View Toggle */}
-                                <div className="flex rounded-lg border border-slate-200 p-1 bg-slate-100 gap-1 h-9 items-center">
-                                    <button
-                                        onClick={() => handleModeChange('timeline')}
-                                        className={cn(
-                                            "px-3 py-1 rounded text-xs font-medium transition-all",
-                                            viewMode === 'timeline' ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
-                                        )}
-                                    >
-                                        Timeline
-                                    </button>
-                                    <button
-                                        onClick={() => handleModeChange('all')}
-                                        className={cn(
-                                            "px-3 py-1 rounded text-xs font-medium transition-all",
-                                            viewMode === 'all' ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
-                                        )}
-                                    >
-                                        All
-                                    </button>
-                                </div>
                             </div>
                         </div>
 
 
-                        {/* Main View */}
+                        {/* Timeline View */}
                         <div className="relative min-h-[500px]">
-                            {isLoadingMode ? (
-                                <div className="absolute inset-0 z-10 bg-white/50 flex items-center justify-center backdrop-blur-sm">
-                                    <div className="animate-spin h-8 w-8 border-4 border-slate-200 border-t-slate-600 rounded-full" />
-                                </div>
-                            ) : viewMode === 'timeline' ? (
-                                <DebtCycleList
-                                    transactions={transactions}
-                                    accounts={accounts}
-                                    categories={categories}
-                                    people={people}
-                                    shops={shops}
-                                    personId={personId}
-                                    sheetProfileId={sheetProfileId}
-                                    cycleSheets={cycleSheets}
-                                    filterType={filterType}
-                                    searchTerm={searchTerm}
-                                    debtTags={debtTags}
-                                    selectedYear={selectedYear}
-                                    onYearChange={setSelectedYear}
-                                />
-                            ) : (
-                                <FilterableTransactions
-                                    transactions={filteredTransactions}
-                                    accounts={accounts}
-                                    categories={categories}
-                                    people={people}
-                                    shops={shops}
-                                    context="person"
-                                    contextId={personId}
-                                    variant="embedded"
-                                    hidePeopleColumn={true}
-                                    searchTerm={searchTerm}
-                                    onSearchChange={setSearchTerm}
-                                    hideTypeFilters={true}
-                                />
-                            )}
+                            <DebtCycleList
+                                transactions={transactions}
+                                accounts={accounts}
+                                categories={categories}
+                                people={people}
+                                shops={shops}
+                                personId={personId}
+                                sheetProfileId={sheetProfileId}
+                                cycleSheets={cycleSheets}
+                                filterType={filterType}
+                                searchTerm={searchTerm}
+                                debtTags={debtTags}
+                                selectedYear={selectedYear}
+                                onYearChange={setSelectedYear}
+                                activeTag={activeCycleTag}
+                                onTagChange={setActiveCycleTag}
+                            />
                         </div>
                     </div>
                 )}
 
-                {/* Active Tab */}
-                {activeTab === 'active' && (
+                {/* History Tab */}
+                {activeTab === 'history' && (
                     <div className="flex flex-col space-y-4">
                         <FilterableTransactions
-                            transactions={filteredTransactions.filter(t => t.status === 'posted')}
+                            transactions={filteredTransactions}
                             accounts={accounts}
                             categories={categories}
                             people={people}
@@ -381,50 +340,6 @@ export function PersonDetailTabs({
                             hidePeopleColumn={true}
                             searchTerm={searchTerm}
                             onSearchChange={setSearchTerm}
-                            hideStatusTabs={true}
-                            hideTypeFilters={true}
-                        />
-                    </div>
-                )}
-
-                {/* Void Tab */}
-                {activeTab === 'void' && (
-                    <div className="flex flex-col space-y-4">
-                        <FilterableTransactions
-                            transactions={filteredTransactions.filter(t => t.status === 'void')}
-                            accounts={accounts}
-                            categories={categories}
-                            people={people}
-                            shops={shops}
-                            context="person"
-                            contextId={personId}
-                            variant="embedded"
-                            hidePeopleColumn={true}
-                            searchTerm={searchTerm}
-                            onSearchChange={setSearchTerm}
-                            hideStatusTabs={true}
-                            hideTypeFilters={true}
-                        />
-                    </div>
-                )}
-
-                {/* Pending Tab */}
-                {activeTab === 'pending' && (
-                    <div className="flex flex-col space-y-4">
-                        <FilterableTransactions
-                            transactions={filteredTransactions.filter(t => t.status === 'pending')}
-                            accounts={accounts}
-                            categories={categories}
-                            people={people}
-                            shops={shops}
-                            context="person"
-                            contextId={personId}
-                            variant="embedded"
-                            hidePeopleColumn={true}
-                            searchTerm={searchTerm}
-                            onSearchChange={setSearchTerm}
-                            hideStatusTabs={true}
-                            hideTypeFilters={true}
                         />
                     </div>
                 )}

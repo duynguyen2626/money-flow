@@ -122,3 +122,74 @@ export async function testSheetConnectionAction(personId: string) {
 export async function syncAllSheetDataAction(personId: string) {
   return syncAllTransactions(personId);
 }
+
+import { createTransaction } from '@/services/transaction.service';
+
+export type RolloverDebtState = {
+  success: boolean
+  message?: string
+  error?: string
+}
+
+export async function rolloverDebtAction(
+  prevState: RolloverDebtState,
+  formData: FormData
+): Promise<RolloverDebtState> {
+  const personId = formData.get('personId') as string
+  const fromCycle = formData.get('fromCycle') as string
+  const toCycle = formData.get('toCycle') as string
+  const amountStr = formData.get('amount') as string
+
+  if (!personId || !fromCycle || !toCycle || !amountStr) {
+    return { success: false, error: 'Missing required fields' }
+  }
+
+  const amount = Number(amountStr)
+  if (isNaN(amount) || amount <= 0) {
+    return { success: false, error: 'Invalid amount' }
+  }
+
+  // Ensure debt account exists and get its ID
+  // This is crucial because transactions must link to a valid account ID, not just a person ID
+  const accountId = await ensureDebtAccount(personId)
+  if (!accountId) {
+    return { success: false, error: 'Could not resolve debt account for person' }
+  }
+
+  // Transaction 1: Settlement (IN) for the OLD cycle
+  // This reduces the balance of the old month to 0 (or less)
+  const settleNote = `Rollover to ${toCycle}`
+  const settleRes = await createTransaction({
+    occurred_at: new Date().toISOString(),
+    tag: fromCycle,
+    note: settleNote,
+    type: 'repayment', // Counts as IN (Reduces debt)
+    source_account_id: accountId,
+    amount: amount,
+    person_id: personId,
+  })
+
+  if (!settleRes) {
+    return { success: false, error: 'Failed to create settlement transaction' }
+  }
+
+  // Transaction 2: Opening Balance (OUT) for the NEW cycle
+  // This increases the balance of the new month
+  const openNote = `Rollover from ${fromCycle}`
+  const openRes = await createTransaction({
+    occurred_at: new Date().toISOString(),
+    tag: toCycle,
+    note: openNote,
+    type: 'debt', // Counts as OUT (Increases debt)
+    source_account_id: accountId,
+    amount: amount,
+    person_id: personId,
+  })
+
+  if (!openRes) {
+    return { success: false, error: 'Failed to create opening balance transaction' }
+  }
+
+  revalidatePath(`/people/${personId}`)
+  return { success: true, message: 'Debt rolled over successfully' }
+}
