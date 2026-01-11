@@ -161,7 +161,7 @@ export function EditableTempTable({
                                     <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Person (Debt/Split)</label>
                                     <EntitySelect
                                         value={txn.person_id}
-                                        items={people.map(p => ({ id: p.id, name: p.name, imageUrl: p.avatar_url }))}
+                                        items={people.map(p => ({ id: p.id, name: p.name, imageUrl: p.image_url }))}
                                         onChange={(id) => handleUpdateField(txn.id, 'person_id', id)}
                                         placeholder="Assign Person"
                                         allowClear

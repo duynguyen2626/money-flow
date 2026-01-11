@@ -206,9 +206,9 @@ export function MemberDetailView({
                             <ChevronLeft className="h-5 w-5" />
                         </Link>
 
-                        {person.avatar_url ? (
+                        {person.image_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={person.avatar_url} alt={person.name} className="h-9 w-9 rounded-lg object-cover" />
+                            <img src={person.image_url} alt={person.name} className="h-9 w-9 rounded-lg object-cover" />
                         ) : (
                             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-base font-bold text-blue-600">
                                 {person.name.charAt(0).toUpperCase()}
@@ -603,6 +603,8 @@ export function MemberDetailView({
                         people={people}
                         shops={shops}
                         searchTerm={searchTerm}
+                        context="person"
+                        contextId={person.id}
                     />
                 </div>
             )}
@@ -616,6 +618,8 @@ export function MemberDetailView({
                         people={people}
                         shops={shops}
                         searchTerm={searchTerm}
+                        context="person"
+                        contextId={person.id}
                     />
                 </div>
             )}

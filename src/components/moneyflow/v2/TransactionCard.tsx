@@ -52,21 +52,22 @@ export function TransactionCard({
     const txnType = (txn.type || 'expense') as 'income' | 'expense' | 'transfer' | 'debt' | 'repayment'
 
     // Get account and person images
-    const accountImageUrl = (txn as any).account_image_url || null
-    const personImageUrl = (txn as any).person_avatar_url || null
+    const accountImageUrl = txn.account_image_url || null
+    // Use person_image_url if available (New Standard)
+    const personImageUrl = txn.person_image_url || null
 
     return (
         <div
             className={cn(
-                'group relative bg-white border border-slate-200 rounded-lg p-4 hover:shadow-md transition-all',
+                'group relative bg-white border border-slate-200 rounded-lg p-3 hover:shadow-md transition-all',
                 isSelected && 'ring-2 ring-blue-500 border-blue-500',
                 isVoided && 'opacity-60 bg-slate-50'
             )}
         >
-            {/* Grid Layout */}
-            <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] gap-4 items-center">
-                {/* Checkbox */}
-                <div className="flex items-center">
+            {/* Grid Layout matching Header: 40px 80px minmax(200px,1fr) minmax(350px,400px) 140px 140px 100px */}
+            <div className="grid grid-cols-[40px_80px_minmax(200px,1fr)_minmax(300px,400px)_140px_140px_100px] gap-4 items-center">
+                {/* 1. Checkbox */}
+                <div className="flex items-center justify-center">
                     <Checkbox
                         checked={isSelected}
                         onCheckedChange={onSelect}
@@ -74,25 +75,31 @@ export function TransactionCard({
                     />
                 </div>
 
-                {/* Date + Details */}
-                <div className="flex items-center gap-4 min-w-0">
+                {/* 2. Timeline (Date) */}
+                <div>
                     <TransactionDateCell date={txn.occurred_at} />
-                    <div className="flex-1 min-w-0">
-                        <TransactionDetailsCell
-                            note={txn.note}
-                            shopName={txn.shop_name}
-                            shopImageUrl={txn.shop_image_url}
-                            categoryName={txn.category_name}
-                            transactionId={txn.id}
-                            date={txn.occurred_at}
-                            isInstallment={txn.is_installment}
-                            refundStatus={refundStatus}
-                        />
-                    </div>
                 </div>
 
-                {/* Flow */}
-                <div className="flex justify-center min-w-[280px]">
+                {/* 3. Transaction Details (Notes) */}
+                <div className="min-w-0">
+                    <TransactionDetailsCell
+                        note={txn.note}
+                        shopName={txn.shop_name}
+                        shopImageUrl={txn.shop_image_url}
+                        categoryName={txn.category_name}
+                        transactionId={txn.id}
+                        date={txn.occurred_at}
+                        isInstallment={txn.is_installment}
+                        installmentsPaid={(metadata as any)?.installments_paid}
+                        installmentsTotal={(metadata as any)?.installments_total}
+                        refundStatus={refundStatus}
+                        isSplit={Boolean((metadata as any)?.is_split)}
+                        categoryIcon={(txn as any).category_icon} // Pass category icon from transaction data
+                    />
+                </div>
+
+                {/* 4. Flow */}
+                <div className="flex justify-center w-full px-2">
                     <AccountPersonFlow
                         accountId={txn.account_id}
                         accountName={txn.account_name}
@@ -113,8 +120,8 @@ export function TransactionCard({
                     />
                 </div>
 
-                {/* Base Amount */}
-                <div className="min-w-[120px]">
+                {/* 5. Base Amount */}
+                <div className="flex justify-end">
                     <PerformanceBaseAmount
                         amount={originalAmount}
                         cashbackPercent={percentValue}
@@ -123,8 +130,8 @@ export function TransactionCard({
                     />
                 </div>
 
-                {/* Final */}
-                <div className="min-w-[120px]">
+                {/* 6. Final */}
+                <div className="flex justify-end">
                     <FinalSettlement
                         finalPrice={finalPrice}
                         type={txnType}
@@ -134,7 +141,7 @@ export function TransactionCard({
                     />
                 </div>
 
-                {/* Actions */}
+                {/* 7. Actions */}
                 <div className="flex justify-center">
                     <TransactionActions
                         isVoided={isVoided}

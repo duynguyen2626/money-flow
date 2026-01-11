@@ -86,7 +86,7 @@ export function buildPeopleDirectoryItems(people: Person[]): PeopleDirectoryItem
     return {
       id: person.id,
       name: person.name,
-      avatarUrl: person.avatar_url ?? null,
+      avatarUrl: person.image_url ?? null,
       person,
       isOwner: person.is_owner ?? null,
       subscriptions: person.subscription_details ?? [],

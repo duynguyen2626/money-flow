@@ -36,8 +36,8 @@ export function ServiceCompactCard({ service, people }: { service: any, people: 
                         <div className="flex -space-x-1.5 overflow-hidden">
                             {members.slice(0, 4).map((m: any) => (
                                 <div key={m.id} className="h-6 w-6 rounded-none border-2 border-white bg-slate-200 flex items-center justify-center text-[8px] font-bold overflow-hidden">
-                                    {m.profile.avatar_url ? (
-                                        <img src={m.profile.avatar_url} alt="" className="h-full w-full object-cover" />
+                                    {m.profile.image_url ? (
+                                        <img src={m.profile.image_url} alt="" className="h-full w-full object-cover" />
                                     ) : (
                                         m.profile.name.substring(0, 1).toUpperCase()
                                     )}

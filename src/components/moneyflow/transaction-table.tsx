@@ -1,17 +1,33 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo } from 'react'
 import { toast } from 'sonner'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
-import { TransactionForm, TransactionFormValues } from './transaction-form'
-import { TransactionDateCell, TransactionDetailsCell, AccountPersonFlow, PerformanceBaseAmount, FinalSettlement, TransactionActions } from './v2'
+import { TransactionForm } from './transaction-form'
+import { TransactionCard } from './v2/TransactionCard'
 import { voidTransactionAction } from '@/actions/transaction-actions'
 import { restoreTransaction } from '@/services/transaction.service'
-import { buildEditInitialValues, parseMetadata } from '@/lib/transaction-mapper'
-import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
+import { buildEditInitialValues } from '@/lib/transaction-mapper'
 import { cn } from '@/lib/utils'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet'
 
 interface TransactionTableProps {
     transactions: TransactionWithDetails[]
@@ -58,45 +74,29 @@ export function TransactionTable({
 
     const selection = selectedTxnIds ?? internalSelection
 
-    const updateSelection = (next: Set<string>) => {
+    const updateSelection = (newSelection: Set<string>) => {
         if (onSelectionChange) {
-            onSelectionChange(next)
-            return
+            onSelectionChange(newSelection)
+        } else {
+            setInternalSelection(newSelection)
         }
-        setInternalSelection(next)
-    }
-
-    const editingInitialValues = useMemo(
-        () => (editingTxn ? buildEditInitialValues(editingTxn) : null),
-        [editingTxn]
-    )
-
-    const refundAccountOptions = useMemo(
-        () => accounts.filter(acc => acc.id !== REFUND_PENDING_ACCOUNT_ID),
-        [accounts]
-    )
-
-    const closeVoidDialog = () => {
-        setConfirmVoidTarget(null)
-        setVoidError(null)
-        setIsVoiding(false)
     }
 
     const handleRestore = (txn: TransactionWithDetails) => {
         setIsRestoring(true)
-        void restoreTransaction(txn.id)
-            .then(ok => {
-                if (!ok) {
-                    setVoidError('Unable to restore transaction. Please try again.')
-                    return
+        restoreTransaction(txn.id)
+            .then(result => {
+                if (result) {
+                    toast.success('Transaction restored successfully')
+                    setStatusOverrides(prev => ({ ...prev, [txn.id]: 'completed' }))
+                    router.refresh()
+                } else {
+                    toast.error('Failed to restore transaction')
                 }
-                setVoidError(null)
-                setStatusOverrides(prev => ({ ...prev, [txn.id]: 'posted' }))
-                router.refresh()
             })
             .catch(err => {
-                console.error('Failed to restore transaction:', err)
-                setVoidError('Unable to restore transaction. Please try again.')
+                toast.error('An error occurred while restoring')
+                console.error(err)
             })
             .finally(() => setIsRestoring(false))
     }
@@ -105,14 +105,14 @@ export function TransactionTable({
         if (!confirmVoidTarget) return
         setVoidError(null)
         setIsVoiding(true)
-        void voidTransactionAction(confirmVoidTarget.id)
+        voidTransactionAction(confirmVoidTarget.id)
             .then(ok => {
                 if (!ok) {
                     setVoidError('Unable to void transaction. Please try again.')
                     return
                 }
                 setStatusOverrides(prev => ({ ...prev, [confirmVoidTarget.id]: 'void' }))
-                closeVoidDialog()
+                setConfirmVoidTarget(null)
                 router.refresh()
             })
             .catch(err => {
@@ -139,6 +139,13 @@ export function TransactionTable({
         }
     }
 
+    const handleClone = (txn: TransactionWithDetails) => {
+        // Clone transaction by opening edit form with pre-filled data but NO ID
+        // The TransactionForm/mapper needs to handle empty ID as "Create"
+        const clonedTxn = { ...txn, id: '' } as TransactionWithDetails
+        setEditingTxn(clonedTxn)
+    }
+
     const displayedTransactions = useMemo(() => {
         return transactions.filter(txn => {
             const effectiveStatus = statusOverrides[txn.id] ?? txn.status
@@ -152,223 +159,156 @@ export function TransactionTable({
     const isAllSelected = displayedTransactions.length > 0 && selection.size >= displayedTransactions.length
 
     return (
-        <div className="flex flex-col h-full w-full">
-            {/* Table Container with Scroll */}
-            <div className="flex-1 overflow-auto">
-                <table className="w-full border-collapse">
-                    {/* Header */}
-                    <thead className="sticky top-0 z-10 bg-slate-100 border-b border-slate-200">
-                        <tr>
-                            <th className="px-4 py-3 text-left w-12">
-                                <Checkbox
-                                    checked={isAllSelected}
-                                    onCheckedChange={handleSelectAll}
-                                />
-                            </th>
-                            <th className="px-4 py-3 text-left font-semibold text-sm text-slate-700 w-32">
-                                Timeline
-                            </th>
-                            <th className="px-4 py-3 text-left font-semibold text-sm text-slate-700">
-                                Transaction Details
-                            </th>
-                            <th className="px-4 py-3 text-center font-semibold text-sm text-slate-700 w-72">
-                                Flow
-                            </th>
-                            <th className="px-4 py-3 text-right font-semibold text-sm text-slate-700 w-36">
-                                Base Amount
-                            </th>
-                            <th className="px-4 py-3 text-right font-semibold text-sm text-slate-700 w-36">
-                                Final
-                            </th>
-                            <th className="px-4 py-3 text-center font-semibold text-sm text-slate-700 w-32">
-                                Actions
-                            </th>
-                        </tr>
-                    </thead>
+        <div className="flex flex-col h-full w-full gap-4 p-4">
+            {/* Sticky Header with integrated Tabs */}
+            <div className="sticky top-0 z-20 bg-slate-50 border-b border-slate-200 pb-3 pt-2 -mx-4 px-4 shadow-sm">
+                <div className="grid grid-cols-[40px_80px_minmax(200px,1fr)_minmax(300px,400px)_140px_140px_100px] gap-4 items-center px-4">
+                    {/* Checkbox Header */}
+                    <div className="flex items-center justify-center">
+                        <Checkbox
+                            checked={isAllSelected}
+                            onCheckedChange={handleSelectAll}
+                        />
+                    </div>
 
-                    {/* Body */}
-                    <tbody>
-                        {displayedTransactions.map(txn => {
-                            const isSelected = selection.has(txn.id)
-                            const effectiveStatus = statusOverrides[txn.id] ?? txn.status
-                            const isVoided = effectiveStatus === 'void'
-                            const metadata = parseMetadata(txn.metadata)
-                            const refundStatus = metadata?.refund_status as string | undefined
+                    {/* Timeline Header */}
+                    <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                        Timeline
+                    </div>
 
-                            // Calculate amounts
-                            const originalAmount = typeof txn.original_amount === 'number' ? txn.original_amount : txn.amount ?? 0
-                            const percentValue = typeof txn.cashback_share_percent === 'number' ? txn.cashback_share_percent : 0
-                            const fixedValue = typeof txn.cashback_share_fixed === 'number' ? txn.cashback_share_fixed : 0
-                            const finalPrice = Math.abs(txn.amount ?? 0)
+                    {/* Details Header */}
+                    <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                        Transaction Details
+                    </div>
 
-                            // Determine type
-                            const txnType = (txn.type || 'expense') as 'income' | 'expense' | 'transfer' | 'debt' | 'repayment'
+                    {/* Flow Header */}
+                    <div className="text-center text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                        Flow
+                    </div>
 
-                            return (
-                                <tr
-                                    key={txn.id}
-                                    className={cn(
-                                        'border-b border-slate-200 hover:bg-slate-50 transition-colors',
-                                        isSelected && 'bg-blue-50',
-                                        isVoided && 'opacity-60'
-                                    )}
-                                >
-                                    {/* Checkbox */}
-                                    <td className="px-4 py-3">
-                                        <Checkbox
-                                            checked={isSelected}
-                                            onCheckedChange={(checked) => handleSelectOne(txn.id, checked as boolean)}
-                                            onClick={(e) => e.stopPropagation()}
-                                        />
-                                    </td>
+                    {/* Base Amount Header */}
+                    <div className="text-right text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                        Base Amount
+                    </div>
 
-                                    {/* Timeline (Date) */}
-                                    <td className="px-4 py-3">
-                                        <TransactionDateCell date={txn.occurred_at} />
-                                    </td>
+                    {/* Final Header */}
+                    <div className="text-right text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                        Final
+                    </div>
 
-                                    {/* Transaction Details */}
-                                    <td className="px-4 py-3">
-                                        <TransactionDetailsCell
-                                            note={txn.note}
-                                            shopName={txn.shop_name}
-                                            shopImageUrl={txn.shop_image_url}
-                                            categoryName={txn.category_name}
-                                            transactionId={txn.id}
-                                            date={txn.occurred_at}
-                                            isInstallment={txn.is_installment}
-                                            refundStatus={refundStatus}
-                                        />
-                                    </td>
-
-                                    {/* Flow */}
-                                    <td className="px-4 py-3">
-                                        <div className="flex justify-center">
-                                            <AccountPersonFlow
-                                                accountId={txn.account_id}
-                                                accountName={txn.account_name}
-                                                accountImageUrl={(txn as any).account_image_url || (txn as any).source_image || null}
-                                                personId={txn.person_id}
-                                                personName={(txn as any).person_name}
-                                                personImageUrl={(txn as any).person_avatar_url || null}
-                                                type={txnType}
-                                                contextAccountId={contextAccountId || contextId}
-                                                contextPersonId={contextPersonId || contextId}
-                                                transactionAccountId={txn.account_id}
-                                                transactionPersonId={txn.person_id}
-                                                cycleTag={txn.tag}
-                                                isSplit={metadata?.is_split as boolean}
-                                                refundStatus={refundStatus}
-                                                installmentsPaid={metadata?.installments_paid as number}
-                                                installmentsTotal={metadata?.installments_total as number}
-                                            />
-                                        </div>
-                                    </td>
-
-                                    {/* Performance-Base Amount */}
-                                    <td className="px-4 py-3">
-                                        <PerformanceBaseAmount
-                                            amount={originalAmount}
-                                            cashbackPercent={percentValue}
-                                            cashbackFixed={fixedValue}
-                                            type={txnType}
-                                        />
-                                    </td>
-
-                                    {/* Final Settlement */}
-                                    <td className="px-4 py-3">
-                                        <FinalSettlement
-                                            finalPrice={finalPrice}
-                                            type={txnType}
-                                            baseAmount={originalAmount}
-                                            cashbackPercent={percentValue}
-                                            cashbackFixed={fixedValue}
-                                        />
-                                    </td>
-
-                                    {/* Actions */}
-                                    <td className="px-4 py-3">
-                                        <div className="flex justify-center">
-                                            <TransactionActions
-                                                isVoided={isVoided}
-                                                canRequestRefund={txn.type === 'expense'}
-                                                isPendingRefund={refundStatus === 'requested'}
-                                                onEdit={() => setEditingTxn(txn)}
-                                                onClone={() => {
-                                                    // TODO: Implement clone
-                                                    toast.info('Clone feature coming soon')
-                                                }}
-                                                onVoid={() => {
-                                                    setConfirmVoidTarget(txn)
-                                                    setVoidError(null)
-                                                }}
-                                                onRestore={() => handleRestore(txn)}
-                                                onHistory={() => {
-                                                    // TODO: Implement history
-                                                    toast.info('History feature coming soon')
-                                                }}
-                                            />
-                                        </div>
-                                    </td>
-                                </tr>
-                            )
-                        })}
-                    </tbody>
-                </table>
+                    {/* Actions Header with Mini Tabs */}
+                    <div className="flex justify-center">
+                        <div className="bg-slate-200 rounded p-0.5 flex gap-0.5">
+                            <button
+                                onClick={() => setActiveTab('active')}
+                                className={cn(
+                                    "px-2 py-0.5 text-[10px] font-medium rounded transition-all",
+                                    activeTab === 'active' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                                )}
+                            >
+                                Active
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('void')}
+                                className={cn(
+                                    "px-2 py-0.5 text-[10px] font-medium rounded transition-all",
+                                    activeTab === 'void' ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                                )}
+                            >
+                                Void
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            {/* Edit Dialog */}
-            {editingTxn && editingInitialValues && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-auto">
+            {/* Transaction Cards Container */}
+            <div className="flex-1 overflow-auto -mx-4 px-4 pb-20">
+                <div className="flex flex-col gap-3">
+                    {displayedTransactions.length === 0 ? (
+                        <div className="text-center py-10 text-slate-500 italic">
+                            No transactions found.
+                        </div>
+                    ) : (
+                        displayedTransactions.map(txn => {
+                            const effectiveStatus = statusOverrides[txn.id] ?? txn.status
+                            const isVoided = effectiveStatus === 'void'
+                            return (
+                                <TransactionCard
+                                    key={txn.id}
+                                    transaction={txn}
+                                    isSelected={selection.has(txn.id)}
+                                    isVoided={isVoided}
+                                    onSelect={(checked) => handleSelectOne(txn.id, checked)}
+                                    onEdit={() => setEditingTxn(txn)}
+                                    onClone={() => handleClone(txn)}
+                                    onVoid={() => setConfirmVoidTarget(txn)}
+                                    onRestore={() => handleRestore(txn)}
+                                    onHistory={() => toast.info("History feature coming soon")}
+                                    contextAccountId={contextAccountId || contextId}
+                                    contextPersonId={contextPersonId || contextId}
+                                />
+                            )
+                        }))}
+                </div>
+            </div>
+
+            {/* Edit/Clone Modal - Wrapped in Sheet for proper behavior */}
+            <Sheet open={!!editingTxn} onOpenChange={(open) => {
+                // Only allow closing via specific actions if needed, or default behavior
+                if (!open) setEditingTxn(null)
+            }}>
+                <SheetContent className="w-full sm:max-w-xl overflow-y-auto" side="right">
+                    <SheetHeader className="mb-4">
+                        <SheetTitle>
+                            {editingTxn?.id ? 'Edit Transaction' : 'New Transaction'}
+                        </SheetTitle>
+                        <SheetDescription>
+                            {editingTxn?.id ? 'Make changes to this transaction.' : 'Create a new transaction based on this one.'}
+                        </SheetDescription>
+                    </SheetHeader>
+                    {editingTxn && (
                         <TransactionForm
-                            initialValues={editingInitialValues}
+                            initialValues={buildEditInitialValues(editingTxn)}
                             accounts={accounts}
                             categories={categories}
                             people={people}
                             shops={shops}
+                            // CRITICAL: Pass mode and ID to ensure correct form behavior
+                            mode={editingTxn.id ? 'edit' : 'create'}
+                            transactionId={editingTxn.id || undefined}
                             onSuccess={() => {
                                 setEditingTxn(null)
                                 router.refresh()
                             }}
                             onCancel={() => setEditingTxn(null)}
                         />
-                    </div>
-                </div>
-            )}
+                    )}
+                </SheetContent>
+            </Sheet>
 
             {/* Void Confirmation Dialog */}
-            {confirmVoidTarget && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                    <div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full">
-                        <h3 className="text-lg font-semibold mb-4">Void Transaction?</h3>
-                        <p className="text-sm text-slate-600 mb-6">
-                            Are you sure you want to void this transaction? This action can be reversed later.
-                        </p>
-                        {voidError && (
-                            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-                                {voidError}
-                            </div>
-                        )}
-                        <div className="flex gap-3 justify-end">
-                            <button
-                                onClick={closeVoidDialog}
-                                className="px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 rounded"
-                                disabled={isVoiding}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleVoidConfirm}
-                                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded disabled:opacity-50"
-                                disabled={isVoiding}
-                            >
-                                {isVoiding ? 'Voiding...' : 'Void Transaction'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+            <AlertDialog open={!!confirmVoidTarget} onOpenChange={(open) => !open && setConfirmVoidTarget(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Void Transaction?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to void this transaction? It will be marked as void and excluded from calculations.
+                            {voidError && <div className="mt-2 text-red-500 font-medium">{voidError}</div>}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isVoiding}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleVoidConfirm}
+                            disabled={isVoiding}
+                            className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                        >
+                            {isVoiding ? 'Voiding...' : 'Yes, Void It'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }

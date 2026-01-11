@@ -1540,8 +1540,8 @@ export function UnifiedTransactionTable({
                                       if (bulkAllocation?.debts && bulkAllocation.debts.length > 0) {
                                         const debts = bulkAllocation.debts as { id: string, amount: number, tag?: string, note?: string }[];
                                         const count = debts.length;
-                                        // Only show badge if count > 1 (True Bulk). Single item is redundant context.
-                                        if (count <= 1) return null;
+                                        // Only show badge if count > 0 (Show "Paid" even for 1 item if it's via bulk allocation structure)
+                                        if (count < 1) return null;
 
                                         return (
                                           <CustomTooltip
@@ -1823,7 +1823,7 @@ export function UnifiedTransactionTable({
                         // Check for Person First (Person takes precedence in "Accounts -> People" flow logic usually, or depends on data)
                         const personId = (txn as any).person_id
                         const personNameLink = (txn as any).person_name
-                        const personAvatar = (txn as any).person_avatar_url
+                        const personAvatar = (txn as any).person_image_url
 
                         if (personId) {
                           targetType = 'person'
@@ -1873,6 +1873,16 @@ export function UnifiedTransactionTable({
                               cycleLabel = `${fmt(range.start)} to ${fmt(range.end)}`
                             }
                           }
+
+                          // Fallback: If no cycle range computed but we have a YYYY-MM tag, show calendar month range
+                          const effectiveTag = cycleTag || debtTag;
+                          if ((!cycleLabel || cycleLabel === '-') && effectiveTag && /^\d{4}-\d{2}$/.test(effectiveTag)) {
+                            const [year, month] = effectiveTag.split('-').map(Number);
+                            const startDate = new Date(year, month - 1, 1);
+                            const endDate = new Date(year, month, 0);
+                            const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                            cycleLabel = `${fmt(startDate)} to ${fmt(endDate)}`;
+                          }
                         }
 
                         // --- 4. Render Helper for Entity ---
@@ -1916,13 +1926,15 @@ export function UnifiedTransactionTable({
                               </div>
 
                               {/* Icon - After Text */}
+                              {/* Icon - After Text */}
+                              {/* Icon - Allow Original Aspect Ratio */}
                               {icon ? (
                                 <>
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
+                                  <img src={icon} alt="" className={cn("h-10 w-auto max-w-[80px] object-contain shrink-0 rounded-none border-none ring-0 outline-none")} />
                                 </>
                               ) : (
-                                <div className={cn("flex h-12 w-12 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
+                                <div className={cn("flex h-10 w-10 items-center justify-center bg-slate-100 shrink-0 text-slate-400 rounded-none border-none ring-0 outline-none")}>
                                   {link?.includes('people') ? <User className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
                                 </div>
                               )}
@@ -1931,13 +1943,14 @@ export function UnifiedTransactionTable({
                             // Source Entity: Default layout with Icon Before Text
                             <div className="flex items-center gap-2 min-w-0 w-full">
                               {/* Icon - Increased Size */}
+                              {/* Icon - Allow Original Aspect Ratio */}
                               {icon ? (
                                 <>
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
+                                  <img src={icon} alt="" className={cn("h-10 w-auto max-w-[80px] object-contain shrink-0 rounded-none border-none ring-0 outline-none")} />
                                 </>
                               ) : (
-                                <div className={cn("flex h-12 w-12 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
+                                <div className={cn("flex h-10 w-10 items-center justify-center bg-slate-100 shrink-0 text-slate-400 rounded-none border-none ring-0 outline-none")}>
                                   {link?.includes('people') ? <User className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
                                 </div>
                               )}
@@ -1986,7 +1999,7 @@ export function UnifiedTransactionTable({
 
                         // Badges Construction - Rounded md and Bold Colors
                         const cycleBadge = (cycleLabel && cycleLabel !== '-') ? (
-                          <span key="cycle" className="inline-flex items-center rounded-md bg-purple-100 px-1.5 py-0.5 text-[0.7em] font-bold text-purple-700 whitespace-nowrap leading-none border border-purple-200">
+                          <span key="cycle" className="inline-flex items-center rounded-md bg-purple-100 px-1.5 py-0.5 text-[0.7em] font-extrabold text-purple-700 whitespace-nowrap leading-none border border-purple-200">
                             {cycleLabel}
                           </span>
                         ) : null
@@ -2020,9 +2033,9 @@ export function UnifiedTransactionTable({
                                     name={accountEntity.name}
                                     icon={accountEntity.icon}
                                     link={accountEntity.link}
-                                    badges={[tagBadge, cycleBadge]}
-                                    contextBadge={toBadge}
                                     isTarget={true}
+                                    badges={[cycleBadge || tagBadge]}
+                                    contextBadge={toBadge}
                                   />
                                 </div>
                               </div>
@@ -2221,42 +2234,47 @@ export function UnifiedTransactionTable({
                         ) : null;
 
                         return (
-                          <div className="flex flex-col items-end gap-1 w-full">
-                            {/* Amount with Cashback Badges - NO +/- signs */}
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={cn("font-bold tabular-nums tracking-tight truncate", amountClass)}
-                                style={{ fontSize: `0.9em` }} // Standardized to 0.9em
-                              >
-                                {numberFormatter.format(Math.abs(amount))}
-                              </span>
-                              {/* Cashback Badges */}
-                              {percentDisp > 0 && (
-                                <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200">
-                                  -{percentDisp > 1 ? percentDisp : percentDisp * 100}%
-                                </span>
-                              )}
-                              {fixedDisp > 0 && (
-                                <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200">
-                                  -{numberFormatter.format(fixedDisp)}
-                                </span>
-                              )}
-                            </div>
+                          <div className="flex flex-col items-end justify-center w-full h-full gap-0.5">
+                            {/* Horizontal Layout: Amount + (Equals -> Final) */}
+                            <div className="flex flex-row items-center justify-end gap-2 flex-nowrap whitespace-nowrap text-right w-full">
 
-                            {/* Final Price - only show if has cashback */}
-                            {hasCashback && (
-                              <div className="flex items-center gap-1">
-                                <span className="text-xs text-slate-400">=</span>
-                                <span className="text-xs font-semibold text-slate-700">
-                                  {numberFormatter.format(finalDisp)}
+                              {/* Group 1: Original Amount + Badges */}
+                              <div className={cn("flex items-center gap-1.5", hasCashback && "opacity-60 saturate-0")}>
+                                <span
+                                  className={cn("font-bold tabular-nums tracking-tight truncate", amountClass)}
+                                  style={{ fontSize: `0.9em` }}
+                                >
+                                  {numberFormatter.format(Math.abs(amount))}
                                 </span>
-                                {priceBreakdown && (
-                                  <CustomTooltip content={priceBreakdown}>
-                                    <Info className="h-3 w-3 text-slate-400 hover:text-slate-600 cursor-help" />
-                                  </CustomTooltip>
+                                {/* Cashback Badges */}
+                                {percentDisp > 0 && (
+                                  <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                    -{percentDisp > 1 ? percentDisp : percentDisp * 100}%
+                                  </span>
+                                )}
+                                {fixedDisp > 0 && (
+                                  <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                    -{numberFormatter.format(fixedDisp)}
+                                  </span>
                                 )}
                               </div>
-                            )}
+
+                              {/* Group 2: Final Price (if differs) */}
+                              {hasCashback && (
+                                <div className="flex items-center gap-1">
+                                  <MoveRight className="h-3 w-3 text-slate-300" />
+                                  <span className="text-xs font-bold text-slate-700">
+                                    {numberFormatter.format(finalDisp)}
+                                  </span>
+                                  {priceBreakdown && (
+                                    <CustomTooltip content={priceBreakdown}>
+                                      <Info className="h-3 w-3 text-slate-300 hover:text-slate-500 cursor-help" />
+                                    </CustomTooltip>
+                                  )}
+                                </div>
+                              )}
+
+                            </div>
                           </div>
                         )
                       }

@@ -573,14 +573,14 @@ export function QuickAddChat({
     const groupItems = groups.map((group) => ({
       value: group.id,
       label: group.name,
-      icon: renderAvatarNode(group.name, group.avatar_url ?? null),
+      icon: renderAvatarNode(group.name, group.image_url ?? null),
       searchValue: group.name,
     }));
     const peopleItems = individualPeople.map((person) => ({
       value: person.id,
       label: person.name,
       description: person.email ?? undefined,
-      icon: renderAvatarNode(person.name, person.avatar_url ?? null),
+      icon: renderAvatarNode(person.name, person.image_url ?? null),
       searchValue: person.name,
     }));
     return [

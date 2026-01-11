@@ -8,22 +8,24 @@ import { getCategories } from '@/services/category.service';
 import { getShops } from '@/services/shop.service';
 import { syncAllTransactions, testConnection } from '@/services/sheet.service';
 
-export async function createPersonAction(payload: {
+export type CreatePersonPayload = {
   name: string
   email?: string | null
-  avatar_url?: string | null
+  image_url?: string | null
   sheet_link?: string | null
   subscriptionIds?: string[]
   is_owner?: boolean
   is_archived?: boolean
   is_group?: boolean
   group_parent_id?: string | null
-}) {
+}
+
+export async function createPersonAction(payload: CreatePersonPayload) {
   const result = await createPerson(
     payload.name,
-    payload.email ?? undefined,
-    payload.avatar_url ?? undefined,
-    payload.sheet_link ?? undefined,
+    payload.email?.trim(),
+    payload.image_url?.trim(),
+    payload.sheet_link?.trim(),
     payload.subscriptionIds,
     {
       is_owner: payload.is_owner,
@@ -32,10 +34,13 @@ export async function createPersonAction(payload: {
       group_parent_id: payload.group_parent_id,
     }
   )
+
   if (result) {
     revalidatePath('/people')
+    return { success: true, profileId: result.profileId, debtAccountId: result.debtAccountId }
+  } else {
+    return { success: false, error: 'Failed to create person' }
   }
-  return result
 }
 
 export async function ensureDebtAccountAction(personId: string, personName?: string) {
@@ -46,23 +51,25 @@ export async function ensureDebtAccountAction(personId: string, personName?: str
   return accountId
 }
 
+export type UpdatePersonPayload = {
+  name?: string
+  email?: string | null
+  image_url?: string | null
+  sheet_link?: string | null
+  google_sheet_url?: string | null
+  sheet_full_img?: string | null
+  sheet_show_bank_account?: boolean
+  sheet_show_qr_image?: boolean
+  subscriptionIds?: string[]
+  is_owner?: boolean
+  is_archived?: boolean
+  is_group?: boolean
+  group_parent_id?: string | null
+}
+
 export async function updatePersonAction(
   id: string,
-  payload: {
-    name?: string
-    email?: string | null
-    avatar_url?: string | null
-    sheet_link?: string | null
-    google_sheet_url?: string | null
-    sheet_full_img?: string | null
-    sheet_show_bank_account?: boolean
-    sheet_show_qr_image?: boolean
-    subscriptionIds?: string[]
-    is_owner?: boolean
-    is_archived?: boolean
-    is_group?: boolean
-    group_parent_id?: string | null
-  }
+  payload: UpdatePersonPayload
 ) {
   const ok = await updatePerson(id, payload)
   if (ok) {

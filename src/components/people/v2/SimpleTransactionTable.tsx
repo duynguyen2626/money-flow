@@ -10,6 +10,8 @@ interface SimpleTransactionTableProps {
     people: Person[]
     shops: Shop[]
     searchTerm?: string
+    context?: 'account' | 'person' | 'general'
+    contextId?: string
 }
 
 /**
@@ -23,6 +25,8 @@ export function SimpleTransactionTable({
     people,
     shops,
     searchTerm = '',
+    context,
+    contextId,
 }: SimpleTransactionTableProps) {
     // Apply search filter
     const filteredTransactions = searchTerm
@@ -46,6 +50,8 @@ export function SimpleTransactionTable({
                 categories={categories}
                 people={people}
                 shops={shops}
+                context={context}
+                contextId={contextId}
                 hiddenColumns={['id', 'final_price', 'back_info', 'tag']}
             // note/shop is visible by default
             // people is visible by default

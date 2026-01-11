@@ -99,7 +99,7 @@ async function createDebtAccountForPerson(
 export async function createPerson(
   name: string,
   email?: string,
-  avatar_url?: string,
+  image_url?: string,
   sheet_link?: string,
   subscriptionIds?: string[],
   opts?: {
@@ -121,7 +121,7 @@ export async function createPerson(
     id: randomUUID(),
     name: trimmedName,
     email: email?.trim() || null,
-    avatar_url: avatar_url?.trim() || null,
+    image_url: image_url?.trim() || null,
     sheet_link: sheet_link?.trim() || null,
     is_owner: (opts?.is_owner ?? null) as any,
     is_archived: (typeof opts?.is_archived === 'boolean' ? opts.is_archived : null) as any,
@@ -186,13 +186,13 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     const attempt = await supabase
       .from('profiles')
       .select(
-        'id, created_at, name, email, avatar_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image'
+        'id, created_at, name, email, image_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image'
       )
       .order('name', { ascending: true })
     if (attempt.error?.code === '42703' || attempt.error?.code === 'PGRST204') {
       const fallback = await supabase
         .from('profiles')
-        .select('id, created_at, name, email, avatar_url, sheet_link, is_owner')
+        .select('id, created_at, name, email, image_url, sheet_link, is_owner')
         .order('name', { ascending: true })
       return { data: fallback.data, error: fallback.error }
     }
@@ -681,7 +681,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       id: person.id,
       name: person.name ?? '',
       email: person.email,
-      avatar_url: person.avatar_url,
+      image_url: person.image_url,
       sheet_link: person.sheet_link,
       google_sheet_url: person.google_sheet_url,
       sheet_full_img: (person as any).sheet_full_img ?? null,
@@ -775,7 +775,7 @@ export async function updatePerson(
   data: {
     name?: string
     email?: string | null
-    avatar_url?: string | null
+    image_url?: string | null
     sheet_link?: string | null
     google_sheet_url?: string | null
     sheet_full_img?: string | null
@@ -797,7 +797,7 @@ export async function updatePerson(
 
   if (typeof data.name === 'string') payload.name = data.name.trim()
   if (typeof data.email !== 'undefined') payload.email = data.email?.trim() || null
-  if (typeof data.avatar_url !== 'undefined') payload.avatar_url = data.avatar_url?.trim() || null
+  if (typeof data.image_url !== 'undefined') payload.image_url = data.image_url?.trim() || null
   if (normalizedSheetLink !== undefined) payload.sheet_link = normalizedSheetLink
   if (normalizedGoogleSheetUrl !== undefined) payload.google_sheet_url = normalizedGoogleSheetUrl
   if (typeof data.sheet_full_img !== 'undefined') payload.sheet_full_img = data.sheet_full_img?.trim() || null
@@ -845,7 +845,7 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     const attempt = await supabase
       .from('profiles')
       .select(
-        'id, name, email, avatar_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image'
+        'id, name, email, image_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image'
       )
       .eq('id', id)
       .maybeSingle()
@@ -853,7 +853,7 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     if (attempt.error?.code === '42703' || attempt.error?.code === 'PGRST204') {
       const fallback = await supabase
         .from('profiles')
-        .select('id, name, email, avatar_url, sheet_link, is_owner')
+        .select('id, name, email, image_url, sheet_link, is_owner')
         .eq('id', id)
         .maybeSingle()
       return { data: fallback.data, error: fallback.error }
@@ -929,7 +929,7 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
     id: (profile as any).id,
     name: (profile as any).name,
     email: (profile as any).email,
-    avatar_url: (profile as any).avatar_url,
+    image_url: (profile as any).image_url,
     sheet_link: (profile as any).sheet_link,
     google_sheet_url: (profile as any).google_sheet_url,
     sheet_full_img: (profile as any).sheet_full_img ?? null,

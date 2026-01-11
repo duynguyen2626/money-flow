@@ -11,6 +11,7 @@ interface TransactionDetailsCellProps {
     shopName?: string | null
     shopImageUrl?: string | null
     categoryName?: string | null
+    categoryIcon?: string | null
     transactionId: string
     date?: string | Date | null
     isInstallment?: boolean
@@ -37,6 +38,7 @@ export function TransactionDetailsCell({
     shopName,
     shopImageUrl,
     categoryName,
+    categoryIcon,
     transactionId,
     date,
     isInstallment,
@@ -117,13 +119,14 @@ export function TransactionDetailsCell({
 
             {/* Badges Row - Only Category, Split, Refund, Installment (NO cycle/debt here) */}
             <div className="flex flex-wrap items-center gap-1.5">
-                {/* Category Badge - with color and min-width for consistency */}
+                {/* Category Badge - with icon and color - Fixed Height */}
                 {categoryName && categoryColor && (
                     <span className={cn(
-                        "inline-flex items-center justify-center rounded px-2 py-0.5 text-xs font-medium min-w-[80px]",
+                        "inline-flex items-center justify-center rounded px-2 text-xs font-medium min-w-[80px] h-6 gap-1",
                         categoryColor.bg,
                         categoryColor.text
                     )}>
+                        {categoryIcon && <span>{categoryIcon}</span>}
                         {categoryName}
                     </span>
                 )}

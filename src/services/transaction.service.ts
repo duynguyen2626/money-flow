@@ -90,7 +90,7 @@ type LookupMaps = {
       icon?: string | null;
     }
   >;
-  people: Map<string, { id: string; name: string; avatar_url: string | null }>;
+  people: Map<string, { id: string; name: string; image_url: string | null }>;
   shops: Map<string, { id: string; name: string; image_url: string | null }>;
 };
 
@@ -232,7 +232,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
     personIds.size
       ? supabase
         .from("profiles")
-        .select("id, name, avatar_url")
+        .select("id, name, image_url")
         .in("id", Array.from(personIds))
       : Promise.resolve({ data: [] as any[], error: null }),
     shopIds.size
@@ -259,7 +259,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
   >();
   const people = new Map<
     string,
-    { id: string; name: string; avatar_url: string | null }
+    { id: string; name: string; image_url: string | null }
   >();
   const shops = new Map<
     string,
@@ -293,7 +293,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
     people.set(row.id, {
       id: row.id,
       name: row.name,
-      avatar_url: row.avatar_url ?? null,
+      image_url: row.image_url ?? null,
     });
   });
 
@@ -375,12 +375,13 @@ export async function mapTransactionRow(
     category_icon: category?.icon ?? null,
     category_image_url: category?.image_url ?? null,
     account_name: account?.name,
+    account_image_url: account?.image_url ?? null,
     source_name: account?.name ?? null,
     destination_name: target?.name ?? (person ? person.name : null),
     source_image: account?.image_url ?? null,
     destination_image: target?.image_url ?? null,
     person_name: person?.name ?? null,
-    person_avatar_url: person?.avatar_url ?? null,
+    person_image_url: person?.image_url ?? null,
     shop_name: shop?.name ?? null,
     shop_image_url: shop?.image_url ?? null,
     persisted_cycle_tag:

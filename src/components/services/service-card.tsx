@@ -55,7 +55,7 @@ type ServiceMember = {
   profile_id: string
   profile: {
     id: string
-    avatar_url: string | null
+    image_url: string | null
     name: string
   }
   slots: number
