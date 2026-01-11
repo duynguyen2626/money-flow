@@ -10,6 +10,7 @@ interface SmartFilterBarProps {
     transactions: TransactionWithDetails[]
     selectedType: FilterType
     onSelectType: (type: FilterType) => void
+    onPaidClick?: () => void
     className?: string
 }
 
@@ -21,6 +22,7 @@ export function SmartFilterBar({
     transactions,
     selectedType,
     onSelectType,
+    onPaidClick,
     className,
 }: SmartFilterBarProps) {
     const totals = useMemo(() => {
@@ -50,6 +52,12 @@ export function SmartFilterBar({
                     cashback = absAmount * txn.cashback_share_percent
                 }
 
+                // Paid: Count settled/paid transactions
+                const isPaid = txn.metadata?.is_settled === true || txn.metadata?.paid_at !== null
+                if (isPaid) {
+                    acc.paidCount += 1
+                }
+
                 if (isLend) {
                     // Use final price for Lend total if available (Net Lend)
                     const effectiveLend = txn.final_price !== null && txn.final_price !== undefined
@@ -70,7 +78,7 @@ export function SmartFilterBar({
 
                 return acc
             },
-            { income: 0, expense: 0, lend: 0, repay: 0, cashback: 0 }
+            { income: 0, expense: 0, lend: 0, repay: 0, cashback: 0, paidCount: 0 }
         )
     }, [transactions])
 
@@ -110,6 +118,13 @@ export function SmartFilterBar({
             show: totals.cashback > 0,
             activeClass: 'bg-orange-50 border-orange-200 text-orange-700 font-semibold',
             inactiveClass: 'hover:bg-orange-50 hover:text-orange-700',
+        },
+        {
+            id: 'paid',
+            label: `Paid: +${totals.paidCount}`,
+            show: totals.paidCount > 0,
+            activeClass: 'bg-purple-50 border-purple-200 text-purple-700 font-semibold',
+            inactiveClass: 'hover:bg-purple-50 hover:text-purple-700',
         }
     ] as const
 
@@ -118,17 +133,25 @@ export function SmartFilterBar({
             {filters.map((filter) => {
                 if (!filter.show) return null
                 const isActive = selectedType === filter.id
+                const isPaidFilter = filter.id === 'paid'
+
                 return (
                     <button
                         key={filter.id}
-                        onClick={() => onSelectType(filter.id as FilterType)}
+                        onClick={() => {
+                            if (isPaidFilter && onPaidClick) {
+                                onPaidClick()
+                            } else {
+                                onSelectType(filter.id as FilterType)
+                            }
+                        }}
                         className={cn(
-                            "h-9 rounded-full border px-4 py-1.5 text-xs font-bold transition-all whitespace-nowrap shadow-sm flex items-center gap-1",
+                            "h-9 rounded-full border px-4 py-1.5 text-xs font-bold transition-all whitespace-nowrap shadow-sm flex items-center gap-1 cursor-pointer",
                             isActive
                                 ? (filter.activeClass || 'bg-slate-900 border-slate-900 text-white shadow-md transform scale-105')
                                 : cn(
                                     "bg-white border-slate-200 text-slate-600",
-                                    filter.inactiveClass || 'hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5'
+                                    filter.inactiveClass || 'hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0'
                                 )
                         )}
                     >

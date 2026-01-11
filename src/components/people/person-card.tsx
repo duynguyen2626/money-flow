@@ -95,8 +95,8 @@ function PersonCardComponent({
     const openDetails = (e?: MouseEvent, tag?: string) => {
         e?.stopPropagation()
         const url = tag
-            ? `/people/${person.id}?tag=${encodeURIComponent(tag)}`
-            : `/people/${person.id}`
+            ? `/people/${person.id}/details?tag=${encodeURIComponent(tag)}`
+            : `/people/${person.id}/details`
         startTransition(() => {
             router.push(url)
         })

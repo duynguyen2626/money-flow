@@ -15,6 +15,7 @@ import { FilterableTransactions } from '@/components/moneyflow/filterable-transa
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { isYYYYMM, normalizeMonthTag } from '@/lib/month-tag'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
+import { PaidTransactionsModal } from '@/components/people/paid-transactions-modal'
 
 interface PersonDetailTabsProps {
     accounts: Account[]
@@ -65,6 +66,7 @@ export function PersonDetailTabs({
     const [searchTerm, setSearchTerm] = useState('')
     const [selectedYear, setSelectedYear] = useState<string | null>(null)
     const [isFilterOpen, setIsFilterOpen] = useState(false)
+    const [showPaidModal, setShowPaidModal] = useState(false)
 
     // Sync tab with URL
     useEffect(() => {
@@ -187,15 +189,16 @@ export function PersonDetailTabs({
                                             variant="ghost"
                                             size="sm"
                                             className={cn(
-                                                "h-10 rounded-full border bg-white px-4 flex items-center gap-2 text-sm font-medium transition-all shadow-sm",
+                                                "h-10 rounded-full border bg-white px-3 flex items-center gap-1.5 text-sm font-medium transition-all shadow-sm",
                                                 selectedYear
                                                     ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300"
                                                     : "border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300"
                                             )}
                                         >
-                                            <Filter className="h-4 w-4" />
-                                            <span>{selectedYear || '2026'}</span> {/* Default to current year or All? Prompt Mockup shows "2026" */}
-                                            <span className="opacity-50 text-xs ml-1">▼</span>
+                                            <Filter className="h-3.5 w-3.5" />
+                                            <span className="text-xs opacity-40">|</span>
+                                            <span className="font-semibold">{selectedYear || new Date().getFullYear()}</span>
+                                            <span className="opacity-50 text-xs">▼</span>
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-56 p-2 rounded-xl" align="start">
@@ -235,13 +238,16 @@ export function PersonDetailTabs({
                             {/* Right: Stats & Actions */}
                             <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto xl:justify-end">
 
-                                {/* Stats Bar - Only visible in Timeline */}
-                                <SmartFilterBar
-                                    transactions={filteredTransactions}
-                                    selectedType={filterType}
-                                    onSelectType={setFilterType}
-                                    className="overflow-x-auto max-w-full pb-1 md:pb-0"
-                                />
+                                {/* Interactive Stats Bar - Only visible in Timeline */}
+                                <div className="flex items-center gap-1">
+                                    <SmartFilterBar
+                                        transactions={filteredTransactions}
+                                        selectedType={filterType}
+                                        onSelectType={setFilterType}
+                                        onPaidClick={() => setShowPaidModal(true)}
+                                        className="overflow-x-auto max-w-full pb-1 md:pb-0"
+                                    />
+                                </div>
 
                                 <div className="h-6 w-px bg-slate-200 hidden xl:block" />
 
@@ -357,6 +363,18 @@ export function PersonDetailTabs({
                     </div>
                 )}
             </div>
+
+            {/* Paid Transactions Modal */}
+            <PaidTransactionsModal
+                open={showPaidModal}
+                onOpenChange={setShowPaidModal}
+                transactions={transactions}
+                personId={personId}
+                accounts={accounts}
+                categories={categories}
+                people={people}
+                shops={shops}
+            />
         </div>
     )
 }
