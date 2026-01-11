@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { MoreHorizontal, Pencil, Copy, Ban, RotateCcw, CreditCard } from 'lucide-react'
+import { MoreHorizontal, Pencil, Copy, Ban, RotateCcw, CreditCard, History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface TransactionActionsProps {
@@ -13,6 +13,7 @@ interface TransactionActionsProps {
     onRefund?: () => void
     onConfirmRefund?: () => void
     onConvertToInstallment?: () => void
+    onHistory?: () => void
 }
 
 /**
@@ -30,6 +31,7 @@ export function TransactionActions({
     onRefund,
     onConfirmRefund,
     onConvertToInstallment,
+    onHistory,
 }: TransactionActionsProps) {
     const [isOpen, setIsOpen] = useState(false)
     const dropdownRef = useRef<HTMLDivElement>(null)
@@ -99,6 +101,24 @@ export function TransactionActions({
                 {isOpen && (
                     <div className="absolute right-0 top-full mt-1 z-50 w-48 rounded-md border border-slate-200 bg-white shadow-lg">
                         <div className="p-1">
+                            {/* History */}
+                            {onHistory && (
+                                <>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            onHistory()
+                                            setIsOpen(false)
+                                        }}
+                                        className="w-full text-left px-3 py-2 text-sm rounded hover:bg-slate-100 flex items-center gap-2"
+                                    >
+                                        <History className="h-4 w-4" />
+                                        View History
+                                    </button>
+                                    <div className="my-1 h-px bg-slate-200" />
+                                </>
+                            )}
+
                             {/* Refund Actions */}
                             {canRequestRefund && !isPendingRefund && onRefund && (
                                 <>
