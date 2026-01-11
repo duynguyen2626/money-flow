@@ -339,105 +339,101 @@ export function DebtCycleList({
     }
 
     return (
-        <div className="flex flex-col gap-4">
-            {/* Horizontal Scrollable Pills */}
-            <div className="relative">
-                <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide px-1 snap-x items-center">
-
-                    {/* Back to Current Year */}
-                    {!isCurrentYear && (
-                        <button
-                            onClick={() => {
-                                const currentYear = new Date().getFullYear().toString()
-                                if (onYearChange) {
-                                    onYearChange(currentYear)
-                                }
-                                setActiveTag(null)
-                            }}
-                            className="flex-shrink-0 flex items-center justify-center h-11 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors whitespace-nowrap text-xs font-bold text-slate-600 snap-start uppercase tracking-wider"
-                        >
-                            ↩ {new Date().getFullYear()}
-                        </button>
-                    )}
-
-                    {/* Previous Outstanding */}
-                    {hasOutstandingFromPrevious && outstandingFromPreviousYears.map(item => (
-                        <button
-                            key={item.tag}
-                            onClick={() => {
-                                if (onYearChange) {
-                                    onYearChange(item.year.toString())
-                                }
-                                setActiveTag(item.tag)
-                            }}
-                            className="flex-shrink-0 flex items-center gap-2 h-11 px-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 font-bold text-xs whitespace-nowrap snap-start shadow-sm hover:border-amber-300 min-w-[120px]"
-                        >
-                            <span>{getMonthName(item.tag).toUpperCase()} '{item.year.toString().slice(2)}</span>
-                            <span className="bg-amber-100 px-1.5 py-0.5 rounded text-[10px] tracking-wide">UNPAID</span>
-                        </button>
-                    ))}
-
-
-                    {visibleCycles.map((group) => {
-                        const isSettled = group.isSettled
-                        const isActive = activeTag === group.tag
-                        const linkedRepaymentsCount = group.serverStatus?.links?.length || 0
-
-                        return (
+        <div className="space-y-4">
+            {/* Grouped Timeline Section: Year Filter + Timeline Cards */}
+            <div className="border border-slate-200 rounded-xl p-4 bg-white">
+                {/* Horizontal Scrollable Timeline Pills */}
+                <div className="relative">
+                    <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-2">
+                        {/* Back to Current Year */}
+                        {selectedYear && !isCurrentYear && (
                             <button
-                                key={group.tag}
-                                onClick={() => setActiveTag(group.tag)}
-                                className={cn(
-                                    "flex-shrink-0 flex items-center gap-2 h-11 px-4 rounded-lg border transition-all whitespace-nowrap snap-start",
-                                    isActive
-                                        ? "bg-[#1e1b4b] border-[#1e1b4b] text-white shadow-lg shadow-indigo-900/20"
-                                        : isSettled
-                                            ? "bg-white border-slate-200 text-slate-400 opacity-80 hover:opacity-100 hover:border-slate-300"
-                                            : "bg-white border-slate-200 text-slate-800 hover:border-slate-300 hover:bg-slate-50"
-                                )}
+                                onClick={() => {
+                                    const currentYear = new Date().getFullYear().toString()
+                                    if (onYearChange) {
+                                        onYearChange(currentYear)
+                                    }
+                                    setActiveTag(null)
+                                }}
+                                className="flex-shrink-0 flex items-center justify-center h-11 px-4 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors whitespace-nowrap text-xs font-bold text-slate-600 snap-start uppercase tracking-wider"
                             >
-                                {/* Month */}
-                                <span className={cn("text-xs font-bold uppercase tracking-wider", isActive ? "text-indigo-200" : isSettled ? "text-slate-400" : "text-slate-500")}>
-                                    {getMonthName(group.tag).toUpperCase()} '{group.tag.split('-')[0].slice(2)}
-                                </span>
-
-                                {/* Amount or Settled */}
-                                {isSettled ? (
-                                    <span className={cn("text-[10px] font-bold uppercase tracking-wide", isActive ? "text-emerald-300" : "text-emerald-600")}>
-                                        SETTLED
-                                    </span>
-                                ) : (
-                                    <span className={cn("text-sm font-bold tabular-nums", isActive ? "text-white" : "text-slate-900")}>
-                                        {compactFormatter.format(Math.max(0, group.remains))}
-                                    </span>
-                                )}
-
-                                {/* Linked Badge */}
-                                {linkedRepaymentsCount > 0 && (
-                                    <span className={cn(
-                                        "flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold",
-                                        isActive ? "bg-indigo-500 text-white" : "bg-indigo-100 text-indigo-700"
-                                    )}>
-                                        {linkedRepaymentsCount}
-                                    </span>
-                                )}
+                                ↩ {new Date().getFullYear()}
                             </button>
-                        )
-                    })}
+                        )}
 
-                    {/* Unpaid Badge (Global) - Placeholder based on request */}
-                    {/* The prompt asked to move "Unpaid" badge to the end. I'll add a summary pill styled as badge */}
-                    <div className="flex-shrink-0 flex items-center justify-center h-11 px-4 rounded-lg bg-amber-50 border border-amber-100 text-amber-600 text-xs font-bold uppercase tracking-wide snap-start">
-                        Unpaid
+                        {/* Previous Outstanding */}
+                        {hasOutstandingFromPrevious && outstandingFromPreviousYears.map(item => (
+                            <button
+                                key={item.tag}
+                                onClick={() => {
+                                    if (onYearChange) {
+                                        onYearChange(item.year.toString())
+                                    }
+                                    setActiveTag(item.tag)
+                                }}
+                                className="flex-shrink-0 flex items-center gap-2 h-11 px-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 font-bold text-xs whitespace-nowrap snap-start shadow-sm hover:border-amber-300 min-w-[120px]"
+                            >
+                                <span>{getMonthName(item.tag).toUpperCase()} '{item.year.toString().slice(2)}</span>
+                                <span className="bg-amber-100 px-1.5 py-0.5 rounded text-[10px] tracking-wide">UNPAID</span>
+                            </button>
+                        ))}
+
+
+                        {visibleCycles.map((group) => {
+                            const isSettled = group.isSettled
+                            const isActive = activeTag === group.tag
+                            const linkedRepaymentsCount = group.serverStatus?.links?.length || 0
+
+                            return (
+                                <button
+                                    key={group.tag}
+                                    onClick={() => setActiveTag(group.tag)}
+                                    className={cn(
+                                        "flex-shrink-0 flex items-center gap-2 h-11 px-4 rounded-lg border transition-all whitespace-nowrap snap-start",
+                                        isActive
+                                            ? "bg-indigo-900 border-indigo-900 text-white shadow-lg shadow-indigo-900/30"
+                                            : isSettled
+                                                ? "bg-white border-slate-200 text-slate-400 opacity-80 hover:opacity-100 hover:border-slate-300"
+                                                : "bg-white border-slate-200 text-slate-800 hover:border-slate-300 hover:bg-slate-50"
+                                    )}
+                                >
+                                    {/* Month */}
+                                    <span className={cn("text-xs font-bold uppercase tracking-wider", isActive ? "text-indigo-200" : isSettled ? "text-slate-400" : "text-slate-500")}>
+                                        {getMonthName(group.tag).toUpperCase()} '{group.tag.split('-')[0].slice(2)}
+                                    </span>
+
+                                    {/* Amount or Settled */}
+                                    {isSettled ? (
+                                        <span className={cn("text-[10px] font-bold uppercase tracking-wide", isActive ? "text-emerald-300" : "text-emerald-600")}>
+                                            SETTLED
+                                        </span>
+                                    ) : (
+                                        <span className={cn("text-sm font-bold tabular-nums", isActive ? "text-white" : "text-slate-900")}>
+                                            {compactFormatter.format(Math.max(0, group.remains))}
+                                        </span>
+                                    )}
+
+                                    {/* Linked Badge */}
+                                    {linkedRepaymentsCount > 0 && (
+                                        <span className={cn(
+                                            "flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold",
+                                            isActive ? "bg-indigo-500 text-white" : "bg-indigo-100 text-indigo-700"
+                                        )}>
+                                            {linkedRepaymentsCount}
+                                        </span>
+                                    )}
+                                </button>
+                            )
+                        })}
+
+                        {/* More Button */}
+                        <button className="flex-shrink-0 flex items-center justify-center h-11 px-4 rounded-lg border border-slate-200 bg-white text-slate-500 text-xs font-medium hover:bg-slate-50 hover:text-slate-700 transition-colors snap-start">
+                            More &gt;
+                        </button>
                     </div>
-
-                    {/* More Button */}
-                    <button className="flex-shrink-0 flex items-center justify-center h-11 px-5 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 text-xs font-bold hover:bg-slate-100 transition-colors uppercase tracking-wider snap-start">
-                        More &gt;
-                    </button>
+                    {/* Fade Gradients for Scroll Hint */}
+                    <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none md:hidden" />
                 </div>
-                {/* Fade Gradients for Scroll Hint */}
-                <div className="absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none md:hidden" />
             </div>
 
             {/* Detail View */}
