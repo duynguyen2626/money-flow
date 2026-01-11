@@ -1,75 +1,77 @@
-# People Details UI Enhancement Tasks
+---
+description:  Senior Frontend Engineer & UI/UX Expert
+---
 
-## ✅ Completed Tasks
+ROLE: Senior Frontend Engineer & UI/UX Expert
 
-### 1. Grouped Timeline Section
-- [x] Wrapped year filter and timeline cards in single bordered container
-- [x] Added `border border-slate-200 rounded-xl p-4 bg-white` styling
-- [x] Cleaned up visual hierarchy
-- [x] File: `debt-cycle-list.tsx`
+CONTEXT
 
-### 2. Stats Bar Enhancements
-- [x] Added Paid stat calculation to SmartFilterBar
-- [x] Reordered stats: Lend → Repay → Cashback → **Paid**
-- [x] Added `onPaidClick` prop to SmartFilterBar
-- [x] Paid stat shows count with purple styling (`+X Paid`)
-- [x] File: `smart-filter-bar.tsx`
+Chúng ta đang thực hiện PR fix/people-ui-v2-refactor. Mục tiêu là hoàn thiện trải nghiệm người dùng tại trang chi tiết thành viên (people/[id]) và danh sách giao dịch chi tiết (people/[id]/details), sử dụng bộ component V2. Cần đặc biệt chú ý sửa các lỗi logic về hiển thị nợ và cashback hiện tại.
 
-### 3. Paid Transactions Modal
-- [x] Created `PaidTransactionsModal` component
-- [x] Implemented bulk settlement detection and display
-- [x] Made original transactions clickable to open edit dialog
-- [x] Integrated modal into `person-detail-tabs.tsx`
-- [x] Added state management (`showPaidModal`)
-- [x] Connected Paid stat click to modal
-- [x] Fixed TypeScript errors (transactionId prop)
-- [x] Files: `paid-transactions-modal.tsx`, `person-detail-tabs.tsx`
+CRITICAL BUG FIXES & LOGIC
 
-### 4. Cashback Interactivity
-- [x] Cashback stat already clickable (sets filterType to 'cashback')
-- [x] Existing hover effects and active states working
-- [x] No changes needed - already functional
+Logic "Paid" (Đã trả):
 
-## ⏳ Pending Tasks
+Hiện tại đang show nhầm cả giao dịch Expense.
 
-### 5. Remove Redundant Counterparty Names
-- [ ] Identify where "→ Name" text is rendered in timeline
-- [ ] Add `currentPersonId` prop to relevant components
-- [ ] Hide counterparty name when `transaction.person_id === currentPersonId`
-- [ ] Preserve debt tags/badges
-- [ ] Maintain amount color indicators (Green/Red)
-- **Status**: Need to locate exact rendering location in transaction rows
+Yêu cầu: Chỉ hiển thị các giao dịch mà người đó thực sự trả tiền cho mình (thường là type debt nhưng mang giá trị dương, hoặc giao dịch repayment).
 
-### 6. Fix Unpaid Filter Logic
-- [ ] Update "Unpaid" filter to show cycles from ALL years
-- [ ] Current: Only shows unpaid from selected year
-- [ ] Target: Show unpaid from previous years if current year has none
-- [ ] Modify filter logic in `debt-cycle-list.tsx`
-- **Status**: Current implementation already shows `outstandingFromPreviousYears` - may already be working
+Khi click vào các giao dịch con (được bulk paid từ giao dịch gốc), hệ thống phải trỏ về Transaction gốc và mở Edit Modal (tham chiếu logic cũ trong code details V1).
 
-## 📝 Implementation Notes
+Logic hiển thị Cashback:
 
-### Files Modified
-1. `src/components/moneyflow/debt-cycle-list.tsx` - Grouped timeline section
-2. `src/components/moneyflow/smart-filter-bar.tsx` - Added Paid stat, reordered filters
-3. `src/components/people/person-detail-tabs.tsx` - Integrated Paid modal
-4. `src/components/people/paid-transactions-modal.tsx` - NEW file for Paid modal
+Vấn đề: Danh sách đang hiển thị cả các giao dịch không có cashback.
 
-### Technical Details
-- Paid stat counts transactions where `metadata.is_settled === true` or `metadata.paid_at !== null`
-- Bulk settlements detected via `metadata.settled_transaction_ids`
-- Modal displays original transactions for bulk settlements
-- All transactions clickable to open edit dialog
+Yêu cầu: Kiểm tra metadata và các trường cashback_share_percent, cashback_share_fixed. Chỉ hiển thị nếu các giá trị này > 0. (Tham chiếu dữ liệu mẫu: cashback_share_percent: '0.0100' là có cashback).
 
-### Known Issues
-- TypeScript error in `v2/SimpleTransactionTable.tsx` (unrelated to our changes)
-- Redundant name removal pending - need to locate rendering location
+Timeline Section (Biểu đồ thời gian):
 
-## 🎯 Next Steps
+Lọc năm: Nếu đang lọc năm 2026, KHÔNG được hiển thị tháng của năm 2025 (ví dụ Nov 25). Chỉ hiển thị tên tháng (ví dụ: "Feb" thay vì "Feb 25").
 
-1. ✅ Fix TypeScript errors in paid-transactions-modal
-2. ⏳ Verify build passes
-3. ⏳ Test Paid modal functionality
-4. ⏳ Locate and fix redundant counterparty names
-5. ⏳ Verify Unpaid filter logic
-6. ⏳ Create walkthrough with screenshots
+Layout: Hiển thị 1 hàng tối đa 6 tháng.
+
+Sắp xếp: Tháng hiện tại nằm ở đầu và giảm dần về trước.
+
+Trạng thái trống: Nếu tháng không có dữ liệu, khi click vào phải hiển thị SVG "No data to show".
+
+Logic Badges "Unpaid (last year)":
+
+Kiểm tra nợ tồn đọng từ năm trước (dựa trên occurred_at trước năm đang filter).
+
+Hiển thị một Badge màu vàng "Unpaid (last year)" phía trước Timeline hiện tại.
+
+Tương tác: Khi click vào badge này, ứng dụng sẽ chuyển filter sang năm trước đó để xem chi tiết.
+
+Cung cấp nút "Back to current year" khi đang xem dữ liệu năm cũ.
+
+TASK OBJECTIVES
+
+Refactor src/app/people/[id]/page.tsx:
+
+Tích hợp Badge "Unpaid (last year)" và logic Timeline mới.
+
+Hiển thị Dashboard tổng quát về nợ (Debt) chuẩn xác.
+
+Refactor src/app/people/[id]/details/page.tsx:
+
+Đảm bảo SimpleTransactionTable lọc đúng loại giao dịch (Paid/Unpaid/Cashback).
+
+Fix lỗi nhảy dữ liệu khi chuyển tab.
+
+UI/UX Enhancement:
+
+Responsive tuyệt đối trên Mobile.
+
+Nhất quán màu sắc: Green (Income/Received), Red (Expense/Spent), Orange (Debt/Unpaid).
+
+Thêm Skeleton Loading khi fetch dữ liệu.
+
+SPECIFIC INSTRUCTIONS FOR AGENT
+
+Kiểm tra kỹ src/hooks/use-person-details.ts để cập nhật logic tính toán nợ theo năm.
+
+Sử dụng Server Actions cho dữ liệu khởi tạo.
+
+Sau khi fix, hãy thực hiện Simulation (giả lập các thao tác) để đảm bảo nút "Back to current year" và logic mở modal transaction gốc hoạt động đúng.
+
+Hãy bắt đầu bằng việc phân tích mã nguồn của DebtTimeline.tsx và use-person-details.ts để đề xuất plan chỉnh sửa trước khi viết code.

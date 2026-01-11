@@ -52,8 +52,10 @@ export function SmartFilterBar({
                     cashback = absAmount * txn.cashback_share_percent
                 }
 
-                // Paid: Count settled/paid transactions
-                const isPaid = txn.metadata?.is_settled === true || txn.metadata?.paid_at !== null
+                // Paid: Count settled/paid transactions (Repayments Only)
+                // We only count money RECEIVED (repayment or income), not debts settled by others
+                const isPaid = (type === 'repayment' || type === 'income') && (txn.metadata?.is_settled === true || txn.metadata?.paid_at !== null)
+
                 if (isPaid) {
                     acc.paidCount += 1
                 }
