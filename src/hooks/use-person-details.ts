@@ -63,6 +63,11 @@ export function usePersonDetails({
                     cashback = absAmount * txn.cashback_share_percent
                 }
 
+                // Include income-based cashback
+                if (type === 'income' && (txn.note?.toLowerCase().includes('cashback') || (txn.metadata as any)?.is_cashback)) {
+                    cashback += absAmount
+                }
+
                 if (isLend) {
                     const effectiveLend = txn.final_price !== null && txn.final_price !== undefined
                         ? Math.abs(Number(txn.final_price))
@@ -76,8 +81,8 @@ export function usePersonDetails({
                     acc.cashback += cashback
                 }
 
-                // Count paid transactions (repayments)
-                if (type === 'repayment') {
+                // Count paid transactions (repayments and income with person)
+                if (type === 'repayment' || (type === 'income' && !!txn.person_id)) {
                     acc.paidCount += 1
                 }
 
