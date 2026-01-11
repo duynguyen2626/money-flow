@@ -5,15 +5,14 @@ interface TransactionDateCellProps {
 }
 
 /**
- * Displays transaction date with time in a large, prominent format
- * Day number is large and bold, month is small below, time at bottom
+ * Displays transaction date in a compact format
+ * Day number is large and bold, month is small below (no time)
  */
 export function TransactionDateCell({ date }: TransactionDateCellProps) {
     const dateObj = typeof date === 'string' ? new Date(date) : date
 
     const day = format(dateObj, 'dd')
     const month = format(dateObj, 'MMM')
-    const time = format(dateObj, 'HH:mm')
 
     return (
         <div className="flex flex-col items-center justify-center min-w-[60px]">
@@ -22,9 +21,6 @@ export function TransactionDateCell({ date }: TransactionDateCellProps) {
             </div>
             <div className="text-xs text-slate-500 uppercase mt-0.5">
                 {month}
-            </div>
-            <div className="text-xs text-slate-400 mt-0.5">
-                {time}
             </div>
         </div>
     )

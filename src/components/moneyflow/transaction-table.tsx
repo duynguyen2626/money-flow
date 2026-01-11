@@ -236,6 +236,7 @@ export function TransactionTable({
                                             categoryName={txn.category_name}
                                             transactionId={txn.id}
                                             tag={txn.tag}
+                                            date={txn.occurred_at}
                                             isInstallment={txn.is_installment}
                                             refundStatus={refundStatus}
                                         />
@@ -254,6 +255,7 @@ export function TransactionTable({
                                                 contextPersonId={contextPersonId || contextId}
                                                 transactionAccountId={txn.account_id}
                                                 transactionPersonId={txn.person_id}
+                                                cycleTag={txn.tag}
                                             />
                                         </div>
                                     </td>

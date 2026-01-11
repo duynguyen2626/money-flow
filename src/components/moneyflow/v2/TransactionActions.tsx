@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { MoreHorizontal, Pencil, Copy, Ban, RotateCcw, CreditCard, History } from 'lucide-react'
+import { MoreHorizontal, Pencil, Files, Ban, RotateCcw, CreditCard, History } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface TransactionActionsProps {
@@ -67,7 +67,7 @@ export function TransactionActions({
                 <Pencil className="h-4 w-4" />
             </Button>
 
-            {/* Clone Button */}
+            {/* Duplicate Button */}
             {onClone && (
                 <Button
                     variant="ghost"
@@ -79,7 +79,7 @@ export function TransactionActions({
                     className="h-8 w-8 p-0"
                     title="Clone"
                 >
-                    <Copy className="h-4 w-4" />
+                    <Files className="h-4 w-4" />
                 </Button>
             )}
 

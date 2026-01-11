@@ -2,6 +2,7 @@
 
 import { Copy, CheckCheck } from 'lucide-react'
 import { useState } from 'react'
+import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
 
@@ -12,6 +13,7 @@ interface TransactionDetailsCellProps {
     categoryName?: string | null
     transactionId: string
     tag?: string | null
+    date?: string | Date | null
     isInstallment?: boolean
     installmentsPaid?: number
     installmentsTotal?: number
@@ -38,6 +40,7 @@ export function TransactionDetailsCell({
     categoryName,
     transactionId,
     tag,
+    date,
     isInstallment,
     installmentsPaid,
     installmentsTotal,
@@ -53,23 +56,51 @@ export function TransactionDetailsCell({
         setTimeout(() => setCopiedId(false), 2000)
     }
 
-    // Primary text: note only (no shop name)
-    const primaryText = note || 'No description'
+    // Primary text: note if available, otherwise shop name
+    const primaryText = note || shopName || 'No description'
 
     // Get category color
     const categoryColor = categoryName ? categoryColors[categoryName] || { bg: 'bg-slate-100', text: 'text-slate-700' } : null
 
+    // Format time
+    const timeStr = date ? format(typeof date === 'string' ? new Date(date) : date, 'HH:mm') : null
+
     return (
         <div className="flex flex-col gap-1.5 min-w-0">
-            {/* Primary Text (Note only) */}
+            {/* Primary Text with Shop Image and Time */}
             <div className="flex items-center gap-2 min-w-0">
+                {/* Shop Icon */}
+                {shopName && (
+                    <div className="flex-shrink-0">
+                        {shopImageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                                src={shopImageUrl}
+                                alt={shopName}
+                                className="h-8 w-8 rounded-none object-cover"
+                            />
+                        ) : (
+                            <div className="flex h-8 w-8 items-center justify-center rounded-none bg-slate-100 text-xs font-semibold text-slate-600">
+                                {shopName.charAt(0).toUpperCase()}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 {/* Text Content */}
                 <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                    <CustomTooltip content={primaryText}>
-                        <span className="text-sm font-medium text-slate-900 truncate">
-                            {primaryText}
-                        </span>
-                    </CustomTooltip>
+                    <div className="flex items-center gap-2">
+                        <CustomTooltip content={primaryText}>
+                            <span className="text-sm font-medium text-slate-900 truncate">
+                                {primaryText}
+                            </span>
+                        </CustomTooltip>
+                        {timeStr && (
+                            <span className="text-xs text-slate-400 flex-shrink-0">
+                                {timeStr}
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 {/* Copy ID Button */}

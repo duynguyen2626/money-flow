@@ -1,8 +1,7 @@
 'use client'
 
-import { ArrowDown, Info } from 'lucide-react'
+import { ArrowDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { CustomTooltip } from '@/components/ui/custom-tooltip'
 
 interface PerformanceBaseAmountProps {
     amount: number
@@ -31,8 +30,8 @@ export function PerformanceBaseAmount({
                 ? 'text-red-500'
                 : 'text-slate-700'
 
-    // Convert decimal to percentage (0.08 -> 8%)
-    const displayPercent = cashbackPercent * 100
+    // Format cashback percent - keep as decimal (0.08 = 0.08%)
+    const displayPercent = cashbackPercent
 
     return (
         <div className="flex flex-col items-end gap-0.5">
