@@ -174,11 +174,11 @@ export function TransactionTable({
                             <th className="px-4 py-3 text-center font-semibold text-sm text-slate-700 w-72">
                                 Flow
                             </th>
-                            <th className="px-4 py-3 text-right font-semibold text-sm text-slate-700 w-40">
-                                Performance-Base Amount
+                            <th className="px-4 py-3 text-right font-semibold text-sm text-slate-700 w-36">
+                                Base Amount
                             </th>
-                            <th className="px-4 py-3 text-right font-semibold text-sm text-slate-700 w-40">
-                                Final Settlement
+                            <th className="px-4 py-3 text-right font-semibold text-sm text-slate-700 w-36">
+                                Final
                             </th>
                             <th className="px-4 py-3 text-center font-semibold text-sm text-slate-700 w-32">
                                 Actions
@@ -273,6 +273,9 @@ export function TransactionTable({
                                         <FinalSettlement
                                             finalPrice={finalPrice}
                                             type={txnType}
+                                            baseAmount={originalAmount}
+                                            cashbackPercent={percentValue}
+                                            cashbackFixed={fixedValue}
                                         />
                                     </td>
 

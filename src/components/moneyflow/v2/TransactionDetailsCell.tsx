@@ -19,6 +19,18 @@ interface TransactionDetailsCellProps {
     refundStatus?: string | null
 }
 
+// Category colors mapping
+const categoryColors: Record<string, { bg: string; text: string }> = {
+    'Shopping': { bg: 'bg-blue-100', text: 'text-blue-700' },
+    'Food': { bg: 'bg-orange-100', text: 'text-orange-700' },
+    'Transport': { bg: 'bg-purple-100', text: 'text-purple-700' },
+    'Entertainment': { bg: 'bg-pink-100', text: 'text-pink-700' },
+    'Health': { bg: 'bg-green-100', text: 'text-green-700' },
+    'Education': { bg: 'bg-indigo-100', text: 'text-indigo-700' },
+    'Income': { bg: 'bg-emerald-100', text: 'text-emerald-700' },
+    'Repayment': { bg: 'bg-teal-100', text: 'text-teal-700' },
+}
+
 export function TransactionDetailsCell({
     note,
     shopName,
@@ -41,49 +53,23 @@ export function TransactionDetailsCell({
         setTimeout(() => setCopiedId(false), 2000)
     }
 
-    // Primary text: note if available, otherwise shop name
-    const primaryText = note || shopName || 'No description'
-    const hasNote = Boolean(note)
+    // Primary text: note only (no shop name)
+    const primaryText = note || 'No description'
+
+    // Get category color
+    const categoryColor = categoryName ? categoryColors[categoryName] || { bg: 'bg-slate-100', text: 'text-slate-700' } : null
 
     return (
         <div className="flex flex-col gap-1.5 min-w-0">
-            {/* Primary Text (Note or Shop Name) */}
+            {/* Primary Text (Note only) */}
             <div className="flex items-center gap-2 min-w-0">
-                {/* Shop Icon (only if we have shop) */}
-                {shopName && (
-                    <div className="flex-shrink-0">
-                        {shopImageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                                src={shopImageUrl}
-                                alt={shopName}
-                                className="h-8 w-8 rounded-none object-cover"
-                            />
-                        ) : (
-                            <div className="flex h-8 w-8 items-center justify-center rounded-none bg-slate-100 text-xs font-semibold text-slate-600">
-                                {shopName.charAt(0).toUpperCase()}
-                            </div>
-                        )}
-                    </div>
-                )}
-
                 {/* Text Content */}
                 <div className="flex flex-col gap-0.5 min-w-0 flex-1">
                     <CustomTooltip content={primaryText}>
-                        <span className={cn(
-                            "truncate",
-                            hasNote ? "text-sm font-medium text-slate-900" : "text-sm font-medium text-slate-700"
-                        )}>
+                        <span className="text-sm font-medium text-slate-900 truncate">
                             {primaryText}
                         </span>
                     </CustomTooltip>
-
-                    {/* Shop name as secondary if we have note */}
-                    {hasNote && shopName && (
-                        <span className="text-xs text-slate-500 truncate">
-                            {shopName}
-                        </span>
-                    )}
                 </div>
 
                 {/* Copy ID Button */}
@@ -102,9 +88,13 @@ export function TransactionDetailsCell({
 
             {/* Badges Row */}
             <div className="flex flex-wrap items-center gap-1.5">
-                {/* Category Badge */}
-                {categoryName && (
-                    <span className="inline-flex items-center rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                {/* Category Badge - with color and min-width for consistency */}
+                {categoryName && categoryColor && (
+                    <span className={cn(
+                        "inline-flex items-center justify-center rounded px-2 py-0.5 text-xs font-medium min-w-[80px]",
+                        categoryColor.bg,
+                        categoryColor.text
+                    )}>
                         {categoryName}
                     </span>
                 )}
