@@ -235,7 +235,6 @@ export function TransactionTable({
                                             shopImageUrl={txn.shop_image_url}
                                             categoryName={txn.category_name}
                                             transactionId={txn.id}
-                                            tag={txn.tag}
                                             date={txn.occurred_at}
                                             isInstallment={txn.is_installment}
                                             refundStatus={refundStatus}
@@ -246,16 +245,22 @@ export function TransactionTable({
                                     <td className="px-4 py-3">
                                         <div className="flex justify-center">
                                             <AccountPersonFlow
+                                                accountId={txn.account_id}
                                                 accountName={txn.account_name}
-                                                accountImageUrl={null}
+                                                accountImageUrl={(txn as any).account_image_url || (txn as any).source_image || null}
+                                                personId={txn.person_id}
                                                 personName={(txn as any).person_name}
-                                                personImageUrl={null}
+                                                personImageUrl={(txn as any).person_avatar_url || null}
                                                 type={txnType}
                                                 contextAccountId={contextAccountId || contextId}
                                                 contextPersonId={contextPersonId || contextId}
                                                 transactionAccountId={txn.account_id}
                                                 transactionPersonId={txn.person_id}
                                                 cycleTag={txn.tag}
+                                                isSplit={metadata?.is_split as boolean}
+                                                refundStatus={refundStatus}
+                                                installmentsPaid={metadata?.installments_paid as number}
+                                                installmentsTotal={metadata?.installments_total as number}
                                             />
                                         </div>
                                     </td>

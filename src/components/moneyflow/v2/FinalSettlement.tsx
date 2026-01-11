@@ -32,20 +32,23 @@ export function FinalSettlement({
                 : 'text-slate-700'
 
     const hasCashback = cashbackPercent > 0 || cashbackFixed > 0
-    const displayPercent = cashbackPercent * 100
+    const displayPercent = cashbackPercent * 10000 // 0.0008 → 8%
 
     // Build formula tooltip
     let formula = ''
     if (hasCashback && baseAmount) {
-        const cashbackAmount = Math.abs(baseAmount) * cashbackPercent + cashbackFixed
-        formula = `${numberFormatter.format(Math.abs(baseAmount))}`
+        const absBase = Math.abs(baseAmount)
+        const percentCashback = absBase * cashbackPercent
+        const totalCashback = percentCashback + cashbackFixed
+
+        formula = `${numberFormatter.format(absBase)}`
         if (displayPercent > 0) {
             formula += ` - ${displayPercent}%`
         }
         if (cashbackFixed > 0) {
             formula += ` - ${numberFormatter.format(cashbackFixed)}`
         }
-        formula += ` = ${numberFormatter.format(finalPrice)}`
+        formula += ` = ${numberFormatter.format(Math.abs(finalPrice))}`
     }
 
     return (
@@ -54,7 +57,7 @@ export function FinalSettlement({
                 {numberFormatter.format(Math.abs(finalPrice))}
             </span>
             {hasCashback && formula && (
-                <CustomTooltip content={<div className="text-xs">{formula}</div>}>
+                <CustomTooltip content={<div className="text-xs whitespace-nowrap">{formula}</div>}>
                     <Info className="h-3.5 w-3.5 text-slate-400 hover:text-slate-600 cursor-help" />
                 </CustomTooltip>
             )}

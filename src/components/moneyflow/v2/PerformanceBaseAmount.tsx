@@ -30,8 +30,8 @@ export function PerformanceBaseAmount({
                 ? 'text-red-500'
                 : 'text-slate-700'
 
-    // Format cashback percent - keep as decimal (0.08 = 0.08%)
-    const displayPercent = cashbackPercent
+    // Convert to percentage: 0.0008 → 8%
+    const displayPercent = cashbackPercent * 10000
 
     return (
         <div className="flex flex-col items-end gap-0.5">

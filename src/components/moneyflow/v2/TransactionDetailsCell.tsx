@@ -12,7 +12,6 @@ interface TransactionDetailsCellProps {
     shopImageUrl?: string | null
     categoryName?: string | null
     transactionId: string
-    tag?: string | null
     date?: string | Date | null
     isInstallment?: boolean
     installmentsPaid?: number
@@ -39,7 +38,6 @@ export function TransactionDetailsCell({
     shopImageUrl,
     categoryName,
     transactionId,
-    tag,
     date,
     isInstallment,
     installmentsPaid,
@@ -117,7 +115,7 @@ export function TransactionDetailsCell({
                 </button>
             </div>
 
-            {/* Badges Row */}
+            {/* Badges Row - Only Category, Split, Refund, Installment (NO cycle/debt here) */}
             <div className="flex flex-wrap items-center gap-1.5">
                 {/* Category Badge - with color and min-width for consistency */}
                 {categoryName && categoryColor && (
@@ -127,13 +125,6 @@ export function TransactionDetailsCell({
                         categoryColor.text
                     )}>
                         {categoryName}
-                    </span>
-                )}
-
-                {/* Tag/Cycle Badge */}
-                {tag && (
-                    <span className="inline-flex items-center rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-                        {tag}
                     </span>
                 )}
 
