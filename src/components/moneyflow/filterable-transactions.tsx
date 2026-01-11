@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Filter, X, Trash2, Undo, ArrowLeft, RotateCcw, RefreshCw, History, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from "sonner"
-import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
+import { TransactionTable } from '@/components/moneyflow/transaction-table'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
 import { Combobox } from '@/components/ui/combobox'
@@ -1095,32 +1095,17 @@ export function FilterableTransactions({
                     )}>
                         {/* Table Region */}
                         <div className="flex-1 overflow-hidden relative">
-                            <UnifiedTransactionTable
-                                data={paginatedTransactions}
+                            <TransactionTable
+                                transactions={paginatedTransactions}
                                 accountType={accountType}
-                                accountId={accountId}
-                                contextId={contextId ?? accountId}
                                 accounts={accounts}
                                 categories={categories}
                                 people={people}
                                 shops={shops}
                                 selectedTxnIds={selectedTxnIds}
                                 onSelectionChange={setSelectedTxnIds}
-                                activeTab={activeTab}
-                                context={context}
-                                onBulkActionStateChange={handleBulkActionStateChange}
-                                sortState={sortState}
-                                onSortChange={setSortState}
-                                hiddenColumns={(Object.keys(visibleColumns) as ColumnKey[]).filter(key => !visibleColumns[key])}
-                                columnOrder={columnOrder}
-                                isExcelMode={isExcelMode}
-
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                onPageChange={setCurrentPage}
-                                pageSize={pageSize}
-                                onPageSizeChange={setPageSize}
-
+                                contextAccountId={contextId ?? accountId}
+                                contextPersonId={contextId}
                             />
                         </div>
 
