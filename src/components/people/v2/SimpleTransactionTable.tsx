@@ -46,19 +46,10 @@ export function SimpleTransactionTable({
                 categories={categories}
                 people={people}
                 shops={shops}
-                visibleColumns={{
-                    date: true,
-                    shop: false,
-                    note: true,
-                    category: true,
-                    tag: false,
-                    account: true,
-                    amount: true,
-                    back_info: false,
-                    final_price: false,
-                    id: false,
-                    people: true,
-                }}
+                hiddenColumns={['id', 'final_price', 'back_info', 'tag']}
+            // note/shop is visible by default
+            // people is visible by default
+            // account, category, amount, date are visible by default    }}
             />
         </div>
     )
