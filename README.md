@@ -18,6 +18,13 @@ Money Flow 3 is a comprehensive personal finance application focused on transact
 - **Cashback:** Advanced cashback calculation and tracking.
 - **Services:** Subscription management.
 
+## Current Status: UI Refactor (Jan 2026)
+We are currently refactoring the core UI components to ensure strict consistency.
+- **Transaction Table**: Moved to a fixed-width CSS Grid layout.
+- **Image Rendering**: Strict rules for Shapes (Person=Circle, Shop=Rounded Square, Account=Original).
+- **Badges**: Standardized size (24px) and positioning.
+See `.agent/context/ui_standards.md` for detailed specs.
+
 ## Project Structure
 
 - `src/app`: Page routes and layouts.
