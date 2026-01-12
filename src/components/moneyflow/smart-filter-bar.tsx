@@ -10,6 +10,8 @@ interface SmartFilterBarProps {
     transactions: TransactionWithDetails[]
     selectedType: FilterType
     onSelectType: (type: FilterType) => void
+    statusFilter?: 'active' | 'void'
+    onStatusFilterChange?: (status: 'active' | 'void') => void
     onPaidClick?: () => void
     className?: string
 }
@@ -22,6 +24,8 @@ export function SmartFilterBar({
     transactions,
     selectedType,
     onSelectType,
+    statusFilter,
+    onStatusFilterChange,
     onPaidClick,
     className,
 }: SmartFilterBarProps) {
@@ -161,6 +165,24 @@ export function SmartFilterBar({
                     </button>
                 )
             })}
+
+            {/* Status Filters (Separator) */}
+            <div className="h-6 w-px bg-border/50 mx-1 shrink-0" />
+
+            {['active', 'void'].map(status => (
+                <button
+                    key={status}
+                    onClick={() => onStatusFilterChange?.(status as 'active' | 'void')}
+                    className={cn(
+                        "h-8 rounded-lg px-3 text-[11px] font-semibold transition-all uppercase tracking-wider shrink-0",
+                        statusFilter === status
+                            ? "bg-slate-800 text-white shadow-md"
+                            : "bg-transparent text-muted-foreground hover:bg-slate-100/50 hover:text-slate-700"
+                    )}
+                >
+                    {status}
+                </button>
+            ))}
         </div>
     )
 }

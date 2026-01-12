@@ -235,6 +235,7 @@ export type TransactionWithDetails = TransactionRow & {
   destination_account_id?: string | null;
   target_account_id?: string | null;
   history_count?: number;
+  account_billing_cycle?: string | null;
 }
 
 export type CashbackCard = {
