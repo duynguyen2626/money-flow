@@ -92,10 +92,10 @@ export function PersonCard({ person, subscriptions, variant = 'detailed', isSele
             <div className="flex flex-col gap-1 min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <div className="relative h-9 w-9 flex-shrink-0 rounded-md overflow-hidden bg-slate-100 border border-slate-200 flex items-center justify-center">
-                  {person.avatar_url ? (
+                  {person.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={person.avatar_url}
+                      src={person.image_url}
                       alt={person.name}
                       className="h-full w-full object-cover"
                     />
@@ -283,10 +283,10 @@ export function PersonCard({ person, subscriptions, variant = 'detailed', isSele
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="relative h-12 w-12 flex-shrink-0 bg-slate-100 border border-slate-200 flex items-center justify-center">
-              {person.avatar_url ? (
+              {person.image_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={person.avatar_url}
+                  src={person.image_url}
                   alt={person.name}
                   className="h-full w-full object-cover"
                 />

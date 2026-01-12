@@ -93,7 +93,7 @@ export function EditPersonDialog({
               initialValues={{
                 name: person.name,
                 email: person.email ?? '',
-                avatar_url: person.avatar_url ?? '',
+                image_url: person.image_url ?? '',
                 sheet_link: person.sheet_link ?? '',
                 subscriptionIds: person.subscription_ids ?? [],
                 is_owner: person.is_owner ?? false,
@@ -105,7 +105,7 @@ export function EditPersonDialog({
                 await updatePersonAction(person.id, {
                   name: values.name,
                   email: values.email,
-                  avatar_url: values.avatar_url,
+                  image_url: values.image_url,
                   sheet_link: values.sheet_link,
                   subscriptionIds: values.subscriptionIds,
                   is_archived: values.is_archived,

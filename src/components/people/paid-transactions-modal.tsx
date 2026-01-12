@@ -35,9 +35,12 @@ export function PaidTransactionsModal({
 }: PaidTransactionsModalProps) {
     const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null)
 
-    // Filter to get paid/settled transactions
+    // Filter to get paid/settled transactions (Strictly Repayments/Income)
     const paidTransactions = useMemo(() => {
         return transactions.filter(txn => {
+            // Must be repayment or income (money in)
+            if (txn.type !== 'repayment' && txn.type !== 'income') return false
+
             const metadata = txn.metadata as any
             return metadata?.is_settled === true || metadata?.paid_at !== null
         }).sort((a, b) => {
@@ -136,8 +139,13 @@ export function PaidTransactionsModal({
                                                         className="w-full flex items-center justify-between p-2 rounded hover:bg-slate-50 transition-colors text-left"
                                                     >
                                                         <div className="flex-1 min-w-0">
-                                                            <div className="text-sm font-medium text-slate-900 truncate">
+                                                            <div className="text-sm font-medium text-slate-900 truncate flex items-center gap-2">
                                                                 {txn.note || 'No description'}
+                                                                {(txn.metadata as any)?.parent_transaction_id && (
+                                                                    <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 flex-shrink-0">
+                                                                        ↳ Linked
+                                                                    </span>
+                                                                )}
                                                             </div>
                                                             <div className="text-xs text-slate-500">
                                                                 {format(new Date(txn.occurred_at || txn.created_at), 'MMM dd, yyyy')}
@@ -159,8 +167,13 @@ export function PaidTransactionsModal({
                                             className="w-full flex items-center justify-between hover:bg-slate-50 transition-colors text-left rounded p-2"
                                         >
                                             <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-medium text-slate-900 truncate">
+                                                <div className="text-sm font-medium text-slate-900 truncate flex items-center gap-2">
                                                     {group.transaction.note || 'No description'}
+                                                    {(group.transaction.metadata as any)?.parent_transaction_id && (
+                                                        <span className="text-[10px] bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-100 flex-shrink-0">
+                                                            ↳ Linked
+                                                        </span>
+                                                    )}
                                                 </div>
                                                 <div className="text-xs text-slate-500">
                                                     {format(new Date(group.transaction.occurred_at || group.transaction.created_at), 'MMM dd, yyyy')}

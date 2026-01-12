@@ -274,13 +274,13 @@ export async function getAccounts(): Promise<Account[]> {
       child_accounts: childRows.map(c => ({
         id: c.id,
         name: c.name,
-        avatar_url: c.image_url
+        image_url: c.image_url
       })),
       parent_info: parentRow ? {
         id: parentRow.id,
         name: parentRow.name,
         type: parentRow.type,
-        avatar_url: parentRow.image_url
+        image_url: parentRow.image_url
       } : null
     }
 

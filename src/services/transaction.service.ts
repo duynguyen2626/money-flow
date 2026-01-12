@@ -13,6 +13,10 @@ import {
   upsertTransactionCashback,
   removeTransactionCashback,
 } from "./cashback.service";
+import {
+  parseCashbackConfig,
+  getCashbackCycleRange,
+} from "@/lib/cashback";
 
 type TransactionStatus =
   | "posted"
@@ -78,7 +82,7 @@ type NormalizedTransaction = Omit<FlatTransactionRow, "id" | "created_at">;
 type LookupMaps = {
   accounts: Map<
     string,
-    { id: string; name: string; image_url: string | null; type: string | null; owner_id: string | null }
+    { id: string; name: string; image_url: string | null; type: string | null; owner_id: string | null; cashback_config: Json | null }
   >;
   categories: Map<
     string,
@@ -90,7 +94,7 @@ type LookupMaps = {
       icon?: string | null;
     }
   >;
-  people: Map<string, { id: string; name: string; avatar_url: string | null }>;
+  people: Map<string, { id: string; name: string; image_url: string | null }>;
   shops: Map<string, { id: string; name: string; image_url: string | null }>;
 };
 
@@ -220,7 +224,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
     accountIds.size
       ? supabase
         .from("accounts")
-        .select("id, name, image_url, type, owner_id")
+        .select("id, name, image_url, type, owner_id, cashback_config")
         .in("id", Array.from(accountIds))
       : Promise.resolve({ data: [] as any[], error: null }),
     categoryIds.size
@@ -232,7 +236,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
     personIds.size
       ? supabase
         .from("profiles")
-        .select("id, name, avatar_url")
+        .select("id, name, image_url")
         .in("id", Array.from(personIds))
       : Promise.resolve({ data: [] as any[], error: null }),
     shopIds.size
@@ -245,7 +249,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
 
   const accounts = new Map<
     string,
-    { id: string; name: string; image_url: string | null; type: string | null; owner_id: string | null }
+    { id: string; name: string; image_url: string | null; type: string | null; owner_id: string | null; cashback_config: Json | null }
   >();
   const categories = new Map<
     string,
@@ -259,7 +263,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
   >();
   const people = new Map<
     string,
-    { id: string; name: string; avatar_url: string | null }
+    { id: string; name: string; image_url: string | null }
   >();
   const shops = new Map<
     string,
@@ -274,6 +278,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
       image_url: row.image_url ?? null,
       type: row.type ?? null,
       owner_id: row.owner_id ?? null,
+      cashback_config: row.cashback_config ?? null,
     });
   });
 
@@ -293,7 +298,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
     people.set(row.id, {
       id: row.id,
       name: row.name,
-      avatar_url: row.avatar_url ?? null,
+      image_url: row.image_url ?? null,
     });
   });
 
@@ -359,6 +364,24 @@ export async function mapTransactionRow(
         ? "income"
         : "expense";
 
+  // Calculate Account Billing Cycle
+  let account_billing_cycle: string | null = null;
+  if (account && account.cashback_config) {
+    try {
+      const config = parseCashbackConfig(account.cashback_config, account.id);
+      const range = getCashbackCycleRange(config, new Date(row.occurred_at));
+      if (range) {
+        const startDay = String(range.start.getDate()).padStart(2, '0');
+        const startMonth = String(range.start.getMonth() + 1).padStart(2, '0');
+        const endDay = String(range.end.getDate()).padStart(2, '0');
+        const endMonth = String(range.end.getMonth() + 1).padStart(2, '0');
+        account_billing_cycle = `${startDay}-${startMonth} to ${endDay}-${endMonth}`;
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+
   return {
     ...row,
     tag: normalizeMonthTag(row.tag) ?? row.tag ?? null,
@@ -375,12 +398,13 @@ export async function mapTransactionRow(
     category_icon: category?.icon ?? null,
     category_image_url: category?.image_url ?? null,
     account_name: account?.name,
+    account_image_url: account?.image_url ?? null,
     source_name: account?.name ?? null,
     destination_name: target?.name ?? (person ? person.name : null),
     source_image: account?.image_url ?? null,
     destination_image: target?.image_url ?? null,
     person_name: person?.name ?? null,
-    person_avatar_url: person?.avatar_url ?? null,
+    person_image_url: person?.image_url ?? null,
     shop_name: shop?.name ?? null,
     shop_image_url: shop?.image_url ?? null,
     persisted_cycle_tag:
@@ -396,6 +420,7 @@ export async function mapTransactionRow(
 
     final_price: row.final_price ?? null,
     history_count: row.transaction_history?.[0]?.count ?? 0,
+    account_billing_cycle,
   };
 }
 

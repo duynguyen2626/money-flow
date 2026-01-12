@@ -64,7 +64,7 @@ export function PersonDetailTabs({
     const [activeCycleTag, setActiveCycleTag] = useState<string | null>(null)
     const [filterType, setFilterType] = useState<'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer' | 'cashback'>('all')
     const [searchTerm, setSearchTerm] = useState('')
-    const [selectedYear, setSelectedYear] = useState<string | null>(null)
+    const [selectedYear, setSelectedYear] = useState<string | null>(new Date().getFullYear().toString())
     const [isFilterOpen, setIsFilterOpen] = useState(false)
     const [showPaidModal, setShowPaidModal] = useState(false)
 
@@ -197,7 +197,7 @@ export function PersonDetailTabs({
                                         >
                                             <Filter className="h-3.5 w-3.5" />
                                             <span className="text-xs opacity-40">|</span>
-                                            <span className="font-semibold">{selectedYear || new Date().getFullYear()}</span>
+                                            <span className="font-semibold">{selectedYear || 'All Years'}</span>
                                             <span className="opacity-50 text-xs">▼</span>
                                         </Button>
                                     </PopoverTrigger>

@@ -372,8 +372,8 @@ export function ServiceDetailsSheet({ open, onOpenChange, service, members, allP
                                             <div className="flex items-center gap-4 flex-1 min-w-0">
                                                 <div className={cn("h-12 w-12 rounded-lg flex items-center justify-center text-lg font-bold flex-shrink-0",
                                                     member.profile.is_owner ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600')}>
-                                                    {member.profile.avatar_url ? (
-                                                        <img src={member.profile.avatar_url} alt="" className="h-full w-full object-cover rounded-lg" />
+                                                    {member.profile.image_url ? (
+                                                        <img src={member.profile.image_url} alt="" className="h-full w-full object-cover rounded-lg" />
                                                     ) : (
                                                         member.profile.name.substring(0, 1).toUpperCase()
                                                     )}
@@ -465,8 +465,8 @@ export function ServiceDetailsSheet({ open, onOpenChange, service, members, allP
                                             className="w-full flex items-center gap-3 p-3 hover:bg-slate-50 rounded-xl transition-all text-left border border-transparent hover:border-slate-200"
                                         >
                                             <div className="h-10 w-10 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                                                {person.avatar_url ? (
-                                                    <img src={person.avatar_url} alt="" className="h-full w-full object-cover" />
+                                                {person.image_url ? (
+                                                    <img src={person.image_url} alt="" className="h-full w-full object-cover" />
                                                 ) : (
                                                     person.name.substring(0, 1).toUpperCase()
                                                 )}

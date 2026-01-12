@@ -44,7 +44,7 @@ export type DashboardStats = {
     id: string
     name: string
     balance: number
-    avatar_url?: string | null
+    image_url?: string | null
   }>
   outstandingByCycle: Array<{
     id: string
@@ -249,7 +249,7 @@ export async function getDashboardStats(
       (debtAccounts as any[])?.map((acc) => acc.owner_id).filter(Boolean) || []
     const { data: profiles, error: profilesError } = await supabase
       .from('profiles')
-      .select('id, name, avatar_url')
+      .select('id, name, image_url')
       .in('id', debtorOwnerIds)
 
     if (profilesError) throw profilesError
@@ -265,7 +265,7 @@ export async function getDashboardStats(
           id: acc.id,
           name: profile?.name || acc.name,
           balance: acc.current_balance || 0,
-          avatar_url: profile?.avatar_url,
+          image_url: profile?.image_url,
         }
       }) || []
 
@@ -278,7 +278,7 @@ export async function getDashboardStats(
     // Get all active profiles with potential debt
     const { data: allProfiles, error: allProfilesError } = await supabase
       .from('profiles')
-      .select('id, name, avatar_url')
+      .select('id, name, image_url')
       .eq('is_archived', false)
 
     if (!allProfilesError && allProfiles) {

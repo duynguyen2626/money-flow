@@ -39,7 +39,7 @@ export function mapUnifiedTransaction(
     const shopName = rawTxn.shops?.name || rawTxn.shop?.name || rawTxn.shop_name;
     const shopImage = rawTxn.shops?.image_url || rawTxn.shop?.image_url;
     const personName = rawTxn.profiles?.name || rawTxn.person?.name || rawTxn.person_name;
-    const personAvatar = rawTxn.profiles?.avatar_url || rawTxn.person?.avatar_url;
+    const personImage = rawTxn.profiles?.image_url || rawTxn.person?.image_url;
 
     // Determine Display Type
     let displayType: TransactionWithDetails['displayType'] = 'expense';
@@ -66,7 +66,7 @@ export function mapUnifiedTransaction(
         shop_name: shopName,
         shop_image_url: shopImage,
         person_name: personName,
-        person_avatar_url: personAvatar,
+        person_image_url: personImage,
         history_count: rawTxn.transaction_history?.[0]?.count ?? 0,
         // Ensure critical fields are present
         cashback_share_percent: rawTxn.cashback_share_percent ?? null,

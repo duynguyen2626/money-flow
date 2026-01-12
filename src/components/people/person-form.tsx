@@ -10,7 +10,7 @@ import { Subscription } from '@/types/moneyflow.types'
 type PersonFormValues = {
   name: string
   email?: string
-  avatar_url?: string
+  image_url?: string
   sheet_link?: string
   subscriptionIds: string[]
   is_owner?: boolean
@@ -30,7 +30,7 @@ type PersonFormProps = {
 const schema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Invalid email address').optional().or(z.literal('')),
-  avatar_url: z.string().url('Invalid avatar URL').optional().or(z.literal('')),
+  image_url: z.string().url('Invalid avatar URL').optional().or(z.literal('')),
   sheet_link: z.string().url('Invalid script link URL').optional().or(z.literal('')),
   subscriptionIds: z.array(z.string()),
   is_owner: z.boolean().optional(),
@@ -64,7 +64,7 @@ export function PersonForm({
   subscriptions,
   onCancel,
 }: PersonFormProps) {
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(initialValues?.avatar_url || null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(initialValues?.image_url || null)
   const [status, setStatus] = useState<{ type: 'error' | 'success'; text: string } | null>(
     null
   )
@@ -79,7 +79,7 @@ export function PersonForm({
     defaultValues: {
       name: initialValues?.name ?? '',
       email: initialValues?.email ?? '',
-      avatar_url: initialValues?.avatar_url ?? '',
+      image_url: initialValues?.image_url ?? '',
       sheet_link: initialValues?.sheet_link ?? '',
       subscriptionIds: initialValues?.subscriptionIds ?? [],
       is_owner: initialValues?.is_owner ?? false,
@@ -88,7 +88,7 @@ export function PersonForm({
     },
   })
 
-  const watchedAvatar = watch('avatar_url')
+  const watchedAvatar = watch('image_url')
   const watchedSubs = watch('subscriptionIds')
   const watchedIsOwner = watch('is_owner')
   const watchedIsArchived = watch('is_archived')
@@ -177,12 +177,12 @@ export function PersonForm({
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Avatar URL</label>
               <input
-                {...register('avatar_url')}
+                {...register('image_url')}
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
                 placeholder="https://example.com/avatar.jpg"
               />
-              {errors.avatar_url && (
-                <p className="text-sm text-rose-600">{errors.avatar_url.message}</p>
+              {errors.image_url && (
+                <p className="text-sm text-rose-600">{errors.image_url.message}</p>
               )}
             </div>
 

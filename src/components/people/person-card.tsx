@@ -146,10 +146,10 @@ function PersonCardComponent({
                 <div className="flex items-center gap-2">
                     {/* Rounded Avatar Background */}
                     <div className="h-8 w-8 shrink-0 rounded-lg overflow-hidden bg-blue-50/50 flex items-center justify-center text-blue-600 font-bold text-sm">
-                        {person.avatar_url ? (
+                        {person.image_url ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                                src={person.avatar_url}
+                                src={person.image_url}
                                 alt={person.name}
                                 className="h-full w-full object-cover"
                             />

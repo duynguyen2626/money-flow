@@ -90,8 +90,8 @@ export function ServiceTable({ services, people }: { services: any[], people: an
                                         <div className="flex -space-x-2" title={members.map((m: any) => `${m.profile.name} (${m.slots} slot${m.slots > 1 ? 's' : ''})`).join(', ')}>
                                             {members.slice(0, 3).map((m: any) => (
                                                 <div key={m.id} className="h-8 w-8 rounded-none border-2 border-white bg-slate-200 flex items-center justify-center text-[10px] font-bold overflow-hidden">
-                                                    {m.profile.avatar_url ? (
-                                                        <img src={m.profile.avatar_url} alt={m.profile.name} className="h-full w-full object-cover" />
+                                                    {m.profile.image_url ? (
+                                                        <img src={m.profile.image_url} alt={m.profile.name} className="h-full w-full object-cover" />
                                                     ) : (
                                                         m.profile.name.substring(0, 1).toUpperCase()
                                                     )}

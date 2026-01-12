@@ -7,6 +7,7 @@ import { Filter, X, Trash2, Undo, ArrowLeft, RotateCcw, RefreshCw, History, Sear
 import { cn } from '@/lib/utils'
 import { toast } from "sonner"
 import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transaction-table'
+import { filterTransactionByType } from '@/lib/transaction-filters'
 import { Account, Category, Person, Shop, TransactionWithDetails } from '@/types/moneyflow.types'
 import { useTagFilter } from '@/context/tag-filter-context'
 import { Combobox } from '@/components/ui/combobox'
@@ -20,6 +21,7 @@ import {
     Select,
 } from "@/components/ui/select"
 import { SmartFilterBar } from './smart-filter-bar'
+// import { UnifiedFilterBar } from './unified-filter-bar'
 import { SummaryDropdown } from './toolbar/SummaryDropdown'
 import { SearchBox } from './toolbar/SearchBox'
 import { QuickTabs } from './toolbar/QuickTabs'
@@ -85,6 +87,7 @@ export function FilterableTransactions({
     variant = 'page',
     hideStatusTabs = false,
     hideTypeFilters = false,
+    hidePeopleColumn = false,
 }: FilterableTransactionsProps & { variant?: 'page' | 'embedded' }) {
     const { selectedTag, setSelectedTag } = useTagFilter()
     const [searchTermInternal, setSearchTermInternal] = useState('');
@@ -397,33 +400,7 @@ export function FilterableTransactions({
 
     const filteredByType = useMemo(() => {
         if (selectedType === 'all') return searchedTransactions
-        return searchedTransactions.filter(txn => {
-            const visualType = (txn as any).displayType ?? txn.type
-            const hasPerson = Boolean((txn as any).person_id)
-
-            // Unified Logic (User Defined):
-            // Lend = Debt (negative) OR Expense with Person (if not purely classified as Expense)
-            // But since 'Out' is 'My Expenses' (without person), and Lend implies Person/Debt...
-
-            // LEND: Matches Type Debt OR (Expense + Person)
-            if (selectedType === 'lend') {
-                return (txn.type === 'debt' && (txn.amount ?? 0) < 0) || (visualType === 'expense' && hasPerson)
-            }
-            // REPAY: Matches Type Repayment OR (Debt + Positive) OR (Income + Person)
-            if (selectedType === 'repay') {
-                return txn.type === 'repayment' || (txn.type === 'debt' && (txn.amount ?? 0) > 0) || (visualType === 'income' && hasPerson)
-            }
-            // MY EXPENSES (Out): Matches pure Expense (no person)
-            if (selectedType === 'expense') {
-                return visualType === 'expense' && !hasPerson && txn.type !== 'debt'
-            }
-            // MY INCOME (In): Matches pure Income (no person)
-            if (selectedType === 'income') {
-                return visualType === 'income' && !hasPerson && txn.type !== 'repayment'
-            }
-
-            return visualType === selectedType
-        })
+        return searchedTransactions.filter(txn => filterTransactionByType(txn, selectedType))
     }, [searchedTransactions, selectedType])
 
     const finalTransactions = useMemo(() => {
@@ -676,88 +653,34 @@ export function FilterableTransactions({
             )}>
                 <div className="w-full px-4 lg:px-10 py-4 space-y-4 flex flex-col min-h-0">
                     {/* Header Row */}
-                    <div className="hidden lg:flex flex-row items-center justify-between gap-4">
-                        {/* LEFT: Title + Search + Financial Summary */}
-                        <div className="flex flex-row items-center gap-2 flex-1 min-w-0">
-                            <div className="hidden xl:block shrink-0 mr-1">
-                                <h1 className="text-lg font-bold tracking-tight text-slate-900">Transactions</h1>
-                            </div>
-
-                            <SummaryDropdown
-                                isOpen={isSummaryOpenDesktop}
-                                onOpenChange={setIsSummaryOpenDesktop}
-                                items={summaryItems}
-                                selectedType={selectedType}
+                    {/* Unified Filter Bar (Zero-Waste Header) */}
+                    {/* UnifiedFilterBar Removed - Under Reconstruction */}
+                    <div className="border p-4 rounded bg-gray-50 text-center text-sm text-gray-500">
+                        Filter Bar Under Reconstruction
+                        <ToolbarActions
+                            isExcelMode={isExcelMode}
+                            onExcelModeChange={setIsExcelMode}
+                            filterContent={filterPopoverContent}
+                        >
+                            <TableViewOptions
+                                visibleColumns={visibleColumns}
+                                onVisibilityChange={setVisibleColumns}
+                                columnOrder={columnOrder}
+                                onOrderChange={setColumnOrder}
                             />
-
-                            <SearchBox
-                                value={searchTerm}
-                                onChange={setSearchTerm}
-                            />
-
-                            {!hideTypeFilters && (
-                                <div className="hidden lg:flex items-center gap-1 bg-slate-100/50 p-1 rounded-lg shrink-0">
-                                    {(['all', 'income', 'expense', 'lend', 'repay'] as const).map(type => (
-                                        <button
-                                            key={type}
-                                            onClick={() => setSelectedType(type)}
-                                            className={cn(
-                                                "px-2.5 py-1 text-[11px] font-bold rounded-md transition-all capitalize",
-                                                selectedType === type
-                                                    ? "bg-white text-slate-900 shadow-sm ring-1 ring-black/5"
-                                                    : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
-                                            )}
-                                        >
-                                            {type}
-                                        </button>
-                                    ))}
+                            {/* Add Transaction (Desktop) */}
+                            {!context && !isExcelMode && (
+                                <div className="ml-1">
+                                    <AddTransactionDialog
+                                        accounts={accounts}
+                                        categories={categories}
+                                        people={people}
+                                        shops={shops}
+                                        listenToUrlParams={true}
+                                    />
                                 </div>
                             )}
-                        </div>
-
-                        {/* RIGHT: Actions & Controls */}
-                        <div className="flex items-center gap-2 shrink-0">
-                            {!hideStatusTabs && (
-                                <QuickTabs
-                                    activeTab={activeTab}
-                                    onTabChange={setActiveTab}
-                                    className="mr-2"
-                                />
-                            )}
-
-                            <DateRangeControl
-                                dateFrom={dateFrom}
-                                dateTo={dateTo}
-                                onDateFromChange={setDateFrom}
-                                onDateToChange={setDateTo}
-                                onClear={() => { setDateFrom(''); setDateTo(''); }}
-                            />
-
-                            <ToolbarActions
-                                isExcelMode={isExcelMode}
-                                onExcelModeChange={setIsExcelMode}
-                                filterContent={filterPopoverContent}
-                            >
-                                <TableViewOptions
-                                    visibleColumns={visibleColumns}
-                                    onVisibilityChange={setVisibleColumns}
-                                    columnOrder={columnOrder}
-                                    onOrderChange={setColumnOrder}
-                                />
-                                {/* Add Transaction (Desktop) */}
-                                {!context && !isExcelMode && (
-                                    <div className="ml-1">
-                                        <AddTransactionDialog
-                                            accounts={accounts}
-                                            categories={categories}
-                                            people={people}
-                                            shops={shops}
-                                            listenToUrlParams={true}
-                                        />
-                                    </div>
-                                )}
-                            </ToolbarActions>
-                        </div>
+                        </ToolbarActions>
                     </div>
 
                     {/* MOBILE LAYOUT (Visible on Mobile) */}
@@ -1096,31 +1019,26 @@ export function FilterableTransactions({
                         {/* Table Region */}
                         <div className="flex-1 overflow-hidden relative">
                             <UnifiedTransactionTable
-                                data={paginatedTransactions}
+                                transactions={finalTransactions}
                                 accountType={accountType}
-                                accountId={accountId}
-                                contextId={contextId ?? accountId}
                                 accounts={accounts}
                                 categories={categories}
                                 people={people}
                                 shops={shops}
                                 selectedTxnIds={selectedTxnIds}
                                 onSelectionChange={setSelectedTxnIds}
-                                activeTab={activeTab}
                                 context={context}
-                                onBulkActionStateChange={handleBulkActionStateChange}
+                                contextId={contextId || accountId}
+                                activeTab={activeTab}
                                 sortState={sortState}
                                 onSortChange={setSortState}
-                                hiddenColumns={(Object.keys(visibleColumns) as ColumnKey[]).filter(key => !visibleColumns[key])}
-                                columnOrder={columnOrder}
-                                isExcelMode={isExcelMode}
-
+                                showPagination={true}
                                 currentPage={currentPage}
-                                totalPages={totalPages}
                                 onPageChange={setCurrentPage}
                                 pageSize={pageSize}
                                 onPageSizeChange={setPageSize}
-
+                                isExcelMode={isExcelMode}
+                                hiddenColumns={hidePeopleColumn ? ['people'] : []}
                             />
                         </div>
 
