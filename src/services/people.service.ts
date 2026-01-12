@@ -6,16 +6,18 @@ import { Database } from '@/types/database.types'
 import { MonthlyDebtSummary, Person, PersonCycleSheet } from '@/types/moneyflow.types'
 import { toYYYYMMFromDate, normalizeMonthTag } from '@/lib/month-tag'
 
-type ProfileRow = Database['public']['Tables']['profiles']['Row']
-type ProfileInsert = Database['public']['Tables']['profiles']['Insert']
-type ProfileUpdate = Database['public']['Tables']['profiles']['Update']
+type PersonRow = Database['public']['Tables']['people']['Row']
+type PersonInsert = Database['public']['Tables']['people']['Insert']
+type PersonUpdate = Database['public']['Tables']['people']['Update']
 type AccountRow = Database['public']['Tables']['accounts']['Row']
 // TODO: The 'service_members' table is not in database.types.ts.
 // This is a temporary type definition.
 // The database schema needs to be updated.
 type ServiceMemberRow = {
   service_id: string;
-  profile_id: string;
+  profile_id: string; // Keep as profile_id if column not renamed? Or assumes 'person_id' if we want to be clean? Code uses profile_id.
+  // The migration did NOT rename 'profile_id' in 'service_members'. So specific column name references must safely stay 'profile_id'.
+  // However, variable usage can be cleaned.
   slots: number;
   subscriptions?: { name: string };
 };
@@ -117,7 +119,7 @@ export async function createPerson(
     return null
   }
 
-  const profilePayload: ProfileInsert & { is_archived?: boolean | null } = {
+  const personPayload: PersonInsert & { is_archived?: boolean | null } = {
     id: randomUUID(),
     name: trimmedName,
     email: email?.trim() || null,
@@ -131,8 +133,8 @@ export async function createPerson(
   }
 
   let { data: profile, error: profileError } = await (supabase
-    .from('profiles')
-    .insert as any)(profilePayload)
+    .from('people')
+    .insert as any)(personPayload)
     .select('id, name')
     .single()
 
@@ -144,9 +146,9 @@ export async function createPerson(
       group_parent_id: _ignoreParent,
       google_sheet_url: _ignoreSheet,
       ...fallbackPayload
-    } = profilePayload as any
+    } = personPayload as any
     const fallback = await (supabase
-      .from('profiles')
+      .from('people')
       .insert as any)(fallbackPayload)
       .select('id, name')
       .single()
@@ -159,7 +161,7 @@ export async function createPerson(
     return null
   }
 
-  const profileId = (profile as unknown as Pick<ProfileRow, 'id'>).id
+  const profileId = (profile as unknown as Pick<PersonRow, 'id'>).id
 
   const debtAccountId = await createDebtAccountForPerson(supabase, profileId, trimmedName)
 
@@ -184,14 +186,14 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
 
   const profileSelect = async () => {
     const attempt = await supabase
-      .from('profiles')
+      .from('people')
       .select(
         'id, created_at, name, email, image_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image'
       )
       .order('name', { ascending: true })
     if (attempt.error?.code === '42703' || attempt.error?.code === 'PGRST204') {
       const fallback = await supabase
-        .from('profiles')
+        .from('people')
         .select('id, created_at, name, email, image_url, sheet_link, is_owner')
         .order('name', { ascending: true })
       return { data: fallback.data, error: fallback.error }
@@ -236,7 +238,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
   // Calculate balances from transactions
   // Note: Some debt transactions use person_id instead of target_account_id
   const debtAccountIds = (debtAccounts as unknown as AccountRow[])?.map(a => a.id) ?? []
-  const personIds = (profiles as unknown as ProfileRow[])?.map(p => p.id) ?? []
+  const personIds = (profiles as unknown as PersonRow[])?.map(p => p.id) ?? []
   const debtBalanceByPerson = new Map<string, number>()
   const currentCycleDebtByPerson = new Map<string, number>()
 
@@ -642,7 +644,7 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     })
   }
 
-  const mapped = (profiles as unknown as ProfileRow[] | null)?.map(person => {
+  const mapped = (profiles as unknown as PersonRow[] | null)?.map(person => {
     const debtInfo = debtAccountMap.get(person.id)
     const subs = subscriptionMap.get(person.id) ?? []
 
@@ -789,7 +791,7 @@ export async function updatePerson(
   }
 ): Promise<boolean> {
   const supabase = createClient()
-  const payload: ProfileUpdate & { is_archived?: boolean } = {}
+  const payload: PersonUpdate & { is_archived?: boolean } = {}
   const normalizedSheetLink =
     typeof data.sheet_link === 'undefined' ? undefined : data.sheet_link?.trim() || null
   const normalizedGoogleSheetUrl =
@@ -811,7 +813,7 @@ export async function updatePerson(
   }
 
   if (Object.keys(payload).length > 0) {
-    let { error, data: updateData } = await (supabase.from('profiles').update as any)(payload).eq('id', id).select()
+    let { error, data: updateData } = await (supabase.from('people').update as any)(payload).eq('id', id).select()
 
     if (error?.code === '42703' || error?.code === 'PGRST204') {
       const {
@@ -822,7 +824,7 @@ export async function updatePerson(
         google_sheet_url: _ignoreSheet,
         ...fallbackPayload
       } = payload as any
-      const fallback = await (supabase.from('profiles').update as any)(fallbackPayload).eq('id', id).select()
+      const fallback = await (supabase.from('people').update as any)(fallbackPayload).eq('id', id).select()
       error = fallback.error
     }
     if (error) {
@@ -843,7 +845,7 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
 
   const profileSelect = async () => {
     const attempt = await supabase
-      .from('profiles')
+      .from('people')
       .select(
         'id, name, email, image_url, sheet_link, google_sheet_url, is_owner, is_archived, is_group, group_parent_id, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image'
       )
@@ -852,7 +854,7 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
 
     if (attempt.error?.code === '42703' || attempt.error?.code === 'PGRST204') {
       const fallback = await supabase
-        .from('profiles')
+        .from('people')
         .select('id, name, email, image_url, sheet_link, is_owner')
         .eq('id', id)
         .maybeSingle()

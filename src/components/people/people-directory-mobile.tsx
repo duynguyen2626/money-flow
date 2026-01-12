@@ -74,10 +74,10 @@ export function PeopleDirectoryMobile({
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
                   <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
-                    {item.avatarUrl ? (
+                    {item.image_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        src={item.avatarUrl}
+                        src={item.image_url}
                         alt={item.name}
                         className="h-full w-full object-cover"
                       />

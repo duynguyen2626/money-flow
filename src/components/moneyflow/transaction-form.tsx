@@ -2128,14 +2128,12 @@ export function TransactionForm({
           description: person.email || "No email",
           searchValue: `${person.name} ${person.email ?? ""}`.trim(),
           icon: person.image_url ? (
-            <div className="relative h-5 w-5 overflow-hidden rounded-full">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={person.image_url}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            </div>
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={person.image_url}
+              alt={person.name}
+              className="h-5 w-5 object-contain rounded-none"
+            />
           ) : (
             <span className="flex h-5 w-5 items-center justify-center rounded-none bg-slate-100 text-[11px] font-semibold text-slate-600">
               {getAccountInitial(person.name)}

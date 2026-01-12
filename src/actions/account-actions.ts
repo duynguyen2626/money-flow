@@ -30,7 +30,7 @@ export async function createAccount(payload: {
   }
 
   // Ensure profile exists
-  const { data: existingProfile, error: profileCheckError } = await supabase.from('profiles').select('id').eq('id', user.id).single()
+  const { data: existingProfile, error: profileCheckError } = await supabase.from('people').select('id').eq('id', user.id).single()
 
   if (profileCheckError || !existingProfile) {
     console.error('[createAccount] Profile missing or check failed:', profileCheckError)

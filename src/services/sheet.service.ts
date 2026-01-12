@@ -74,7 +74,7 @@ function extractSheetId(sheetUrl: string | null | undefined): string | null {
 async function getProfileSheetLink(personId: string): Promise<string | null> {
   const supabase = createClient()
   const { data: profile, error } = await supabase
-    .from('profiles')
+    .from('people')
     .select('id, sheet_link')
     .eq('id', personId)
     .maybeSingle()
@@ -98,7 +98,7 @@ async function getProfileSheetLink(personId: string): Promise<string | null> {
 
   const { data: accountRow, error: accountError } = await supabase
     .from('accounts')
-    .select('owner_id, profiles (id, sheet_link)')
+    .select('owner_id, people (id, sheet_link)')
     .eq('id', personId)
     .eq('type', 'debt')
     .maybeSingle()
@@ -107,7 +107,7 @@ async function getProfileSheetLink(personId: string): Promise<string | null> {
     console.error('Failed to fetch account for sheet sync:', accountError)
   }
 
-  const ownerProfile = (accountRow as any)?.profiles as { id?: string; sheet_link?: string | null } | null
+  const ownerProfile = (accountRow as any)?.people as { id?: string; sheet_link?: string | null } | null
   const ownerProfileId = ((accountRow as any)?.owner_id as string | null) ?? ownerProfile?.id ?? null
   if (ownerProfile) {
     const sheetLink = ownerProfile.sheet_link?.trim() ?? null
@@ -131,7 +131,7 @@ async function getProfileSheetLink(personId: string): Promise<string | null> {
 async function getProfileSheetInfo(personId: string): Promise<{ sheetUrl: string | null; sheetId: string | null }> {
   const supabase = createClient()
   const attempt = await supabase
-    .from('profiles')
+    .from('people')
     .select('id, google_sheet_url')
     .eq('id', personId)
     .maybeSingle()
@@ -147,12 +147,12 @@ async function getProfileSheetInfo(personId: string): Promise<{ sheetUrl: string
 
   const { data: accountRow } = await supabase
     .from('accounts')
-    .select('owner_id, profiles (id, google_sheet_url)')
+    .select('owner_id, people (id, google_sheet_url)')
     .eq('id', personId)
     .eq('type', 'debt')
     .maybeSingle()
 
-  const ownerProfile = (accountRow as any)?.profiles as { id?: string; google_sheet_url?: string | null } | null
+  const ownerProfile = (accountRow as any)?.people as { id?: string; google_sheet_url?: string | null } | null
   const sheetUrl = ownerProfile?.google_sheet_url?.trim() ?? null
   return { sheetUrl, sheetId: extractSheetId(sheetUrl) }
 }
@@ -238,7 +238,7 @@ export async function syncTransactionToSheet(
     // Fetch person's sheet preferences (replaces hardcoded ANH_SCRIPT)
     const supabaseTxn = await createClient()
     const { data: personData, error: personError } = await supabaseTxn
-      .from('profiles')
+      .from('people')
       .select('sheet_show_bank_account, sheet_show_qr_image, sheet_full_img')
       .eq('id', personId)
       .single()
@@ -364,8 +364,12 @@ export async function syncAllTransactions(personId: string) {
 
       // Fallback for Repayment/Transfer if shop is empty -> Use Account Name (e.g. "Vpbank Lady", "Wallet A")
       if (!shopName) {
-        const accData = txn.accounts as any
-        shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
+        if (txn.note?.toLowerCase().startsWith('rollover')) {
+          shopName = 'Bank'
+        } else {
+          const accData = txn.accounts as any
+          shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
+        }
       }
 
       // Determine type: debt = lending out, repayment = receiving back
@@ -528,8 +532,12 @@ export async function syncCycleTransactions(
 
       // Fallback for Repayment/Transfer if shop is empty -> Use Account Name
       if (!shopName) {
-        const accData = txn.accounts as any
-        shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
+        if (txn.note?.toLowerCase().startsWith('rollover')) {
+          shopName = 'Bank'
+        } else {
+          const accData = txn.accounts as any
+          shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
+        }
       }
       const syncType = txn.type === 'repayment' ? 'In' : 'Debt'
 
@@ -559,7 +567,7 @@ export async function syncCycleTransactions(
     // Fetch person's sheet preferences (replaces hardcoded ANH_SCRIPT)
     const supabaseCycle = await createClient()
     const { data: personData, error: personError } = await supabaseCycle
-      .from('profiles')
+      .from('people')
       .select('sheet_show_bank_account, sheet_show_qr_image, sheet_full_img')
       .eq('id', personId)
       .single()

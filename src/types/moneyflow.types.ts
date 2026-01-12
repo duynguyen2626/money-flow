@@ -40,8 +40,8 @@ export type AccountStats = {
 export type AccountRelationships = {
   is_parent: boolean
   child_count: number
-  child_accounts: { id: string; name: string; image_url?: string | null }[]
-  parent_info: { id: string; name: string; type: Account['type']; image_url?: string | null } | null
+  child_accounts: { id: string; name: string; image_url: string | null }[]
+  parent_info: { id: string; name: string; type: Account['type']; image_url: string | null } | null
 }
 
 export type Account = {
@@ -86,9 +86,9 @@ export type DebtAccount = {
   id: string;
   name: string;
   current_balance: number;
-  owner_id: string;
-  image_url: string | null;
-  sheet_link: string | null;
+  owner_id: string | null;
+  image_url?: string | null;
+  sheet_link?: string | null;
   google_sheet_url?: string | null;
 }
 

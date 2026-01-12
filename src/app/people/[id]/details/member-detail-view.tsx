@@ -16,6 +16,7 @@ import { RolloverDebtDialog } from '@/components/people/rollover-debt-dialog'
 import { SimpleTransactionTable } from '@/components/people/v2/SimpleTransactionTable'
 import { PaidTransactionsModal } from '@/components/people/paid-transactions-modal'
 import { ManageSheetButton } from '@/components/people/manage-sheet-button'
+import { EditPersonButton } from '@/components/people/edit-person-button'
 
 interface MemberDetailViewProps {
     person: Person
@@ -246,9 +247,10 @@ export function MemberDetailView({
                             <UserMinus className="h-3.5 w-3.5" />
                             SPLIT BILL
                         </button>
-                        <button className="flex items-center justify-center h-7 w-7 rounded-md text-slate-500 hover:bg-slate-100 transition-colors ml-1">
-                            <Edit className="h-3.5 w-3.5" />
-                        </button>
+                        <EditPersonButton
+                            person={person}
+                            subscriptions={[]} // You might need to pass subscriptions prop if available or fetch them
+                        />
                     </div>
                 </div>
 
@@ -514,7 +516,7 @@ export function MemberDetailView({
                                         currentCycle={activeCycle.tag}
                                         remains={activeCycle.remains}
                                         trigger={
-                                            <button className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border-2 border-slate-300 rounded-md hover:bg-slate-50 hover:border-slate-400 transition-colors">
+                                            <button className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border-2 border-amber-300 text-amber-700 bg-amber-50 rounded-md hover:bg-amber-100 hover:border-amber-400 transition-colors">
                                                 <RefreshCw className="h-3.5 w-3.5" />
                                                 Rollover
                                             </button>
@@ -534,7 +536,7 @@ export function MemberDetailView({
                                     buttonClassName="h-8 px-3 text-xs border-2 border-slate-300 hover:border-slate-400"
                                     asChild
                                     triggerContent={
-                                        <button className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border-2 border-slate-300 rounded-md hover:bg-slate-50 hover:border-slate-400 transition-colors">
+                                        <button className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border-2 border-blue-300 text-blue-700 bg-white rounded-md hover:bg-blue-50 hover:border-blue-500 hover:text-blue-800 transition-colors">
                                             <UserMinus className="h-3.5 w-3.5" />
                                             Debt
                                         </button>
@@ -553,7 +555,7 @@ export function MemberDetailView({
                                     buttonClassName="h-8 px-3 text-xs border-2 border-slate-300 hover:border-slate-400"
                                     asChild
                                     triggerContent={
-                                        <button className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border-2 border-slate-300 rounded-md hover:bg-slate-50 hover:border-slate-400 transition-colors">
+                                        <button className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border-2 border-emerald-300 text-emerald-700 bg-white rounded-md hover:bg-emerald-50 hover:border-emerald-500 hover:text-emerald-800 transition-colors">
                                             <Plus className="h-3.5 w-3.5" />
                                             Repay
                                         </button>
@@ -570,9 +572,10 @@ export function MemberDetailView({
                                     showBankAccount={person.sheet_show_bank_account ?? false}
                                     showQrImage={person.sheet_show_qr_image ?? false}
                                     size="sm"
-                                    buttonClassName="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border-2 border-slate-300 rounded-md hover:bg-slate-50 hover:border-slate-400 transition-colors"
+                                    buttonClassName="h-8 text-xs font-medium"
                                     linkedLabel="Sheet"
                                     unlinkedLabel="Sheet"
+                                    splitMode={true}
                                 />
 
                                 <div className="relative">

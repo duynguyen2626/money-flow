@@ -101,6 +101,7 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                 </Link>
 
                 {person.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={person.image_url} alt={person.name} className="h-10 w-10 rounded-md object-cover md:h-12 md:w-12" />
                 ) : (
                   <div className="flex h-10 w-10 items-center justify-center rounded-md bg-slate-100 text-base font-bold text-slate-600 md:h-12 md:w-12 md:text-lg">

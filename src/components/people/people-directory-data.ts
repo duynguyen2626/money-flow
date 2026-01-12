@@ -4,7 +4,7 @@ import { isYYYYMM, normalizeMonthTag } from '@/lib/month-tag'
 export type PeopleDirectoryItem = {
   id: string
   name: string
-  avatarUrl: string | null
+  image_url: string | null
   person: Person
   isOwner?: boolean | null
   subscriptions: Array<{ id: string; name: string; slots: number; image_url?: string | null }>
@@ -86,7 +86,7 @@ export function buildPeopleDirectoryItems(people: Person[]): PeopleDirectoryItem
     return {
       id: person.id,
       name: person.name,
-      avatarUrl: person.image_url ?? null,
+      image_url: person.image_url ?? null,
       person,
       isOwner: person.is_owner ?? null,
       subscriptions: person.subscription_details ?? [],

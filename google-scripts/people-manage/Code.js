@@ -1,6 +1,6 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 4.8 (TAB COLORS)
-// Last Updated: 2026-01-09 11:05 ICT
+// VERSION: 4.9 (REMAINS FIX)
+// Last Updated: 2026-01-12 11:10 ICT
 // Scope: Sync logic now respects manual data entered below the auto-block.
 //        - Sync All: Inserts/Deletes rows within the auto-block scope to shift manual data.
 //        - Single Create: Inserts row to shift manual data.
@@ -277,7 +277,12 @@ function applyBordersAndSort(sheet, summaryOptions) {
     var maxRow = sheet.getLastRow();
     if (maxRow >= 2) {
         var totalRows = maxRow - 1;
-        sheet.getRange(2, 1, totalRows, 10).setBorder(true, true, true, true, true, true);
+        // Fix Grey Styling: Reset background and font weight for data rows
+        sheet.getRange(2, 1, totalRows, 10)
+            .setBorder(true, true, true, true, true, true)
+            .setBackground(null)
+            .setFontWeight('normal');
+
         // FIXED CENTER ALIGNMENT FOR DATE COLUMN
         sheet.getRange(2, 3, totalRows, 1).setHorizontalAlignment('center');
     }
@@ -392,7 +397,7 @@ function setupSummaryTable(sheet, summaryOptions) {
     sheet.getRange('N2').setFormula('=SUMIFS(J:J;B:B;"In")');
     sheet.getRange('N3').setFormula('=SUM(I2:I)');
     sheet.getRange('N4').setFormula('=SUMIFS(J:J;B:B;"Out")');
-    sheet.getRange('N5').setFormula('=SUMIFS(F:F;B:B;"Out") - SUMIFS(F:F;B:B;"In") - N3');
+    sheet.getRange('N5').setFormula('=SUM(J2:J) + N3');
 
     sheet.getRange('N2:N5').setNumberFormat('#,##0').setFontWeight('bold');
     sheet.getRange('L2:N5').setBorder(true, true, true, true, true, true);

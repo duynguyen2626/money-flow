@@ -39,7 +39,7 @@ export function ServiceTransactionsTable({ serviceId, serviceName }: ServiceTran
                 .select(`
           *,
           account:accounts!transactions_account_id_fkey(id, name, type, image_url),
-          person:profiles!transactions_person_id_fkey(id, name, image_url),
+          person:people!transactions_person_id_fkey(id, name, image_url),
           shop:shops!transactions_shop_id_fkey1(id, name, image_url),
           category:categories!transactions_category_id_fkey(id, name, icon)
         `)

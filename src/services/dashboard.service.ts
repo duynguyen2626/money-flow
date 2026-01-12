@@ -248,7 +248,7 @@ export async function getDashboardStats(
     const debtorOwnerIds =
       (debtAccounts as any[])?.map((acc) => acc.owner_id).filter(Boolean) || []
     const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
+      .from('people')
       .select('id, name, image_url')
       .in('id', debtorOwnerIds)
 
@@ -277,7 +277,7 @@ export async function getDashboardStats(
 
     // Get all active profiles with potential debt
     const { data: allProfiles, error: allProfilesError } = await supabase
-      .from('profiles')
+      .from('people')
       .select('id, name, image_url')
       .eq('is_archived', false)
 

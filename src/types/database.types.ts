@@ -13,7 +13,7 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      profiles: {
+      people: {
         Row: {
           id: string
           name: string

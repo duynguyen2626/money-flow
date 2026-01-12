@@ -74,3 +74,9 @@ export async function confirmRefundMoneyReceived(
         return { success: false, error: error.message }
     }
 }
+
+import { getPendingRefunds } from '@/services/transaction.service'
+
+export async function getPendingRefundsAction() {
+    return getPendingRefunds()
+}

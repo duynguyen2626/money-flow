@@ -132,13 +132,10 @@ export async function getDebtAccounts(): Promise<DebtAccount[]> {
 
   if (personIds.length === 0) return []
 
-  const [debtValues] = await Promise.all([
+  const [profilesRes, debtValues] = await Promise.all([
+    supabase.from('people').select('id, name, image_url, sheet_link').in('id', personIds),
     Promise.all(personIds.map(id => getPersonDebt(id))),
   ])
-
-  // Fetch profiles again to get image_url
-  const profilesRes = await supabase.from('profiles').select('id, name, image_url, sheet_link').in('id', personIds)
-
   const profileMap = new Map<string, { name: string; image_url: string | null; sheet_link: string | null }>()
     ; (profilesRes.data ?? []).forEach((row: any) => {
       if (!row?.id) return
@@ -178,7 +175,7 @@ export async function getPersonDetails(id: string): Promise<{
 
   // Add new columns to SELECT
   const { data, error } = await supabase
-    .from('profiles')
+    .from('people')
     .select('id, name, image_url, sheet_link, google_sheet_url, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image')
     .eq('id', id)
     .maybeSingle()
@@ -191,7 +188,7 @@ export async function getPersonDetails(id: string): Promise<{
     console.warn('[getPersonDetails] Column missing, using fallback (settings will be lost)')
     // Fallback if google_sheet_url column doesn't exist
     const fallback = await supabase
-      .from('profiles')
+      .from('people')
       .select('id, name, image_url, sheet_link')
       .eq('id', id)
       .maybeSingle()

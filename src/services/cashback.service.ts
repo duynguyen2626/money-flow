@@ -551,7 +551,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
             cashback_share_percent, cashback_share_fixed,
             category:categories(name, icon),
             shop:shops(name, image_url),
-            person:profiles!transactions_person_id_fkey(name)
+            person:people!transactions_person_id_fkey(name)
           )
         `)
         .eq('cycle_id', (cycle as any).id)
@@ -786,7 +786,7 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
   let transactions: CashbackTransaction[] = [];
   const { data: entries, error: entriesError } = await (supabase
     .from('cashback_entries')
-    .select('mode, amount, metadata, transaction_id, cycle_id, cycle:cashback_cycles(cycle_tag), transaction:transactions!inner(id, occurred_at, note, amount, account_id, cashback_share_percent, cashback_share_fixed, category:categories(name, icon), shop:shops(name, image_url), person:profiles!transactions_person_id_fkey(name))')
+    .select('mode, amount, metadata, transaction_id, cycle_id, cycle:cashback_cycles(cycle_tag), transaction:transactions!inner(id, occurred_at, note, amount, account_id, cashback_share_percent, cashback_share_fixed, category:categories(name, icon), shop:shops(name, image_url), person:people!transactions_person_id_fkey(name))')
     .eq('transaction.account_id', accountId) as any);
 
   if (!entriesError && entries && (entries as any).length > 0) {
