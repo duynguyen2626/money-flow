@@ -10,7 +10,7 @@ import { Subscription } from '@/types/moneyflow.types'
 type PersonFormValues = {
   name: string
   email?: string
-  avatar_url?: string
+  image_url?: string
   sheet_link?: string
   subscriptionIds: string[]
   is_owner?: boolean
@@ -30,7 +30,7 @@ type PersonFormProps = {
 const schema = z.object({
   name: z.string().min(1, 'Name is required'),
   email: z.string().email('Invalid email address').optional().or(z.literal('')),
-  avatar_url: z.string().url('Invalid avatar URL').optional().or(z.literal('')),
+  image_url: z.string().url('Invalid image URL').optional().or(z.literal('')), // Changed from avatar_url and updated validation
   sheet_link: z.string().url('Invalid script link URL').optional().or(z.literal('')),
   subscriptionIds: z.array(z.string()),
   is_owner: z.boolean().optional(),
@@ -64,7 +64,7 @@ export function PersonForm({
   subscriptions,
   onCancel,
 }: PersonFormProps) {
-  const [avatarPreview, setAvatarPreview] = useState<string | null>(initialValues?.avatar_url || null)
+  const [imagePreview, setImagePreview] = useState<string | null>(initialValues?.image_url || null) // Changed from avatarPreview and avatar_url
   const [status, setStatus] = useState<{ type: 'error' | 'success'; text: string } | null>(
     null
   )
@@ -79,7 +79,7 @@ export function PersonForm({
     defaultValues: {
       name: initialValues?.name ?? '',
       email: initialValues?.email ?? '',
-      avatar_url: initialValues?.avatar_url ?? '',
+      image_url: initialValues?.image_url ?? '', // Changed from avatar_url
       sheet_link: initialValues?.sheet_link ?? '',
       subscriptionIds: initialValues?.subscriptionIds ?? [],
       is_owner: initialValues?.is_owner ?? false,
@@ -88,15 +88,15 @@ export function PersonForm({
     },
   })
 
-  const watchedAvatar = watch('avatar_url')
+  const watchedImage = watch('image_url') // Changed from watchedAvatar
   const watchedSubs = watch('subscriptionIds')
   const watchedIsOwner = watch('is_owner')
   const watchedIsArchived = watch('is_archived')
   const watchedIsGroup = watch('is_group')
 
   useEffect(() => {
-    setAvatarPreview(watchedAvatar || null)
-  }, [watchedAvatar])
+    setImagePreview(watchedImage || null) // Changed from setAvatarPreview and watchedAvatar
+  }, [watchedImage]) // Changed from watchedAvatar
 
   useEffect(() => {
     // Ensure subscriptionIds is registered even without direct input binding
@@ -139,13 +139,13 @@ export function PersonForm({
               <p className="text-sm text-slate-500">Basic info and sheet connection.</p>
             </div>
             <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-full border border-slate-200 bg-slate-50">
-              {avatarPreview ? (
+              {imagePreview ? ( // Changed from avatarPreview
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={avatarPreview}
-                  alt="Avatar preview"
+                  src={imagePreview} // Changed from avatarPreview
+                  alt="Image preview" // Changed from Avatar preview
                   className="h-full w-full object-cover"
-                  onError={() => setAvatarPreview(null)}
+                  onError={() => setImagePreview(null)} // Changed from setAvatarPreview
                 />
               ) : (
                 <span className="text-xs text-slate-400">No</span>
@@ -175,14 +175,14 @@ export function PersonForm({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Avatar URL</label>
+              <label className="text-sm font-medium text-slate-700">Image URL</label> {/* Changed from Avatar URL */}
               <input
-                {...register('avatar_url')}
+                {...register('image_url')} // Changed from avatar_url
                 className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                placeholder="https://example.com/avatar.jpg"
+                placeholder="https://example.com/image.jpg" // Changed placeholder
               />
-              {errors.avatar_url && (
-                <p className="text-sm text-rose-600">{errors.avatar_url.message}</p>
+              {errors.image_url && ( // Changed from avatar_url
+                <p className="text-sm text-rose-600">{errors.image_url.message}</p> // Changed from avatar_url
               )}
             </div>
 

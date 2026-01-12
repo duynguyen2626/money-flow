@@ -40,8 +40,8 @@ export type AccountStats = {
 export type AccountRelationships = {
   is_parent: boolean
   child_count: number
-  child_accounts: { id: string; name: string; avatar_url: string | null }[]
-  parent_info: { id: string; name: string; type: Account['type']; avatar_url: string | null } | null
+  child_accounts: { id: string; name: string; image_url: string | null }[]
+  parent_info: { id: string; name: string; type: Account['type']; image_url: string | null } | null
 }
 
 export type Account = {
@@ -87,7 +87,7 @@ export type DebtAccount = {
   name: string;
   current_balance: number;
   owner_id: string | null;
-  avatar_url?: string | null;
+  image_url?: string | null;
   sheet_link?: string | null;
   google_sheet_url?: string | null;
 }
@@ -120,7 +120,7 @@ export type Person = {
   created_at?: string
   name: string
   email?: string | null
-  avatar_url?: string | null
+  image_url?: string | null
 
   sheet_link?: string | null
   google_sheet_url?: string | null
@@ -148,7 +148,7 @@ export type SubscriptionMember = {
   fixed_amount?: number | null
   slots?: number | null
   profile_name?: string | null
-  avatar_url?: string | null
+  image_url?: string | null
   debt_account_id?: string | null
 }
 
@@ -180,8 +180,8 @@ export type TransactionWithLineRelations = {
   metadata?: Json | null;
   accounts: Pick<AccountRow, 'name' | 'image_url' | 'type'> | null;
   categories: Pick<CategoryRow, 'name' | 'type'> & { image_url?: string | null; icon?: string | null } | null;
-  profiles?: { name?: string | null; avatar_url?: string | null } | null;
-  people?: { name?: string | null; avatar_url?: string | null } | null;
+  profiles?: { name?: string | null; image_url?: string | null } | null;
+  people?: { name?: string | null; image_url?: string | null } | null;
 }
 
 export type CashbackMode = 'none_back' | 'real_fixed' | 'real_percent' | 'voluntary'
@@ -215,7 +215,7 @@ export type TransactionWithDetails = TransactionRow & {
   type?: 'income' | 'expense' | 'transfer' | 'debt' | 'repayment';
   person_id?: string | null;
   person_name?: string | null;
-  person_avatar_url?: string | null;
+  person_image_url?: string | null;
   category_id?: string | null;
   persisted_cycle_tag?: string | null;
   shop_id?: string | null;

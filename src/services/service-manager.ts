@@ -315,7 +315,7 @@ export async function getServices() {
     .select(`
         *,
         shop:shops(*),
-        service_members:service_members(*, profile:profiles(*))
+        service_members:service_members(*, profile:people(*))
       `)
     .order('name', { ascending: true })
 
@@ -396,7 +396,7 @@ export async function getServiceById(id: string) {
     .select(`
         *,
         shop:shops(*),
-        service_members:service_members(*, profile:profiles(*))
+        service_members:service_members(*, profile:people(*))
       `)
     .eq('id', id)
     .single()

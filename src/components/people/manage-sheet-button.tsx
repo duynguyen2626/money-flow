@@ -35,6 +35,7 @@ type ManageSheetButtonProps = {
   showCycleAction?: boolean
   connectHref?: string
   showViewLink?: boolean
+  splitMode?: boolean
 }
 
 function isValidLink(value: string | null | undefined): boolean {
@@ -63,6 +64,7 @@ export function ManageSheetButton({
   showCycleAction = true,
   connectHref,
   showViewLink = false,
+  splitMode = false,
 }: ManageSheetButtonProps) {
   const [sheetUrl, setSheetUrl] = useState<string | null>(initialSheetUrl ?? null)
   const [isManaging, startManageTransition] = useTransition()
@@ -192,20 +194,52 @@ export function ManageSheetButton({
   }
 
   return (
-    <div className={cn('inline-flex items-center gap-2', className)}>
+    <div className={cn(splitMode ? 'flex items-center rounded-md border-2 border-slate-300 hover:border-slate-400 overflow-hidden transition-colors' : 'inline-flex items-center gap-2', className)}>
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
-        <DialogTrigger asChild>
-          <Button
-            variant="outline"
-            size={size === 'md' ? 'default' : size}
-            className={cn(buttonClassName)}
-            disabled={isDisabled}
-            onClick={handleTriggerClick}
-          >
-            <Icon className={cn('h-4 w-4', !iconOnly && 'mr-2')} />
-            {!iconOnly && label}
-          </Button>
-        </DialogTrigger>
+        {splitMode ? (
+          <>
+            {/* Sync Action Button */}
+            <Button
+              variant="ghost"
+              size={size === 'md' ? 'default' : size}
+              className={cn("rounded-none border-r border-slate-300 px-3 hover:bg-slate-100 h-8", buttonClassName)}
+              disabled={isDisabled || !hasValidScriptLink || !hasValidCycle}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleManageCycle();
+              }}
+            >
+              <RefreshCcw className={cn("h-3.5 w-3.5 mr-1.5", isManaging && "animate-spin")} />
+              {isManaging ? 'Syncing' : 'Sheet'}
+            </Button>
+
+            {/* Settings Trigger Icon */}
+            <DialogTrigger asChild>
+              <Button
+                variant="ghost"
+                size={size === 'md' ? 'default' : size}
+                className="rounded-none px-2 hover:bg-slate-100 h-8 text-slate-500"
+                disabled={isDisabled}
+                onClick={handleTriggerClick}
+              >
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </DialogTrigger>
+          </>
+        ) : (
+          <DialogTrigger asChild>
+            <Button
+              variant="outline"
+              size={size === 'md' ? 'default' : size}
+              className={cn(buttonClassName)}
+              disabled={isDisabled}
+              onClick={handleTriggerClick}
+            >
+              <Icon className={cn('h-4 w-4', !iconOnly && 'mr-2')} />
+              {!iconOnly && label}
+            </Button>
+          </DialogTrigger>
+        )}
 
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>

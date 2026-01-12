@@ -55,7 +55,7 @@ type ServiceMember = {
   profile_id: string
   profile: {
     id: string
-    avatar_url: string | null
+    image_url: string | null
     name: string
   }
   slots: number
@@ -427,7 +427,11 @@ export function ServiceCard({ service, members, allPeople, isDetail = false }: S
                   <div className="flex items-center gap-3">
                     <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold ${member.profile.is_owner ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
                       }`}>
-                      {member.profile.name.substring(0, 2).toUpperCase()}
+                      {member.profile?.image_url ? (
+                        <img src={member.profile.image_url} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        member.profile.name.substring(0, 2).toUpperCase()
+                      )}
                     </div>
                     <div className="flex flex-col">
                       <span className="text-sm font-medium text-slate-700">

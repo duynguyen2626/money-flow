@@ -72,4 +72,12 @@
 3. ⏳ Test Paid modal functionality
 4. ⏳ Locate and fix redundant counterparty names
 5. ⏳ Verify Unpaid filter logic
-6. ⏳ Create walkthrough with screenshots
+### 7. Google Script Auto-Deploy
+- [x] Auto-deploy `push-sheet.mjs` with `clasp deploy`
+- [x] Environment variables configuration
+- [x] Fix grey grid formatting in scripts
+
+### 8. People Details UI Enhancements
+- [x] Split Sheet button (Sync / Settings)
+- [x] Styled Rollover/Debt/Repay buttons
+- [x] Restored Refund Menu item

@@ -13,14 +13,14 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      profiles: {
+      people: {
         Row: {
           id: string
           name: string
           email: string | null
           role: string
           is_group: boolean
-          avatar_url: string | null
+          image_url: string | null
           created_at: string
           sheet_link: string | null
           is_owner: boolean
@@ -37,7 +37,7 @@ export interface Database {
           email?: string | null
           role?: string
           is_group?: boolean
-          avatar_url?: string | null
+          image_url?: string | null
           created_at?: string
           sheet_link?: string | null
           is_owner?: boolean
@@ -54,7 +54,7 @@ export interface Database {
           email?: string | null
           role?: string
           is_group?: boolean
-          avatar_url?: string | null
+          image_url?: string | null
           created_at?: string
           sheet_link?: string | null
           is_owner?: boolean

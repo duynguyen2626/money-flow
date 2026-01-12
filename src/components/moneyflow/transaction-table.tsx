@@ -1,7 +1,7 @@
 "use client"
 
 import { useMemo, useState } from "react"
-import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, CreditCard, Link as LinkIcon } from "lucide-react"
+import { Ban, Loader2, MoreHorizontal, Pencil, RotateCcw, SlidersHorizontal, ArrowLeftRight, ArrowDownLeft, ArrowUpRight, CreditCard, Link as LinkIcon, Clock } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { createPortal } from "react-dom"
@@ -24,6 +24,7 @@ import {
   requestRefund,
   confirmRefund,
 } from "@/services/transaction.service"
+import { markTransactionAsPendingRefund } from "@/actions/transaction-actions"
 import { REFUND_PENDING_ACCOUNT_ID } from "@/constants/refunds"
 import { generateTag } from "@/lib/tag"
 import { normalizeMonthTag, toYYYYMMFromDate } from "@/lib/month-tag"
@@ -721,6 +722,26 @@ export function TransactionTable({
                           <span>Request Refund</span>
                         </button>
                       )}
+                      {canRequestRefund && !isPendingRefund && (
+                        <button
+                          className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
+                          onClick={async event => {
+                            event.stopPropagation()
+                            setActionMenuOpen(null)
+                            // Quick Pending Refund (Full Amount)
+                            const ok = await markTransactionAsPendingRefund(txn.id)
+                            if (ok) {
+                              router.refresh()
+                            } else {
+                              alert("Failed to mark as pending refund")
+                            }
+                          }}
+                          disabled={isVoided}
+                        >
+                          <Clock className="h-4 w-4 text-amber-600" />
+                          <span>Pending Refund (Quick)</span>
+                        </button>
+                      )}
                       {!isVoided && !isPendingRefund && (
                         <button
                           className="flex w-full items-center gap-2 rounded px-3 py-2 text-left hover:bg-slate-50"
@@ -780,22 +801,16 @@ export function TransactionTable({
               // Smart Source Logic
               let displayAccountName = txn.account_name ?? "-";
 
-              // If person_id is present, it's likely a debt-related transaction (Lending or Repayment)
-              // In this case, we want to show the REAL source (Bank) if possible.
-              // But we already did this in Backend Service! `txn.account_name` should be correct now.
-              // However, let's keep the frontend fallback just in case or for specific tweaks.
-              // The service returns `account_name` based on context.
-              // If we are in 'Account Detail' page (accountId passed), `account_name` is the OTHER side.
-              // If we are in 'People Detail' or 'Recent Transactions', `account_name` is also computed.
-
-              // The only issue might be if `account_name` is still the Debt Account name when we want Bank.
-              // Let's trust the backend service update first.
+              const isWaitingRefund = txn.status === 'waiting_refund' || isPendingRefund
 
               const renderCell = (key: ColumnKey) => {
                 switch (key) {
                   case "date":
                     return formattedDate(txn.occurred_at)
                   case "type":
+                    if (isWaitingRefund) {
+                      return <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800"><Clock className="mr-1 h-3 w-3" /> Pending Refund</span>
+                    }
                     if (txn.type === 'income') return <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800"><ArrowDownLeft className="mr-1 h-3 w-3" /> In</span>
                     if (txn.type === 'expense') {
                       // Check if it's Shopping to show Red? It is Expense so Red.

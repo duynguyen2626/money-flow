@@ -55,7 +55,7 @@ export function MobileTransactionsSimpleList({
                     // Line 2: Flow (Left) - Amount (Right)
                     const showFlow = txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment'
                     const sourceImage = txn.source_image || txn.shop_image_url
-                    const targetImage = (txn as any).person_avatar_url || (txn as any).destination_image_url
+                    const targetImage = (txn as any).person_image_url || (txn as any).destination_image_url
 
                     // Value
                     const rawAmount = typeof txn.original_amount === 'number' ? txn.original_amount : txn.amount ?? 0

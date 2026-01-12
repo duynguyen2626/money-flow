@@ -93,7 +93,7 @@ export function transactionToMobileRecordRow({
 
     // 3. Flow Visuals (Source -> Dest)
     const sourceImage = txn.source_image || txn.shop_image_url
-    const targetImage = (txn as any).person_avatar_url || (txn as any).destination_image_url
+    const targetImage = (txn as any).person_image_url || (txn as any).destination_image_url
 
     // Determine if we need flow
     const isTransfer = txn.type === 'transfer' || txn.type === 'debt' || txn.type === 'repayment'

@@ -39,7 +39,7 @@ export function ServiceTransactionsTable({ serviceId, serviceName }: ServiceTran
                 .select(`
           *,
           account:accounts!transactions_account_id_fkey(id, name, type, image_url),
-          person:profiles!transactions_person_id_fkey(id, name, avatar_url),
+          person:people!transactions_person_id_fkey(id, name, image_url),
           shop:shops!transactions_shop_id_fkey1(id, name, image_url),
           category:categories!transactions_category_id_fkey(id, name, icon)
         `)
@@ -75,7 +75,7 @@ export function ServiceTransactionsTable({ serviceId, serviceName }: ServiceTran
                 source_image: txn.account?.image_url,
                 // Flatten person data
                 person_name: txn.person?.name,
-                person_avatar_url: txn.person?.avatar_url,
+                person_image_url: txn.person?.image_url,
                 // Flatten category data
                 category_name: txn.category?.name,
                 category_icon: txn.category?.icon,

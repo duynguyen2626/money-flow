@@ -784,6 +784,17 @@ type RefundTransactionLine = {
   } | null
 }
 
+export async function markTransactionAsPendingRefund(transactionId: string): Promise<boolean> {
+  const supabase = createClient();
+  const { data: txn } = await supabase.from('transactions').select('amount').eq('id', transactionId).single();
+
+  if (!txn) return false;
+
+  const amount = Math.abs((txn as any).amount);
+  const result = await requestRefund(transactionId, amount, false); // Full refund
+  return result.success;
+}
+
 export async function requestRefund(
   transactionId: string,
   refundAmount: number,
@@ -1138,7 +1149,7 @@ export async function getSplitChildrenAction(parentId: string) {
   // Fetch transactions where metadata->parent_transaction_id == parentId
   const { data, error } = await supabase
     .from('transactions')
-    .select('id, amount, person_id, note, metadata, profiles:person_id(name)')
+    .select('id, amount, person_id, note, metadata, people:person_id(name)')
     .eq('metadata->>parent_transaction_id', parentId);
 
   if (error) {
@@ -1150,7 +1161,7 @@ export async function getSplitChildrenAction(parentId: string) {
     id: txn.id,
     amount: txn.amount,
     personId: txn.person_id,
-    name: (txn.profiles as any)?.name ?? 'Unknown',
+    name: (txn.people as any)?.name ?? 'Unknown',
     note: txn.note
   }));
 }

@@ -5,13 +5,23 @@ import { createPerson, ensureDebtAccount, updatePerson, getPersonWithSubs, getPe
 import { getPersonDetails, getDebtByTags } from '@/services/debt.service';
 import { getAccounts, getAccountTransactions } from '@/services/account.service';
 import { getCategories } from '@/services/category.service';
-import { getShops } from '@/services/shop.service';
+import { getShops, createShop } from '@/services/shop.service';
 import { syncAllTransactions, testConnection } from '@/services/sheet.service';
+
+async function findOrCreateBankShop() {
+  const shops = await getShops()
+  const bankShop = shops.find(s => s.name.toLowerCase() === 'bank')
+  if (bankShop) return bankShop.id
+
+  // Create if not exists
+  const newShop = await createShop({ name: 'Bank' })
+  return newShop?.id
+}
 
 export async function createPersonAction(payload: {
   name: string
   email?: string | null
-  avatar_url?: string | null
+  image_url?: string | null
   sheet_link?: string | null
   subscriptionIds?: string[]
   is_owner?: boolean
@@ -22,7 +32,7 @@ export async function createPersonAction(payload: {
   const result = await createPerson(
     payload.name,
     payload.email ?? undefined,
-    payload.avatar_url ?? undefined,
+    payload.image_url ?? undefined,
     payload.sheet_link ?? undefined,
     payload.subscriptionIds,
     {
@@ -51,7 +61,7 @@ export async function updatePersonAction(
   payload: {
     name?: string
     email?: string | null
-    avatar_url?: string | null
+    image_url?: string | null
     sheet_link?: string | null
     google_sheet_url?: string | null
     sheet_full_img?: string | null
@@ -156,6 +166,9 @@ export async function rolloverDebtAction(
     return { success: false, error: 'Could not resolve debt account for person' }
   }
 
+  // Ensure 'Bank' shop exists
+  const bankShopId = await findOrCreateBankShop()
+
   // Transaction 1: Settlement (IN) for the OLD cycle
   // This reduces the balance of the old month to 0 (or less)
   const settleNote = `Rollover to ${toCycle}`
@@ -167,6 +180,7 @@ export async function rolloverDebtAction(
     source_account_id: accountId,
     amount: amount,
     person_id: personId,
+    shop_id: bankShopId ?? undefined,
   })
 
   if (!settleRes) {
@@ -184,6 +198,7 @@ export async function rolloverDebtAction(
     source_account_id: accountId,
     amount: amount,
     person_id: personId,
+    shop_id: bankShopId ?? undefined,
   })
 
   if (!openRes) {

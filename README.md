@@ -163,6 +163,18 @@ If you encounter missing cycle data or incorrect caps in the Cashback Analysis v
 - Sheet formatter applies banding, formulas, summary panel, bank info, shop icon mapping, and per-row borders on sync.
 - Added `sheet:push` helper with `.env`-based script ID profiles and `--force` support for faster deploys.
 
+## Recent Updates (Phase 11 - Auto-Deploy & UI Enhancements)
+
+### 1. Automated Google Script Deployment
+- **Auto-Deploy**: `push-sheet.mjs` now automatically triggers `clasp deploy` after pushing.
+- **Config**: Relies on `PEOPLE_SHEET_DEPLOY_...` variables in `.env.local`.
+- **Formatting Fix**: Scripts now explicitly reset data row styles to prevent "Grey Grid" issues.
+
+### 2. People Details UI Enhancements
+- **Split Sheet Button**: Separated into "Sync Now" (Left) and "Settings" (Right Icon) for faster access.
+- **Styled Buttons**: Rollover (Amber), Debt (Blue), and Repay (Emerald) buttons now use distinct color schemes.
+- **Refund Menu**: Restored "Pending Refund" menu item in the transaction table.
+
 ## Recent Updates (Phase 9 - Manage Sheet Settings)
 - Fixed stale sheet settings in the cycle list (settings now flow from `getPeople()`).
 - Apps Script now clears/merges the bank row based on toggle state and positions QR images in a merged summary area.

@@ -51,10 +51,10 @@ export function AccountFamilyModal({
                             >
                                 <div className="absolute inset-0 border-l-4 border-blue-500/50 rounded-lg pointer-events-none" />
                                 <div className="h-10 w-10 shrink-0 overflow-hidden bg-white flex items-center justify-center rounded-none border border-blue-100 shadow-sm">
-                                    {parentInfo.avatar_url ? (
+                                    {parentInfo.image_url ? (
                                         // eslint-disable-next-line @next/next/no-img-element
                                         <img
-                                            src={parentInfo.avatar_url}
+                                            src={parentInfo.image_url}
                                             alt={parentInfo.name}
                                             className="h-full w-full object-contain p-1"
                                         />
@@ -91,10 +91,10 @@ export function AccountFamilyModal({
                                         className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                                     >
                                         <div className="h-10 w-10 shrink-0 overflow-hidden bg-muted flex items-center justify-center rounded-none border border-slate-100">
-                                            {child.avatar_url ? (
+                                            {child.image_url ? (
                                                 // eslint-disable-next-line @next/next/no-img-element
                                                 <img
-                                                    src={child.avatar_url}
+                                                    src={child.image_url}
                                                     alt={child.name}
                                                     className="h-full w-full object-contain p-1"
                                                 />

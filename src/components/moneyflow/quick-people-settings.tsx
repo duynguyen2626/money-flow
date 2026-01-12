@@ -132,9 +132,9 @@ export function QuickPeopleSettings({ people, onClose }: QuickPeopleSettingsProp
                                                 }}
                                                 className="flex items-center gap-2 cursor-pointer"
                                             >
-                                                {person.avatar_url ? (
+                                                {person.image_url ? (
                                                     // eslint-disable-next-line @next/next/no-img-element
-                                                    <img src={person.avatar_url} alt="" className="w-6 h-6 rounded-full object-cover" />
+                                                    <img src={person.image_url} alt="" className="w-6 h-6 rounded-full object-cover" />
                                                 ) : (
                                                     <div className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold text-slate-500">
                                                         {getAccountInitial(person.name)}
@@ -158,9 +158,9 @@ export function QuickPeopleSettings({ people, onClose }: QuickPeopleSettingsProp
                                     className="group flex items-center justify-between p-2 rounded-md bg-white border border-slate-200 shadow-sm hover:border-slate-300 transition-all"
                                 >
                                     <div className="flex items-center gap-3">
-                                        {person.avatar_url ? (
+                                        {person.image_url ? (
                                             // eslint-disable-next-line @next/next/no-img-element
-                                            <img src={person.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover border border-slate-100" />
+                                            <img src={person.image_url} alt="" className="w-8 h-8 rounded-full object-cover border border-slate-100" />
                                         ) : (
                                             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 border border-slate-200">
                                                 {getAccountInitial(person.name)}

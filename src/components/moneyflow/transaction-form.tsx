@@ -342,7 +342,7 @@ export function TransactionForm({
       .map((group) => ({
         id: group.id,
         name: group.name ?? "Group",
-        imageUrl: group.avatar_url ?? null,
+        imageUrl: group.image_url ?? null,
         members: (groupMembers.get(group.id) ?? []).sort((a, b) =>
           a.name.localeCompare(b.name),
         ),
@@ -1292,7 +1292,7 @@ export function TransactionForm({
             // Relations
             account: optAccount,
             category: optCategory,
-            people: optPerson ? { id: optPerson.id, name: optPerson.name, avatar_url: optPerson.avatar_url } : undefined,
+            people: optPerson ? { id: optPerson.id, name: optPerson.name, image_url: optPerson.image_url } : undefined,
             shop: optShop ? { id: optShop.id, name: optShop.name, image_url: optShop.image_url } : undefined,
 
             // Cashback (Approximate)
@@ -2127,10 +2127,10 @@ export function TransactionForm({
           label: person.name,
           description: person.email || "No email",
           searchValue: `${person.name} ${person.email ?? ""}`.trim(),
-          icon: person.avatar_url ? (
+          icon: person.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={person.avatar_url}
+              src={person.image_url}
               alt={person.name}
               className="h-5 w-5 object-contain rounded-none"
             />
@@ -2183,7 +2183,7 @@ export function TransactionForm({
         id: person.id,
         name: person.name,
         hint,
-        avatar_url: person.avatar_url ?? null,
+        image_url: person.image_url ?? null,
       };
     });
   }, [
@@ -2838,7 +2838,7 @@ export function TransactionForm({
         id: created.profileId,
         name: rawName,
         email: null,
-        avatar_url: null,
+        image_url: null,
         sheet_link: null,
         google_sheet_url: null,
         is_owner: null,
@@ -3687,10 +3687,10 @@ export function TransactionForm({
                   onClick={() => handleSelectSplitSuggestion(suggestion.id)}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-slate-50"
                 >
-                  {suggestion.avatar_url ? (
+                  {suggestion.image_url ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={suggestion.avatar_url}
+                      src={suggestion.image_url}
                       alt={suggestion.name}
                       className="h-7 w-7 rounded-full object-cover"
                     />

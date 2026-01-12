@@ -242,6 +242,35 @@ const main = async () => {
         if (result.status === 0) {
           console.log(`[${indexLabel}] ${profile.key} ✅ PUSHED`)
           successCount++
+
+          // AUTO-DEPLOY LOGIC
+          // Strategy: specific var PEOPLE_SHEET_DEPLOY_XYZ matching PEOPLE_SHEET_SCRIPT_XYZ
+          // OR: simply look for a variable with "DEPLOY" instead of "SCRIPT"
+          const deployEnvKey = profile.key.replace('_SCRIPT_', '_DEPLOY_')
+          const deployId = process.env[deployEnvKey]
+
+          if (deployId) {
+            console.log(`   🚀 Auto-deploying to ${deployId}...`)
+            // Use explicit command string to avoid spawnSync/shell arg parsing issues
+            // and use full flags for clarity/compatibility
+            const deployCmd = `${claspCmd} deploy --deploymentId "${deployId}" --description "Auto-updated_via_script"`
+
+            const deployResult = spawnSync(deployCmd, [], {
+              cwd: __dirname,
+              stdio: 'inherit',
+              shell: true,
+            })
+
+            if (deployResult.status === 0) {
+              console.log(`   ✨ Deployed Successfully!`)
+            } else {
+              console.log(`   ⚠️ Deploy Failed (Exit Code: ${deployResult.status})`)
+            }
+          } else {
+            // Optional: Check generic pattern if simple replace didn't work? 
+            // current convention is strict: PEOPLE_SHEET_SCRIPT_LAM -> PEOPLE_SHEET_DEPLOY_LAM
+          }
+
         } else {
           console.log(`[${indexLabel}] ${profile.key} ❌ PUSH FAILED`)
           failCount++

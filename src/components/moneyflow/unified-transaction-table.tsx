@@ -44,6 +44,7 @@ import { buildEditInitialValues, parseMetadata } from '@/lib/transaction-mapper'
 import { MobileTransactionsSimpleList } from "./mobile/MobileTransactionsSimpleList"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { RefundsDialogTrigger } from './toolbar/RefundsDialogTrigger'
 
 import { toast } from "sonner"
 import { CustomTooltip } from '@/components/ui/custom-tooltip'
@@ -1823,14 +1824,14 @@ export function UnifiedTransactionTable({
                         // Check for Person First (Person takes precedence in "Accounts -> People" flow logic usually, or depends on data)
                         const personId = (txn as any).person_id
                         const personNameLink = (txn as any).person_name
-                        const personAvatar = (txn as any).person_avatar_url
+                        const personAvatar = (txn as any).person_image_url
 
                         if (personId) {
                           targetType = 'person'
                           targetName = personNameLink || 'Unknown Person'
                           targetIcon = personAvatar
                           targetId = personId
-                          targetLink = `/people/${personId}`
+                          targetLink = `/people/${personId}/details`
                         } else if (targetId) {
                           targetType = 'account'
                           if (targetName === 'Unknown') {

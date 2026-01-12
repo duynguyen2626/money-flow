@@ -13,6 +13,7 @@ import {
   upsertTransactionCashback,
   removeTransactionCashback,
 } from "./cashback.service";
+import { parseMetadata } from '@/lib/transaction-mapper';
 
 type TransactionStatus =
   | "posted"
@@ -90,7 +91,7 @@ type LookupMaps = {
       icon?: string | null;
     }
   >;
-  people: Map<string, { id: string; name: string; avatar_url: string | null }>;
+  people: Map<string, { id: string; name: string; image_url: string | null }>;
   shops: Map<string, { id: string; name: string; image_url: string | null }>;
 };
 
@@ -231,8 +232,8 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
       : Promise.resolve({ data: [] as any[], error: null }),
     personIds.size
       ? supabase
-        .from("profiles")
-        .select("id, name, avatar_url")
+        .from("people")
+        .select("id, name, image_url")
         .in("id", Array.from(personIds))
       : Promise.resolve({ data: [] as any[], error: null }),
     shopIds.size
@@ -259,7 +260,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
   >();
   const people = new Map<
     string,
-    { id: string; name: string; avatar_url: string | null }
+    { id: string; name: string; image_url: string | null }
   >();
   const shops = new Map<
     string,
@@ -293,7 +294,7 @@ async function fetchLookups(rows: FlatTransactionRow[]): Promise<LookupMaps> {
     people.set(row.id, {
       id: row.id,
       name: row.name,
-      avatar_url: row.avatar_url ?? null,
+      image_url: row.image_url ?? null,
     });
   });
 
@@ -380,7 +381,7 @@ export async function mapTransactionRow(
     source_image: account?.image_url ?? null,
     destination_image: target?.image_url ?? null,
     person_name: person?.name ?? null,
-    person_avatar_url: person?.avatar_url ?? null,
+    person_image_url: person?.image_url ?? null,
     shop_name: shop?.name ?? null,
     shop_image_url: shop?.image_url ?? null,
     persisted_cycle_tag:
@@ -544,7 +545,7 @@ export async function createTransaction(
           original_amount: originalAmount,
           cashback_share_percent: decimalRate,
           cashback_share_fixed: fixedAmount,
-          type: input.type === "repayment" ? "In" : "Debt",
+          type: ['repayment', 'income'].includes(input.type) ? "In" : "Debt",
         };
         void syncTransactionToSheet(
           input.person_id,
@@ -1443,27 +1444,48 @@ export async function confirmRefund(
 }
 
 export async function getPendingRefunds(): Promise<PendingRefundItem[]> {
-  const supabase = createClient();
+  const supabase = createClient()
+
+  // Logic: status='waiting_refund' OR metadata->has_refund_request=true
+  // Single query with OR logic
   const { data, error } = await supabase
-    .from("transactions")
-    .select("*")
-    .eq("account_id", "99999999-9999-9999-9999-999999999999")
-    .eq("status", "pending") // Only show actual pending, not completed ones history
-    .order("occurred_at", { ascending: false });
+    .from('transactions')
+    .select(`
+      id,
+      occurred_at,
+      amount,
+      note,
+      status,
+      tag,
+      metadata,
+      category:categories(name)
+    `)
+    .or('status.eq.waiting_refund,metadata->>has_refund_request.eq.true')
+    .neq('status', 'void')
+    .order('occurred_at', { ascending: false })
 
-  if (error || !data) return [];
+  if (error) {
+    console.error('Failed to fetch pending refunds:', error)
+    return []
+  }
 
-  return data.map((row: any) => ({
-    id: row.id,
-    occurred_at: row.occurred_at,
-    note: row.note,
-    tag: row.tag,
-    amount: row.amount,
-    status: row.status,
-    original_note: row.metadata?.original_note ?? null,
-    original_category: null,
-    linked_transaction_id: row.metadata?.original_transaction_id,
-  }));
+  return (data || []).map((txn: any) => {
+    // We need parseMetadata here. Ensure it is imported.
+    const meta = txn.metadata // parseMetadata(txn.metadata) - simplified access since we just need fields
+    // Actually better to use helper if available. 
+    // I will assume I fix import next.
+
+    return {
+      id: txn.id,
+      occurred_at: txn.occurred_at,
+      amount: Math.abs(txn.amount),
+      status: txn.status,
+      note: txn.note,
+      tag: txn.tag,
+      original_category: txn.category?.name ?? null,
+      original_note: meta?.original_note ?? txn.note
+    }
+  })
 }
 
 /**

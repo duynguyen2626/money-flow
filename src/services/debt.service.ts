@@ -133,16 +133,16 @@ export async function getDebtAccounts(): Promise<DebtAccount[]> {
   if (personIds.length === 0) return []
 
   const [profilesRes, debtValues] = await Promise.all([
-    supabase.from('profiles').select('id, name, avatar_url, sheet_link').in('id', personIds),
+    supabase.from('people').select('id, name, image_url, sheet_link').in('id', personIds),
     Promise.all(personIds.map(id => getPersonDebt(id))),
   ])
 
-  const profileMap = new Map<string, { name: string; avatar_url: string | null; sheet_link: string | null }>()
+  const profileMap = new Map<string, { name: string; image_url: string | null; sheet_link: string | null }>()
     ; (profilesRes.data ?? []).forEach((row: any) => {
       if (!row?.id) return
       profileMap.set(row.id, {
         name: row.name,
-        avatar_url: row.avatar_url ?? null,
+        image_url: row.image_url ?? null,
         sheet_link: row.sheet_link ?? null,
       })
     })
@@ -154,7 +154,7 @@ export async function getDebtAccounts(): Promise<DebtAccount[]> {
       name: profile?.name ?? 'Unknown',
       current_balance: debtValues[index] ?? 0,
       owner_id: id,
-      avatar_url: profile?.avatar_url ?? null,
+      image_url: profile?.image_url ?? null,
       sheet_link: profile?.sheet_link ?? null,
     }
   })
@@ -165,7 +165,7 @@ export async function getPersonDetails(id: string): Promise<{
   name: string
   current_balance: number
   owner_id: string
-  avatar_url: string | null
+  image_url: string | null
   sheet_link: string | null
   google_sheet_url: string | null
   sheet_full_img: string | null
@@ -176,8 +176,8 @@ export async function getPersonDetails(id: string): Promise<{
 
   // Add new columns to SELECT
   const { data, error } = await supabase
-    .from('profiles')
-    .select('id, name, avatar_url, sheet_link, google_sheet_url, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image')
+    .from('people')
+    .select('id, name, image_url, sheet_link, google_sheet_url, sheet_full_img, sheet_show_bank_account, sheet_show_qr_image')
     .eq('id', id)
     .maybeSingle()
 
@@ -189,8 +189,8 @@ export async function getPersonDetails(id: string): Promise<{
     console.warn('[getPersonDetails] Column missing, using fallback (settings will be lost)')
     // Fallback if google_sheet_url column doesn't exist
     const fallback = await supabase
-      .from('profiles')
-      .select('id, name, avatar_url, sheet_link')
+      .from('people')
+      .select('id, name, image_url, sheet_link')
       .eq('id', id)
       .maybeSingle()
     return fallback.data ? {
@@ -218,7 +218,7 @@ export async function getPersonDetails(id: string): Promise<{
     name: profile.name,
     current_balance: currentBalance,
     owner_id: profile.id,
-    avatar_url: profile.avatar_url ?? null,
+    image_url: profile.image_url ?? null,
     sheet_link: profile.sheet_link ?? null,
     google_sheet_url: profile.google_sheet_url ?? null,
     sheet_full_img: profile.sheet_full_img ?? null,
