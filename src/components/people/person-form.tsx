@@ -184,7 +184,7 @@ export function PersonForm({
               {errors.image_url && ( // Changed from avatar_url
                 <p className="text-sm text-rose-600">{errors.image_url.message}</p> // Changed from avatar_url
               )}
-            </div>
+            </div >
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Script Link (Webhook)</label>
@@ -198,8 +198,8 @@ export function PersonForm({
               )}
               <p className="text-xs text-slate-500">Used for Manage Sheet sync.</p>
             </div>
-          </div>
-        </div>
+          </div >
+        </div >
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -289,7 +289,7 @@ export function PersonForm({
             )}
           </div>
         </div>
-      </div>
+      </div >
 
       <div className="sticky bottom-0 border-t border-slate-200 bg-white px-6 py-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -319,6 +319,6 @@ export function PersonForm({
           </div>
         </div>
       </div>
-    </form>
+    </form >
   )
 }

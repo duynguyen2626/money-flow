@@ -83,14 +83,45 @@ export function DebtCycleList({
             if (filterType === 'expense') return type === 'expense' && !txn.person_id
 
             if (filterType === 'cashback') {
+                // Ensure we only show transactions that actually earned cashback
+                // 1. Must be an expense (debt < 0 or expense) - technically debt is usually not cashback but logic allows it if configured
+                const amount = Number(txn.amount) || 0
+                if (amount >= 0 && txn.type === 'debt') return false // Debts you owe don't earn you cashback usually
+
+                // 2. Check for explicit positive cashback
+                let calculatedCashback = 0
                 if (txn.final_price !== null && txn.final_price !== undefined) {
-                    const absAmount = Math.abs(Number(txn.amount) || 0)
+                    const absAmount = Math.abs(amount)
                     const effectiveFinal = Math.abs(Number(txn.final_price))
-                    return absAmount > effectiveFinal
+                    if (absAmount > effectiveFinal) {
+                        calculatedCashback = absAmount - effectiveFinal
+                    }
+                } else if (txn.cashback_share_amount) {
+                    calculatedCashback = Number(txn.cashback_share_amount)
+                } else if (txn.cashback_share_percent && txn.cashback_share_percent > 0) {
+                    calculatedCashback = Math.abs(amount) * txn.cashback_share_percent
                 }
-                if (txn.cashback_share_amount) return Number(txn.cashback_share_amount) > 0
-                if (txn.cashback_share_percent && txn.cashback_share_percent > 0) return true
-                return false
+
+                // New: Include explicit Cashback Income matching DebtCycleList logic
+                // Check if note contains "cashback" (case insensitive) or metadata flag
+                if (type === 'income' && (txn.note?.toLowerCase().includes('cashback') || (txn.metadata as any)?.is_cashback)) {
+                }
+
+                // 3. New: Include Income transactions that are explicitly Cashback (e.g. "Cashback" in note/category)
+                if (txn.type === 'income') {
+                    // Simple heuristic: if category name contains "Cashback" or note contains "Cashback"
+                    // Since we don't have category name easily here (just ID), check note or metadata?
+                    // Assuming 'category_id' maps to a cashback category or user uses 'Cashback' in note.
+                    // The user mentioned "CASHBACK: 266,034" in global list.
+                    // Global list uses 'cashback' service likely.
+                    // Let's assume if it IS displayed in Global Cashback, it should be here.
+                    // For now, check if note contains "Cashback" (case insensitive)
+                    if (txn.note?.toLowerCase().includes('cashback') || (txn.metadata as any)?.is_cashback) {
+                        return true
+                    }
+                }
+
+                return calculatedCashback > 0
             }
 
             return true
@@ -121,13 +152,34 @@ export function DebtCycleList({
             groups.get(tag)?.push(txn)
         })
 
-        // 2. If a specific year is selected, ensure all 12 months exist
-        if (selectedYear && /^\d{4}$/.test(selectedYear)) {
+        // 2. If a specific year is selected, ensure we show the correct months
+        if (selectedYear) {
             const year = parseInt(selectedYear)
-            for (let month = 1; month <= 12; month++) {
-                const tag = `${year}-${String(month).padStart(2, '0')}`
-                if (!groups.has(tag)) {
-                    groups.set(tag, [])
+            const currentYear = new Date().getFullYear()
+
+            if (year === currentYear) {
+                // Show current month + 5 previous months (6 month window)
+                const now = new Date()
+                for (let i = 0; i < 6; i++) {
+                    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+                    // Strict Year Check: Only add if months belong to the selected year
+                    if (d.getFullYear() === year) {
+                        const tag = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+                        if (!groups.has(tag)) {
+                            groups.set(tag, [])
+                        }
+                    }
+                    // If we hit a month from previous year (e.g. Jan 2026 -> prev is Dec 2025), stop or continue?
+                    // Requirement: "filter year 2026: không được show Nov25"
+                    // So we implicitly stop adding to 'groups' for display if year mismatch, handled by the if-check above.
+                }
+            } else {
+                // Past/Future year: Show all 12 months
+                for (let month = 1; month <= 12; month++) {
+                    const tag = `${year}-${String(month).padStart(2, '0')}`
+                    if (!groups.has(tag)) {
+                        groups.set(tag, [])
+                    }
                 }
             }
         }
@@ -223,9 +275,11 @@ export function DebtCycleList({
         if (!selectedYear) return groupedCycles
         return groupedCycles.filter(g => {
             if (selectedYear === 'Other') return !isYYYYMM(g.tag)
-            return g.tag.startsWith(selectedYear)
+            // Strict check: tag MUST start with "YYYY-"
+            return g.tag.startsWith(`${selectedYear}-`)
         })
     }, [groupedCycles, selectedYear])
+
 
     const [internalActiveTag, setInternalActiveTag] = useState<string | null>(null)
     const activeTag = controlledActiveTag !== undefined ? controlledActiveTag : internalActiveTag
@@ -293,6 +347,14 @@ export function DebtCycleList({
         })
     }, [groupedCycles, selectedYear])
 
+    // Debug check: why outstandingFromPreviousYears might be empty?
+    // It relies on 'groupedCycles' having ALL years data.
+    // BUT 'groupedCycles' is built from 'filteredTransactions'.
+    // 'filteredTransactions' DOES NOT filter by year (good).
+    // So 'groupedCycles' should have 2025/2026 data.
+    // 'outstanding...Memo' filters for year < selectedYear.
+    // Ensure logical correctness: if selectedYear=2026, we want < 2026.
+
     const hasOutstandingFromPrevious = outstandingFromPreviousYears.length > 0
 
     const linkedGroup = useMemo(() =>
@@ -330,6 +392,7 @@ export function DebtCycleList({
         return date.toLocaleString('en-US', { month: 'short' })
     }
 
+
     if (groupedCycles.length === 0) {
         return (
             <div className="p-8 text-center text-slate-500 bg-slate-50 rounded-lg border border-slate-100 italic">
@@ -341,7 +404,36 @@ export function DebtCycleList({
     return (
         <div className="space-y-4">
             {/* Grouped Timeline Section: Year Filter + Timeline Cards */}
-            <div className="border border-slate-200 rounded-xl p-4 bg-white">
+            <div className="border border-slate-200 rounded-xl p-4 bg-white space-y-4">
+                {/* Outstanding Debts Vertical List (User Req: Expand vertically, push UI down) */}
+                {hasOutstandingFromPrevious && (
+                    <div className="flex flex-col gap-2 border-b border-slate-100 pb-4">
+                        <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide px-1">Outstanding Debts</div>
+                        <div className="flex flex-wrap gap-2">
+                            {outstandingFromPreviousYears.map(item => (
+                                <button
+                                    key={item.tag}
+                                    onClick={() => {
+                                        if (onYearChange) {
+                                            onYearChange(item.year.toString())
+                                        }
+                                        setActiveTag(item.tag)
+                                    }}
+                                    className="flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:border-amber-300 transition-colors"
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-bold">{getMonthName(item.tag).toUpperCase()} '{item.year.toString().slice(2)}</span>
+                                        <span className="bg-white/50 px-1.5 rounded text-[10px] font-bold">UNPAID</span>
+                                    </div>
+                                    <span className="text-sm font-bold tabular-nums">
+                                        {compactFormatter.format(Math.abs(item.remains))}
+                                    </span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Horizontal Scrollable Timeline Pills */}
                 <div className="relative">
                     <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide snap-x snap-mandatory pb-2">
@@ -361,22 +453,10 @@ export function DebtCycleList({
                             </button>
                         )}
 
-                        {/* Previous Outstanding */}
-                        {hasOutstandingFromPrevious && outstandingFromPreviousYears.map(item => (
-                            <button
-                                key={item.tag}
-                                onClick={() => {
-                                    if (onYearChange) {
-                                        onYearChange(item.year.toString())
-                                    }
-                                    setActiveTag(item.tag)
-                                }}
-                                className="flex-shrink-0 flex items-center gap-2 h-11 px-4 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 font-bold text-xs whitespace-nowrap snap-start shadow-sm hover:border-amber-300 min-w-[120px]"
-                            >
-                                <span>{getMonthName(item.tag).toUpperCase()} '{item.year.toString().slice(2)}</span>
-                                <span className="bg-amber-100 px-1.5 py-0.5 rounded text-[10px] tracking-wide">UNPAID</span>
-                            </button>
-                        ))}
+                        {/* Previous Outstanding - Now Vertical Stack ABOVE the horizontal list? Or just separate start? 
+                            User said "expand vertical". Let's move this OUT of the horizontal container. 
+                            See next replace block.
+                        */}
 
 
                         {visibleCycles.map((group) => {

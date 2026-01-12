@@ -2835,7 +2835,7 @@ export function TransactionForm({
       }
 
       const newPerson: Person = {
-        id: created.profileId,
+        id: created.profileId!,
         name: rawName,
         email: null,
         image_url: null,

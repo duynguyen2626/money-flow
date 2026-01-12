@@ -1,42 +1,46 @@
-# Handover: People Details UI Refactor (V2)
+# Handover: Transaction Table Layout Refactor
 
-## Current Status
-We have implemented the core UI requirements for the V2 People Details page (`/people/[id]/details`), but the user feels the UI is "going in circles". Technically, the changes **are active** (verified by screenshot showing new buttons), but the implementation approach (patching inline code vs. using components) might be the friction point.
+**Date:** Jan 12, 2026
+**Status:** Emergency Fix Complete
 
-## Work Completed
-1.  **Paid Transactions Modal Integration**:
-    -   Ported `PaidTransactionsModal` from V1 logic.
-    -   Integrated into `member-detail-view.tsx`.
-    -   Connects to "Paid" stats button.
+## Summary
+We have successfully refactored the Transaction Table (`TransactionRow.tsx`) to use a **Fixed-Width CSS Grid Layout**. This resolves critical issues with column alignment, overlapping badges, and layout shifts.
 
-2.  **UI Enhancements (Applied to Inline Code)**:
-    -   **Grouped Timeline**: Wrapped the year filter and timeline pills in a `border border-slate-200` container.
-    -   **Stats Bar**: Added a "Paid" button (purple, CheckCircle icon) to the inline stats bar.
-    -   **Order**: LEND -> REPAY -> CASHBACK -> PAID.
+## Key Changes
+1.  **Grid Layout**: Encapsulated in `ui_standards.md`. Flow column is now fixed at `480px`.
+2.  **Image Rendering**:
+    *   **Shop Icons**: `rounded-md` (Square).
+    *   **Person Avatars**: `rounded-full` (Circle).
+    *   **Account Images**: Original aspect ratio.
+3.  **Badges**: Standardized to `24px` height, removed duplicates.
 
-3.  **Fixes**:
-    -   Fixed `variant` prop issue in `SimpleTransactionTable.tsx`.
-    -   Resolved port 3000 conflict by killing the stuck process.
-
-## Known Issues / "Stickiness"
--   **Inline Code vs Components**: `member-detail-view.tsx` contains a large amount of inline layout code for the timeline and stats.
-    -   Ideally, this should be refactored to use `src/components/people/v2/DebtTimeline.tsx` and `StatsToolbar.tsx`.
-    -   My changes patched the *inline* code to get the visual result quickly, but a proper fix requires refactoring to use the dedicated components.
--   **User Perception**: The user reported "no change" or "circles" likely because:
-    a) They expected a cleaner component-based architecture.
-    b) The "Grouped Timeline" visual wasn't distinct enough from the previous state (needs verifying design specs).
+## Documentation
+*   [UI Standards](.agent/context/ui_standards.md): **READ THIS FIRST**. It contains the strict rules for the grid and images.
+*   [Gravity Rules](.agent/rules/gravityrules.md): (Note: might need manual update if agent failed to write) Contains the compliance rules.
 
 ## Next Steps for Next Agent
-1.  **Refactor**: STOP patching `member-detail-view.tsx` inline code.
-    -   **Action**: Replace the entire inline timeline section with `<DebtTimeline />`.
-    -   **Action**: Replace the entire inline stats section with `<StatsToolbar />`.
-2.  **Verify**: Ensure these components accept the correct props from `member-detail-view.tsx`.
-3.  **Debug**: Read `.agent/task/debug_ui_issues.md` for more context on the "ghost UI" issue (proven to be solved, but good context).
+1.  **Mobile Responsiveness**: The current fix targets Desktop (Grid). Mobile view (`block` layout) was touched but needs verification.
+2.  **Other Tables**: Check `PeopleDetails` and `AccountDetails` tables. They likely share Similar components but might not be using the new strict Grid yet.
+3.  **Legacy Code**: Continue removing any V1/V2 legacy components not in use.
 
-## Files Changed
--   `src/app/people/[id]/details/member-detail-view.tsx` (Core logic)
--   `src/components/people/paid-transactions-modal.tsx` (New component)
--   `src/components/people/v2/SimpleTransactionTable.tsx` (Bug fix)
+---
 
-## Branch
--   Work saved in: `fix/people-ui-v2-refactor`
+## Agent Prompt (Copy & Paste to Next Agent)
+
+```md
+@workspace We are continuing the "Transaction Layout Refactor".
+The previous agent established a STRICT Fixed-Width Grid Layout for the main Transaction Table and fixed Image Rendering rules.
+
+Your Logic State:
+1. READ `.agent/context/ui_standards.md` immediately. This is the Source of Truth.
+2. CHECK `src/components/transactions/TransactionRow.tsx` to understand the reference implementation.
+3. TASK:
+   - Verify Mobile Layout of Transaction Row (ensure it doesn't break).
+   - Audit `src/components/people/v2/SimpleTransactionTable.tsx` (or equivalent) and apply the same Image Rendering Rules (Shop=Square, Person=Circle).
+   - Do NOT break the Desktop Grid Layout (7 columns).
+
+Rules:
+- Person Avatars MUST be `rounded-full`.
+- Shop Icons MUST be `rounded-md`.
+- No currency symbols in amounts.
+```

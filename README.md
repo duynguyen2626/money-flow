@@ -1,36 +1,41 @@
-# Money Flow 3.0
+# Money Flow 3
 
-## 💰 Split Bill Architecture (Important for Devs/Agents)
+Money Flow 3 is a comprehensive personal finance application focused on transaction management, debt tracking, and spending analytics.
 
-### Data Model
-- **Parent Transaction (Expense)**:
-  - Records the **TOTAL** bill amount (e.g., 791k) to match Bank Statement.
-  - `person_id`: `null`.
-  - `metadata.is_split_bill`: `true`.
-  - `metadata.my_share`: The actual personal expense amount (e.g., 395k).
-  - `metadata.original_total_amount`: Same as Amount.
+## Tech Stack
 
-- **Child Transactions (Debt)**:
-  - Linked to Parent via `metadata.parent_transaction_id`.
-  - Represent money owed by others.
-  - `type`: `debt` (Lending).
-  - `metadata.skip_wallet_deduction`: `true` (Future proofing balance logic).
+- **Framework:** Next.js 15 (App Router)
+- **Language:** TypeScript
+- **Styling:** Tailwind CSS, Shadcn UI
+- **Database:** Supabase (PostgreSQL)
+- **State/Data:** React Server Components, Server Actions
 
-### 📊 Reporting Logic
-When calculating "My Expense" in reports:
-1. Check if `is_split_bill` is true.
-2. If true, use `metadata.my_share` as the expense amount.
-3. If false, use `amount`.
+## Core Features
 
----
+- **Transactions:** Income, Expense, Transfer, Debt, Repayment tracking.
+- **Accounts:** Management of bank accounts, wallets, credit cards.
+- **People:** Debt and shared expense tracking associated with people.
+- **Cashback:** Advanced cashback calculation and tracking.
+- **Services:** Subscription management.
 
-> [!IMPORTANT]
-> **Handover Status (Sprint 5.1):**
-> Current objective: Forcing Debt Account Auto-Selection in `TransactionForm.tsx`.
-> **Blocker:** Không update được Receivable accounts (Auto-pick failed). The aggressive auto-selection logic is written but awaiting successful build to verify.
+## Current Status: UI Refactor (Jan 2026)
+We are currently refactoring the core UI components to ensure strict consistency.
+- **Transaction Table**: Moved to a fixed-width CSS Grid layout.
+- **Image Rendering**: Strict rules for Shapes (Person=Circle, Shop=Rounded Square, Account=Original).
+- **Badges**: Standardized size (24px) and positioning.
+See `.agent/context/ui_standards.md` for detailed specs.
+
+## Project Structure
+
+- `src/app`: Page routes and layouts.
+- `src/components`: UI components (moneyflow, people, etc).
+- `src/lib`: Utilities and helpers.
+- `src/actions`: Server actions for data mutation.
+- `src/types`: TypeScript definitions.
 
 ## Getting Started
 
+<<<<<<< HEAD
 First, run the development server:
 
 ```bash
@@ -198,3 +203,13 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+=======
+1. Install dependencies:
+   ```bash
+   pnpm install
+   ```
+2. Run development server:
+   ```bash
+   pnpm dev
+   ```
+>>>>>>> origin/main

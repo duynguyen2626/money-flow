@@ -136,7 +136,6 @@ export async function getDebtAccounts(): Promise<DebtAccount[]> {
     supabase.from('people').select('id, name, image_url, sheet_link').in('id', personIds),
     Promise.all(personIds.map(id => getPersonDebt(id))),
   ])
-
   const profileMap = new Map<string, { name: string; image_url: string | null; sheet_link: string | null }>()
     ; (profilesRes.data ?? []).forEach((row: any) => {
       if (!row?.id) return

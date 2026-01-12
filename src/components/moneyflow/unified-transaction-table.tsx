@@ -2853,5 +2853,6 @@ export function UnifiedTransactionTable({
         isVisible={!!isExcelMode && selectedCells.size > 0}
       />
     </div >
+
   )
 }

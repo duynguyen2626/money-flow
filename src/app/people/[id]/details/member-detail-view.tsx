@@ -606,6 +606,8 @@ export function MemberDetailView({
                         people={people}
                         shops={shops}
                         searchTerm={searchTerm}
+                        context="person"
+                        contextId={person.id}
                     />
                 </div>
             )}
@@ -613,12 +615,14 @@ export function MemberDetailView({
             {activeTab === 'history' && (
                 <div className="flex-1 overflow-y-auto px-4 py-3">
                     <SimpleTransactionTable
-                        transactions={transactions}
+                        transactions={transactions.filter(t => !selectedYear || t.occurred_at?.startsWith(selectedYear))}
                         accounts={accounts}
                         categories={categories}
                         people={people}
                         shops={shops}
                         searchTerm={searchTerm}
+                        context="person"
+                        contextId={person.id}
                     />
                 </div>
             )}

@@ -199,10 +199,11 @@ export type TransactionWithDetails = TransactionRow & {
   category_name?: string;
   category_icon?: string | null;
   category_image_url?: string | null;
-  account_name?: string;
+  account_name?: string | null;
+  account_image_url?: string | null;
   source_name?: string | null;
-  destination_name?: string | null;
   source_image?: string | null;
+  destination_name?: string | null;
   destination_image?: string | null;
   cashback_share_percent?: number | null;
   cashback_share_fixed?: number | null;
@@ -234,6 +235,7 @@ export type TransactionWithDetails = TransactionRow & {
   destination_account_id?: string | null;
   target_account_id?: string | null;
   history_count?: number;
+  account_billing_cycle?: string | null;
 }
 
 export type CashbackCard = {
