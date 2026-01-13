@@ -27,12 +27,18 @@ export function TransactionsTable({
 
             {/* Float Header */}
             {/* "align header: chuyển thành float header ... match style với rows cards" */}
-            <div className="hidden md:flex items-center gap-4 px-4 py-3 mx-4 mt-4 bg-background/80 backdrop-blur-md border rounded-xl shadow-sm sticky top-4 z-20 text-xs font-semibold text-muted-foreground transition-all">
-                <div className="w-[100px] shrink-0">Date</div>
-                <div className="w-[380px] shrink-0">Details</div>
-                <div className="flex-1 min-w-[200px]">Flow (Source &rarr; Target)</div>
-                <div className="w-[300px] shrink-0 text-right pr-12">Amount</div>
-                <div className="w-[100px] text-right">Actions</div>
+            {/* Float Header */}
+            {/* "align header: chuyển thành float header ... match style với rows cards" */}
+            <div className="hidden md:grid grid-cols-[40px_80px_280px_480px_180px_200px_120px] gap-4 px-4 py-3 mx-4 mt-4 bg-background/80 backdrop-blur-md border rounded-xl shadow-sm sticky top-4 z-20 text-xs font-semibold text-muted-foreground transition-all items-center min-w-[1380px]">
+                <div className="flex justify-center">
+                    {/* Checkbox Placeholder */}
+                </div>
+                <div>Date</div>
+                <div>Details</div>
+                <div>Flow (Source &rarr; Target)</div>
+                <div className="text-right">Value</div>
+                <div className="text-right">Net Value</div>
+                <div className="text-right pr-2">Actions</div>
             </div>
 
             {/* Card List */}

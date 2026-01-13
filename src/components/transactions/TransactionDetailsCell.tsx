@@ -73,12 +73,12 @@ export function TransactionDetailsCell({ transaction, className }: TransactionDe
             <div className="flex items-start gap-2">
                 <div className="shrink-0 mt-0.5">
                     {transaction.shop_image_url ? (
-                        <div className="h-6 w-6 rounded-md bg-white border flex items-center justify-center overflow-hidden">
+                        <div className="h-10 w-10 rounded-md bg-white border flex items-center justify-center overflow-hidden">
                             <img src={transaction.shop_image_url} alt="Shop" className="w-full h-full object-contain" />
                         </div>
                     ) : (
-                        <div className="h-6 w-6 rounded-md bg-muted flex items-center justify-center">
-                            <CategoryIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                        <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center">
+                            <CategoryIcon className="h-5 w-5 text-muted-foreground" />
                         </div>
                     )}
                 </div>

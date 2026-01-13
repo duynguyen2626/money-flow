@@ -467,25 +467,34 @@ export async function confirmRefundAction(
   }
 }
 
-export async function getOriginalAccount(refundRequestId: string): Promise<string | null> {
+export async function getOriginalAccount(refundRequestId: string): Promise<{ id: string; name: string; type: string } | null> {
   const supabase = createClient();
   const { data: refundTxn } = await supabase.from('transactions').select('metadata').eq('id', refundRequestId).single();
 
   if (!refundTxn) return null;
+
   const meta: any = parseMetadata((refundTxn as any).metadata);
   const originalId = meta?.original_transaction_id || meta?.linked_transaction_id;
 
   if (!originalId) return null;
 
-  // Try to get account_id directly from header first
+  // Fetch account details directly
   const { data: originalTxn } = await supabase
     .from('transactions')
-    .select('account_id')
+    .select('account_id, accounts(name, type)')
     .eq('id', originalId)
     .single();
 
-  if (!originalTxn) return null;
-  return (originalTxn as any).account_id ?? null;
+  if (!originalTxn || !originalTxn.account_id) return null;
+
+  const accName = (originalTxn.accounts as any)?.name || 'Unknown Account';
+  const accType = (originalTxn.accounts as any)?.type || 'general';
+
+  return {
+    id: originalTxn.account_id,
+    name: accName,
+    type: accType
+  };
 }
 
 export async function restoreTransaction(id: string): Promise<boolean> {
@@ -852,12 +861,13 @@ export async function requestRefund(
   const lineMetadata = {
     original_note: safeExisting.note ?? null,
     original_category_id: safeExisting.category_id,
+    original_transaction_id: transactionId,
   }
 
-  const refundCategoryId = await resolveSystemCategory(supabase, 'Refund', 'expense');
+  const refundCategoryId = await resolveSystemCategory(supabase, 'Refund', 'income');
   if (!refundCategoryId) {
-    console.error('FATAL: "Refund" system category not found.');
-    return { success: false, error: 'Hệ thống chưa cấu hình danh mục Hoàn tiền.' }
+    console.error('FATAL: "Refund" system category (income) not found.');
+    return { success: false, error: 'Hệ thống chưa cấu hình danh mục Hoàn tiền (Income).' }
   }
 
   // Single-table insert for Refund Request
@@ -873,7 +883,7 @@ export async function requestRefund(
       account_id: REFUND_PENDING_ACCOUNT_ID,
       category_id: refundCategoryId,
       amount: safeAmount,
-      type: 'expense',
+      type: 'income',
       metadata: lineMetadata
     })
     .select()
@@ -905,6 +915,26 @@ export async function requestRefund(
   }
 
   return { success: true, refundTransactionId: requestTxn.id }
+}
+
+export async function cancelOrder(
+  transactionId: string
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const supabase = createClient()
+    const { data: txn } = await supabase.from('transactions').select('amount').eq('id', transactionId).single()
+
+    if (!txn) {
+      return { success: false, error: 'Transaction not found' }
+    }
+
+    // Cancel order is essentially a full refund
+    // We could add specific metadata if needed, but for now reuse requestRefund
+    return await requestRefund(transactionId, Math.abs(txn.amount), false)
+  } catch (error: any) {
+    console.error('Cancel order error:', error)
+    return { success: false, error: error.message }
+  }
 }
 
 export async function confirmRefund(
@@ -1165,3 +1195,5 @@ export async function getSplitChildrenAction(parentId: string) {
     note: txn.note
   }));
 }
+
+

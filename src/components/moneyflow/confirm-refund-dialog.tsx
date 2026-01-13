@@ -39,16 +39,25 @@ export function ConfirmRefundDialog({
             setIsLoadingDefault(true);
             setShowOtherAccounts(false);
             getOriginalAccount(transaction.id)
-                .then((id) => {
-                    if (id) {
-                        setDefaultAccountId(id);
-                        setSelectedAccountId(id);
+                .then((result) => {
+                    if (result && result.id) {
+                        // Check if in list
+                        const found = accounts.find(a => a.id === result.id);
+                        if (!found) {
+                            // OPTIONAL: Inject into list temporarily or just handle selection
+                            // For now, we trust the ID. If Combobox doesn't have it, it might show ID or nothing.
+                            // Better UX: Show a warning or just select it (if component supports value not in options)
+                            console.warn('Recommended account not in current list:', result.name);
+                        }
+                        setDefaultAccountId(result.id);
+                        setSelectedAccountId(result.id);
                     } else {
                         setDefaultAccountId(null);
                         setSelectedAccountId("");
-                        setShowOtherAccounts(true); // Auto-show if no default
+                        setShowOtherAccounts(true);
                     }
                 })
+                .catch(err => console.error('getOriginalAccount error:', err))
                 .finally(() => setIsLoadingDefault(false));
             setSearchTerm("");
         }
@@ -128,13 +137,13 @@ export function ConfirmRefundDialog({
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-green-700">
                         <CheckCircle2 className="h-5 w-5" />
-                        Xác nhận tiền về (Confirm Refund)
+                        Confirm Refund Received
                     </DialogTitle>
                 </DialogHeader>
 
                 <div className="py-4 space-y-4">
                     <div className="bg-slate-50 p-3 rounded-md border border-slate-100">
-                        <p className="text-sm text-slate-500 mb-1">Khoản tiền hoàn lại:</p>
+                        <p className="text-sm text-slate-500 mb-1">Refund Amount:</p>
                         <p className="text-2xl font-bold text-slate-800">
                             {new Intl.NumberFormat('en-US').format(Math.abs(transaction.amount))}
                         </p>
@@ -144,14 +153,14 @@ export function ConfirmRefundDialog({
                     </div>
 
                     <div className="space-y-3">
-                        <h3 className="text-sm font-medium text-slate-700">Khoản tiền này đã về tài khoản nào?</h3>
+                        <h3 className="text-sm font-medium text-slate-700">Where was this refund received?</h3>
 
                         {/* Default Account Section */}
                         {isLoadingDefault ? (
                             <div className="h-14 bg-slate-100 animate-pulse rounded-lg"></div>
                         ) : defaultAccount ? (
                             <div className="mb-2">
-                                <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Tài khoản gốc (Recommended)</p>
+                                <p className="text-xs font-semibold text-slate-500 mb-2 uppercase tracking-wide">Original Account (Recommended)</p>
                                 {renderAccountCard(defaultAccount)}
                             </div>
                         ) : null}
@@ -170,7 +179,7 @@ export function ConfirmRefundDialog({
                         {showOtherAccounts && (
                             <div className="space-y-2 pt-2 border-t">
                                 <div className="flex items-center justify-between">
-                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Tài khoản khác</p>
+                                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Other Accounts</p>
                                     {defaultAccount && (
                                         <button
                                             onClick={() => {

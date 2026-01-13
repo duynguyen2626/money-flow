@@ -88,6 +88,8 @@ import { normalizeMonthTag } from '@/lib/month-tag'
 import { ConfirmRefundDialog } from "./confirm-refund-dialog"
 import { TransactionHistoryModal } from './transaction-history-modal'
 import { AddTransactionDialog } from "./add-transaction-dialog"
+import { RequestRefundDialog } from "./request-refund-dialog"
+import { cancelOrder } from "@/actions/transaction-actions"
 import { ExcelStatusBar } from "@/components/ui/excel-status-bar"
 import { ColumnKey } from "@/components/app/table/transactionColumns"
 
@@ -189,6 +191,15 @@ export function UnifiedTransactionTable({
   const [tableData, setTableData] = useState<TransactionWithDetails[]>(() => data ?? transactions ?? [])
   const [updatingTxnIds, setUpdatingTxnIds] = useState<Set<string>>(new Set())
 
+  // Refund/Cancel Dialog State
+  const [isRefundOpen, setIsRefundOpen] = useState(false)
+  const [refundTarget, setRefundTarget] = useState<TransactionWithDetails | null>(null)
+  const [refundType, setRefundType] = useState<'refund' | 'cancel'>('refund')
+
+  // Confirm Refund Dialog State
+  const [confirmRefundOpen, setConfirmRefundOpen] = useState(false)
+  const [confirmRefundTxn, setConfirmRefundTxn] = useState<TransactionWithDetails | null>(null)
+
   useEffect(() => {
     setTableData(data ?? transactions ?? [])
   }, [data, transactions])
@@ -230,9 +241,11 @@ export function UnifiedTransactionTable({
     { key: "shop", label: "Note", defaultWidth: 250, minWidth: 180 },
     { key: "people", label: "People", defaultWidth: 150, minWidth: 120 },
     { key: "account", label: "Flow & Entity", defaultWidth: 280, minWidth: 220 },
-    { key: "amount", label: "Value", defaultWidth: 140, minWidth: 120 },
+    { key: "amount", label: "BASE", defaultWidth: 120, minWidth: 100 },
+    { key: "final_price", label: "Net Value", defaultWidth: 120, minWidth: 100 },
     { key: "category", label: "Category", defaultWidth: 180 },
     { key: "id", label: "ID", defaultWidth: 100 },
+    { key: "actions", label: "", defaultWidth: 80, minWidth: 60 },
   ]
   const mobileColumnOrder: ColumnKey[] = ["date", "shop", "category", "account", "amount"]
   const router = useRouter()
@@ -244,15 +257,16 @@ export function UnifiedTransactionTable({
     const initial: Record<ColumnKey, boolean> = {
       date: true,
       shop: true,
-      note: false, // Merged into Shop
-      category: true,
-      tag: false, // Merged into Account column (not in defaultColumns)
+      note: false,
+      category: false, // Merged into Shop (inline badge)
+      tag: false,
       account: true,
-      amount: true, // VALUE column (merged Amount + Final Price)
-      back_info: false, // Merged into Amount column (not in defaultColumns)
+      amount: true,
       final_price: true,
+      back_info: false,
       id: false,
       people: false,
+      actions: true,
     }
 
     if (hiddenColumns.length > 0) {
@@ -460,8 +474,6 @@ export function UnifiedTransactionTable({
   const [isRestoring, setIsRestoring] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [voidError, setVoidError] = useState<string | null>(null)
-  const [confirmRefundOpen, setConfirmRefundOpen] = useState(false)
-  const [confirmRefundTxn] = useState<TransactionWithDetails | null>(null)
   const [historyTarget, setHistoryTarget] = useState<TransactionWithDetails | null>(null)
   const [cloningTxn, setCloningTxn] = useState<TransactionWithDetails | null>(null)
   const [confirmDeletingTarget, setConfirmDeletingTarget] = useState<TransactionWithDetails | null>(null)
@@ -954,6 +966,8 @@ export function UnifiedTransactionTable({
     variant: 'popover' | 'sheet'
   ) => {
     const isSheet = variant === 'sheet'
+    const isPendingRefund = txn.account_id === REFUND_PENDING_ACCOUNT_ID
+    const hasRefundRequest = (txn.metadata as any)?.has_refund_request || (txn.metadata as any)?.refund_request_id
     const baseItemClass = isSheet
       ? "flex w-full items-center gap-3 px-4 py-3 text-sm font-semibold text-slate-700"
       : "flex w-full items-center gap-2 rounded px-3 py-1 text-left hover:bg-slate-50"
@@ -1040,6 +1054,44 @@ export function UnifiedTransactionTable({
           <Ban className="h-4 w-4" />
           <span>Void</span>
         </button>
+
+        {/* Refund & Cancel Actions - Restored */}
+        {!isPendingRefund && (
+          <>
+            <button
+              className={`${neutralItemClass} ${hasRefundRequest ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={!!hasRefundRequest}
+              onClick={event => {
+                event.stopPropagation();
+                setRefundTarget(txn);
+                setRefundType('refund');
+                setIsRefundOpen(true);
+                setActionMenuOpen(null);
+              }}
+            >
+              <RotateCcw className="h-4 w-4" />
+              <span>{hasRefundRequest ? 'Refund Requested' : 'Request Refund'}</span>
+            </button>
+            <button
+              className={`${dangerItemClass} ${hasRefundRequest ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={!!hasRefundRequest}
+              onClick={event => {
+                event.stopPropagation();
+                // For Cancel Order, we can reuse the dialog or call specialized handler
+                // If RequestRefundDialog doesn't support 'type', we might need to adjust it
+                // But for now, let's open it as refund but maybe pre-set
+                // Actually, let's use the same dialog but with a title change if possible
+                setRefundTarget(txn);
+                setRefundType('cancel');
+                setIsRefundOpen(true);
+                setActionMenuOpen(null);
+              }}
+            >
+              <Ban className="h-4 w-4" />
+              <span>{hasRefundRequest ? 'Order Cancelled' : 'Cancel Order (100%)'}</span>
+            </button>
+          </>
+        )}
         <button
           className={dangerItemClass}
           onClick={event => {
@@ -1067,9 +1119,11 @@ export function UnifiedTransactionTable({
             <span>View History</span>
           </button>
         )}
+        {/* Request Refund Dialog */}
       </>
     )
   }
+
 
   const renderRowActions = (txn: TransactionWithDetails, isVoided: boolean) => {
     const isMenuOpen = actionMenuOpen === txn.id
@@ -1391,10 +1445,13 @@ export function UnifiedTransactionTable({
                               </div>
                             </CustomTooltip>
 
-                            {/* Action Menu (Wrench Icon) */}
-                            <div className="relative flex ml-auto flex-shrink-0">
-                              {renderRowActions(txn, isVoided)}
-                            </div>
+                          </div>
+                        )
+                      }
+                      case "actions": {
+                        return (
+                          <div className="flex items-center justify-end w-full pr-1">
+                            {renderRowActions(txn, isVoided)}
                           </div>
                         )
                       }
@@ -1427,11 +1484,31 @@ export function UnifiedTransactionTable({
                           </CustomTooltip>
                         ) : null;
 
+                        const refundAccount = accounts.find(a => a.id === txn.account_id);
+                        // Check joined account name (txn.accounts) OR looked up account name
+                        const accountName = (txn.accounts as any)?.name || refundAccount?.name;
+                        const isPendingRefund = txn.account_id === REFUND_PENDING_ACCOUNT_ID || accountName === 'Pending Refunds (System)';
                         const refundBadge = refundSeq > 0 ? (
                           <CustomTooltip content={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
                             <div className="flex items-center justify-center rounded bg-purple-100 border border-purple-400 text-purple-700 px-1 py-0.5 shrink-0 transition-colors hover:bg-purple-200">
                               <RefreshCcw className="h-3 w-3" />
                               <span className="text-[10px] font-bold ml-1">{refundSeq}</span>
+                            </div>
+                          </CustomTooltip>
+                        ) : null;
+
+                        const confirmRefundBadge = isPendingRefund ? (
+                          <CustomTooltip content="Click to Confirm Refund">
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setConfirmRefundTxn(txn);
+                                setConfirmRefundOpen(true);
+                              }}
+                              className="flex items-center justify-center rounded bg-emerald-100 border border-emerald-400 text-emerald-700 px-1 py-0.5 shrink-0 transition-colors hover:bg-emerald-200 cursor-pointer ml-1"
+                            >
+                              <CheckCheck className="h-3 w-3" />
+                              <span className="text-[10px] font-bold ml-1">Confirm</span>
                             </div>
                           </CustomTooltip>
                         ) : null;
@@ -1446,16 +1523,14 @@ export function UnifiedTransactionTable({
                             {shopLogo ? (
                               <>
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={shopLogo} alt="" className="h-10 w-10 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none" />
+                                <img src={shopLogo} alt="" className="h-8 w-8 object-contain shrink-0 rounded-sm border-none ring-0 outline-none" />
                               </>
                             ) : (
-                              <div className={cn(
-                                "flex items-center justify-center h-10 w-10 !rounded-none !border-none ring-0 outline-none bg-slate-50 shrink-0"
-                              )}>
+                              <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-sm shrink-0">
                                 {txn.type === 'repayment' ? (
-                                  <Wallet className="h-5 w-5 text-orange-600" />
+                                  <Wallet className="h-4 w-4 text-orange-600" />
                                 ) : (
-                                  <ShoppingBasket className="h-5 w-5 text-slate-500" />
+                                  <ShoppingBasket className="h-4 w-4 text-slate-500" />
                                 )}
                               </div>
                             )}
@@ -1497,6 +1572,18 @@ export function UnifiedTransactionTable({
                                 ) : (
                                   <span className="text-slate-400 italic text-[0.9em]">No note</span>
                                 )}
+
+                                {/* Inline Category Badge */}
+                                {(() => {
+                                  const actualCategory = categories.find(c => c.id === txn.category_id);
+                                  const displayCategory = actualCategory?.name || txn.category_name;
+                                  if (!displayCategory) return null;
+                                  return (
+                                    <span className="inline-flex items-center justify-center rounded-sm bg-slate-100 border border-slate-200 px-1.5 h-4 text-[9px] font-bold text-slate-500 uppercase tracking-tight shrink-0 ml-1">
+                                      {displayCategory}
+                                    </span>
+                                  )
+                                })()}
                               </div>
 
                               {/* Row 2: Badges (Installment/Refund/Split) */}
@@ -1529,10 +1616,11 @@ export function UnifiedTransactionTable({
                                 }
 
                                 const hasBulkDebts = (metadata?.bulk_allocation?.debts?.length > 0) || (metadata?.bulkAllocation?.debts?.length > 0);
-                                return (installmentBadge || refundBadge || splitBadge || hasBulkDebts) && (
+                                return (installmentBadge || refundBadge || confirmRefundBadge || splitBadge || hasBulkDebts) && (
                                   <div className="flex items-center gap-1">
                                     {installmentBadge}
                                     {refundBadge}
+                                    {confirmRefundBadge}
                                     {splitBadge}
                                     {/* Repayment Counter Badge (Added to Shop Column) */}
                                     {hasBulkDebts && (() => {
@@ -1680,7 +1768,7 @@ export function UnifiedTransactionTable({
 
                         return (
                           <div className="flex items-center gap-1.5">
-                            <div className="flex items-center justify-center h-6 w-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">
+                            <div className="flex items-center justify-center h-8 w-8 rounded-sm bg-indigo-100 text-indigo-700 text-xs font-bold border border-indigo-200">
                               {personName.charAt(0).toUpperCase()}
                             </div>
                             <span className="text-sm font-medium text-slate-700 truncate max-w-[120px]" title={personName}>
@@ -1758,16 +1846,16 @@ export function UnifiedTransactionTable({
                               <CustomTooltip content={displayCategory}>
                                 <div className="shrink-0 cursor-help">
                                   {displayImage ? (
-                                    <div className="flex h-12 w-12 items-center justify-center">
+                                    <div className="flex h-8 w-8 items-center justify-center">
                                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img src={displayImage} alt="" className="h-full w-full object-contain rounded-none ring-0 outline-none" />
+                                      <img src={displayImage} alt="" className="h-full w-full object-contain rounded-sm ring-0 outline-none" />
                                     </div>
                                   ) : categoryIcon ? (
-                                    <div className="flex h-12 w-12 items-center justify-center bg-slate-50 rounded-sm text-xl border border-slate-200">
+                                    <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-sm text-sm border border-slate-200">
                                       {categoryIcon}
                                     </div>
                                   ) : (
-                                    <div className="flex h-12 w-12 items-center justify-center bg-slate-100 rounded-sm text-xs font-bold text-slate-500 border border-slate-200 uppercase">
+                                    <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-sm text-[10px] font-bold text-slate-500 border border-slate-200 uppercase">
                                       {displayCategory.slice(0, 1)}
                                     </div>
                                   )}
@@ -1920,11 +2008,11 @@ export function UnifiedTransactionTable({
                               {icon ? (
                                 <>
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
+                                  <img src={icon} alt="" className={cn("h-8 w-8 object-contain shrink-0 rounded-sm border-none ring-0 outline-none", isSquare ? "" : "")} />
                                 </>
                               ) : (
-                                <div className={cn("flex h-12 w-12 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
-                                  {link?.includes('people') ? <User className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
+                                <div className={cn("flex h-8 w-8 items-center justify-center bg-slate-100 shrink-0 text-slate-400 rounded-sm border-none ring-0 outline-none")}>
+                                  {link?.includes('people') ? <User className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
                                 </div>
                               )}
                             </div>
@@ -1935,11 +2023,11 @@ export function UnifiedTransactionTable({
                               {icon ? (
                                 <>
                                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={icon} alt="" className={cn("h-12 w-12 object-contain shrink-0 !rounded-none !border-none ring-0 outline-none", isSquare ? "" : "")} />
+                                  <img src={icon} alt="" className={cn("h-8 w-8 object-contain shrink-0 rounded-sm border-none ring-0 outline-none", isSquare ? "" : "")} />
                                 </>
                               ) : (
-                                <div className={cn("flex h-12 w-12 items-center justify-center bg-slate-100 shrink-0 text-slate-400 !rounded-none !border-none ring-0 outline-none")}>
-                                  {link?.includes('people') ? <User className="h-5 w-5" /> : <Wallet className="h-5 w-5" />}
+                                <div className={cn("flex h-8 w-8 items-center justify-center bg-slate-100 shrink-0 text-slate-400 rounded-sm border-none ring-0 outline-none")}>
+                                  {link?.includes('people') ? <User className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
                                 </div>
                               )}
 
@@ -1955,11 +2043,7 @@ export function UnifiedTransactionTable({
                                     </span>
                                   </CustomTooltip>
                                 </div>
-                                {badges.length > 0 && (
-                                  <div className="flex flex-wrap gap-1 mt-0.5">
-                                    {badges}
-                                  </div>
-                                )}
+                                {/* Badges Row Removed - Now displayed in Shop/Note column */}
                               </div>
                             </div>
                           )
@@ -2223,41 +2307,70 @@ export function UnifiedTransactionTable({
 
                         return (
                           <div className="flex flex-col items-end gap-1 w-full">
-                            {/* Amount with Cashback Badges - NO +/- signs */}
-                            <div className="flex items-center gap-1.5">
-                              <span
-                                className={cn("font-bold tabular-nums tracking-tight truncate", amountClass)}
-                                style={{ fontSize: `0.9em` }} // Standardized to 0.9em
-                              >
+                            <span
+                              className={cn("font-bold tabular-nums tracking-tight truncate", amountClass)}
+                              style={{ fontSize: `0.9em` }}
+                            >
+                              {numberFormatter.format(Math.abs(amount))}
+                            </span>
+                          </div>
+                        )
+                      }
+                      case "final_price": {
+                        const amount = typeof txn.amount === "number" ? txn.amount : 0
+                        const originalAmount = typeof txn.original_amount === "number" ? txn.original_amount : amount
+
+                        const percentDisp = Number(txn.cashback_share_percent ?? 0)
+                        const fixedDisp = Number(txn.cashback_share_fixed ?? 0)
+                        const rate = percentDisp > 1 ? percentDisp / 100 : percentDisp
+                        const cashbackCalc = (Math.abs(Number(originalAmount ?? 0)) * rate) + fixedDisp
+                        const cashbackAmount = txn.cashback_share_amount ?? (cashbackCalc > 0 ? cashbackCalc : 0);
+                        const baseAmount = Math.abs(Number(originalAmount ?? 0));
+                        const finalDisp = (typeof txn.final_price === 'number')
+                          ? Math.abs(txn.final_price)
+                          : (cashbackAmount > baseAmount ? baseAmount : Math.max(0, baseAmount - cashbackAmount));
+
+                        const hasCashback = percentDisp > 0 || fixedDisp > 0 || cashbackAmount > 0;
+                        const isRepayment = txn.type === 'repayment';
+                        const visualType = (txn as any).displayType ?? txn.type;
+                        const amountClass =
+                          visualType === "income" || isRepayment
+                            ? "text-emerald-700"
+                            : visualType === "expense"
+                              ? "text-red-500"
+                              : "text-slate-600"
+
+                        if (!hasCashback) {
+                          // If no cashback, Net = Base. Show same value or dimmed?
+                          // To align with "Base ... Net", we show it again or maybe just "-" if identical?
+                          // Usually showing it confirms the final settlement.
+                          return (
+                            <div className="flex flex-col items-end gap-1 w-full">
+                              <span className={cn("font-bold tabular-nums tracking-tight truncate opacity-80", amountClass)} style={{ fontSize: `0.9em` }}>
                                 {numberFormatter.format(Math.abs(amount))}
                               </span>
+                            </div>
+                          )
+                        }
+
+                        return (
+                          <div className="flex flex-col items-end gap-1 w-full">
+                            <div className="flex items-center gap-1.5 justify-end">
                               {/* Cashback Badges */}
                               {percentDisp > 0 && (
-                                <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700 border border-green-200">
                                   -{percentDisp > 1 ? percentDisp : percentDisp * 100}%
                                 </span>
                               )}
                               {fixedDisp > 0 && (
-                                <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-red-100 text-red-700 border border-red-200">
+                                <span className="inline-flex items-center px-1 py-0.5 rounded text-[9px] font-bold bg-green-100 text-green-700 border border-green-200">
                                   -{numberFormatter.format(fixedDisp)}
                                 </span>
                               )}
+                              <span className={cn("font-bold tabular-nums tracking-tight truncate", amountClass)} style={{ fontSize: `0.9em` }}>
+                                {numberFormatter.format(finalDisp)}
+                              </span>
                             </div>
-
-                            {/* Final Price - only show if has cashback */}
-                            {hasCashback && (
-                              <div className="flex items-center gap-1">
-                                <span className="text-xs text-slate-400">=</span>
-                                <span className="text-xs font-semibold text-slate-700">
-                                  {numberFormatter.format(finalDisp)}
-                                </span>
-                                {priceBreakdown && (
-                                  <CustomTooltip content={priceBreakdown}>
-                                    <Info className="h-3 w-3 text-slate-400 hover:text-slate-600 cursor-help" />
-                                  </CustomTooltip>
-                                )}
-                              </div>
-                            )}
                           </div>
                         )
                       }
@@ -2852,7 +2965,16 @@ export function UnifiedTransactionTable({
         count={selectedStats.count}
         isVisible={!!isExcelMode && selectedCells.size > 0}
       />
-    </div >
 
+      {/* Request Refund Dialog */}
+      {refundTarget && (
+        <RequestRefundDialog
+          open={isRefundOpen}
+          onOpenChange={setIsRefundOpen}
+          transaction={refundTarget}
+          type={refundType}
+        />
+      )}
+    </div>
   )
 }
