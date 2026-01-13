@@ -2,12 +2,13 @@
 
 import { useState, useMemo } from 'react'
 import { TransactionWithDetails, Account, Category, Person, Shop } from '@/types/moneyflow.types'
-import { TransactionsTable } from './TransactionsTable'
+import { UnifiedTransactionTable } from '../moneyflow/unified-transaction-table'
 import { TransactionToolbar, FilterType, StatusFilter } from './TransactionToolbar'
 import { DateRange } from 'react-day-picker'
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameMonth } from 'date-fns'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
-import { ConfirmRefundDialog } from '@/components/moneyflow/confirm-refund-dialog'
+import { ConfirmRefundDialogV2 } from '@/components/moneyflow/confirm-refund-dialog-v2'
+import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { voidTransactionAction } from '@/actions/transaction-actions'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -92,6 +93,11 @@ export function UnifiedTransactionsPage({
             // 0. Status Filter
             if (statusFilter === 'active' && t.status === 'void') return false
             if (statusFilter === 'void' && t.status !== 'void') return false
+            if (statusFilter === 'pending') {
+                const isPendingRefund = t.account_id === REFUND_PENDING_ACCOUNT_ID;
+                const isSystemPending = t.status === 'pending';
+                if (!isPendingRefund && !isSystemPending) return false;
+            }
 
             // 1. Date Filter
             const tDate = parseISO(t.occurred_at)
@@ -252,13 +258,15 @@ export function UnifiedTransactionsPage({
 
             {/* Content Section */}
             <div className="flex-1 overflow-hidden p-0 sm:p-4">
-                <TransactionsTable
+                <UnifiedTransactionTable
                     transactions={filteredTransactions}
-                    onEdit={handleEdit}
-                    onRefund={handleRefund}
-                    onVoid={handleVoid}
-                    selectedIds={selectedIds}
-                    onSelect={handleSelect}
+                    accounts={accounts}
+                    categories={categories}
+                    people={people}
+                    shops={shops}
+                    selectedTxnIds={selectedIds}
+                    onSelectTxn={handleSelect}
+                    context="general"
                 />
             </div>
 
@@ -296,7 +304,7 @@ export function UnifiedTransactionsPage({
             )}
 
             {isRefundOpen && refundTxn && (
-                <ConfirmRefundDialog
+                <ConfirmRefundDialogV2
                     open={isRefundOpen}
                     onOpenChange={setIsRefundOpen}
                     transaction={refundTxn}

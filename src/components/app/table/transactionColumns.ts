@@ -11,6 +11,7 @@ export type ColumnKey =
   | "final_price"
   | "id"
   | "people"
+  | "actions"
 
 export interface ColumnConfig {
   key: ColumnKey
@@ -27,6 +28,7 @@ export const defaultColumns: ColumnConfig[] = [
   { key: "category", label: "Category", defaultWidth: 180 },
   { key: "people", label: "People", defaultWidth: 150 },
   { key: "id", label: "ID", defaultWidth: 100 },
+  { key: "actions", label: "Actions", defaultWidth: 80 },
 ]
 
 export const mobileColumnOrder: ColumnKey[] = ["date", "shop", "category", "account", "amount"]

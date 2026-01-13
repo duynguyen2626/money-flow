@@ -3,7 +3,7 @@
 import React from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Search, Plus } from 'lucide-react'
+import { Search, Plus, Trash2, CheckCircle2, Clock } from 'lucide-react'
 import { Combobox } from '@/components/ui/combobox' // Assuming generic usage
 import { MonthYearPicker } from './MonthYearPicker'
 import { cn } from '@/lib/utils'
@@ -11,7 +11,7 @@ import { Account, Person } from '@/types/moneyflow.types'
 import { DateRange } from 'react-day-picker'
 
 export type FilterType = 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer' | 'cashback'
-export type StatusFilter = 'active' | 'void'
+export type StatusFilter = 'active' | 'void' | 'pending'
 
 interface TransactionToolbarProps {
     // Data
@@ -150,11 +150,11 @@ export function TransactionToolbar({
                     </div>
                 </div>
 
-                {/* 3. Search (Flex) */}
-                <div className="flex-1 min-w-[150px] relative">
+                {/* 3. Search (Flex) - Reduced Width */}
+                <div className="relative w-[180px] shrink-0">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Search notes, ID, people..."
+                        placeholder="Search..."
                         value={searchTerm}
                         onChange={(e) => onSearchChange(e.target.value)}
                         className="pl-9 pr-8 h-9 text-xs bg-muted/30"
@@ -198,7 +198,7 @@ export function TransactionToolbar({
                 )}
 
                 {/* 4. Type Filters */}
-                <div className="flex items-center gap-1 shrink-0 bg-muted/20 p-1 rounded-lg">
+                <div className="flex items-center gap-1 shrink-0 bg-muted/20 p-1 rounded-lg ml-auto">
                     {/* All Button */}
                     <button
                         onClick={() => onFilterChange('all')}
@@ -230,23 +230,41 @@ export function TransactionToolbar({
                 {/* 5. Status & Add */}
                 <div className="flex items-center gap-2 shrink-0 pl-2 border-l">
                     {/* Status Toggle */}
-                    <div className="flex bg-muted rounded-md p-0.5">
+                    <div className="flex bg-muted rounded-md p-0.5 gap-0.5">
                         <button
                             onClick={() => onStatusChange('active')}
                             className={cn(
-                                "px-2 py-1 text-[10px] font-bold uppercase rounded-sm transition-all",
-                                statusFilter === 'active' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                                "flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase rounded-sm transition-all",
+                                statusFilter === 'active'
+                                    ? "bg-emerald-100 text-emerald-700 shadow-sm"
+                                    : "text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50/50"
                             )}
                         >
+                            <CheckCircle2 className="h-3 w-3" />
                             Active
+                        </button>
+                        <button
+                            onClick={() => onStatusChange('pending')}
+                            className={cn(
+                                "flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase rounded-sm transition-all",
+                                statusFilter === 'pending'
+                                    ? "bg-amber-100 text-amber-700 shadow-sm"
+                                    : "text-muted-foreground hover:text-amber-600 hover:bg-amber-50/50"
+                            )}
+                        >
+                            <Clock className="h-3 w-3" />
+                            Pend
                         </button>
                         <button
                             onClick={() => onStatusChange('void')}
                             className={cn(
-                                "px-2 py-1 text-[10px] font-bold uppercase rounded-sm transition-all",
-                                statusFilter === 'void' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                                "flex items-center gap-1 px-2 py-1 text-[10px] font-bold uppercase rounded-sm transition-all",
+                                statusFilter === 'void'
+                                    ? "bg-slate-200 text-slate-700 shadow-sm"
+                                    : "text-muted-foreground hover:text-slate-700 hover:bg-slate-100"
                             )}
                         >
+                            <Trash2 className="h-3 w-3" />
                             Void
                         </button>
                     </div>

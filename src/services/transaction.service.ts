@@ -674,13 +674,36 @@ export async function updateTransaction(
   const { data: existing, error: fetchError } = await supabase
     .from("transactions")
     .select(
-      "id, occurred_at, note, tag, account_id, target_account_id, person_id, amount, type, shop_id, cashback_share_percent, cashback_share_fixed",
+      "id, occurred_at, note, tag, account_id, target_account_id, person_id, amount, type, shop_id, cashback_share_percent, cashback_share_fixed, metadata, status",
     )
     .eq("id", id)
     .maybeSingle();
 
   if (fetchError || !existing) {
     console.error("Failed to load transaction before update:", fetchError);
+    return false;
+  }
+
+  // 1. GUARD: Check for dependent transactions (Refund Chain)
+  // Prevent editing if this transaction is a parent
+
+  // Check linked_transaction_id column
+  const { data: linkedChildren } = await supabase
+    .from("transactions")
+    .select("id")
+    .neq("status", "void")
+    .eq("linked_transaction_id", id)
+    .limit(1);
+
+  if (linkedChildren && linkedChildren.length > 0) {
+    console.warn("Blocking update: Has linked dependent transactions.");
+    return false;
+  }
+
+  // Check metadata references
+  const meta = ((existing as any)?.metadata || {}) as any;
+  if (meta.has_refund_request) {
+    console.warn("Blocking update: Transaction has a refund request.");
     return false;
   }
 
@@ -940,9 +963,88 @@ export async function deleteTransaction(id: string): Promise<boolean> {
   // Fetch existing transaction INCLUDING person_id for sheet sync and installment_plan_id for auto-settle
   const { data: existing, error: fetchError } = await supabase
     .from("transactions")
-    .select("account_id, target_account_id, person_id, installment_plan_id")
+    .select("account_id, target_account_id, person_id, installment_plan_id, metadata, status")
     .eq("id", id)
     .maybeSingle();
+
+  if (fetchError || !existing) return false;
+
+  // 1. GUARD: Check for dependent transactions (Refund Chain)
+  // Prevent deleting if this transaction is a parent (e.g. Original of a Request, or Request of a Confirmation)
+
+  // Check linked_transaction_id column (used by Confirmation -> Request)
+  const { data: linkedChildren } = await supabase
+    .from("transactions")
+    .select("id")
+    .neq("status", "void")
+    .eq("linked_transaction_id", id)
+    .limit(1);
+
+  if (linkedChildren && linkedChildren.length > 0) {
+    // If we are deleting a Request (Tx 2), and a Confirmation (Tx 3) exists (linked by ID), block it.
+    console.warn("Blocking delete: Has linked dependent transactions.");
+    return false;
+    // Ideally we throw error, but function returns boolean. 
+    // UI `handleSingleDeleteConfirm` checks return value. 
+    // To show error message, we might need to change signature or handle upstream.
+    // For now, returning false triggers "Failed to delete transaction" message.
+  }
+
+  // Check metadata references (Original -> Request)
+  const meta = ((existing as any)?.metadata || {}) as any;
+  if (meta.has_refund_request) {
+    // This is Tx 1, and Tx 2 exists.
+    // We should really check if Tx 2 is still valid (not void/deleted), but assuming flag is accurate:
+    console.warn("Blocking delete: Transaction has a refund request.");
+    return false;
+  }
+
+  // 2. ROLLBACK LOGIC (Maintain Consistency when deleting Leaf Nodes)
+
+  // Case A: Deleting Confirmation (GD3) -> Revert Pending Refund (GD2) to 'waiting_refund' (or 'pending')
+  if (meta.is_refund_confirmation && meta.pending_refund_id) {
+    console.log(`[deleteTransaction] Deleting Confirmation ${id}. Reverting Pending ${meta.pending_refund_id} status.`);
+    await (supabase.from("transactions").update as any)({
+      status: "waiting_refund", // Revert to waiting for confirmation (Orange state)
+      // We don't delete the Request, just reset its status so it can be confirmed again.
+    }).eq("id", meta.pending_refund_id);
+
+    // Also revert Original Transaction (GD1) if it was marked as 'refunded'
+    if (meta.original_transaction_id) {
+      await (supabase.from("transactions").update as any)({
+        status: "waiting_refund"
+      }).eq("id", meta.original_transaction_id).eq("status", "refunded");
+    }
+  }
+
+  // Case B: Deleting Refund Request (GD2) -> Revert Original (GD1) to 'posted' & Clear Metadata
+  // Only if NOT a confirmation (which also has original_id)
+  if (meta.original_transaction_id && !meta.is_refund_confirmation) {
+    const { data: linkedReview } = await supabase.from('transactions').select('id, status').eq('linked_transaction_id', id).maybeSingle() as { data: { id: string, status: string } | null };
+    if (linkedReview && linkedReview.status !== 'void') {
+      // This should be caught by GUARD above, but double check.
+      return false;
+    }
+
+    console.log(`[deleteTransaction] Deleting Request ${id}. Cleaning Original ${meta.original_transaction_id}.`);
+    const { data: gd1 } = await supabase
+      .from("transactions")
+      .select("metadata")
+      .eq("id", meta.original_transaction_id)
+      .single();
+    if (gd1) {
+      const newMeta = { ...((gd1 as any).metadata || {}) };
+      delete newMeta.refund_status;
+      delete newMeta.refunded_amount;
+      delete newMeta.has_refund_request;
+      delete newMeta.refund_request_id;
+
+      await (supabase.from("transactions").update as any)({
+        status: "posted",
+        metadata: newMeta,
+      }).eq("id", meta.original_transaction_id);
+    }
+  }
 
   const { error } = await supabase.from("transactions").delete().eq("id", id);
   if (error) {
@@ -1276,6 +1378,7 @@ export async function requestRefund(
     status: "pending", // Yellow badge for pending
     metadata: {
       original_transaction_id: transactionId,
+      original_account_id: originalRow.account_id,
       refund_type: isPartial ? "partial" : "full",
       original_note: originalRow.note,
     },
@@ -1455,11 +1558,18 @@ export async function confirmRefund(
       .from("transactions")
       .select("status, metadata")
       .eq("id", pendingMeta.original_transaction_id)
-      .single();
-    if (original && (original as any).status === "waiting_refund") {
-      await (supabase.from("transactions").update as any)({
-        status: "refunded",
-      }).eq("id", pendingMeta.original_transaction_id);
+      .single() as { data: { status: string, metadata: any } | null };
+    if (original) {
+      const originalMeta = (original.metadata || {}) as any;
+      const newMeta = { ...originalMeta, refund_status: 'completed' };
+      const updatePayload: any = { metadata: newMeta };
+
+      // Also update status if currently waiting
+      if ((original as any).status === "waiting_refund") {
+        updatePayload.status = "refunded";
+      }
+
+      await (supabase.from("transactions").update as any)(updatePayload).eq("id", pendingMeta.original_transaction_id);
     }
   }
 

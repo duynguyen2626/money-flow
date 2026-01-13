@@ -57,7 +57,7 @@ export function TransactionFlowCell({ transaction, className }: TransactionFlowC
                             style={{ objectFit: 'contain' }}
                         />
                     ) : (
-                        <div className="w-[48px] h-[30px] border rounded-md bg-white flex items-center justify-center">
+                        <div className="w-[48px] h-[30px] border rounded-none bg-white flex items-center justify-center">
                             <span className="text-[10px] font-bold text-muted-foreground">{sourceName?.slice(0, 2)}</span>
                         </div>
                     )}
@@ -116,7 +116,7 @@ export function TransactionFlowCell({ transaction, className }: TransactionFlowC
 
                 {targetType === 'person' ? (
                     <Link href={`/people/${transaction.person_id}/details`} target="_blank">
-                        <div className="w-8 h-8 rounded-full overflow-hidden bg-indigo-600 cursor-pointer hover:ring-2 hover:ring-indigo-400 shrink-0">
+                        <div className="w-8 h-8 rounded-none overflow-hidden bg-indigo-600 cursor-pointer hover:ring-2 hover:ring-indigo-400 shrink-0">
                             {transaction.person_image_url || transaction.person?.image_url ? (
                                 <img
                                     src={transaction.person_image_url || transaction.person?.image_url}
@@ -131,7 +131,7 @@ export function TransactionFlowCell({ transaction, className }: TransactionFlowC
                         </div>
                     </Link>
                 ) : targetImg ? (
-                    <div className="w-10 h-10 rounded-md overflow-hidden bg-white flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-none overflow-hidden bg-white flex items-center justify-center shrink-0">
                         <img
                             src={targetImg}
                             alt={targetName}
@@ -139,7 +139,7 @@ export function TransactionFlowCell({ transaction, className }: TransactionFlowC
                         />
                     </div>
                 ) : (
-                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center border shrink-0">
+                    <div className="w-8 h-8 rounded-none bg-muted flex items-center justify-center border shrink-0">
                         <span className="text-[10px] font-bold opacity-50">{targetName?.slice(0, 2)}</span>
                     </div>
                 )}

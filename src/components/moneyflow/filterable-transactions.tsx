@@ -130,7 +130,8 @@ export function FilterableTransactions({
             back_info: false,
             final_price: true,
             id: false,
-            people: false, // Default hidden
+            people: false,
+            actions: true,
         }
         return initial
     })
