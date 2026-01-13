@@ -28,6 +28,7 @@ import {
   ChevronLeft,
   Edit,
   Clock,
+  Undo2,
   ArrowRightLeft,
   ArrowUpRight,
   ArrowDownLeft,
@@ -85,10 +86,12 @@ import { cn } from "@/lib/utils"
 import { parseCashbackConfig, getCashbackCycleRange } from '@/lib/cashback'
 import { formatCycleTag } from '@/lib/cycle-utils'
 import { normalizeMonthTag } from '@/lib/month-tag'
-import { ConfirmRefundDialog } from "./confirm-refund-dialog"
-import { TransactionHistoryModal } from './transaction-history-modal'
-import { AddTransactionDialog } from "./add-transaction-dialog"
+import { ConfirmRefundDialogV2 } from "./confirm-refund-dialog-v2"
+
 import { RequestRefundDialog } from "./request-refund-dialog"
+import { TransactionHistoryModal } from "./transaction-history-modal"
+
+import { AddTransactionDialog } from "./add-transaction-dialog"
 import { cancelOrder } from "@/actions/transaction-actions"
 import { ExcelStatusBar } from "@/components/ui/excel-status-bar"
 import { ColumnKey } from "@/components/app/table/transactionColumns"
@@ -1056,7 +1059,7 @@ export function UnifiedTransactionTable({
         </button>
 
         {/* Refund & Cancel Actions - Restored */}
-        {!isPendingRefund && (
+        {!isPendingRefund && txn.type === 'expense' && (
           <>
             <button
               className={`${neutralItemClass} ${hasRefundRequest ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -1488,16 +1491,74 @@ export function UnifiedTransactionTable({
                         // Check joined account name (txn.accounts) OR looked up account name
                         const accountName = (txn.accounts as any)?.name || refundAccount?.name;
                         const isPendingRefund = txn.account_id === REFUND_PENDING_ACCOUNT_ID || accountName === 'Pending Refunds (System)';
-                        const refundBadge = refundSeq > 0 ? (
-                          <CustomTooltip content={`Refund Step ${refundSeq} - ID: ${displayIdForBadge}`}>
-                            <div className="flex items-center justify-center rounded bg-purple-100 border border-purple-400 text-purple-700 px-1 py-0.5 shrink-0 transition-colors hover:bg-purple-200">
-                              <RefreshCcw className="h-3 w-3" />
-                              <span className="text-[10px] font-bold ml-1">{refundSeq}</span>
-                            </div>
-                          </CustomTooltip>
-                        ) : null;
+                        // BADGE LOGIC & CONFIRM BUTTON VISIBILITY
+                        const originalMetadata = (txn.metadata as any) ?? {};
 
-                        const confirmRefundBadge = isPendingRefund ? (
+                        // 1. isPendingRefund (For Confirm Button)
+                        // This logic determines if the "Confirm" button should show.
+                        // It serves Tx 2 (Request) which is NOT yet completed.
+                        const isOriginalTxn = Boolean(originalMetadata.original_transaction_id);
+                        const isRefundConfirmation = Boolean(originalMetadata.is_refund_confirmation);
+                        const isRefundRequest = isOriginalTxn && !isRefundConfirmation;
+
+                        const canConfirm = isRefundRequest && txn.status !== 'completed';
+
+                        // 2. VISUAL BADGES
+                        // Hourglass (Tx 1): Shows on Original if refund is requested but not fully refunded
+                        const refundStatus = originalMetadata.refund_status;
+                        // Show hourglass only if requested AND NOT completed
+                        const showHourglass = Boolean(originalMetadata.has_refund_request)
+                          && txn.status !== 'refunded'
+                          && refundStatus !== 'completed'
+                          && refundStatus !== 'refunded';
+
+                        // Reversed/Refunded Icon (Tx 1): Shows if refund is COMPLETED
+                        // This replaces the hourglass when the cycle is done (GD3 exists)
+                        const showReversed = Boolean(originalMetadata.has_refund_request)
+                          && (refundStatus === 'completed' || refundStatus === 'refunded' || txn.status === 'refunded');
+
+                        // Check (Tx 2): Shows on Request if it is Completed (Confirmed)
+                        const showCheck = isRefundRequest && txn.status === 'completed';
+
+                        // OK (Tx 3): Shows on Confirmation
+                        const showOK = isRefundConfirmation;
+
+                        let refundBadge = null;
+                        if (showHourglass) {
+                          refundBadge = (
+                            <CustomTooltip content="Refund Requested - Waiting for Confirmation">
+                              <div className="flex items-center justify-center rounded bg-amber-100 border border-amber-300 text-amber-700 px-1 py-0.5 shrink-0 ml-1">
+                                <Clock className="h-3 w-3" />
+                              </div>
+                            </CustomTooltip>
+                          );
+                        } else if (showReversed) {
+                          refundBadge = (
+                            <CustomTooltip content="Refund Completed">
+                              <div className="flex items-center justify-center rounded bg-slate-100 border border-slate-300 text-slate-700 px-1 py-0.5 shrink-0 ml-1">
+                                <Undo2 className="h-3 w-3" />
+                              </div>
+                            </CustomTooltip>
+                          );
+                        } else if (showCheck) {
+                          refundBadge = (
+                            <CustomTooltip content="Refund Confirmed">
+                              <div className="flex items-center justify-center rounded bg-emerald-100 border border-emerald-300 text-emerald-700 px-1 py-0.5 shrink-0 ml-1">
+                                <Check className="h-3 w-3" />
+                              </div>
+                            </CustomTooltip>
+                          );
+                        } else if (showOK) {
+                          refundBadge = (
+                            <CustomTooltip content="Refund Received (OK)">
+                              <div className="flex items-center justify-center rounded bg-indigo-100 border border-indigo-300 text-indigo-700 px-1 py-0.5 shrink-0 ml-1">
+                                <span className="text-[10px] font-bold">OK</span>
+                              </div>
+                            </CustomTooltip>
+                          );
+                        }
+
+                        const confirmRefundBadge = canConfirm ? (
                           <CustomTooltip content="Click to Confirm Refund">
                             <div
                               onClick={(e) => {
@@ -1505,7 +1566,7 @@ export function UnifiedTransactionTable({
                                 setConfirmRefundTxn(txn);
                                 setConfirmRefundOpen(true);
                               }}
-                              className="flex items-center justify-center rounded bg-emerald-100 border border-emerald-400 text-emerald-700 px-1 py-0.5 shrink-0 transition-colors hover:bg-emerald-200 cursor-pointer ml-1"
+                              className="flex items-center justify-center rounded bg-emerald-100 border border-emerald-400 text-emerald-700 px-1.5 py-0.5 shrink-0 transition-colors hover:bg-emerald-200 cursor-pointer ml-1"
                             >
                               <CheckCheck className="h-3 w-3" />
                               <span className="text-[10px] font-bold ml-1">Confirm</span>
@@ -2930,18 +2991,23 @@ export function UnifiedTransactionTable({
           document.body
         )
       }
-      <ConfirmRefundDialog
-        open={confirmRefundOpen}
-        onOpenChange={setConfirmRefundOpen}
-        transaction={confirmRefundTxn}
-        accounts={accounts}
-      />
+
       <TransactionHistoryModal
         transactionId={historyTarget?.id ?? ''}
         transactionNote={historyTarget?.note}
         isOpen={!!historyTarget}
         onClose={() => setHistoryTarget(null)}
       />
+      {confirmRefundTxn && (
+        <ConfirmRefundDialogV2
+          open={!!confirmRefundTxn}
+          onOpenChange={(open) => {
+            if (!open) setConfirmRefundTxn(null)
+          }}
+          transaction={confirmRefundTxn}
+          accounts={accounts}
+        />
+      )}
       {
         cloningTxn && (
           <AddTransactionDialog

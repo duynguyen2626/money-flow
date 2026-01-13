@@ -7,7 +7,7 @@ import { TransactionToolbar, FilterType, StatusFilter } from './TransactionToolb
 import { DateRange } from 'react-day-picker'
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameMonth } from 'date-fns'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
-import { ConfirmRefundDialog } from '@/components/moneyflow/confirm-refund-dialog'
+import { ConfirmRefundDialogV2 } from '@/components/moneyflow/confirm-refund-dialog-v2'
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { voidTransactionAction } from '@/actions/transaction-actions'
 import { toast } from 'sonner'
@@ -304,7 +304,7 @@ export function UnifiedTransactionsPage({
             )}
 
             {isRefundOpen && refundTxn && (
-                <ConfirmRefundDialog
+                <ConfirmRefundDialogV2
                     open={isRefundOpen}
                     onOpenChange={setIsRefundOpen}
                     transaction={refundTxn}
