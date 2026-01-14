@@ -8,8 +8,9 @@
 - `.agent/`:
     - `logs/`: Bug reports & error logs.
     - `task/`: Task documentation.
-    - `context/`: Project context & Google Scripts.
     - `rules/`: Project rules (`rules.md`).
+- `integrations/`:
+    - `google-sheets/`: Google Apps Scripts (People Sync, Batch Import).
 
 ## Application Status
 ### 1. Reverted Feature: Volunteer Cashback
