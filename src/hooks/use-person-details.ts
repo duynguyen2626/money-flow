@@ -12,6 +12,8 @@ interface DebtCycle {
     stats: {
         lend: number
         repay: number
+        originalLend: number
+        cashback: number
     }
     serverStatus?: any
     remains: number
@@ -137,9 +139,26 @@ export function usePersonDetails({
                     const type = txn.type
                     const isOutboundDebt = (type === 'debt' && (Number(txn.amount) || 0) < 0) || (type === 'expense' && !!txn.person_id)
 
+                    // Cashback Calculation
+                    let cashback = 0
+                    if (txn.final_price !== null && txn.final_price !== undefined) {
+                        const effectiveFinal = Math.abs(Number(txn.final_price))
+                        if (amount > effectiveFinal) {
+                            cashback = amount - effectiveFinal
+                        }
+                    } else if (txn.cashback_share_amount) {
+                        cashback = Number(txn.cashback_share_amount)
+                    } else if (txn.cashback_share_percent && txn.cashback_share_percent > 0) {
+                        cashback = amount * txn.cashback_share_percent
+                    }
+                    if (type === 'income' && (txn.note?.toLowerCase().includes('cashback') || (txn.metadata as any)?.is_cashback)) {
+                        cashback += amount
+                    }
+
                     if (isOutboundDebt) {
                         const effectiveFinal = txn.final_price !== null && txn.final_price !== undefined ? Math.abs(Number(txn.final_price)) : amount
-                        acc.lend += effectiveFinal
+                        acc.lend += effectiveFinal // This is NET LEND
+                        acc.originalLend += amount
                     }
 
                     if (type === 'repayment') {
@@ -149,9 +168,14 @@ export function usePersonDetails({
                     } else if (type === 'income' && !!txn.person_id) {
                         acc.repay += amount
                     }
+
+                    if (cashback > 0) {
+                        acc.cashback += cashback
+                    }
+
                     return acc
                 },
-                { lend: 0, repay: 0 }
+                { lend: 0, repay: 0, originalLend: 0, cashback: 0 }
             )
 
             // Get Server Status if available
@@ -161,9 +185,8 @@ export function usePersonDetails({
                 if (normalized) serverStatus = debtTagsMap.get(normalized)
             }
 
-            const remains = serverStatus && typeof serverStatus.remainingPrincipal === 'number'
-                ? serverStatus.remainingPrincipal
-                : stats.lend - stats.repay
+            // Trust local calculation for display correctness: Net Lend - Repay
+            const remains = stats.lend - stats.repay
 
             const isSettled = serverStatus ? serverStatus.status === 'settled' : (txns.length === 0 ? false : Math.abs(remains) < 100)
 

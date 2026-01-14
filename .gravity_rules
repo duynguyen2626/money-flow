@@ -42,7 +42,13 @@ Queries: Select specific columns, avoid select('*') when possible.
 
 4. Money Flow 3 Business Logic (CRITICAL)
 
-Refunds: Never modify a Parent transaction if it has a linked Void/Refund. Always check link_to_transaction_id.
+Refunds (V2):
+- **Flow**: Original (GD1) -> Request (GD2) -> Confirm (GD3).
+- **Constraints**:
+  - DELETE must follow LIFO order (3 -> 2 -> 1).
+  - REQUEST REFUND action restricted to `expense` type only.
+  - ICONS: GD1=`Undo2`(completed), GD2=`Clock`, GD3=`Check`/`OK`.
+- **Metadata**: GD1 must have `refund_status: 'completed'` when GD3 exists.
 
 Batches: When processing batches, check for duplicates using transaction_date, amount, and details.
 

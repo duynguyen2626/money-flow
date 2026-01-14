@@ -432,7 +432,10 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       if (isForPerson) {
         personDebts.push({
           ...txn,
-          remaining: Math.abs(txn.amount),
+          // Initialize remaining debt
+          // FIX: Use calculateFinalPrice (Net) so that Remaining is also Net-based.
+          // Previously it used Math.abs(debt.amount) which was Original Amount, causing discrepancy with Net Lend.
+          remaining: calculateFinalPrice(txn),
           links: [] as { repaymentId: string, amount: number }[]
         })
       }

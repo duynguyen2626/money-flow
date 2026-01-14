@@ -52,7 +52,7 @@ export function SimpleTransactionTable({
                 shops={shops}
                 context={context}
                 contextId={contextId}
-                hiddenColumns={['id', 'final_price', 'back_info', 'tag']}
+                hiddenColumns={['id', 'tag']}
             // note/shop is visible by default
             // people is visible by default
             // account, category, amount, date are visible by default    }}

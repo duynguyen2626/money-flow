@@ -56,6 +56,7 @@ export function SidebarNav({ className }: SidebarNavProps) {
         { title: "Refunds", href: "/transactions?filter=refund", icon: Undo2 } // Moved Refund here
       ]
     },
+    { title: "Cashback", href: "/cashback", icon: PieChart },
     { title: "Installments", href: "/installments", icon: Hourglass }, // Updated Icon
     {
       title: "Categories",
