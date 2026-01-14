@@ -1,6 +1,0 @@
-﻿.next/dev/types/routes.d.ts(116,3): error TS1128: Declaration or statement expected.
-.next/dev/types/routes.d.ts(116,4): error TS1128: Declaration or statement expected.
-.next/dev/types/routes.d.ts(117,4): error TS1109: Expression expected.
-.next/dev/types/routes.d.ts(117,6): error TS1109: Expression expected.
-.next/dev/types/routes.d.ts(118,4): error TS1109: Expression expected.
-.next/dev/types/routes.d.ts(124,1): error TS1160: Unterminated template literal.
