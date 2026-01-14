@@ -65,3 +65,8 @@ Installments: Installments are linked to transaction_lines. Do not double-count 
    Testing:
    - Vitest is configured. Run `npm test` (if available) or minimally ensure `npm run build` passes.
    - Any Types: PROHIBITED. Fix them, do not cast as any unless absolutely necessary for external libraries.
+   
+7. Database Schema & Migrations
+   - Schema File: `database/schema.sql`.
+   - Migrations: `database/migrations/`.
+   - DO NOT create migrations in other folders.

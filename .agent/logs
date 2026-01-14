@@ -1,0 +1,73 @@
+Run pnpm lint
+
+> money-flow-3@0.1.0 lint /home/runner/work/money-flow-3/money-flow-3
+> eslint
+
+
+/home/runner/work/money-flow-3/money-flow-3/.agent/context/google-scripts/batch-manage/Code.js
+Warning:    5:10  warning  'doPost' is defined but never used  @typescript-eslint/no-unused-vars
+Warning:   30:72  warning  'ignore' is defined but never used  @typescript-eslint/no-unused-vars
+Warning:   82:26  warning  'e' is defined but never used       @typescript-eslint/no-unused-vars
+
+/home/runner/work/money-flow-3/money-flow-3/.agent/context/google-scripts/batch-manage/push-sheet.mjs
+Warning:   109:7  warning  'chooseProfile' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+/home/runner/work/money-flow-3/money-flow-3/.agent/context/google-scripts/people-manage/Code.js
+Warning:    19:10  warning  'createManualTestSheet' is defined but never used  @typescript-eslint/no-unused-vars
+Warning:    33:10  warning  'manualFormat' is defined but never used           @typescript-eslint/no-unused-vars
+Warning:    34:10  warning  'manualSort' is defined but never used             @typescript-eslint/no-unused-vars
+Warning:    36:10  warning  'doPost' is defined but never used                 @typescript-eslint/no-unused-vars
+Warning:   217:9   warning  'isNew' is assigned a value but never used         @typescript-eslint/no-unused-vars
+Warning:   247:14  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   305:76  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   308:82  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   348:14  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   425:14  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   438:14  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   482:77  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   559:69  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   560:53  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   562:50  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   563:53  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   571:14  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   576:41  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   581:14  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   585:63  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   586:63  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+Warning:   620:14  warning  'e' is defined but never used                      @typescript-eslint/no-unused-vars
+
+/home/runner/work/money-flow-3/money-flow-3/.agent/moneyflow---people-management/App.tsx
+Warning:    15:3   warning  'ArrowRight' is defined but never used    @typescript-eslint/no-unused-vars
+Warning:   180:56  warning  'idx' is defined but never used           @typescript-eslint/no-unused-vars
+Error:   221:66  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+Error:   222:23  error    Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/runner/work/money-flow-3/money-flow-3/.agent/moneyflow---people-management/components/AccountCard.tsx
+Error:   1808:12  error    Unexpected any. Specify a different type                                                               @typescript-eslint/no-explicit-any
+Error:   1825:52  error    Unexpected any. Specify a different type                                                               @typescript-eslint/no-explicit-any
+Error:   1838:45  error    Unexpected any. Specify a different type                                                               @typescript-eslint/no-explicit-any
+Error:   1847:39  error    Unexpected any. Specify a different type                                                               @typescript-eslint/no-explicit-any
+Error:   1858:42  error    Unexpected any. Specify a different type                                                               @typescript-eslint/no-explicit-any
+Error:   1859:51  error    Unexpected any. Specify a different type                                                               @typescript-eslint/no-explicit-any
+Error:   1861:34  error    Unexpected any. Specify a different type                                                               @typescript-eslint/no-explicit-any
+Error:   1862:41  error    Unexpected any. Specify a different type                                                               @typescript-eslint/no-explicit-any
+Error:   1865:41  error    Unexpected any. Specify a different type                                                               @typescript-eslint/no-explicit-any
+Error:   1867:42  error    Unexpected any. Specify a different type                                                               @typescript-eslint/no-explicit-any
+Error:   1877:36  error    Unexpected any. Specify a different type                                                               @typescript-eslint/no-explicit-any
+
+/home/runner/work/money-flow-3/money-flow-3/src/services/webhook-link.service.ts
+Error:   11:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+Error:   26:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+Error:   38:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+/home/runner/work/money-flow-3/money-flow-3/src/types/database.types.ts
+Error:   69:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+Error:   72:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+Error:   75:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+Error:   78:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 1579 problems (1016 errors, 563 warnings)
+  11 errors and 3 warnings potentially fixable with the `--fix` option.
+
+ ELIFECYCLE  Command failed with exit code 1.
+Error: Process completed with exit code 1.
