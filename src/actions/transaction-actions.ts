@@ -340,7 +340,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     .from('transactions')
     .select('id, status')
     .neq('status', 'void')
-    .eq('linked_transaction_id', id)) as { data: { id: string }[], error: unknown };
+    .eq('linked_transaction_id', id)) as unknown as { data: { id: string }[], error: unknown };
 
   // 2. Find Parent (Transaction this one points to)
   let linkedParentId: string | null = null;
