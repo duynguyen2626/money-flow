@@ -19,7 +19,7 @@ export async function getSheetWebhookLinks(): Promise<SheetWebhookLink[]> {
         console.warn('sheet_webhook_links not available or failed to fetch', error)
         return []
     }
-    return data || []
+    return (data as unknown as SheetWebhookLink[]) || []
 }
 
 export async function createSheetWebhookLink(payload: { name: string; url: string }) {
@@ -31,7 +31,7 @@ export async function createSheetWebhookLink(payload: { name: string; url: strin
         .single()
 
     if (error) throw error
-    return data as SheetWebhookLink
+    return data as unknown as SheetWebhookLink
 }
 
 export async function deleteSheetWebhookLink(id: string) {
