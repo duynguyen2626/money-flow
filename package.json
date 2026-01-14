@@ -7,14 +7,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "sheet:people": "node google-scripts/people-manage/push-sheet.mjs --prefix PEOPLE_SHEET_",
-    "sheet:people:1": "node google-scripts/people-manage/push-sheet.mjs --prefix PEOPLE_SHEET_",
-    "sheet:people:2": "node google-scripts/people-manage/push-sheet.mjs --prefix PEOPLE_SHEET_",
-    "sheet:people:3": "node google-scripts/people-manage/push-sheet.mjs --prefix PEOPLE_SHEET_",
-    "sheet:batch": "node google-scripts/batch-manage/push-sheet.mjs --prefix BATCH_SHEET_",
-    "sheet:batch:1": "node google-scripts/batch-manage/push-sheet.mjs --prefix BATCH_SHEET_",
-    "sheet:batch:2": "node google-scripts/batch-manage/push-sheet.mjs --prefix BATCH_SHEET_",
-    "sheet:batch:3": "node google-scripts/batch-manage/push-sheet.mjs --prefix BATCH_SHEET_"
+    "sheet:people": "node integrations/google-sheets/people-sync/push-sheet.mjs --prefix PEOPLE_SHEET_",
+    "sheet:people:1": "node integrations/google-sheets/people-sync/push-sheet.mjs --prefix PEOPLE_SHEET_",
+    "sheet:people:2": "node integrations/google-sheets/people-sync/push-sheet.mjs --prefix PEOPLE_SHEET_",
+    "sheet:people:3": "node integrations/google-sheets/people-sync/push-sheet.mjs --prefix PEOPLE_SHEET_",
+    "sheet:batch": "node integrations/google-sheets/batch-sync/push-sheet.mjs --prefix BATCH_SHEET_",
+    "sheet:batch:1": "node integrations/google-sheets/batch-sync/push-sheet.mjs --prefix BATCH_SHEET_",
+    "sheet:batch:2": "node integrations/google-sheets/batch-sync/push-sheet.mjs --prefix BATCH_SHEET_",
+    "sheet:batch:3": "node integrations/google-sheets/batch-sync/push-sheet.mjs --prefix BATCH_SHEET_"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

@@ -35,6 +35,11 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
     maximumFractionDigits: 0,
 })
 
+const compactNumberFormatter = new Intl.NumberFormat('en-US', {
+    notation: 'compact',
+    maximumFractionDigits: 1,
+})
+
 function getMonthName(tag: string, includeYear: boolean = false) {
     if (!isYYYYMM(tag)) return tag
     const month = parseInt(tag.split('-')[1], 10)
@@ -422,88 +427,66 @@ export function MemberDetailView({
                                     )}
                                 </div>
 
-                                {/* Filter Buttons */}
-                                <button
-                                    onClick={() => setFilterType('all')}
-                                    className={cn(
-                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all border",
-                                        filterType === 'all'
-                                            ? "bg-rose-50 text-rose-700 border-rose-200 shadow-sm"
-                                            : "border-slate-200 hover:bg-slate-50 hover:border-slate-300"
-                                    )}
-                                >
-                                    <Wallet className="h-3.5 w-3.5" />
-                                    <span className="text-slate-500 font-medium">REMAINS:</span>
-                                    <span className="text-rose-600 font-bold">{numberFormatter.format(activeCycle.remains)}</span>
-                                </button>
+                                {/* Original Lend Badge */}
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs">
+                                    <span className="text-slate-500 font-medium uppercase">Original:</span>
+                                    <span className="font-bold text-slate-700">{numberFormatter.format(activeCycle.stats.originalLend)}</span>
+                                </div>
 
-                                {/* LEND Filter Button */}
+                                {/* Cashback Badge */}
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded text-xs">
+                                    <span className="text-amber-600 font-medium uppercase">Cashback:</span>
+                                    <span className="font-bold text-amber-700">{numberFormatter.format(activeCycle.stats.cashback)}</span>
+                                </div>
+
+                                {/* Net Lend (Filter Trigger) */}
                                 <button
                                     onClick={() => setFilterType('lend')}
                                     className={cn(
-                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all border-2",
-                                        filterType === 'lend'
-                                            ? "bg-blue-500 text-white border-blue-500 shadow-sm"
-                                            : "border-blue-300 text-blue-700 hover:bg-blue-500 hover:text-white hover:border-blue-500"
+                                        "flex items-center gap-1.5 px-3 py-1.5 border rounded transition-all text-xs",
+                                        filterType === 'lend' ? "bg-blue-100 border-blue-400" : "bg-blue-50 border-blue-200 hover:bg-blue-100"
                                     )}
                                 >
-                                    <ArrowUpRight className="h-3.5 w-3.5" />
-                                    <span className="font-medium">LEND:</span>
-                                    <span className="font-bold">{numberFormatter.format(activeCycle.stats.lend)}</span>
+                                    <span className="text-blue-600 font-medium uppercase flex items-center gap-1">
+                                        Net Lend:
+                                    </span>
+                                    <span className="font-bold text-blue-700">{numberFormatter.format(activeCycle.stats.lend)}</span>
+                                    <span className="text-[10px] text-blue-500 font-normal ml-1">
+                                        ({compactNumberFormatter.format(activeCycle.stats.originalLend)} - {compactNumberFormatter.format(activeCycle.stats.cashback)})
+                                    </span>
                                 </button>
 
-                                {/* REPAY Filter Button */}
+                                {/* Repay (Filter Trigger) */}
                                 <button
                                     onClick={() => setFilterType('repay')}
                                     className={cn(
-                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all border-2",
-                                        filterType === 'repay'
-                                            ? "bg-emerald-500 text-white border-emerald-500 shadow-sm"
-                                            : "border-emerald-300 text-emerald-700 hover:bg-emerald-500 hover:text-white hover:border-emerald-500"
+                                        "flex items-center gap-1.5 px-3 py-1.5 border rounded transition-all text-xs",
+                                        filterType === 'repay' ? "bg-emerald-100 border-emerald-400" : "bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
                                     )}
                                 >
-                                    <ArrowDownLeft className="h-3.5 w-3.5" />
-                                    <span className="font-medium">REPAY:</span>
-                                    <span className="font-bold">{numberFormatter.format(activeCycle.stats.repay)}</span>
+                                    <span className="text-emerald-600 font-medium uppercase flex items-center gap-1">
+                                        Repay:
+                                    </span>
+                                    <span className="font-bold text-emerald-700">{numberFormatter.format(activeCycle.stats.repay)}</span>
                                 </button>
 
-                                {/* Cashback Filter Button */}
+                                {/* Remains (Filter Trigger) */}
                                 <button
-                                    onClick={() => setFilterType('cashback')}
+                                    onClick={() => setFilterType('all')}
                                     className={cn(
-                                        "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs transition-all border",
-                                        filterType === 'cashback'
-                                            ? "bg-amber-50 text-amber-700 border-amber-200 shadow-sm"
-                                            : "border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                                        "flex items-center gap-1.5 px-3 py-1.5 border-2 rounded-md transition-all relative group text-xs",
+                                        filterType === 'all'
+                                            ? "bg-rose-50 border-rose-400 shadow-sm"
+                                            : "bg-white border-slate-200 hover:border-rose-300"
                                     )}
                                 >
-                                    <Gift className="h-3.5 w-3.5" />
-                                    <span className="text-slate-500 font-medium">CASHBACK:</span>
-                                    <span className="text-amber-600 font-bold">
-                                        {numberFormatter.format(
-                                            activeCycle.transactions.reduce((sum, t) => {
-                                                const amount = Math.abs(Number(t.amount) || 0)
-                                                let cashback = 0
+                                    <span className="text-slate-500 font-bold uppercase">REMAINS:</span>
+                                    <span className="font-bold text-rose-600">{numberFormatter.format(activeCycle.remains)}</span>
 
-                                                if (t.final_price !== null && t.final_price !== undefined) {
-                                                    const effectiveFinal = Math.abs(Number(t.final_price))
-                                                    if (amount > effectiveFinal) {
-                                                        cashback = amount - effectiveFinal
-                                                    }
-                                                } else if (t.cashback_share_amount) {
-                                                    cashback = Number(t.cashback_share_amount)
-                                                } else if (t.cashback_share_percent && t.cashback_share_percent > 0) {
-                                                    cashback = amount * t.cashback_share_percent
-                                                }
-
-                                                if (t.type === 'income' && (t.note?.toLowerCase().includes('cashback') || (t.metadata as any)?.is_cashback)) {
-                                                    cashback += amount
-                                                }
-
-                                                return sum + cashback
-                                            }, 0)
-                                        )}
-                                    </span>
+                                    {/* Tooltip on Hover */}
+                                    <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+                                        Remains = Net Lend - Repay
+                                    </div>
                                 </button>
                             </div>
 

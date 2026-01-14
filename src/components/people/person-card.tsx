@@ -310,21 +310,14 @@ function PersonCardComponent({
                         />
                     </div>
 
-                    {/* View Details Button with Loading Indicator */}
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-full rounded-lg border border-slate-100 bg-white shadow-sm text-blue-500 hover:text-blue-600 hover:border-blue-200 transition-colors"
-                        onClick={(e) => openDetails(e)}
+                    {/* View Details Button as Link */}
+                    <Link
+                        href={`/people/${person.id}/details`}
+                        className="h-8 w-full rounded-lg border border-slate-100 bg-white shadow-sm text-blue-500 hover:text-blue-600 hover:border-blue-200 transition-colors flex items-center justify-center"
                         title="View Details"
-                        disabled={isPending}
                     >
-                        {isPending ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                            <Eye className="w-3.5 h-3.5" />
-                        )}
-                    </Button>
+                        <Eye className="w-3.5 h-3.5" />
+                    </Link>
                 </div>
 
                 {/* Hidden Modals/Dialogs kept for functionality */}

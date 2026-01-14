@@ -87,6 +87,7 @@ async function ensureCycle(
       .select('id')
       .eq('account_id', accountId)
       .eq('cycle_tag', cycleTag)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .maybeSingle() as any;
 
     if (retry) return { id: retry.id, tag: cycleTag };
@@ -482,7 +483,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
     date.setMonth(date.getMonth() + monthOffset);
   }
 
-  let query = supabase.from('accounts').select('id, name, type, cashback_config, image_url').eq('type', 'credit_card');
+  let query = supabase.from('accounts').select('id, name, type, cashback_config, image_url').in('type', ['credit_card', 'debt']);
   if (accountIds && accountIds.length > 0) {
     query = query.in('id', accountIds);
   }
@@ -492,7 +493,38 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
   const results: CashbackCard[] = [];
 
   for (const acc of accounts) {
-    if (!acc.cashback_config) continue;
+    if (!acc.cashback_config) {
+      // Return basic info for accounts without cashback config (e.g. Volunteer/Debt)
+      results.push({
+        accountId: acc.id,
+        accountName: acc.name,
+        accountLogoUrl: acc.image_url,
+        currentSpend: 0,
+        totalEarned: 0,
+        sharedAmount: 0,
+        netProfit: 0,
+        maxCashback: null,
+        progress: 0,
+        rate: 0,
+        spendTarget: null,
+        cycleStart: null,
+        cycleEnd: null,
+        cycleLabel: 'N/A',
+        cycleType: 'calendar_month',
+        transactions: [],
+        minSpend: null,
+        minSpendMet: true,
+        minSpendRemaining: null,
+        remainingBudget: null,
+        cycleOffset: 0,
+        min_spend_required: null,
+        total_spend_eligible: 0,
+        is_min_spend_met: true,
+        missing_min_spend: null,
+        potential_earned: 0
+      });
+      continue;
+    }
     const config = parseCashbackConfig(acc.cashback_config, acc.id);
     const cycleRange = getCashbackCycleRange(config, date);
     const tagDate = cycleRange?.end ?? date;
@@ -952,6 +984,157 @@ export async function getCashbackCycleOptions(accountId: string, limit: number =
       label,
       cycleType: config.cycleType,
       statementDay: config.statementDay,
+    };
+  });
+}
+
+/**
+ * MF7.4: Aggregates cashback analytics for a specific year.
+ * Focuses on Calendar Month aggregation for Spend & Share.
+ */
+export async function getCashbackYearAnalytics(year: number): Promise<import('@/types/cashback.types').CashbackYearSummary[]> {
+  const supabase = createAdminClient() as any;
+
+  // 1. Get credit cards and debt accounts (for volunteer/loans)
+  const { data: cards, error: cardError } = await supabase
+    .from('accounts')
+    .select('id, name, annual_fee, type')
+    .eq('type', 'credit_card')
+    .eq('is_active', true);
+
+  if (cardError || !cards) {
+    console.error('[getCashbackYearAnalytics] Failed to fetch cards:', cardError);
+    return [];
+  }
+
+  const cardIds = cards.map((c: any) => c.id);
+  console.log(`[getCashbackYearAnalytics] Found ${cardIds.length} cards/debt-accounts:`, cards.map((c: any) => `${c.name} (${c.type})`).join(', '));
+
+  if (cardIds.length === 0) return [];
+
+  const startDate = `${year}-01-01`;
+  const endDate = `${year}-12-31T23:59:59`;
+
+  // 2. Batch Fetch Transactions (Single Query)
+  const { data: allTxns } = await supabase
+    .from('transactions')
+    .select(`
+        id, amount, occurred_at, type, category_id, account_id, cashback_mode,
+        cashback_entries ( amount )
+      `)
+    .in('account_id', cardIds)
+    .gte('occurred_at', startDate)
+    .lte('occurred_at', endDate) as any;
+
+  // 3. Batch Fetch Redeemed (Income 'Hoàn tiền (Cashback)')
+  const { data: allRedeemed } = await supabase
+    .from('transactions')
+    .select('amount, account_id')
+    .in('account_id', cardIds)
+    .gte('occurred_at', startDate)
+    .lte('occurred_at', endDate)
+    .eq('type', 'income')
+    .eq('category_id', 'e0000000-0000-0000-0000-000000000092');
+
+  const results: import('@/types/cashback.types').CashbackYearSummary[] = [];
+  const { computeCardCashbackProfit } = await import('@/lib/analytics-utils');
+
+  for (const card of cards) {
+    // A. Filter Data in Memory
+    const cardTxns = (allTxns || []).filter((t: any) => t.account_id === card.id);
+    const cardRedeemedTxns = (allRedeemed || []).filter((t: any) => t.account_id === card.id);
+
+    const monthsData: { [key: number]: { spend: number, given: number } } = {};
+    for (let m = 1; m <= 12; m++) monthsData[m] = { spend: 0, given: 0 };
+
+    cardTxns.forEach((t: any) => {
+
+
+      const date = new Date(t.occurred_at);
+      const month = date.getMonth() + 1;
+
+      // DEBUG: Log transaction processing
+      // if (t.type === 'debt') console.log(`[CashbackAnalytics] Processing DEBT txn: ${t.id} Amount: ${t.amount} Account: ${t.account_id}`);
+
+      if (t.type === 'expense') {
+        monthsData[month].spend += Math.abs(t.amount);
+      }
+
+      // Sum cashback entries for this transaction
+      if (t.cashback_entries && t.cashback_entries.length > 0) {
+        const given = t.cashback_entries.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+        monthsData[month].given += given;
+      }
+    });
+
+    const monthsArray = Object.entries(monthsData).map(([m, val]) => ({
+      month: Number(m),
+      totalSpendForCashback: val.spend,
+      cashbackGiven: val.given
+    }));
+
+    const cashbackGivenYearTotal = monthsArray.reduce((sum, m) => sum + m.cashbackGiven, 0);
+    const cashbackRedeemedYearTotal = cardRedeemedTxns.reduce((sum: any, t: any) => sum + Math.abs(t.amount || 0), 0);
+    const annualFeeYearTotal = card.annual_fee || 0;
+    const interestYearTotal = 0;
+
+    const netProfit = computeCardCashbackProfit({
+      cashbackRedeemed: cashbackRedeemedYearTotal,
+      cashbackGiven: cashbackGivenYearTotal,
+      annualFee: annualFeeYearTotal,
+      interest: interestYearTotal
+    });
+
+    results.push({
+      cardId: card.id,
+      cardType: card.type, // Include type for UI filtering
+      year,
+      months: monthsArray,
+      cashbackRedeemedYearTotal,
+      annualFeeYearTotal,
+      interestYearTotal,
+      cashbackGivenYearTotal,
+      netProfit
+    });
+  }
+
+  return results.sort((a, b) => b.netProfit - a.netProfit);
+}
+
+/**
+ * Fetches detailed transactions for a specific card/month/year for drill-down.
+ */
+export async function getMonthlyCashbackTransactions(cardId: string, month: number, year: number) {
+  const supabase = createAdminClient();
+
+  // Construct start/end dates for the month
+  const startDate = new Date(year, month - 1, 1).toISOString();
+  // End date is start of next month (handling Dec rollover)
+  const endDate = new Date(year, month, 1).toISOString();
+
+  // Fetch transactions with cashback entries
+  const { data: txns, error } = await supabase
+    .from('transactions')
+    .select(`
+      id, occurred_at, note, amount, type, category:categories(name, icon),
+      cashback_entries ( amount, mode, metadata )
+    `)
+    .eq('account_id', cardId)
+    .gte('occurred_at', startDate)
+    .lt('occurred_at', endDate)
+    .in('type', ['expense']) // Only display expenses for "Spend" drilldown
+    .order('occurred_at', { ascending: false }) as any;
+
+  if (error) {
+    console.error('getMonthlyCashbackTransactions error:', error);
+    return [];
+  }
+
+  return (txns || []).map((t: any) => {
+    const given = (t.cashback_entries || []).reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+    return {
+      ...t,
+      cashbackGiven: given
     };
   });
 }

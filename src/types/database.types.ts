@@ -66,15 +66,39 @@ export interface Database {
           sheet_show_qr_image?: boolean
         }
       }
+      sheet_webhook_links: {
+        Row: {
+          id: string
+          name: string
+          url: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          url: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          name?: string
+          url?: string
+          created_at?: string
+        }
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       [key: string]: any
     }
     Views: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       [key: string]: any
     }
     Functions: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       [key: string]: any
     }
     Enums: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       [key: string]: any
     }
   }

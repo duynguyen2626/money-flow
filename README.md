@@ -63,7 +63,18 @@ Before committing any code, you **MUST** run the following commands to ensure qu
 npm run lint
 
 # 2. Verify build succeeds
+# 2. Verify build succeeds
 npm run build
+```
+
+## Google Apps Script
+
+To deploy changes to the People Management Sheet script:
+
+```bash
+npm run sheet:people
+# or
+pnpm push sheet people
 ```
 
 **Do not commit if either of these fails.**

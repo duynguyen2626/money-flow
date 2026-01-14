@@ -135,46 +135,82 @@ export function DebtCycleGroup({
         <div className="relative min-h-[400px]">
 
             {/* Header: Cycle Info & Stats */}
-            <div className="bg-white p-4 border-b flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-baseline gap-3">
-                    <h2 className="text-lg font-bold text-slate-900 tracking-tight">
-                        {tag && isYYYYMM(tag) ? (
-                            <>
-                                {new Date(parseInt(tag.split('-')[0]), parseInt(tag.split('-')[1]) - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
-                            </>
-                        ) : tag}
-                    </h2>
-                    <div className={cn("text-2xl font-extrabold tabular-nums", statusColor)}>
-                        {formatter.format(remains)}
+            <div className="bg-white p-4 border-b flex flex-col gap-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-baseline gap-3">
+                        <h2 className="text-lg font-bold text-slate-900 tracking-tight uppercase">
+                            {tag && isYYYYMM(tag) ? (
+                                <>
+                                    {new Date(parseInt(tag.split('-')[0]), parseInt(tag.split('-')[1]) - 1).toLocaleString('default', { month: 'short', year: 'numeric' })}
+                                </>
+                            ) : tag}
+                        </h2>
+                        {/* Primary Badge */}
+                        <div className={cn("px-3 py-1 rounded-md text-sm font-bold tabular-nums flex items-center gap-2", isSettled ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700")}>
+                            <span>{isSettled ? "SETTLED" : "REMAINS:"}</span>
+                            <span>{formatter.format(remains)}</span>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        {/* Manage Sheet & Settled Status */}
+                        <div className="flex items-center gap-2">
+                            <ManageSheetButton
+                                personId={personId}
+                                cycleTag={tag}
+                                scriptLink={scriptLink}
+                                googleSheetUrl={googleSheetUrl}
+                                sheetFullImg={sheetFullImg}
+                                showBankAccount={showBankAccount}
+                                showQrImage={showQrImage}
+                                iconOnly={true}
+                                size={'sm'}
+                                className="h-8 w-8"
+                                showCycleAction={true}
+                            />
+                            {/* Rollover Button */}
+                            {!isSettled && remains > 1000 && (
+                                <RolloverDebtDialog
+                                    personId={personId}
+                                    currentCycle={tag}
+                                    remains={remains}
+                                />
+                            )}
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <ManageSheetButton
-                        personId={personId}
-                        cycleTag={tag}
-                        scriptLink={scriptLink}
-                        googleSheetUrl={googleSheetUrl}
-                        sheetFullImg={sheetFullImg}
-                        showBankAccount={showBankAccount}
-                        showQrImage={showQrImage}
-                        iconOnly={true}
-                        size={'sm'}
-                        className="h-8 w-8"
-                        showCycleAction={true}
-                    />
+                {/* Sub-Metrics Bar */}
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                    {/* Original Lend */}
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded border border-blue-100 bg-blue-50 text-blue-700" title="Tổng tiền gốc (đã bao gồm cashback)">
+                        <span className="font-semibold opacity-70">ORIGINAL LEND:</span>
+                        <span className="font-bold tabular-nums">{formatter.format(stats.initial)}</span>
+                    </div>
 
-                    <span className={cn("px-2.5 py-0.5 rounded-full text-xs font-medium border", statusBadge)}>
-                        {isSettled ? 'Settled' : 'Unsettled'}
-                    </span>
+                    {/* Cashback */}
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded border border-amber-100 bg-amber-50 text-amber-700" title="Tổng cashback đã trừ">
+                        <span className="font-semibold opacity-70">CASHBACK:</span>
+                        <span className="font-bold tabular-nums">{formatter.format(back)}</span>
+                    </div>
 
-                    {/* Rollover Button - Only if Unsettled and Positive Debt */}
-                    {!isSettled && remains > 1000 && (
-                        <RolloverDebtDialog
-                            personId={personId}
-                            currentCycle={tag}
-                            remains={remains}
-                        />
+                    {/* Net Lend */}
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded border border-indigo-100 bg-indigo-50 text-indigo-700" title="NET LEND = Original - Cashback">
+                        <span className="font-semibold opacity-70">NET LEND:</span>
+                        <span className="font-bold tabular-nums">{formatter.format(stats.lend)}</span>
+                    </div>
+
+                    {/* Repay */}
+                    <div className="flex items-center gap-1.5 px-2 py-1 rounded border border-emerald-100 bg-emerald-50 text-emerald-700" title="Tổng đã trả">
+                        <span className="font-semibold opacity-70">REPAY:</span>
+                        <span className="font-bold tabular-nums">{formatter.format(stats.repay)}</span>
+                    </div>
+
+                    {/* Remains Formula Hint */}
+                    {!isSettled && (
+                        <div className="ml-auto text-[10px] text-slate-400 italic hidden md:block">
+                            * Remains = (Original - Cashback) - Repay
+                        </div>
                     )}
                 </div>
             </div>

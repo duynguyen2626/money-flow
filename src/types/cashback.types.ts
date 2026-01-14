@@ -91,3 +91,21 @@ export type AccountSpendingStats = {
     label: string
   } | null
 }
+
+export type CashbackMonthSummary = {
+  month: number // 1-12
+  totalSpendForCashback: number
+  cashbackGiven: number
+}
+
+export type CashbackYearSummary = {
+  cardId: string
+  cardType?: string
+  year: number
+  months: CashbackMonthSummary[]
+  cashbackRedeemedYearTotal: number
+  annualFeeYearTotal: number
+  interestYearTotal: number
+  cashbackGivenYearTotal: number
+  netProfit: number
+}
