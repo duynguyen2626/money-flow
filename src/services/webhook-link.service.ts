@@ -8,7 +8,7 @@ export type SheetWebhookLink = {
 }
 
 export async function getSheetWebhookLinks(): Promise<SheetWebhookLink[]> {
-    const supabase: any = createClient()
+    const supabase = createClient()
     const { data, error } = await supabase
         .from('sheet_webhook_links')
         .select('*')
@@ -23,7 +23,7 @@ export async function getSheetWebhookLinks(): Promise<SheetWebhookLink[]> {
 }
 
 export async function createSheetWebhookLink(payload: { name: string; url: string }) {
-    const supabase: any = createClient()
+    const supabase = createClient()
     const { data, error } = await supabase
         .from('sheet_webhook_links')
         .insert({ name: payload.name, url: payload.url })
@@ -35,7 +35,7 @@ export async function createSheetWebhookLink(payload: { name: string; url: strin
 }
 
 export async function deleteSheetWebhookLink(id: string) {
-    const supabase: any = createClient()
+    const supabase = createClient()
     const { error } = await supabase
         .from('sheet_webhook_links')
         .delete()
