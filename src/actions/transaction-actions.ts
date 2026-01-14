@@ -371,7 +371,7 @@ export async function voidTransactionAction(id: string): Promise<boolean> {
     console.log(`[Void Cascade] Voiding parent ${linkedParentId} linked from ${id}`);
     // Check parent status first to avoid infinite recursion if parent void triggered this
     const { data: parent } = await supabase.from('transactions').select('status').eq('id', linkedParentId).single();
-    if (parent && (parent as { status: string }).status !== 'void') {
+    if (parent && (parent as unknown as { status: string }).status !== 'void') {
       await voidTransactionAction(linkedParentId);
     }
   }
