@@ -33,6 +33,10 @@ jobs:
 
     - name: Type Check & Build
       run: pnpm build
+      env:
+        NEXT_PUBLIC_SUPABASE_URL: "https://mock-url.supabase.co"
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "mock-anon-key"
+        # Add other public env vars here if needed for build-time static generation
 
     # Uncomment when tests are ready
     # - name: Run Tests
