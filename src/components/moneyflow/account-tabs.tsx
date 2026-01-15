@@ -7,25 +7,28 @@ import { cn } from '@/lib/utils'
 
 type AccountTabsProps = {
   accountId: string
-  activeTab: 'transactions' // Simplified type
+  activeTab: 'transactions' | 'cashback'
 }
 
 export function AccountTabs({ accountId, activeTab }: AccountTabsProps) {
   const router = useRouter()
-  // Simplified state - strictly 'transactions'
-  const [currentTab, setCurrentTab] = useState<'transactions'>('transactions')
+  const [currentTab, setCurrentTab] = useState<'transactions' | 'cashback'>(activeTab)
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
-    // No-op if only one tab
+    setCurrentTab(activeTab)
   }, [activeTab])
 
-  const handleTabChange = (tab: 'transactions') => {
-    // No-op
+  const handleTabChange = (tab: 'transactions' | 'cashback') => {
+    setCurrentTab(tab)
+    startTransition(() => {
+      router.push(`/accounts/${accountId}?tab=${tab}`)
+    })
   }
 
   const tabs = [
     { key: 'transactions' as const, label: 'Transactions' },
+    { key: 'cashback' as const, label: 'Cashback Analysis' },
   ]
 
   return (

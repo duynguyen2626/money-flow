@@ -11,9 +11,10 @@ interface Props {
     data: CashbackYearSummary[]
     cards: CashbackCard[]
     year: number
+    onMonthClick?: (cardId: string, cardName: string, month: number) => void
 }
 
-export function CashbackMatrixView({ data, cards, year }: Props) {
+export function CashbackMatrixView({ data, cards, year, onMonthClick }: Props) {
     const monthNames = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
     // Helper for full currency
@@ -22,18 +23,32 @@ export function CashbackMatrixView({ data, cards, year }: Props) {
         return new Intl.NumberFormat('vi-VN').format(Math.round(n))
     }
 
-    // Filter out rows with absolutely no data (Show if Spend OR Profit OR Redeemed OR Given is non-zero)
-    // EXCEPTION: Always show 'debt' (Volunteer) accounts so the Volunteer tab isn't blank if inactive.
-    const filteredData = data.filter(d =>
-        d.netProfit !== 0 ||
-        d.cashbackGivenYearTotal !== 0 ||
-        d.cashbackRedeemedYearTotal !== 0 ||
-        d.months.some(m => m.totalSpendForCashback > 0)
-    )
+    // Filter out:
+    // 1. Accounts with "DUPLICATE" or "DO NOT USE" in name (case-insensitive)
+    // 2. Accounts with absolutely no data (zero spend, profit, redeemed, given)
+    const filteredData = data.filter(d => {
+        const cardInfo = cards.find(c => c.accountId === d.cardId)
+        const cardName = cardInfo?.accountName || ""
+
+        // Filter 1: Exclude "DO NOT USE" or "DUPLICATE" accounts
+        const nameUpper = cardName.toUpperCase()
+        if (nameUpper.includes('DUPLICATE') || nameUpper.includes('DO NOT USE')) {
+            return false
+        }
+
+        // Filter 2: Exclude zero-data accounts
+        const hasActivity = d.netProfit !== 0 ||
+            d.cashbackGivenYearTotal !== 0 ||
+            d.cashbackRedeemedYearTotal !== 0 ||
+            d.months.some(m => m.totalGivenAway > 0)
+
+        return hasActivity
+    })
 
     const renderHalf = (range: [number, number]) => {
         // Calculate Totals for this range
         const totalRedeemed = filteredData.reduce((sum, d) => sum + d.cashbackRedeemedYearTotal, 0)
+        const totalAnnualFee = filteredData.reduce((sum, d) => sum + d.annualFeeYearTotal, 0)
         const totalProfit = filteredData.reduce((sum, d) => sum + d.netProfit, 0)
 
         // Calculate monthly totals
@@ -54,6 +69,7 @@ export function CashbackMatrixView({ data, cards, year }: Props) {
                             <TableHead key={m} className="text-right min-w-[100px] bg-muted/50 border-r px-2">{monthNames[m]}</TableHead>
                         ))}
                         <TableHead className="text-right font-bold bg-muted/50 border-r px-2">Redeemed</TableHead>
+                        <TableHead className="text-right font-bold bg-muted/50 border-r px-2">Annual Fee</TableHead>
                         <TableHead className="text-right font-bold bg-muted/50 px-2">Net Profit</TableHead>
                     </TableRow>
                 </TableHeader>
@@ -89,9 +105,21 @@ export function CashbackMatrixView({ data, cards, year }: Props) {
                                 {Array.from({ length: range[1] - range[0] + 1 }, (_, i) => i + range[0]).map(month => {
                                     const monthData = summary.months.find(m => m.month === month)
                                     const val = monthData?.cashbackGiven || 0
+                                    const cardInfo = cards.find(c => c.accountId === summary.cardId)
+                                    const cardName = cardInfo?.accountName || "Unknown Card"
+
                                     return (
                                         <TableCell key={month} className={cn("text-right text-xs border-r px-2 py-1", val > 0 ? "text-blue-600 font-medium" : "text-muted-foreground/20")}>
-                                            {fmt(val)}
+                                            {val > 0 && onMonthClick ? (
+                                                <button
+                                                    onClick={() => onMonthClick(summary.cardId, cardName, month)}
+                                                    className="hover:underline cursor-pointer"
+                                                >
+                                                    {fmt(val)}
+                                                </button>
+                                            ) : (
+                                                fmt(val)
+                                            )}
                                         </TableCell>
                                     )
                                 })}
@@ -99,6 +127,10 @@ export function CashbackMatrixView({ data, cards, year }: Props) {
                                 {/* Totals (Yearly) */}
                                 <TableCell className={cn("text-right font-medium text-xs border-r px-2 py-1", summary.cashbackRedeemedYearTotal > 0 ? "text-green-600" : "text-muted-foreground/30")}>
                                     {fmt(summary.cashbackRedeemedYearTotal)}
+                                </TableCell>
+                                {/* Annual Fee Cell */}
+                                <TableCell className={cn("text-right font-medium text-xs border-r px-2 py-1", summary.annualFeeYearTotal > 0 ? "text-red-600" : "text-muted-foreground/30")}>
+                                    {summary.annualFeeYearTotal > 0 ? `-${fmt(summary.annualFeeYearTotal)}` : '-'}
                                 </TableCell>
                                 <TableCell className={cn("text-right font-bold text-sm px-2 py-1", summary.netProfit >= 0 ? "text-green-600" : "text-red-600")}>
                                     {fmt(summary.netProfit)}
@@ -117,6 +149,10 @@ export function CashbackMatrixView({ data, cards, year }: Props) {
                         ))}
                         <TableCell className="text-right text-xs border-r px-2 py-2 text-green-700">
                             {fmt(totalRedeemed)}
+                        </TableCell>
+                        {/* Total Annual Fee */}
+                        <TableCell className="text-right text-xs border-r px-2 py-2 text-red-600">
+                            {totalAnnualFee > 0 ? `-${fmt(totalAnnualFee)}` : '-'}
                         </TableCell>
                         <TableCell className="text-right text-xs px-2 py-2 text-green-700">
                             {fmt(totalProfit)}

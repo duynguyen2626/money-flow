@@ -125,7 +125,7 @@ export function BatchSettingsDialog({ batch }: { batch: any }) {
                                 <FormItem>
                                     <FormLabel>Sheet Webhook Link (Script)</FormLabel>
                                     <FormControl>
-                                        <Input {...field} placeholder="https://script.google.com/..." />
+                                        <Input {...field} placeholder="https://script.google.com/macros/s/.../exec" />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

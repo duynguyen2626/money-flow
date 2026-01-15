@@ -1,18 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { EditAccountDialog } from '@/components/moneyflow/edit-account-dialog'
 import { Account } from '@/types/moneyflow.types'
-import { createPortal } from 'react-dom'
 
 export default function NewAccountPage() {
   const router = useRouter()
-  const [isMounted, setIsMounted] = useState(false)
+  // Fixed: Initialize directly to true since this is client-side only
+  const [isMounted, setIsMounted] = useState(true)
 
-  useEffect(() => {
-    setIsMounted(true)
-  }, [])
 
   // Create a mock account object for the dialog
   const newAccount: Account = {

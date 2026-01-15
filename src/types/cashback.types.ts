@@ -67,6 +67,7 @@ export type CashbackCard = {
   is_min_spend_met: boolean
   missing_min_spend: number | null
   potential_earned: number
+  totalGivenAway: number
 }
 
 export type AccountSpendingStats = {
@@ -94,7 +95,7 @@ export type AccountSpendingStats = {
 
 export type CashbackMonthSummary = {
   month: number // 1-12
-  totalSpendForCashback: number
+  totalGivenAway: number // Total cashback given away (percent + fixed)
   cashbackGiven: number
 }
 
@@ -108,4 +109,55 @@ export type CashbackYearSummary = {
   interestYearTotal: number
   cashbackGivenYearTotal: number
   netProfit: number
+}
+
+// ============================================================================
+// VOLUNTEER CASHBACK TYPES
+// ============================================================================
+
+export type VolunteerCashbackMonth = {
+  month: number // 1-12
+  cashbackGiven: number
+  txCount: number
+}
+
+export type VolunteerCashbackData = {
+  personId: string
+  personName: string
+  personImageUrl?: string | null
+  year: number
+  months: VolunteerCashbackMonth[]
+  yearTotal: number
+}
+
+export type VolunteerTransaction = {
+  id: string
+  date: string
+  note: string
+  originalAmount: number
+  finalPrice: number
+  cashbackGiven: number
+  sharePercent: number
+  personName: string
+  personImageUrl: string | null
+}
+
+// ============================================================================
+// MODAL TYPES
+// ============================================================================
+
+export type MonthDetailModalProps = {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  mode: 'card' | 'volunteer'
+  // For card mode
+  cardId?: string | null
+  cardName?: string
+  // For volunteer mode
+  accountId?: string | null
+  accountName?: string
+  // Common
+  month: number
+  year: number
+  initialTab?: string // 'spend' | 'share'
 }

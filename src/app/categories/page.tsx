@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Plus } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -16,14 +16,15 @@ export default function CategoriesPage() {
     const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
     const [activeTab, setActiveTab] = useState<"expense" | "income" | "transfer">("expense")
 
-    const fetchCategories = async () => {
+    // Fixed: Use useCallback to memoize fetchCategories
+    const fetchCategories = useCallback(async () => {
         const data = await getCategories()
         setCategories(data)
-    }
+    }, [])
 
     useEffect(() => {
         fetchCategories()
-    }, [])
+    }, [fetchCategories])
 
     const handleEdit = (category: Category) => {
         setSelectedCategory(category)

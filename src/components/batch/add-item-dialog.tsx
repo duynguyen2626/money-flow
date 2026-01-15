@@ -427,25 +427,34 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
                                                             const seen = new Set()
                                                             return bankMappings
                                                                 .filter(b => {
-                                                                    if (!b.short_name) return false
-                                                                    const duplicate = seen.has(b.short_name)
-                                                                    seen.add(b.short_name)
+                                                                    if (!b.bank_name) return false
+                                                                    // Use bank_name for uniqueness check in MBB
+                                                                    const duplicate = seen.has(b.bank_name)
+                                                                    seen.add(b.bank_name)
                                                                     return !duplicate
                                                                 })
                                                                 .map(b => ({
-                                                                    value: b.short_name,
-                                                                    label: `${b.short_name} (${b.bank_code})`,
-                                                                    description: b.bank_name,
-                                                                    searchValue: `${b.short_name} ${b.bank_name} ${b.bank_code}`
+                                                                    // MBB Format: "Ngoại thương Việt Nam (VCB)"
+                                                                    value: `${b.bank_name} (${b.bank_code})`,
+                                                                    label: `${b.bank_name} (${b.bank_code})`,
+                                                                    description: b.short_name,
+                                                                    searchValue: `${b.bank_name} ${b.bank_code} ${b.short_name}`
                                                                 }))
                                                         })()}
                                                         value={field.value}
                                                         onValueChange={(val) => {
                                                             field.onChange(val)
-                                                            const found = bankMappings.find(b => b.short_name === val)
-                                                            if (found) {
-                                                                form.setValue('bank_code', found.bank_code)
-                                                                updateRecentBanks(found.bank_code)
+                                                            // Extract bank code from "Name (CODE)" format
+                                                            if (val) {
+                                                                const match = val.match(/\(([^)]+)\)$/)
+                                                                if (match && match[1]) {
+                                                                    const code = match[1]
+                                                                    const found = bankMappings.find(b => b.bank_code === code)
+                                                                    if (found) {
+                                                                        form.setValue('bank_code', found.bank_code)
+                                                                        updateRecentBanks(found.bank_code)
+                                                                    }
+                                                                }
                                                             }
                                                         }}
                                                         placeholder="Select bank"

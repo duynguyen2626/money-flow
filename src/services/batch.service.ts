@@ -811,8 +811,9 @@ export async function sendBatchToSheet(batchId: string) {
                         const mbbName = bankObj?.bank_name || bankName
                         bankName = `${mbbName} (${code})`
                     } else {
-                        // VIB Format: Use short_name (e.g., "203 - Vietcombank")
-                        const vibName = bankObj?.short_name || bankName
+                        // VIB Format: Use stored name if valid, else fallback to mapping
+                        // This fixes the issue where user selects "VCB" but gets "Vietcombank" due to mapping override
+                        const vibName = bankName || bankObj?.short_name
                         bankName = `${code} - ${vibName}`
                     }
                 }

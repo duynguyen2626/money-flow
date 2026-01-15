@@ -521,7 +521,8 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
         total_spend_eligible: 0,
         is_min_spend_met: true,
         missing_min_spend: null,
-        potential_earned: 0
+        potential_earned: 0,
+        totalGivenAway: 0
       });
       continue;
     }
@@ -587,7 +588,8 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
           )
         `)
         .eq('cycle_id', (cycle as any).id)
-        .eq('transaction.account_id', acc.id) as any);
+        .eq('transaction.account_id', acc.id)
+        .neq('transaction.status', 'void') as any);
 
       if (entriesError) {
         console.error('[getCashbackProgress] Failed to load entries:', entriesError);
@@ -652,6 +654,14 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       }
     }
 
+    // Calculate totalGivenAway (Sum of (percent * amount) + fixed)
+    const totalGivenAway = transactions.reduce((sum, t) => {
+      const sharePercent = parseFloat((t.sharePercent as any) || '0'); // sharePercent in CashbackTransaction might be number | string? defined as number but data might be string from DB
+      const shareFixed = parseFloat((t.shareFixed as any) || '0');
+      const txnAmount = Math.abs(t.amount);
+      return sum + (sharePercent * txnAmount) + shareFixed;
+    }, 0);
+
     results.push({
       accountId: acc.id,
       accountName: acc.name,
@@ -678,7 +688,8 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
       potential_earned: finalNetProfit, // Use final calculation here too? Yes implies cycle.virtual_profit
       transactions,
       remainingBudget: remainingBudget,
-      rate: policy.rate
+      rate: policy.rate,
+      totalGivenAway
     });
 
   }
@@ -819,7 +830,8 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
   const { data: entries, error: entriesError } = await (supabase
     .from('cashback_entries')
     .select('mode, amount, metadata, transaction_id, cycle_id, cycle:cashback_cycles(cycle_tag), transaction:transactions!inner(id, occurred_at, note, amount, account_id, cashback_share_percent, cashback_share_fixed, category:categories(name, icon), shop:shops(name, image_url), person:people!transactions_person_id_fkey(name))')
-    .eq('transaction.account_id', accountId) as any);
+    .eq('transaction.account_id', accountId)
+    .neq('transaction.status', 'void') as any);
 
   if (!entriesError && entries && (entries as any).length > 0) {
     transactions = (entries as any).map((e: any) => {
@@ -850,6 +862,14 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
       .sort((a: any, b: any) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime());
   }
 
+  // Calculate totalGivenAway (Sum of (percent * amount) + fixed)
+  const totalGivenAway = transactions.reduce((sum, t) => {
+    const sharePercent = parseFloat((t.sharePercent as any) || '0');
+    const shareFixed = parseFloat((t.shareFixed as any) || '0');
+    const txnAmount = Math.abs(t.amount);
+    return sum + (sharePercent * txnAmount) + shareFixed;
+  }, 0);
+
   return {
     accountId: account.id,
     accountName: account.name,
@@ -876,7 +896,8 @@ export async function getAllCashbackHistory(accountId: string): Promise<Cashback
     potential_earned: totalNet,
     transactions,
     remainingBudget: sumMaxBudget > 0 ? Math.max(0, sumMaxBudget - totalEarned) : null,
-    rate: 0
+    rate: 0,
+    totalGivenAway
   };
 }
 
@@ -1024,7 +1045,8 @@ export async function getCashbackYearAnalytics(year: number): Promise<import('@/
       `)
     .in('account_id', cardIds)
     .gte('occurred_at', startDate)
-    .lte('occurred_at', endDate) as any;
+    .lte('occurred_at', endDate)
+    .neq('status', 'void') as any;
 
   // 3. Batch Fetch Redeemed (Income 'Hoàn tiền (Cashback)')
   const { data: allRedeemed } = await supabase
@@ -1033,6 +1055,7 @@ export async function getCashbackYearAnalytics(year: number): Promise<import('@/
     .in('account_id', cardIds)
     .gte('occurred_at', startDate)
     .lte('occurred_at', endDate)
+    .neq('status', 'void')
     .eq('type', 'income')
     .eq('category_id', 'e0000000-0000-0000-0000-000000000092');
 
@@ -1056,20 +1079,30 @@ export async function getCashbackYearAnalytics(year: number): Promise<import('@/
       // DEBUG: Log transaction processing
       // if (t.type === 'debt') console.log(`[CashbackAnalytics] Processing DEBT txn: ${t.id} Amount: ${t.amount} Account: ${t.account_id}`);
 
-      if (t.type === 'expense') {
-        monthsData[month].spend += Math.abs(t.amount);
+      // Track cashback GIVEN AWAY to people (not the lent amount itself)
+      // Calculate: (cashback_share_percent * amount) + cashback_share_fixed
+      if (t.type === 'debt') {
+        const sharePercent = parseFloat(t.cashback_share_percent || '0');
+        const shareFixed = parseFloat(t.cashback_share_fixed || '0');
+        const txnAmount = Math.abs(t.amount);
+        const cashbackGivenAway = (sharePercent * txnAmount) + shareFixed;
+        monthsData[month].spend += cashbackGivenAway;
       }
 
       // Sum cashback entries for this transaction
       if (t.cashback_entries && t.cashback_entries.length > 0) {
-        const given = t.cashback_entries.reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
+        // Fix: Shared Return should ONLY count Voluntary (Shared) cashback.
+        // Previously it summed ALL cashback (including real/bank).
+        const given = t.cashback_entries
+          .filter((e: any) => e.mode === 'voluntary')
+          .reduce((sum: number, e: any) => sum + (e.amount || 0), 0);
         monthsData[month].given += given;
       }
     });
 
     const monthsArray = Object.entries(monthsData).map(([m, val]) => ({
       month: Number(m),
-      totalSpendForCashback: val.spend,
+      totalGivenAway: val.spend, // Total cashback given away (percent + fixed)
       cashbackGiven: val.given
     }));
 
@@ -1103,6 +1136,7 @@ export async function getCashbackYearAnalytics(year: number): Promise<import('@/
 
 /**
  * Fetches detailed transactions for a specific card/month/year for drill-down.
+ * Logic: Track money GIVEN to people (debt/lend), NOT personal expenses
  */
 export async function getMonthlyCashbackTransactions(cardId: string, month: number, year: number) {
   const supabase = createAdminClient();
@@ -1116,13 +1150,16 @@ export async function getMonthlyCashbackTransactions(cardId: string, month: numb
   const { data: txns, error } = await supabase
     .from('transactions')
     .select(`
-      id, occurred_at, note, amount, type, category:categories(name, icon),
+      id, occurred_at, note, amount, type, 
+      cashback_share_percent, cashback_share_fixed,
+      category:categories(name, icon),
       cashback_entries ( amount, mode, metadata )
     `)
     .eq('account_id', cardId)
     .gte('occurred_at', startDate)
     .lt('occurred_at', endDate)
-    .in('type', ['expense']) // Only display expenses for "Spend" drilldown
+    .neq('status', 'void') // Exclude void
+    .in('type', ['debt']) // Track money given to people (debt), not personal expenses
     .order('occurred_at', { ascending: false }) as any;
 
   if (error) {
