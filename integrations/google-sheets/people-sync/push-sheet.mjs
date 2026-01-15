@@ -7,7 +7,7 @@ import dotenv from 'dotenv'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const claspPath = join(__dirname, '.clasp.json')
-const repoRoot = join(__dirname, '..', '..')
+const repoRoot = join(__dirname, '..', '..', '..')
 
 const args = process.argv.slice(2)
 const getFlagValue = (flag) => {

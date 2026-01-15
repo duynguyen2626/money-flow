@@ -301,7 +301,7 @@ export function EditItemDialog({ item, accounts = [], bankMappings = [], bankTyp
                             ) : (
                                 <FormField
                                     control={form.control}
-                                    name="bank_name"
+                                    name="bank_code"
                                     render={({ field }) => (
                                         <FormItem className="col-span-2">
                                             <FormLabel className="text-xs font-semibold text-slate-600">Bank Name</FormLabel>
@@ -311,27 +311,26 @@ export function EditItemDialog({ item, accounts = [], bankMappings = [], bankTyp
                                                         const seen = new Set()
                                                         return bankMappings
                                                             .filter(b => {
-                                                                if (!b.short_name) return false
-                                                                const duplicate = seen.has(b.short_name)
-                                                                seen.add(b.short_name)
+                                                                if (!b.bank_code) return false
+                                                                const duplicate = seen.has(b.bank_code)
+                                                                seen.add(b.bank_code)
                                                                 return !duplicate
                                                             })
-                                                            .map(b => ({
-                                                                value: b.short_name,
-                                                                label: `${b.short_name} (${b.bank_code})`,
-                                                                description: b.bank_name,
-                                                                searchValue: `${b.short_name} ${b.bank_name} ${b.bank_code}`
-                                                            }))
+                                                            .map(b => {
+                                                                const displayName = b.short_name || b.bank_name
+                                                                return {
+                                                                    value: b.bank_code,
+                                                                    label: `${displayName} (${b.bank_code})`,
+                                                                    description: b.bank_name,
+                                                                    searchValue: `${displayName} ${b.bank_name} ${b.bank_code}`
+                                                                }
+                                                            })
                                                     })()}
                                                     value={field.value}
                                                     onValueChange={(val) => {
-                                                        // MBB: Selecting Bank Name needs to trigger Code + Signature Logic
-                                                        const found = bankMappings.find(b => b.short_name === val)
-                                                        if (found) {
-                                                            handleBankCodeChange(found.bank_code)
-                                                        } else {
-                                                            handleBankNameChange(val)
-                                                        }
+                                                        // MBB: Selecting Bank Name (code) needs to trigger Code + Signature Logic
+                                                        field.onChange(val)
+                                                        handleBankCodeChange(val)
                                                     }}
                                                     placeholder="Select bank"
                                                 />

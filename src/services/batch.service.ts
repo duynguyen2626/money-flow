@@ -257,7 +257,7 @@ export async function confirmBatchItem(itemId: string, targetAccountId?: string)
             created_by: userId,
             category_id: categoryId,
             // Single-table fields
-            account_id: SYSTEM_ACCOUNTS.DRAFT_FUND,
+            account_id: SYSTEM_ACCOUNTS.BATCH_CLEARING,
             target_account_id: finalTargetId,
             amount: Math.abs(item.amount),
             type: 'transfer',
@@ -291,7 +291,7 @@ export async function confirmBatchItem(itemId: string, targetAccountId?: string)
 
     // 4. Recalculate Balances
     const { recalculateBalance } = await import('./account.service')
-    await recalculateBalance(SYSTEM_ACCOUNTS.DRAFT_FUND)
+    await recalculateBalance(SYSTEM_ACCOUNTS.BATCH_CLEARING)
     await recalculateBalance(finalTargetId)
 
     return true
@@ -1096,3 +1096,218 @@ export async function updateBatchNoteMode(batchId: string, mode: 'previous' | 'c
 
     return { success: true, count: updatedCount }
 }
+
+// ============================================
+// BATCH REFACTOR - New Functions
+// ============================================
+
+/**
+ * Get batches filtered by bank type
+ */
+
+/**
+ * Get batches filtered by bank type
+ */
+export async function getBatchesByType(bankType: 'MBB' | 'VIB', isArchived?: boolean) {
+    const supabase: any = createClient()
+    let query = supabase
+        .from('batches')
+        .select('*, batch_items(count)')
+        .eq('bank_type', bankType)
+
+    if (isArchived !== undefined) {
+        query = query.eq('is_archived', isArchived)
+    }
+
+    const { data, error } = await query
+        .order('month_year', { ascending: false })
+        .order('created_at', { ascending: false })
+
+    if (error) throw error
+    return data
+}
+
+export async function archiveBatch(id: string) {
+    const supabase: any = createClient()
+    const { error } = await supabase
+        .from('batches')
+        .update({ is_archived: true })
+        .eq('id', id)
+    if (error) throw error
+}
+
+export async function restoreBatch(id: string) {
+    const supabase: any = createClient()
+    const { error } = await supabase
+        .from('batches')
+        .update({ is_archived: false })
+        .eq('id', id)
+    if (error) throw error
+}
+
+
+/**
+ * Get batches grouped by month for a specific bank type
+ */
+export async function getBatchesByMonthAndType(bankType: 'MBB' | 'VIB') {
+    const batches = await getBatchesByType(bankType)
+
+    // Group by month_year
+    const grouped = batches.reduce((acc: any, batch: any) => {
+        const month = batch.month_year || 'unknown'
+        if (!acc[month]) {
+            acc[month] = []
+        }
+        acc[month].push(batch)
+        return acc
+    }, {})
+
+    return grouped
+}
+
+/**
+ * Create a new batch from cloning a previous month
+ */
+export async function createBatchFromClone(params: {
+    source_batch_id: string
+    month_year: string
+    bank_type: 'MBB' | 'VIB'
+    items: Array<{
+        bank_name: string
+        bank_code?: string
+        amount: number
+        receiver_name?: string
+        bank_number?: string
+        card_name?: string
+        note?: string
+    }>
+}) {
+    const supabase: any = createClient()
+
+    // 1. Get source batch details
+    const { data: sourceBatch, error: sourceError } = await supabase
+        .from('batches')
+        .select('*')
+        .eq('id', params.source_batch_id)
+        .single()
+
+    if (sourceError) throw sourceError
+
+    // 2. Create new batch
+    const monthName = formatMonthName(params.month_year)
+    const { data: newBatch, error: batchError } = await supabase
+        .from('batches')
+        .insert({
+            name: `${monthName} (${params.bank_type})`,
+            month_year: params.month_year,
+            bank_type: params.bank_type,
+            cloned_from_id: params.source_batch_id,
+
+            source_account_id: sourceBatch.source_account_id || SYSTEM_ACCOUNTS.DRAFT_FUND,
+            status: 'pending'
+        })
+        .select()
+        .single()
+
+    if (batchError) throw batchError
+
+    // 3. Create batch items
+    const itemsToInsert = params.items.map(item => ({
+        batch_id: newBatch.id,
+        amount: item.amount,
+        bank_name: item.bank_name,
+        receiver_name: item.receiver_name,
+        bank_number: item.bank_number,
+        card_name: item.card_name,
+        note: item.note,
+        status: 'pending'
+    }))
+
+    const { error: itemsError } = await supabase
+        .from('batch_items')
+        .insert(itemsToInsert)
+
+    if (itemsError) throw itemsError
+
+
+
+    return newBatch
+}
+
+/**
+ * Get batch settings for a specific bank type
+ */
+export async function getBatchSettings(bankType: 'MBB' | 'VIB') {
+    const supabase: any = createClient()
+    const { data, error } = await supabase
+        .from('batch_settings')
+        .select('*')
+        .eq('bank_type', bankType)
+        .single()
+
+    if (error) throw error
+    return data
+}
+
+/**
+ * Update batch settings
+ */
+export async function updateBatchSettings(
+    bankType: 'MBB' | 'VIB',
+    settings: {
+        sheet_url?: string | null
+        sheet_name?: string | null
+        webhook_url?: string | null
+        webhook_enabled?: boolean
+    }
+) {
+    const supabase: any = createClient()
+    const { data, error } = await supabase
+        .from('batch_settings')
+        .update({
+            ...settings,
+            updated_at: new Date().toISOString()
+        })
+        .eq('bank_type', bankType)
+        .select()
+        .single()
+
+    if (error) throw error
+    return data
+}
+
+/**
+ * Format month_year to human-readable name
+ * @param monthYear Format: 'YYYY-MM' (e.g., '2026-01')
+ * @returns Format: 'Jan 2026'
+ */
+function formatMonthName(monthYear: string): string {
+    const [year, month] = monthYear.split('-')
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const monthIndex = parseInt(month, 10) - 1
+    return `${monthNames[monthIndex]} ${year}`
+}
+
+/**
+ * Get current month in YYYY-MM format
+ */
+export function getCurrentMonthYear(): string {
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    return `${year}-${month}`
+}
+
+/**
+ * Get next month in YYYY-MM format
+ */
+export function getNextMonthYear(currentMonth?: string): string {
+    const base = currentMonth || getCurrentMonthYear()
+    const [year, month] = base.split('-').map(Number)
+    const date = new Date(year, month - 1, 1)
+    const nextDate = addMonths(date, 1)
+    const nextYear = nextDate.getFullYear()
+    const nextMonth = String(nextDate.getMonth() + 1).padStart(2, '0')
+    return `${nextYear}-${nextMonth}`
+}
+

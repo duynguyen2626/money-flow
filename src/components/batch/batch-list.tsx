@@ -35,7 +35,7 @@ export function BatchList({ batches, mode, accounts = [], webhookLinks = [] }: B
     const BatchGrid = ({ items }: { items: any[] }) => (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {items.map((batch) => (
-                <div key={batch.id} onClick={() => router.push(`/batch/${batch.id}`)}>
+                <div key={batch.id} onClick={() => router.push(`/batch/detail/${batch.id}`)}>
                     <Card className="hover:bg-accent transition-colors cursor-pointer group relative">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-base font-medium truncate pr-8">

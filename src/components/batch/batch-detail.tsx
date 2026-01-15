@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { AddItemDialog } from './add-item-dialog'
 import { ItemsTable } from './items-table'
-import { Loader2, CheckCircle2, DollarSign, Trash2, Send, ExternalLink, Settings, ChevronLeft, ChevronRight, Sparkles } from 'lucide-react'
+import { Loader2, CheckCircle2, DollarSign, Trash2, Send, ExternalLink, Settings, ChevronLeft, ChevronRight, Sparkles, Archive, ArchiveRestore, HandCoins, WalletCards } from 'lucide-react'
 import { sendBatchToSheetAction, fundBatchAction, deleteBatchAction, confirmBatchItemAction, updateBatchCycleAction } from '@/actions/batch.actions'
 import { useRouter } from 'next/navigation'
 import { CloneBatchDialog } from './clone-batch-dialog'
@@ -19,13 +19,18 @@ import { ConfirmSourceDialog } from './confirm-source-dialog'
 import { SYSTEM_ACCOUNTS } from '@/lib/constants'
 import { LinkSheetDialog } from './link-sheet-dialog'
 import { BatchAIImportDialog } from './batch-ai-import-dialog'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { Info } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { deleteBatchItemsBulkAction } from '@/actions/batch.actions'
+
 
 export function BatchDetail({
     batch,
     accounts,
     bankMappings,
     webhookLinks = [],
-    activeInstallmentAccounts = []
+    activeInstallmentAccounts = [],
 }: {
     batch: any,
     accounts: any[],
@@ -42,6 +47,8 @@ export function BatchDetail({
     const [showConfirmDialog, setShowConfirmDialog] = useState(false)
     const [linkDialogOpen, setLinkDialogOpen] = useState(false)
     const [aiImportOpen, setAiImportOpen] = useState(false)
+    const [bulkAction, setBulkAction] = useState<'confirm' | 'delete' | null>(null)
+
     const router = useRouter()
 
     const sourceAccount = accounts.find(a => a.id === batch.source_account_id)
@@ -112,7 +119,39 @@ export function BatchDetail({
 
     async function handleBulkConfirm() {
         if (selectedItemIds.length === 0) return
+        setBulkAction('confirm')
         setShowConfirmDialog(true)
+    }
+
+    async function handleBulkDelete() {
+        if (selectedItemIds.length === 0) return
+        setBulkAction('delete')
+        setShowConfirmDialog(true)
+    }
+
+    async function performBulkAction() {
+        if (bulkAction === 'confirm') {
+            await performBulkConfirm()
+        } else if (bulkAction === 'delete') {
+            await performBulkDelete()
+        }
+    }
+
+    async function performBulkDelete() {
+        setDeleting(true)
+        try {
+            await deleteBatchItemsBulkAction(selectedItemIds, batch.id)
+            router.refresh()
+            setSelectedItemIds([])
+            toast.success('Items deleted')
+        } catch (error) {
+            console.error(error)
+            toast.error('Failed to delete items')
+        } finally {
+            setDeleting(false)
+            setShowConfirmDialog(false)
+            setBulkAction(null)
+        }
     }
 
     async function performBulkConfirm() {
@@ -128,6 +167,7 @@ export function BatchDetail({
         } finally {
             setConfirming(false)
             setShowConfirmDialog(false)
+            setBulkAction(null)
         }
     }
 
@@ -147,6 +187,8 @@ export function BatchDetail({
 
     return (
         <div className="space-y-6">
+            {/* Context Navigation - Tabs removed (moved to parent) */}
+
             <div className="flex justify-between items-center">
                 <div>
                     <div className="flex items-center gap-3">
@@ -214,32 +256,115 @@ export function BatchDetail({
                     <BatchSettingsDialog batch={batch} />
                     <CloneBatchDialog batch={batch} accounts={accounts} webhookLinks={webhookLinks} />
 
+
                     <Button onClick={handleDelete} disabled={deleting} variant="outline" size="icon" className="text-red-600 hover:text-red-700 hover:bg-red-50" title="Delete Batch">
                         {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                     </Button>
 
                     <div className="w-px h-8 bg-slate-200 mx-2" />
 
-                    {batch.source_account_id === SYSTEM_ACCOUNTS.DRAFT_FUND && batch.status === 'funded' && (
-                        <ConfirmSourceDialog batchId={batch.id} accounts={accounts} />
+                    {/* Archive/Restore Button */}
+                    {batch.is_archived ? (
+                        <Button
+                            variant="outline"
+                            onClick={async () => {
+                                if (confirm('Restore this batch?')) {
+                                    const { restoreBatchAction } = await import('@/actions/batch.actions')
+                                    await restoreBatchAction(batch.id)
+                                    toast.success('Batch restored')
+                                    router.push('/batch')
+                                }
+                            }}
+                            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                        >
+                            <ArchiveRestore className="mr-2 h-4 w-4" />
+                            Restore
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="outline"
+                            onClick={async () => {
+                                if (confirm('Archive this batch? It will be hidden from the main list.')) {
+                                    const { archiveBatchAction } = await import('@/actions/batch.actions')
+                                    await archiveBatchAction(batch.id)
+                                    toast.success('Batch archived')
+                                    router.push('/batch')
+                                }
+                            }}
+                            className="text-slate-600 hover:text-slate-700 hover:bg-slate-50"
+                            title="Archive"
+                        >
+                            <Archive className="h-4 w-4" />
+                        </Button>
                     )}
 
-                    <Button
-                        onClick={handleFund}
-                        disabled={funding || batch.batch_items.length === 0}
-                        variant="secondary"
-                        className={batch.batch_items.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}
-                    >
-                        {funding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        <DollarSign className="mr-2 h-4 w-4" />
-                        {batch.status === 'funded' ? 'Fund More' : 'Fund'}
-                    </Button>
+                    <div className="w-px h-8 bg-slate-200 mx-2" />
+
+                    {batch.source_account_id === SYSTEM_ACCOUNTS.DRAFT_FUND && batch.status === 'funded' && (
+                        <div className="flex items-center gap-1 group">
+                            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 rounded border border-green-200">
+                                <span className="text-[10px] font-bold text-green-700">2</span>
+                            </div>
+                            <ConfirmSourceDialog batchId={batch.id} accounts={accounts} />
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Info className="h-4 w-4 text-slate-400 cursor-help hover:text-green-500 transition-colors" />
+                                    </TooltipTrigger>
+                                    <TooltipContent className="max-w-[250px]">
+                                        <p><strong>Step 2 - Match Real Source:</strong> After funding all items, reconcile which real account you used to reimburse the Draft Fund.</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        </div>
+                    )}
+
+                    <div className="flex items-center gap-1 group">
+                        <div className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 rounded border border-amber-200">
+                            <span className="text-[10px] font-bold text-amber-700">1</span>
+                        </div>
+                        <Button
+                            onClick={() => {
+                                if (batch.status === 'funded') {
+                                    if (confirm('Fund more money for this batch? This will create a new transaction from the source account to the clearing pool.')) {
+                                        handleFund()
+                                    }
+                                } else {
+                                    handleFund()
+                                }
+                            }}
+                            disabled={funding || batch.batch_items.length === 0}
+                            variant="secondary"
+                            className={cn(
+                                "border-amber-200 text-amber-700 hover:bg-amber-50",
+                                batch.batch_items.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                            )}
+                        >
+                            {funding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            <WalletCards className="mr-2 h-4 w-4" />
+                            {batch.status === 'funded' ? 'Fund More' : 'Fund'}
+                        </Button>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Info className="h-4 w-4 text-slate-400 cursor-help hover:text-amber-500 transition-colors" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-[250px]">
+                                    <p><strong>Step 1 - Funding:</strong> Moves money from source to "Batch Clearing".</p>
+                                    <p className="mt-1 text-[10px] opacity-80 italic">Example: If you already funded 10M but items now total 12M, "Fund More" adds the remaining 2M. Complete this before matching the real source.</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    </div>
 
                     <Button
                         onClick={handleSend}
                         disabled={sending || batch.batch_items.length === 0}
                         variant="outline"
-                        className={batch.batch_items.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}
+                        className={cn(
+                            "border-emerald-200 text-emerald-700 hover:bg-emerald-50",
+                            batch.batch_items.length === 0 ? 'opacity-50 cursor-not-allowed' : ''
+                        )}
                     >
                         {sending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         <Send className="mr-2 h-4 w-4" />
@@ -272,32 +397,60 @@ export function BatchDetail({
             />
 
             <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
+                <CardHeader>
                     <CardTitle>Items</CardTitle>
-                    {selectedItemIds.length > 0 && (
-                        <Button onClick={handleBulkConfirm} disabled={confirming} size="sm" className="bg-green-600 hover:bg-green-700">
-                            {confirming && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                            Confirm ({selectedItemIds.length})
-                        </Button>
-                    )}
                 </CardHeader>
                 <CardContent>
                     <Tabs defaultValue="pending" className="w-full">
-                        <div className="flex items-center justify-between mb-4">
-                            <TabsList>
-                                <TabsTrigger value="pending">
+                        <div className="flex items-center justify-between gap-4 py-2 px-1 bg-slate-50/50 rounded-lg mb-4">
+                            <TabsList className="bg-transparent border-none">
+                                <TabsTrigger value="pending" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
                                     Pending ({pendingItems.length})
                                 </TabsTrigger>
-                                <TabsTrigger value="confirmed">
+                                <TabsTrigger value="confirmed" className="data-[state=active]:bg-white data-[state=active]:shadow-sm">
                                     Confirmed ({confirmedItems.length})
                                 </TabsTrigger>
                             </TabsList>
+
+                            {selectedItemIds.length > 0 && (
+                                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-2 duration-300 pr-2">
+                                    <Button
+                                        onClick={handleBulkDelete}
+                                        disabled={deleting || confirming}
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-8 text-red-600 border-red-200 hover:bg-red-50"
+                                    >
+                                        {deleting && (bulkAction === 'delete') && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        <Trash2 className="h-4 w-4 mr-1" />
+                                        Delete ({selectedItemIds.length})
+                                    </Button>
+                                    <Button
+                                        onClick={handleBulkConfirm}
+                                        disabled={confirming || deleting}
+                                        size="sm"
+                                        className="h-8 bg-green-600 hover:bg-green-700"
+                                    >
+                                        {confirming && (bulkAction === 'confirm') && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                                        Confirm ({selectedItemIds.length})
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 text-slate-500"
+                                        onClick={() => setSelectedItemIds([])}
+                                    >
+                                        Clear
+                                    </Button>
+                                </div>
+                            )}
                         </div>
                         <TabsContent value="pending" className="mt-0">
                             <ItemsTable
                                 items={pendingItems}
                                 batchId={batch.id}
+                                selectedIds={selectedItemIds}
                                 onSelectionChange={setSelectedItemIds}
                                 activeInstallmentAccounts={activeInstallmentAccounts}
                                 bankType={batch.bank_type || 'VIB'}
@@ -309,6 +462,7 @@ export function BatchDetail({
                             <ItemsTable
                                 items={confirmedItems}
                                 batchId={batch.id}
+                                selectedIds={selectedItemIds}
                                 onSelectionChange={setSelectedItemIds}
                                 activeInstallmentAccounts={activeInstallmentAccounts}
                                 bankType={batch.bank_type || 'VIB'}
@@ -323,12 +477,15 @@ export function BatchDetail({
             <ConfirmDialog
                 open={showConfirmDialog}
                 onOpenChange={setShowConfirmDialog}
-                title="Confirm Items"
-                description={`Are you sure you want to confirm ${selectedItemIds.length} items?`}
-                onConfirm={performBulkConfirm}
-                confirmText="Confirm"
+                title={bulkAction === 'delete' ? 'Delete Selected Items' : 'Confirm Selected Items'}
+                description={bulkAction === 'delete'
+                    ? `Are you sure you want to delete ${selectedItemIds.length} items? This action cannot be undone.`
+                    : `Are you sure you want to confirm ${selectedItemIds.length} items? This will create ${selectedItemIds.length} transactions and move money to the target accounts.`
+                }
+                onConfirm={performBulkAction}
+                confirmText={bulkAction === 'delete' ? 'Delete' : 'Confirm'}
                 cancelText="Cancel"
-                variant="default"
+                variant={bulkAction === 'delete' ? 'destructive' : 'default'}
             />
 
             <LinkSheetDialog

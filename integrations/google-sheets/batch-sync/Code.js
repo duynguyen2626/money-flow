@@ -1,5 +1,5 @@
 // MoneyFlow 3 - Google Apps Script (Batch Management)
-// VERSION: 1.5 (MBB DATA AT A3 - NO HEADER)
+// VERSION: 1.6 (Auto-deploy enabled)
 // Task: MBB data starts at A3, VIB data starts at A5. Remove MBB script header.
 
 function doPost(e) {
@@ -116,7 +116,7 @@ function doPost(e) {
                 "result": "success",
                 "bank_type": bankType,
                 "count": items.length,
-                "version": "1.5"
+                "version": "1.6"
             })).setMimeType(ContentService.MimeType.JSON);
 
         } finally {
@@ -126,7 +126,7 @@ function doPost(e) {
         return ContentService.createTextOutput(JSON.stringify({
             "result": "error",
             "error": e.toString(),
-            "version": "1.5"
+            "version": "1.6"
         })).setMimeType(ContentService.MimeType.JSON);
     }
 }

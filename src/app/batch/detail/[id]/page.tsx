@@ -14,13 +14,29 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
     const activeInstallmentAccounts = await getAccountsWithActiveInstallments()
 
     if (!batch) {
-        return <div>Batch not found</div>
+        return <div className="p-10 text-center">Batch not found</div>
     }
+
+    // Format month for display
+    const formatMonth = (monthYear: string) => {
+        if (!monthYear) return 'Unknown'
+        const [year, month] = monthYear.split('-')
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+        const monthIndex = parseInt(month, 10) - 1
+        return `${monthNames[monthIndex]} ${year}`
+    }
+
+    const bankType = batch.bank_type || 'MBB'
+    const monthDisplay = batch.month_year ? formatMonth(batch.month_year) : batch.name
 
     return (
         <div className="container mx-auto py-10 space-y-4">
-            <div className="flex items-center gap-2">
-                <a href="/batch" className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700 transition-colors">
+            {/* Context Navigation back to Unified View */}
+            <div className="flex items-center gap-2 text-sm px-4">
+                <a
+                    href={`/batch/${bankType.toLowerCase()}?month=${batch.month_year}`}
+                    className="flex items-center gap-1 text-slate-500 hover:text-slate-700 transition-colors"
+                >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
                         width="16"
@@ -35,16 +51,21 @@ export default async function BatchDetailPage({ params }: { params: Promise<{ id
                         <path d="m12 19-7-7 7-7" />
                         <path d="M19 12H5" />
                     </svg>
-                    Back to Batches
+                    Back to {bankType} Batches
                 </a>
+                <span className="text-slate-400">/</span>
+                <span className="font-medium text-slate-900">{monthDisplay}</span>
             </div>
-            <BatchDetail
-                batch={batch}
-                accounts={accounts}
-                bankMappings={bankMappings}
-                webhookLinks={webhookLinks}
-                activeInstallmentAccounts={activeInstallmentAccounts}
-            />
+
+            <div className="px-4">
+                <BatchDetail
+                    batch={batch}
+                    accounts={accounts}
+                    bankMappings={bankMappings}
+                    webhookLinks={webhookLinks}
+                    activeInstallmentAccounts={activeInstallmentAccounts}
+                />
+            </div>
         </div>
     )
 }

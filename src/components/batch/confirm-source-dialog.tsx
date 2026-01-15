@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select } from '@/components/ui/select'
 import { confirmBatchSourceAction } from '@/actions/batch.actions'
 import { toast } from 'sonner'
-import { Loader2, Landmark } from 'lucide-react'
+import { Loader2, CheckCircle2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 export function ConfirmSourceDialog({ batchId, accounts }: { batchId: string, accounts: any[] }) {
@@ -35,15 +35,21 @@ export function ConfirmSourceDialog({ batchId, accounts }: { batchId: string, ac
     return (
         <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-                <Button variant="default" className="bg-blue-600 hover:bg-blue-700">
-                    <Landmark className="mr-2 h-4 w-4" />
-                    Confirm Source
+                <Button variant="default" className="bg-green-600 hover:bg-green-700">
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Match Real Source
                 </Button>
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
                     <DialogTitle>Select Real Money Source</DialogTitle>
                 </DialogHeader>
+                <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 mb-4">
+                    <p className="text-xs text-blue-700 leading-relaxed">
+                        This batch was originally funded using <strong>Draft Fund</strong> (virtual money).
+                        Please select the real bank account you used to pay for this batch to reconcile the balances.
+                    </p>
+                </div>
                 <div className="space-y-4 py-4">
                     <div className="space-y-2">
                         <label className="text-sm font-medium">Source Account</label>

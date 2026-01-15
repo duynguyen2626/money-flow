@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -25,7 +25,7 @@ import { Combobox } from '@/components/ui/combobox'
 import { addBatchItemAction } from '@/actions/batch.actions'
 import { toast } from 'sonner'
 import { ConfirmDialog } from '@/components/common/ConfirmDialog'
-import { Info, Edit, Plus } from 'lucide-react'
+import { Info, Edit, Plus, Loader2 } from 'lucide-react'
 import { EditAccountDialog } from '@/components/moneyflow/edit-account-dialog'
 import { CreateAccountDialog } from '@/components/moneyflow/create-account-dialog'
 
@@ -53,6 +53,7 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
     const [recentBanks, setRecentBanks] = useState<string[]>([])
     const [managedAccounts, setManagedAccounts] = useState<{ name: string; receiverName: string; bankNumber: string }[]>([])
     const [accountTab, setAccountTab] = useState<'filtered' | 'all'>('filtered')
+    const [loading, setLoading] = useState(false)
 
     useEffect(() => {
         const stored = localStorage.getItem('recent_bank_codes')
@@ -273,6 +274,7 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
     }, [bankNumber, managedAccounts, form])
 
     async function onSubmit(values: FormValues) {
+        setLoading(true)
         try {
             const targetAccountId = values.target_account_id === 'none' ? null : values.target_account_id
 
@@ -300,37 +302,47 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
         } catch (error) {
             console.error(error)
             toast.error('Failed to add item')
+        } finally {
+            setLoading(false)
         }
     }
 
     async function performAdd(values: FormValues) {
-        const targetAccountId = values.target_account_id === 'none' ? null : values.target_account_id
+        setLoading(true)
+        try {
+            const targetAccountId = values.target_account_id === 'none' ? null : values.target_account_id
 
-        await addBatchItemAction({
-            batch_id: batchId,
-            receiver_name: values.receiver_name,
-            target_account_id: targetAccountId || null,
-            amount: values.amount,
-            note: values.note,
-            bank_name: values.bank_name,
-            bank_number: values.bank_number,
-            card_name: values.card_name,
-        })
+            await addBatchItemAction({
+                batch_id: batchId,
+                receiver_name: values.receiver_name,
+                target_account_id: targetAccountId || null,
+                amount: values.amount,
+                note: values.note,
+                bank_name: values.bank_name,
+                bank_number: values.bank_number,
+                card_name: values.card_name,
+            })
 
-        toast.success('Item added successfully')
+            toast.success('Item added successfully')
 
-        form.reset({
-            receiver_name: '',
-            target_account_id: 'none',
-            amount: 0,
-            note: '',
-            bank_code: '',
-            bank_name: '',
-            bank_number: '',
-            card_name: '',
-        })
+            form.reset({
+                receiver_name: '',
+                target_account_id: 'none',
+                amount: 0,
+                note: '',
+                bank_code: '',
+                bank_name: '',
+                bank_number: '',
+                card_name: '',
+            })
 
-        setOpen(false)
+            setOpen(false)
+        } catch (error) {
+            console.error(error)
+            toast.error('Failed to add item')
+        } finally {
+            setLoading(false)
+        }
     }
 
     const formatCurrency = (value: number) => {
@@ -346,7 +358,10 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
             <Dialog open={open} onOpenChange={setOpen}>
 
                 <DialogTrigger asChild>
-                    <Button variant="outline">Add Item</Button>
+                    <Button variant="outline" className="text-blue-600 border-blue-200 hover:bg-blue-50">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Item
+                    </Button>
                 </DialogTrigger>
                 <DialogContent>
                     <DialogHeader>
@@ -417,44 +432,37 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
                                 ) : (
                                     <FormField
                                         control={form.control}
-                                        name="bank_name"
+                                        name="bank_code"
                                         render={({ field }) => (
                                             <FormItem className="col-span-2">
                                                 <FormLabel className="text-xs font-semibold text-slate-600">Bank Name</FormLabel>
                                                 <FormControl>
                                                     <Combobox
-                                                        items={(() => {
+                                                        items={useMemo(() => {
                                                             const seen = new Set()
                                                             return bankMappings
                                                                 .filter(b => {
-                                                                    if (!b.bank_name) return false
-                                                                    // Use bank_name for uniqueness check in MBB
-                                                                    const duplicate = seen.has(b.bank_name)
-                                                                    seen.add(b.bank_name)
+                                                                    if (!b.bank_code) return false
+                                                                    const duplicate = seen.has(b.bank_code)
+                                                                    seen.add(b.bank_code)
                                                                     return !duplicate
                                                                 })
-                                                                .map(b => ({
-                                                                    // MBB Format: "Ngoại thương Việt Nam (VCB)"
-                                                                    value: `${b.bank_name} (${b.bank_code})`,
-                                                                    label: `${b.bank_name} (${b.bank_code})`,
-                                                                    description: b.short_name,
-                                                                    searchValue: `${b.bank_name} ${b.bank_code} ${b.short_name}`
-                                                                }))
-                                                        })()}
+                                                                .map(b => {
+                                                                    const displayName = b.short_name || b.bank_name
+                                                                    return {
+                                                                        value: b.bank_code,
+                                                                        label: `${displayName} (${b.bank_code})`,
+                                                                        description: b.bank_name,
+                                                                        searchValue: `${displayName} ${b.bank_name} ${b.bank_code}`
+                                                                    }
+                                                                })
+                                                        }, [bankMappings])}
                                                         value={field.value}
                                                         onValueChange={(val) => {
                                                             field.onChange(val)
-                                                            // Extract bank code from "Name (CODE)" format
                                                             if (val) {
-                                                                const match = val.match(/\(([^)]+)\)$/)
-                                                                if (match && match[1]) {
-                                                                    const code = match[1]
-                                                                    const found = bankMappings.find(b => b.bank_code === code)
-                                                                    if (found) {
-                                                                        form.setValue('bank_code', found.bank_code)
-                                                                        updateRecentBanks(found.bank_code)
-                                                                    }
-                                                                }
+                                                                updateRecentBanks(val)
+                                                                // bank_name will be auto-filled by the useEffect watching bankCode
                                                             }
                                                         }}
                                                         placeholder="Select bank"
@@ -632,8 +640,19 @@ export function AddItemDialog({ batchId, batchName, accounts, bankType = 'VIB' }
                                     </FormItem>
                                 )}
                             />
-                            <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 h-11 text-base font-bold shadow-lg shadow-blue-200">
-                                Add to Batch
+                            <Button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full bg-blue-600 hover:bg-blue-700 h-11 text-base font-bold shadow-lg shadow-blue-200"
+                            >
+                                {loading ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Adding...
+                                    </>
+                                ) : (
+                                    'Add to Batch'
+                                )}
                             </Button>
                         </form>
                     </Form>
