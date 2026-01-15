@@ -11,20 +11,26 @@ The current accounts page has cluttered cards with excessive whitespace. The use
 ### 1. Update Filter Tabs
 - **File**: `src/components/moneyflow/account-list.tsx`
 - **Changes**:
-  - Reorder filters: Credit (default) → Account → Savings → Others → All
+  - Reorder filters: Credit (default) → Account → Savings → Debt Accounts → All
   - Change default `activeFilter` from `'all'` to `'credit'`
   - Rename "Bank" filter to "Account"
-  - Add "Others" filter for debt/loans
+  - Rename "Others" to "Debt Accounts" (for Receivable accounts)
   - When `activeFilter === 'all'`, automatically switch to table layout
+  - **Sort Order**: Primary by due date (urgent first), secondary by spend need (yellow/amber cards)
+  - Cards with near due dates should have **bold colored borders** (red for urgent, amber for warning)
+  - Cards needing more spend should also have **bold amber borders**
+  - Move urgent/spend indicators to card header (no separate section)
 
 ### 2. Redesign Account Cards
 - **File**: `src/components/moneyflow/account-card.tsx`
+- **Reference**: Batch MBB/VIB cards (but more compact)
 - **New Structure**:
   ```
   ┌─────────────────────────────────────┐
   │ HEADER (Colored Gradient)           │
   │ • Card Name (bold, white)            │
-  │ • Due Date Badge                     │
+  │ • Due Date Badge (if urgent)         │
+  │ • Spend Need Badge (if needed)       │
   │ • Balance (large, bold)              │
   │ • Security Badge (Secured/Unsecured) │
   │ • Parent/Child Indicator             │
@@ -36,26 +42,39 @@ The current accounts page has cluttered cards with excessive whitespace. The use
   │ │ IMG  │  • Current Spend             │
   │ │      │  • Cashback Earned           │
   │ │      │  • Progress Indicators       │
-  │ └──────┘  • Expand Arrow →            │
+  │ └──────┘  • Expand Arrow → (CLICK)   │
   ├─────────────────────────────────────┤
   │ FOOTER (Quick Actions)               │
   │ [Income] [Expense] [Transfer] [Lend] │
   └─────────────────────────────────────┘
   ```
 
+**IMPORTANT**: 
+- **Click arrow (→) to open details**, NOT the card body
+- Card body click should be disabled or do nothing
+- Only the expand arrow should navigate to `/accounts/{id}`
+
 ### 3. Fix Image Rendering
-- **Credit Cards**:
-  - Vertical orientation (portrait)
+**CRITICAL CHANGE**: Do NOT rotate or transform images anymore!
+
+- **All Account Images**:
+  - Keep original orientation from Cloudinary/URL
+  - NO rotation (`-rotate-90` removed)
+  - NO transform or scale
   - `object-fit: contain`
   - No border, no background
-  - Preserve original aspect ratio
-  - Max width: 80px, height: auto
-  
-- **Other Accounts**:
-  - Square (1:1 aspect ratio)
-  - `object-fit: contain`
-  - No border
-  - Size: 64x64px
+  - Preserve original aspect ratio exactly as provided
+  - Max width: 80px for credit cards, 64px for others
+  - Height: auto (preserve aspect ratio)
+
+**Example**:
+```tsx
+// OLD (WRONG):
+className="object-contain -rotate-90 scale-[1.4]"
+
+// NEW (CORRECT):
+className="object-contain"
+```
 
 ### 4. Add Gradient Backgrounds
 ```css
