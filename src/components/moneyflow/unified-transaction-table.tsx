@@ -1650,19 +1650,22 @@ export function UnifiedTransactionTable({
                               {/* Row 2: Badges (Installment/Refund/Split) */}
                               {(() => {
                                 const metadata = (typeof txn.metadata === 'string' ? JSON.parse(txn.metadata) : txn.metadata) as any;
-                                const isSplitBase = metadata?.is_split_bill_base;
-                                const isSplitChild = metadata?.split_parent_id;
+                                // Support New and Old flags
+                                const isSplitParent = metadata?.is_split_bill === true || metadata?.is_split_bill_base === true;
+                                const isSplitChild = !!(metadata?.parent_transaction_id || metadata?.split_parent_id);
                                 const splitGroupName = metadata?.split_group_name;
 
                                 let splitBadge = null;
-                                if (isSplitBase || isSplitChild) {
-                                  const badgeText = isSplitBase ? "Split Base" : "Split";
-                                  const badgeColor = isSplitBase
-                                    ? "bg-blue-100 text-blue-700 border-blue-200"
-                                    : "bg-emerald-100 text-emerald-700 border-emerald-200";
-                                  const tooltipText = splitGroupName
-                                    ? `${badgeText} - Group: ${splitGroupName}`
-                                    : badgeText;
+                                if (isSplitParent || isSplitChild) {
+                                  const badgeText = isSplitParent ? "SPLIT" : "SHARE";
+                                  // Parent = Indigo (Distinct), Child = Slate (Subtle)
+                                  const badgeColor = isSplitParent
+                                    ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                    : "bg-slate-50 text-slate-600 border-slate-200";
+
+                                  const tooltipText = isSplitParent
+                                    ? (splitGroupName ? `Split Bill Parent - Group: ${splitGroupName}` : "Split Bill Parent (Total)")
+                                    : "Split Bill Share (Linked)";
 
                                   splitBadge = (
                                     <CustomTooltip content={tooltipText}>
@@ -1670,7 +1673,7 @@ export function UnifiedTransactionTable({
                                         "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold whitespace-nowrap",
                                         badgeColor
                                       )}>
-                                        {isSplitBase ? "📊" : "🔗"} {badgeText}
+                                        {isSplitParent ? "⚡" : "🔗"} {badgeText}
                                       </span>
                                     </CustomTooltip>
                                   );
@@ -1765,20 +1768,20 @@ export function UnifiedTransactionTable({
 
                                 {/* Split Bill Indicator */}
                                 {(() => {
-                                  const metadata = txn.metadata as any;
-                                  const isSplitBase = metadata?.is_split_bill_base;
-                                  const isSplitChild = metadata?.split_parent_id;
+                                  const metadata = (typeof txn.metadata === 'string' ? JSON.parse(txn.metadata) : txn.metadata) as any;
+                                  const isSplitParent = metadata?.is_split_bill === true || metadata?.is_split_bill_base === true;
+                                  const isSplitChild = !!(metadata?.parent_transaction_id || metadata?.split_parent_id);
                                   const splitGroupName = metadata?.split_group_name;
 
-                                  if (!isSplitBase && !isSplitChild) return null;
+                                  if (!isSplitParent && !isSplitChild) return null;
 
-                                  const badgeText = isSplitBase ? "Split Base" : "Split";
-                                  const badgeColor = isSplitBase
-                                    ? "bg-blue-100 text-blue-700 border-blue-200"
-                                    : "bg-emerald-100 text-emerald-700 border-emerald-200";
-                                  const tooltipText = splitGroupName
-                                    ? `${badgeText} - Group: ${splitGroupName}`
-                                    : badgeText;
+                                  const badgeText = isSplitParent ? "SPLIT" : "SHARE";
+                                  const badgeColor = isSplitParent
+                                    ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                                    : "bg-slate-50 text-slate-600 border-slate-200";
+                                  const tooltipText = isSplitParent
+                                    ? (splitGroupName ? `Split Bill Parent - Group: ${splitGroupName}` : "Split Bill Parent (Total)")
+                                    : "Split Bill Share (Linked)";
 
                                   return (
                                     <CustomTooltip content={tooltipText}>
@@ -1786,7 +1789,7 @@ export function UnifiedTransactionTable({
                                         "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold whitespace-nowrap",
                                         badgeColor
                                       )}>
-                                        {isSplitBase ? "📊" : "🔗"} {badgeText}
+                                        {isSplitParent ? "⚡" : "🔗"} {badgeText}
                                       </span>
                                     </CustomTooltip>
                                   );

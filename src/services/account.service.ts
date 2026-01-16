@@ -619,6 +619,7 @@ export async function recalculateBalance(accountId: string): Promise<boolean> {
     .from('transactions')
     .select('amount, type, category_id, account_id, target_account_id, status')
     .eq('status', 'posted')
+    .is('parent_transaction_id', null)
     .or(`account_id.eq.${accountId},target_account_id.eq.${accountId}`)
 
   if (txnError) {
@@ -668,6 +669,7 @@ export async function recalculateBalanceWithClient(
     .from('transactions')
     .select('amount, type, category_id, account_id, target_account_id, status')
     .eq('status', 'posted')
+    .is('parent_transaction_id', null)
     .or(`account_id.eq.${accountId},target_account_id.eq.${accountId}`)
 
   if (txnError) {

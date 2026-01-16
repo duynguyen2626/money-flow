@@ -210,7 +210,11 @@ export function ManageSheetButton({
               }}
             >
               <RefreshCcw className={cn("h-3.5 w-3.5 mr-1.5", isManaging && "animate-spin")} />
-              {isManaging ? 'Syncing' : 'Sheet'}
+              {isManaging ? (
+                'Syncing'
+              ) : (
+                <span className="font-bold">{cycleTag || 'Sheet'}</span>
+              )}
             </Button>
 
             {/* Settings Trigger Icon */}

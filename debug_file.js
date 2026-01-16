@@ -1,4 +1,5 @@
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require('fs');
 const path = 'src/actions/transaction-actions.ts';
 let c = fs.readFileSync(path, 'utf8');

@@ -7,7 +7,7 @@ import dotenv from 'dotenv'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const claspPath = join(__dirname, '.clasp.json')
-const repoRoot = join(__dirname, '..', '..')
+const repoRoot = join(__dirname, '..', '..', '..')
 
 const args = process.argv.slice(2)
 const getFlagValue = (flag) => {
@@ -321,6 +321,37 @@ const main = async () => {
     const indexLabel = selected.index ? `${selected.index}) ` : ''
     const statusLabel = result.status === 0 ? 'PUSHED' : 'PUSH FAILED'
     console.log(`${indexLabel}${selected.profile.key} ${statusLabel}`)
+  }
+
+  // AUTO-DEPLOY LOGIC FOR SINGLE PUSH
+  if (result.status === 0) {
+    let profileKey = selected?.profile?.key
+    if (!profileKey) {
+      const found = profiles.find(p => p.value === scriptId)
+      if (found) profileKey = found.key
+    }
+
+    if (profileKey) {
+      const deployEnvKey = profileKey.replace('_SCRIPT_', '_DEPLOY_')
+      const deployId = process.env[deployEnvKey]
+
+      if (deployId) {
+        console.log(`   🚀 Auto-deploying to ${deployId}...`)
+        const deployCmd = `${claspCmd} deploy --deploymentId "${deployId}" --description "Auto-updated_via_script"`
+
+        const deployResult = spawnSync(deployCmd, [], {
+          cwd: __dirname,
+          stdio: 'inherit',
+          shell: true,
+        })
+
+        if (deployResult.status === 0) {
+          console.log(`   ✨ Deployed Successfully!`)
+        } else {
+          console.log(`   ⚠️ Deploy Failed (Exit Code: ${deployResult.status})`)
+        }
+      }
+    }
   }
 
   process.exit(result.status ?? 0)

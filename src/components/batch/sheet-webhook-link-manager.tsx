@@ -16,14 +16,12 @@ type SheetWebhookLink = {
 }
 
 export function SheetWebhookLinkManager({ initialLinks, onChange }: { initialLinks: SheetWebhookLink[]; onChange?: (links: SheetWebhookLink[]) => void }) {
+    // Fixed: Use initialLinks directly as initial state, no need to sync in useEffect
     const [links, setLinks] = useState<SheetWebhookLink[]>(initialLinks || [])
     const [name, setName] = useState('')
     const [url, setUrl] = useState('')
     const [isPending, startTransition] = useTransition()
 
-    useEffect(() => {
-        setLinks(initialLinks || [])
-    }, [initialLinks])
 
     useEffect(() => {
         if (onChange) {

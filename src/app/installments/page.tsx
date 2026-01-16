@@ -87,8 +87,8 @@ export default async function InstallmentsPage({ searchParams }: PageProps) {
             <div className="rounded-md border bg-amber-50/50 p-4 text-sm text-amber-800">
               <p className="font-medium">Pending Setup</p>
               <p>
-                These transactions were marked as installments but haven't been
-                set up yet. Click "Setup Plan" to configure terms.
+                These transactions were marked as installments but haven&apos;t been
+                set up yet. Click &quot;Setup Plan&quot; to configure terms.
               </p>
             </div>
             <PendingInstallmentTable

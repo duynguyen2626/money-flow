@@ -1,10 +1,9 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 5.0 (FORMULA REFACTOR)
-// Last Updated: 2026-01-13 22:15 ICT
+// VERSION: 5.2 (FINAL STABLE)
+// Last Updated: 2026-01-16 16:45 ICT
 // Scope: Sync logic fixes and simplified formulas.
-//        - Sync All: Inserts/Deletes rows within the auto-block scope to shift manual data.
-//        - Formulas: In/Out now use SUMIFS(J:J) directly as J is already Net Price.
-//        - Remains: SUM(J:J).
+//        - Bank Info: Uses raw integer format for remains.
+//        - Final Price: J = F - I (Signed). Force cache bust.
 
 /*
 function onOpen() {
@@ -108,8 +107,27 @@ function handleSyncTransactions(payload) {
     }
 
     var ss = getOrCreateSpreadsheet(personId, payload);
+
+    // Safety: Default cycleTag if missing (e.g. empty rows)
+    if (!cycleTag) {
+        cycleTag = getCycleTagFromDate(new Date());
+    }
+
     var sheet = getOrCreateCycleTab(ss, cycleTag);
+    if (!sheet) throw new Error("Could not create or find sheet for tag: " + cycleTag);
+
     var syncOptions = buildSheetSyncOptions(payload);
+
+    // CRITICAL FIX: Clear Summary Columns L:N completely BEFORE ANY INSERTION
+    // This prevents the summary table from being pushed down and duplicated by insertRows
+    try {
+        var maxRows = sheet.getMaxRows();
+        var clearRange = sheet.getRange(1, 12, maxRows, 3); // L1:N(max)
+        clearRange.clearContent();
+        clearRange.setBorder(false, false, false, false, false, false);
+        clearRange.setBackground(null);
+        clearRange.breakApart();
+    } catch (e) { }
 
     setupNewSheet(sheet, syncOptions.summaryOptions);
 
@@ -164,7 +182,11 @@ function handleSyncTransactions(payload) {
             var r = startRow + i;
             arrABC[i] = [txn.id, normalizeType(txn.type, txn.amount), new Date(txn.date)];
             arrD[i] = ['=IFERROR(VLOOKUP(O' + r + ';Shop!A:B;2;FALSE);O' + r + ')'];
-            arrEFGH[i] = [txn.notes || "", Math.abs(txn.amount), txn.percent_back || 0, txn.fixed_back || 0];
+            var amt = Math.abs(txn.amount);
+            if (normalizeType(txn.type, txn.amount) === 'In') {
+                amt = -amt;
+            }
+            arrEFGH[i] = [txn.notes || "", amt, txn.percent_back || 0, txn.fixed_back || 0];
             // arrIJ removed
             arrO[i] = [txn.shop || ""];
         }
@@ -221,7 +243,13 @@ function handleSingleTransaction(payload, action) {
     sheet.getRange(targetRow, 2).setValue(normalizeType(payload.type, payload.amount));
     sheet.getRange(targetRow, 3).setValue(new Date(payload.date));
     sheet.getRange(targetRow, 5).setValue(payload.notes || "");
-    sheet.getRange(targetRow, 6).setValue(Math.abs(payload.amount));
+
+    var amt = Math.abs(payload.amount);
+    if (normalizeType(payload.type, payload.amount) === 'In') {
+        amt = -amt;
+    }
+    sheet.getRange(targetRow, 6).setValue(amt);
+
     sheet.getRange(targetRow, 7).setValue(payload.percent_back || 0);
     sheet.getRange(targetRow, 8).setValue(payload.fixed_back || 0);
     sheet.getRange(targetRow, 15).setValue(payload.shop || "");
@@ -248,52 +276,56 @@ function getLastDataRow(sheet) {
 }
 
 function applyBordersAndSort(sheet, summaryOptions) {
-    // ONLY Sort the Auto-Block (rows with ID)
+    // 1. DATA STYLING & SORTING (Only if data exists)
     var lastAutoRow = getLastDataRow(sheet);
-    if (lastAutoRow < 2) return;
 
-    clearImageMerges(sheet);
+    if (lastAutoRow >= 2) {
+        clearImageMerges(sheet);
+        var rowCount = lastAutoRow - 1;
+        var dataRange = sheet.getRange(2, 1, rowCount, 15);
+        dataRange.sort({ column: 3, ascending: true });
 
-    var rowCount = lastAutoRow - 1;
-    var dataRange = sheet.getRange(2, 1, rowCount, 15);
-    dataRange.sort({ column: 3, ascending: true });
+        var arrD = new Array(rowCount);
+        for (var i = 0; i < rowCount; i++) {
+            var r = i + 2;
+            arrD[i] = ['=IFERROR(VLOOKUP(O' + r + ';Shop!A:B;2;FALSE);O' + r + ')'];
+        }
+        sheet.getRange(2, 4, rowCount, 1).setValues(arrD);
 
-    var arrD = new Array(rowCount);
-    // var arrIJ removed
+        ensureArrayFormulas(sheet);
 
-    for (var i = 0; i < rowCount; i++) {
-        var r = i + 2;
-        arrD[i] = ['=IFERROR(VLOOKUP(O' + r + ';Shop!A:B;2;FALSE);O' + r + ')'];
-        // arrIJ loop removed
+        // Fix Grey Background: Force White for all data rows
+        var maxRow = sheet.getLastRow();
+        if (maxRow >= 2) {
+            var totalRows = maxRow - 1;
+            var dataRange = sheet.getRange(2, 1, totalRows, 15); // A:O
+
+            // 1. Borders & Background
+            sheet.getRange(2, 1, totalRows, 10) // A:J
+                .setBorder(true, true, true, true, true, true)
+                .setBackground('#FFFFFF')
+                .setFontWeight('normal');
+
+            // 2. Alignment
+            sheet.getRange(2, 3, totalRows, 1).setHorizontalAlignment('center'); // Date
+
+            // 3. Number Format for F (Amount), I (Σ Back), J (Final Price)
+            // Using '#,##0' to match Summary Table
+            sheet.getRange(2, 6, totalRows, 1).setNumberFormat('#,##0'); // F
+            sheet.getRange(2, 9, totalRows, 2).setNumberFormat('#,##0'); // I, J
+        }
     }
 
-    sheet.getRange(2, 4, rowCount, 1).setValues(arrD);
-    // arrIJ setValues removed
-
-    ensureArrayFormulas(sheet);
-
-    // Borders for A:J for ALL DATA ROWS (including manual input)
-    var maxRow = sheet.getLastRow();
-    if (maxRow >= 2) {
-        var totalRows = maxRow - 1;
-        // Fix Grey Styling: Reset background and font weight for data rows
-        sheet.getRange(2, 1, totalRows, 10)
-            .setBorder(true, true, true, true, true, true)
-            .setBackground(null)
-            .setFontWeight('normal');
-
-        // FIXED CENTER ALIGNMENT FOR DATE COLUMN
-        sheet.getRange(2, 3, totalRows, 1).setHorizontalAlignment('center');
-    }
-
+    // 2. ALWAYS Re-draw Summary Table (Regardless of data rows)
     // Fix Summary Table area - Clear content, borders, AND background colors
-    sheet.getRange('L7:N').clearContent();
-    // Fix Summary Table area - Clear content, borders, AND background colors
-    sheet.getRange('L7:N').clearContent();
-    sheet.getRange('L7:N').clearFormat();  // This clears background colors and other formatting
-    sheet.getRange('L6:N6').clearContent(); // Clear old bank row if valid
-    sheet.getRange('L6:N6').setBorder(false, false, false, false, false, false);
-    sheet.getRange('L7:N').setBorder(false, false, false, false, false, false);
+    try {
+        var maxRows = sheet.getMaxRows();
+        var clearRange = sheet.getRange(1, 12, maxRows, 3); // L1:N(max)
+        clearRange.clearContent();
+        clearRange.setBorder(false, false, false, false, false, false);
+        clearRange.setBackground(null);
+        clearRange.breakApart();
+    } catch (e) { }
 
     setupSummaryTable(sheet, summaryOptions);
 }
@@ -361,7 +393,12 @@ function setupNewSheet(sheet, summaryOptions) {
     var rule1 = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$B2="In"').setBackground("#D5F5E3").setFontColor("#145A32").setRanges([sheet.getRange('A2:J')]).build();
     sheet.setConditionalFormatRules([rule1]);
 
-    setupSummaryTable(sheet, summaryOptions);
+    var rule1 = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$B2="In"').setBackground("#D5F5E3").setFontColor("#145A32").setRanges([sheet.getRange('A2:J')]).build();
+    sheet.setConditionalFormatRules([rule1]);
+
+    // setupSummaryTable REMOVED from here to prevent shifting during row insertion.
+    // It should only be called at the end of the process.
+
     ensureShopSheet(sheet.getParent());
     ensureBankInfoSheet(sheet.getParent());
     SpreadsheetApp.flush();
@@ -389,65 +426,94 @@ function setupSummaryTable(sheet, summaryOptions) {
     if (typeof showBankAccount === 'undefined') {
         showBankAccount = true;
     }
+
+    // Clear all backgrounds first
+    sheet.getRange('L2:N6').setBackground(null);
+    sheet.getRange('L2:N6').setFontColor('#000000');
+
     var r = sheet.getRange('L1:N1');
     r.setValues([['No.', 'Summary', 'Value']]);
-    r.setFontWeight('bold').setBackground('#fde4e4').setFontSize(12).setBorder(true, true, true, true, true, true).setHorizontalAlignment('center');
+    r.setFontWeight('bold').setBackground('#f3f4f6').setFontSize(12).setBorder(true, true, true, true, true, true).setHorizontalAlignment('center');
 
-    var d = sheet.getRange('L2:M4');
-    d.setValues([[1, 'In'], [2, 'Out'], [3, 'Remains']]);
-    d.setFontWeight('bold');  // Make all labels bold
+    // Row 2: In (Gross)
+    // Row 3: Out (Gross)
+    // Row 4: Total Back
+    // Row 5: Bank Info (Merged)
+    // Row 6: Remains (Net)
 
-    // N2 (In): Sum of Final Price (J) for "In". J already includes cashback logic (Net).
-    sheet.getRange('N2').setFormula('=SUMIFS(J:J;B:B;"In")');
+    // Row 2: In (Gross) - Dark Green
+    // Row 3: Out (Gross) - Dark Red
+    // Row 4: Total Back - Blue
+    // Row 5: Remains - Below Total Back
+    // Row 6: Bank Info - Below Remains
 
-    // N3 (Out): Sum of Final Price (J) for "Out". J already includes cashback logic (Net).
-    sheet.getRange('N3').setFormula('=SUMIFS(J:J;B:B;"Out")');
+    var labels = [
+        [1, 'In (Gross)'],
+        [2, 'Out (Gross)'],
+        [3, 'Total Back'],
+        [4, 'Remains']
+    ];
+    sheet.getRange('L2:M5').setValues(labels);
+    sheet.getRange('L2:M5').setFontWeight('bold');
 
-    // N4 (Remains): Simply SUM(Final Price) which is Net Debt
-    sheet.getRange('N4').setFormula('=SUM(J2:J)');
+    // N2 (In - Gross): Sum of Amount (F) for "In" (Expect Negative values)
+    sheet.getRange('N2').setFormula('=SUMIFS(F:F;B:B;"In")');
+    sheet.getRange('N2').setFontColor('#14532d'); // Dark Green
 
-    sheet.getRange('N2:N4').setNumberFormat('#,##0').setFontWeight('bold');
-    sheet.getRange('L2:N4').setBorder(true, true, true, true, true, true);
+    // N3 (Out - Gross): Sum of Amount (F) for "Out" (Positive values)
+    sheet.getRange('N3').setFormula('=SUMIFS(F:F;B:B;"Out")');
+    sheet.getRange('N3').setFontColor('#991b1b'); // Dark Red
 
-    // Clear all backgrounds first, then apply specific ones
-    sheet.getRange('L2:N5').setBackground(null);  // Clear all backgrounds in summary area
-    sheet.getRange('L4:N4').setBackground('#f8d0d0').setFontWeight('bold');  // Pink for Remains row only
+    // N4 (Total Back): Sum of Sum Back (I)
+    sheet.getRange('N4').setFormula('=SUM(I:I)');
+    sheet.getRange('N4').setFontColor('#1e40af'); // Blue
 
-    // Set text colors (bold already set above)
-    sheet.getRange('L2:N2').setFontColor('#137333');  // Green for In
-    sheet.getRange('L3:N3').setFontColor('#000000');  // Black for Out
-    sheet.getRange('L4:N5').setFontColor('#000000');  // Black for Remains, Bank
+    // N5 (Remains): Sum of Final Price (J). Since F is signed, J is signed.
+    // J = F - I. (Amount - Back).
+    // If Out: F=100, I=5. J=95.
+    // If In: F=-100, I=0. J=-100.
+    // Sum = 95 - 100 = -5. Net Debt. Correct.
+    sheet.getRange('N5').setFormula('=SUM(J2:J)');
 
-    try {
-        sheet.setColumnWidth(12, 50);
-        sheet.setColumnWidth(13, 130);
-        sheet.setColumnWidth(14, 130);
-    } catch (e) { }
+    // Styling
+    sheet.getRange('N2:N5').setNumberFormat('#,##0').setFontWeight('bold');
+    sheet.getRange('L2:N5').setBorder(true, true, true, true, true, true);
 
-    var bankCell = sheet.getRange('L5:N5');
+    // Highlight Remains
+    sheet.getRange('L5:N5').setBackground('#fee2e2'); // Soft red/pink for remains
+
+    // Bank Info at Row 6
+    var bankCell = sheet.getRange('L6:N6');
+    // Clear Row 6 first (merges/styles)
+    bankCell.breakApart();
+    bankCell.setBackground('#f9fafb');
+
     try {
         if (showBankAccount) {
             if (shouldMerge) {
                 bankCell.merge();
-            } else {
-                bankCell.breakApart();
             }
+
+            // Dynamic Formula with Remains (N5)
+            // User requested: =Bank... & " " & ROUND(N5;0)
+            if (bankAccountText) {
+                // If custom text provided (unlikely to change dynamic part but supports payload override)
+                var escapedText = bankAccountText.replace(/"/g, '""');
+                bankCell.setFormula('="' + escapedText + ' " & TEXT(N5;"0")'); // Raw integer format
+            } else {
+                // Referenced BankInfo sheet
+                bankCell.setFormula('=BankInfo!A2&" "&BankInfo!B2&" "&BankInfo!C2&" "&TEXT(N5;"0")');
+            }
+            bankCell.setFontWeight('bold')
+                .setHorizontalAlignment('left')
+                .setBorder(true, true, true, true, true, true)
+                .setWrap(false); // User requested NO text wrapping
         } else {
-            bankCell.breakApart();
+            bankCell.clearContent();
+            bankCell.setBorder(false, false, false, false, false, false);
+            bankCell.setBackground(null);
         }
     } catch (e) { }
-    if (showBankAccount) {
-        if (bankAccountText) {
-            var escapedText = bankAccountText.replace(/"/g, '""');
-            bankCell.setFormula('="' + escapedText + ' " & ROUND(N4;0)');
-        } else {
-            bankCell.setFormula('=BankInfo!A2&" "&BankInfo!B2&" "&BankInfo!C2&" "&ROUND(N4;0)');
-        }
-        bankCell.setFontWeight('bold').setHorizontalAlignment('left').setBorder(true, true, true, true, true, true);
-    } else {
-        bankCell.clearContent();
-        bankCell.setBorder(false, false, false, false, false, false);
-    }
 }
 
 function ensureShopSheet(ss) {
@@ -486,7 +552,12 @@ function ensureArrayFormulas(sheet) {
     sheet.getRange("I2").setFormula('=ARRAYFORMULA(IF(F2:F="";"";IF(F2:F*G2:G/100+H2:H=0;0;F2:F*G2:G/100+H2:H)))');
 
     // J2 Formula (Final Price)
-    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F="";"";IF(B2:B="In";(F2:F-I2:I)*(-1);F2:F-I2:I)))');
+    // J2 Formula (Final Price) - Force Update
+    // Updated Logic: F is Signed. J = F - I.
+    var jRange = sheet.getRange("J2:J");
+    try { jRange.clearContent(); jRange.clearDataValidations(); } catch (e) { }
+    // Added spaces to formula to ensure it is treated as a new string during sync
+    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F="";""; F2:F - I2:I ))');
 }
 
 function findRowById(sheet, id) {

@@ -7,7 +7,7 @@ import dotenv from 'dotenv'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const claspPath = join(__dirname, '.clasp.json')
-const repoRoot = join(__dirname, '..', '..')
+const repoRoot = join(__dirname, '..', '..', '..')
 
 const args = process.argv.slice(2)
 const getFlagValue = (flag) => {
@@ -107,12 +107,25 @@ const selectionFromProfile = (profiles, profile) => {
 }
 
 const chooseProfile = async (profiles) => {
-    if (!profiles.length) return null
+    if (!profiles.length) {
+        if (prefixArg) {
+            console.log(`No profiles found matching prefix: "${prefixArg}".`)
+            console.log('Available keys in env:', Object.keys(process.env).filter(k => /script/i.test(k)).join(', '))
+        }
+        return null
+    }
     console.log('Available script IDs:')
     profiles.forEach((profile, index) => {
         console.log(`${index + 1}) ${profile.key}`)
     })
-    const answer = await ask('Choose a number or paste a Script ID: ')
+    console.log('Press Enter to push ALL, or choose a number/paste a Script ID:')
+    const answer = await ask('Choice: ')
+
+    // Empty answer = push all
+    if (!answer || answer.trim() === '') {
+        return 'ALL'
+    }
+
     const index = toIndex(answer)
     const byIndex = selectByIndex(profiles, index)
     if (byIndex) {
@@ -129,16 +142,26 @@ const chooseProfile = async (profiles) => {
 
 const main = async () => {
     loadEnv()
+    // DEBUG ENV VARS
+    const debugKeys = Object.keys(process.env).filter(k => k.startsWith('BATCH_SHEET_'))
+    console.log('DEBUG: Found BATCH_SHEET keys:', debugKeys)
+    // Check specific values (redacted first chars)
+    debugKeys.forEach(k => {
+        const val = process.env[k]
+        console.log(`Key: ${k}, Value Length: ${val ? val.length : 0}`)
+    })
+
     const profiles = buildProfiles()
 
-    console.log(`DEBUG: Loaded ${profiles.length} profiles:`, profiles.map(p => p.key))
-    console.log(`DEBUG: prefixArg="${prefixArg}"`)
+    if (profiles.length === 0 && prefixArg) {
+        console.log(`No profiles found matching prefix: "${prefixArg}".`)
+        const allEnvKeys = Object.keys(process.env).filter(k => /script/i.test(k))
+        console.log('Available keys in env (containing "script"):', allEnvKeys.join(', '))
+    }
 
     const lifecycleEvent = process.env.npm_lifecycle_event || ''
-    console.log(`DEBUG: lifecycleEvent="${lifecycleEvent}"`)
     const lifecycleMatch = lifecycleEvent.match(/:(\d+)$/)
     const lifecycleIndex = lifecycleMatch ? toIndex(lifecycleMatch[1]) : null
-    console.log(`DEBUG: lifecycleIndex=${lifecycleIndex}`)
 
     let selected = null
     let scriptId = ''
@@ -147,7 +170,6 @@ const main = async () => {
     if (directIndex) {
         selected = selectByIndex(profiles, directIndex)
         scriptId = selected?.profile?.value ?? ''
-        console.log(`DEBUG: directIndex=${directIndex}, selected=${selected?.profile?.key}`)
     }
 
     if (!scriptId && scriptIdArg && isLikelyScriptId(scriptIdArg)) {
@@ -196,47 +218,98 @@ const main = async () => {
         scriptId = selected?.profile?.value ?? ''
     }
 
-    // If a specific script ID was identified (via args, env, or lifecycle), push to it.
-    if (scriptId) {
-        await pushToScript(scriptId, profiles, forceFlag, selected)
-    } else {
-        // Otherwise, if no specific ID provided, push to ALL profiles
-        if (profiles.length === 0) {
-            console.error('No profiles (script IDs) found in .env matching prefix. Aborting.')
-            process.exit(1)
+    if (!scriptId && profiles.length) {
+        const selection = await chooseProfile(profiles)
+
+        // Handle push ALL
+        if (selection === 'ALL') {
+            console.log(`\nPushing to ALL ${profiles.length} profiles...\n`)
+            let successCount = 0
+            let failCount = 0
+
+            for (let i = 0; i < profiles.length; i++) {
+                const profile = profiles[i]
+                const indexLabel = `${i + 1}/${profiles.length}`
+
+                console.log(`\n[${indexLabel}] Pushing to ${profile.key}...`)
+
+                const raw = readFileSync(claspPath, 'utf8')
+                const config = JSON.parse(raw)
+                config.scriptId = profile.value
+                writeFileSync(claspPath, JSON.stringify(config, null, 2) + '\n')
+
+                const pushArgs = ['push']
+                if (forceFlag) pushArgs.push('--force')
+
+                // Use clasp.cmd for Windows compatibility if needed
+                const claspCmd = process.platform === 'win32' ? 'clasp.cmd' : 'clasp'
+                const result = spawnSync(claspCmd, pushArgs, {
+                    cwd: __dirname,
+                    stdio: 'inherit',
+                    shell: true,
+                })
+
+                if (result.status === 0) {
+                    console.log(`[${indexLabel}] ${profile.key} ✅ PUSHED`)
+                    successCount++
+
+                    // AUTO-DEPLOY LOGIC
+                    const deployEnvKey = profile.key.replace('_SCRIPT_', '_DEPLOY_')
+                    const deployId = process.env[deployEnvKey]
+
+                    if (deployId) {
+                        console.log(`   🚀 Auto-deploying to ${deployId}...`)
+                        // Use specific deploy command with description
+                        const deployCmd = `${claspCmd} deploy --deploymentId "${deployId}" --description "Auto-updated_via_script"`
+
+                        const deployResult = spawnSync(deployCmd, [], {
+                            cwd: __dirname,
+                            stdio: 'inherit',
+                            shell: true,
+                        })
+
+                        if (deployResult.status === 0) {
+                            console.log(`   ✨ Deployed Successfully!`)
+                        } else {
+                            console.log(`   ⚠️ Deploy Failed (Exit Code: ${deployResult.status})`)
+                        }
+                    } else {
+                        console.log(`   ℹ️ No auto-deploy variable found. Checked key: ${deployEnvKey}`)
+                        console.log(`   (Value in env: ${process.env[deployEnvKey] ? 'Yes' : 'No/Undefined'})`)
+                    }
+
+                } else {
+                    console.log(`[${indexLabel}] ${profile.key} ❌ PUSH FAILED`)
+                    failCount++
+                }
+            }
+
+            console.log(`\n📊 Summary: ${successCount} succeeded, ${failCount} failed`)
+            process.exit(failCount > 0 ? 1 : 0)
         }
 
-        console.log(`\nNo specific ID provided. Pushing to ALL ${profiles.length} detected profiles...\n`)
-
-        let errorCount = 0
-        for (const profile of profiles) {
-            const result = await pushToScript(profile.value, profiles, forceFlag, { profile })
-            if (result.status !== 0) errorCount++
-            console.log('---')
-        }
-
-        if (errorCount > 0) {
-            console.error(`\nCompleted with ${errorCount} errors.`)
-            process.exit(1)
-        } else {
-            console.log('\nAll pushes completed successfully.')
-            process.exit(0)
+        if (selection && typeof selection === 'object' && selection.profile) {
+            selected = selection
+            scriptId = selection.profile.value
+        } else if (typeof selection === 'string') {
+            scriptId = selection
         }
     }
-}
 
-async function pushToScript(scriptId, profiles, forceFlag, selected) {
+    if (!scriptId) {
+        scriptId = await ask('Enter Apps Script ID to push to: ')
+    }
+    if (!scriptId) {
+        console.error('Missing script ID. Aborting.')
+        process.exit(1)
+    }
+
     if (selected?.profile?.key) {
         const indexLabel = selected.index ? `${selected.index}) ` : ''
-        console.log(`Target: ${indexLabel}${selected.profile.key} (${scriptId})`)
-    } else {
-        // Try to find profile for nice logging
-        const p = profiles.find(x => x.value === scriptId)
-        if (p) console.log(`Target: ${p.key} (${scriptId})`)
-        else console.log(`Target: ${scriptId}`)
+        console.log(`Selected: ${indexLabel}${selected.profile.key}`)
     }
 
-    const raw = existsSync(claspPath) ? readFileSync(claspPath, 'utf8') : '{}'
+    const raw = readFileSync(claspPath, 'utf8')
     const config = JSON.parse(raw)
     config.scriptId = scriptId
     writeFileSync(claspPath, JSON.stringify(config, null, 2) + '\n')
@@ -244,15 +317,41 @@ async function pushToScript(scriptId, profiles, forceFlag, selected) {
     const pushArgs = ['push']
     if (forceFlag) pushArgs.push('--force')
 
-    const result = spawnSync('clasp', pushArgs, {
+    const claspCmd = process.platform === 'win32' ? 'clasp.cmd' : 'clasp'
+    const result = spawnSync(claspCmd, pushArgs, {
         cwd: __dirname,
         stdio: 'inherit',
+        shell: true,
     })
 
-    const statusLabel = result.status === 0 ? 'SUCCESS' : 'FAILED'
-    console.log(`Result: ${statusLabel}`)
+    // SINGLE PUSH AUTO-DEPLOY LOGIC
+    if (result.status === 0 && selected?.profile?.key) {
+        const deployEnvKey = selected.profile.key.replace('_SCRIPT_', '_DEPLOY_')
+        const deployId = process.env[deployEnvKey]
 
-    return result
+        if (deployId) {
+            console.log(`   🚀 Auto-deploying to ${deployId}...`)
+            const deployCmd = `${claspCmd} deploy --deploymentId "${deployId}" --description "Auto-updated_via_script"`
+            const deployResult = spawnSync(deployCmd, [], {
+                cwd: __dirname,
+                stdio: 'inherit',
+                shell: true,
+            })
+            if (deployResult.status === 0) {
+                console.log(`   ✨ Deployed Successfully!`)
+            } else {
+                console.log(`   ⚠️ Deploy Failed (Exit Code: ${deployResult.status})`)
+            }
+        }
+    }
+
+    if (selected?.profile?.key) {
+        const indexLabel = selected.index ? `${selected.index}) ` : ''
+        const statusLabel = result.status === 0 ? 'PUSHED' : 'PUSH FAILED'
+        console.log(`${indexLabel}${selected.profile.key} ${statusLabel}`)
+    }
+
+    process.exit(result.status ?? 0)
 }
 
 main()

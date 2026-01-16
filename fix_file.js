@@ -1,4 +1,5 @@
 
+/* eslint-disable @typescript-eslint/no-require-imports */
 const fs = require('fs');
 const path = 'src/actions/transaction-actions.ts';
 let c = fs.readFileSync(path, 'utf8'); // Reading as utf8 might mangle the utf16 part but the start is good.

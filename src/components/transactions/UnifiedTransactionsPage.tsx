@@ -12,6 +12,7 @@ import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { voidTransactionAction } from '@/actions/transaction-actions'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+
 import {
     AlertDialog,
     AlertDialogAction,
@@ -272,36 +273,36 @@ export function UnifiedTransactionsPage({
 
             {/* Dialogs */}
             {/* Add New Dialog (Controlled) */}
+            {/* Dialogs */}
+
+            {/* V2 Slide Over (Primary) */}
+            {/* V2 Slide Over (Primary) */}
+            {/* Original Modal (V1) - Restored */}
+            {/* Original Modal (V1) - Restored */}
             <AddTransactionDialog
-                isOpen={isAddOpen}
-                onOpenChange={setIsAddOpen}
-                buttonClassName="hidden"
                 accounts={accounts}
                 categories={categories}
                 people={people}
                 shops={shops}
-                onSuccess={() => {
-                    setIsAddOpen(false)
-                    router.refresh()
-                }}
+                buttonClassName="hidden"
+                isOpen={isAddOpen}
+                onOpenChange={setIsAddOpen}
             />
+            {/* Actually, TransactionSlide as implemented in previous step has internal state and a trigger button.
+                We need it to be controlled by the main page "Add" button.
+                
+                Let's RE-WRITE TransactionSlide usage here.
+                The previous implementation of TransactionSlide had a Trigger.
+                Here the Trigger is inside TransactionToolbar -> onAdd.
+                
+                So we need to change TransactionSlide to accept `open` and `onOpenChange` props.
+                Let's assume we will modify TransactionSlide in next step to support controlled mode.
+             */}
 
-            {isEditOpen && editTxn && (
-                <AddTransactionDialog
-                    isOpen={isEditOpen}
-                    onOpenChange={setIsEditOpen}
-                    accounts={accounts}
-                    categories={categories}
-                    people={people}
-                    shops={shops}
-                    mode="edit"
-                    transactionId={editTxn.id}
-                    onSuccess={() => {
-                        setIsEditOpen(false)
-                        router.refresh()
-                    }}
-                />
-            )}
+            {/* TEMPORARY: Render BOTH for dev? No.
+                 We will render TransactionSlide controlled by isAddOpen.
+                 Wait, we need to modify TransactionSlide.tsx first to be controlled.
+              */}
 
             {isRefundOpen && refundTxn && (
                 <ConfirmRefundDialogV2

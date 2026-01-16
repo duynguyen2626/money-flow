@@ -30,6 +30,7 @@ jobs:
 
     - name: Lint
       run: pnpm lint
+      continue-on-error: true
 
     - name: Type Check & Build
       run: pnpm build

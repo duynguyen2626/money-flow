@@ -25,7 +25,19 @@ type ManagedAccount = {
     bankNumber: string
 }
 
-export function BatchPageClient({ batches, accounts, bankMappings, webhookLinks }: { batches: Batch[], accounts: any[], bankMappings: any[], webhookLinks: any[] }) {
+export function BatchPageClient({
+    batches,
+    accounts,
+    bankMappings,
+    webhookLinks,
+    bankType = 'MBB'
+}: {
+    batches: Batch[]
+    accounts: any[]
+    bankMappings: any[]
+    webhookLinks: any[]
+    bankType?: 'MBB' | 'VIB'
+}) {
     const router = useRouter()
     const [importDialogOpen, setImportDialogOpen] = useState(false)
     const [selectedMappingIds, setSelectedMappingIds] = useState<string[]>([])
@@ -117,7 +129,7 @@ export function BatchPageClient({ batches, accounts, bankMappings, webhookLinks 
         <div className="h-full overflow-auto">
             <div className="container mx-auto py-10">
                 <div className="flex justify-between items-center mb-8">
-                    <h1 className="text-3xl font-bold">Batch Transfers</h1>
+                    <h1 className="text-3xl font-bold">Batch Transfers ({bankType})</h1>
                     <div className="flex gap-2">
                         <Button variant="outline" onClick={() => setImportDialogOpen(true)}>
                             <Upload className="mr-2 h-4 w-4" />

@@ -20,12 +20,32 @@ interface Props {
 
 export function CashbackDashboardV2({ initialData, year, cards }: Props) {
     const [selectedCardId, setSelectedCardId] = useState<string | null>(initialData[0]?.cardId ?? null)
-    const [detailModal, setDetailModal] = useState<{ month: number } | null>(null)
+    const [detailModal, setDetailModal] = useState<{ month: number, tab?: string } | null>(null)
     const [viewMode, setViewMode] = useState<'detail' | 'matrix'>('detail')
 
 
-    // Only show credit cards
-    const filteredData = initialData.filter(d => d.cardType === 'credit_card' || !d.cardType)
+    // Filter: credit cards + exclude DUPLICATE/DO NOT USE + exclude zero-data
+    const filteredData = initialData.filter(d => {
+        // Step 1: Only credit cards
+        if (d.cardType !== 'credit_card' && d.cardType) return false
+
+        const cardInfo = cards.find(c => c.accountId === d.cardId)
+        const cardName = cardInfo?.accountName || ""
+
+        // Step 2: Exclude "DO NOT USE" or "DUPLICATE" accounts
+        const nameUpper = cardName.toUpperCase()
+        if (nameUpper.includes('DUPLICATE') || nameUpper.includes('DO NOT USE')) {
+            return false
+        }
+
+        // Step 3: Exclude zero-data accounts
+        const hasActivity = d.netProfit !== 0 ||
+            d.cashbackGivenYearTotal !== 0 ||
+            d.cashbackRedeemedYearTotal !== 0 ||
+            d.months.some(m => m.totalGivenAway > 0)
+
+        return hasActivity
+    })
 
     const selectedSummary = filteredData.find(d => d.cardId === selectedCardId) || filteredData[0]
     const selectedCardInfo = cards.find(c => c.accountId === selectedSummary?.cardId)
@@ -33,9 +53,9 @@ export function CashbackDashboardV2({ initialData, year, cards }: Props) {
     // Helper to format currency
     const fmt = (n: number) => new Intl.NumberFormat('vi-VN').format(Math.round(n))
 
-    const handleMonthClick = (month: number) => {
+    const handleMonthClick = (month: number, tab?: string) => {
         if (selectedSummary?.cardId) {
-            setDetailModal({ month })
+            setDetailModal({ month, tab })
         }
     }
 
@@ -84,7 +104,15 @@ export function CashbackDashboardV2({ initialData, year, cards }: Props) {
 
             <div className="flex flex-1 gap-6 overflow-hidden">
                 {viewMode === 'matrix' ? (
-                    <CashbackMatrixView data={filteredData} cards={cards} year={year} />
+                    <CashbackMatrixView
+                        data={filteredData}
+                        cards={cards}
+                        year={year}
+                        onMonthClick={(cardId, cardName, month) => {
+                            setSelectedCardId(cardId)
+                            setDetailModal({ month })
+                        }}
+                    />
                 ) : (
                     <>
                         {/* Sidebar - Card List */}
@@ -152,7 +180,7 @@ export function CashbackDashboardV2({ initialData, year, cards }: Props) {
 
                                     {/* Totals Row */}
                                     <Card>
-                                        <CardContent className="p-4 grid grid-cols-4 gap-4 text-center">
+                                        <CardContent className="p-4 grid grid-cols-5 gap-4 text-center">
                                             <div>
                                                 <div className="text-xs text-muted-foreground uppercase">Rate</div>
                                                 <div className="text-lg font-bold">{(selectedCardInfo?.rate || 0) * 100}%</div>
@@ -160,6 +188,10 @@ export function CashbackDashboardV2({ initialData, year, cards }: Props) {
                                             <div>
                                                 <div className="text-xs text-muted-foreground uppercase">Max/Cycle</div>
                                                 <div className="text-lg font-bold">{fmt(selectedCardInfo?.maxCashback || 0)}</div>
+                                            </div>
+                                            <div>
+                                                <div className="text-xs text-muted-foreground uppercase">Total Give Away</div>
+                                                <div className="text-lg font-bold text-amber-600">{fmt(selectedSummary.months.reduce((sum, m) => sum + m.totalGivenAway, 0))}</div>
                                             </div>
                                             <div>
                                                 <div className="text-xs text-muted-foreground uppercase">Redeemed This Year</div>
@@ -183,10 +215,12 @@ export function CashbackDashboardV2({ initialData, year, cards }: Props) {
                             <CashbackMonthDetailModal
                                 open={!!detailModal}
                                 onOpenChange={(op) => !op && setDetailModal(null)}
+                                mode="card"
                                 cardId={selectedSummary.cardId}
                                 cardName={selectedCardInfo?.accountName || 'Card'}
                                 month={detailModal.month}
                                 year={year}
+                                initialTab={detailModal.tab}
                             />
                         )}
                     </>
@@ -196,15 +230,15 @@ export function CashbackDashboardV2({ initialData, year, cards }: Props) {
     )
 }
 
-function MonthTableHalf({ summary, range, onMonthClick }: { summary: CashbackYearSummary, range: [number, number], onMonthClick: (m: number) => void }) {
+function MonthTableHalf({ summary, range, onMonthClick }: { summary: CashbackYearSummary, range: [number, number], onMonthClick: (m: number, tab?: string) => void }) {
     const months = summary.months.filter(m => m.month >= range[0] && m.month <= range[1])
     const fmt = (n: number) => new Intl.NumberFormat('vi-VN').format(Math.round(n))
 
     // Fill missing months if necessary
-    const displayMonths: { month: number, totalSpendForCashback: number, cashbackGiven: number }[] = []
+    const displayMonths: { month: number, totalGivenAway: number, cashbackGiven: number }[] = []
     for (let i = range[0]; i <= range[1]; i++) {
         const found = months.find(m => m.month === i)
-        displayMonths.push(found || { month: i, totalSpendForCashback: 0, cashbackGiven: 0 })
+        displayMonths.push(found || { month: i, totalGivenAway: 0, cashbackGiven: 0 })
     }
 
     const monthNames = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -223,9 +257,9 @@ function MonthTableHalf({ summary, range, onMonthClick }: { summary: CashbackYea
                     </tr>
                 </thead>
                 <tbody className="divide-y">
-                    {/* Spend Row */}
+                    {/* Give Away Row */}
                     <tr>
-                        <td className="p-2 font-medium text-muted-foreground">Spend</td>
+                        <td className="p-2 font-medium text-muted-foreground">Give Away</td>
                         {displayMonths.map(m => (
                             <td
                                 key={m.month}
@@ -233,21 +267,12 @@ function MonthTableHalf({ summary, range, onMonthClick }: { summary: CashbackYea
                                 title="Click for details"
                                 onClick={() => onMonthClick(m.month)}
                             >
-                                {m.totalSpendForCashback > 0 ? fmt(m.totalSpendForCashback) : '-'}
-                            </td>
-                        ))}
-                    </tr>
-                    {/* Given Row */}
-                    <tr>
-                        <td className="p-2 font-medium text-blue-600">Shared Return</td>
-                        {displayMonths.map(m => (
-                            <td key={m.month} className="p-2 text-right text-blue-600 hover:bg-blue-50 cursor-pointer transition-colors">
-                                {m.cashbackGiven > 0 ? fmt(m.cashbackGiven) : '-'}
+                                {m.totalGivenAway > 0 ? fmt(m.totalGivenAway) : '-'}
                             </td>
                         ))}
                     </tr>
                 </tbody>
             </table>
-        </div>
+        </div >
     )
 }
