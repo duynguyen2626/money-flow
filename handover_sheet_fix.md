@@ -1,20 +1,21 @@
-# Handover: Sheet Sync Cosmetic Fix (Round 11)
+# Handover: Sheet Button UI Enhancement (Round 12)
 
 ## Issue
--   User report: "sửa dòng bank cho không xuống hàng được không".
--   Hiện tại: `setWrap(true)` khiến text bị xuống dòng nếu quá dài.
+-   User report: Khó biết đang Sync cho Cycle nào. Chuyển Cycle rồi nhưng sợ Sync nhầm.
+-   Yêu cầu: Hiển thị tên Target Sheet ngay trên nút Button.
 
-## Fix Applied (`integrations/google-sheets/people-sync/Code.js`)
--   Đổi thành `.setWrap(false)` cho ô Bank Info (L6:N6).
--   Kết quả: Text sẽ hiển thị trên 1 dòng duy nhất.
+## Fix Applied (`src/components/people/manage-sheet-button.tsx`)
+-   Thay đổi label nút Sync:
+    -   Hành động: `Sheet` -> `2025-12` (Cycle Tag).
+    -   Format: Font Mono, Medium weight để dễ nhìn.
+    -   Trạng thái:
+        -   Normal: `[Icon] 2025-12`
+        -   Syncing: `[Spin] Syncing`
 
-## Final Status
--   **Logic**: Đã xác nhận đúng (In/Out/Remains/J Formula).
--   **Formatting**: Đã fix Grey Rows, Summary Position.
--   **Cosmetic**: Đã tắt Text Wrap cho Bank Info.
+## Verification
+-   Check UI trên Page Detail.
+-   Khi switch qua các tháng (Pill), nút Sheet phải đổi tên theo (VD: 2025-11, 2025-10...).
+-   Ấn Sync ở tháng nào -> Sync đúng cho tháng đó.
 
-## Action
-Chạy lệnh update cuối cùng:
-```bash
-npm run sheet:people
-```
+## Note
+-   Logic Sync vốn dĩ đã đúng (nhận prop `cycleTag` từ parent), chỉ là UI chưa hiển thị nên User hoang mang.
