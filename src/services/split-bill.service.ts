@@ -304,7 +304,7 @@ export async function updateSplitBill(parentId: string, input: SplitBillInput) {
     // We use the service to update parent (handle history, basic fields)
     // But we need to update metadata specifically for split info
     const parentMetadata = {
-        ...(parent_transaction.metadata || {}),
+        ...((parent_transaction.metadata as Record<string, any>) || {}),
         is_split_bill: true,
         split_participants_count: shares.length,
         split_shares: shares,

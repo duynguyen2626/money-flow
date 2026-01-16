@@ -1,9 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // @ts-expect-error - Internal Next.js types might not be updated yet
   eslint: {
     ignoreDuringBuilds: true,
   },
+  // @ts-expect-error - Internal Next.js types might not be updated yet
   typescript: {
     ignoreBuildErrors: true,
   },
