@@ -6,45 +6,15 @@
 //        - Formulas: In/Out now use SUMIFS(J:J) directly as J is already Net Price.
 //        - Remains: SUM(J:J).
 
+/*
 function onOpen() {
-    var ui = SpreadsheetApp.getUi();
-    ui.createMenu('📊 Money Flow')
-        .addItem('📋 Copy Bank Info', 'copyBankInfo')
-        .addItem('💰 Copy Remains', 'copyRemains')
-        .addSeparator()
-        .addItem('⚠️ Re-apply Format', 'manualFormat')
-        .addToUi();
+  var ui = SpreadsheetApp.getUi();
+  ui.createMenu('📊 Money Flow')
+    .addItem('Re-apply Format', 'manualFormat')
+    .addItem('Sort Auto Block', 'manualSort')
+    .addToUi();
 }
-
-function copyBankInfo() { showCopyDialog(6, "Bank Info"); } // Row 6 is Bank Info
-function copyRemains() { showCopyDialog(5, "Remains"); }    // Row 5 is Remains
-
-function showCopyDialog(row, title) {
-    var sheet = SpreadsheetApp.getActiveSheet();
-    // Check if we are on a valid cycle sheet (has ID column)
-    if (sheet.getRange("A1").getValue() !== "ID") {
-        SpreadsheetApp.getUi().alert("Please select a transaction sheet first.");
-        return;
-    }
-
-    // Get value from Column N (14) or Merged Cell starting at L (12)
-    // Bank Info is L6:N6 merged usually. Remains is N5.
-    var val;
-    if (title === "Bank Info") {
-        val = sheet.getRange(row, 12).getDisplayValue(); // Col L
-        // If empty, try checking if unmerged
-        if (!val) val = sheet.getRange(row, 14).getDisplayValue(); // Col N
-    } else {
-        val = sheet.getRange(row, 14).getDisplayValue(); // Col N
-    }
-
-    var htmlOutput = HtmlService
-        .createHtmlOutput('<textarea style="width:100%;height:100px;font-size:16px;">' + val + '</textarea>' +
-            '<br><div style="text-align:center;color:#666;font-family:sans-serif;font-size:12px;">Ctrl+C to copy, Esc to close</div>')
-        .setWidth(300)
-        .setHeight(180);
-    SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Copy ' + title);
-}
+*/
 
 function createManualTestSheet() {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -457,69 +427,77 @@ function setupSummaryTable(sheet, summaryOptions) {
     // Row 5: Bank Info (Merged)
     // Row 6: Remains (Net)
 
+    // Row 2: In (Gross) - Dark Green
+    // Row 3: Out (Gross) - Dark Red
+    // Row 4: Total Back - Blue
+    // Row 5: Remains - Below Total Back
+    // Row 6: Bank Info - Below Remains
+
     var labels = [
         [1, 'In (Gross)'],
         [2, 'Out (Gross)'],
-        [3, 'Total Back']
+        [3, 'Total Back'],
+        [4, 'Remains']
     ];
-    sheet.getRange('L2:M4').setValues(labels);
-    sheet.getRange('L2:M4').setFontWeight('bold');
+    sheet.getRange('L2:M5').setValues(labels);
+    sheet.getRange('L2:M5').setFontWeight('bold');
 
-    // N2 (In - Gross): Sum of Amount (F) for "In"
+    // N2 (In - Gross): Sum of Amount (F) for "In" (Expect Negative values)
     sheet.getRange('N2').setFormula('=SUMIFS(F:F;B:B;"In")');
-    sheet.getRange('N2').setFontColor('#16a34a'); // Green
+    sheet.getRange('N2').setFontColor('#14532d'); // Dark Green
 
-    // N3 (Out - Gross): Sum of Amount (F) for "Out" 
+    // N3 (Out - Gross): Sum of Amount (F) for "Out" (Positive values)
     sheet.getRange('N3').setFormula('=SUMIFS(F:F;B:B;"Out")');
+    sheet.getRange('N3').setFontColor('#991b1b'); // Dark Red
 
     // N4 (Total Back): Sum of Sum Back (I)
     sheet.getRange('N4').setFormula('=SUM(I:I)');
-    sheet.getRange('N4').setFontColor('#ea580c'); // Orange
+    sheet.getRange('N4').setFontColor('#1e40af'); // Blue
 
-    // Bank Row (Row 5 - L5:N5)
-    var bankCell = sheet.getRange('L5:N5');
-
-    // Remains Row (Row 6 - L6:N6) - MOVED BELOW BANK
-    sheet.getRange('L6').setValue(4);
-    sheet.getRange('M6').setValue('Remains');
-    sheet.getRange('N6').setFormula('=SUM(J2:J)'); // Net Remains
+    // N5 (Remains): Sum of Final Price (J). Since F is signed, J is signed.
+    // J = F - I. (Amount - Back).
+    // If Out: F=100, I=5. J=95.
+    // If In: F=-100, I=0. J=-100.
+    // Sum = 95 - 100 = -5. Net Debt. Correct.
+    sheet.getRange('N5').setFormula('=SUM(J2:J)');
 
     // Styling
-    sheet.getRange('N2:N6').setNumberFormat('#,##0').setFontWeight('bold');
-    sheet.getRange('L2:N6').setBorder(true, true, true, true, true, true);
+    sheet.getRange('N2:N5').setNumberFormat('#,##0').setFontWeight('bold');
+    sheet.getRange('L2:N5').setBorder(true, true, true, true, true, true);
 
     // Highlight Remains
-    sheet.getRange('L6:N6').setBackground('#fee2e2'); // Soft red/pink for remains
+    sheet.getRange('L5:N5').setBackground('#fee2e2'); // Soft red/pink for remains
 
-    try {
-        sheet.setColumnWidth(12, 50);
-        sheet.setColumnWidth(13, 130);
-        sheet.setColumnWidth(14, 450);
-    } catch (e) { }
+    // Bank Info at Row 6
+    var bankCell = sheet.getRange('L6:N6');
+    // Clear Row 6 first (merges/styles)
+    bankCell.breakApart();
+    bankCell.setBackground('#f9fafb');
 
-    // Setup Bank Cell at Row 5
     try {
         if (showBankAccount) {
             if (shouldMerge) {
                 bankCell.merge();
-            } else {
-                bankCell.breakApart();
             }
 
+            // Dynamic Formula with Remains (N5)
+            // User requested: =Bank... & " " & ROUND(N5;0)
             if (bankAccountText) {
+                // If custom text provided (unlikely to change dynamic part but supports payload override)
                 var escapedText = bankAccountText.replace(/"/g, '""');
-                bankCell.setFormula('="' + escapedText + '"');
+                bankCell.setFormula('="' + escapedText + ' " & TEXT(N5;"#,##0")'); // Adding value here too? Maybe redundant but safer if hardcoded.
             } else {
-                bankCell.setFormula('=BankInfo!A2&" "&BankInfo!B2&" "&BankInfo!C2');
+                // Referenced BankInfo sheet
+                bankCell.setFormula('=BankInfo!A2&" "&BankInfo!B2&" "&BankInfo!C2&" "&TEXT(N5;"#,##0")');
             }
             bankCell.setFontWeight('bold')
                 .setHorizontalAlignment('left')
                 .setBorder(true, true, true, true, true, true)
-                .setWrap(true)
-                .setBackground('#f9fafb'); // Light grey for bank info
+                .setWrap(true);
         } else {
             bankCell.clearContent();
             bankCell.setBorder(false, false, false, false, false, false);
+            bankCell.setBackground(null);
         }
     } catch (e) { }
 }
@@ -560,24 +538,18 @@ function ensureArrayFormulas(sheet) {
     sheet.getRange("I2").setFormula('=ARRAYFORMULA(IF(F2:F="";"";IF(F2:F*G2:G/100+H2:H=0;0;F2:F*G2:G/100+H2:H)))');
 
     // J2 Formula (Final Price)
-    // Logic: If In -> Amount + Back (Wait, In shouldn't have back? Usually In is income.)
-    // If Out -> Amount - Back.
-    // Normalized Type 'In' means POSITIVE (receiving). 'Out' means NEGATIVE (spending).
-    // But Amount (F) is always ABSOLUTE (Positive).
-    // So if B="In", Result = F. (Assuming no cashback on income).
-    // If B="Out", Result = -(F - I). (Spending less cashback).
-    // Current Formula: =IF(B="In"; (F-I)*(-1); F-I). 
-    // Wait, previous formula: IF(B="In"; (F-I)*(-1); F-I) ???
-    // If B="In" (Income), why * -1? That makes it negative?
-    // User complaint "In thì cần dấu -".
-    // Maybe default is:
-    // Out = Positive Cost.
-    // In = Negative Cost (Repayment).
-    // If Amount=100. Out -> Cost 100.
-    // In -> Cost -100.
-    // Formula: IF(B="Out"; F-I; (F-I)*-1).
-    // Let's stick to the previous one found in line 512, but Ensure it is set.
-    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F="";"";IF(B2:B="In";(F2:F-I2:I)*(-1);F2:F-I2:I)))');
+    // Updated Logic: Amount (F) is now signed (Negative for In, Positive for Out).
+    // Final Price = Amount - Back.
+    // If Out (Positive F): F - Back. Correct.
+    // If In (Negative F): F - 0 (assuming no back on In). Result is Negative F. Correct.
+    // If In has Back? (Negative F) - Back. Result is MORE Negative. Correct (Cost reduced? No, In is Income. Back increases Income?)
+    // Wait. Cashback on repayment? Usually cashback is on Spending (Out).
+    // If I spend -100 (In?? No Spending is Out).
+    // Case: Cashback on Card Payment (Out).
+    // Case: Cashback on receiving money? Rare.
+    // Assuming Back is 0 or Positive.
+    // Formula: F - I.
+    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F="";"";F2:F-I2:I))');
 }
 
 function findRowById(sheet, id) {
