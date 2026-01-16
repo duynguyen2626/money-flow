@@ -497,7 +497,7 @@ function setupSummaryTable(sheet, summaryOptions) {
             bankCell.setFontWeight('bold')
                 .setHorizontalAlignment('left')
                 .setBorder(true, true, true, true, true, true)
-                .setWrap(true);
+                .setWrap(false); // User requested NO text wrapping
         } else {
             bankCell.clearContent();
             bankCell.setBorder(false, false, false, false, false, false);
