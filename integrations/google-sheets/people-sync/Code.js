@@ -298,11 +298,21 @@ function applyBordersAndSort(sheet, summaryOptions) {
         var maxRow = sheet.getLastRow();
         if (maxRow >= 2) {
             var totalRows = maxRow - 1;
-            sheet.getRange(2, 1, totalRows, 10)
+            var dataRange = sheet.getRange(2, 1, totalRows, 15); // A:O
+
+            // 1. Borders & Background
+            sheet.getRange(2, 1, totalRows, 10) // A:J
                 .setBorder(true, true, true, true, true, true)
                 .setBackground('#FFFFFF')
                 .setFontWeight('normal');
-            sheet.getRange(2, 3, totalRows, 1).setHorizontalAlignment('center');
+
+            // 2. Alignment
+            sheet.getRange(2, 3, totalRows, 1).setHorizontalAlignment('center'); // Date
+
+            // 3. Number Format for F (Amount), I (Σ Back), J (Final Price)
+            // Using '#,##0' to match Summary Table
+            sheet.getRange(2, 6, totalRows, 1).setNumberFormat('#,##0'); // F
+            sheet.getRange(2, 9, totalRows, 2).setNumberFormat('#,##0'); // I, J
         }
     }
 

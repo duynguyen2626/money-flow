@@ -213,7 +213,7 @@ export function ManageSheetButton({
               {isManaging ? (
                 'Syncing'
               ) : (
-                <span className="font-mono font-medium">{cycleTag || 'Sheet'}</span>
+                <span className="font-bold">{cycleTag || 'Sheet'}</span>
               )}
             </Button>
 

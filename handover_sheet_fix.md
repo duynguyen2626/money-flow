@@ -1,21 +1,19 @@
-# Handover: Sheet Button UI Enhancement (Round 12)
+# Handover: Sheet Sync Formatting (Round 13)
 
 ## Issue
--   User report: Khó biết đang Sync cho Cycle nào. Chuyển Cycle rồi nhưng sợ Sync nhầm.
--   Yêu cầu: Hiển thị tên Target Sheet ngay trên nút Button.
+-   User report 1: Font nút Sheet bị lỗi số 0 gạch chéo (do dùng `font-mono`).
+-   User report 2: Cột F, I, J trên Sheet chưa có format dấu chấm phân cách hàng nghìn.
 
-## Fix Applied (`src/components/people/manage-sheet-button.tsx`)
--   Thay đổi label nút Sync:
-    -   Hành động: `Sheet` -> `2025-12` (Cycle Tag).
-    -   Format: Font Mono, Medium weight để dễ nhìn.
-    -   Trạng thái:
-        -   Normal: `[Icon] 2025-12`
-        -   Syncing: `[Spin] Syncing`
+## Fix Applied
+1.  **UI (`src/components/people/manage-sheet-button.tsx`)**:
+    -   Đổi `font-mono` -> `font-bold` (Sans serif mặc định).
+2.  **Sheet Script (`integrations/google-sheets/people-sync/Code.js`)**:
+    -   Thêm `setNumberFormat('#,##0')` cho các cột:
+        -   Column F (Amount)
+        -   Column I (Σ Back)
+        -   Column J (Final Price)
 
 ## Verification
--   Check UI trên Page Detail.
--   Khi switch qua các tháng (Pill), nút Sheet phải đổi tên theo (VD: 2025-11, 2025-10...).
--   Ấn Sync ở tháng nào -> Sync đúng cho tháng đó.
-
-## Note
--   Logic Sync vốn dĩ đã đúng (nhận prop `cycleTag` từ parent), chỉ là UI chưa hiển thị nên User hoang mang.
+1.  Check UI nút Sheet: Số 0 tròn trịa, đậm.
+2.  Chạy `npm run sheet:people` -> Sync lại Sheet.
+3.  Check Sheet: Các cột tiền (F, I, J) hiển thị dạng `1.234.567` (hoặc `,` tùy locale sheet) thay vì số thô.
