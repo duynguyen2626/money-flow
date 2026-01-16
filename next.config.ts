@@ -5,7 +5,6 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
-  // @ts-expect-error - Internal Next.js types might not be updated yet
   typescript: {
     ignoreBuildErrors: true,
   },
