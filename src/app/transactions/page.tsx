@@ -7,6 +7,12 @@ import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dia
 import { UnifiedTransactionsPage } from '@/components/transactions/UnifiedTransactionsPage'
 import { TagFilterProvider } from '@/context/tag-filter-context'
 
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Transactions',
+}
+
 export const dynamic = 'force-dynamic'
 
 export default async function TransactionsPage() {

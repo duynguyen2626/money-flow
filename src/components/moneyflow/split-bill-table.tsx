@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { X, Plus, ExternalLink } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { SmartAmountInput } from "@/components/ui/smart-amount-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 export type SplitBillParticipant = {
@@ -126,12 +127,10 @@ export function SplitBillTable({
                   </div>
                 </td>
                 <td className="px-3 py-2">
-                  <Input
-                    value={row.amount.toString()}
-                    onChange={(event) =>
-                      onAmountChange(row.personId, parseAmount(event.target.value))
-                    }
-                    inputMode="decimal"
+                  <SmartAmountInput
+                    value={row.amount}
+                    onChange={(val) => onAmountChange(row.personId, val ?? 0)}
+                    placeholder="0"
                     className="h-9"
                   />
                 </td>
@@ -209,12 +208,10 @@ export function SplitBillTable({
             </div>
             <div className="space-y-2">
               <label className="text-xs font-semibold text-slate-500">Share</label>
-              <Input
-                value={row.amount.toString()}
-                onChange={(event) =>
-                  onAmountChange(row.personId, parseAmount(event.target.value))
-                }
-                inputMode="decimal"
+              <SmartAmountInput
+                value={row.amount}
+                onChange={(val) => onAmountChange(row.personId, val ?? 0)}
+                placeholder="0"
                 className="h-9"
               />
             </div>

@@ -74,7 +74,7 @@ import {
   allocateTransactionRepayment,
 } from "@/lib/debt-allocation";
 import { Installment } from "@/services/installment.service";
-import { SplitBillParticipant, SplitBillTable } from "./split-bill-table";
+// Old split-bill-table import removed - now using modular structure
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -93,6 +93,9 @@ import {
   CreateTransactionInput,
 } from "@/services/transaction.service";
 import { getOutstandingDebts } from "@/services/debt.service";
+import { createSplitBillAction, updateSplitBillAction } from "@/actions/split-bill-actions";
+import { SplitBillInput } from "@/services/split-bill.service";
+import { SplitBillSection as SplitBillSectionComponent, type SplitBillParticipant } from "@/components/moneyflow/transaction-form/sections";
 
 const numberFormatter = new Intl.NumberFormat('en-US', {
   maximumFractionDigits: 0,
@@ -171,6 +174,16 @@ type TransactionFormProps = {
 
 // ...
 
+const validateSplitBill = (total: number, participants: SplitBillParticipant[]) => {
+  if (!participants || participants.length === 0) return null; // Allow empty initially? Or validation error on submit.
+  const sum = participants.reduce((acc, p) => acc + (p.amount || 0), 0);
+  const diff = Math.abs(total - sum);
+  if (diff > 1000) { // Tolerance 1000 VND
+    return `Total amount (${total}) does not match sum of shares (${sum}). Diff: ${diff}`;
+  }
+  return null;
+};
+
 export function TransactionForm({
   // Deployment Verification: Cashback Fix v2.1
   accounts: allAccounts,
@@ -222,11 +235,12 @@ export function TransactionForm({
       const meParticipant: SplitBillParticipant = {
         personId: "me",
         name: "Me (Mine)",
-        amount: myAmount,
-        paidBy: "Me", // Assuming I paid
+        shareBefore: Math.abs(myAmount),
+        voucherAmount: 0,
+        finalShare: Math.abs(myAmount),
+        advanceAmount: 0,
+        paidBy: "Me (Mine)",
         note: initialValues?.note || "",
-        // The parent doesn't have a linkedTransactionId for "me" separate from itself, or we can use itself.
-        // But clicking "Edit" on Me should just stay here.
       };
 
       // 2. Fetch children
@@ -235,8 +249,11 @@ export function TransactionForm({
           const others: SplitBillParticipant[] = children.map((c: any) => ({
             personId: c.personId,
             name: c.name,
-            amount: c.amount,
-            paidBy: "Me", // Logic: I paid for them
+            shareBefore: Math.abs(c.amount || 0),
+            voucherAmount: 0,
+            finalShare: Math.abs(c.amount || 0),
+            advanceAmount: 0,
+            paidBy: "Me (Mine)",
             note: c.note || "",
             linkedTransactionId: c.id
           }));
@@ -971,171 +988,72 @@ export function TransactionForm({
           return;
         }
 
-        // General N-Person Split Bill Logic
-        const myShare = splitParticipants.find(p => p.personId === "me" || p.name.toLowerCase() === "me (mine)");
-        const otherParticipants = splitParticipants.filter(p => p.personId !== "me" && p.name.toLowerCase() !== "me (mine)");
+        const rawPercent = Number(restValues.cashback_share_percent ?? 0);
 
-        // Determine the main transaction's amount.
-        // If "Me" is a participant, the main transaction is my share.
-        // If "Me" is not a participant (e.g., I'm just paying for others), the main transaction amount is 0.
-        const myAmount = myShare ? myShare.amount : 0;
-
-        // CRITICAL: Check if editing existing split bill to prevent duplicate children
-        // Support both new (is_split_bill) and legacy (is_two_person_split_lend) flags
-        const isEditingExistingSplitBill = mode === 'edit' &&
-          (initialValues?.metadata?.is_split_bill === true || initialValues?.metadata?.is_two_person_split_lend === true) &&
-          transactionId;
-
-        if (isEditingExistingSplitBill) {
-          // This is an EDIT of existing split bill parent
-          // DO NOT create new children - they already exist
-          // Just update the parent transaction
-          console.log("[Split Bill] Editing existing split bill parent - skipping child creation");
-
-          await updateTransaction(transactionId, {
-            occurred_at: restValues.occurred_at?.toISOString() ?? new Date().toISOString(),
-            type: restValues.type === "repayment" ? "income" : (restValues.type === "quick-people" ? "expense" : restValues.type) as any,
-            amount: myAmount,
-            source_account_id: restValues.source_account_id!,
-            category_id: restValues.category_id ?? undefined,
-            shop_id: restValues.shop_id ?? undefined,
-            note: restValues.note || "Split Bill",
-            tag: restValues.tag,
-            person_id: null,
-            metadata: {
-              ...(initialValues?.metadata || {}),
-              is_split_bill: true,
-              original_total_amount: totalAmount,
-              split_participants_count: splitParticipants.length,
-              my_share: myAmount
-            },
-          });
-          router.refresh();
-          setStatus({ type: "success", text: "Split bill updated successfully!" });
-          setIsSubmitting(false);
-          if (onSuccess) onSuccess();
-          return;
-        }
-
-        // 1. Create Parent Transaction (My Expense Share)
-        const parentExpensePayload: Parameters<typeof createTransaction>[0] = {
-          occurred_at: restValues.occurred_at?.toISOString() ?? new Date().toISOString(),
-          type: "expense", // ✅ Keep as expense (Total Bill)
-          amount: totalAmount, // ✅ Parent keeps TOTAL amount (User Request for Recon)
+        // Construct Parent Input (Standardized)
+        // Parent is always an Expense (I Paid) for typical split bills
+        const parentInput: CreateTransactionInput = {
+          ...restValues,
+          type: "expense",
+          amount: totalAmount, // Parent keeps TOTAL amount
           source_account_id: restValues.source_account_id!,
+          occurred_at: restValues.occurred_at?.toISOString() ?? new Date().toISOString(),
           category_id: restValues.category_id ?? undefined,
           shop_id: restValues.shop_id ?? undefined,
           note: restValues.note || "Split Bill",
           tag: restValues.tag,
           person_id: null,
+          destination_account_id: undefined,
+          is_installment: isInstallment,
+          installment_plan_id: restValues.installment_plan_id ?? undefined,
+          cashback_share_percent: rawPercent / 100,
+          cashback_share_fixed: Number(restValues.cashback_share_fixed ?? 0),
+          cashback_mode: (restValues.cashback_mode === 'fixed' ? 'real_fixed' :
+            restValues.cashback_mode === 'percent' ? 'real_percent' :
+              restValues.cashback_mode) as any,
           metadata: {
             ...(restValues.installment_plan_id ? { installment_id: restValues.installment_plan_id } : {}),
             ...(initialValues?.metadata || {}),
             is_split_bill: true,
             original_total_amount: totalAmount,
             split_participants_count: splitParticipants.length,
-            my_share: myAmount // Keep track of my real share
-          },
-          is_installment: isInstallment,
-          installment_plan_id: restValues.installment_plan_id ?? undefined,
-          cashback_share_percent: Number(restValues.cashback_share_percent ?? 0) / 100,
-          cashback_share_fixed: Number(restValues.cashback_share_fixed ?? 0),
-          cashback_mode: (restValues.cashback_mode === 'fixed' ? 'real_fixed' :
-            restValues.cashback_mode === 'percent' ? 'real_percent' :
-              restValues.cashback_mode) as any,
+          }
         };
 
-        // 1. Create OR Update Parent Transaction (My Expense Share)
+        // Construct Shares
+        const shares = splitParticipants.map(participant => ({
+          person_id: (participant.personId === 'me' || participant.name.toLowerCase() === 'me (mine)') ? null : participant.personId,
+          amount: participant.finalShare,
+          share_before: participant.shareBefore,
+          voucher_amount: participant.voucherAmount,
+          advance_amount: participant.advanceAmount,
+          paid_by: participant.paidBy,
+          note: participant.note
+        }));
 
-        let mainTxnId = transactionId; // If editing, target the current ID
+        const splitInput: SplitBillInput = {
+          parent_transaction: parentInput,
+          shares,
+          split_method: 'custom'
+        };
+
+        let result;
 
         if (mode === 'edit' && transactionId) {
-          // UPDATE existing transaction to become the Split Bill Parent
-          await updateTransaction(transactionId, parentExpensePayload);
-          // mainTxnId remains transactionId
+          // Update Mode
+          result = await updateSplitBillAction(transactionId, splitInput);
         } else {
-          // CREATE new split bill parent
-          const newId = await createTransaction(parentExpensePayload);
-          if (!newId) {
-            setStatus({ type: "error", text: "Failed to create main split transaction." });
-            setIsSubmitting(false);
-            return;
-          }
-          mainTxnId = newId;
+          // Create Mode
+          result = await createSplitBillAction(splitInput);
         }
 
-        // 2. Create Lend Transactions for OTHER participants only
-        // (Me is already the parent expense, no need for separate transaction)
-        const othersToCreate = otherParticipants;
-
-        let failures = 0;
-
-        for (const p of othersToCreate) {
-          // Find their debt account
-          let debtAccId = debtAccountByPerson.get(p.personId);
-
-          // ... (keep finding debt account logic if it was here, assume it's safe to continue loop)
-          // If debtAccId logic is inside loop, strict adherence to original code flow is needed. 
-          // Re-inserting the loop content but with fixed NOTE:
-
-          if (!debtAccId) {
-            // Try to find existing debt account
-            const { data: accounts } = await supabase
-              .from("accounts")
-              .select("id")
-              .eq("person_id", p.personId)
-              .eq("type", "debt")
-              .limit(1);
-
-            if (accounts && accounts.length > 0) {
-              debtAccId = accounts[0].id;
-              debtAccountByPerson.set(p.personId, debtAccId!);
-            } else {
-              // Create new debt account if needed
-              const personName = splitParticipants.find(sp => sp.personId === p.personId)?.name || "Unknown";
-              const newAccId = await ensureDebtAccountAction(p.personId, personName);
-              if (newAccId) {
-                debtAccId = newAccId;
-                debtAccountByPerson.set(p.personId, debtAccId);
-              }
-            }
-          }
-
-          if (debtAccId) {
-            const childPayload: Parameters<typeof createTransaction>[0] = {
-              occurred_at: restValues.occurred_at?.toISOString() ?? new Date().toISOString(),
-              type: "debt", // Lending is 'debt' type
-              amount: p.amount,
-              source_account_id: restValues.source_account_id!, // Money leaves my account
-              target_account_id: undefined,
-              category_id: undefined, // Usually no category for lending? Or allow?
-              shop_id: undefined,
-              note: restValues.note || "Split Bill", // ✅ Use Original Note
-              tag: restValues.tag,
-              person_id: p.personId,
-              metadata: {
-                parent_transaction_id: mainTxnId,
-                is_split_share: true,
-                // store link to main expense if needed
-                linked_expense_id: mainTxnId,
-                skip_wallet_deduction: true // Signal for future balance logic
-              },
-              cashback_share_percent: 0,
-              cashback_share_fixed: 0,
-              cashback_mode: 'none_back' as any
-            };
-
-            await createTransaction(childPayload);
-          } else {
-            console.error(`Could not find/create debt account for person ${p.personId}`);
-            failures++;
-          }
-        }
-        if (failures > 0) {
-          // We warn but don't fail completely since main txn succeeded
-          console.warn(`[Split Bill] Failed to create ${failures} lend transactions.`);
+        if (!result.success) {
+          setStatus({ type: "error", text: result.error || "Failed to save split bill." });
+          setIsSubmitting(false);
+          return;
         }
 
+        // Success Handling
         router.refresh();
         form.reset({
           ...baseDefaults,
@@ -1158,11 +1076,11 @@ export function TransactionForm({
         setSplitParticipants([]);
         setSplitBillAutoSplit(true);
         setSplitBillError(null);
-
         setCashbackPreview(null);
-        setStatus({ type: "success", text: "Split bill created successfully!" });
-        onSuccess?.({ id: mainTxnId });
+        setStatus({ type: "success", text: isEditMode ? "Split bill updated!" : "Split bill created!" });
         setIsSubmitting(false);
+        // data.data is parentId if create
+        onSuccess?.(result.data ? { id: result.data } : undefined);
         return;
       }
 
@@ -1637,8 +1555,10 @@ export function TransactionForm({
       return members.map((person, index) => ({
         personId: person.id,
         name: person.name,
-        amount: amounts[index] ?? 0,
-        paidBefore: 0,
+        shareBefore: amounts[index] ?? 0,
+        voucherAmount: 0,
+        finalShare: amounts[index] ?? 0,
+        advanceAmount: 0,
         paidBy: defaultPayerName,
         note: "",
       }));
@@ -1650,12 +1570,12 @@ export function TransactionForm({
     (participants: SplitBillParticipant[], totalAmount: number) => {
       const amounts = getEvenSplitAmounts(totalAmount, participants.length);
       return participants.map((participant, index) => {
-        const paidBefore = participant.paidBefore ?? 0;
-        const baseAmount = amounts[index] ?? 0;
+        const shareBefore = amounts[index] ?? 0;
+        const voucherAmount = participant.voucherAmount || 0;
         return {
           ...participant,
-          paidBefore,
-          amount: Math.max(0, baseAmount - paidBefore),
+          shareBefore,
+          finalShare: Math.max(0, shareBefore - voucherAmount),
         };
       });
     },
@@ -1667,14 +1587,17 @@ export function TransactionForm({
       {
         personId: person.id,
         name: person.name,
-        amount: totalAmount,
-        paidBefore: 0,
+        shareBefore: totalAmount,
+        voucherAmount: 0,
+        finalShare: totalAmount,
+        advanceAmount: 0,
         paidBy,
         note: "",
       },
     ],
     [],
   );
+
 
   const validateSplitBill = useCallback(
     (totalAmount: number, participants: SplitBillParticipant[]) => {
@@ -1698,27 +1621,27 @@ export function TransactionForm({
 
       const invalidAmount = participants.find(
         (participant) =>
-          !Number.isFinite(participant.amount) || participant.amount < 0,
+          !Number.isFinite(participant.finalShare) || participant.finalShare < 0,
       );
       if (invalidAmount) {
         return "Split amounts must be zero or greater.";
       }
 
-      const invalidPaidBefore = participants.find((participant) => {
-        if (participant.paidBefore === undefined) return false;
-        return !Number.isFinite(participant.paidBefore) || participant.paidBefore < 0;
+      const invalidAdvance = participants.find((participant) => {
+        if (participant.advanceAmount === undefined) return false;
+        return !Number.isFinite(participant.advanceAmount) || participant.advanceAmount < 0;
       });
-      if (invalidPaidBefore) {
-        return "Paid before must be zero or greater.";
+      if (invalidAdvance) {
+        return "Advance amount must be zero or greater.";
       }
 
       const sum = participants.reduce(
-        (acc, participant) =>
-          acc + (participant.amount || 0) + (participant.paidBefore || 0),
+        (acc, participant) => acc + participant.finalShare,
         0,
       );
-      if (Math.abs(sum - totalAmount) > 0.01) {
-        return "Split total plus paid before must match the main amount.";
+      // Floating point tolerance
+      if (Math.abs(sum - totalAmount) > 1.0) {
+        return `Split total (${numberFormatter.format(sum)}) must match transaction amount (${numberFormatter.format(totalAmount)}).`;
       }
 
       return null;
@@ -3582,18 +3505,22 @@ export function TransactionForm({
                             {
                               personId: "me",
                               name: "Me (Mine)",
-                              amount: 0,
-                              paidBy: "Me (Mine)", // Standardize to "Me (Mine)"
+                              shareBefore: 0,
+                              voucherAmount: 0,
+                              finalShare: 0,
+                              advanceAmount: 0,
+                              paidBy: "Me (Mine)",
                               note: "",
-                              paidBefore: 0,
                             },
                             {
                               personId: selectedPerson.id,
                               name: selectedPerson.name,
-                              amount: 0,
-                              paidBy: "Me (Mine)", // Standardize to "Me (Mine)"
+                              shareBefore: 0,
+                              voucherAmount: 0,
+                              finalShare: 0,
+                              advanceAmount: 0,
+                              paidBy: "Me (Mine)",
                               note: "",
-                              paidBefore: 0,
                             },
                           ];
                           setSplitParticipants(newParticipants);
@@ -3758,25 +3685,20 @@ export function TransactionForm({
     </div>
   ) : null;
 
-  const SplitBillSection = SplitBillToggle ? (
+  const SplitBillSectionJSX = SplitBillToggle ? (
     <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-800">
-          Participants
-        </h3>
-        {isSplitBill &&
-          (splitBillAutoSplit ? (
-            <span className="text-[10px] uppercase text-slate-400">
-              Even split
-            </span>
-          ) : (
-            <span className="text-[10px] uppercase text-amber-500">
-              Custom split
-            </span>
-          ))}
-      </div>
       {SplitBillToggle}
-      {SplitBillSelection}
+      {isSplitBill && (
+        <SplitBillSectionComponent
+          participants={splitParticipants}
+          totalAmount={Math.abs(form.watch('amount') || 0)}
+          onParticipantsChange={setSplitParticipants}
+          onRemove={(personId) => {
+            setSplitParticipants(prev => prev.filter(p => p.personId !== personId));
+          }}
+          error={splitBillError}
+        />
+      )}
     </div>
   ) : null;
 
@@ -4820,7 +4742,50 @@ export function TransactionForm({
 
   return (
     <>
-      {transactionType === "quick-people" ? (
+      {/* Read-Only Mode for Split Bill Child Transactions */}
+      {isEditMode && parentTxnId ? (
+        <div className="flex flex-col h-full bg-slate-50/50">
+          <div className="sticky top-0 z-20 bg-white border-b border-slate-100 shadow-sm px-5 py-3 flex items-center justify-between flex-none">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-indigo-100 rounded-full">
+                <Info className="w-4 h-4 text-indigo-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900">Split Share</h2>
+                <p className="text-xs text-slate-500">Part of a split bill</p>
+              </div>
+            </div>
+            <button
+              onClick={onCancel}
+              className="p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 max-w-sm w-full space-y-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-slate-500">Share Amount</p>
+                <p className="text-3xl font-bold text-slate-900">{numberFormatter.format(Math.abs(initialValues?.amount ?? 0))}</p>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100">
+                <p className="text-sm text-slate-600 mb-4">
+                  This transaction is a share of a split bill. To make changes, please edit the parent transaction.
+                </p>
+                <Button
+                  onClick={() => onSwitchTransaction?.(parentTxnId)}
+                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  View Parent Bill
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : transactionType === "quick-people" ? (
         <div className="h-full flex flex-col">
           <div className="sticky top-0 z-10 bg-white border-b border-slate-100 px-6 py-3 shadow-sm">
             {TypeInput}
@@ -5227,7 +5192,7 @@ export function TransactionForm({
                 {/* Extras */}
                 {SplitBillToggle}
                 {RefundStatusInput}
-                {SplitBillSection}
+                {SplitBillSectionJSX}
               </div>
             ) : (
               /* TRANSFER LAYOUT (Original Fallback) */
@@ -5251,7 +5216,7 @@ export function TransactionForm({
                   </div>
                 </div>
 
-                {SplitBillSection}
+                {SplitBillSectionJSX}
               </>
             )}
 

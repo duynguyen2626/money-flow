@@ -289,9 +289,17 @@ function applyBordersAndSort(sheet, summaryOptions) {
     // Fix Summary Table area - Clear content, borders, AND background colors
     sheet.getRange('L7:N').clearContent();
     // Fix Summary Table area - Clear content, borders, AND background colors
-    sheet.getRange('L7:N').clearContent();
-    sheet.getRange('L7:N').clearFormat();  // This clears background colors and other formatting
-    sheet.getRange('L6:N6').clearContent(); // Clear old bank row if valid
+    // CLEAR EVERYTHING in L:N columns to avoid ghost data from row shifts
+    try {
+        var maxRows = sheet.getMaxRows();
+        sheet.getRange(1, 12, maxRows, 3).clearContent(); // Clear L1:N(max)
+        sheet.getRange(1, 12, maxRows, 3).setBorder(false, false, false, false, false, false);
+        sheet.getRange(1, 12, maxRows, 3).setBackground(null);
+    } catch (e) { }
+
+    // sheet.getRange('L7:N').clearContent(); // Redundant now
+    // sheet.getRange('L7:N').clearFormat();  // Redundant now
+    // sheet.getRange('L6:N6').clearContent(); // Redundant now
     sheet.getRange('L6:N6').setBorder(false, false, false, false, false, false);
     sheet.getRange('L7:N').setBorder(false, false, false, false, false, false);
 
@@ -421,7 +429,9 @@ function setupSummaryTable(sheet, summaryOptions) {
     try {
         sheet.setColumnWidth(12, 50);
         sheet.setColumnWidth(13, 130);
-        sheet.setColumnWidth(14, 130);
+        sheet.setColumnWidth(12, 50);
+        sheet.setColumnWidth(13, 130);
+        sheet.setColumnWidth(14, 450); // Increased from 130 to 450 to fit Bank Account Info
     } catch (e) { }
 
     var bankCell = sheet.getRange('L5:N5');
@@ -443,7 +453,11 @@ function setupSummaryTable(sheet, summaryOptions) {
         } else {
             bankCell.setFormula('=BankInfo!A2&" "&BankInfo!B2&" "&BankInfo!C2&" "&ROUND(N4;0)');
         }
-        bankCell.setFontWeight('bold').setHorizontalAlignment('left').setBorder(true, true, true, true, true, true);
+        // Force wrap to ensure data fits if it's very long
+        bankCell.setFontWeight('bold')
+            .setHorizontalAlignment('left')
+            .setBorder(true, true, true, true, true, true)
+            .setWrap(true);
     } else {
         bankCell.clearContent();
         bankCell.setBorder(false, false, false, false, false, false);
