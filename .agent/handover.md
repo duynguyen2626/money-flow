@@ -162,6 +162,10 @@ This session focused on completing Phase 3 of the Batch UI improvements and plan
 - ✅ No console errors or warnings
 - ✅ Image rendering rules followed (no borders, object-fit: contain)
 
+### **Rules**:
+  - Check `.agent/rules/sheet_sync_rules.md` for Google Sheet Sync logic (In/Out signs, Formulas, Bank Info).
+  - Check `database/SCHEMA.md` for latest DB Schema.
+
 ### Database Schema
 - No schema changes in Phase 3
 - Installment modal uses existing `batch_items.metadata` field

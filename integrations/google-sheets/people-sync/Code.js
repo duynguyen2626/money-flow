@@ -1,9 +1,9 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 5.1 (RAW INT & FINAL FIX)
-// Last Updated: 2026-01-16 16:30 ICT
+// VERSION: 5.2 (FINAL STABLE)
+// Last Updated: 2026-01-16 16:45 ICT
 // Scope: Sync logic fixes and simplified formulas.
 //        - Bank Info: Uses raw integer format for remains.
-//        - Final Price: J = F - I (Signed).
+//        - Final Price: J = F - I (Signed). Force cache bust.
 
 /*
 function onOpen() {
