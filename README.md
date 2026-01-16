@@ -33,12 +33,18 @@ See `.agent/context/ui_standards.md` for detailed specs.
 - `src/actions`: Server actions for data mutation.
 - `src/types`: TypeScript definitions.
 
-## Recently Updated (Sprint 7)
+## Recently Updated (Jan 2026)
 
-### 1. Refund Logic Overhaul
-- **Smart Account Recommendation**: The "Confirm Refund" dialog now intelligently fetches and recommends the original source account of the transaction, even if it wasn't initially loaded in the filtered list.
-- **Robust Data Handling**: Fixed issues where transactions on hidden/duplicate accounts ("Test Card" vs "Card Test") caused UI failures.
-- **RLS & Ownership**: Strengthened RLS policies and ownership checks for `created_by` to ensure transactions are always visible to their owners.
+### Phase 3: Batch UI & Installments
+- **Smart Installment Modal**: New dialog to pay installments directly from Batch items. Auto-calculates remaining balance and periods.
+- **Batch Workflow**: Added numbered badges (1: Fund, 2: Match) to guide users through the batch funding process.
+- **UI Refinements**: Improved clone loading state, fixed "Rendering" bugs, and standardized bank icon mapping (`MBB`/`VIB`).
+- **CI/CD**: Relaxed lint rules to ensure smoother Vercel deployments while maintaining code quality locally.
+
+### Planned: Phase 4 (Accounts Refactor)
+- **Filter Tabs**: Redesigning into Credit / Account / Savings / Debt.
+- **Card Design**: Modernizing account cards with better image handling and visual hierarchy.
+- **Sorting**: Priority on Due Date and Spend Need.
 
 ## Getting Started
 
