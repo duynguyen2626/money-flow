@@ -277,14 +277,16 @@ export function UnifiedTransactionsPage({
 
             {/* V2 Slide Over (Primary) */}
             {/* V2 Slide Over (Primary) */}
-            <TransactionSlide
+            {/* Original Modal (V1) - Restored */}
+            {/* Original Modal (V1) - Restored */}
+            <AddTransactionDialog
                 accounts={accounts}
                 categories={categories}
                 people={people}
                 shops={shops}
-                installments={[]}
                 open={isAddOpen}
                 onOpenChange={setIsAddOpen}
+                buttonClassName="hidden"
             />
             {/* Actually, TransactionSlide as implemented in previous step has internal state and a trigger button.
                 We need it to be controlled by the main page "Add" button.

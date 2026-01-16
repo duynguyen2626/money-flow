@@ -1,39 +1,19 @@
-
-import React from 'react';
-import { createClient } from '@/lib/supabase/server';
-import { TransactionSlide } from '@/components/moneyflow/transaction-slide-v2/TransactionSlide';
-
-export default async function TestV2Page() {
-    const supabase = createClient();
-
-    const [
-        { data: accounts },
-        { data: categories },
-        { data: people },
-        { data: shops },
-        { data: installments },
-    ] = await Promise.all([
-        supabase.from('accounts').select('*'),
-        supabase.from('categories').select('*'),
-        supabase.from('people').select('*'),
-        supabase.from('shops').select('*'),
-        supabase.from('installment_plans').select('*').eq('status', 'active'),
-    ]);
-
+export default function TestV2Page() {
     return (
-        <div className="flex h-screen w-full items-center justify-center bg-gray-100 dark:bg-zinc-900">
-            <div className="text-center">
-                <h1 className="text-2xl font-bold mb-4">Transaction Slide V2 Test</h1>
-                <p className="mb-4 text-muted-foreground">Click the button below to open the slide-over.</p>
+        <div className="flex h-screen w-full flex-col items-center justify-center space-y-4 bg-muted/40 p-8">
+            <div className="text-center space-y-2">
+                <h1 className="text-3xl font-bold tracking-tight">Transaction Slide V2</h1>
+                <p className="text-muted-foreground max-w-[500px]">
+                    Feature is currently paused for redesign.
+                    Will be implemented in future iterations to provide a better splitting experience.
+                </p>
+            </div>
 
-                <TransactionSlide
-                    accounts={accounts || []}
-                    categories={categories || []}
-                    people={people || []}
-                    shops={shops || []}
-                    installments={installments || []}
-                    defaultOpen={true}
-                />
+            <div className="rounded-lg border bg-card text-card-foreground shadow-sm max-w-md w-full p-6">
+                <div className="flex flex-col space-y-1.5 p-6 pt-0">
+                    <h3 className="text-lg font-semibold leading-none tracking-tight">Status: Paused</h3>
+                    <p className="text-sm text-muted-foreground">Pending Layout Redesign</p>
+                </div>
             </div>
         </div>
     );

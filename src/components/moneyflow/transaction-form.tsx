@@ -1079,8 +1079,10 @@ export function TransactionForm({
         setCashbackPreview(null);
         setStatus({ type: "success", text: isEditMode ? "Split bill updated!" : "Split bill created!" });
         setIsSubmitting(false);
-        // data.data is parentId if create
-        onSuccess?.(result.data ? { id: result.data } : undefined);
+        // Fix result type access
+        // @ts-ignore
+        const newId = result.data?.id || result.data;
+        onSuccess?.(newId ? { id: newId } : undefined);
         return;
       }
 

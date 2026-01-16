@@ -75,6 +75,8 @@ export type SplitBillParticipant = {
     paidBy: string;
     note?: string;
     linkedTransactionId?: string;
+    amount?: number;
+    paidBefore?: number;
 };
 
 export type VoucherDistributionMode = "equal" | "proportional";
