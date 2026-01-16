@@ -2507,6 +2507,9 @@ export function TransactionForm({
             paidBefore: 0,
             paidBy: defaultPayerName,
             note: "",
+            shareBefore: 0,
+            voucherAmount: 0,
+            finalShare: 0,
           },
         ];
         return resplitParticipants(next, splitTotalAmount);
