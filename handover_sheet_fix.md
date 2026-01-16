@@ -1,32 +1,32 @@
-# Handover: Sheet Sync Final Logic (Round 6)
+# Handover: Sheet Sync Final Logic (Round 7)
 
 ## Final Updates (`integrations/google-sheets/people-sync/Code.js`)
 
-### 1. Bank Info Format
--   **Requirement**: "số nguyên không chấm phẩy" (Raw Integer).
--   **Implementation**: `TEXT(N5;"0")`.
-    -   Output Example: `TPBank 0000 NGUYEN VAN A 16525128`.
+### 1. Header Update (v5.1)
+-   Đã cập nhật header file Code.js lên version 5.1 để confirm code mới nhất.
+-   Timestamp: 2026-01-16 16:30 ICT.
 
-### 2. Final Price (J) Fix
--   **Issue**: Cột J vẫn hiển thị số dương cho giao dịch "In" (do công thức cũ nhân -1).
--   **Fix**:
-    -   Force Clear cột J trước khi set formula mới.
-    -   Formula: `=ARRAYFORMULA(IF(F2:F="";"";F2:F-I2:I))`.
-    -   Vì F (Amount) đã là số âm (cho In), nên J sẽ tự động âm theo.
+### 2. Bank Info Format
+-   **FIXED**: Sử dụng `TEXT(N5;"0")` để hiển thị số nguyên thô (không có separator).
+-   Ví dụ: `... 16525128` thay vì `... 16.525.128`.
 
-### 3. Header Info
--   Đã cập nhật Header version `5.0 (FORMULA REFACTOR)` theo yêu cầu.
+### 3. Final Price (J) Logic
+-   Code logic hiện tại:
+    ```javascript
+    sheet.getRange("J2:J").clearContent(); // Clear cũ
+    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F="";"";F2:F-I2:I))');
+    ```
+-   Logic: `Amount (F) - Back (I)`.
+-   Vì `Amount` cho giao dịch **In** là số **Âm** -> Kết quả J sẽ là **Âm**.
+-   Nếu trên Sheet vẫn thấy Dương, khả năng là do cache hoặc chưa sync lại sau khi deploy mới.
 
-## Validated Logic Flow
-1.  **Transaction In**: Input dương -> Amount (F) lưu **Âm** (Negative). -> Final Price (J) = F - I = **Âm**. -> Summary In (Row 2) = SumIfs(In) = **Âm**.
-2.  **Transaction Out**: Input dương -> Amount (F) lưu **Dương**. -> Final Price (J) = F - I = **Dương**. -> Summary Out (Row 3) = SumIfs(Out) = **Dương**.
-3.  **Remains**: Sum(J) = Net Debt.
-    -   User nợ mình (Out nhiều): Dương.
-    -   Mình nợ user (In nhiều): Âm.
-
-## Deployment
-Chạy lại lệnh update:
-
-```bash
-npm run sheet:people
-```
+## Check List Deployment
+1.  Chạy lại lệnh update:
+    ```bash
+    npm run sheet:people
+    ```
+2.  **QUAN TRỌNG**: Vào Web App -> Chạy Sync lại cho People đó.
+3.  Kiểm tra Sheet:
+    -   Header script (nếu mở script editor) phải là v5.1.
+    -   Bank Info: Số tiền không có chấm phẩy.
+    -   Final Price: Giao dịch In (màu xanh) phải có giá trị Âm.

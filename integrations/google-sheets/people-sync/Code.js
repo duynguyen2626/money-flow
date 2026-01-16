@@ -1,10 +1,9 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 5.0 (FORMULA REFACTOR)
-// Last Updated: 2026-01-13 22:15 ICT
+// VERSION: 5.1 (RAW INT & FINAL FIX)
+// Last Updated: 2026-01-16 16:30 ICT
 // Scope: Sync logic fixes and simplified formulas.
-//        - Sync All: Inserts/Deletes rows within the auto-block scope to shift manual data.
-//        - Formulas: In/Out now use SUMIFS(J:J) directly as J is already Net Price.
-//        - Remains: SUM(J:J).
+//        - Bank Info: Uses raw integer format for remains.
+//        - Final Price: J = F - I (Signed).
 
 /*
 function onOpen() {
@@ -485,10 +484,10 @@ function setupSummaryTable(sheet, summaryOptions) {
             if (bankAccountText) {
                 // If custom text provided (unlikely to change dynamic part but supports payload override)
                 var escapedText = bankAccountText.replace(/"/g, '""');
-                bankCell.setFormula('="' + escapedText + ' " & TEXT(N5;"#,##0")'); // Adding value here too? Maybe redundant but safer if hardcoded.
+                bankCell.setFormula('="' + escapedText + ' " & TEXT(N5;"0")'); // Raw integer format
             } else {
                 // Referenced BankInfo sheet
-                bankCell.setFormula('=BankInfo!A2&" "&BankInfo!B2&" "&BankInfo!C2&" "&TEXT(N5;"#,##0")');
+                bankCell.setFormula('=BankInfo!A2&" "&BankInfo!B2&" "&BankInfo!C2&" "&TEXT(N5;"0")');
             }
             bankCell.setFontWeight('bold')
                 .setHorizontalAlignment('left')
