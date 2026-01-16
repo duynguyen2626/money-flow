@@ -76,7 +76,7 @@ export async function createSplitBill(input: SplitBillInput) {
 
     // 2. Create Parent Transaction
     const parentMetadata = {
-        ...(parent_transaction.metadata || {}),
+        ...((parent_transaction.metadata as Record<string, any>) || {}),
         is_split_bill: true,
         split_method,
         split_participants_count: shares.length,
