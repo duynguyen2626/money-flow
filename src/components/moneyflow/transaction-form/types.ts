@@ -1,5 +1,6 @@
 import { z } from "zod";
-import type { Account, Category, Person, Shop, Installment, TransactionWithDetails } from "@/types/moneyflow.types";
+import type { Account, Category, Person, Shop, TransactionWithDetails } from "@/types/moneyflow.types";
+import type { Installment } from "@/services/installment.service";
 
 // Form Schema
 export const formSchema = z.object({

@@ -192,7 +192,9 @@ export function SplitBillSection({
         totalVoucher: safeParticipants.reduce((sum, p) => sum + p.voucherAmount, 0),
         totalAdvance: safeParticipants.reduce((sum, p) => sum + (p.advanceAmount || 0), 0),
         totalFinal: safeParticipants.reduce((sum, p) => sum + p.finalShare, 0),
+        netAmount: 0 // Initialize for TS
     };
+    summary.netAmount = summary.totalFinal - summary.totalAdvance;
     summary.netAmount = summary.totalFinal - summary.totalAdvance;
 
     if (safeParticipants.length === 0) {

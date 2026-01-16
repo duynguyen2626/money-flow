@@ -284,9 +284,9 @@ export function UnifiedTransactionsPage({
                 categories={categories}
                 people={people}
                 shops={shops}
-                open={isAddOpen}
-                onOpenChange={setIsAddOpen}
                 buttonClassName="hidden"
+                isOpen={isAddOpen}
+                onOpenChange={setIsAddOpen}
             />
             {/* Actually, TransactionSlide as implemented in previous step has internal state and a trigger button.
                 We need it to be controlled by the main page "Add" button.
