@@ -6,15 +6,45 @@
 //        - Formulas: In/Out now use SUMIFS(J:J) directly as J is already Net Price.
 //        - Remains: SUM(J:J).
 
-/*
 function onOpen() {
-  var ui = SpreadsheetApp.getUi();
-  ui.createMenu('📊 Money Flow')
-    .addItem('Re-apply Format', 'manualFormat')
-    .addItem('Sort Auto Block', 'manualSort')
-    .addToUi();
+    var ui = SpreadsheetApp.getUi();
+    ui.createMenu('📊 Money Flow')
+        .addItem('📋 Copy Bank Info', 'copyBankInfo')
+        .addItem('💰 Copy Remains', 'copyRemains')
+        .addSeparator()
+        .addItem('⚠️ Re-apply Format', 'manualFormat')
+        .addToUi();
 }
-*/
+
+function copyBankInfo() { showCopyDialog(6, "Bank Info"); } // Row 6 is Bank Info
+function copyRemains() { showCopyDialog(5, "Remains"); }    // Row 5 is Remains
+
+function showCopyDialog(row, title) {
+    var sheet = SpreadsheetApp.getActiveSheet();
+    // Check if we are on a valid cycle sheet (has ID column)
+    if (sheet.getRange("A1").getValue() !== "ID") {
+        SpreadsheetApp.getUi().alert("Please select a transaction sheet first.");
+        return;
+    }
+
+    // Get value from Column N (14) or Merged Cell starting at L (12)
+    // Bank Info is L6:N6 merged usually. Remains is N5.
+    var val;
+    if (title === "Bank Info") {
+        val = sheet.getRange(row, 12).getDisplayValue(); // Col L
+        // If empty, try checking if unmerged
+        if (!val) val = sheet.getRange(row, 14).getDisplayValue(); // Col N
+    } else {
+        val = sheet.getRange(row, 14).getDisplayValue(); // Col N
+    }
+
+    var htmlOutput = HtmlService
+        .createHtmlOutput('<textarea style="width:100%;height:100px;font-size:16px;">' + val + '</textarea>' +
+            '<br><div style="text-align:center;color:#666;font-family:sans-serif;font-size:12px;">Ctrl+C to copy, Esc to close</div>')
+        .setWidth(300)
+        .setHeight(180);
+    SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Copy ' + title);
+}
 
 function createManualTestSheet() {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
