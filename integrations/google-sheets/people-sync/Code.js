@@ -538,17 +538,9 @@ function ensureArrayFormulas(sheet) {
     sheet.getRange("I2").setFormula('=ARRAYFORMULA(IF(F2:F="";"";IF(F2:F*G2:G/100+H2:H=0;0;F2:F*G2:G/100+H2:H)))');
 
     // J2 Formula (Final Price)
-    // Updated Logic: Amount (F) is now signed (Negative for In, Positive for Out).
-    // Final Price = Amount - Back.
-    // If Out (Positive F): F - Back. Correct.
-    // If In (Negative F): F - 0 (assuming no back on In). Result is Negative F. Correct.
-    // If In has Back? (Negative F) - Back. Result is MORE Negative. Correct (Cost reduced? No, In is Income. Back increases Income?)
-    // Wait. Cashback on repayment? Usually cashback is on Spending (Out).
-    // If I spend -100 (In?? No Spending is Out).
-    // Case: Cashback on Card Payment (Out).
-    // Case: Cashback on receiving money? Rare.
-    // Assuming Back is 0 or Positive.
-    // Formula: F - I.
+    // Updated Logic: F is Signed. J = F - I.
+    // Ensure we clear previous formulas first to avoid conflicts
+    try { sheet.getRange("J2:J").clearContent(); } catch (e) { }
     sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F="";"";F2:F-I2:I))');
 }
 
