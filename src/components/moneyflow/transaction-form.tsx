@@ -5130,7 +5130,7 @@ export function TransactionForm({
                 {/* VolunteerSection removed (Merged into Cashback UI) */}
 
                 {InstallmentSection}
-                {SplitBillSection}
+                {SplitBillSectionJSX}
               </div>
             ) : transactionType === "income" ? (
               <div className="space-y-4">
