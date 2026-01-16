@@ -3669,8 +3669,8 @@ export function TransactionForm({
               <div className="text-xs text-blue-800">
                 <p className="font-semibold">2-Person Split Detected</p>
                 <p className="mt-1">
-                  Your expense ({numberFormatter.format(myShare.amount)}) will be recorded with the full amount for bank reconciliation.
-                  A "Lend" transaction ({numberFormatter.format(otherPerson.amount)}) will be created for {otherPerson.name}.
+                  Your expense ({numberFormatter.format(myShare.amount || 0)}) will be recorded with the full amount for bank reconciliation.
+                  A "Lend" transaction ({numberFormatter.format(otherPerson.amount || 0)}) will be created for {otherPerson.name}.
                 </p>
               </div>
             </div>
