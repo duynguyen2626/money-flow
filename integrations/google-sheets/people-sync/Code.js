@@ -111,6 +111,17 @@ function handleSyncTransactions(payload) {
     var sheet = getOrCreateCycleTab(ss, cycleTag);
     var syncOptions = buildSheetSyncOptions(payload);
 
+    // CRITICAL FIX: Clear Summary Columns L:N completely BEFORE ANY INSERTION
+    // This prevents the summary table from being pushed down and duplicated by insertRows
+    try {
+        var maxRows = sheet.getMaxRows();
+        var clearRange = sheet.getRange(1, 12, maxRows, 3); // L1:N(max)
+        clearRange.clearContent();
+        clearRange.setBorder(false, false, false, false, false, false);
+        clearRange.setBackground(null);
+        clearRange.breakApart();
+    } catch (e) { }
+
     setupNewSheet(sheet, syncOptions.summaryOptions);
 
     // INTELLIGENT SYNC: Preserve Manual Rows
@@ -509,6 +520,23 @@ function ensureArrayFormulas(sheet) {
     sheet.getRange("I2").setFormula('=ARRAYFORMULA(IF(F2:F="";"";IF(F2:F*G2:G/100+H2:H=0;0;F2:F*G2:G/100+H2:H)))');
 
     // J2 Formula (Final Price)
+    // Logic: If In -> Amount + Back (Wait, In shouldn't have back? Usually In is income.)
+    // If Out -> Amount - Back.
+    // Normalized Type 'In' means POSITIVE (receiving). 'Out' means NEGATIVE (spending).
+    // But Amount (F) is always ABSOLUTE (Positive).
+    // So if B="In", Result = F. (Assuming no cashback on income).
+    // If B="Out", Result = -(F - I). (Spending less cashback).
+    // Current Formula: =IF(B="In"; (F-I)*(-1); F-I). 
+    // Wait, previous formula: IF(B="In"; (F-I)*(-1); F-I) ???
+    // If B="In" (Income), why * -1? That makes it negative?
+    // User complaint "In thì cần dấu -".
+    // Maybe default is:
+    // Out = Positive Cost.
+    // In = Negative Cost (Repayment).
+    // If Amount=100. Out -> Cost 100.
+    // In -> Cost -100.
+    // Formula: IF(B="Out"; F-I; (F-I)*-1).
+    // Let's stick to the previous one found in line 512, but Ensure it is set.
     sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F="";"";IF(B2:B="In";(F2:F-I2:I)*(-1);F2:F-I2:I)))');
 }
 

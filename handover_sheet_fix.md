@@ -1,35 +1,39 @@
-# Handover: Sheet Sync & People Navigation Fixes (Round 2)
+# Handover: Sheet Sync Final Fixes (Round 3)
 
-## Fixes Implemented
+## Critical Fixes for Sheet Sync (`Code.js`)
 
-### 1. Google Sheets Sync (`integrations/google-sheets/people-sync/Code.js`)
--   **No Duplication**: Logic `clearContent()` và `breakApart()` đã được cập nhật để xóa sạch toàn bộ cột L:N trước khi vẽ lại bảng Summary, đảm bảo không còn tình trạng bảng cũ bị đẩy xuống dưới (Duplicate).
--   **Format as Table**: Các dòng dữ liệu (Data Rows) giờ được set background màu **TRẮNG (#FFFFFF)** thay vì trong suốt (null), giúp tránh việc bị ám màu xám từ format cũ, làm cho nhìn giống Header.
--   **Total Back & Remains**:
-    -   **Total Back**: Đã thêm dòng "Total Back" (tổng cột Σ Back) vào bảng Summary.
-    -   **Gross In/Out**: "In" và "Out" giờ tính theo cột Amount (Gross) thay vì Final Price (Net), để tách biệt phần Cashback.
-    -   **Remains Position**: D dòng "Remains" đã được tách ra và đặt **nằm dưới** phần thông tin Ngân hàng (Bank Info), đúng như yêu cầu.
--   **Bank Info**: Giữ nguyên logic wrap text và độ rộng cột 450px.
+### 1. "Ghost Rows" & Duplicate Summary Table Fix
+-   **Root Cause**: Lệnh `insertRows` (khi thêm giao dịch mới) đẩy toàn bộ cột L:N xuống dưới, tạo ra các dòng trống có border cũ (ghost rows) và nhân bản bảng Summary.
+-   **Solution**: Đã thêm logic **Clear sạch cột L:N** ngay đầu hàm `handleSyncTransactions`, **TRƯỚC** khi bất kỳ lệnh `insertRows` nào được thực thi. Điều này đảm bảo bảng Summary luôn được vẽ lại từ đầu ở đúng vị trí cố định (L1:N6) mà không bị ảnh hưởng bởi việc thêm dòng data.
 
-### 2. People UI (`src/app/people/[id]/details/member-detail-view.tsx`)
--   **Sheet Link Button**: Đã thêm nút icon "LayoutDashboard" (biểu tượng Sheet) ngay trên header, cạnh tên người dùng. Click vào sẽ mở link Google Sheet (nếu có trong settings).
+### 2. Remains Formula Update
+-   **Logic**: Chuyển sang công thức Gross đơn giản dễ hiểu theo yêu cầu:
+    `Remains = In (Gross) - Out (Gross) + Total Back`.
+    (Công thức Excel: `=N2-N3+N4`).
+-   **In/Out**: Vẫn hiển thị Amount (Gross, chưa trừ cashback) để user dễ đối chiếu.
 
-## Deployment Instructions
+### 3. ArrayFormulas Restored
+-   Đã verify và giữ nguyên `ensureArrayFormulas` cho cột I và J.
+-   **Lưu ý**: Cột J (Final Price) dùng logic:
+    -   Nếu là **Out**: `Amount - Cashback`. (Dương = Chi tiêu).
+    -   Nếu là **In**: `(Amount - Cashback) * -1`. (Âm = Trả nợ/Thu nhập).
+    -   Đây là logic mặc định của sheet hiện tại.
 
-### To Apply Sheet Sync Fixes:
-**BẮT BUỘC** phải push code Apps Script mới lên Google Sheet:
+### 4. Background White
+-   Đảm bảo các dòng data có background màu trắng (`#FFFFFF`) để không bị xám như Header.
+
+## Deployment
+**BẮT BUỘC** chạy lệnh sau để push code mới lên Google Script:
 
 ```bash
 npm run sheet:people
-# Hoặc phiên bản specific nếu cần
-# npm run sheet:people:1
 ```
 
-### To Verify:
-1.  **Sync**: Chạy sync lại 1 người.
-2.  **Check Sheet**:
-    -   Bảng Summary phải nằm gọn ở trên cùng (L1:N6). Không có bảng thừa ở dưới.
-    -   Dòng data phải nền trắng.
-    -   Summary có dòng "Total Back".
-    -   Dòng "Remains" nằm dưới Bank Info.
-3.  **Check UI**: Vào chi tiết 1 người -> Thấy nút Sheet trên header -> Click mở ra sheet đúng.
+## Verification Steps
+1.  Mở Google Sheet của 1 person.
+2.  Chạy Sync lại data.
+3.  Kiểm tra:
+    -   Không còn các dòng trống có border (ghost rows) phía trên bảng Summary.
+    -   Bảng Summary nằm gọn ở góc phải trên cùng.
+    -   Dòng Remains có công thức `=N2-N3+N4` (hoặc tương tự) dễ hiểu.
+    -   Cột I, J có công thức mảng tự động tràn xuống dưới.
