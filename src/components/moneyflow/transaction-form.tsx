@@ -5159,7 +5159,7 @@ export function TransactionForm({
                   {AmountInput}
                 </div>
 
-                {SplitBillSection}
+                {SplitBillSectionJSX}
               </div>
             ) : transactionType === "expense" ? (
               <div className="space-y-4">
