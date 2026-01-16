@@ -69,7 +69,7 @@ export function BatchPageClientV2({
             const result = await createFreshBatchAction({
                 monthYear: selectedMonthParam,
                 monthName,
-                bankType
+                bankType: bankType as 'MBB' | 'VIB'
             })
 
             if (result.success) {
@@ -141,7 +141,7 @@ export function BatchPageClientV2({
             {/* Month Tabs */}
             <MonthTabs
                 batches={visibleBatches}
-                bankType={bankType}
+                bankType={bankType as 'MBB' | 'VIB'}
                 onCreateMonth={() => setCreateMonthOpen(true)}
                 value={currentMonth}
                 onValueChange={handleMonthSelect}
@@ -197,7 +197,7 @@ export function BatchPageClientV2({
             <CreateMonthDialog
                 open={createMonthOpen}
                 onOpenChange={setCreateMonthOpen}
-                bankType={bankType}
+                bankType={bankType as 'MBB' | 'VIB'}
                 previousMonths={batches
                     .map(b => b.month_year)
                     .filter((v, i, a) => v && a.indexOf(v) === i)
@@ -208,7 +208,7 @@ export function BatchPageClientV2({
                     const result = await createFreshBatchAction({
                         monthYear,
                         monthName,
-                        bankType
+                        bankType: bankType as 'MBB' | 'VIB'
                     })
 
                     if (result.success) {
@@ -243,14 +243,14 @@ export function BatchPageClientV2({
                     onOpenChange={setQuickEntryOpen}
                     sourceBatchId={quickEntryData.sourceBatchId}
                     newMonthName={quickEntryData.monthName}
-                    bankType={bankType}
+                    bankType={bankType as 'MBB' | 'VIB'}
                     bankMappings={bankMappings}
                     onSubmit={async (amounts) => {
                         const { createCloneBatchAction } = await import('@/actions/batch-create.actions')
                         const result = await createCloneBatchAction({
                             monthYear: quickEntryData.monthYear,
                             monthName: quickEntryData.monthName,
-                            bankType,
+                            bankType: bankType as 'MBB' | 'VIB',
                             sourceBatchId: quickEntryData.sourceBatchId,
                             amounts
                         })

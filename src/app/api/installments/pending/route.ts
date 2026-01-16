@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
 
 
         const accountInstallments = (installments || []).filter((inst: any) => {
-            const txn = (transactions || []).find((t: any) => t.id === inst.original_transaction_id)
+            const txn = (transactions || []).find((t: any) => t.id === inst.original_transaction_id) as any
             return txn && txn.account_id === accountId
         })
 

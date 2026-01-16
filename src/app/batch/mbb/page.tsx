@@ -22,7 +22,7 @@ export default async function MBBBatchPage({
 
     let targetBatchId = null
     if (month) {
-        const found = batches.find(b => b.month_year === month)
+        const found = batches.find((b: any) => b.month_year === month)
         if (found) targetBatchId = found.id
     } else if (visibleBatches.length > 0) {
         const sorted = [...visibleBatches].sort((a: any, b: any) => {
