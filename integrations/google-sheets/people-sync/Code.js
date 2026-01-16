@@ -277,9 +277,9 @@ function applyBordersAndSort(sheet, summaryOptions) {
     if (maxRow >= 2) {
         var totalRows = maxRow - 1;
         // Fix Grey Styling: Reset background and font weight for data rows
-        sheet.getRange(2, 1, totalRows, 10)
-            .setBorder(true, true, true, true, true, true)
-            .setBackground(null)
+        var dataRange = sheet.getRange(2, 1, totalRows, 10);
+        dataRange.setBorder(true, true, true, true, true, true)
+            .setBackground('#FFFFFF') // Force White to prevent "Header Grey" look
             .setFontWeight('normal');
 
         // FIXED CENTER ALIGNMENT FOR DATE COLUMN
@@ -287,21 +287,15 @@ function applyBordersAndSort(sheet, summaryOptions) {
     }
 
     // Fix Summary Table area - Clear content, borders, AND background colors
-    sheet.getRange('L7:N').clearContent();
-    // Fix Summary Table area - Clear content, borders, AND background colors
     // CLEAR EVERYTHING in L:N columns to avoid ghost data from row shifts
     try {
         var maxRows = sheet.getMaxRows();
-        sheet.getRange(1, 12, maxRows, 3).clearContent(); // Clear L1:N(max)
-        sheet.getRange(1, 12, maxRows, 3).setBorder(false, false, false, false, false, false);
-        sheet.getRange(1, 12, maxRows, 3).setBackground(null);
+        var clearRange = sheet.getRange(1, 12, maxRows, 3); // L1:N(max)
+        clearRange.clearContent();
+        clearRange.setBorder(false, false, false, false, false, false);
+        clearRange.setBackground(null);
+        clearRange.breakApart(); // Clear merges
     } catch (e) { }
-
-    // sheet.getRange('L7:N').clearContent(); // Redundant now
-    // sheet.getRange('L7:N').clearFormat();  // Redundant now
-    // sheet.getRange('L6:N6').clearContent(); // Redundant now
-    sheet.getRange('L6:N6').setBorder(false, false, false, false, false, false);
-    sheet.getRange('L7:N').setBorder(false, false, false, false, false, false);
 
     setupSummaryTable(sheet, summaryOptions);
 }
@@ -397,44 +391,62 @@ function setupSummaryTable(sheet, summaryOptions) {
     if (typeof showBankAccount === 'undefined') {
         showBankAccount = true;
     }
+
+    // Clear all backgrounds first
+    sheet.getRange('L2:N6').setBackground(null);
+    sheet.getRange('L2:N6').setFontColor('#000000');
+
     var r = sheet.getRange('L1:N1');
     r.setValues([['No.', 'Summary', 'Value']]);
-    r.setFontWeight('bold').setBackground('#fde4e4').setFontSize(12).setBorder(true, true, true, true, true, true).setHorizontalAlignment('center');
+    r.setFontWeight('bold').setBackground('#f3f4f6').setFontSize(12).setBorder(true, true, true, true, true, true).setHorizontalAlignment('center');
 
-    var d = sheet.getRange('L2:M4');
-    d.setValues([[1, 'In'], [2, 'Out'], [3, 'Remains']]);
-    d.setFontWeight('bold');  // Make all labels bold
+    // Row 2: In (Gross)
+    // Row 3: Out (Gross)
+    // Row 4: Total Back
+    // Row 5: Bank Info (Merged)
+    // Row 6: Remains (Net)
 
-    // N2 (In): Sum of Final Price (J) for "In". J already includes cashback logic (Net).
-    sheet.getRange('N2').setFormula('=SUMIFS(J:J;B:B;"In")');
+    var labels = [
+        [1, 'In (Gross)'],
+        [2, 'Out (Gross)'],
+        [3, 'Total Back']
+    ];
+    sheet.getRange('L2:M4').setValues(labels);
+    sheet.getRange('L2:M4').setFontWeight('bold');
 
-    // N3 (Out): Sum of Final Price (J) for "Out". J already includes cashback logic (Net).
-    sheet.getRange('N3').setFormula('=SUMIFS(J:J;B:B;"Out")');
+    // N2 (In - Gross): Sum of Amount (F) for "In"
+    sheet.getRange('N2').setFormula('=SUMIFS(F:F;B:B;"In")');
+    sheet.getRange('N2').setFontColor('#16a34a'); // Green
 
-    // N4 (Remains): Simply SUM(Final Price) which is Net Debt
-    sheet.getRange('N4').setFormula('=SUM(J2:J)');
+    // N3 (Out - Gross): Sum of Amount (F) for "Out" 
+    sheet.getRange('N3').setFormula('=SUMIFS(F:F;B:B;"Out")');
 
-    sheet.getRange('N2:N4').setNumberFormat('#,##0').setFontWeight('bold');
-    sheet.getRange('L2:N4').setBorder(true, true, true, true, true, true);
+    // N4 (Total Back): Sum of Sum Back (I)
+    sheet.getRange('N4').setFormula('=SUM(I:I)');
+    sheet.getRange('N4').setFontColor('#ea580c'); // Orange
 
-    // Clear all backgrounds first, then apply specific ones
-    sheet.getRange('L2:N5').setBackground(null);  // Clear all backgrounds in summary area
-    sheet.getRange('L4:N4').setBackground('#f8d0d0').setFontWeight('bold');  // Pink for Remains row only
+    // Bank Row (Row 5 - L5:N5)
+    var bankCell = sheet.getRange('L5:N5');
 
-    // Set text colors (bold already set above)
-    sheet.getRange('L2:N2').setFontColor('#137333');  // Green for In
-    sheet.getRange('L3:N3').setFontColor('#000000');  // Black for Out
-    sheet.getRange('L4:N5').setFontColor('#000000');  // Black for Remains, Bank
+    // Remains Row (Row 6 - L6:N6) - MOVED BELOW BANK
+    sheet.getRange('L6').setValue(4);
+    sheet.getRange('M6').setValue('Remains');
+    sheet.getRange('N6').setFormula('=SUM(J2:J)'); // Net Remains
+
+    // Styling
+    sheet.getRange('N2:N6').setNumberFormat('#,##0').setFontWeight('bold');
+    sheet.getRange('L2:N6').setBorder(true, true, true, true, true, true);
+
+    // Highlight Remains
+    sheet.getRange('L6:N6').setBackground('#fee2e2'); // Soft red/pink for remains
 
     try {
         sheet.setColumnWidth(12, 50);
         sheet.setColumnWidth(13, 130);
-        sheet.setColumnWidth(12, 50);
-        sheet.setColumnWidth(13, 130);
-        sheet.setColumnWidth(14, 450); // Increased from 130 to 450 to fit Bank Account Info
+        sheet.setColumnWidth(14, 450);
     } catch (e) { }
 
-    var bankCell = sheet.getRange('L5:N5');
+    // Setup Bank Cell at Row 5
     try {
         if (showBankAccount) {
             if (shouldMerge) {
@@ -442,26 +454,23 @@ function setupSummaryTable(sheet, summaryOptions) {
             } else {
                 bankCell.breakApart();
             }
+
+            if (bankAccountText) {
+                var escapedText = bankAccountText.replace(/"/g, '""');
+                bankCell.setFormula('="' + escapedText + '"');
+            } else {
+                bankCell.setFormula('=BankInfo!A2&" "&BankInfo!B2&" "&BankInfo!C2');
+            }
+            bankCell.setFontWeight('bold')
+                .setHorizontalAlignment('left')
+                .setBorder(true, true, true, true, true, true)
+                .setWrap(true)
+                .setBackground('#f9fafb'); // Light grey for bank info
         } else {
-            bankCell.breakApart();
+            bankCell.clearContent();
+            bankCell.setBorder(false, false, false, false, false, false);
         }
     } catch (e) { }
-    if (showBankAccount) {
-        if (bankAccountText) {
-            var escapedText = bankAccountText.replace(/"/g, '""');
-            bankCell.setFormula('="' + escapedText + ' " & ROUND(N4;0)');
-        } else {
-            bankCell.setFormula('=BankInfo!A2&" "&BankInfo!B2&" "&BankInfo!C2&" "&ROUND(N4;0)');
-        }
-        // Force wrap to ensure data fits if it's very long
-        bankCell.setFontWeight('bold')
-            .setHorizontalAlignment('left')
-            .setBorder(true, true, true, true, true, true)
-            .setWrap(true);
-    } else {
-        bankCell.clearContent();
-        bankCell.setBorder(false, false, false, false, false, false);
-    }
 }
 
 function ensureShopSheet(ss) {

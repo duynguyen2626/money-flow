@@ -222,6 +222,18 @@ export function MemberDetailView({
                         )}
 
                         <div className="flex items-center gap-2">
+                            {/* Google Sheet Link */}
+                            {person.google_sheet_url && (
+                                <a
+                                    href={person.google_sheet_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-2 rounded-full hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 transition-colors border border-transparent hover:border-emerald-100"
+                                    title="Open Google Sheet"
+                                >
+                                    <LayoutDashboard className="w-5 h-5" />
+                                </a>
+                            )}
                             <h1 className="text-lg font-bold text-slate-900">{person.name}</h1>
                             <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded uppercase", Math.abs(balance) < 100 ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600")}>
                                 {Math.abs(balance) < 100 ? 'SETTLED' : 'ACTIVE'}
