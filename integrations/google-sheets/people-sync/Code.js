@@ -276,53 +276,45 @@ function getLastDataRow(sheet) {
 }
 
 function applyBordersAndSort(sheet, summaryOptions) {
-    // ONLY Sort the Auto-Block (rows with ID)
+    // 1. DATA STYLING & SORTING (Only if data exists)
     var lastAutoRow = getLastDataRow(sheet);
-    if (lastAutoRow < 2) return;
 
-    clearImageMerges(sheet);
+    if (lastAutoRow >= 2) {
+        clearImageMerges(sheet);
+        var rowCount = lastAutoRow - 1;
+        var dataRange = sheet.getRange(2, 1, rowCount, 15);
+        dataRange.sort({ column: 3, ascending: true });
 
-    var rowCount = lastAutoRow - 1;
-    var dataRange = sheet.getRange(2, 1, rowCount, 15);
-    dataRange.sort({ column: 3, ascending: true });
+        var arrD = new Array(rowCount);
+        for (var i = 0; i < rowCount; i++) {
+            var r = i + 2;
+            arrD[i] = ['=IFERROR(VLOOKUP(O' + r + ';Shop!A:B;2;FALSE);O' + r + ')'];
+        }
+        sheet.getRange(2, 4, rowCount, 1).setValues(arrD);
 
-    var arrD = new Array(rowCount);
-    // var arrIJ removed
+        ensureArrayFormulas(sheet);
 
-    for (var i = 0; i < rowCount; i++) {
-        var r = i + 2;
-        arrD[i] = ['=IFERROR(VLOOKUP(O' + r + ';Shop!A:B;2;FALSE);O' + r + ')'];
-        // arrIJ loop removed
+        // Fix Grey Background: Force White for all data rows
+        var maxRow = sheet.getLastRow();
+        if (maxRow >= 2) {
+            var totalRows = maxRow - 1;
+            sheet.getRange(2, 1, totalRows, 10)
+                .setBorder(true, true, true, true, true, true)
+                .setBackground('#FFFFFF')
+                .setFontWeight('normal');
+            sheet.getRange(2, 3, totalRows, 1).setHorizontalAlignment('center');
+        }
     }
 
-    sheet.getRange(2, 4, rowCount, 1).setValues(arrD);
-    // arrIJ setValues removed
-
-    ensureArrayFormulas(sheet);
-
-    // Borders for A:J for ALL DATA ROWS (including manual input)
-    var maxRow = sheet.getLastRow();
-    if (maxRow >= 2) {
-        var totalRows = maxRow - 1;
-        // Fix Grey Styling: Reset background and font weight for data rows
-        var dataRange = sheet.getRange(2, 1, totalRows, 10);
-        dataRange.setBorder(true, true, true, true, true, true)
-            .setBackground('#FFFFFF') // Force White to prevent "Header Grey" look
-            .setFontWeight('normal');
-
-        // FIXED CENTER ALIGNMENT FOR DATE COLUMN
-        sheet.getRange(2, 3, totalRows, 1).setHorizontalAlignment('center');
-    }
-
+    // 2. ALWAYS Re-draw Summary Table (Regardless of data rows)
     // Fix Summary Table area - Clear content, borders, AND background colors
-    // CLEAR EVERYTHING in L:N columns to avoid ghost data from row shifts
     try {
         var maxRows = sheet.getMaxRows();
         var clearRange = sheet.getRange(1, 12, maxRows, 3); // L1:N(max)
         clearRange.clearContent();
         clearRange.setBorder(false, false, false, false, false, false);
         clearRange.setBackground(null);
-        clearRange.breakApart(); // Clear merges
+        clearRange.breakApart();
     } catch (e) { }
 
     setupSummaryTable(sheet, summaryOptions);
@@ -391,7 +383,12 @@ function setupNewSheet(sheet, summaryOptions) {
     var rule1 = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$B2="In"').setBackground("#D5F5E3").setFontColor("#145A32").setRanges([sheet.getRange('A2:J')]).build();
     sheet.setConditionalFormatRules([rule1]);
 
-    setupSummaryTable(sheet, summaryOptions);
+    var rule1 = SpreadsheetApp.newConditionalFormatRule().whenFormulaSatisfied('=$B2="In"').setBackground("#D5F5E3").setFontColor("#145A32").setRanges([sheet.getRange('A2:J')]).build();
+    sheet.setConditionalFormatRules([rule1]);
+
+    // setupSummaryTable REMOVED from here to prevent shifting during row insertion.
+    // It should only be called at the end of the process.
+
     ensureShopSheet(sheet.getParent());
     ensureBankInfoSheet(sheet.getParent());
     SpreadsheetApp.flush();
