@@ -175,7 +175,11 @@ function handleSyncTransactions(payload) {
             var r = startRow + i;
             arrABC[i] = [txn.id, normalizeType(txn.type, txn.amount), new Date(txn.date)];
             arrD[i] = ['=IFERROR(VLOOKUP(O' + r + ';Shop!A:B;2;FALSE);O' + r + ')'];
-            arrEFGH[i] = [txn.notes || "", Math.abs(txn.amount), txn.percent_back || 0, txn.fixed_back || 0];
+            var amt = Math.abs(txn.amount);
+            if (normalizeType(txn.type, txn.amount) === 'In') {
+                amt = -amt;
+            }
+            arrEFGH[i] = [txn.notes || "", amt, txn.percent_back || 0, txn.fixed_back || 0];
             // arrIJ removed
             arrO[i] = [txn.shop || ""];
         }
@@ -232,7 +236,13 @@ function handleSingleTransaction(payload, action) {
     sheet.getRange(targetRow, 2).setValue(normalizeType(payload.type, payload.amount));
     sheet.getRange(targetRow, 3).setValue(new Date(payload.date));
     sheet.getRange(targetRow, 5).setValue(payload.notes || "");
-    sheet.getRange(targetRow, 6).setValue(Math.abs(payload.amount));
+
+    var amt = Math.abs(payload.amount);
+    if (normalizeType(payload.type, payload.amount) === 'In') {
+        amt = -amt;
+    }
+    sheet.getRange(targetRow, 6).setValue(amt);
+
     sheet.getRange(targetRow, 7).setValue(payload.percent_back || 0);
     sheet.getRange(targetRow, 8).setValue(payload.fixed_back || 0);
     sheet.getRange(targetRow, 15).setValue(payload.shop || "");

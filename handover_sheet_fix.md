@@ -1,39 +1,41 @@
-# Handover: Sheet Sync Final Fixes (Round 3)
+# Handover: Sheet Sync Final Adjustments (Round 4)
 
-## Critical Fixes for Sheet Sync (`Code.js`)
+## Sheet Sync (`integrations/google-sheets/people-sync/Code.js`) Updates
 
-### 1. "Ghost Rows" & Duplicate Summary Table Fix
--   **Root Cause**: Lệnh `insertRows` (khi thêm giao dịch mới) đẩy toàn bộ cột L:N xuống dưới, tạo ra các dòng trống có border cũ (ghost rows) và nhân bản bảng Summary.
--   **Solution**: Đã thêm logic **Clear sạch cột L:N** ngay đầu hàm `handleSyncTransactions`, **TRƯỚC** khi bất kỳ lệnh `insertRows` nào được thực thi. Điều này đảm bảo bảng Summary luôn được vẽ lại từ đầu ở đúng vị trí cố định (L1:N6) mà không bị ảnh hưởng bởi việc thêm dòng data.
+### 1. Layout & Colors
+-   **Structure**:
+    -   Row 2: In (Gross) - **Dark Green**. Value is **Negative**.
+    -   Row 3: Out (Gross) - **Dark Red**. Value is **Positive**.
+    -   Row 4: Total Back - **Blue**. Value is **Positive**.
+    -   Row 5: Remains - **Below Total Back**. Background: Light Red.
+    -   Row 6: Bank Info - **Below Remains**. Background: Light Grey.
+-   **Remains Formula**: `=N3+N2-N4` (Out + In - Back).
+    -   Example: Out 100, In -90, Back 5. Result = 100 + (-90) - 5 = 5.
 
-### 2. Remains Formula Update
--   **Logic**: Chuyển sang công thức Gross đơn giản dễ hiểu theo yêu cầu:
-    `Remains = In (Gross) - Out (Gross) + Total Back`.
-    (Công thức Excel: `=N2-N3+N4`).
--   **In/Out**: Vẫn hiển thị Amount (Gross, chưa trừ cashback) để user dễ đối chiếu.
+### 2. Formulas & Data
+-   **In (Gross)**: Logic đã sửa để hiển thị giá trị **Âm** (Negative) trong cột Amount (F) và bảng Summary.
+-   **Bank Info**: Sử dụng công thức động tham chiếu sheet `BankInfo` và giá trị Remains hiện tại.
+    -   Formula: `=BankInfo!A2 & " " & BankInfo!B2 & " " & BankInfo!C2 & " " & TEXT(N5;"#,##0")`
+    -   Lưu ý: Dùng `TEXT(N5;"#,##0")` để format số Remains cho đẹp trong chuỗi text.
 
-### 3. ArrayFormulas Restored
--   Đã verify và giữ nguyên `ensureArrayFormulas` cho cột I và J.
--   **Lưu ý**: Cột J (Final Price) dùng logic:
-    -   Nếu là **Out**: `Amount - Cashback`. (Dương = Chi tiêu).
-    -   Nếu là **In**: `(Amount - Cashback) * -1`. (Âm = Trả nợ/Thu nhập).
-    -   Đây là logic mặc định của sheet hiện tại.
-
-### 4. Background White
--   Đảm bảo các dòng data có background màu trắng (`#FFFFFF`) để không bị xám như Header.
+### 3. Stability
+-   Vẫn giữ logic `Clear L:N` đầu hàm sync để chống ghost rows.
+-   Đã verify lại logic insert row không làm vỡ bảng Summary (do bảng Summary luôn được vẽ lại sau cùng).
 
 ## Deployment
-**BẮT BUỘC** chạy lệnh sau để push code mới lên Google Script:
+**BẮT BUỘC** chạy lệnh update script:
 
 ```bash
 npm run sheet:people
 ```
 
-## Verification Steps
-1.  Mở Google Sheet của 1 person.
-2.  Chạy Sync lại data.
-3.  Kiểm tra:
-    -   Không còn các dòng trống có border (ghost rows) phía trên bảng Summary.
-    -   Bảng Summary nằm gọn ở góc phải trên cùng.
-    -   Dòng Remains có công thức `=N2-N3+N4` (hoặc tương tự) dễ hiểu.
-    -   Cột I, J có công thức mảng tự động tràn xuống dưới.
+## Verification
+1.  **Sync**: Chạy sync 1 người.
+2.  **Check Table**:
+    -   Cột Amount: Transaction "In" phải số âm.
+    -   Row data: Nền trắng.
+3.  **Check Summary**:
+    -   Thứ tự: In -> Out -> Back -> Remains -> Bank.
+    -   Màu sắc: In (Xanh đậm), Out (Đỏ đậm), Back (Xanh dương).
+    -   Remains: Tính đúng (Out - In - Back).
+    -   Bank Info: Hiển thị đúng text ngân hàng kèm số tiền Remains ở cuối.
