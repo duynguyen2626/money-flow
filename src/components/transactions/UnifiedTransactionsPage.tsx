@@ -12,7 +12,7 @@ import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { voidTransactionAction } from '@/actions/transaction-actions'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
-import { TransactionSlide } from '@/components/moneyflow/transaction-slide-v2/TransactionSlide'
+
 import {
     AlertDialog,
     AlertDialogAction,
