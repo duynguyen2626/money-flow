@@ -3678,18 +3678,7 @@ export function TransactionForm({
         );
       })()}
 
-      <SplitBillTable
-        participants={splitParticipants}
-        totalAmount={splitTotalAmount}
-        onAmountChange={handleSplitAmountChange}
-        onPaidByChange={handleSplitPaidByChange}
-        onNoteChange={handleSplitNoteChange}
-        onPaidBeforeChange={handleSplitPaidBeforeChange}
-        onRemove={handleRemoveSplitParticipant}
-        allowPaidBefore={transactionType !== "repayment"}
-        error={splitBillError}
-        onEditTransaction={(id) => onSwitchTransaction?.(id)}
-      />
+
     </div>
   ) : null;
 
