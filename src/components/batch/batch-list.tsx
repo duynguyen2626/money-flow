@@ -11,31 +11,20 @@ import { CloneBatchDialog } from './clone-batch-dialog'
 
 type BatchListProps = { batches: any[]; mode?: 'processing' | 'done'; accounts?: any[]; webhookLinks?: any[] }
 
-export function BatchList({ batches, mode, accounts = [], webhookLinks = [] }: BatchListProps) {
-    const router = useRouter()
 
-    if (!batches || batches.length === 0) {
-        return <div>No batches found. Create one to get started.</div>
-    }
+interface BatchGridProps {
+    items: any[]
+    accounts: any[]
+    webhookLinks: any[]
+    onItemClick: (id: string) => void
+    onDelete: (e: React.MouseEvent, id: string) => void
+}
 
-    const processingBatches = batches.filter(b => b.status !== 'funded' && b.status !== 'completed')
-    const doneBatches = batches.filter(b => b.status === 'funded' || b.status === 'completed')
-
-    async function handleDelete(e: React.MouseEvent, id: string) {
-        e.preventDefault() // Prevent navigation to detail page
-        e.stopPropagation()
-
-        if (confirm('Are you sure you want to delete this batch? This action cannot be undone.')) {
-            await deleteBatchAction(id)
-            // Ideally we should use optimistic updates or router.refresh() but the action calls revalidatePath
-            // router.refresh() might be needed to see changes immediately if not using optimistic UI
-        }
-    }
-
-    const BatchGrid = ({ items }: { items: any[] }) => (
+function BatchGrid({ items, accounts, webhookLinks, onItemClick, onDelete }: BatchGridProps) {
+    return (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {items.map((batch) => (
-                <div key={batch.id} onClick={() => router.push(`/batch/detail/${batch.id}`)}>
+                <div key={batch.id} onClick={() => onItemClick(batch.id)}>
                     <Card className="hover:bg-accent transition-colors cursor-pointer group relative">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-base font-medium truncate pr-8">
@@ -47,7 +36,7 @@ export function BatchList({ batches, mode, accounts = [], webhookLinks = [] }: B
                                     variant="ghost"
                                     size="icon"
                                     className="h-8 w-8 text-muted-foreground hover:text-red-600"
-                                    onClick={(e) => handleDelete(e, batch.id)}
+                                    onClick={(e) => onDelete(e, batch.id)}
                                 >
                                     <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -85,14 +74,50 @@ export function BatchList({ batches, mode, accounts = [], webhookLinks = [] }: B
                     </Card>
                 </div>
             ))}
-        </div >
+        </div>
+    )
+}
+
+export function BatchList({ batches, mode, accounts = [], webhookLinks = [] }: BatchListProps) {
+    const router = useRouter()
+
+    if (!batches || batches.length === 0) {
+        return <div>No batches found. Create one to get started.</div>
+    }
+
+    const processingBatches = batches.filter(b => b.status !== 'funded' && b.status !== 'completed')
+    const doneBatches = batches.filter(b => b.status === 'funded' || b.status === 'completed')
+
+    async function handleDelete(e: React.MouseEvent, id: string) {
+        e.preventDefault() // Prevent navigation to detail page
+        e.stopPropagation()
+
+        if (confirm('Are you sure you want to delete this batch? This action cannot be undone.')) {
+            await deleteBatchAction(id)
+            // Ideally we should use optimistic updates or router.refresh() but the action calls revalidatePath
+            // router.refresh() might be needed to see changes immediately if not using optimistic UI
+        }
+    }
+
+    const handleItemClick = (id: string) => {
+        router.push(`/batch/detail/${id}`)
+    }
+
+    const renderGrid = (items: any[]) => (
+        <BatchGrid
+            items={items}
+            accounts={accounts}
+            webhookLinks={webhookLinks}
+            onItemClick={handleItemClick}
+            onDelete={handleDelete}
+        />
     )
 
     if (mode === 'processing') {
         return (
             <div className="mt-4">
                 {processingBatches.length > 0 ? (
-                    <BatchGrid items={processingBatches} />
+                    renderGrid(processingBatches)
                 ) : (
                     <div className="text-muted-foreground text-sm">No processing batches.</div>
                 )}
@@ -104,7 +129,7 @@ export function BatchList({ batches, mode, accounts = [], webhookLinks = [] }: B
         return (
             <div className="mt-4">
                 {doneBatches.length > 0 ? (
-                    <BatchGrid items={doneBatches} />
+                    renderGrid(doneBatches)
                 ) : (
                     <div className="text-muted-foreground text-sm">No completed batches.</div>
                 )}
@@ -120,14 +145,14 @@ export function BatchList({ batches, mode, accounts = [], webhookLinks = [] }: B
             </TabsList>
             <TabsContent value="processing" className="mt-4">
                 {processingBatches.length > 0 ? (
-                    <BatchGrid items={processingBatches} />
+                    renderGrid(processingBatches)
                 ) : (
                     <div className="text-muted-foreground text-sm">No processing batches.</div>
                 )}
             </TabsContent>
             <TabsContent value="done" className="mt-4">
                 {doneBatches.length > 0 ? (
-                    <BatchGrid items={doneBatches} />
+                    renderGrid(doneBatches)
                 ) : (
                     <div className="text-muted-foreground text-sm">No completed batches.</div>
                 )}
@@ -135,3 +160,4 @@ export function BatchList({ batches, mode, accounts = [], webhookLinks = [] }: B
         </Tabs>
     )
 }
+

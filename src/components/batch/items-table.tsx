@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import Link from 'next/link'
@@ -46,6 +47,7 @@ export function ItemsTable({
     // Sort items: Nearest Due Date -> Created At (desc)
     const items = useMemo(() => {
         return [...initialItems].sort((a, b) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const getDaysUntilDue = (item: any) => {
                 if (!item.target_account?.cashback_config) return 999
                 const config = parseCashbackConfig(item.target_account.cashback_config)
