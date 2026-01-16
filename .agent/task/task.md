@@ -541,6 +541,14 @@ TEST 5.4: Bank Reconciliation View
         ✓ Toggle "Show only parent transactions"
         ✓ When enabled: Children hidden, cleaner view
 
+    Sheet Sync Tasks:
+      - [x] Fix "Ghost Rows" (Duplicate rows) in Google Sheet Sync
+    - [/] Refine Google Sheet Summary Table
+        - [x] Implement "Total Back" row
+        - [x] Correct "Remains" calculation (Signed J column)
+        - [x] Position "Remains" (Row 5) and "Bank Info" (Row 6)
+        - [/] Verify J Column Logic (User reports positive value for negative input)
+
 
 ═══════════════════════════════════════════════════════════════════════════════
 SECTION 6: EDGE CASES & ERROR HANDLING

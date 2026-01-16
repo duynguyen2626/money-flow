@@ -1,32 +1,21 @@
-# Handover: Sheet Sync Final Logic (Round 7)
+# Handover: Sheet Sync Final Fix (Round 8)
 
-## Final Updates (`integrations/google-sheets/people-sync/Code.js`)
+## Issue Analysis
+-   User report: Cột J (Final Price) vẫn hiển thị số Dương dù Cột F (Amount) là Âm.
+-   Nguyên nhân: Có thể do Google Sheet cache công thức cũ hoặc quá trình clear content chưa triệt để, hoặc script chưa thực sự update formula string mới.
 
-### 1. Header Update (v5.1)
--   Đã cập nhật header file Code.js lên version 5.1 để confirm code mới nhất.
--   Timestamp: 2026-01-16 16:30 ICT.
+## Fix Applied (`integrations/google-sheets/people-sync/Code.js`)
+-   **Force J Formula Update**: Thay đổi string formula thành `=ARRAYFORMULA(IF(F2:F="";""; F2:F - I2:I ))` (thêm spaces) để đảm bảo Sheet nhận diện đây là công thức mới.
+-   **Aggressive Clear**: Thêm `clearDataValidations()` cạnh `clearContent()` cho cột J.
 
-### 2. Bank Info Format
--   **FIXED**: Sử dụng `TEXT(N5;"0")` để hiển thị số nguyên thô (không có separator).
--   Ví dụ: `... 16525128` thay vì `... 16.525.128`.
-
-### 3. Final Price (J) Logic
--   Code logic hiện tại:
-    ```javascript
-    sheet.getRange("J2:J").clearContent(); // Clear cũ
-    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F="";"";F2:F-I2:I))');
-    ```
--   Logic: `Amount (F) - Back (I)`.
--   Vì `Amount` cho giao dịch **In** là số **Âm** -> Kết quả J sẽ là **Âm**.
--   Nếu trên Sheet vẫn thấy Dương, khả năng là do cache hoặc chưa sync lại sau khi deploy mới.
-
-## Check List Deployment
-1.  Chạy lại lệnh update:
+## Verification Steps
+1.  Chạy lệnh update:
     ```bash
     npm run sheet:people
     ```
-2.  **QUAN TRỌNG**: Vào Web App -> Chạy Sync lại cho People đó.
-3.  Kiểm tra Sheet:
-    -   Header script (nếu mở script editor) phải là v5.1.
-    -   Bank Info: Số tiền không có chấm phẩy.
-    -   Final Price: Giao dịch In (màu xanh) phải có giá trị Âm.
+2.  **BẮT BUỘC**: Vào Web App -> **Chạy Sync lại** (Action: Sync Transactions).
+    -   Việc deploy script KHÔNG tự động sửa sheet cũ. Script chỉ chạy khi có request Sync từ App.
+3.  Kiểm tra lại cột J.
+    -   Click vào ô **J2**, công thức phải là: `=ARRAYFORMULA(IF(F2:F="";""; F2:F - I2:I ))`.
+    -   Nếu `F` âm -> `J` phải âm.
+4.  Nếu vẫn sai: Vui lòng check xem ô J2 có bị `Override` bằng tay không (xóa hết cột J đi để script điền lại).

@@ -537,10 +537,12 @@ function ensureArrayFormulas(sheet) {
     sheet.getRange("I2").setFormula('=ARRAYFORMULA(IF(F2:F="";"";IF(F2:F*G2:G/100+H2:H=0;0;F2:F*G2:G/100+H2:H)))');
 
     // J2 Formula (Final Price)
+    // J2 Formula (Final Price) - Force Update
     // Updated Logic: F is Signed. J = F - I.
-    // Ensure we clear previous formulas first to avoid conflicts
-    try { sheet.getRange("J2:J").clearContent(); } catch (e) { }
-    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F="";"";F2:F-I2:I))');
+    var jRange = sheet.getRange("J2:J");
+    try { jRange.clearContent(); jRange.clearDataValidations(); } catch (e) { }
+    // Added spaces to formula to ensure it is treated as a new string during sync
+    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F="";""; F2:F - I2:I ))');
 }
 
 function findRowById(sheet, id) {
