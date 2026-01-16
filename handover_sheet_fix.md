@@ -1,21 +1,18 @@
-# Handover: Sheet Sync Final Fix (Round 8)
+# Handover: Sheet Sync Robustness Fix (Round 9)
 
 ## Issue Analysis
--   User report: Cột J (Final Price) vẫn hiển thị số Dương dù Cột F (Amount) là Âm.
--   Nguyên nhân: Có thể do Google Sheet cache công thức cũ hoặc quá trình clear content chưa triệt để, hoặc script chưa thực sự update formula string mới.
+-   User report: "Sync (xóa sheet cũ) Không thấy tạo lại".
+-   Nguyên nhân dự đoán: Trường hợp payload không có `cycleTag` và `rows` rỗng (hoặc lỗi), code cũ dẫn đến `cycleTag = null` -> `insertSheet(null)` có thể gây lỗi hoặc tạo sheet không đúng tên, dẫn đến các bước sau bị fail.
 
 ## Fix Applied (`integrations/google-sheets/people-sync/Code.js`)
--   **Force J Formula Update**: Thay đổi string formula thành `=ARRAYFORMULA(IF(F2:F="";""; F2:F - I2:I ))` (thêm spaces) để đảm bảo Sheet nhận diện đây là công thức mới.
--   **Aggressive Clear**: Thêm `clearDataValidations()` cạnh `clearContent()` cho cột J.
+-   **Default CycleTag**: Nếu không tìm thấy `cycleTag` từ payload hoặc rows, tự động lấy `Current Date` (YYYY-MM).
+-   **Explicit Sheet Check**: Thêm kiểm tra `if (!sheet) throw Error` để báo lỗi rõ ràng nếu không tạo được sheet.
 
 ## Verification Steps
 1.  Chạy lệnh update:
     ```bash
     npm run sheet:people
     ```
-2.  **BẮT BUỘC**: Vào Web App -> **Chạy Sync lại** (Action: Sync Transactions).
-    -   Việc deploy script KHÔNG tự động sửa sheet cũ. Script chỉ chạy khi có request Sync từ App.
-3.  Kiểm tra lại cột J.
-    -   Click vào ô **J2**, công thức phải là: `=ARRAYFORMULA(IF(F2:F="";""; F2:F - I2:I ))`.
-    -   Nếu `F` âm -> `J` phải âm.
-4.  Nếu vẫn sai: Vui lòng check xem ô J2 có bị `Override` bằng tay không (xóa hết cột J đi để script điền lại).
+2.  Vào Web App -> Sync lại.
+    -   Nếu sheet cũ đã bị xóa, script sẽ tạo sheet mới với tên `YYYY-MM` (tháng hiện tại hoặc tháng của transaction).
+3.  Kiểm tra trang tính xem đã hiện chưa.

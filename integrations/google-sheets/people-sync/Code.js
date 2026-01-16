@@ -107,7 +107,15 @@ function handleSyncTransactions(payload) {
     }
 
     var ss = getOrCreateSpreadsheet(personId, payload);
+
+    // Safety: Default cycleTag if missing (e.g. empty rows)
+    if (!cycleTag) {
+        cycleTag = getCycleTagFromDate(new Date());
+    }
+
     var sheet = getOrCreateCycleTab(ss, cycleTag);
+    if (!sheet) throw new Error("Could not create or find sheet for tag: " + cycleTag);
+
     var syncOptions = buildSheetSyncOptions(payload);
 
     // CRITICAL FIX: Clear Summary Columns L:N completely BEFORE ANY INSERTION
