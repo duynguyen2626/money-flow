@@ -61,8 +61,8 @@ Current build includes fully functional Transaction Slide V2 with Single and Bul
 ## Phase 2: Integration with Cards (Planned)
 
 ### Account Cards
-- [ ] Add "Quick Add" button to Account detail page
-- [ ] Pre-fill source_account_id from context
+- [x] Add "Quick Add" button to Account detail page
+- [x] Pre-fill source_account_id from context
 - [ ] Add quick action buttons:
   - [ ] "💳 Pay Bill" (for credit cards)
   - [ ] "🔄 Transfer Out"
@@ -71,10 +71,10 @@ Current build includes fully functional Transaction Slide V2 with Single and Bul
 - [ ] Test integration
 
 ### People Cards
-- [ ] Add "Quick Lend" button to People detail page
-- [ ] Add "Quick Repay" button to People detail page
-- [ ] Pre-fill person_id from context
-- [ ] Auto-detect debt direction based on balance
+- [x] Add "Quick Lend" button to People detail page
+- [x] Add "Quick Repay" button to People detail page
+- [x] Pre-fill person_id from context
+- [x] Auto-detect debt direction based on balance
 - [ ] Show current debt balance in slide
 - [ ] Suggest repayment amount
 - [ ] Test integration
@@ -187,8 +187,17 @@ Current build includes fully functional Transaction Slide V2 with Single and Bul
 - ✅ Cycle badge styling consistency
 - ✅ Data integrity fixes (account.service.ts, bulk-transaction-actions.ts)
 
+### Phase 16.4: Safety and Customization (Latest)
+- ✅ Implemented Unsaved Changes Warning (Slide-based)
+- ✅ Added Column Customization Feature
+  - ✅ Drag-and-drop reordering
+  - ✅ Visibility toggling
+  - ✅ Frozen columns (Date, Action)
+  - ✅ Resizing support (input based)
+- ✅ Fixed infinite loop issues in Transaction Slide
+
 ---
 
 **Last Updated**: 2026-01-18
-**Current Build**: Transaction Slide V2 (Single + Bulk)
+**Current Build**: Transaction Slide V2 + Unified Table Customization
 **Next Milestone**: Phase 2 - Cards Integration

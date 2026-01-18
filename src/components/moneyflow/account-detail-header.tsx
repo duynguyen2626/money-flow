@@ -25,6 +25,7 @@ import {
   Hourglass,
   PiggyBank,
   Lock,
+  Zap,
 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
@@ -41,6 +42,7 @@ import { cn } from '@/lib/utils'
 
 import { AddTransactionDialog } from './add-transaction-dialog'
 import { EditAccountDialog } from './edit-account-dialog'
+import { TransactionTrigger } from '@/components/transaction/slide-v2/transaction-trigger'
 
 type PendingBatchItem = {
   id: string
@@ -356,6 +358,17 @@ export function AccountDetailHeader({
 
         {/* MIDDLE: Quick Action Buttons - Inline with name */}
         <div className="flex flex-wrap items-center gap-2">
+          <TransactionTrigger
+            initialData={{ source_account_id: account.id }}
+            accounts={allAccounts}
+            categories={categories}
+            people={people}
+            shops={shops}
+          >
+            <div className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-indigo-200 hover:bg-indigo-50 text-indigo-600 hover:text-indigo-700 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer">
+              <Zap className="w-3 h-3" />Quick Add
+            </div>
+          </TransactionTrigger>
           <AddTransactionDialog
             {...dialogBaseProps}
             defaultType="income"

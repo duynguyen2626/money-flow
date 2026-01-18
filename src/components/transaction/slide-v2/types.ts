@@ -84,6 +84,7 @@ export type TransactionSlideV2Props = {
     onOpenChange: (open: boolean) => void;
     mode?: TransactionMode;
     initialData?: Partial<SingleTransactionFormValues>;
+    editingId?: string;
 
     // Data dependencies
     accounts: Account[];
@@ -91,5 +92,8 @@ export type TransactionSlideV2Props = {
     people: Person[];
     shops: Shop[];
 
-    onSuccess?: () => void;
+    onSuccess?: (data?: any) => void;
+    onHasChanges?: (hasChanges: boolean) => void;
+    onSubmissionStart?: () => void;
+    onSubmissionEnd?: () => void;
 };

@@ -10,7 +10,7 @@ import { getTransactionsByPeople, getUnifiedTransactions } from '@/services/tran
 import { getPersonCycleSheets } from '@/services/person-cycle-sheet.service'
 import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 import { TagFilterProvider } from '@/context/tag-filter-context'
-import { Plus, CheckCheck, ChevronLeft, Edit } from 'lucide-react'
+import { Plus, CheckCheck, ChevronLeft, Edit, Zap } from 'lucide-react'
 
 import { MigrateDataButton } from '@/components/people/migrate-data-button'
 import { EditPersonButton } from '@/components/people/edit-person-button'
@@ -20,6 +20,7 @@ import { toYYYYMMFromDate } from '@/lib/month-tag'
 import { QuickAddChat } from '@/components/ai/quick-add-chat'
 import { Button } from "@/components/ui/button"
 import { getPersonWithSubs } from '@/services/people.service'
+import { TransactionTrigger } from '@/components/transaction/slide-v2/transaction-trigger'
 
 export const dynamic = 'force-dynamic'
 
@@ -132,6 +133,35 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
                   <pre id="debug-debt-info">{JSON.stringify(debugInfo, null, 2)}</pre>
                 </div>
 
+
+
+                {/* Quick Actions (Slide V2) */}
+                <TransactionTrigger
+                  initialData={{ type: 'debt', person_id: actualAccountId }}
+                  accounts={accounts}
+                  categories={categories}
+                  people={people}
+                  shops={shops}
+                >
+                  <Button variant="outline" size="sm" className="hidden md:flex gap-1 text-rose-600 border-rose-200 hover:bg-rose-50 hover:text-rose-700 h-9">
+                    <Zap className="h-4 w-4" />
+                    <span className="hidden lg:inline">Quick</span> Lend
+                  </Button>
+                </TransactionTrigger>
+
+                <TransactionTrigger
+                  initialData={{ type: 'repayment', person_id: actualAccountId }}
+                  accounts={accounts}
+                  categories={categories}
+                  people={people}
+                  shops={shops}
+                >
+                  <Button variant="outline" size="sm" className="hidden md:flex gap-1 text-emerald-600 border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 h-9">
+                    <Zap className="h-4 w-4" />
+                    <span className="hidden lg:inline">Quick</span> Repay
+                  </Button>
+                </TransactionTrigger>
+
                 <AddTransactionDialog
                   {...dialogBaseProps}
                   buttonText="Settle"
@@ -206,6 +236,6 @@ export default async function PeopleDetailPage({ params }: { params: Promise<{ i
         contextPerson={profileRecord ?? null}
         modelName={process.env.GEMINI_MODEL ?? "Gemini Auto"}
       />
-    </TagFilterProvider>
+    </TagFilterProvider >
   )
 }

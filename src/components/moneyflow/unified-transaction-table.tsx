@@ -37,8 +37,10 @@ import {
   MoveRight,
   Wrench,
   Pencil,
-  ClipboardPaste
+  ClipboardPaste,
+  Settings2,
 } from "lucide-react"
+import { ColumnCustomizer } from "./column-customizer"
 
 import { buildEditInitialValues, parseMetadata } from '@/lib/transaction-mapper';
 
@@ -155,6 +157,9 @@ interface UnifiedTransactionTableProps {
   onPageSizeChange?: (size: number) => void
   fontSize?: number
   onFontSizeChange?: (size: number) => void
+  onEdit?: (txn: TransactionWithDetails) => void
+  onDuplicate?: (txn: TransactionWithDetails) => void
+  loadingIds?: Set<string>
 }
 
 
@@ -190,6 +195,9 @@ export function UnifiedTransactionTable({
   onPageSizeChange,
   fontSize: externalFontSize,
   onFontSizeChange,
+  onEdit: externalOnEdit,
+  onDuplicate: externalOnDuplicate,
+  loadingIds,
 }: UnifiedTransactionTableProps) {
   const [tableData, setTableData] = useState<TransactionWithDetails[]>(() => data ?? transactions ?? [])
   const [updatingTxnIds, setUpdatingTxnIds] = useState<Set<string>>(new Set())
@@ -248,8 +256,15 @@ export function UnifiedTransactionTable({
     { key: "final_price", label: "Net Value", defaultWidth: 120, minWidth: 100 },
     { key: "category", label: "Category", defaultWidth: 180 },
     { key: "id", label: "ID", defaultWidth: 100 },
-    { key: "actions", label: "", defaultWidth: 80, minWidth: 60 },
+    { key: "actions", label: "Action", defaultWidth: 80, minWidth: 60 },
   ]
+  const [isColumnCustomizerOpen, setIsColumnCustomizerOpen] = useState(false)
+
+  // Initialize with prop or default
+  const [customColumnOrder, setCustomColumnOrder] = useState<ColumnKey[]>(() =>
+    columnOrder ?? defaultColumns.map(c => c.key)
+  )
+
   const mobileColumnOrder: ColumnKey[] = ["date", "shop", "category", "account", "amount"]
   const router = useRouter()
   // Internal state removed for activeTab, now using prop with fallback
@@ -728,7 +743,20 @@ export function UnifiedTransactionTable({
   ])
 
   const handleDuplicate = (txn: TransactionWithDetails) => {
+    if (externalOnDuplicate) {
+      externalOnDuplicate(txn);
+      return;
+    }
     setCloningTxn(txn);
+    setActionMenuOpen(null);
+  };
+
+  const handleEdit = (txn: TransactionWithDetails) => {
+    if (externalOnEdit) {
+      externalOnEdit(txn);
+      return;
+    }
+    setEditingTxn(txn);
     setActionMenuOpen(null);
   };
 
@@ -1028,7 +1056,7 @@ export function UnifiedTransactionTable({
           className={baseItemClass}
           onClick={event => {
             event.stopPropagation();
-            setEditingTxn(txn);
+            handleEdit(txn);
             setActionMenuOpen(null);
           }}
         >
@@ -1182,7 +1210,7 @@ export function UnifiedTransactionTable({
         {/* Quick Actions */}
         <button
           className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-          onClick={(e) => { e.stopPropagation(); setEditingTxn(txn); }}
+          onClick={(e) => { e.stopPropagation(); handleEdit(txn); }}
           title="Edit"
         >
           <Pencil className="h-3.5 w-3.5" />
@@ -1230,7 +1258,7 @@ export function UnifiedTransactionTable({
 
 
 
-  const effectiveColumnOrder = columnOrder ?? defaultColumns.map(c => c.key)
+  const effectiveColumnOrder = columnOrder ?? customColumnOrder
   const displayedColumns = useMemo(() => {
     if (isMobile) {
       return mobileColumnOrder.map(key => defaultColumns.find(col => col.key === key)).filter(Boolean).filter(col => visibleColumns[col!.key]) as ColumnConfig[]
@@ -1267,7 +1295,7 @@ export function UnifiedTransactionTable({
             renderActions={isMobile ? (txn) => renderRowActions(txn, (statusOverrides[txn.id] ?? txn.status) === 'void') : undefined}
             onRowClick={(txn) => {
               if (isExcelMode) return;
-              setEditingTxn(txn);
+              handleEdit(txn);
             }}
             onCopyId={(id) => {
               navigator.clipboard.writeText(id)
@@ -1359,6 +1387,20 @@ export function UnifiedTransactionTable({
                               <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                             )}
                           </button>
+                        ) : col.key === 'actions' ? (
+                          <div className="flex items-center justify-center w-full relative group">
+                            <span className="mr-6">{columnLabel}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setIsColumnCustomizerOpen(true)
+                              }}
+                              className="absolute right-0 p-1.5 hover:bg-slate-300 rounded-md transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                              title="Customize Columns"
+                            >
+                              <Settings2 className="h-3.5 w-3.5 text-slate-600" />
+                            </button>
+                          </div>
                         ) : (
                           columnLabel
                         )}
@@ -1714,7 +1756,7 @@ export function UnifiedTransactionTable({
                                               type="button"
                                               onClick={(e) => {
                                                 e.stopPropagation();
-                                                setEditingTxn(txn);
+                                                handleEdit(txn);
                                               }}
                                               className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-indigo-100 border border-indigo-200 text-indigo-700 w-fit cursor-pointer hover:bg-indigo-300 transition-colors"
                                             >
@@ -2514,7 +2556,7 @@ export function UnifiedTransactionTable({
                         "border-b border-slate-200 transition-colors text-base",
                         isMenuOpen ? "bg-blue-50" : rowBgColor,
                         !isExcelMode && "hover:bg-slate-50/50",
-                        updatingTxnIds.has(txn.id) && "opacity-70 animate-pulse bg-slate-50"
+                        (updatingTxnIds.has(txn.id) || loadingIds?.has(txn.id)) && "opacity-70 animate-pulse bg-slate-50"
                       )}
                     >
                       {displayedColumns.map(col => {
@@ -3044,6 +3086,33 @@ export function UnifiedTransactionTable({
           type={refundType}
         />
       )}
+      {/* Column Customizer */}
+      <ColumnCustomizer
+        open={isColumnCustomizerOpen}
+        onOpenChange={setIsColumnCustomizerOpen}
+        columns={customColumnOrder.map(key => {
+          const def = defaultColumns.find(c => c.key === key)
+          if (!def) return null
+          return {
+            id: key,
+            label: def.label || (key === 'actions' ? 'Action' : key),
+            frozen: key === 'date' || key === 'actions'
+          }
+        }).filter(Boolean) as any[]}
+        visibleColumns={visibleColumns}
+        onVisibilityChange={(key, visible) => {
+          setVisibleColumns(prev => ({ ...prev, [key]: visible }))
+        }}
+        onOrderChange={(newOrder) => {
+          // Enforce Date always first and Actions always last
+          const content = newOrder.filter(k => k !== 'date' && k !== 'actions')
+          setCustomColumnOrder(['date', ...content, 'actions'] as ColumnKey[])
+        }}
+        widths={columnWidths}
+        onWidthChange={(key, width) => {
+          setColumnWidths(prev => ({ ...prev, [key]: width }))
+        }}
+      />
     </div>
   )
 }

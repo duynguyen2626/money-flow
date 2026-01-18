@@ -1046,6 +1046,13 @@ export async function deleteTransaction(id: string): Promise<boolean> {
     }
   }
 
+  // CASHBACK INTEGRATION: Remove BEFORE deleting transaction to avoid FK constraint violations
+  try {
+    await removeTransactionCashback(id);
+  } catch (cbError) {
+    console.error("Failed to remove cashback entry:", cbError);
+  }
+
   const { error } = await supabase.from("transactions").delete().eq("id", id);
   if (error) {
     console.error("Error deleting transaction:", error);
@@ -1070,13 +1077,6 @@ export async function deleteTransaction(id: string): Promise<boolean> {
     import("./installment.service").then(({ checkAndAutoSettleInstallment }) => {
       checkAndAutoSettleInstallment((existing as any).installment_plan_id);
     });
-  }
-
-  // CASHBACK INTEGRATION
-  try {
-    await removeTransactionCashback(id);
-  } catch (cbError) {
-    console.error("Failed to remove cashback entry:", cbError);
   }
 
   return true;

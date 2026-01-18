@@ -1,9 +1,10 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 5.2 (FINAL STABLE)
+// VERSION: 5.6 (FINAL STABLE)
 // Last Updated: 2026-01-16 16:45 ICT
 // Scope: Sync logic fixes and simplified formulas.
 //        - Bank Info: Uses raw integer format for remains.
 //        - Final Price: J = F - I (Signed). Force cache bust.
+//        - Sorting: Use sheet.getLastRow(), Add Sleep for consistency.
 
 /*
 function onOpen() {
@@ -266,10 +267,13 @@ function getLastDataRow(sheet) {
     try {
         var lastRow = sheet.getLastRow();
         if (lastRow < 2) return 1;
-        var vals = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
-        // Scan backwards for first non-empty ID
+        // Fetch ID (A), Type (B), Date (C)
+        var vals = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+        // Scan backwards for first non-empty ID OR Date
         for (var i = vals.length - 1; i >= 0; i--) {
-            if (vals[i][0] !== "" && vals[i][0] != null) return i + 2;
+            var hasId = vals[i][0] !== "" && vals[i][0] != null;
+            var hasDate = vals[i][2] !== "" && vals[i][2] != null;
+            if (hasId || hasDate) return i + 2;
         }
         return 1;
     } catch (e) { return 1; }
@@ -277,13 +281,22 @@ function getLastDataRow(sheet) {
 
 function applyBordersAndSort(sheet, summaryOptions) {
     // 1. DATA STYLING & SORTING (Only if data exists)
-    var lastAutoRow = getLastDataRow(sheet);
+    // Robustness: Use physical last row to ensure NO data is missed from sorting range.
+    // Empty rows (due to Summary table height) will just be sorted to bottom.
+    var lastAutoRow = sheet.getLastRow();
 
     if (lastAutoRow >= 2) {
         clearImageMerges(sheet);
         var rowCount = lastAutoRow - 1;
+
+        // FORCE COMMIT before sorting to ensure new values are registered
+        // Add minimal delay to ensure Sheet DB consistency
+        Utilities.sleep(300);
+        SpreadsheetApp.flush();
+
         var dataRange = sheet.getRange(2, 1, rowCount, 15);
-        dataRange.sort({ column: 3, ascending: true });
+        // Robust Sort: Date (Col 3) ASC, then ID (Col 1) ASC
+        dataRange.sort([{ column: 3, ascending: true }, { column: 1, ascending: true }]);
 
         var arrD = new Array(rowCount);
         for (var i = 0; i < rowCount; i++) {
