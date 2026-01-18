@@ -340,9 +340,9 @@ export function UnifiedTransactionsPage({
             {/* Content Section */}
             <div className="flex-1 overflow-hidden p-0 sm:p-4 relative">
                 {isGlobalLoading && (
-                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-[1px] transition-all duration-300">
-                        <div className="bg-white px-6 py-4 rounded-full shadow-xl flex items-center gap-3 animate-in fade-in zoom-in-95 duration-200 border border-slate-100">
-                            <div className="w-5 h-5 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
+                    <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+                        <div className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-full shadow-lg flex items-center gap-3 animate-in slide-in-from-top-4 duration-200 border border-slate-200 pointer-events-auto">
+                            <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
                             <span className="text-sm font-medium text-slate-700">Updating...</span>
                         </div>
                     </div>

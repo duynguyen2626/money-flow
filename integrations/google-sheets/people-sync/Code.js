@@ -1,10 +1,10 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 5.5 (FINAL STABLE)
+// VERSION: 5.6 (FINAL STABLE)
 // Last Updated: 2026-01-16 16:45 ICT
 // Scope: Sync logic fixes and simplified formulas.
 //        - Bank Info: Uses raw integer format for remains.
 //        - Final Price: J = F - I (Signed). Force cache bust.
-//        - Sorting: Use sheet.getLastRow() for range safety.
+//        - Sorting: Use sheet.getLastRow(), Add Sleep for consistency.
 
 /*
 function onOpen() {
@@ -290,6 +290,8 @@ function applyBordersAndSort(sheet, summaryOptions) {
         var rowCount = lastAutoRow - 1;
 
         // FORCE COMMIT before sorting to ensure new values are registered
+        // Add minimal delay to ensure Sheet DB consistency
+        Utilities.sleep(300);
         SpreadsheetApp.flush();
 
         var dataRange = sheet.getRange(2, 1, rowCount, 15);
