@@ -194,8 +194,7 @@ export function TransactionSlideV2({
             if (success) {
                 setHasChanges(false);
                 onHasChanges?.(false);
-                onOpenChange(false);
-                onSuccess?.();
+                onSuccess?.(); // Parent will likely close the slide here
             }
         } catch (error) {
             console.error("Submission error:", error);
@@ -209,7 +208,6 @@ export function TransactionSlideV2({
         setIsSubmitting(true);
         try {
             await bulkCreateTransactions(data);
-            onOpenChange(false);
             onSuccess?.();
         } catch (error) {
             console.error("Bulk submit failed", error);
