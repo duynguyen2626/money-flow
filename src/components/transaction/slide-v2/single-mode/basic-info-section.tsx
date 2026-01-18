@@ -136,7 +136,13 @@ export function BasicInfoSection({ shops, categories, onAddNewCategory }: BasicI
                                         <Calendar
                                             mode="single"
                                             selected={field.value}
-                                            onSelect={field.onChange}
+                                            onSelect={(newDate) => {
+                                                if (!newDate) return;
+                                                const current = field.value || new Date();
+                                                const preserved = new Date(newDate);
+                                                preserved.setHours(current.getHours(), current.getMinutes(), current.getSeconds(), current.getMilliseconds());
+                                                field.onChange(preserved);
+                                            }}
                                             disabled={(date) =>
                                                 date > new Date() || date < new Date("1900-01-01")
                                             }

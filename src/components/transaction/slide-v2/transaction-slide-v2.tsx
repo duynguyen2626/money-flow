@@ -271,7 +271,14 @@ export function TransactionSlideV2({
                     {mode === 'single' ? (
                         <div className="px-6 py-6">
                             <FormProvider {...singleForm}>
-                                <form id="single-txn-form" onSubmit={singleForm.handleSubmit(onSingleSubmit)} className="space-y-6">
+                                <form
+                                    id="single-txn-form"
+                                    onSubmit={singleForm.handleSubmit(onSingleSubmit, (errors) => {
+                                        console.error("Form validation errors:", errors);
+                                        toast.error("Please fill in all required fields correctly.");
+                                    })}
+                                    className="space-y-6"
+                                >
                                     <BasicInfoSection
                                         shops={shops}
                                         categories={categories}
