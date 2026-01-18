@@ -95,7 +95,7 @@ export function TransactionToolbar({
         people.map(p => ({
             value: p.id,
             label: p.name,
-            icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" className="rounded-md" />
+            icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" className="rounded-none" />
         })),
         [people])
 

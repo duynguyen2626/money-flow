@@ -63,7 +63,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     const mapAccountToItem = (a: Account) => ({
         value: a.id,
         label: a.name,
-        icon: a.image_url ? <img src={a.image_url} alt="" className="w-4 h-4 object-contain rounded-sm" /> : undefined
+        icon: a.image_url ? <img src={a.image_url} alt="" className="w-4 h-4 object-contain rounded-none" /> : undefined
     });
 
     // Recent Accounts Logic (Current + Last Submitted)
@@ -95,7 +95,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     const peopleList = people.map(p => ({
         value: p.id,
         label: p.name,
-        icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" className="rounded-md" />
+        icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" className="rounded-none" />
     }));
 
     // Logic: 1. Current (if exists), 2. Last Submitted (if exists and != current)
