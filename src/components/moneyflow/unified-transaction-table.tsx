@@ -3143,6 +3143,39 @@ export function UnifiedTransactionTable({
           const content = newOrder.filter(k => k !== 'date' && k !== 'actions')
           setCustomColumnOrder(['date', ...content, 'actions'] as ColumnKey[])
         }}
+        onReset={() => {
+          // 1. Reset Order
+          setCustomColumnOrder(defaultColumns.map(c => c.key));
+          localStorage.removeItem('mf_v3_col_order');
+
+          // 2. Reset Visibility
+          const defaultVis: Record<ColumnKey, boolean> = {
+            date: true,
+            shop: true,
+            note: false,
+            category: false,
+            tag: false,
+            account: true,
+            amount: true,
+            final_price: true,
+            back_info: false,
+            id: false,
+            people: false,
+            actions: true,
+          };
+          setVisibleColumns(defaultVis);
+          localStorage.removeItem('mf_v3_col_vis');
+
+          // 3. Reset Widths
+          const map = {} as Record<ColumnKey, number>;
+          defaultColumns.forEach(col => {
+            map[col.key] = col.defaultWidth;
+          });
+          setColumnWidths(map);
+          localStorage.removeItem('mf_v3_col_width');
+
+          toast.success("Column settings reset to default");
+        }}
         widths={columnWidths}
         onWidthChange={(key, width) => {
           setColumnWidths(prev => ({ ...prev, [key]: width }))

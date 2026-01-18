@@ -18,11 +18,10 @@ import {
     useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { GripVertical, Lock } from "lucide-react";
+import { GripVertical, Lock, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type ColumnKey = string;
@@ -42,6 +41,7 @@ interface ColumnCustomizerProps {
     onOrderChange: (newOrder: ColumnKey[]) => void;
     widths: Record<ColumnKey, number>;
     onWidthChange: (key: ColumnKey, width: number) => void;
+    onReset?: () => void;
 }
 
 function SortableItem({
@@ -90,7 +90,7 @@ function SortableItem({
                 {frozen ? (
                     <Lock className="h-4 w-4 text-muted-foreground shrink-0" />
                 ) : (
-                    <div {...attributes} {...listeners} className="cursor-grab hover:text-primary active:cursor-grabbing shrink-0">
+                    <div {...attributes} {...listeners} className="cursor-grab hover:text-primary active:cursor-grabbing shrink-0 touch-none">
                         <GripVertical className="h-4 w-4 text-muted-foreground" />
                     </div>
                 )}
@@ -129,10 +129,17 @@ export function ColumnCustomizer({
     onVisibilityChange,
     onOrderChange,
     widths,
-    onWidthChange
+    onWidthChange,
+    onReset
 }: ColumnCustomizerProps) {
     const sensors = useSensors(
-        useSensor(PointerSensor),
+        useSensor(PointerSensor, {
+            activation: {
+                constraint: {
+                    distance: 5,
+                },
+            },
+        }),
         useSensor(KeyboardSensor, {
             coordinateGetter: sortableKeyboardCoordinates,
         })
@@ -151,13 +158,24 @@ export function ColumnCustomizer({
     };
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>Customize Columns</DialogTitle>
-                </DialogHeader>
+        <Sheet open={open} onOpenChange={onOpenChange}>
+            <SheetContent side="right" className="w-[400px] sm:w-[540px] overflow-y-auto">
+                <SheetHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b">
+                    <SheetTitle>Customize Columns</SheetTitle>
+                    {onReset && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={onReset}
+                            className="h-8 gap-1.5"
+                        >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            <span className="text-xs">Reset Default</span>
+                        </Button>
+                    )}
+                </SheetHeader>
 
-                <div className="mt-4">
+                <div className="mt-6 space-y-4">
                     <DndContext
                         sensors={sensors}
                         collisionDetection={closestCenter}
@@ -182,7 +200,7 @@ export function ColumnCustomizer({
                         </SortableContext>
                     </DndContext>
                 </div>
-            </DialogContent>
-        </Dialog>
+            </SheetContent>
+        </Sheet>
     );
 }
