@@ -306,6 +306,41 @@ export function UnifiedTransactionTable({
     return map
   })
 
+  // --- Persistence Logic ---
+  useEffect(() => {
+    // Load saved settings
+    try {
+      const savedOrder = localStorage.getItem('mf_v3_col_order');
+      const savedVis = localStorage.getItem('mf_v3_col_vis');
+      const savedWidths = localStorage.getItem('mf_v3_col_width');
+
+      if (savedOrder) {
+        setCustomColumnOrder(JSON.parse(savedOrder));
+      }
+      if (savedVis) {
+        setVisibleColumns(prev => ({ ...prev, ...JSON.parse(savedVis) }));
+      }
+      if (savedWidths) {
+        setColumnWidths(prev => ({ ...prev, ...JSON.parse(savedWidths) }));
+      }
+    } catch (e) {
+      console.error("Failed to load column settings", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (customColumnOrder.length > 0)
+      localStorage.setItem('mf_v3_col_order', JSON.stringify(customColumnOrder));
+  }, [customColumnOrder]);
+
+  useEffect(() => {
+    localStorage.setItem('mf_v3_col_vis', JSON.stringify(visibleColumns));
+  }, [visibleColumns]);
+
+  useEffect(() => {
+    localStorage.setItem('mf_v3_col_width', JSON.stringify(columnWidths));
+  }, [columnWidths]);
+
   // --- Excel Mode State & Logic ---
   const [selectedCells, setSelectedCells] = useState<Set<string>>(new Set())
   const [selectedColumn, setSelectedColumn] = useState<ColumnKey | null>(null)
