@@ -1,185 +1,303 @@
-# Handover Document - Batch UI Phase 3 & Accounts Page Refactor Plan
+# Transaction Slide V2 - Handover Guide
 
-## Session Summary
-This session focused on completing Phase 3 of the Batch UI improvements and planning the Accounts Page UI refactor.
+## For the Next Developer
 
-## Completed Work
+This document provides everything you need to continue work on Transaction Slide V2.
 
-### Phase 3: Batch UI Improvements ✅
+---
 
-#### 1. Clone Loading Indicator
-- **File**: `src/components/batch/items-table.tsx`
-- **Changes**:
-  - Added `cloningItemId` state to track which item is being cloned
-  - Replaced static SVG icon with conditional `Copy`/`Loader2` icon
-  - Button is disabled during clone operation
-  - Fixed the "Rendering" bug that appeared when cloning items
+## Quick Start
 
-#### 2. Workflow Order Clarification
-- **File**: `src/components/batch/batch-detail.tsx`
-- **Changes**:
-  - Added numbered badges (1: Fund, 2: Match Real Source)
-  - "Match Real Source" only shows after batch is funded (conditional rendering)
-  - Updated tooltips to explain recommended workflow sequence
-  - Step 1 (Amber): Fund/Fund More - Moves money to Batch Clearing
-  - Step 2 (Green): Match Real Source - Reconciles Draft Fund with real account
+### What is Transaction Slide V2?
+A comprehensive transaction input system with Single and Bulk modes, supporting all transaction types (Expense, Income, Transfer, Debt, Repayment) with advanced features like cashback tracking.
 
-#### 3. Smart Installment Payment Modal
-- **New Files**:
-  - `src/components/batch/installment-payment-dialog.tsx` - Modal component
-  - `src/app/api/installments/pending/route.ts` - API endpoint
-- **Modified Files**:
-  - `src/components/batch/items-table.tsx` - Integrated modal, replaced checkbox
-- **Features**:
-  - Only shows "Installment" button for accounts with pending installments
-  - Fetches active installments via `/api/installments/pending`
-  - Users can select individual periods or "Pay All"
-  - Validates batch amount vs selected installments (warning, non-blocking)
-  - Shows period number (e.g., "Period 2 of 12"), monthly amount, remaining balance
-  - Stores selected installment IDs in `batch_items.metadata` for backend processing
+### Where is it?
+- **Code**: `src/components/transaction/slide-v2/`
+- **Test Page**: http://localhost:3000/txn/v2
+- **Status**: ✅ Production-ready, Phase 1 complete
 
-## Planned Work (Not Started)
+---
 
-### Accounts Page UI Refactor
-- **Status**: Planning complete, implementation not started
-- **Documentation**: 
-  - Implementation plan: `.gemini/antigravity/brain/.../implementation_plan.md`
-  - Workflow: `.agent/workflows/plan.md`
-- **Key Changes**:
-  1. Redesign filter tabs (Credit → Account → Savings → Others → All)
-  2. Set default filter to "Credit"
-  3. Implement table view for "All" filter
-  4. Redesign account cards with modern layout:
-     - Colored header section with critical info
-     - Clean body section with image + cashback details
-     - Compact quick action buttons
-     - Fix image rendering (no border, no crop, preserve aspect ratio)
-     - Add gradient backgrounds based on card type/status
+## Current State
 
-## Git Branch
-- **Branch**: `feature/batch-ui-phase3-installments`
-- **Base**: `fix/cashback-dashboard-improvements`
-- **Status**: All changes staged, build passed, ready to commit
+### What's Working
+- ✅ Single transaction mode (all types)
+- ✅ Bulk transaction mode (multi-row input)
+- ✅ Cashback tracking with cycle badges
+- ✅ Tag auto-sync with date
+- ✅ Category auto-defaults
+- ✅ Input validation
+- ✅ Integration with backend services
 
-## Build Status
-- ✅ `npm run build` - PASSED
-- ✅ TypeScript compilation - PASSED
-- ✅ All Phase 3 features implemented and tested
+### What's Not Implemented
+- ❌ Split Bill section (placeholder only)
+- ❌ Integration with main /transactions page
+- ❌ Integration with Account/People cards
+- ❌ Edit transaction via slide
 
-## Files Modified (Phase 3)
+---
 
-### Components
-- `src/components/batch/batch-detail.tsx` - Workflow order badges and tooltips
-- `src/components/batch/items-table.tsx` - Clone loading, installment modal integration
-- `src/components/batch/installment-payment-dialog.tsx` - NEW: Smart installment modal
+## Architecture Overview
 
-### API Routes
-- `src/app/api/installments/pending/route.ts` - NEW: Fetch pending installments
+### Component Structure
+```
+slide-v2/
+├── transaction-slide-v2.tsx          # Main component (Single + Bulk tabs)
+├── types.ts                          # Zod schemas, TypeScript types
+├── single-mode/
+│   ├── basic-info-section.tsx        # Date, Tag, Account selection
+│   ├── account-selector.tsx          # Account/Person/Target selectors
+│   ├── cashback-section.tsx          # Cashback tracking UI
+│   └── split-bill-section.tsx        # (Placeholder)
+└── bulk-mode/
+    ├── bulk-input-section.tsx        # Header + row list
+    ├── bulk-row.tsx                  # Individual transaction row
+    └── quick-cashback-input.tsx      # Cashback popover for rows
+```
 
-### Documentation
-- `.gemini/antigravity/brain/.../task.md` - Updated with Phase 3 completion
-- `.gemini/antigravity/brain/.../walkthrough.md` - Documented Phase 3 changes
-- `.gemini/antigravity/brain/.../implementation_plan.md` - Accounts page refactor plan
-- `.agent/workflows/plan.md` - Workflow for accounts page refactor
+### Data Flow
+1. **User Input** → Form (react-hook-form)
+2. **Validation** → Zod schema
+3. **Submission** → Server Action (`createTransaction` or `bulkCreateTransactions`)
+4. **Backend** → `transaction.service.ts` → Database
+5. **Cashback** → Automatically processed via `upsertTransactionCashback`
 
-## Next Steps for Agent
+### Key Dependencies
+- `react-hook-form` - Form state
+- `zod` - Validation
+- `date-fns` - Date handling
+- `sonner` - Toasts
+- Custom UI components (Shadcn/Radix)
 
-1. **Review and Merge Phase 3**:
-   ```bash
-   git status
-   git push origin feature/batch-ui-phase3-installments
-   # Create PR and merge
-   ```
+---
 
-2. **Start Accounts Page Refactor**:
-   - Read `.agent/workflows/plan.md` for detailed steps
-   - Follow implementation plan in `.gemini/antigravity/brain/.../implementation_plan.md`
-   
-3. **Key Requirements** (UPDATED):
-   - **NO image rotation**: Remove `-rotate-90` and `scale-[1.4]` from all account images
-   - **Bold borders**: Cards with near due dates or spend needs get bold colored borders
-   - **Sort order**: Primary by due date, secondary by spend need
-   - **Click behavior**: Only arrow (→) opens details, NOT card body
-   - **Filter rename**: "Others" → "Debt Accounts"
-   - **Preserve linked account behavior**: See section below
+## How to Make Changes
 
-4. **Testing**:
-   - Verify default filter is "Credit"
-   - Test filter switching
-   - Check image rendering (no rotation, no crop, no border)
-   - Verify click arrow opens details, card body does nothing
-   - Test linked accounts (Parent/Child, Secured) still work correctly
-   - Verify responsive behavior on mobile
+### Adding a New Field
 
-## Linked Accounts Behavior (PRESERVE)
+1. **Update Schema** (`types.ts`)
+```typescript
+export const singleTransactionSchema = z.object({
+  // ... existing fields
+  new_field: z.string().optional(),
+});
+```
 
-**IMPORTANT**: The following behaviors MUST be preserved during the refactor:
+2. **Update Form** (e.g., `basic-info-section.tsx`)
+```tsx
+<FormField
+  control={form.control}
+  name="new_field"
+  render={({ field }) => (
+    <FormItem>
+      <FormLabel>New Field</FormLabel>
+      <FormControl>
+        <Input {...field} />
+      </FormControl>
+    </FormItem>
+  )}
+/>
+```
 
-### Parent-Child Accounts
-- **Current Behavior**: 
-  - Parent and child accounts are grouped together in a `FamilyCluster` component
-  - Balance shown for child accounts reflects the parent's shared limit
-  - Clicking on a family cluster expands to show all members
-  
-- **Files Involved**:
-  - `src/components/moneyflow/family-cluster.tsx` - Handles grouped display
-  - `src/components/moneyflow/account-card.tsx` - Individual card with `isClusterParent`/`isClusterChild` props
-  - `src/lib/account-utils.ts` - `getSharedLimitParentId()` helper
-  
-- **What to Preserve**:
-  - Family clustering logic in `account-list.tsx` (lines 193-233)
-  - `displayItems` array that creates `{type: 'family'}` or `{type: 'single'}` items
-  - Balance calculation for child cards using parent's limit
-  - Visual indicators (Parent/Child badges)
+3. **Update Submission** (`transaction-slide-v2.tsx`)
+```typescript
+await createTransaction({
+  // ... existing fields
+  new_field: data.new_field,
+});
+```
 
-### Secured Accounts
-- **Current Behavior**:
-  - Credit cards can be "secured" by linking to a savings/collateral account
-  - Secured badge shows on the card
-  - Tooltip shows which account is securing it
-  
-- **Files Involved**:
-  - `src/components/moneyflow/account-card.tsx` - Secured badge rendering
-  - `account.secured_by_account_id` field in database
-  
-- **What to Preserve**:
-  - Secured badge display logic
-  - Tooltip showing collateral account name
-  - Visual distinction between secured/unsecured cards
+### Modifying Cashback Logic
 
-### Implementation Notes
-- Do NOT change the clustering logic in `account-list.tsx`
-- Do NOT modify `FamilyCluster` component structure
-- Keep the `isClusterParent` and `isClusterChild` props in `AccountCard`
-- Preserve the balance calculation logic that uses parent's limit for children
-- Keep the secured account badge and tooltip functionality
+**Frontend**: `cashback-section.tsx` or `quick-cashback-input.tsx`
+**Backend**: `src/services/cashback.service.ts` → `upsertTransactionCashback`
 
-## Important Notes
+**Important**: Cashback is automatically processed when a transaction is created. The frontend only provides the input UI.
 
-### Gravity Rules Compliance
-- ✅ Ran `npm run build` before commit
-- ✅ All TypeScript errors resolved
-- ✅ No console errors or warnings
-- ✅ Image rendering rules followed (no borders, object-fit: contain)
+### Adding a New Transaction Type
 
-### **Rules**:
-  - Check `.agent/rules/sheet_sync_rules.md` for Google Sheet Sync logic (In/Out signs, Formulas, Bank Info).
-  - Check `database/SCHEMA.md` for latest DB Schema.
+1. Update `types.ts` enum
+2. Add button/tab in `transaction-slide-v2.tsx`
+3. Update `account-selector.tsx` to show/hide relevant fields
+4. Test thoroughly
 
-### Database Schema
-- No schema changes in Phase 3
-- Installment modal uses existing `batch_items.metadata` field
-- API route queries existing `installments` and `transactions` tables
+---
 
-### Known Issues
-- None for Phase 3 implementation
+## Common Tasks
 
-### Dependencies
-- No new dependencies added
-- Uses existing UI components from shadcn/ui
-- Leverages existing batch actions and services
+### Task: Integrate with Account Cards
 
-## Contact/Questions
-- All Phase 3 work is complete and tested
-- Accounts page refactor plan is ready for implementation
-- Follow workflow in `.agent/workflows/plan.md` for next steps
+**Goal**: Add "Quick Add" button to Account detail pages
+
+**Steps**:
+1. Add button to `src/app/accounts/[id]/details/page.tsx`
+2. Pass `initialData` to `TransactionSlideV2`:
+```tsx
+<TransactionSlideV2
+  initialData={{
+    source_account_id: accountId,
+    type: "expense", // or auto-detect
+  }}
+/>
+```
+3. Test with different account types
+
+**Estimated Time**: 2-3 hours
+
+---
+
+### Task: Integrate with People Cards
+
+**Goal**: Add "Quick Lend" and "Quick Repay" buttons
+
+**Steps**:
+1. Add buttons to `src/app/people/[id]/details/page.tsx`
+2. Pass `initialData`:
+```tsx
+// For Lend
+<TransactionSlideV2
+  initialData={{
+    type: "debt",
+    person_id: personId,
+  }}
+/>
+
+// For Repay
+<TransactionSlideV2
+  initialData={{
+    type: "repayment",
+    person_id: personId,
+  }}
+/>
+```
+3. Optionally: Auto-detect direction based on debt balance
+4. Test both scenarios
+
+**Estimated Time**: 2-3 hours
+
+---
+
+### Task: Implement Split Bill
+
+**Goal**: Complete the split bill feature
+
+**Steps**:
+1. Design data structure (who owes what)
+2. Implement UI in `split-bill-section.tsx`
+3. Update schema to include `participants` array
+4. Create backend logic to split transaction
+5. Test with multiple participants
+
+**Estimated Time**: 1-2 days
+
+---
+
+### Task: Replace Main Transaction Modal
+
+**Goal**: Use Slide V2 as default on /transactions page
+
+**Steps**:
+1. Add "New Transaction" button to `/transactions`
+2. Open `TransactionSlideV2` instead of old modal
+3. Add feature flag for gradual rollout
+4. Test thoroughly
+5. Deprecate old modal after 2 weeks
+
+**Estimated Time**: 3-5 days
+
+---
+
+## Testing Strategy
+
+### Manual Testing
+1. Go to http://localhost:3000/txn/v2
+2. Test each transaction type:
+   - Expense (with/without cashback)
+   - Income
+   - Transfer
+   - Debt (Lend)
+   - Repayment
+3. Test bulk mode with 5+ rows
+4. Verify data in database
+
+### Automated Testing
+(Not yet implemented - recommended for future)
+
+**Suggested Tests**:
+- Form validation (Zod schema)
+- Submission flow (mock server actions)
+- Cashback calculation
+- Tag sync logic
+
+---
+
+## Troubleshooting
+
+### Issue: Cashback cycle badge not showing
+**Cause**: Account is not a Credit Card or statement_day not configured
+**Fix**: Check `account.service.ts` → `getAccounts` → `credit_card_info` mapping
+
+### Issue: Tag not syncing with date
+**Cause**: `useEffect` dependency issue
+**Fix**: Check `basic-info-section.tsx` → `useEffect([occurred_at])`
+
+### Issue: Bulk mode total incorrect
+**Cause**: Empty rows or invalid amounts
+**Fix**: Check `bulk-input-section.tsx` → `totalAmount` calculation
+
+### Issue: Build fails
+**Cause**: TypeScript errors or missing imports
+**Fix**: Run `npm run build` and fix errors one by one
+
+---
+
+## Important Files to Know
+
+### Core Files
+- `transaction-slide-v2.tsx` - Main component, mode switching
+- `types.ts` - All schemas and types
+- `basic-info-section.tsx` - Date/Tag/Account logic
+
+### Backend Files
+- `src/services/transaction.service.ts` - Transaction CRUD
+- `src/services/cashback.service.ts` - Cashback processing
+- `src/actions/bulk-transaction-actions.ts` - Bulk creation
+
+### Configuration Files
+- `src/types/moneyflow.types.ts` - Global types (Account, Person, etc.)
+- `src/lib/constants.ts` - System constants
+- `src/lib/cycle-utils.ts` - Cashback cycle calculation
+
+---
+
+## Next Steps (Recommended Priority)
+
+1. **Phase 2**: Integrate with Account/People cards (High Priority)
+2. **Split Bill**: Complete the feature (Medium Priority)
+3. **Main Integration**: Replace /transactions modal (High Priority)
+4. **Modal Refactoring**: Unify all modals to slides (Low Priority)
+
+---
+
+## Resources
+
+- **User Guide**: `.agent/guide.md`
+- **Implementation Plan**: `.agent/implementation_plan.md`
+- **Task Breakdown**: `.agent/task.md`
+- **Project Rules**: `gravityrules.md`
+
+---
+
+## Contact / Questions
+
+If you have questions about the implementation:
+1. Check this handover guide first
+2. Review the code comments
+3. Check git history for context
+4. Ask the team
+
+---
+
+**Last Updated**: 2026-01-18
+**Handover From**: AI Assistant (Antigravity)
+**Current Status**: Phase 1 Complete, Ready for Phase 2
