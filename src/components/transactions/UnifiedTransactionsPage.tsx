@@ -60,6 +60,12 @@ export function UnifiedTransactionsPage({
     const [selectedTxn, setSelectedTxn] = useState<TransactionWithDetails | null>(null)
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
     const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
+    const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
+
+    // Clear loading IDs when transaction data updates
+    useMemo(() => {
+        setLoadingIds(new Set())
+    }, [transactions])
 
     // Other Dialog States
     const [refundTxn, setRefundTxn] = useState<TransactionWithDetails | null>(null)
@@ -227,10 +233,13 @@ export function UnifiedTransactionsPage({
         setSelectedTxn(null)
     }
 
-    const handleSlideSuccess = () => {
+    const handleSlideSuccess = (data?: any) => {
         setIsSlideOpen(false)
         setHasUnsavedChanges(false)
         setSelectedTxn(null)
+        if (data?.id) {
+            setLoadingIds(prev => new Set(prev).add(data.id))
+        }
         router.refresh()
     }
 
@@ -330,6 +339,7 @@ export function UnifiedTransactionsPage({
                     onEdit={handleEdit}
                     onDuplicate={handleDuplicate}
                     context="general"
+                    loadingIds={loadingIds}
                 />
             </div>
 

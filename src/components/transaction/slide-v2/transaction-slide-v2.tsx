@@ -194,7 +194,7 @@ export function TransactionSlideV2({
             if (success) {
                 setHasChanges(false);
                 onHasChanges?.(false);
-                onSuccess?.(); // Parent will likely close the slide here
+                onSuccess?.(editingId ? { id: editingId, ...payload } : undefined); // Parent will likely close the slide here
             }
         } catch (error) {
             console.error("Submission error:", error);

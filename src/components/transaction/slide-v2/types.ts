@@ -92,6 +92,6 @@ export type TransactionSlideV2Props = {
     people: Person[];
     shops: Shop[];
 
-    onSuccess?: () => void;
+    onSuccess?: (data?: any) => void;
     onHasChanges?: (hasChanges: boolean) => void;
 };

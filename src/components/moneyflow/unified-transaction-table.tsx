@@ -159,6 +159,7 @@ interface UnifiedTransactionTableProps {
   onFontSizeChange?: (size: number) => void
   onEdit?: (txn: TransactionWithDetails) => void
   onDuplicate?: (txn: TransactionWithDetails) => void
+  loadingIds?: Set<string>
 }
 
 
@@ -196,6 +197,7 @@ export function UnifiedTransactionTable({
   onFontSizeChange,
   onEdit: externalOnEdit,
   onDuplicate: externalOnDuplicate,
+  loadingIds,
 }: UnifiedTransactionTableProps) {
   const [tableData, setTableData] = useState<TransactionWithDetails[]>(() => data ?? transactions ?? [])
   const [updatingTxnIds, setUpdatingTxnIds] = useState<Set<string>>(new Set())
@@ -2554,7 +2556,7 @@ export function UnifiedTransactionTable({
                         "border-b border-slate-200 transition-colors text-base",
                         isMenuOpen ? "bg-blue-50" : rowBgColor,
                         !isExcelMode && "hover:bg-slate-50/50",
-                        updatingTxnIds.has(txn.id) && "opacity-70 animate-pulse bg-slate-50"
+                        (updatingTxnIds.has(txn.id) || loadingIds?.has(txn.id)) && "opacity-70 animate-pulse bg-slate-50"
                       )}
                     >
                       {displayedColumns.map(col => {
