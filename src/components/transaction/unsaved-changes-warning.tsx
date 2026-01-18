@@ -20,8 +20,8 @@ export function UnsavedChangesWarning({
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent
-                side="bottom"
-                className="h-auto max-h-[40vh] rounded-t-2xl border-t-4 border-amber-500"
+                side="right"
+                className="w-full sm:max-w-md border-l-4 border-amber-500 flex flex-col justify-center"
                 showClose={false}
             >
                 <div className="flex flex-col items-center gap-6 py-4">
@@ -41,25 +41,25 @@ export function UnsavedChangesWarning({
                     </div>
 
                     {/* Actions */}
-                    <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md">
+                    <div className="flex flex-col gap-3 w-full max-w-xs mt-4">
+                        <Button
+                            onClick={() => {
+                                onDiscardChanges();
+                                onOpenChange(false);
+                            }}
+                            className="w-full h-11 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            Discard Changes
+                        </Button>
                         <Button
                             variant="outline"
                             onClick={() => {
                                 onContinueEditing();
                                 onOpenChange(false);
                             }}
-                            className="flex-1 h-11"
+                            className="w-full h-11"
                         >
                             Continue Editing
-                        </Button>
-                        <Button
-                            onClick={() => {
-                                onDiscardChanges();
-                                onOpenChange(false);
-                            }}
-                            className="flex-1 h-11 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
-                            Discard Changes
                         </Button>
                     </div>
                 </div>

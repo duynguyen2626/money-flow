@@ -31,28 +31,17 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     const personId = useWatch({ control: form.control, name: "person_id" });
 
     const [showAllAccounts, setShowAllAccounts] = useState(false);
-    const [recentPeopleIds, setRecentPeopleIds] = useState<string[]>([]);
+    const [lastSubmittedId, setLastSubmittedId] = useState<string | null>(null);
 
-    // Load recent people on mount
+    // Load last submitted person on mount
     useEffect(() => {
         try {
-            const saved = localStorage.getItem("mf_recent_people");
-            if (saved) setRecentPeopleIds(JSON.parse(saved));
+            const saved = localStorage.getItem("mf_last_submitted_person_id");
+            if (saved) setLastSubmittedId(saved);
         } catch (e) {
-            console.error("Failed to load recent people", e);
+            console.error("Failed to load last submitted person", e);
         }
     }, []);
-
-    // Save recent people when person_id changes (and is valid debt/repayment)
-    useEffect(() => {
-        if (personId && (type === 'debt' || type === 'repayment')) {
-            setRecentPeopleIds(prev => {
-                const newRecent = [personId, ...prev.filter(id => id !== personId)].slice(0, 5);
-                localStorage.setItem("mf_recent_people", JSON.stringify(newRecent));
-                return newRecent;
-            });
-        }
-    }, [personId, type]);
 
     // Filter accounts based on type and toggle
     const validAccounts = accounts.filter(a => {
@@ -90,12 +79,16 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     const peopleList = people.map(p => ({
         value: p.id,
         label: p.name,
-        icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" />
+        icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" className="rounded-md" />
     }));
 
-    const recentItems = recentPeopleIds
-        .map(id => peopleList.find(p => p.value === id))
-        .filter(Boolean) as any[];
+    // Logic: 1. Current (if exists), 2. Last Submitted (if exists and != current)
+    const recentItems: any[] = [];
+    const validCurrent = personId ? peopleList.find(p => p.value === personId) : null;
+    const validLast = lastSubmittedId ? peopleList.find(p => p.value === lastSubmittedId) : null;
+
+    if (validCurrent) recentItems.push(validCurrent);
+    if (validLast && validLast.value !== personId) recentItems.push(validLast);
 
     const peopleGroups: ComboboxGroup[] = [
         ...(recentItems.length > 0 ? [{ label: "Recent", items: recentItems }] : []),

@@ -264,6 +264,12 @@ export function UnifiedTransactionsPage({
         if (data?.id) {
             setLoadingIds(prev => new Set(prev).add(data.id))
         }
+        // Save last submitted person for recent logic
+        if (data?.person_id) {
+            try {
+                localStorage.setItem("mf_last_submitted_person_id", data.person_id);
+            } catch (e) { console.error(e) }
+        }
         router.refresh()
     }
 
@@ -301,7 +307,7 @@ export function UnifiedTransactionsPage({
                 type: slideOverrideType as any,
                 occurred_at: new Date(),
                 amount: 0,
-                cashback_mode: "none_back",
+                cashback_mode: "none_back" as const,
                 // Pass source_account_id preference? No, let V2 default to first account.
             };
         }
