@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { User, ArrowUpRight, ArrowDownLeft, RefreshCcw, ArrowRightLeft, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,8 +28,31 @@ type AccountSelectorProps = {
 export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPerson }: AccountSelectorProps) {
     const form = useFormContext<SingleTransactionFormValues>();
     const type = useWatch({ control: form.control, name: "type" });
+    const personId = useWatch({ control: form.control, name: "person_id" });
 
     const [showAllAccounts, setShowAllAccounts] = useState(false);
+    const [recentPeopleIds, setRecentPeopleIds] = useState<string[]>([]);
+
+    // Load recent people on mount
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem("mf_recent_people");
+            if (saved) setRecentPeopleIds(JSON.parse(saved));
+        } catch (e) {
+            console.error("Failed to load recent people", e);
+        }
+    }, []);
+
+    // Save recent people when person_id changes (and is valid debt/repayment)
+    useEffect(() => {
+        if (personId && (type === 'debt' || type === 'repayment')) {
+            setRecentPeopleIds(prev => {
+                const newRecent = [personId, ...prev.filter(id => id !== personId)].slice(0, 5);
+                localStorage.setItem("mf_recent_people", JSON.stringify(newRecent));
+                return newRecent;
+            });
+        }
+    }, [personId, type]);
 
     // Filter accounts based on type and toggle
     const validAccounts = accounts.filter(a => {
@@ -63,12 +86,21 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
         }
     ];
 
-    // People Options
-    const peopleOptions = people.map(p => ({
+    // People Options & Groups
+    const peopleList = people.map(p => ({
         value: p.id,
         label: p.name,
         icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" />
     }));
+
+    const recentItems = recentPeopleIds
+        .map(id => peopleList.find(p => p.value === id))
+        .filter(Boolean) as any[];
+
+    const peopleGroups: ComboboxGroup[] = [
+        ...(recentItems.length > 0 ? [{ label: "Recent", items: recentItems }] : []),
+        { label: "All People", items: peopleList }
+    ];
 
     return (
         <div className="space-y-4 pt-2">
@@ -128,15 +160,24 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                                         className="w-full"
                                     >
                                         <TabsList className="grid w-full grid-cols-3 h-9 bg-slate-100/50">
-                                            <TabsTrigger value="expense" className="text-xs gap-1.5 data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm">
+                                            <TabsTrigger
+                                                value="expense"
+                                                className="text-xs gap-1.5 data-[state=active]:bg-rose-50 data-[state=active]:text-rose-700 data-[state=active]:shadow-sm hover:text-rose-600 transition-colors"
+                                            >
                                                 <ArrowUpRight className="w-3.5 h-3.5" />
                                                 Expense
                                             </TabsTrigger>
-                                            <TabsTrigger value="income" className="text-xs gap-1.5 data-[state=active]:bg-white data-[state=active]:text-green-600 data-[state=active]:shadow-sm">
+                                            <TabsTrigger
+                                                value="income"
+                                                className="text-xs gap-1.5 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm hover:text-emerald-600 transition-colors"
+                                            >
                                                 <ArrowDownLeft className="w-3.5 h-3.5" />
                                                 Income
                                             </TabsTrigger>
-                                            <TabsTrigger value="transfer" className="text-xs gap-1.5 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
+                                            <TabsTrigger
+                                                value="transfer"
+                                                className="text-xs gap-1.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-sm hover:text-blue-600 transition-colors"
+                                            >
                                                 <ArrowRightLeft className="w-3.5 h-3.5" />
                                                 Transfer
                                             </TabsTrigger>
@@ -254,7 +295,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                                     </div>
                                     <FormControl>
                                         <Combobox
-                                            items={peopleOptions}
+                                            groups={peopleGroups}
                                             value={field.value}
                                             onValueChange={field.onChange}
                                             placeholder="Select person"

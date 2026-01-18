@@ -98,7 +98,7 @@ export function TransactionToolbar({
                 <img
                     src={p.image_url}
                     alt={p.name}
-                    className="h-4 w-4 rounded-full object-cover"
+                    className="h-4 w-4 rounded-md object-cover"
                 />
             ) : undefined
         })),
