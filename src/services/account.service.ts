@@ -303,6 +303,14 @@ export async function getAccounts(): Promise<Account[]> {
       total_out: item.total_out ?? 0,
       stats,
       relationships, // Added field
+      credit_card_info: (() => {
+        const config = normalizeCashbackConfig(item.cashback_config) as any
+        if (!config) return undefined
+        return {
+          statement_day: config.statementDay ?? config.statement_day,
+          payment_due_day: config.paymentDueDay ?? config.payment_due_day ?? config.dueDate
+        }
+      })(),
     })
   }
 

@@ -4,7 +4,8 @@ import * as React from 'react'
 import { Input } from '@/components/ui/input'
 import { formatVietnameseCurrencyText } from '@/lib/number-to-text'
 import { cn } from '@/lib/utils'
-import { Calculator, AlertCircle } from 'lucide-react'
+import { Calculator, AlertCircle, X } from 'lucide-react'
+import { CustomTooltip } from '@/components/ui/custom-tooltip'
 
 interface SmartAmountInputProps {
     value?: number
@@ -27,8 +28,9 @@ export function SmartAmountInput({
     error,
     label = 'Amount',
     unit,
-    hideCurrencyText
-}: SmartAmountInputProps) {
+    hideCurrencyText,
+    hideLabel
+}: SmartAmountInputProps & { hideLabel?: boolean }) {
     const [inputValue, setInputValue] = React.useState('')
     const [isFocused, setIsFocused] = React.useState(false)
     const [mathError, setMathError] = React.useState<string | null>(null)
@@ -168,25 +170,17 @@ export function SmartAmountInput({
     }, [value, inputValue, isFocused, hideCurrencyText, unit])
 
     return (
-        <div className={cn("space-y-2", className)}>
-            <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                    {label}
-                    {mathError && <span className="text-xs text-red-500 font-normal flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {mathError}</span>}
-                </label>
-                {textParts.length > 0 && (
-                    <div className="text-xs text-right max-w-[200px] truncate" title={textParts.map(p => p.value + ' ' + p.unit).join(' ')}>
-                        {textParts.map((part, i) => (
-                            <React.Fragment key={i}>
-                                <span className="font-bold text-blue-600">{part.value}</span>
-                                <span className="text-red-600 ml-0.5 mr-1">{part.unit}</span>
-                            </React.Fragment>
-                        ))}
-                    </div>
-                )}
-            </div>
+        <div className="space-y-2">
+            {!hideLabel && (
+                <div className="flex items-center justify-between">
+                    <label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                        {label}
+                        {mathError && <span className="text-xs text-red-500 font-normal flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {mathError}</span>}
+                    </label>
+                </div>
+            )}
 
-            <div className="relative">
+            <div className="relative group">
                 <Input
                     ref={inputRef}
                     value={inputValue}
@@ -197,12 +191,44 @@ export function SmartAmountInput({
                     disabled={disabled}
                     placeholder={placeholder}
                     className={cn(
-                        "h-11 text-sm",
-                        mathError ? "border-red-300 focus-visible:ring-red-200" : ""
+                        "text-sm pr-32 font-medium tracking-wide", // Removed h-11, will use parent className
+                        mathError ? "border-red-300 focus-visible:ring-red-200" : "",
+                        className // Apply parent className last so it can override
                     )}
                 />
-                {/[+\-*/]/.test(inputValue) && (
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+
+                {/* Result Badge inside Input - Hide when focused to prevent overlap */}
+                {textParts.length > 0 && !/[+\-*/]/.test(inputValue) && !isFocused && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center bg-white pl-2 shadow-[-10px_0_10px_-5px_rgba(255,255,255,1)]">
+                        {textParts.length > 2 ? (
+                            <div className="pointer-events-auto">
+                                <CustomTooltip content={textParts.map(p => `${p.value} ${p.unit}`).join(' ')}>
+                                    <div className="text-xs text-right whitespace-nowrap bg-blue-50 px-2 py-1 rounded-md border border-blue-100 flex items-center gap-1 cursor-help">
+                                        {textParts.slice(0, 2).map((part, i) => (
+                                            <React.Fragment key={i}>
+                                                <span className="font-bold text-blue-600 max-w-[60px] truncate inline-block align-bottom">{part.value}</span>
+                                                <span className="text-red-600 font-bold">{part.unit}</span>
+                                            </React.Fragment>
+                                        ))}
+                                        <span className="text-slate-500 font-bold">...</span>
+                                    </div>
+                                </CustomTooltip>
+                            </div>
+                        ) : (
+                            <div className="text-xs text-right whitespace-nowrap bg-blue-50 px-2 py-1 rounded-md border border-blue-100 flex items-center gap-1">
+                                {textParts.map((part, i) => (
+                                    <React.Fragment key={i}>
+                                        <span className="font-bold text-blue-600">{part.value}</span>
+                                        <span className="text-red-600 font-bold">{part.unit}</span>
+                                    </React.Fragment>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {(isFocused || /[+\-*/]/.test(inputValue)) && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                         <Calculator className="h-4 w-4" />
                     </div>
                 )}
@@ -228,6 +254,23 @@ export function SmartAmountInput({
                             </button>
                         ))}
                     </div>
+                )}
+                {/* Clear Button */}
+                {inputValue && !disabled && isFocused && (
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setInputValue('');
+                            onChange(undefined);
+                            setIsFocused(true);
+                            inputRef.current?.focus();
+                        }}
+                        className="absolute right-10 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 z-10"
+                        tabIndex={-1}
+                    >
+                        <X className="h-3.5 w-3.5" />
+                    </button>
                 )}
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}

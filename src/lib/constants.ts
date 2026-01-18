@@ -50,3 +50,5 @@ export const SYSTEM_CATEGORIES = {
     // Danh mục Hoàn tiền (Cashback)
     CASHBACK: 'e0000000-0000-0000-0000-000000000092',
 };
+
+export const ASSET_TYPES = ['savings', 'investment', 'asset'] as const;

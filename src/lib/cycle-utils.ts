@@ -1,4 +1,5 @@
 import { isYYYYMM, normalizeMonthTag } from './month-tag'
+import { addMonths, startOfDay, endOfDay, subDays, subMonths, isBefore, isAfter, setDate } from "date-fns";
 
 /**
  * Utility functions for formatting month tags into readable date ranges.
@@ -55,4 +56,35 @@ export function formatCycleTagWithYear(tag: string): string {
   const formatMonth = (m: number) => String(m).padStart(2, '0')
 
   return `${formatDay(cycleStartDay)}.${formatMonth(startMonth)}.${startYear} - ${formatDay(cycleEndDay)}.${formatMonth(endMonth)}.${endYear}`
+}
+
+export function calculateStatementCycle(date: Date, statementDay: number) {
+  if (!statementDay || statementDay > 31) {
+    // Fallback or handle invalid statement day
+    return null;
+  }
+
+  const targetDate = startOfDay(date);
+  const day = targetDate.getDate();
+
+  // Cycle ends on statementDay.
+  // Start depends on month.
+
+  let cycleEndDate = startOfDay(setDate(targetDate, statementDay));
+
+  // If current day > statementDay, we are in NEXT cycle (which ends next month)
+  // If current day <= statementDay, we are in CURRENT cycle (which ends this month)
+
+  if (day > statementDay) {
+    cycleEndDate = addMonths(cycleEndDate, 1);
+  }
+
+  // Cycle Start is (Cycle End - 1 month) + 1 day
+  const cycleStartDate = addMonths(cycleEndDate, -1);
+  cycleStartDate.setDate(cycleStartDate.getDate() + 1);
+
+  return {
+    start: cycleStartDate,
+    end: cycleEndDate
+  };
 }

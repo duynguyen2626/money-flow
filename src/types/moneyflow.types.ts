@@ -65,6 +65,10 @@ export type Account = {
   annual_fee?: number | null;
   stats?: AccountStats | null;
   relationships?: AccountRelationships | null;
+  credit_card_info?: {
+    statement_day?: number;
+    payment_due_day?: number;
+  } | null;
 }
 
 export type AccountCashbackSnapshot = {
@@ -184,7 +188,7 @@ export type TransactionWithLineRelations = {
   people?: { name?: string | null; image_url?: string | null } | null;
 }
 
-export type CashbackMode = 'none_back' | 'real_fixed' | 'real_percent' | 'voluntary'
+export type CashbackMode = 'none_back' | 'real_fixed' | 'real_percent' | 'voluntary' | 'percent' | 'fixed'
 
 export type CashbackEntry = Database['public']['Tables']['cashback_entries']['Row']
 export type CashbackCycle = Database['public']['Tables']['cashback_cycles']['Row']

@@ -6,6 +6,7 @@ import { createPortal } from 'react-dom'
 import { parseCashbackConfig, CashbackCycleType, CashbackLevel, normalizeCashbackConfig, CashbackCategoryRule } from '@/lib/cashback'
 import { getSharedLimitParentId } from '@/lib/account-utils'
 import { Account } from '@/types/moneyflow.types'
+import { ASSET_TYPES } from '@/lib/constants'
 import { updateAccountConfigAction } from '@/actions/account-actions'
 import type { Json } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
@@ -523,7 +524,7 @@ type StatusMessage = {
   variant: 'success' | 'error'
 } | null
 
-const ASSET_TYPES: Account['type'][] = ['savings', 'investment', 'asset']
+
 
 type SavingsConfig = {
   interestRate: number | null

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createPortal } from 'react-dom'
 import { parseCashbackConfig, CashbackCycleType, CashbackLevel, normalizeCashbackConfig } from '@/lib/cashback'
 import { Account } from '@/types/moneyflow.types'
+import { SYSTEM_ACCOUNTS, ASSET_TYPES } from '@/lib/constants'
 import type { Json } from '@/types/database.types'
 import { createClient } from '@/lib/supabase/client'
 import { createAccount } from '@/actions/account-actions'
@@ -396,19 +397,25 @@ type CreateAccountDialogProps = {
   collateralAccounts?: Account[]
   creditCardAccounts?: Account[]
   trigger?: ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
-type StatusMessage = {
-  text: string
-  variant: 'success' | 'error'
-} | null
+// ...
 
-const ASSET_TYPES: Account['type'][] = ['savings', 'investment', 'asset']
-
-export function CreateAccountDialog({ collateralAccounts = [], creditCardAccounts = [], trigger }: CreateAccountDialogProps) {
+export function CreateAccountDialog({ collateralAccounts = [], creditCardAccounts = [], trigger, open: controlledOpen, onOpenChange }: CreateAccountDialogProps) {
   const router = useRouter()
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
+
+  const isControlled = controlledOpen !== undefined
+  const open = isControlled ? controlledOpen : internalOpen
+  const setOpen = (val: boolean) => {
+    if (!isControlled) setInternalOpen(val)
+    onOpenChange?.(val)
+  }
+
   const [status, setStatus] = useState<StatusMessage>(null)
+  // ... rest of state ...
   const [isPending, startTransition] = useTransition()
   const [showCloseWarning, setShowCloseWarning] = useState(false)
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false)
@@ -653,7 +660,7 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
       <div onClick={(e) => { e.stopPropagation(); openDialog(); }}>
         {trigger}
       </div>
-      {!trigger && (
+      {trigger === undefined && (
         <button
           type="button"
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition hover:bg-blue-500"

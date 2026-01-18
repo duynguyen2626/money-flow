@@ -102,7 +102,9 @@ export function Combobox({
             type="button"
             disabled={disabled}
             className={cn(
-              'flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm text-slate-600 shadow-sm transition hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-0',
+              'flex w-full items-center justify-between rounded-md border border-gray-300 bg-white px-3 text-left text-sm text-slate-600 shadow-sm transition hover:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:ring-offset-0',
+              // Only add py-2 if no height class is specified
+              !className?.includes('h-') ? 'py-2' : '',
               open ? 'border-blue-500' : '',
               disabled ? 'bg-gray-100 text-slate-500 cursor-not-allowed' : '',
               className,
