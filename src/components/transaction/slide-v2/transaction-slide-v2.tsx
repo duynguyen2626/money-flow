@@ -52,7 +52,9 @@ export function TransactionSlideV2({
     people,
     shops,
     onSuccess,
-    onHasChanges
+    onHasChanges,
+    onSubmissionStart,
+    onSubmissionEnd
 }: TransactionSlideV2Props) {
     const [mode, setMode] = useState<TransactionMode>(initialMode);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -149,58 +151,62 @@ export function TransactionSlideV2({
     }, [open, singleForm, defaultFormValues, onHasChanges]);
 
     const onSingleSubmit = async (data: SingleTransactionFormValues) => {
-        setIsSubmitting(true);
+        const payload = {
+            occurred_at: data.occurred_at.toISOString(),
+            amount: data.amount,
+            note: data.note,
+            type: data.type,
+            source_account_id: data.source_account_id,
+            target_account_id: data.target_account_id,
+            category_id: data.category_id || null,
+            shop_id: data.shop_id || null,
+            person_id: data.person_id || null,
+            tag: data.tag,
+            cashback_mode: data.cashback_mode,
+            cashback_share_percent: data.cashback_share_percent,
+            cashback_share_fixed: data.cashback_share_fixed,
+        };
+
+        // UX: Close immediately if handler provided
+        if (onSubmissionStart) {
+            onSubmissionStart();
+        } else {
+            setIsSubmitting(true);
+        }
+
+        // Fire and forget (or await if parent logic keeps this alive)
+        // Note: If component unmounts, this promise continues but state updates will fail/warn.
+        // Since we closed the sheet, we shouldn't touch local state after this point if onSubmissionStart was used.
         try {
-            // Map Form Values to Service Input
-            const payload = {
-                occurred_at: data.occurred_at.toISOString(),
-                amount: data.amount,
-                note: data.note,
-                type: data.type,
-                source_account_id: data.source_account_id,
-                target_account_id: data.target_account_id,
-                category_id: data.category_id || null,
-                shop_id: data.shop_id || null,
-                person_id: data.person_id || null,
-                tag: data.tag,
-                cashback_mode: data.cashback_mode,
-                cashback_share_percent: data.cashback_share_percent,
-                cashback_share_fixed: data.cashback_share_fixed,
-                // Split bill participants are not yet handled in backend for single txn? 
-                // Ignoring participants for now as per schema
-            };
-
             let success = false;
-
             if (editingId) {
-                // UPDATE
                 success = await updateTransaction(editingId, payload);
-                if (success) {
-                    toast.success("Transaction updated successfully");
-                } else {
-                    toast.error("Failed to update transaction");
-                }
+                if (success) toast.success("Transaction updated successfully");
+                else toast.error("Failed to update transaction");
             } else {
-                // CREATE
                 const newId = await createTransaction(payload);
                 if (newId) {
                     success = true;
                     toast.success("Transaction created successfully");
-                } else {
-                    toast.error("Failed to create transaction");
-                }
+                } else toast.error("Failed to create transaction");
             }
 
             if (success) {
-                setHasChanges(false);
-                onHasChanges?.(false);
-                onSuccess?.(editingId ? { id: editingId, ...payload } : undefined); // Parent will likely close the slide here
+                if (!onSubmissionStart) {
+                    setHasChanges(false);
+                    onHasChanges?.(false);
+                }
+                onSuccess?.(editingId ? { id: editingId, ...payload } : undefined);
             }
         } catch (error) {
             console.error("Submission error:", error);
             toast.error("An error occurred. Please try again.");
         } finally {
-            setIsSubmitting(false);
+            if (onSubmissionEnd) {
+                onSubmissionEnd();
+            } else {
+                setIsSubmitting(false);
+            }
         }
     };
 

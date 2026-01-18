@@ -61,6 +61,17 @@ export function UnifiedTransactionsPage({
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
     const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
     const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
+    const [isGlobalLoading, setIsGlobalLoading] = useState(false)
+
+    const handleSlideSubmissionStart = () => {
+        setIsSlideOpen(false) // Close immediately
+        setIsGlobalLoading(true) // Show loading
+    }
+
+    const handleSlideSubmissionEnd = () => {
+        setIsGlobalLoading(false)
+        router.refresh()
+    }
 
     // Clear loading IDs when transaction data updates
     useMemo(() => {
@@ -327,7 +338,15 @@ export function UnifiedTransactionsPage({
             </div>
 
             {/* Content Section */}
-            <div className="flex-1 overflow-hidden p-0 sm:p-4">
+            <div className="flex-1 overflow-hidden p-0 sm:p-4 relative">
+                {isGlobalLoading && (
+                    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-[1px] transition-all duration-300">
+                        <div className="bg-white px-6 py-4 rounded-full shadow-xl flex items-center gap-3 animate-in fade-in zoom-in-95 duration-200 border border-slate-100">
+                            <div className="w-5 h-5 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
+                            <span className="text-sm font-medium text-slate-700">Updating...</span>
+                        </div>
+                    </div>
+                )}
                 <UnifiedTransactionTable
                     transactions={filteredTransactions}
                     accounts={accounts}
@@ -347,6 +366,8 @@ export function UnifiedTransactionsPage({
             <TransactionSlideV2
                 open={isSlideOpen}
                 onOpenChange={handleSlideClose}
+                onSubmissionStart={handleSlideSubmissionStart}
+                onSubmissionEnd={handleSlideSubmissionEnd}
                 mode="single"
                 editingId={(slideMode === 'edit' && selectedTxn) ? selectedTxn.id : undefined}
                 initialData={initialSlideData}

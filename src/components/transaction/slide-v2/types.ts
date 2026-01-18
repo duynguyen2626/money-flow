@@ -94,4 +94,6 @@ export type TransactionSlideV2Props = {
 
     onSuccess?: (data?: any) => void;
     onHasChanges?: (hasChanges: boolean) => void;
+    onSubmissionStart?: () => void;
+    onSubmissionEnd?: () => void;
 };
