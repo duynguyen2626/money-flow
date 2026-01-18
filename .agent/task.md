@@ -187,8 +187,17 @@ Current build includes fully functional Transaction Slide V2 with Single and Bul
 - ✅ Cycle badge styling consistency
 - ✅ Data integrity fixes (account.service.ts, bulk-transaction-actions.ts)
 
+### Phase 16.4: Safety and Customization (Latest)
+- ✅ Implemented Unsaved Changes Warning (Slide-based)
+- ✅ Added Column Customization Feature
+  - ✅ Drag-and-drop reordering
+  - ✅ Visibility toggling
+  - ✅ Frozen columns (Date, Action)
+  - ✅ Resizing support (input based)
+- ✅ Fixed infinite loop issues in Transaction Slide
+
 ---
 
 **Last Updated**: 2026-01-18
-**Current Build**: Transaction Slide V2 (Single + Bulk)
+**Current Build**: Transaction Slide V2 + Unified Table Customization
 **Next Milestone**: Phase 2 - Cards Integration

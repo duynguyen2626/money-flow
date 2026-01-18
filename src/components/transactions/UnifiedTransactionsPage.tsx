@@ -6,7 +6,8 @@ import { UnifiedTransactionTable } from '../moneyflow/unified-transaction-table'
 import { TransactionToolbar, FilterType, StatusFilter } from './TransactionToolbar'
 import { DateRange } from 'react-day-picker'
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameMonth } from 'date-fns'
-import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
+import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
+import { UnsavedChangesWarning } from '@/components/transaction/unsaved-changes-warning'
 import { ConfirmRefundDialogV2 } from '@/components/moneyflow/confirm-refund-dialog-v2'
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { voidTransactionAction } from '@/actions/transaction-actions'
@@ -53,11 +54,14 @@ export function UnifiedTransactionsPage({
     const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>()
     const [selectedPersonId, setSelectedPersonId] = useState<string | undefined>()
 
-    // Dialog States
-    const [isAddOpen, setIsAddOpen] = useState(false) // New controlled state for Add
-    const [editTxn, setEditTxn] = useState<TransactionWithDetails | null>(null)
-    const [isEditOpen, setIsEditOpen] = useState(false)
+    // Transaction Slide V2 States
+    const [isSlideOpen, setIsSlideOpen] = useState(false)
+    const [slideMode, setSlideMode] = useState<'add' | 'edit' | 'duplicate'>('add')
+    const [selectedTxn, setSelectedTxn] = useState<TransactionWithDetails | null>(null)
+    const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+    const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
 
+    // Other Dialog States
     const [refundTxn, setRefundTxn] = useState<TransactionWithDetails | null>(null)
     const [isRefundOpen, setIsRefundOpen] = useState(false)
 
@@ -187,10 +191,47 @@ export function UnifiedTransactionsPage({
         setSelectedIds(newSelected)
     }
 
-    // Handlers
+    // Slide Handlers
+    const handleAdd = () => {
+        setSlideMode('add')
+        setSelectedTxn(null)
+        setIsSlideOpen(true)
+    }
+
     const handleEdit = (t: TransactionWithDetails) => {
-        setEditTxn(t)
-        setIsEditOpen(true)
+        setSlideMode('edit')
+        setSelectedTxn(t)
+        setIsSlideOpen(true)
+    }
+
+    const handleDuplicate = (t: TransactionWithDetails) => {
+        setSlideMode('duplicate')
+        setSelectedTxn(t)
+        setIsSlideOpen(true)
+    }
+
+    const handleSlideClose = (force = false) => {
+        if (hasUnsavedChanges && !force) {
+            setShowUnsavedWarning(true)
+        } else {
+            setIsSlideOpen(false)
+            setHasUnsavedChanges(false)
+            setSelectedTxn(null)
+        }
+    }
+
+    const confirmCloseSlide = () => {
+        setShowUnsavedWarning(false)
+        setIsSlideOpen(false)
+        setHasUnsavedChanges(false)
+        setSelectedTxn(null)
+    }
+
+    const handleSlideSuccess = () => {
+        setIsSlideOpen(false)
+        setHasUnsavedChanges(false)
+        setSelectedTxn(null)
+        router.refresh()
     }
 
     const handleRefund = (t: TransactionWithDetails) => {
@@ -253,7 +294,7 @@ export function UnifiedTransactionsPage({
                     hasActiveFilters={hasActiveFilters}
                     onReset={handleReset}
 
-                    onAdd={() => setIsAddOpen(true)}
+                    onAdd={handleAdd}
                 />
             </div>
 
@@ -267,42 +308,44 @@ export function UnifiedTransactionsPage({
                     shops={shops}
                     selectedTxnIds={selectedIds}
                     onSelectTxn={handleSelect}
+                    onEdit={handleEdit}
+                    onDuplicate={handleDuplicate}
                     context="general"
                 />
             </div>
 
-            {/* Dialogs */}
-            {/* Add New Dialog (Controlled) */}
-            {/* Dialogs */}
-
-            {/* V2 Slide Over (Primary) */}
-            {/* V2 Slide Over (Primary) */}
-            {/* Original Modal (V1) - Restored */}
-            {/* Original Modal (V1) - Restored */}
-            <AddTransactionDialog
+            {/* Transaction Slide V2 - Primary Interface */}
+            <TransactionSlideV2
+                open={isSlideOpen}
+                onOpenChange={handleSlideClose}
+                mode="single"
+                initialData={selectedTxn ? {
+                    type: selectedTxn.type as any,
+                    occurred_at: new Date(selectedTxn.occurred_at),
+                    amount: Number(selectedTxn.amount),
+                    note: selectedTxn.note || '',
+                    source_account_id: selectedTxn.account_id || '',
+                    target_account_id: selectedTxn.to_account_id || undefined,
+                    category_id: selectedTxn.category_id || undefined,
+                    shop_id: selectedTxn.shop_id || undefined,
+                    person_id: selectedTxn.person_id || undefined,
+                    tag: selectedTxn.tag || undefined,
+                } : undefined}
                 accounts={accounts}
                 categories={categories}
                 people={people}
                 shops={shops}
-                buttonClassName="hidden"
-                isOpen={isAddOpen}
-                onOpenChange={setIsAddOpen}
+                onSuccess={handleSlideSuccess}
+                onHasChanges={setHasUnsavedChanges}
             />
-            {/* Actually, TransactionSlide as implemented in previous step has internal state and a trigger button.
-                We need it to be controlled by the main page "Add" button.
-                
-                Let's RE-WRITE TransactionSlide usage here.
-                The previous implementation of TransactionSlide had a Trigger.
-                Here the Trigger is inside TransactionToolbar -> onAdd.
-                
-                So we need to change TransactionSlide to accept `open` and `onOpenChange` props.
-                Let's assume we will modify TransactionSlide in next step to support controlled mode.
-             */}
 
-            {/* TEMPORARY: Render BOTH for dev? No.
-                 We will render TransactionSlide controlled by isAddOpen.
-                 Wait, we need to modify TransactionSlide.tsx first to be controlled.
-              */}
+            {/* Unsaved Changes Warning */}
+            <UnsavedChangesWarning
+                open={showUnsavedWarning}
+                onOpenChange={setShowUnsavedWarning}
+                onContinueEditing={() => setShowUnsavedWarning(false)}
+                onDiscardChanges={confirmCloseSlide}
+            />
 
             {isRefundOpen && refundTxn && (
                 <ConfirmRefundDialogV2

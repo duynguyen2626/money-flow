@@ -2,25 +2,134 @@
 Console Error
 
 ## Error Message
-A component is changing an uncontrolled input to be controlled. This is likely caused by the value changing from undefined to a defined value, which should not happen. Decide between using a controlled or uncontrolled input element for the lifetime of the component. More info: https://react.dev/link/controlled-components
+The final argument passed to useEffect changed size between renders.The order and size of this array must remain constant.
+
+  Previous: [false, () => {
+    if (initialData) {
+      return {
+        type: initialData.type || "expense",
+        category_id: initialData.category_id || "",
+        occurred_at: initialData.occurred_at || new Date(),
+        amount: initialData.amount || 0,
+        note: initialData.note || "",
+        source_account_id: initialData.source_account_id || accounts[0]?.id || "",
+        target_account_id: initialData.target_account_id,
+        shop_id: initialData.shop_id,
+        person_id: initialData.person_id,
+        tag: initialData.tag,
+        cashback_mode: initialData.cashback_mode || "none_back",
+        cashback_share_percent: initialData.cashback_share_percent,
+        cashback_share_fixed: initialData.cashback_share_fixed,
+        ui_is_cashback_expanded: false
+      };
+    }
+    return {
+      type: "expense",
+      category_id: "",
+      occurred_at: new Date(),
+      amount: 0,
+      note: "",
+      source_account_id: accounts[0]?.id || "",
+      cashback_mode: "none_back",
+      ui_is_cashback_expanded: false
+    };
+  }, [object Object]]
+Incoming: [false, () => {
+  if (initialData) {
+    return {
+      type: initialData.type || "expense",
+      category_id: initialData.category_id || "",
+      occurred_at: initialData.occurred_at || new Date(),
+      amount: initialData.amount || 0,
+      note: initialData.note || "",
+      source_account_id: initialData.source_account_id || accounts[0]?.id || "",
+      target_account_id: initialData.target_account_id,
+      shop_id: initialData.shop_id,
+      person_id: initialData.person_id,
+      tag: initialData.tag,
+      cashback_mode: initialData.cashback_mode || "none_back",
+      cashback_share_percent: initialData.cashback_share_percent,
+      cashback_share_fixed: initialData.cashback_share_fixed,
+      ui_is_cashback_expanded: false
+    };
+  }
+  return {
+    type: "expense",
+    category_id: "",
+    occurred_at: new Date(),
+    amount: 0,
+    note: "",
+    source_account_id: accounts[0]?.id || "",
+    cashback_mode: "none_back",
+    ui_is_cashback_expanded: false
+  };
+}, [object Object], function () { [native code] }]
 
 
-    at input (<anonymous>:null:null)
-    at _c (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/ui/input.tsx:12:5)
-    at Object.render (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/transaction/slide-v2/single-mode/cashback-section.tsx:113:53)
-    at FormField (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/ui/form.tsx:21:10)
-    at CashbackSection (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/transaction/slide-v2/single-mode/cashback-section.tsx:103:37)
-    at TransactionSlideV2 (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/transaction/slide-v2/transaction-slide-v2.tsx:173:37)
-    at TestPageClient (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/app/txn/v2/client-wrapper.tsx:39:13)
-    at TransactionV2Page (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/app/txn/v2/page.tsx:18:9)
+    at TransactionSlideV2(../../../../ Mobile Documents / com~apple~CloudDocs / Github Nov25 / money - flow - 3 / src / components / transaction / slide - v2 / transaction - slide - v2.tsx: 112: 14)
+    at UnifiedTransactionsPage(../../../../ Mobile Documents / com~apple~CloudDocs / Github Nov25 / money - flow - 3 / src / components / transactions / UnifiedTransactionsPage.tsx: 317: 13)
+    at TransactionsPage(../../../../ Mobile Documents / com~apple~CloudDocs / Github Nov25 / money - flow - 3 / src / app / transactions / page.tsx: 29: 7)
 
 ## Code Frame
-  10 | >(({ className, type = 'text', ...props }, ref) => {
-  11 |   return (
-> 12 |     <input
-     |     ^
-  13 |       type={type}
-  14 |       ref={ref}
-  15 |       className={cn(
+110 |
+  111 |     // Reset form when initialData changes or slide opens
+> 112 | useEffect(() => {
+      |              ^
+      113 |         if (open) {
+        114 |             const values = getDefaultValues();
+        115 | singleForm.reset(values);
 
-Next.js version: 16.0.10 (Turbopack)
+        Next.js version: 16.0.10(Turbopack)
+## Error Type
+Console Error
+
+## Error Message
+The final argument passed to useEffect changed size between renders.The order and size of this array must remain constant.
+
+          Previous: [[object Object], function () { [native code] }]
+        Incoming: [false, [object Object], function () { [native code] }, () => {
+          if (initialData) {
+            return {
+              type: initialData.type || "expense",
+              category_id: initialData.category_id || "",
+              occurred_at: initialData.occurred_at || new Date(),
+              amount: initialData.amount || 0,
+              note: initialData.note || "",
+              source_account_id: initialData.source_account_id || accounts[0]?.id || "",
+              target_account_id: initialData.target_account_id,
+              shop_id: initialData.shop_id,
+              person_id: initialData.person_id,
+              tag: initialData.tag,
+              cashback_mode: initialData.cashback_mode || "none_back",
+              cashback_share_percent: initialData.cashback_share_percent,
+              cashback_share_fixed: initialData.cashback_share_fixed,
+              ui_is_cashback_expanded: false
+            };
+          }
+          return {
+            type: "expense",
+            category_id: "",
+            occurred_at: new Date(),
+            amount: 0,
+            note: "",
+            source_account_id: accounts[0]?.id || "",
+            cashback_mode: "none_back",
+            ui_is_cashback_expanded: false
+          };
+        }]
+
+
+    at TransactionSlideV2(../../../../ Mobile Documents / com~apple~CloudDocs / Github Nov25 / money - flow - 3 / src / components / transaction / slide - v2 / transaction - slide - v2.tsx: 122: 14)
+    at UnifiedTransactionsPage(../../../../ Mobile Documents / com~apple~CloudDocs / Github Nov25 / money - flow - 3 / src / components / transactions / UnifiedTransactionsPage.tsx: 317: 13)
+    at TransactionsPage(../../../../ Mobile Documents / com~apple~CloudDocs / Github Nov25 / money - flow - 3 / src / app / transactions / page.tsx: 29: 7)
+
+## Code Frame
+        120 |
+          121 |     // Track form changes by comparing with initial values
+> 122 | useEffect(() => {
+      |              ^
+              123 |         if (!open) return; // Don't track when closed
+            124 |
+              125 |         const subscription = singleForm.watch((currentValues) => {
+
+                Next.js version: 16.0.10(Turbopack)

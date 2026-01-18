@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CycleSelector } from "@/components/ui/cycle-selector";
@@ -48,20 +48,39 @@ export function TransactionSlideV2({
     categories,
     people,
     shops,
-    onSuccess
+    onSuccess,
+    onHasChanges
 }: TransactionSlideV2Props) {
     const [mode, setMode] = useState<TransactionMode>(initialMode);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [hasChanges, setHasChanges] = useState(false);
 
     // Dialog States
     const [isAccountDialogOpen, setIsAccountDialogOpen] = useState(false);
     const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
     const [isPeopleDialogOpen, setIsPeopleDialogOpen] = useState(false);
 
-    // --- Single Transaction Form ---
-    const singleForm = useForm<SingleTransactionFormValues>({
-        resolver: zodResolver(singleTransactionSchema) as any,
-        defaultValues: {
+    // Get default values based on initialData - memoized to prevent infinite loops
+    const defaultFormValues = useMemo((): SingleTransactionFormValues => {
+        if (initialData) {
+            return {
+                type: initialData.type || "expense",
+                category_id: initialData.category_id || "",
+                occurred_at: initialData.occurred_at || new Date(),
+                amount: initialData.amount || 0,
+                note: initialData.note || "",
+                source_account_id: initialData.source_account_id || accounts[0]?.id || "",
+                target_account_id: initialData.target_account_id,
+                shop_id: initialData.shop_id,
+                person_id: initialData.person_id,
+                tag: initialData.tag,
+                cashback_mode: initialData.cashback_mode || "none_back",
+                cashback_share_percent: initialData.cashback_share_percent,
+                cashback_share_fixed: initialData.cashback_share_fixed,
+                ui_is_cashback_expanded: false,
+            };
+        }
+        return {
             type: "expense",
             category_id: "",
             occurred_at: new Date(),
@@ -70,7 +89,13 @@ export function TransactionSlideV2({
             source_account_id: accounts[0]?.id || "",
             cashback_mode: "none_back",
             ui_is_cashback_expanded: false,
-        }
+        };
+    }, [initialData, accounts]);
+
+    // --- Single Transaction Form ---
+    const singleForm = useForm<SingleTransactionFormValues>({
+        resolver: zodResolver(singleTransactionSchema) as any,
+        defaultValues: defaultFormValues,
     });
 
     // --- Bulk Transaction Form ---
@@ -83,11 +108,50 @@ export function TransactionSlideV2({
         }
     });
 
+    // Reset form when slide opens or initialData changes
+    useEffect(() => {
+        if (open) {
+            singleForm.reset(defaultFormValues);
+            setHasChanges(false);
+            onHasChanges?.(false);
+        }
+    }, [open, defaultFormValues, singleForm, onHasChanges]);
+
+    // Track form changes by comparing with initial values
+    useEffect(() => {
+        if (!open) return; // Don't track when closed
+
+        const subscription = singleForm.watch((currentValues) => {
+            // Deep comparison of relevant fields
+            const hasActualChanges =
+                currentValues.type !== defaultFormValues.type ||
+                currentValues.amount !== defaultFormValues.amount ||
+                currentValues.note !== defaultFormValues.note ||
+                currentValues.source_account_id !== defaultFormValues.source_account_id ||
+                currentValues.target_account_id !== defaultFormValues.target_account_id ||
+                currentValues.category_id !== defaultFormValues.category_id ||
+                currentValues.shop_id !== defaultFormValues.shop_id ||
+                currentValues.person_id !== defaultFormValues.person_id ||
+                currentValues.tag !== defaultFormValues.tag ||
+                currentValues.cashback_mode !== defaultFormValues.cashback_mode ||
+                currentValues.cashback_share_percent !== defaultFormValues.cashback_share_percent ||
+                currentValues.cashback_share_fixed !== defaultFormValues.cashback_share_fixed ||
+                currentValues.occurred_at?.getTime() !== defaultFormValues.occurred_at?.getTime();
+
+            setHasChanges(hasActualChanges);
+            onHasChanges?.(hasActualChanges);
+        });
+
+        return () => subscription.unsubscribe();
+    }, [open, singleForm, defaultFormValues, onHasChanges]);
+
     const onSingleSubmit = async (data: SingleTransactionFormValues) => {
         setIsSubmitting(true);
         console.log("Submitting Single:", data);
         await new Promise(r => setTimeout(r, 1000));
         setIsSubmitting(false);
+        setHasChanges(false);
+        onHasChanges?.(false);
         onOpenChange(false);
         onSuccess?.();
     };
@@ -124,7 +188,10 @@ export function TransactionSlideV2({
                 {/* Header */}
                 <div className="bg-white border-b px-6 py-4 flex items-center justify-between shrink-0">
                     <SheetTitle>
-                        {mode === 'single' ? 'New Transaction' : 'Bulk Add'}
+                        {mode === 'single'
+                            ? (initialData ? 'Edit Transaction' : 'New Transaction')
+                            : 'Bulk Add'
+                        }
                     </SheetTitle>
 
                     {/* Quick Mode Toggle */}
@@ -192,7 +259,10 @@ export function TransactionSlideV2({
 
                 {/* Footer */}
                 <div className="bg-white border-t px-6 py-4 shrink-0 flex justify-end gap-3">
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
+                    <Button
+                        variant="outline"
+                        onClick={() => onOpenChange(false)}
+                    >
                         Cancel
                     </Button>
                     <Button

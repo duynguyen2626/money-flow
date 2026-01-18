@@ -92,4 +92,5 @@ export type TransactionSlideV2Props = {
     shops: Shop[];
 
     onSuccess?: () => void;
+    onHasChanges?: (hasChanges: boolean) => void;
 };
