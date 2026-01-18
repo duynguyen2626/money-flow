@@ -23,6 +23,8 @@ import {
 } from "./types";
 import { cn } from "@/lib/utils";
 import { bulkCreateTransactions } from "@/actions/bulk-transaction-actions";
+import { createTransaction, updateTransaction } from "@/services/transaction.service";
+import { toast } from "sonner";
 import { Combobox } from "@/components/ui/combobox";
 
 // Components
@@ -44,6 +46,7 @@ export function TransactionSlideV2({
     onOpenChange,
     mode: initialMode = 'single',
     initialData,
+    editingId,
     accounts,
     categories,
     people,
@@ -147,13 +150,59 @@ export function TransactionSlideV2({
 
     const onSingleSubmit = async (data: SingleTransactionFormValues) => {
         setIsSubmitting(true);
-        console.log("Submitting Single:", data);
-        await new Promise(r => setTimeout(r, 1000));
-        setIsSubmitting(false);
-        setHasChanges(false);
-        onHasChanges?.(false);
-        onOpenChange(false);
-        onSuccess?.();
+        try {
+            // Map Form Values to Service Input
+            const payload = {
+                occurred_at: data.occurred_at.toISOString(),
+                amount: data.amount,
+                note: data.note,
+                type: data.type,
+                source_account_id: data.source_account_id,
+                target_account_id: data.target_account_id,
+                category_id: data.category_id,
+                shop_id: data.shop_id,
+                person_id: data.person_id,
+                tag: data.tag,
+                cashback_mode: data.cashback_mode,
+                cashback_share_percent: data.cashback_share_percent,
+                cashback_share_fixed: data.cashback_share_fixed,
+                // Split bill participants are not yet handled in backend for single txn? 
+                // Ignoring participants for now as per schema
+            };
+
+            let success = false;
+
+            if (editingId) {
+                // UPDATE
+                success = await updateTransaction(editingId, payload);
+                if (success) {
+                    toast.success("Transaction updated successfully");
+                } else {
+                    toast.error("Failed to update transaction");
+                }
+            } else {
+                // CREATE
+                const newId = await createTransaction(payload);
+                if (newId) {
+                    success = true;
+                    toast.success("Transaction created successfully");
+                } else {
+                    toast.error("Failed to create transaction");
+                }
+            }
+
+            if (success) {
+                setHasChanges(false);
+                onHasChanges?.(false);
+                onOpenChange(false);
+                onSuccess?.();
+            }
+        } catch (error) {
+            console.error("Submission error:", error);
+            toast.error("An error occurred. Please try again.");
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const onBulkSubmit = async (data: BulkTransactionFormValues) => {

@@ -319,10 +319,11 @@ export function UnifiedTransactionsPage({
                 open={isSlideOpen}
                 onOpenChange={handleSlideClose}
                 mode="single"
+                editingId={(slideMode === 'edit' && selectedTxn) ? selectedTxn.id : undefined}
                 initialData={selectedTxn ? {
                     type: selectedTxn.type as any,
-                    occurred_at: new Date(selectedTxn.occurred_at),
-                    amount: Number(selectedTxn.amount),
+                    occurred_at: slideMode === 'duplicate' ? new Date() : new Date(selectedTxn.occurred_at),
+                    amount: Math.abs(Number(selectedTxn.amount)),
                     note: selectedTxn.note || '',
                     source_account_id: selectedTxn.account_id || '',
                     target_account_id: selectedTxn.to_account_id || undefined,
@@ -330,6 +331,9 @@ export function UnifiedTransactionsPage({
                     shop_id: selectedTxn.shop_id || undefined,
                     person_id: selectedTxn.person_id || undefined,
                     tag: selectedTxn.tag || undefined,
+                    cashback_mode: selectedTxn.cashback_mode || "none_back",
+                    cashback_share_percent: selectedTxn.cashback_share_percent,
+                    cashback_share_fixed: selectedTxn.cashback_share_fixed,
                 } : undefined}
                 accounts={accounts}
                 categories={categories}
