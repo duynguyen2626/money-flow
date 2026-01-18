@@ -9,6 +9,7 @@ import { MonthYearPicker } from './MonthYearPicker'
 import { cn } from '@/lib/utils'
 import { Account, Person } from '@/types/moneyflow.types'
 import { DateRange } from 'react-day-picker'
+import { PersonAvatar } from '@/components/ui/person-avatar'
 
 export type FilterType = 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer' | 'cashback'
 export type StatusFilter = 'active' | 'void' | 'pending'
@@ -94,22 +95,51 @@ export function TransactionToolbar({
         people.map(p => ({
             value: p.id,
             label: p.name,
-            icon: p.image_url ? (
-                <img
-                    src={p.image_url}
-                    alt={p.name}
-                    className="h-4 w-4 rounded-md object-cover"
-                />
-            ) : undefined
+            icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" className="rounded-md" />
         })),
         [people])
 
     const filterButtons = [
-        { id: 'all', label: 'All', addType: 'expense', colorClass: 'bg-slate-800 text-white hover:bg-slate-700', activeClass: 'ring-2 ring-slate-800 ring-offset-1' },
-        { id: 'income', label: 'In', addType: 'income', colorClass: 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100', activeClass: 'ring-2 ring-emerald-500 ring-offset-1 bg-emerald-100' },
-        { id: 'expense', label: 'Out', addType: 'expense', colorClass: 'text-rose-700 bg-rose-50 border-rose-200 hover:bg-rose-100', activeClass: 'ring-2 ring-rose-500 ring-offset-1 bg-rose-100' },
-        { id: 'lend', label: 'Lend', addType: 'debt', colorClass: 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100', activeClass: 'ring-2 ring-amber-500 ring-offset-1 bg-amber-100' },
-        { id: 'repay', label: 'Repay', addType: 'repayment', colorClass: 'text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100', activeClass: 'ring-2 ring-indigo-500 ring-offset-1 bg-indigo-100' },
+        {
+            id: 'all', label: 'All', addType: 'expense',
+            activeClass: 'ring-2 ring-slate-800 ring-offset-1',
+            activeColors: 'bg-slate-800 text-white hover:bg-slate-700',
+            hoverContainer: 'hover:border-slate-400 hover:bg-slate-50',
+            hoverText: 'group-hover:text-slate-800',
+            hoverPlus: 'group-hover:bg-slate-800 group-hover:text-white'
+        },
+        {
+            id: 'income', label: 'In', addType: 'income',
+            activeClass: 'ring-2 ring-emerald-500 ring-offset-1 bg-emerald-100',
+            activeColors: 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100',
+            hoverContainer: 'hover:border-emerald-400 hover:bg-emerald-50',
+            hoverText: 'group-hover:text-emerald-700',
+            hoverPlus: 'group-hover:bg-emerald-600 group-hover:text-white'
+        },
+        {
+            id: 'expense', label: 'Out', addType: 'expense',
+            activeClass: 'ring-2 ring-rose-500 ring-offset-1 bg-rose-100',
+            activeColors: 'text-rose-700 bg-rose-50 border-rose-200 hover:bg-rose-100',
+            hoverContainer: 'hover:border-rose-400 hover:bg-rose-50',
+            hoverText: 'group-hover:text-rose-700',
+            hoverPlus: 'group-hover:bg-rose-600 group-hover:text-white'
+        },
+        {
+            id: 'lend', label: 'Lend', addType: 'debt',
+            activeClass: 'ring-2 ring-amber-500 ring-offset-1 bg-amber-100',
+            activeColors: 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100',
+            hoverContainer: 'hover:border-amber-400 hover:bg-amber-50',
+            hoverText: 'group-hover:text-amber-700',
+            hoverPlus: 'group-hover:bg-amber-600 group-hover:text-white'
+        },
+        {
+            id: 'repay', label: 'Repay', addType: 'repayment',
+            activeClass: 'ring-2 ring-indigo-500 ring-offset-1 bg-indigo-100',
+            activeColors: 'text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100',
+            hoverContainer: 'hover:border-indigo-400 hover:bg-indigo-50',
+            hoverText: 'group-hover:text-indigo-700',
+            hoverPlus: 'group-hover:bg-indigo-600 group-hover:text-white'
+        },
     ] as const
 
     return (
@@ -198,8 +228,10 @@ export function TransactionToolbar({
                             <div
                                 key={btn.id}
                                 className={cn(
-                                    "flex items-center rounded-md overflow-hidden transition-all bg-muted/20 border-border",
-                                    isActive ? "shadow-sm ring-1 ring-slate-200" : "hover:bg-muted/40"
+                                    "group flex items-center rounded-md overflow-hidden transition-all border",
+                                    isActive
+                                        ? "border-transparent bg-muted/20 " + btn.activeClass
+                                        : "border-transparent " + btn.hoverContainer
                                 )}
                             >
                                 <button
@@ -207,18 +239,18 @@ export function TransactionToolbar({
                                     className={cn(
                                         baseClass,
                                         "px-2.5 text-xs font-bold rounded-l-md border-r-0",
-                                        isActive ? btn.colorClass : "text-muted-foreground hover:bg-muted"
+                                        isActive ? btn.activeColors : "text-muted-foreground " + btn.hoverText
                                     )}
                                 >
                                     {btn.label}
                                 </button>
-                                <div className={cn("w-[1px] h-4", isActive ? "bg-black/10" : "bg-border")} />
+                                <div className={cn("w-[1px] h-4", isActive ? "bg-black/10" : "bg-border/50 group-hover:bg-border")} />
                                 <button
                                     onClick={() => onAddWithState?.(btn.addType)}
                                     className={cn(
                                         baseClass,
-                                        "px-1.5 rounded-r-md border-l-0",
-                                        isActive ? btn.colorClass : "text-muted-foreground hover:bg-muted hover:text-primary"
+                                        "px-1.5 rounded-r-md border-l-0 transition-colors",
+                                        isActive ? btn.activeColors : "text-muted-foreground " + btn.hoverPlus
                                     )}
                                     title={`Add ${btn.label}`}
                                 >
