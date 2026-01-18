@@ -270,6 +270,11 @@ export function UnifiedTransactionsPage({
                 localStorage.setItem("mf_last_submitted_person_id", data.person_id);
             } catch (e) { console.error(e) }
         }
+        if (data?.account_id) {
+            try {
+                localStorage.setItem("mf_last_submitted_account_id", data.account_id);
+            } catch (e) { console.error(e) }
+        }
         router.refresh()
     }
 

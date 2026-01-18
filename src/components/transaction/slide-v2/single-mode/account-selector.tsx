@@ -31,15 +31,19 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     const personId = useWatch({ control: form.control, name: "person_id" });
 
     const [showAllAccounts, setShowAllAccounts] = useState(false);
-    const [lastSubmittedId, setLastSubmittedId] = useState<string | null>(null);
+    const [lastSubmittedPersonId, setLastSubmittedPersonId] = useState<string | null>(null);
+    const [lastSubmittedAccountId, setLastSubmittedAccountId] = useState<string | null>(null);
 
-    // Load last submitted person on mount
+    // Load last submitted person and account on mount
     useEffect(() => {
         try {
-            const saved = localStorage.getItem("mf_last_submitted_person_id");
-            if (saved) setLastSubmittedId(saved);
+            const savedPerson = localStorage.getItem("mf_last_submitted_person_id");
+            if (savedPerson) setLastSubmittedPersonId(savedPerson);
+
+            const savedAccount = localStorage.getItem("mf_last_submitted_account_id");
+            if (savedAccount) setLastSubmittedAccountId(savedAccount);
         } catch (e) {
-            console.error("Failed to load last submitted person", e);
+            console.error("Failed to load last submitted data", e);
         }
     }, []);
 
@@ -55,23 +59,35 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     const creditAccounts = validAccounts.filter(a => a.type === 'credit_card');
     const cashAccounts = validAccounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt');
 
+    // Helper to map account to item
+    const mapAccountToItem = (a: Account) => ({
+        value: a.id,
+        label: a.name,
+        icon: a.image_url ? <img src={a.image_url} alt="" className="w-4 h-4 object-contain rounded-sm" /> : undefined
+    });
+
+    // Recent Accounts Logic (Current + Last Submitted)
+    const sourceId = useWatch({ control: form.control, name: "source_account_id" });
+    const recentAccountItems: any[] = [];
+
+    // 1. Current Selection
+    const currentAcc = sourceId ? validAccounts.find(a => a.id === sourceId) : null;
+    if (currentAcc) recentAccountItems.push(mapAccountToItem(currentAcc));
+
+    // 2. Last Submitted (if valid and different)
+    const lastAcc = lastSubmittedAccountId ? validAccounts.find(a => a.id === lastSubmittedAccountId) : null;
+    if (lastAcc && lastAcc.id !== sourceId) recentAccountItems.push(mapAccountToItem(lastAcc));
+
     // Prepare Groups for Combobox
     const accountGroups: ComboboxGroup[] = [
+        ...(recentAccountItems.length > 0 ? [{ label: "Recent", items: recentAccountItems }] : []),
         ...(creditAccounts.length > 0 ? [{
             label: "Credit Cards",
-            items: creditAccounts.map(a => ({
-                value: a.id,
-                label: a.name,
-                icon: a.image_url ? <img src={a.image_url} alt="" className="w-4 h-4 object-contain" /> : undefined
-            }))
+            items: creditAccounts.map(mapAccountToItem)
         }] : []),
         {
             label: "Cash / Bank",
-            items: cashAccounts.map(a => ({
-                value: a.id,
-                label: a.name,
-                icon: a.image_url ? <img src={a.image_url} alt="" className="w-4 h-4 object-contain" /> : undefined
-            }))
+            items: cashAccounts.map(mapAccountToItem)
         }
     ];
 
@@ -85,7 +101,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     // Logic: 1. Current (if exists), 2. Last Submitted (if exists and != current)
     const recentItems: any[] = [];
     const validCurrent = personId ? peopleList.find(p => p.value === personId) : null;
-    const validLast = lastSubmittedId ? peopleList.find(p => p.value === lastSubmittedId) : null;
+    const validLast = lastSubmittedPersonId ? peopleList.find(p => p.value === lastSubmittedPersonId) : null;
 
     if (validCurrent) recentItems.push(validCurrent);
     if (validLast && validLast.value !== personId) recentItems.push(validLast);
