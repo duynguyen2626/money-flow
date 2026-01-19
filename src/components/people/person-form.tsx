@@ -9,7 +9,7 @@ import { Subscription } from '@/types/moneyflow.types'
 
 type PersonFormValues = {
   name: string
-  email?: string
+
   image_url?: string
   sheet_link?: string
   subscriptionIds: string[]
@@ -29,7 +29,7 @@ type PersonFormProps = {
 
 const schema = z.object({
   name: z.string().min(1, 'Name is required'),
-  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+
   image_url: z.string().url('Invalid image URL').optional().or(z.literal('')), // Changed from avatar_url and updated validation
   sheet_link: z.string().url('Invalid script link URL').optional().or(z.literal('')),
   subscriptionIds: z.array(z.string()),
@@ -78,7 +78,7 @@ export function PersonForm({
     resolver: zodResolver(schema),
     defaultValues: {
       name: initialValues?.name ?? '',
-      email: initialValues?.email ?? '',
+
       image_url: initialValues?.image_url ?? '', // Changed from avatar_url
       sheet_link: initialValues?.sheet_link ?? '',
       subscriptionIds: initialValues?.subscriptionIds ?? [],
@@ -164,15 +164,7 @@ export function PersonForm({
               {errors.name && <p className="text-sm text-rose-600">{errors.name.message}</p>}
             </div>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Email address</label>
-              <input
-                {...register('email')}
-                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                placeholder="jamie@example.com"
-              />
-              {errors.email && <p className="text-sm text-rose-600">{errors.email.message}</p>}
-            </div>
+
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-slate-700">Image URL</label> {/* Changed from Avatar URL */}

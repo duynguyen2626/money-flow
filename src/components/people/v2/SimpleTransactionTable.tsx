@@ -37,6 +37,7 @@ export function SimpleTransactionTable({
                 txn.id?.toLowerCase().includes(lowerTerm) ||
                 txn.category_name?.toLowerCase().includes(lowerTerm) ||
                 txn.shop_name?.toLowerCase().includes(lowerTerm) ||
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 (txn as any).person_name?.toLowerCase().includes(lowerTerm)
             )
         })

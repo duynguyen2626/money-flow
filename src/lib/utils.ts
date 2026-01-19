@@ -17,3 +17,9 @@ export function getAccountInitial(name: string) {
   const firstLetter = name?.trim().charAt(0)
   return firstLetter ? firstLetter.toUpperCase() : '?'
 }
+
+export function formatMoneyVND(amount: number) {
+  if (amount === 0) return '-';
+  // Format: 1.000 (no currency symbol)
+  return new Intl.NumberFormat('vi-VN').format(amount);
+}

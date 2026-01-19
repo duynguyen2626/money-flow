@@ -143,7 +143,7 @@ export function DebtTimeline({ cycles, availableYears, onCycleClick }: DebtTimel
                                 >
                                     {/* Month */}
                                     <span className={cn("text-xs font-bold uppercase tracking-wider", isActive ? "text-indigo-200" : isSettled ? "text-slate-400" : "text-slate-500")}>
-                                        {getMonthName(cycle.tag).toUpperCase()} '{cycle.tag.split('-')[0].slice(2)}
+                                        {getMonthName(cycle.tag).toUpperCase()} &apos;{cycle.tag.split('-')[0].slice(2)}
                                     </span>
 
                                     {/* Amount or Settled */}
