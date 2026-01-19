@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { User, ArrowUpRight, ArrowDownLeft, RefreshCcw, ArrowRightLeft, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,8 +28,24 @@ type AccountSelectorProps = {
 export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPerson }: AccountSelectorProps) {
     const form = useFormContext<SingleTransactionFormValues>();
     const type = useWatch({ control: form.control, name: "type" });
+    const personId = useWatch({ control: form.control, name: "person_id" });
 
     const [showAllAccounts, setShowAllAccounts] = useState(false);
+    const [lastSubmittedPersonId, setLastSubmittedPersonId] = useState<string | null>(null);
+    const [lastSubmittedAccountId, setLastSubmittedAccountId] = useState<string | null>(null);
+
+    // Load last submitted person and account on mount
+    useEffect(() => {
+        try {
+            const savedPerson = localStorage.getItem("mf_last_submitted_person_id");
+            if (savedPerson) setLastSubmittedPersonId(savedPerson);
+
+            const savedAccount = localStorage.getItem("mf_last_submitted_account_id");
+            if (savedAccount) setLastSubmittedAccountId(savedAccount);
+        } catch (e) {
+            console.error("Failed to load last submitted data", e);
+        }
+    }, []);
 
     // Filter accounts based on type and toggle
     const validAccounts = accounts.filter(a => {
@@ -43,32 +59,57 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
     const creditAccounts = validAccounts.filter(a => a.type === 'credit_card');
     const cashAccounts = validAccounts.filter(a => a.type !== 'credit_card' && a.type !== 'debt');
 
+    // Helper to map account to item
+    const mapAccountToItem = (a: Account) => ({
+        value: a.id,
+        label: a.name,
+        icon: a.image_url ? <img src={a.image_url} alt="" className="w-4 h-4 object-contain rounded-none" /> : undefined
+    });
+
+    // Recent Accounts Logic (Current + Last Submitted)
+    const sourceId = useWatch({ control: form.control, name: "source_account_id" });
+    const recentAccountItems: any[] = [];
+
+    // 1. Current Selection
+    const currentAcc = sourceId ? validAccounts.find(a => a.id === sourceId) : null;
+    if (currentAcc) recentAccountItems.push(mapAccountToItem(currentAcc));
+
+    // 2. Last Submitted (if valid and different)
+    const lastAcc = lastSubmittedAccountId ? validAccounts.find(a => a.id === lastSubmittedAccountId) : null;
+    if (lastAcc && lastAcc.id !== sourceId) recentAccountItems.push(mapAccountToItem(lastAcc));
+
     // Prepare Groups for Combobox
     const accountGroups: ComboboxGroup[] = [
+        ...(recentAccountItems.length > 0 ? [{ label: "Recent", items: recentAccountItems }] : []),
         ...(creditAccounts.length > 0 ? [{
             label: "Credit Cards",
-            items: creditAccounts.map(a => ({
-                value: a.id,
-                label: a.name,
-                icon: a.image_url ? <img src={a.image_url} alt="" className="w-4 h-4 object-contain" /> : undefined
-            }))
+            items: creditAccounts.map(mapAccountToItem)
         }] : []),
         {
             label: "Cash / Bank",
-            items: cashAccounts.map(a => ({
-                value: a.id,
-                label: a.name,
-                icon: a.image_url ? <img src={a.image_url} alt="" className="w-4 h-4 object-contain" /> : undefined
-            }))
+            items: cashAccounts.map(mapAccountToItem)
         }
     ];
 
-    // People Options
-    const peopleOptions = people.map(p => ({
+    // People Options & Groups
+    const peopleList = people.map(p => ({
         value: p.id,
         label: p.name,
-        icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" />
+        icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" className="rounded-none" />
     }));
+
+    // Logic: 1. Current (if exists), 2. Last Submitted (if exists and != current)
+    const recentItems: any[] = [];
+    const validCurrent = personId ? peopleList.find(p => p.value === personId) : null;
+    const validLast = lastSubmittedPersonId ? peopleList.find(p => p.value === lastSubmittedPersonId) : null;
+
+    if (validCurrent) recentItems.push(validCurrent);
+    if (validLast && validLast.value !== personId) recentItems.push(validLast);
+
+    const peopleGroups: ComboboxGroup[] = [
+        ...(recentItems.length > 0 ? [{ label: "Recent", items: recentItems }] : []),
+        { label: "All People", items: peopleList }
+    ];
 
     return (
         <div className="space-y-4 pt-2">
@@ -128,15 +169,24 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                                         className="w-full"
                                     >
                                         <TabsList className="grid w-full grid-cols-3 h-9 bg-slate-100/50">
-                                            <TabsTrigger value="expense" className="text-xs gap-1.5 data-[state=active]:bg-white data-[state=active]:text-red-600 data-[state=active]:shadow-sm">
+                                            <TabsTrigger
+                                                value="expense"
+                                                className="text-xs gap-1.5 data-[state=active]:bg-rose-50 data-[state=active]:text-rose-700 data-[state=active]:shadow-sm hover:text-rose-600 transition-colors"
+                                            >
                                                 <ArrowUpRight className="w-3.5 h-3.5" />
                                                 Expense
                                             </TabsTrigger>
-                                            <TabsTrigger value="income" className="text-xs gap-1.5 data-[state=active]:bg-white data-[state=active]:text-green-600 data-[state=active]:shadow-sm">
+                                            <TabsTrigger
+                                                value="income"
+                                                className="text-xs gap-1.5 data-[state=active]:bg-emerald-50 data-[state=active]:text-emerald-700 data-[state=active]:shadow-sm hover:text-emerald-600 transition-colors"
+                                            >
                                                 <ArrowDownLeft className="w-3.5 h-3.5" />
                                                 Income
                                             </TabsTrigger>
-                                            <TabsTrigger value="transfer" className="text-xs gap-1.5 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm">
+                                            <TabsTrigger
+                                                value="transfer"
+                                                className="text-xs gap-1.5 data-[state=active]:bg-blue-50 data-[state=active]:text-blue-700 data-[state=active]:shadow-sm hover:text-blue-600 transition-colors"
+                                            >
                                                 <ArrowRightLeft className="w-3.5 h-3.5" />
                                                 Transfer
                                             </TabsTrigger>
@@ -254,7 +304,7 @@ export function AccountSelector({ accounts, people, onAddNewAccount, onAddNewPer
                                     </div>
                                     <FormControl>
                                         <Combobox
-                                            items={peopleOptions}
+                                            groups={peopleGroups}
                                             value={field.value}
                                             onValueChange={field.onChange}
                                             placeholder="Select person"

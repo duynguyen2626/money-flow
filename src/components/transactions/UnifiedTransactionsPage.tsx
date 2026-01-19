@@ -58,6 +58,7 @@ export function UnifiedTransactionsPage({
     const [isSlideOpen, setIsSlideOpen] = useState(false)
     const [slideMode, setSlideMode] = useState<'add' | 'edit' | 'duplicate'>('add')
     const [selectedTxn, setSelectedTxn] = useState<TransactionWithDetails | null>(null)
+    const [slideOverrideType, setSlideOverrideType] = useState<string | undefined>(undefined)
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
     const [showUnsavedWarning, setShowUnsavedWarning] = useState(false)
     const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set())
@@ -210,6 +211,14 @@ export function UnifiedTransactionsPage({
 
     // Slide Handlers
     const handleAdd = () => {
+        setSlideOverrideType(undefined)
+        setSlideMode('add')
+        setSelectedTxn(null)
+        setIsSlideOpen(true)
+    }
+
+    const handleAddWithState = (type: string) => {
+        setSlideOverrideType(type)
         setSlideMode('add')
         setSelectedTxn(null)
         setIsSlideOpen(true)
@@ -222,6 +231,7 @@ export function UnifiedTransactionsPage({
     }
 
     const handleDuplicate = (t: TransactionWithDetails) => {
+        setSlideOverrideType(undefined)
         setSlideMode('duplicate')
         setSelectedTxn(t)
         setIsSlideOpen(true)
@@ -234,6 +244,7 @@ export function UnifiedTransactionsPage({
             setIsSlideOpen(false)
             setHasUnsavedChanges(false)
             setSelectedTxn(null)
+            setSlideOverrideType(undefined)
         }
     }
 
@@ -242,14 +253,27 @@ export function UnifiedTransactionsPage({
         setIsSlideOpen(false)
         setHasUnsavedChanges(false)
         setSelectedTxn(null)
+        setSlideOverrideType(undefined)
     }
 
     const handleSlideSuccess = (data?: any) => {
         setIsSlideOpen(false)
         setHasUnsavedChanges(false)
         setSelectedTxn(null)
+        setSlideOverrideType(undefined)
         if (data?.id) {
             setLoadingIds(prev => new Set(prev).add(data.id))
+        }
+        // Save last submitted person for recent logic
+        if (data?.person_id) {
+            try {
+                localStorage.setItem("mf_last_submitted_person_id", data.person_id);
+            } catch (e) { console.error(e) }
+        }
+        if (data?.account_id) {
+            try {
+                localStorage.setItem("mf_last_submitted_account_id", data.account_id);
+            } catch (e) { console.error(e) }
         }
         router.refresh()
     }
@@ -283,6 +307,15 @@ export function UnifiedTransactionsPage({
     }
 
     const initialSlideData = useMemo(() => {
+        if (slideOverrideType) {
+            return {
+                type: slideOverrideType as any,
+                occurred_at: new Date(),
+                amount: 0,
+                cashback_mode: "none_back" as const,
+                // Pass source_account_id preference? No, let V2 default to first account.
+            };
+        }
         if (!selectedTxn) return undefined;
         return {
             type: selectedTxn.type as any,
@@ -299,7 +332,7 @@ export function UnifiedTransactionsPage({
             cashback_share_percent: selectedTxn.cashback_share_percent,
             cashback_share_fixed: selectedTxn.cashback_share_fixed,
         };
-    }, [selectedTxn, slideMode]);
+    }, [selectedTxn, slideMode, slideOverrideType]);
 
     return (
         <div className="flex flex-col h-full bg-background/50">
@@ -334,6 +367,7 @@ export function UnifiedTransactionsPage({
                     onReset={handleReset}
 
                     onAdd={handleAdd}
+                    onAddWithState={handleAddWithState}
                 />
             </div>
 

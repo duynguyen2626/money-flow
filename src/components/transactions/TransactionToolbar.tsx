@@ -3,12 +3,13 @@
 import React from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Search, Plus, Trash2, CheckCircle2, Clock } from 'lucide-react'
+import { Search, Plus, Trash2, CheckCircle2, Clock, FilterX } from 'lucide-react'
 import { Combobox } from '@/components/ui/combobox' // Assuming generic usage
 import { MonthYearPicker } from './MonthYearPicker'
 import { cn } from '@/lib/utils'
 import { Account, Person } from '@/types/moneyflow.types'
 import { DateRange } from 'react-day-picker'
+import { PersonAvatar } from '@/components/ui/person-avatar'
 
 export type FilterType = 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer' | 'cashback'
 export type StatusFilter = 'active' | 'void' | 'pending'
@@ -45,6 +46,7 @@ interface TransactionToolbarProps {
     onReset?: () => void
 
     onAdd: () => void
+    onAddWithState?: (type: string) => void
     className?: string
 }
 
@@ -70,6 +72,7 @@ export function TransactionToolbar({
     hasActiveFilters,
     onReset,
     onAdd,
+    onAddWithState,
     className
 }: TransactionToolbarProps) {
 
@@ -92,21 +95,51 @@ export function TransactionToolbar({
         people.map(p => ({
             value: p.id,
             label: p.name,
-            icon: p.image_url ? (
-                <img
-                    src={p.image_url}
-                    alt={p.name}
-                    className="h-4 w-4 rounded-full object-cover"
-                />
-            ) : undefined
+            icon: <PersonAvatar name={p.name} imageUrl={p.image_url} size="sm" className="rounded-none" />
         })),
         [people])
 
-    const typeFilters = [
-        { id: 'income', label: 'In', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
-        { id: 'expense', label: 'Out', color: 'text-rose-700 bg-rose-50 border-rose-200' },
-        { id: 'lend', label: 'Lend', color: 'text-amber-700 bg-amber-50 border-amber-200' },
-        { id: 'repay', label: 'Repay', color: 'text-indigo-700 bg-indigo-50 border-indigo-200' },
+    const filterButtons = [
+        {
+            id: 'all', label: 'All', addType: 'expense',
+            activeClass: 'ring-2 ring-slate-800 ring-offset-1',
+            activeColors: 'bg-slate-800 text-white hover:bg-slate-700',
+            hoverContainer: 'hover:border-slate-400 hover:bg-slate-50',
+            hoverText: 'group-hover:text-slate-800',
+            hoverPlus: 'group-hover:bg-slate-800 group-hover:text-white'
+        },
+        {
+            id: 'income', label: 'In', addType: 'income',
+            activeClass: 'ring-2 ring-emerald-500 ring-offset-1 bg-emerald-100',
+            activeColors: 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100',
+            hoverContainer: 'hover:border-emerald-400 hover:bg-emerald-50',
+            hoverText: 'group-hover:text-emerald-700',
+            hoverPlus: 'group-hover:bg-emerald-600 group-hover:text-white'
+        },
+        {
+            id: 'expense', label: 'Out', addType: 'expense',
+            activeClass: 'ring-2 ring-rose-500 ring-offset-1 bg-rose-100',
+            activeColors: 'text-rose-700 bg-rose-50 border-rose-200 hover:bg-rose-100',
+            hoverContainer: 'hover:border-rose-400 hover:bg-rose-50',
+            hoverText: 'group-hover:text-rose-700',
+            hoverPlus: 'group-hover:bg-rose-600 group-hover:text-white'
+        },
+        {
+            id: 'lend', label: 'Lend', addType: 'debt',
+            activeClass: 'ring-2 ring-amber-500 ring-offset-1 bg-amber-100',
+            activeColors: 'text-amber-700 bg-amber-50 border-amber-200 hover:bg-amber-100',
+            hoverContainer: 'hover:border-amber-400 hover:bg-amber-50',
+            hoverText: 'group-hover:text-amber-700',
+            hoverPlus: 'group-hover:bg-amber-600 group-hover:text-white'
+        },
+        {
+            id: 'repay', label: 'Repay', addType: 'repayment',
+            activeClass: 'ring-2 ring-indigo-500 ring-offset-1 bg-indigo-100',
+            activeColors: 'text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100',
+            hoverContainer: 'hover:border-indigo-400 hover:bg-indigo-50',
+            hoverText: 'group-hover:text-indigo-700',
+            hoverPlus: 'group-hover:bg-indigo-600 group-hover:text-white'
+        },
     ] as const
 
     return (
@@ -150,14 +183,14 @@ export function TransactionToolbar({
                     </div>
                 </div>
 
-                {/* 3. Search (Flex) - Reduced Width */}
-                <div className="relative w-[180px] shrink-0">
+                {/* 3. Search (Flex) - Expanded Width */}
+                <div className="relative flex-1 min-w-[200px] shrink-0">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                         placeholder="Search..."
                         value={searchTerm}
                         onChange={(e) => onSearchChange(e.target.value)}
-                        className="pl-9 pr-8 h-9 text-xs bg-muted/30"
+                        className="pl-9 pr-8 h-9 text-xs bg-muted/30 w-full"
                     />
                     {searchTerm && (
                         <button
@@ -170,61 +203,62 @@ export function TransactionToolbar({
                     )}
                 </div>
 
-                {/* Reset Button (Always Show, Disabled if not active) */}
+                {/* Reset Button */}
                 {onReset && (
                     <button
                         onClick={onReset}
                         disabled={!hasActiveFilters}
                         className={cn(
                             "p-2 rounded-md transition-colors shrink-0",
-                            hasActiveFilters ? "hover:bg-gray-100 text-gray-600" : "text-gray-300 cursor-not-allowed"
+                            hasActiveFilters ? "hover:bg-slate-100 text-slate-600" : "text-slate-300 cursor-not-allowed"
                         )}
                         title="Reset Filters"
                     >
-                        <svg
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                            />
-                        </svg>
+                        <FilterX className="w-5 h-5" />
                     </button>
                 )}
 
-                {/* 4. Type Filters */}
-                <div className="flex items-center gap-1 shrink-0 bg-muted/20 p-1 rounded-lg ml-auto">
-                    {/* All Button */}
-                    <button
-                        onClick={() => onFilterChange('all')}
-                        className={cn(
-                            "px-2.5 py-1 text-xs font-bold rounded-md transition-all",
-                            filterType === 'all'
-                                ? "bg-slate-800 text-white shadow-sm"
-                                : "text-slate-500 hover:bg-slate-200/50"
-                        )}
-                    >
-                        All
-                    </button>
-                    {typeFilters.map(t => (
-                        <button
-                            key={t.id}
-                            onClick={() => onFilterChange(t.id)}
-                            className={cn(
-                                "px-2.5 py-1 text-xs font-bold rounded-md transition-all",
-                                filterType === t.id
-                                    ? t.color + " shadow-sm"
-                                    : "text-muted-foreground hover:bg-muted"
-                            )}
-                        >
-                            {t.label}
-                        </button>
-                    ))}
+                {/* 4. Type Filters (Split Buttons) */}
+                <div className="flex items-center gap-1 shrink-0 ml-auto">
+                    {filterButtons.map(btn => {
+                        const isActive = filterType === btn.id
+                        const baseClass = "h-8 flex items-center justify-center transition-all border border-transparent"
+
+                        return (
+                            <div
+                                key={btn.id}
+                                className={cn(
+                                    "group flex items-center rounded-md overflow-hidden transition-all border",
+                                    isActive
+                                        ? "border-transparent bg-muted/20 " + btn.activeClass
+                                        : "border-transparent " + btn.hoverContainer
+                                )}
+                            >
+                                <button
+                                    onClick={() => onFilterChange(btn.id as FilterType)}
+                                    className={cn(
+                                        baseClass,
+                                        "px-2.5 text-xs font-bold rounded-l-md border-r-0",
+                                        isActive ? btn.activeColors : "text-muted-foreground " + btn.hoverText
+                                    )}
+                                >
+                                    {btn.label}
+                                </button>
+                                <div className={cn("w-[1px] h-4", isActive ? "bg-black/10" : "bg-border/50 group-hover:bg-border")} />
+                                <button
+                                    onClick={() => onAddWithState?.(btn.addType)}
+                                    className={cn(
+                                        baseClass,
+                                        "px-1.5 rounded-r-md border-l-0 transition-colors",
+                                        isActive ? btn.activeColors : "text-muted-foreground " + btn.hoverPlus
+                                    )}
+                                    title={`Add ${btn.label}`}
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        )
+                    })}
                 </div>
 
                 {/* 5. Status & Add */}
