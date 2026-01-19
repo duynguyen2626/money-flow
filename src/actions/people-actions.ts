@@ -20,7 +20,7 @@ async function findOrCreateBankShop() {
 
 export type CreatePersonPayload = {
   name: string
-  email?: string | null
+
   image_url?: string | null
   sheet_link?: string | null
   subscriptionIds?: string[]
@@ -33,7 +33,7 @@ export type CreatePersonPayload = {
 export async function createPersonAction(payload: CreatePersonPayload) {
   const result = await createPerson(
     payload.name,
-    payload.email?.trim(),
+
     payload.image_url?.trim(),
     payload.sheet_link?.trim(),
     payload.subscriptionIds,
@@ -63,7 +63,7 @@ export async function ensureDebtAccountAction(personId: string, personName?: str
 
 export type UpdatePersonPayload = {
   name?: string
-  email?: string | null
+
   image_url?: string | null
   sheet_link?: string | null
   google_sheet_url?: string | null

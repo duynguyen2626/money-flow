@@ -123,7 +123,6 @@ export type Person = {
   id: string
   created_at?: string
   name: string
-  email?: string | null
   image_url?: string | null
 
   sheet_link?: string | null
@@ -145,6 +144,10 @@ export type Person = {
   current_cycle_debt?: number | null
   outstanding_debt?: number | null
   current_cycle_label?: string | null
+  // Breakdown
+  total_base_debt?: number | null
+  total_cashback?: number | null
+  total_net_debt?: number | null
 }
 
 export type SubscriptionMember = {

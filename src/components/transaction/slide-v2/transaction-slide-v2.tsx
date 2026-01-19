@@ -148,7 +148,7 @@ export function TransactionSlideV2({
         });
 
         return () => subscription.unsubscribe();
-    }, [open, singleForm, defaultFormValues, onHasChanges]);
+    }, [open, defaultFormValues, singleForm, onHasChanges]);
 
     const onSingleSubmit = async (data: SingleTransactionFormValues) => {
         const payload = {

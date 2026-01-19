@@ -1,4 +1,6 @@
 'use server'
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 
 import { randomUUID } from 'crypto'
 import { createClient } from '@/lib/supabase/server'
@@ -100,7 +102,7 @@ async function createDebtAccountForPerson(
 
 export async function createPerson(
   name: string,
-  email?: string,
+
   image_url?: string,
   sheet_link?: string,
   subscriptionIds?: string[],
@@ -122,7 +124,7 @@ export async function createPerson(
   const personPayload: PersonInsert & { is_archived?: boolean | null } = {
     id: randomUUID(),
     name: trimmedName,
-    email: email?.trim() || null,
+
     image_url: image_url?.trim() || null,
     sheet_link: sheet_link?.trim() || null,
     is_owner: (opts?.is_owner ?? null) as any,
@@ -664,6 +666,13 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
     const personFifoDebts = monthlyDebtsByPerson.get(person.id) ?? []
     const fifoTotalRemaining = personFifoDebts.reduce((sum, d) => sum + d.amount, 0)
 
+    // Breakdown Stats (Lifetime)
+    // We sum up the aggregates from monthly buckets to get the total history for this person
+    const totalNetLend = personFifoDebts.reduce((sum, d) => sum + (d.total_debt || 0), 0)
+    const totalCashback = personFifoDebts.reduce((sum, d) => sum + (d.total_cashback || 0), 0)
+    // Base Lend = Net + Cashback
+    const totalBaseLend = totalNetLend + totalCashback
+
     // Identify Current Cycle Amount in FIFO
     // We match tag or date
     const fifoCurrentCycle = personFifoDebts
@@ -701,6 +710,9 @@ export async function getPeople(options?: { includeArchived?: boolean }): Promis
       current_cycle_debt: fifoCurrentCycle,
       outstanding_debt: outstandingDebt,
       current_cycle_label: currentCycleLabel,
+      total_base_debt: totalBaseLend,
+      total_cashback: totalCashback,
+      total_net_debt: totalNetLend,
       subscription_count: subs.length,
       subscription_ids: subs.map(s => s.id), // Keep for backward compatibility if needed
       subscription_details: subs, // Now includes image_url
@@ -779,7 +791,7 @@ export async function updatePerson(
   id: string,
   data: {
     name?: string
-    email?: string | null
+
     image_url?: string | null
     sheet_link?: string | null
     google_sheet_url?: string | null
@@ -801,7 +813,7 @@ export async function updatePerson(
     typeof data.google_sheet_url === 'undefined' ? undefined : data.google_sheet_url?.trim() || null
 
   if (typeof data.name === 'string') payload.name = data.name.trim()
-  if (typeof data.email !== 'undefined') payload.email = data.email?.trim() || null
+
   if (typeof data.image_url !== 'undefined') payload.image_url = data.image_url?.trim() || null
   if (normalizedSheetLink !== undefined) payload.sheet_link = normalizedSheetLink
   if (normalizedGoogleSheetUrl !== undefined) payload.google_sheet_url = normalizedGoogleSheetUrl

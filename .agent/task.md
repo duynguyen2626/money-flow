@@ -196,8 +196,66 @@ Current build includes fully functional Transaction Slide V2 with Single and Bul
   - ✅ Resizing support (input based)
 - ✅ Fixed infinite loop issues in Transaction Slide
 
+### Phase 2A: Table Expand/Collapse Details (ROLLED BACK)
+- [x] Initial implementation (Successfully rolled back per user request)
+
+### Phase 2B: People Refactor - Directory & Slide V2 (Active)
+- [x] Initialize feature branch `feature/phase-2b-people-refactor-v2`
+- [x] Implement `PeopleDirectoryV2` at `/people/v2`
+  - [x] Header with " +Add " button
+  - [x] Filters (Outstanding, Settled, Archived, Groups)
+  - [x] Search functionality
+  - [x] Implement `PeopleDirectoryV2` at `/people/v2`
+  - [x] Header with " +Add " button
+  - [x] Filters (Outstanding, Settled, Archived, Groups)
+  - [x] Search functionality
+  - [x] "All Members" Table View
+- [x] Create Table Architecture
+  - [x] `PeopleTableV2` component
+  - [x] `PeopleRowV2` component
+  - [x] `PeopleRowDetailsV2` component
+  - [x] Hooks: `usePeopleColumnPreferences`, `usePeopleExpandableRows`
+- [x] Develop `PeopleSlideV2`
+  - [x] Individual person editing
+  - [x] New person creation
+- [x] Update Navigation
+  - [x] Add new left nav icon for People V2
+- [ ] Verify build and lint
+
+### Phase 2B Enhancement: People UI/UX Refinements
+- [ ] **Phase 1: Critical & Major**
+  - [x] **Issue #1: Avatar Radius** (UI Polish)
+    - [x] Update `PeopleRow.tsx` avatar style (rounded-md/6px)
+  - [x] **Issue #5: Remove Email Column** (DB + UI)
+    - [x] Remove email from `Person` type
+    - [x] Remove from `PeopleTable` columns
+    - [x] Remove from Add/Edit Slides
+  - [x] **Issue #3: Debt Calculation**
+    - [x] Calculate total debt in `PeopleRow` (current + previous)
+    - [x] Show debt-badge in 'Remains' column
+    - [x] Calculate total debt in `PeopleRow` (current + previous)
+    - [x] Show debt-badge in 'Remains' column
+    - [x] Update `PeopleRowDetails` to show breakdown
+- [ ] **Phase 1 Fixes (User Feedback)**
+  - [x] **Fix Status Logic**: Use `totalDebt` for "Settled" check (Issue: Green badge on 35M debt).
+  - [x] **Add Breakdown Columns**: Add Base Lend, Sum Back, Net Lend columns to `PeopleRowV2`.
+  - [x] **Formatting**: Remove 'đ', use '-' for zero.
+- [ ] **Phase 2: Major Features**
+  - [x] **Issue #4: Quick Action Buttons**
+    - [x] Add "Lend" (Wallet) button to `PeopleRowV2`
+    - [x] Add "Repay" (Check) button to `PeopleRowV2`
+    - [x] Connect to `TransactionSlideV2` with pre-filled data
+  - [x] **Issue #2: Subscribe Details**
+    - [x] Add `active_subs` column to `usePeopleColumnPreferences`
+    - [x] Create `SubscriptionBadges` component with icons/counts
+    - [x] Render in `PeopleRowV2`
+  - [x] **Issue #9: Sheet Link Badges**
+    - [x] Add "SHEET" badge next to name in `PeopleRowV2`
+    - [x] Link to `google_sheet_url`
+
+
 ---
 
-**Last Updated**: 2026-01-18
-**Current Build**: Transaction Slide V2 + Unified Table Customization
-**Next Milestone**: Phase 2 - Cards Integration
+**Last Updated**: 2026-01-19
+**Current Build**: Stability Fixes
+**Next Milestone**: Phase 2A - Table Expand/Collapse
