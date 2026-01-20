@@ -1,10 +1,10 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 5.7 (MANUAL SAFE MODE)
-// Last Updated: 2026-01-20 17:25 ICT
-// Scope: Data Safety Override.
+// VERSION: 5.8 (OFFSET MERGE)
+// Last Updated: 2026-01-20 17:30 ICT
+// Scope: Data Safety & Deduplication.
 //        - Rewrite Strategy: Protects Manual Data.
-//        - Smart Merge: DISABLED DELETION (Only flags potential dup in Note).
-//        - Result: DUPLICATES PRESERVED for safety.
+//        - Smart Merge v5.8: NEUTRALIZE matching Manual Rows (Set I = F) instead of destroying them.
+//        - Result: Manual Rows Visible (J=0), App Row Valid.
 //        - Protect Manual Data: Insert/Delete only within System Logic.
 //        - F: Absolute Value (Positive).
 //        - J: Text-safe formula with SUBSTITUTE/VALUE.
