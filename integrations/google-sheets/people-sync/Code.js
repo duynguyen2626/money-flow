@@ -1,7 +1,9 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 5.3 (F-ABS & J-FORMULA OPT)
-// Last Updated: 2026-01-20 15:00 ICT
-// Scope: Build fix & Formula Update.
+// VERSION: 5.4 (MANUAL DATA SAFETY)
+// Last Updated: 2026-01-20 17:05 ICT
+// Scope: Sync logic fixes.
+//        - STRICT ID Check: Only treat rows with ID as System Rows.
+//        - Protect Manual Data: Insert/Delete only within System Logic.
 //        - F: Absolute Value (Positive).
 //        - J: Text-safe formula with SUBSTITUTE/VALUE.
 //        - Sorting: Use sheet.getLastRow(), Add Sleep for consistency.
@@ -132,23 +134,22 @@ function handleSyncTransactions(payload) {
 
     setupNewSheet(sheet, syncOptions.summaryOptions);
 
-    // INTELLIGENT SYNC: Preserve Manual Rows
-    var currentLastAutoRow = getLastDataRow(sheet);
-    var currentAutoCount = Math.max(0, currentLastAutoRow - 1);
+    setupNewSheet(sheet, syncOptions.summaryOptions);
+
+    // INTELLIGENT SYNC: Preserve Manual Rows (Strict ID Check)
+    var currentLastSystemRow = getLastSystemRow(sheet);
+    var currentSystemCount = Math.max(0, currentLastSystemRow - 1);
     var newCount = transactions.length;
 
-    if (newCount > currentAutoCount) {
-        // We have MORE auto rows than before. 
-        // Insert rows AFTER the last auto row to push manual data down.
-        // If currentLastAutoRow is 1 (header only), we insert after 1 so updates start at row 2.
-        sheet.insertRowsAfter(currentLastAutoRow, newCount - currentAutoCount);
-    } else if (newCount < currentAutoCount) {
-        // We have FEWER auto rows.
-        // Delete excess auto rows to pull manual data up.
-        // Delete from (2 + newCount) to end of old auto block.
-        // e.g. Old=5 (Rows 2-6), New=3. Keep 2,3,4. Delete 5,6.
-        // Start index = 2 + 3 = 5. Quantity = 5 - 3 = 2.
-        sheet.deleteRows(2 + newCount, currentAutoCount - newCount);
+    if (newCount > currentSystemCount) {
+        // We have MORE system rows than before. 
+        // Insert rows AFTER the last system row to push manual data down.
+        sheet.insertRowsAfter(currentLastSystemRow, newCount - currentSystemCount);
+    } else if (newCount < currentSystemCount) {
+        // We have FEWER system rows.
+        // Delete excess system rows. (Pull manual data up)
+        // Rows to delete start from (2 + newCount).
+        sheet.deleteRows(2 + newCount, currentSystemCount - newCount);
     }
     // If counts equal, no structural change needed, just overwrite.
 
@@ -200,7 +201,8 @@ function handleSyncTransactions(payload) {
         }
     }
 
-    applyBordersAndSort(sheet, syncOptions.summaryOptions);
+    // Pass system row count to prevent sorting manual data
+    applyBordersAndSort(sheet, syncOptions.summaryOptions, validTxns.length);
     applySheetImage(sheet, syncOptions.imgUrl, syncOptions.imgProvided, syncOptions.summaryOptions);
     return jsonResponse({ ok: true, syncedCount: validTxns.length, sheetId: ss.getId(), tabName: sheet.getName() });
 }
@@ -232,10 +234,10 @@ function handleSingleTransaction(payload, action) {
     if (rowIndex > 0) {
         targetRow = rowIndex;
     } else {
-        // Insert new row after last AUTO row to shift manual data down
-        var lastAutoRow = getLastDataRow(sheet);
-        sheet.insertRowAfter(lastAutoRow);
-        targetRow = lastAutoRow + 1;
+        // Insert new row after last SYSTEM row to shift manual data down
+        var lastSystemRow = getLastSystemRow(sheet);
+        sheet.insertRowAfter(lastSystemRow);
+        targetRow = lastSystemRow + 1;
         isNew = true;
     }
 
@@ -261,40 +263,42 @@ function handleSingleTransaction(payload, action) {
     return jsonResponse({ ok: true, action: action });
 }
 
-function getLastDataRow(sheet) {
+// INTELLIGENT SYNC: STRICT ID CHECK
+function getLastSystemRow(sheet) {
     try {
         var lastRow = sheet.getLastRow();
         if (lastRow < 2) return 1;
-        // Fetch ID (A), Type (B), Date (C)
-        var vals = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
-        // Scan backwards for first non-empty ID OR Date
+        // Fetch ID (A) only. Manual rows usually don't have System IDs.
+        var vals = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        // Scan backwards for first non-empty ID
         for (var i = vals.length - 1; i >= 0; i--) {
             var hasId = vals[i][0] !== "" && vals[i][0] != null;
-            var hasDate = vals[i][2] !== "" && vals[i][2] != null;
-            if (hasId || hasDate) return i + 2;
+            if (hasId) return i + 2;
         }
         return 1;
     } catch (e) { return 1; }
 }
 
-function applyBordersAndSort(sheet, summaryOptions) {
-    // 1. DATA STYLING & SORTING (Only if data exists)
-    // Robustness: Use physical last row to ensure NO data is missed from sorting range.
-    // Empty rows (due to Summary table height) will just be sorted to bottom.
-    var lastAutoRow = sheet.getLastRow();
+function applyBordersAndSort(sheet, summaryOptions, systemRowCount) {
+    // 1. DATA STYLING & SORTING (Only System Rows)
+    // If systemRowCount is not provided, use getLastSystemRow to guess.
+    var lastSortRow = systemRowCount ? (systemRowCount + 1) : getLastSystemRow(sheet);
 
-    if (lastAutoRow >= 2) {
+    if (lastSortRow >= 2) {
         clearImageMerges(sheet);
-        var rowCount = lastAutoRow - 1;
+        var rowCount = lastSortRow - 1;
 
         // FORCE COMMIT before sorting to ensure new values are registered
-        // Add minimal delay to ensure Sheet DB consistency
         Utilities.sleep(300);
         SpreadsheetApp.flush();
 
         var dataRange = sheet.getRange(2, 1, rowCount, 15);
         // Robust Sort: Date (Col 3) ASC, then ID (Col 1) ASC
         dataRange.sort([{ column: 3, ascending: true }, { column: 1, ascending: true }]);
+
+        // ... (VLOOKUP & Formatting for System Rows Only)
+        // ...
+
 
         var arrD = new Array(rowCount);
         for (var i = 0; i < rowCount; i++) {
