@@ -135,7 +135,9 @@ function handleSyncTransactions(payload) {
         // Filter rows that have NO ID (Col A is empty) but HAVE Data (Date or Amount or Note)
         for (var i = 0; i < currentData.length; i++) {
             var row = currentData[i];
-            var hasId = row[0] && row[0].toString().trim() !== "";
+            var idVal = (row[0] || "").toString().trim();
+            // CRITICAL: System IDs are UUIDs (long). Short/empty = Manual Row.
+            var hasId = idVal.length > 5;
             // ROBUST CHECK: Treat as Manual if NO ID. 
             // Even if data seems sparse, if it has a Note or Amount, keep it.
             var hasData = row[2] || row[4] || row[5] || (row[7] && row[7] !== 0);
