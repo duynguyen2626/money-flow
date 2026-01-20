@@ -1,10 +1,10 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 5.6 (SUM-SMART MERGE)
-// Last Updated: 2026-01-20 17:20 ICT
-// Scope: Data Safety & Deduplication.
-//        - Rewrite Strategy: Protects Manual Data by reading & rewriting.
-//        - Smart Merge: Auto-links 1-to-1 or Sum-Based Matches (Day Level).
-//        - Protect Manual Data: Insert/Delete only within System Logic.
+// VERSION: 5.7 (MANUAL SAFE MODE)
+// Last Updated: 2026-01-20 17:25 ICT
+// Scope: Data Safety Override.
+//        - Rewrite Strategy: Protects Manual Data.
+//        - Smart Merge: DISABLED DELETION (Only flags potential dup in Note).
+//        - Result: DUPLICATES PRESERVED for safety.
 //        - Protect Manual Data: Insert/Delete only within System Logic.
 //        - F: Absolute Value (Positive).
 //        - J: Text-safe formula with SUBSTITUTE/VALUE.
