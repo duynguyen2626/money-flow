@@ -382,18 +382,19 @@ function renderCell(account: Account, key: string, actions: any, familyBalance?:
             let rulesDetails: any[] = [];
 
             // Handle legacy structure (categoryRules at root)
-            if (cashbackConfig?.categoryRules) {
-                ruleCount = Object.keys(cashbackConfig.categoryRules).length;
-                rulesDetails = Object.entries(cashbackConfig.categoryRules).map(([catId, rule]: [string, any]) => ({
+            const config = account.cashback_config as any;
+            if (config?.categoryRules) {
+                ruleCount = Object.keys(config.categoryRules).length;
+                rulesDetails = Object.entries(config.categoryRules).map(([catId, rule]: [string, any]) => ({
                     level: 'Legacy',
                     rate: rule.rate,
                     desc: `${(rule.rate * 100).toFixed(1)}%`
                 }));
             }
             // Handle new structure (program.levels -> rules)
-            else if (cashbackConfig?.program?.levels) {
+            else if (config?.program?.levels) {
                 // Sum up rules across all levels
-                cashbackConfig.program.levels.forEach((lvl: any) => {
+                config.program.levels.forEach((lvl: any) => {
                     if (lvl.rules) {
                         lvl.rules.forEach((r: any) => {
                             ruleCount++;

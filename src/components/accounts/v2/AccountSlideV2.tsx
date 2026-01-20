@@ -597,7 +597,7 @@ export function AccountSlideV2({
                                                             value={rule.categoryId}
                                                             onValueChange={(val) => {
                                                                 const newRules = [...categoryRules];
-                                                                newRules[idx].categoryId = val;
+                                                                newRules[idx].categoryId = val ?? "";
                                                                 setCategoryRules(newRules);
                                                             }}
                                                             items={categories.map(c => ({ value: c.id || '', label: c.name || 'Unknown' }))}
