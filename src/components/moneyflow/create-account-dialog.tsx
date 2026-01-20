@@ -401,6 +401,11 @@ type CreateAccountDialogProps = {
   onOpenChange?: (open: boolean) => void
 }
 
+type StatusMessage = {
+  text: string
+  variant: 'success' | 'error'
+} | null
+
 // ...
 
 export function CreateAccountDialog({ collateralAccounts = [], creditCardAccounts = [], trigger, open: controlledOpen, onOpenChange }: CreateAccountDialogProps) {
@@ -457,10 +462,10 @@ export function CreateAccountDialog({ collateralAccounts = [], creditCardAccount
   }, [])
 
   const isCreditCard = accountType === 'credit_card'
-  const isAssetAccount = ASSET_TYPES.includes(accountType)
+  const isAssetAccount = ASSET_TYPES.includes(accountType as any)
 
   const collateralOptions = useMemo(
-    () => collateralAccounts.filter(candidate => ASSET_TYPES.includes(candidate.type)),
+    () => collateralAccounts.filter(candidate => ASSET_TYPES.includes(candidate.type as any)),
     [collateralAccounts]
   )
 

@@ -134,10 +134,8 @@ export function ColumnCustomizer({
 }: ColumnCustomizerProps) {
     const sensors = useSensors(
         useSensor(PointerSensor, {
-            activation: {
-                constraint: {
-                    distance: 5,
-                },
+            activationConstraint: {
+                distance: 5,
             },
         }),
         useSensor(KeyboardSensor, {

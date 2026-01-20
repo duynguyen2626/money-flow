@@ -254,8 +254,64 @@ Current build includes fully functional Transaction Slide V2 with Single and Bul
     - [x] Link to `google_sheet_url`
 
 
+### Phase 4: Account Details Restoration & Directory UI Overhaul (Complete ✅)
+- [x] **Account Details Restoration**
+  - [x] Restore async data fetching (Batch, Cashback, Txns)
+  - [x] Integrate V1 components: `AccountDetailHeader`, `AccountTabs`, `FilterableTransactions`
+  - [x] Wrap in `TagFilterProvider`
+- [x] **Account Directory V2 UI Overhaul**
+  - [x] Implement 3-way toggle switch (Active - Debt - Closed) in Header
+  - [x] Update Table Columns (Remove Code/Status/Update/Sheet, Add Limit, Rename Total->Balance)
+  - [x] Implement Image aspect ratio fix
+  - [x] Add Parent/Child badges and logic
+  - [x] Implement Spent Column with Cashback Progress Bar
+  - [x] Implement Due Column with "X Days Left" logic
+  - [x] Merge Unsecured/Secured logic
+  - [x] Implement Family Balance aggregation
+  - [x] Increase Action icon sizes and add visibility logic
+
+### Phase 5: Account Directory Enhancements & Relationship Links (Completed)
+- [x] **UI & Formatting Refinements**
+  - [x] Delete "Members" column from Table
+  - [x] Increase "Balance" and "Spent" column widths
+  - [x] Format Balance/Spent to show full numbers (no "M" suffix)
+  - [x] Improve Spent color styling (emerald/amber) and remove pulse animation
+- [x] **Logic & Visibility**
+  - [x] Update Parent badge: `Parent +X` logic for multi-child accounts
+  - [x] Expanded Row: Add Account links with logos for secured/parent/child relations
+- [x] **Consolidated Edit Flow**
+  - [x] Change Edit button to open a full Side Slide-over
+  - [x] Merge Advanced settings (Cashback, Statement Days) into main Edit Slide
+
+### Phase 6: Deep Polish, Relationship Visualization & Advanced Filtering (Completed)
+- [x] **Main Table Polish**
+  - [x] Rename groups to Credit / Loans & Debt / Accounts & Savings
+  - [x] Merge "Secured" into Name column (Sub-text + icon)
+  - [x] Align Parent/Child badges (fixed width, right align)
+  - [x] Swap Due Date hierarchy (X days left primary)
+  - [x] Add Limit progress bar (Debt/Limit ratio)
+  - [x] Implement row highlighting (Red/Yellow)
+  - [x] Unified "Credit" summary with aggregate progress bar
+- [x] **Relationship Expansion**
+  - [x] List related accounts vertically in Name cell when expanded
+- [x] **Details Page Redesign**
+  - [x] Redesign toolbar in `FilterableTransactions.tsx`
+  - [x] Add People & Date range quick filters (Unified Bar)
+  - [x] Move Settings to `AccountSlideV2`
+- [x] **Bug Fixes**
+  - [x] Fix Debt tab list filtering (include loans/debt)
+  - [x] Correct group sums for Credit group (Debt/Limit)
+  - [x] Fix all TypeScript errors across V2 components
+
 ---
 
-**Last Updated**: 2026-01-19
-**Current Build**: Stability Fixes
-**Next Milestone**: Phase 2A - Table Expand/Collapse
+### Phase 10: Final Polish & Handover (Current Status: Partial/Handover)
+- [x] **Attempted Fixes (Phase 10g/h)**
+  - [x] **Secured Unknown**: Tried creating backing account in DB. Status: **FAIL** (Still showing Unknown).
+  - [x] **Copy ID**: Tried cleaning up string. Status: **FAIL** (User reports weird characters).
+  - [x] **Cashback**: Tried updating JSON config. Status: **FAIL** (VPBank Lady still showing dash).
+- [x] **Documentation**
+  - [x] Create Handover documentation in .agent/HANDOVER.md
+  - [x] Update sample.sql with latest attempts
+  - [x] Commit and Push
+

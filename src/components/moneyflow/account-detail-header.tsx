@@ -41,7 +41,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
 import { AddTransactionDialog } from './add-transaction-dialog'
-import { EditAccountDialog } from './edit-account-dialog'
+import { AccountSlideV2 } from '@/components/accounts/v2/AccountSlideV2'
 import { TransactionTrigger } from '@/components/transaction/slide-v2/transaction-trigger'
 
 type PendingBatchItem = {
@@ -94,6 +94,7 @@ export function AccountDetailHeader({
   const [isConfirmingPending, setIsConfirmingPending] = useState(false)
   const [pendingRefundAmount, setPendingRefundAmount] = useState(0)
   const [isPendingLoading, setIsPendingLoading] = useState(false)
+  const [isSlideOpen, setIsSlideOpen] = useState(false)
   const numberFormatter = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 })
 
   const fetchBatchStats = useCallback(async () => {
@@ -423,16 +424,12 @@ export function AccountDetailHeader({
               </div>
             }
           />
-          <EditAccountDialog
-            account={account}
-            collateralAccounts={savingsAccounts}
-            accounts={allAccounts}
-            triggerContent={
-              <div className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-600 hover:text-slate-700 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer">
-                <Settings className="w-3 h-3" />Settings
-              </div>
-            }
-          />
+          <div
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 hover:border-slate-300 hover:bg-slate-100 text-slate-600 hover:text-slate-700 text-[10px] font-bold uppercase tracking-wider transition-colors cursor-pointer"
+            onClick={() => setIsSlideOpen(true)}
+          >
+            <Settings className="w-3 h-3" />Settings
+          </div>
           {hasPending && waitingAmount > 0 && (
             <button
               onClick={handleConfirmPending}
@@ -635,6 +632,11 @@ export function AccountDetailHeader({
           </div>
         )
       }
+      <AccountSlideV2
+        open={isSlideOpen}
+        onOpenChange={setIsSlideOpen}
+        account={account}
+      />
     </div >
   )
 }

@@ -1,23 +1,22 @@
-INSERT INTO "public"."categories" ("id",
-                                   "name",
-                                   "type",
-                                   "icon",
-                                   "mcc_codes",
-                                   "image_url",
-                                   "kind")
-VALUES ('e0000000-0000-0000-0000-000000000089', 'Lending', 'expense', '💸', NULL, 'https://img.icons8.com/color/48/borrow-book.png', ARRAY["ex"]),
-       ('e0000000-0000-0000-0000-000000000095', 'Refund', 'income', '↩️', NULL, 'https://cdn-icons-png.flaticon.com/128/1585/1585145.png', ARRAY["ex"]),
-       ('e0000000-0000-0000-0000-000000000001', 'Food & Drink', 'expense', NULL, ARRAY["5812","5814"], 'https://img.icons8.com/color/48/hamburger.png', ARRAY["ex"]),
-       ('e0000000-0000-0000-0000-000000000088', 'Online Services', 'expense', '☁️', NULL, 'https://img.icons8.com/fluency/48/cloud-sync.png', ARRAY["ex"]),
-       ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a99', 'Shopping', 'expense', '🛍️', NULL, 'https://img.icons8.com/fluency/48/shopping-bag.png', ARRAY["ex"]),
-       ('dac6e2f4-12a0-41f2-89dd-8d597854bbe6', 'Subscriptions', 'expense', NULL, NULL, NULL, ARRAY["ex"]),
-       ('e0000000-0000-0000-0000-000000000002', 'Utilities', 'expense', NULL, NULL, 'https://img.icons8.com/color/48/electricity.png', ARRAY["ex"]),
-       ('e0000000-0000-0000-0000-000000000003', 'Income', 'income', NULL, NULL, 'https://img.icons8.com/color/48/money-bag.png', ARRAY["ex"]),
-       ('e0000000-0000-0000-0000-000000000098', 'Adjustment', 'expense', '🎁', NULL, 'https://img.icons8.com/color/48/request-money.png', ARRAY["ex"]),
-       ('e0000000-0000-0000-0000-000000000099', 'Other Expense', 'expense', '📝', NULL, NULL, ARRAY["ex"]),
-       ('e0000000-0000-0000-0000-000000000096', 'Debt Repayment', 'income', '🤝', NULL, 'https://img.icons8.com/fluency/48/handshake.png', ARRAY["in"]),
-       ('405a25bf-f106-41aa-9414-b1a8c9862069', 'Repayment', 'income', NULL, NULL, NULL, ARRAY["in"]),
-       ('e0000000-0000-0000-0000-000000000092', 'Hoàn tiền (Cashback)', 'income', '💰', NULL, NULL, ARRAY["in"]),
-       ('e0000000-0000-0000-0000-000000000090', 'Transfer', 'transfer', '💸', NULL, 'https://img.icons8.com/color/48/switch.png', ARRAY["in"]),
-       ('e0000000-0000-0000-0000-000000000091', 'Credit Payment', 'transfer', '💳', NULL, 'https://img.icons8.com/color/48/credit-card.png', ARRAY["in"]),
-       ('e0000000-0000-0000-0000-000000000080', 'Money Transfer', 'transfer', '💸', NULL, 'https://img.icons8.com/fluency/48/money-transfer.png', ARRAY["in"]);
+
+/*Secured account*/
+INSERT INTO public.accounts
+(id, "name", "type", currency, credit_limit, current_balance, owner_id, cashback_config, is_active, created_at, secured_by_account_id, image_url, parent_account_id, total_in, total_out, annual_fee, cashback_config_version, receiver_name, account_number)
+VALUES('9527c56a-81c6-438f-b470-93cb80cace08'::uuid, 'Sổ TK đảm bảo cho Exim Violet', 'savings'::public."account_type", 'VND', 0.00, 0.00, '917455ba-16c0-42f9-9cea-264f81a3db66'::uuid, NULL, true, '2025-11-30 19:04:42.646', NULL, 'https://img.icons8.com/color/48/safe.png', NULL, 0.00, 0.00, 0.00, 1, NULL, NULL);
+
+/*Credit card*/
+INSERT INTO public.accounts
+(id, "name", "type", currency, credit_limit, current_balance, owner_id, cashback_config, is_active, created_at, secured_by_account_id, image_url, parent_account_id, total_in, total_out, annual_fee, cashback_config_version, receiver_name, account_number)
+VALUES('fb1ba42e-04d1-4321-944d-1803049a57ab'::uuid, 'Exim Violet', 'credit_card'::public."account_type", 'VND', 18000000.00, 1669920.00, '917455ba-16c0-42f9-9cea-264f81a3db66'::uuid, '{"program": {"levels": [], "dueDate": null, "cycleType": "calendar_month", "maxBudget": 300000, "defaultRate": 0.1, "statementDay": null, "minSpendTarget": 3000000}, "parentAccountId": null}'::jsonb, true, '2025-11-30 19:04:42.646', '9527c56a-81c6-438f-b470-93cb80cace08'::uuid, 'https://res.cloudinary.com/dpnrln3ug/image/upload/v1763789710/the-tin-dung-quoc-te-eximbank-visa-violet_ucx2sa.jpg', NULL, 0.00, -1669920.00, 499000.00, 2, 'NGUYEN THI THAO TRANG', '220310501000217')
+ON CONFLICT (id) DO UPDATE SET secured_by_account_id = '9527c56a-81c6-438f-b470-93cb80cace08'::uuid;
+
+/* Secured Saving Account (Mock for Exim Violet) */
+INSERT INTO public.accounts
+(id, "name", "type", currency, credit_limit, current_balance, owner_id, is_active, created_at, image_url, account_number)
+VALUES('9527c56a-81c6-438f-b470-93cb80cace08'::uuid, 'Sổ TK đảm bảo thẻ Exim', 'savings'::public."account_type", 'VND', 0, 20000000.00, '917455ba-16c0-42f9-9cea-264f81a3db66'::uuid, true, NOW(), NULL, 'STK-001')
+ON CONFLICT (id) DO NOTHING;
+
+/*Credit card Vpbank Lady with advanced cashback*/
+INSERT INTO public.accounts
+(id, "name", "type", currency, credit_limit, current_balance, owner_id, cashback_config, is_active, created_at, secured_by_account_id, image_url, parent_account_id, total_in, total_out, annual_fee, cashback_config_version, receiver_name, account_number)
+VALUES('83a27121-0e34-4231-b060-2818da672eca'::uuid, 'Vpbank Lady', 'credit_card'::public."account_type", 'VND', 38000000.00, 10114347.00, 'dba2a24b-d89b-4d29-a51e-b92c5632228d'::uuid, '{"program": {"levels": [{"id": "lvl_premium", "name": "Premium Tier ≥15M", "rules": [{"id": "rule_1", "rate": 0.15, "maxReward": 300000, "categoryIds": ["fake_cat_id"]}]}, {"id": "lvl_standard", "name": "Standard (<15M)", "rules": [{"id": "rule_2", "rate": 0.075, "maxReward": 150000, "categoryIds": ["fake_cat_id"]}]}], "dueDate": 15, "cycleType": "statement_cycle", "statementDay": 20}}'::jsonb, true, '2025-11-30 19:04:42.646', NULL, 'https://haagrico.com.vn/wp-content/uploads/2023/06/vpbank-lady-mastercard-la-the-gi-4.jpg', NULL, 0.00, -10114347.00, NULL, 4, 'NGUYEN THI THAO TRANG', '0362790199');

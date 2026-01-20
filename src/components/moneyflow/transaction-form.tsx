@@ -2050,8 +2050,8 @@ export function TransactionForm({
         .map((person) => ({
           value: person.id,
           label: person.name,
-          description: person.email || "No email",
-          searchValue: `${person.name} ${person.email ?? ""}`.trim(),
+          description: "No email checking",
+          searchValue: `${person.name}`.trim(),
           icon: person.image_url ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -2768,7 +2768,6 @@ export function TransactionForm({
       const newPerson: Person = {
         id: created.profileId!,
         name: rawName,
-        email: null,
         image_url: null,
         sheet_link: null,
         google_sheet_url: null,

@@ -70,7 +70,6 @@ export default async function PeopleDetailsPage({ params }: PeopleDetailsPagePro
                         </div>
 
                         <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 text-sm text-slate-500">
-                            {person.email && <span>{person.email}</span>}
                             {person.google_sheet_url && (
                                 <a href={person.google_sheet_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
                                     Link to Sheet

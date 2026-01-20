@@ -646,9 +646,9 @@ export function EditAccountDialog({
   }, [])
 
   const isCreditCard = accountType === 'credit_card'
-  const isAssetAccount = ASSET_TYPES.includes(accountType)
+  const isAssetAccount = ASSET_TYPES.includes(accountType as any)
   const collateralOptions = useMemo(() =>
-    (collateralAccounts ?? []).filter(candidate => candidate.id !== account.id && ASSET_TYPES.includes(candidate.type)),
+    (collateralAccounts ?? []).filter(candidate => candidate.id !== account.id && ASSET_TYPES.includes(candidate.type as any)),
     [collateralAccounts, account.id]
   )
 

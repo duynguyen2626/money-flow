@@ -579,7 +579,7 @@ export function QuickAddChat({
     const peopleItems = individualPeople.map((person) => ({
       value: person.id,
       label: person.name,
-      description: person.email ?? undefined,
+      // description: person.email ?? undefined, // Removed
       icon: renderAvatarNode(person.name, person.image_url ?? null),
       searchValue: person.name,
     }));

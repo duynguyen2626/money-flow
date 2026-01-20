@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { Account, AccountRelationships, AccountStats, TransactionWithDetails, AccountRow } from '@/types/moneyflow.types'
@@ -705,5 +706,44 @@ export async function recalculateBalanceWithClient(
     return false
   }
 
+  return true
+}
+
+export async function deleteAccount(id: string): Promise<boolean> {
+  const supabase = createClient()
+
+  // Potential restriction: don't delete if it has transactions?
+  // Or just void it?
+  // Schema usually allows deletion if no foreign keys block it.
+  const { error } = await supabase
+    .from('accounts')
+    .delete()
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error deleting account:', error)
+    return false
+  }
+
+  revalidatePath('/accounts')
+  revalidatePath('/accounts/v2')
+  return true
+}
+
+export async function updateAccountStatus(id: string, isActive: boolean): Promise<boolean> {
+  const supabase = createClient()
+
+  const { error } = await supabase
+    .from('accounts')
+    .update({ is_active: isActive } as any)
+    .eq('id', id)
+
+  if (error) {
+    console.error('Error updating account status:', error)
+    return false
+  }
+
+  revalidatePath('/accounts')
+  revalidatePath('/accounts/v2')
   return true
 }
