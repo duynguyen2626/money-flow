@@ -74,7 +74,7 @@ export function AccountHeaderV2({
             <div className="relative flex-1 max-w-lg mr-auto">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                 <Input
-                    placeholder="Search accounts..."
+                    placeholder="Search by name, ids..."
                     className="pl-9 pr-8 h-10 bg-slate-50 border-slate-200 focus:bg-white transition-all rounded-lg font-medium shadow-sm hover:border-slate-300"
                     value={searchQuery}
                     onChange={(e) => onSearchChange(e.target.value)}

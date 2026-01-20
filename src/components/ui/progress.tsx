@@ -3,12 +3,13 @@ import * as React from 'react'
 type ProgressProps = React.HTMLAttributes<HTMLDivElement> & {
   value?: number
   max?: number
+  indicatorClassName?: string
 }
 
 const classNames = (...classes: Array<string | undefined | null | false>) =>
   classes.filter(Boolean).join(' ')
 
-export function Progress({ value = 0, max = 100, className, ...props }: ProgressProps) {
+export function Progress({ value = 0, max = 100, className, indicatorClassName, ...props }: ProgressProps) {
   const normalized =
     typeof value === 'number' && typeof max === 'number' && max > 0
       ? Math.min(100, Math.max(0, (value / max) * 100))
@@ -24,7 +25,7 @@ export function Progress({ value = 0, max = 100, className, ...props }: Progress
       {...props}
     >
       <div
-        className="h-full rounded-full bg-emerald-500 transition-all"
+        className={classNames("h-full rounded-full bg-emerald-500 transition-all", indicatorClassName)}
         style={{ width: `${normalized}%` }}
       />
     </div>

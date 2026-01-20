@@ -71,7 +71,8 @@ export function AccountDirectoryV2({
             result = result.filter(a =>
                 a.name.toLowerCase().includes(q) ||
                 a.type.toLowerCase().includes(q) ||
-                a.account_number?.includes(q)
+                a.id.toLowerCase().includes(q) ||
+                a.account_number?.toLowerCase().includes(q)
             );
         }
 
@@ -181,6 +182,7 @@ export function AccountDirectoryV2({
                         onRepay={handleRepay}
                         onPay={handlePay}
                         onTransfer={handleTransfer}
+                        allAccounts={initialAccounts}
                     />
                 ) : (
                     <AccountGridView
