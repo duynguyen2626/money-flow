@@ -136,8 +136,11 @@ function handleSyncTransactions(payload) {
         for (var i = 0; i < currentData.length; i++) {
             var row = currentData[i];
             var hasId = row[0] && row[0].toString().trim() !== "";
-            var hasData = row[2] || row[4] || row[5]; // Date, Note, or Amount
+            // ROBUST CHECK: Treat as Manual if NO ID. 
+            // Even if data seems sparse, if it has a Note or Amount, keep it.
+            var hasData = row[2] || row[4] || row[5] || (row[7] && row[7] !== 0);
             if (!hasId && hasData) {
+                // FORCE KEEP: Ensure row is not undefined
                 manualRows.push(row);
             }
         }
@@ -234,7 +237,10 @@ function handleSyncTransactions(payload) {
         }
     }
 
-    // 3. CLEAR SHEET Content (Safety Step)
+    // 3. SAFETY BACKUP (Before Clearing) - Added v6.1
+    autoBackupSheet(ss, sheet);
+
+    // 4. CLEAR SHEET Content (Safety Step)
     var maxRows = sheet.getMaxRows();
     if (maxRows >= 2) {
         sheet.getRange(2, 1, maxRows - 1, 15).clearContent().setBorder(false, false, false, false, false, false).setBackground(null);
@@ -647,7 +653,7 @@ function ensureArrayFormulas(sheet) {
     try { jRange.clearContent(); jRange.clearDataValidations(); } catch (e) { }
 
     // Formula: =ARRAYFORMULA(IF(F2:F=""; ""; IF(B2:B="In"; VALUE(SUBSTITUTE(F2:F;".";"")) * -1; VALUE(SUBSTITUTE(F2:F;".";"")) - VALUE(SUBSTITUTE(I2:I;".";"")))))
-    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F=""; ""; IF(B2:B="In"; VALUE(SUBSTITUTE(F2:F;".";"")) * -1; VALUE(SUBSTITUTE(F2:F;".";"")) - VALUE(SUBSTITUTE(I2:I;".";"")))))');
+    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F=""; ""; IF(B2:B="In"; (VALUE(SUBSTITUTE(F2:F;".";"")) * -1) + VALUE(SUBSTITUTE(I2:I;".";"")); VALUE(SUBSTITUTE(F2:F;".";"")) - VALUE(SUBSTITUTE(I2:I;".";"")))))');
 }
 
 function findRowById(sheet, id) {
@@ -748,6 +754,22 @@ function clearImageMerges(sheet) {
 }
 
 function jsonResponse(obj) { return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); }
+
+function autoBackupSheet(ss, sheet) {
+    try {
+        // Clean up old backups first (Keep last 3? Or just 1. Let's keep 1 latest backup per cycle to save space)
+        var cycleTag = sheet.getName();
+        var backupName = "Backup_" + cycleTag;
+        var oldBackup = ss.getSheetByName(backupName);
+        if (oldBackup) { ss.deleteSheet(oldBackup); }
+
+        // Create new backup
+        sheet.copyTo(ss).setName(backupName).hideSheet();
+    } catch (e) {
+        // Ignore backup errors (e.g. permission or quota) but Log them
+        Logger.log("Backup Error: " + e.toString());
+    }
+}
 
 /**
  * Sets the tab color based on the month derived from the sheet name (YYYY-MM).
