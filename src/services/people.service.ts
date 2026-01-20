@@ -945,7 +945,6 @@ export async function getPersonWithSubs(id: string): Promise<Person | null> {
   return {
     id: (profile as any).id,
     name: (profile as any).name,
-    email: (profile as any).email,
     image_url: (profile as any).image_url,
     sheet_link: (profile as any).sheet_link,
     google_sheet_url: (profile as any).google_sheet_url,

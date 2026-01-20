@@ -92,7 +92,6 @@ export function EditPersonDialog({
               subscriptions={subscriptions}
               initialValues={{
                 name: person.name,
-                email: person.email ?? '',
                 image_url: person.image_url ?? '',
                 sheet_link: person.sheet_link ?? '',
                 subscriptionIds: person.subscription_ids ?? [],
@@ -104,7 +103,6 @@ export function EditPersonDialog({
               onSubmit={async values => {
                 await updatePersonAction(person.id, {
                   name: values.name,
-                  email: values.email,
                   image_url: values.image_url,
                   sheet_link: values.sheet_link,
                   subscriptionIds: values.subscriptionIds,

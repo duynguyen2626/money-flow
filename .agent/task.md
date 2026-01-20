@@ -304,3 +304,14 @@ Current build includes fully functional Transaction Slide V2 with Single and Bul
   - [x] Fix all TypeScript errors across V2 components
 
 ---
+
+### Phase 10: Final Polish & Handover (Current Status: Partial/Handover)
+- [x] **Attempted Fixes (Phase 10g/h)**
+  - [x] **Secured Unknown**: Tried creating backing account in DB. Status: **FAIL** (Still showing Unknown).
+  - [x] **Copy ID**: Tried cleaning up string. Status: **FAIL** (User reports weird characters).
+  - [x] **Cashback**: Tried updating JSON config. Status: **FAIL** (VPBank Lady still showing dash).
+- [x] **Documentation**
+  - [x] Create Handover documentation in .agent/HANDOVER.md
+  - [x] Update sample.sql with latest attempts
+  - [x] Commit and Push
+
