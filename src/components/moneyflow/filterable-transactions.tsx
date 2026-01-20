@@ -652,26 +652,85 @@ export function FilterableTransactions({
                 "flex-1 flex flex-col min-h-0",
                 isEmbedded ? "overflow-visible" : "overflow-hidden"
             )}>
-                <div className="w-full px-4 lg:px-10 py-4 space-y-4 flex flex-col min-h-0">
-                    {/* Header Row */}
-                    {/* Unified Filter Bar (Zero-Waste Header) */}
-                    {/* UnifiedFilterBar Removed - Under Reconstruction */}
-                    <div className="border p-4 rounded bg-gray-50 text-center text-sm text-gray-500">
-                        Filter Bar Under Reconstruction
-                        <ToolbarActions
-                            isExcelMode={isExcelMode}
-                            onExcelModeChange={setIsExcelMode}
-                            filterContent={filterPopoverContent}
-                        >
-                            <TableViewOptions
-                                visibleColumns={visibleColumns}
-                                onVisibilityChange={setVisibleColumns}
-                                columnOrder={columnOrder}
-                                onOrderChange={setColumnOrder}
+                <div className="w-full px-4 lg:px-10 py-4 flex flex-col gap-4">
+                    {/* Desktop Toolbar: One Row Design */}
+                    <div className="hidden lg:flex items-center gap-3">
+                        <div className="flex-1 max-w-sm">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Search transactions..."
+                                    className="w-full pl-9 pr-4 h-9 text-sm bg-white border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-medium"
+                                />
+                            </div>
+                        </div>
+
+                        {!hideStatusTabs && (
+                            <QuickTabs
+                                activeTab={activeTab}
+                                onTabChange={setActiveTab}
+                                size="sm"
                             />
-                            {/* Add Transaction (Desktop) */}
-                            {!context && !isExcelMode && (
-                                <div className="ml-1">
+                        )}
+
+                        <div className="h-6 w-px bg-slate-200" />
+
+                        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5">
+                            {(['all', 'income', 'expense', 'lend', 'repay', 'transfer'] as const).map(type => (
+                                <button
+                                    key={type}
+                                    onClick={() => setSelectedType(type)}
+                                    className={cn(
+                                        "px-3 py-1.5 text-[11px] font-black uppercase tracking-wider rounded-md border transition-all whitespace-nowrap",
+                                        selectedType === type
+                                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                                            : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700"
+                                    )}
+                                >
+                                    {type}
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="h-6 w-px bg-slate-200" />
+
+                        <div className="flex items-center gap-2 shrink-0">
+                            {/* People Filter Inline */}
+                            {!hidePeopleColumn && (
+                                <div className="w-36">
+                                    <Combobox
+                                        items={peopleItems}
+                                        value={selectedPersonId ?? undefined}
+                                        onValueChange={val => setSelectedPersonId(val ?? null)}
+                                        placeholder="All People"
+                                        className="h-9 text-[11px]"
+                                    />
+                                </div>
+                            )}
+
+                            <DateRangeControl
+                                dateFrom={dateFrom}
+                                dateTo={dateTo}
+                                onDateFromChange={setDateFrom}
+                                onDateToChange={setDateTo}
+                                onClear={() => { setDateFrom(''); setDateTo(''); }}
+                            />
+
+                            <ToolbarActions
+                                isExcelMode={isExcelMode}
+                                onExcelModeChange={setIsExcelMode}
+                                filterContent={filterPopoverContent}
+                            >
+                                <TableViewOptions
+                                    visibleColumns={visibleColumns}
+                                    onVisibilityChange={setVisibleColumns}
+                                    columnOrder={columnOrder}
+                                    onOrderChange={setColumnOrder}
+                                />
+                                {!context && !isExcelMode && (
                                     <AddTransactionDialog
                                         accounts={accounts}
                                         categories={categories}
@@ -679,9 +738,9 @@ export function FilterableTransactions({
                                         shops={shops}
                                         listenToUrlParams={true}
                                     />
-                                </div>
-                            )}
-                        </ToolbarActions>
+                                )}
+                            </ToolbarActions>
+                        </div>
                     </div>
 
                     {/* MOBILE LAYOUT (Visible on Mobile) */}
