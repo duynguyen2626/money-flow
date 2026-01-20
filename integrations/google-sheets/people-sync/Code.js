@@ -1,8 +1,9 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 5.4 (MANUAL DATA SAFETY)
-// Last Updated: 2026-01-20 17:05 ICT
-// Scope: Sync logic fixes.
-//        - STRICT ID Check: Only treat rows with ID as System Rows.
+// VERSION: 5.5 (SMART MERGE & REWRITE)
+// Last Updated: 2026-01-20 17:15 ICT
+// Scope: Data Safety & Deduplication.
+//        - Rewrite Strategy: Protects Manual Data by reading & rewriting.
+//        - Smart Merge: Auto-links Manual Txns with new App Txns (matches Amount/Type/Date).
 //        - Protect Manual Data: Insert/Delete only within System Logic.
 //        - F: Absolute Value (Positive).
 //        - J: Text-safe formula with SUBSTITUTE/VALUE.
