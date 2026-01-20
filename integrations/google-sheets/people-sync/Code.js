@@ -1,11 +1,11 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 5.9 (OFFSET MERGE - FINAL FIXED)
-// Last Updated: 2026-01-20 17:48 ICT
+// VERSION: 6.2 (ID SAFETY CHECK - CRITICAL FIX)
+// Last Updated: 2026-01-20 18:10 ICT
 // Scope: Data Safety & Deduplication.
-//        - Rewrite Strategy: Protects Manual Data.
-//        - Smart Merge v5.9: NEUTRALIZE matching Manual Rows (Set I = F) instead of destroying them.
-//        - Result: Manual Rows Visible (J=0), App Row Valid.
-//        - Protect Manual Data: Insert/Delete only within System Logic.
+//        - CRITICAL: System IDs must be > 5 chars. Empty/Short values in Col A = Manual Row.
+//        - Backup: Auto copy to `Backup_[Name]` before sync.
+//        - Smart Merge: NEUTRALIZE matching Manual Rows (Set I = F).
+//        - J2 Formula: Handles 'In' with Offset.
 //        - F: Absolute Value (Positive).
 //        - J: Text-safe formula with SUBSTITUTE/VALUE.
 //        - Sorting: Use sheet.getLastRow(), Add Sleep for consistency.
