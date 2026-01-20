@@ -82,7 +82,6 @@ export function CreatePersonDialog({ subscriptions, trigger, open: controlledOpe
               onSubmit={async values => {
                 await createPersonAction({
                   name: values.name,
-                  email: values.email,
                   image_url: values.image_url,
                   sheet_link: values.sheet_link,
                   subscriptionIds: values.subscriptionIds,
