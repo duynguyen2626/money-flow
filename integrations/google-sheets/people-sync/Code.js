@@ -1,9 +1,9 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 5.6 (FINAL STABLE)
-// Last Updated: 2026-01-16 16:45 ICT
-// Scope: Sync logic fixes and simplified formulas.
-//        - Bank Info: Uses raw integer format for remains.
-//        - Final Price: J = F - I (Signed). Force cache bust.
+// VERSION: 5.3 (F-ABS & J-FORMULA OPT)
+// Last Updated: 2026-01-20 15:00 ICT
+// Scope: Build fix & Formula Update.
+//        - F: Absolute Value (Positive).
+//        - J: Text-safe formula with SUBSTITUTE/VALUE.
 //        - Sorting: Use sheet.getLastRow(), Add Sleep for consistency.
 
 /*
@@ -183,10 +183,9 @@ function handleSyncTransactions(payload) {
             var r = startRow + i;
             arrABC[i] = [txn.id, normalizeType(txn.type, txn.amount), new Date(txn.date)];
             arrD[i] = ['=IFERROR(VLOOKUP(O' + r + ';Shop!A:B;2;FALSE);O' + r + ')'];
+            // Col F (Amount): User requested ABSOLUTE value (Positive) for visual clarity
+            // J Formula will handle the sign logic.
             var amt = Math.abs(txn.amount);
-            if (normalizeType(txn.type, txn.amount) === 'In') {
-                amt = -amt;
-            }
             arrEFGH[i] = [txn.notes || "", amt, txn.percent_back || 0, txn.fixed_back || 0];
             // arrIJ removed
             arrO[i] = [txn.shop || ""];
@@ -246,9 +245,8 @@ function handleSingleTransaction(payload, action) {
     sheet.getRange(targetRow, 5).setValue(payload.notes || "");
 
     var amt = Math.abs(payload.amount);
-    if (normalizeType(payload.type, payload.amount) === 'In') {
-        amt = -amt;
-    }
+    // User requested ABSOLUTE value for Col F. J Formula handles sign.
+    // if (normalizeType(payload.type, payload.amount) === 'In') { amt = -amt; } // Removed
     sheet.getRange(targetRow, 6).setValue(amt);
 
     sheet.getRange(targetRow, 7).setValue(payload.percent_back || 0);
@@ -566,11 +564,13 @@ function ensureArrayFormulas(sheet) {
 
     // J2 Formula (Final Price)
     // J2 Formula (Final Price) - Force Update
-    // Updated Logic: F is Signed. J = F - I.
+    // Updated Logic: User requested SUBSTITUTE/VALUE to handle text-formatting risks
+    // IF In: F * -1. IF Out: F - I.
     var jRange = sheet.getRange("J2:J");
     try { jRange.clearContent(); jRange.clearDataValidations(); } catch (e) { }
-    // Added spaces to formula to ensure it is treated as a new string during sync
-    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F="";""; F2:F - I2:I ))');
+
+    // Formula: =ARRAYFORMULA(IF(F2:F=""; ""; IF(B2:B="In"; VALUE(SUBSTITUTE(F2:F;".";"")) * -1; VALUE(SUBSTITUTE(F2:F;".";"")) - VALUE(SUBSTITUTE(I2:I;".";"")))))
+    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F=""; ""; IF(B2:B="In"; VALUE(SUBSTITUTE(F2:F;".";"")) * -1; VALUE(SUBSTITUTE(F2:F;".";"")) - VALUE(SUBSTITUTE(I2:I;".";"")))))');
 }
 
 function findRowById(sheet, id) {
