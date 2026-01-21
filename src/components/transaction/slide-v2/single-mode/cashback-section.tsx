@@ -66,7 +66,7 @@ export function CashbackSection({ accounts }: CashbackSectionProps) {
                 const config = normalizeCashbackConfig(acc.cashback_config as any);
 
                 // Extract the best rate from the config
-                let bestRate = config.program?.defaultRate ?? config.rate ?? 0;
+                let bestRate = (config as any).program?.defaultRate ?? (config as any).rate ?? 0;
 
                 // Check levels for higher rates in category rules
                 if (config.program?.levels && config.program.levels.length > 0) {
