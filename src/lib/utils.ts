@@ -23,3 +23,14 @@ export function formatMoneyVND(amount: number) {
   // Format: 1.000 (no currency symbol)
   return new Intl.NumberFormat('vi-VN').format(amount);
 }
+
+export function formatCompactMoney(amount: number) {
+  if (amount === 0) return '0';
+  if (amount >= 1000000) {
+    return (amount / 1000000).toFixed(1).replace(/\.0$/, '') + 'm';
+  }
+  if (amount >= 1000) {
+    return (amount / 1000).toFixed(0) + 'k';
+  }
+  return amount.toString();
+}

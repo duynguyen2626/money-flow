@@ -22,17 +22,18 @@ import {
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { SingleTransactionFormValues } from "../types";
-import { Shop, Category } from "@/types/moneyflow.types";
+import { Shop, Category, Person } from "@/types/moneyflow.types";
 import { SmartAmountInput } from "@/components/ui/smart-amount-input";
 import { Combobox } from "@/components/ui/combobox";
 
 type BasicInfoSectionProps = {
     shops: Shop[];
     categories: Category[];
+    people: Person[];
     onAddNewCategory?: () => void;
 };
 
-export function BasicInfoSection({ shops, categories, onAddNewCategory }: BasicInfoSectionProps) {
+export function BasicInfoSection({ shops, categories, people, onAddNewCategory }: BasicInfoSectionProps) {
     const form = useFormContext<SingleTransactionFormValues>();
     const transactionType = useWatch({ control: form.control, name: "type" });
     const isShopHidden = ['income', 'repayment', 'transfer'].includes(transactionType);
@@ -306,30 +307,55 @@ export function BasicInfoSection({ shops, categories, onAddNewCategory }: BasicI
             <FormField
                 control={form.control}
                 name="note"
-                render={({ field }) => (
-                    <FormItem>
-                        <FormControl>
-                            <div className="relative">
-                                <Textarea
-                                    placeholder="Add a note..."
-                                    className="resize-none min-h-[60px] bg-white border-slate-200 pr-8"
-                                    {...field}
-                                    value={field.value || ''}
-                                />
-                                {field.value && (
-                                    <button
-                                        type="button"
-                                        onClick={() => field.onChange("")}
-                                        className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors"
-                                    >
-                                        <X className="w-4 h-4" />
-                                    </button>
-                                )}
+                render={({ field }) => {
+                    // Calculate #nosync label based on selected person
+                    const personId = form.getValues("person_id");
+                    const selectedPerson = people?.find(p => p.id === personId);
+                    const hasSheet = !!selectedPerson?.google_sheet_url;
+                    const nosyncLabel = hasSheet ? "+ Not sync" : "+ #nosync";
+
+                    return (
+                        <FormItem>
+                            <div className="flex items-center justify-between px-1 mb-1.5">
+                                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Note</span>
+                                <span
+                                    onClick={(e) => {
+                                        e.preventDefault(); // Prevent focus stealing issues
+                                        const current = field.value || "";
+                                        if (!current.includes("#nosync")) {
+                                            const newValue = current ? `${current} #nosync` : "#nosync";
+                                            field.onChange(newValue);
+                                        }
+                                    }}
+                                    className="text-[10px] text-slate-400 hover:text-blue-600 hover:bg-slate-100 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+                                    title="Click to add #nosync tag"
+                                >
+                                    {nosyncLabel}
+                                </span>
                             </div>
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                )}
+                            <FormControl>
+                                <div className="relative">
+                                    <Textarea
+                                        placeholder="Add a note..."
+                                        className="resize-none min-h-[60px] bg-white border-slate-200 pr-8"
+                                        {...field}
+                                        value={field.value || ''}
+                                    />
+                                    {field.value && (
+                                        <button
+                                            type="button"
+                                            onClick={() => field.onChange("")}
+                                            className="absolute right-2 top-2 text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100 transition-colors"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    )}
+                                </div>
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                    );
+                }}
             />
 
         </div>

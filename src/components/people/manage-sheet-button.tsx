@@ -14,9 +14,16 @@ import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { isYYYYMM } from '@/lib/month-tag'
 import { updatePersonAction } from '@/actions/people-actions'
+import { SyncReportDialog } from './sync-report-dialog'
 
-type ManageSheetButtonProps = {
-  personId: string
+function isValidLink(value: string | null | undefined): boolean {
+  if (!value) return false
+  const trimmed = value.trim()
+  return /^https?:\/\//i.test(trimmed)
+}
+
+export interface ManageSheetButtonProps {
+  personId?: string | null
   cycleTag: string
   initialSheetUrl?: string | null
   scriptLink?: string | null
@@ -26,7 +33,7 @@ type ManageSheetButtonProps = {
   showQrImage?: boolean
   className?: string
   buttonClassName?: string
-  size?: 'sm' | 'md'
+  size?: 'sm' | 'md' | 'lg' | 'icon' | 'default'
   iconOnly?: boolean
   linkedLabel?: string
   unlinkedLabel?: string
@@ -36,12 +43,6 @@ type ManageSheetButtonProps = {
   connectHref?: string
   showViewLink?: boolean
   splitMode?: boolean
-}
-
-function isValidLink(value: string | null | undefined): boolean {
-  if (!value) return false
-  const trimmed = value.trim()
-  return /^https?:\/\//i.test(trimmed)
 }
 
 export function ManageSheetButton({
@@ -70,6 +71,10 @@ export function ManageSheetButton({
   const [isManaging, startManageTransition] = useTransition()
   const [isSaving, startSaveTransition] = useTransition()
   const [showDialog, setShowDialog] = useState(false)
+
+  // Sync Report State
+  const [showReport, setShowReport] = useState(false)
+  const [syncStats, setSyncStats] = useState<any>(null)
 
   // State for all settings
   const [currentScriptLink, setCurrentScriptLink] = useState(scriptLink ?? '')
@@ -176,16 +181,30 @@ export function ManageSheetButton({
           setSheetUrl(data.sheetUrl)
         }
         toast.dismiss(toastId)
+
         if (data.status === 'created' || data.status === 'synced') {
-          toast.success(data.status === 'created' ? 'Sheet created & synced.' : 'Sheet synced.')
+          // Success! Show report instead of just a toast
+          setSyncStats({
+            syncedCount: data.syncedCount,
+            manualPreserved: data.manualPreserved,
+            totalRows: data.totalRows,
+            sheetUrl: nextUrl
+          })
+          setShowDialog(false) // Close settings dialog
+          setShowReport(true) // Open report dialog
+
+          if (data.status === 'created') {
+            toast.success('Sheet created & synced.')
+          }
         } else {
           toast.error('Failed to sync sheet.')
         }
-        setShowDialog(false)
+
         router.refresh()
-        if (openAfterSuccess && nextUrl) {
-          window.open(nextUrl, '_blank', 'noopener,noreferrer')
-        }
+        // Removed auto-open since we now show the report dialog which has an Open button
+        // if (openAfterSuccess && nextUrl) {
+        //   window.open(nextUrl, '_blank', 'noopener,noreferrer')
+        // }
       } catch (error) {
         toast.dismiss(toastId)
         toast.error('Manage sheet failed.')
@@ -195,6 +214,13 @@ export function ManageSheetButton({
 
   return (
     <div className={cn(splitMode ? 'flex items-center rounded-md border-2 border-slate-300 hover:border-slate-400 overflow-hidden transition-colors' : 'inline-flex items-center gap-2', className)}>
+      <SyncReportDialog
+        open={showReport}
+        onOpenChange={setShowReport}
+        stats={syncStats}
+        cycleTag={cycleTag}
+      />
+
       <Dialog open={showDialog} onOpenChange={setShowDialog}>
         {splitMode ? (
           <>

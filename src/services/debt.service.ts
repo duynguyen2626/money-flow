@@ -316,7 +316,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
             // Link
             debtEntry.links.push({ repaymentId: repay.id, amount: pay });
 
-            console.log(`[DebtFIFO-TARGET] Pay ${pay} to ${debtId} from ${repay.id}. RepayRem: ${repay.amount}`);
+            // console.log(`[DebtFIFO-TARGET] Pay ${pay} to ${debtId} from ${repay.id}. RepayRem: ${repay.amount}`);
           }
         }
       });
@@ -345,7 +345,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
           if (entry.remaining < 0) entry.remaining = 0;
 
           entry.links.push({ repaymentId: repay.id, amount: pay });
-          console.log(`[DebtFIFO-TAGGED] Pay ${pay} to ${debt.id} from ${repay.id} (Tag: ${debtTag})`);
+          // console.log(`[DebtFIFO-TAGGED] Pay ${pay} to ${debt.id} from ${repay.id} (Tag: ${debtTag})`);
 
           if (repay.amount <= 0.01) break; // Repayment exhausted
         }
@@ -393,7 +393,7 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
       currentRepayment.amount -= payAmount;
       if (entry.remaining < 0) entry.remaining = 0;
 
-      console.log(`[DebtFIFO-GENERAL] Pay ${payAmount} for ${debt.tag} (Rem: ${entry.remaining})`);
+      // console.log(`[DebtFIFO-GENERAL] Pay ${payAmount} for ${debt.tag} (Rem: ${entry.remaining})`);
 
       // If Repayment exhausted, remove from queue
       if (currentRepayment.amount < 0.01) {
@@ -445,9 +445,11 @@ export async function getDebtByTags(personId: string): Promise<DebtByTagAggregat
         // Add remaining principal from our FIFO simulation
         const fifoEntry = debtsMap.get(row.id)
         if (fifoEntry) {
+          /*
           if (row.tag?.includes('2025-10')) {
             console.log(`[DebtAgg-DEBUG] ID: ${row.id} | Tag: ${row.tag} | MapRem: ${fifoEntry.remaining}`);
           }
+          */
           current.remainingPrincipal += fifoEntry.remaining
           // Add links (deduplicate by ID if needed, but array is fine for now)
           fifoEntry.links.forEach(link => {

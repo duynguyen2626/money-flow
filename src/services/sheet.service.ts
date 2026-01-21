@@ -232,6 +232,13 @@ export async function syncTransactionToSheet(
   action: 'create' | 'delete' | 'update' = 'create'
 ) {
   try {
+    // Check for #nosync or #deprecated tags
+    const note = (txn.note || '').toLowerCase()
+    if (note.includes('#nosync') || note.includes('#deprecated')) {
+      // If tagged as nosync, we treat it as a deletion from the sheet
+      action = 'delete'
+    }
+
     const sheetLink = await getProfileSheetLink(personId)
     if (!sheetLink) return
 
@@ -525,7 +532,14 @@ export async function syncCycleTransactions(
       return { success: false, message: 'Failed to load transactions' }
     }
 
-    const rows = (data ?? []) as unknown as any[]
+    // Filter out transactions marked as #nosync or #deprecated
+    // This allows users to create "Aggregate" transactions in App (for balance) 
+    // but keep detailed manual rows in Sheet without duplication.
+    const rawRows = (data ?? []) as unknown as any[]
+    const rows = rawRows.filter(txn => {
+      const note = (txn.note || '').toLowerCase()
+      return !note.includes('#nosync') && !note.includes('#deprecated')
+    })
     const batchRows = rows.map((txn) => {
       const shopData = txn.shops as any
       let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
@@ -605,7 +619,13 @@ export async function syncCycleTransactions(
       return { success: false, message: result.message ?? 'Sheet sync failed' }
     }
 
-    return { success: true, count: batchRows.length }
+    return {
+      success: true,
+      count: batchRows.length,
+      syncedCount: result.json?.syncedCount,
+      manualPreserved: result.json?.manualPreserved,
+      totalRows: result.json?.totalRows
+    }
   } catch (error) {
     console.error('Sync cycle transactions failed:', error)
     return { success: false, message: 'Sync failed' }

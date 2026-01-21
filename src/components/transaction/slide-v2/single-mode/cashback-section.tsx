@@ -18,6 +18,7 @@ import { SmartAmountInput } from "@/components/ui/smart-amount-input";
 import { Account } from "@/types/moneyflow.types";
 import { calculateStatementCycle } from "@/lib/cycle-utils";
 import { format } from "date-fns";
+import { normalizeCashbackConfig } from "@/lib/cashback";
 
 type CashbackSectionProps = {
     accounts?: Account[];
@@ -30,6 +31,7 @@ export function CashbackSection({ accounts }: CashbackSectionProps) {
 
     const transactionType = useWatch({ control: form.control, name: "type" });
     const sourceAccountId = useWatch({ control: form.control, name: "source_account_id" });
+    const personId = useWatch({ control: form.control, name: "person_id" });
 
     // Calculate Cycle
     let cycleInfo = null;
@@ -43,16 +45,56 @@ export function CashbackSection({ accounts }: CashbackSectionProps) {
 
     // Derive active Tab from mode
     const getTabFromMode = (mode: string) => {
-        if (['real_percent', 'real_fixed'].includes(mode)) return 'real';
+        if (['real_percent', 'real_fixed'].includes(mode)) return 'giveaway';
         if (mode === 'voluntary') return 'voluntary';
-        return 'virtual'; // 'none_back', 'percent', 'fixed'
+        return 'claim'; // 'none_back', 'percent', 'fixed'
     };
 
-    // Default to 'percent' if switching to virtual, 'real_percent' for real
+    // Handle tab changes with auto-fill logic
     const handleTabChange = (val: string) => {
-        if (val === 'virtual') form.setValue('cashback_mode', 'percent');
-        if (val === 'real') form.setValue('cashback_mode', 'real_percent');
-        if (val === 'voluntary') form.setValue('cashback_mode', 'voluntary');
+        let newMode: any = 'percent';
+        if (val === 'claim') newMode = 'percent';
+        if (val === 'giveaway') newMode = 'real_percent';
+        if (val === 'voluntary') newMode = 'voluntary';
+
+        form.setValue('cashback_mode', newMode);
+
+        // Auto-fill rate if switching to percent modes
+        if ((newMode === 'percent' || newMode === 'real_percent') && sourceAccountId && accounts) {
+            const acc = accounts.find(a => a.id === sourceAccountId);
+            if (acc?.cashback_config) {
+                const config = normalizeCashbackConfig(acc.cashback_config as any);
+
+                // Extract the best rate from the config
+                let bestRate = config.program?.defaultRate ?? config.rate ?? 0;
+
+                // Check levels for higher rates in category rules
+                if (config.program?.levels && config.program.levels.length > 0) {
+                    for (const level of config.program.levels) {
+                        // Check level's default rate
+                        if (level.defaultRate !== null && level.defaultRate !== undefined && level.defaultRate > bestRate) {
+                            bestRate = level.defaultRate;
+                        }
+                        // Check category-specific rules
+                        if (level.rules && level.rules.length > 0) {
+                            for (const rule of level.rules) {
+                                if (rule.rate > bestRate) {
+                                    bestRate = rule.rate;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                console.log('[CashbackSection] Auto-fill rate:', { account: acc.name, bestRate, config });
+
+                if (bestRate > 0) {
+                    // Convert decimal (0.2) to percentage (20) for UI display
+                    // The form will convert back to decimal on submit
+                    form.setValue('cashback_share_percent', bestRate * 100);
+                }
+            }
+        }
     };
 
     if (transactionType === 'income' || transactionType === 'transfer') return null;
@@ -91,25 +133,34 @@ export function CashbackSection({ accounts }: CashbackSectionProps) {
                 <div className="px-3 pb-3 border-t border-slate-200 pt-3">
                     <Tabs value={currentTab} onValueChange={handleTabChange} className="w-full">
                         <TabsList className="grid w-full grid-cols-3 h-9 bg-slate-100 p-1 mb-4">
-                            <TabsTrigger value="virtual" className="text-xs">Virtual (Auto)</TabsTrigger>
-                            <TabsTrigger value="real" className="text-xs">Real (Claimed)</TabsTrigger>
-                            <TabsTrigger value="voluntary" className="text-xs">Voluntary</TabsTrigger>
+                            <TabsTrigger value="claim" className="text-xs">Claim</TabsTrigger>
+                            <TabsTrigger
+                                value="giveaway"
+                                className="text-xs"
+                                disabled={!personId}
+                            >
+                                Give Away
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="voluntary"
+                                className="text-xs"
+                                disabled={!personId}
+                            >
+                                Voluntary
+                            </TabsTrigger>
                         </TabsList>
 
-                        {/* VIRTUAL & REAL CONTENT (Shared Layout) */}
+                        {/* CLAIM & GIVE AWAY CONTENT (Shared Layout) */}
                         <div className="space-y-4">
                             {/* Row 1: Rate & Amount Inputs */}
-                            {(currentTab === 'virtual' || currentTab === 'real') && (
+                            {(currentTab === 'claim' || currentTab === 'giveaway') && (
                                 <div className="grid grid-cols-2 gap-4">
                                     <FormField
                                         control={form.control}
                                         name="cashback_share_percent"
                                         render={({ field }) => (
                                             <FormItem>
-                                                <div className="flex justify-between items-center mb-1.5">
-                                                    <FormLabel className="text-xs font-semibold text-slate-500">% Rate</FormLabel>
-                                                    <span className="text-[10px] text-slate-400">Max: 10%</span>
-                                                </div>
+                                                <FormLabel className="text-xs font-semibold text-slate-500">% Rate</FormLabel>
                                                 <div className="relative">
                                                     <Input
                                                         type="number"
@@ -118,14 +169,11 @@ export function CashbackSection({ accounts }: CashbackSectionProps) {
                                                         value={field.value ?? ''}
                                                         onChange={e => {
                                                             let val = Number(e.target.value);
-                                                            if (val > 10) {
-                                                                toast.warning("Rate cannot exceed 10%");
-                                                                val = 10;
-                                                            }
+                                                            // Removed hardcoded 10% limit to support higher rates (e.g. 20%)
                                                             field.onChange(val);
                                                             // Auto-switch mode based on interaction
-                                                            if (currentTab === 'virtual') form.setValue('cashback_mode', 'percent');
-                                                            if (currentTab === 'real') form.setValue('cashback_mode', 'real_percent');
+                                                            if (currentTab === 'claim') form.setValue('cashback_mode', 'percent');
+                                                            if (currentTab === 'giveaway') form.setValue('cashback_mode', 'real_percent');
                                                         }}
                                                         className={cn(
                                                             "pr-7 h-10 text-right",
@@ -154,8 +202,8 @@ export function CashbackSection({ accounts }: CashbackSectionProps) {
                                                         field.onChange(safeVal);
                                                         // Auto-switch mode based on interaction
                                                         if (safeVal > 0) {
-                                                            if (currentTab === 'virtual') form.setValue('cashback_mode', 'fixed');
-                                                            if (currentTab === 'real') form.setValue('cashback_mode', 'real_fixed');
+                                                            if (currentTab === 'claim') form.setValue('cashback_mode', 'fixed');
+                                                            if (currentTab === 'giveaway') form.setValue('cashback_mode', 'real_fixed');
                                                         }
                                                     }}
                                                     placeholder="0"
@@ -238,8 +286,9 @@ export function CashbackSection({ accounts }: CashbackSectionProps) {
                             </div>
                         </div>
                     </Tabs>
-                </div>
-            )}
-        </div>
+                </div >
+            )
+            }
+        </div >
     );
 }

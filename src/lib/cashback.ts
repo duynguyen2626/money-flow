@@ -21,6 +21,7 @@ export type CashbackCategoryRule = {
   categoryIds: string[];
   rate: number;
   maxReward: number | null;
+  description?: string;
 };
 
 export type CashbackLevel = {
@@ -189,6 +190,7 @@ export function normalizeCashbackConfig(raw: any): CashbackProgram {
           categoryIds: rule.categoryIds || [],
           rate: Number(rule.rate ?? 0),
           maxReward: rule.maxReward !== undefined ? rule.maxReward : null,
+          description: rule.description
         })) || []
       })) || []
     };

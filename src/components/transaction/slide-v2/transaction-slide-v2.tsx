@@ -58,6 +58,7 @@ export function TransactionSlideV2({
 }: TransactionSlideV2Props) {
     const [mode, setMode] = useState<TransactionMode>(initialMode);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isLoadingEdit, setIsLoadingEdit] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
 
     // Dialog States
@@ -92,7 +93,7 @@ export function TransactionSlideV2({
             amount: 0,
             note: "",
             source_account_id: accounts[0]?.id || "",
-            cashback_mode: "none_back",
+            cashback_mode: "percent",
             ui_is_cashback_expanded: false,
         };
     }, [initialData, accounts]);
@@ -145,10 +146,49 @@ export function TransactionSlideV2({
 
             setHasChanges(hasActualChanges);
             onHasChanges?.(hasActualChanges);
+            setHasChanges(hasActualChanges);
+            onHasChanges?.(hasActualChanges);
         });
 
         return () => subscription.unsubscribe();
     }, [open, defaultFormValues, singleForm, onHasChanges]);
+
+    // Fetch data if editingId provided but no initialData
+    useEffect(() => {
+        if (open && editingId && !initialData) {
+            setIsLoadingEdit(true);
+            import("@/services/transaction.service").then(({ loadTransactions }) => {
+                loadTransactions({ transactionId: editingId, limit: 1 }).then(([txn]) => {
+                    if (txn) {
+                        const formVal: SingleTransactionFormValues = {
+                            type: (txn.type as any) || "expense",
+                            amount: txn.original_amount ?? Math.abs(txn.amount),
+                            occurred_at: new Date(txn.occurred_at),
+                            note: txn.note || "",
+                            source_account_id: txn.account_id,
+                            target_account_id: txn.target_account_id || undefined,
+                            category_id: txn.category_id || undefined,
+                            shop_id: txn.shop_id || undefined,
+                            person_id: txn.person_id || undefined,
+                            tag: txn.tag || undefined,
+                            cashback_mode: txn.cashback_mode || "none_back",
+                            // Convert DB decimal (0.2) to UI percentage (20)
+                            cashback_share_percent: txn.cashback_share_percent ? txn.cashback_share_percent * 100 : undefined,
+                            cashback_share_fixed: txn.cashback_share_fixed || undefined,
+                            ui_is_cashback_expanded: !!txn.cashback_mode && txn.cashback_mode !== 'none_back',
+                        };
+                        singleForm.reset(formVal);
+                    } else {
+                        toast.error("Failed to load transaction details");
+                    }
+                    setIsLoadingEdit(false);
+                }).catch(() => {
+                    setIsLoadingEdit(false);
+                    toast.error("Failed to load transaction");
+                });
+            });
+        }
+    }, [open, editingId, initialData, singleForm]);
 
     const onSingleSubmit = async (data: SingleTransactionFormValues) => {
         const payload = {
@@ -163,7 +203,8 @@ export function TransactionSlideV2({
             person_id: data.person_id || null,
             tag: data.tag,
             cashback_mode: data.cashback_mode,
-            cashback_share_percent: data.cashback_share_percent,
+            // Convert UI percentage (20) to DB decimal (0.2)
+            cashback_share_percent: data.cashback_share_percent ? data.cashback_share_percent / 100 : null,
             cashback_share_fixed: data.cashback_share_fixed,
         };
 
@@ -227,7 +268,7 @@ export function TransactionSlideV2({
             <SheetContent
                 showClose={false}
                 className={cn(
-                    "w-full p-0 flex flex-col h-full bg-slate-50 transition-all duration-300 ease-in-out",
+                    "w-full p-0 flex flex-col h-full bg-slate-50 transition-all duration-300 ease-in-out z-[100]",
                     mode === 'single' ? "sm:max-w-[500px]" : "sm:max-w-[1000px]"
                 )}
                 side="right"
@@ -240,11 +281,20 @@ export function TransactionSlideV2({
             >
                 {/* Header */}
                 <div className="bg-white border-b px-6 py-4 flex items-center justify-between shrink-0">
-                    <SheetTitle>
+                    <SheetTitle className="flex items-center gap-2">
                         {mode === 'single'
-                            ? (initialData ? 'Edit Transaction' : 'New Transaction')
+                            ? (initialData || editingId ? 'Edit Transaction' : 'New Transaction')
                             : 'Bulk Add'
                         }
+                        {isLoadingEdit && (
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Loading...
+                            </span>
+                        )}
                     </SheetTitle>
 
                     {/* Quick Mode Toggle */}
@@ -288,6 +338,7 @@ export function TransactionSlideV2({
                                     <BasicInfoSection
                                         shops={shops}
                                         categories={categories}
+                                        people={people}
                                         onAddNewCategory={() => setIsCategoryDialogOpen(true)}
                                     />
                                     <AccountSelector

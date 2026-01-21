@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     const payload = (await request.json()) as ManageCycleSheetRequest
     const personId = payload?.personId?.trim()
     const action = payload?.action || 'sync'
-    
+
     if (!personId) {
       return NextResponse.json({ error: 'Missing personId' }, { status: 400 })
     }
@@ -20,10 +20,10 @@ export async function POST(request: Request) {
       if (!result.success) {
         return NextResponse.json({ error: result.message ?? 'Test create failed' }, { status: 400 })
       }
-      return NextResponse.json({ 
-        status: 'test_created', 
-        sheetUrl: result.sheetUrl, 
-        sheetId: result.sheetId 
+      return NextResponse.json({
+        status: 'test_created',
+        sheetUrl: result.sheetUrl,
+        sheetId: result.sheetId
       })
     }
 
@@ -121,7 +121,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: syncResult.message ?? 'Sync failed' }, { status: 400 })
     }
 
-    return NextResponse.json({ status, sheetUrl, sheetId })
+    return NextResponse.json({
+      status,
+      sheetUrl,
+      sheetId,
+      syncedCount: (syncResult as any).syncedCount,
+      manualPreserved: (syncResult as any).manualPreserved,
+      totalRows: (syncResult as any).totalRows
+    })
   } catch (error: any) {
     console.error('Manage sheet endpoint failed:', error)
     return NextResponse.json({ error: error?.message ?? 'Unexpected error' }, { status: 500 })
