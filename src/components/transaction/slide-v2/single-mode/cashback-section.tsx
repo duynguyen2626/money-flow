@@ -69,8 +69,8 @@ export function CashbackSection({ accounts }: CashbackSectionProps) {
                 let bestRate = (config as any).program?.defaultRate ?? (config as any).rate ?? 0;
 
                 // Check levels for higher rates in category rules
-                if (config.program?.levels && config.program.levels.length > 0) {
-                    for (const level of config.program.levels) {
+                if ((config as any).program?.levels && (config as any).program.levels.length > 0) {
+                    for (const level of (config as any).program.levels) {
                         // Check level's default rate
                         if (level.defaultRate !== null && level.defaultRate !== undefined && level.defaultRate > bestRate) {
                             bestRate = level.defaultRate;

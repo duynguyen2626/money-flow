@@ -552,7 +552,7 @@ function renderCell(account: Account, key: string, actions: any, familyBalance?:
 
                 const isMet = isQualified || currentSpent >= minSpend;
                 const remainingMinSpend = Math.max(0, minSpend - currentSpent);
-                nextLevelName = stats?.next_level_name || undefined;
+                nextLevelName = stats?.next_level_name || "";
 
                 // Calculate available spend capacity if capped
                 // Use the highest rate from current level or default rate for approximation
@@ -786,7 +786,7 @@ function renderCell(account: Account, key: string, actions: any, familyBalance?:
                         onOpenChange={setIsTransactionsModalOpen || (() => { })}
                         accountId={account.id}
                         accountName={account.name}
-                        cycleDisplay={cycleDisplay || ''}
+                        cycleDisplay={(cycleDisplay as string) || ''}
                         onEditTransaction={onEditTransaction}
                         refreshKey={modalRefreshKey}
                     />

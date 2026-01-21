@@ -79,7 +79,7 @@ export function AccountSlideV2({
     const [securedById, setSecuredById] = useState<string>("none");
     const [isCollateralLinked, setIsCollateralLinked] = useState(false);
     const [openCollateralCombo, setOpenCollateralCombo] = useState(false);
-    const [maxCashback, setMaxCashback] = useState<number | null>(null);
+    const [maxCashback, setMaxCashback] = useState<number | undefined>(undefined);
     const [startDate, setStartDate] = useState<number | null>(null);
     const [parentAccountId, setParentAccountId] = useState<string | null>(null);
     const [activeMainType, setActiveMainType] = useState<'bank' | 'credit' | 'savings' | 'others'>('bank');
@@ -100,7 +100,7 @@ export function AccountSlideV2({
     const [cycleType, setCycleType] = useState<CashbackProgram['cycleType']>('calendar_month');
     const [statementDay, setStatementDay] = useState<number | null>(null);
     const [dueDate, setDueDate] = useState<number | null>(null);
-    const [minSpendTarget, setMinSpendTarget] = useState<number | null>(null);
+    const [minSpendTarget, setMinSpendTarget] = useState<number | undefined>(undefined);
     const [defaultRate, setDefaultRate] = useState<number>(0);
     const [isAdvancedCashback, setIsAdvancedCashback] = useState(false);
 
@@ -156,17 +156,17 @@ export function AccountSlideV2({
                     securedById: account.secured_by_account_id || "none",
                     isCollateralLinked: !!account.secured_by_account_id,
                     // Cashback config
-                    cycleType: account.cashback_config?.program?.cycleType || 'calendar_month',
-                    statementDay: account.cashback_config?.program?.statementDay || null,
-                    dueDate: account.cashback_config?.program?.dueDate || null,
-                    minSpendTarget: account.cashback_config?.program?.minSpendTarget || null,
-                    defaultRate: account.cashback_config?.program?.defaultRate || 0,
-                    maxCashback: account.cashback_config?.program?.maxBudget || null,
-                    levels: (account.cashback_config?.program?.levels || []).map(lvl => ({
+                    cycleType: (account.cashback_config as any)?.program?.cycleType || 'calendar_month',
+                    statementDay: (account.cashback_config as any)?.program?.statementDay || null,
+                    dueDate: (account.cashback_config as any)?.program?.dueDate || null,
+                    minSpendTarget: (account.cashback_config as any)?.program?.minSpendTarget || null,
+                    defaultRate: (account.cashback_config as any)?.program?.defaultRate || 0,
+                    maxCashback: (account.cashback_config as any)?.program?.maxBudget || null,
+                    levels: ((account.cashback_config as any)?.program?.levels || []).map((lvl: any) => ({
                         name: lvl.name || "",
                         minTotalSpend: lvl.minTotalSpend || 0,
                         defaultRate: lvl.defaultRate || 0,
-                        rules: (lvl.rules || []).map(r => ({
+                        rules: (lvl.rules || []).map((r: any) => ({
                             categoryIds: [...(r.categoryIds || [])].sort(),
                             rate: r.rate || 0,
                             maxReward: r.maxReward || null
@@ -178,12 +178,12 @@ export function AccountSlideV2({
                 };
 
                 // Normalizing logic for simple mode to match how valid levels look
-                const loadedLevels = (account.cashback_config?.program?.levels || []).map(lvl => ({
+                const loadedLevels = ((account.cashback_config as any)?.program?.levels || []).map((lvl: any) => ({
                     id: lvl.id, // keep ID for keying but exclude from dirty check if generated? No, IDs are stable in DB.
                     name: lvl.name || "",
                     minTotalSpend: lvl.minTotalSpend || 0,
                     defaultRate: lvl.defaultRate || 0,
-                    rules: (lvl.rules || []).map(r => ({
+                    rules: (lvl.rules || []).map((r: any) => ({
                         id: r.id,
                         categoryIds: r.categoryIds || [],
                         rate: r.rate || 0,
@@ -263,7 +263,7 @@ export function AccountSlideV2({
     // Set initial state once when opening
     useEffect(() => {
         if (open && account) {
-            const cb = account.cashback_config?.program || {};
+            const cb = (account.cashback_config as any)?.program || {};
             const loadedLevels = (cb.levels || []).map((lvl: any) => ({
                 name: lvl.name || "",
                 minTotalSpend: lvl.minTotalSpend || 0,
@@ -375,18 +375,19 @@ export function AccountSlideV2({
                 setIsActive(account.is_active !== false);
                 setImageUrl(account.image_url || "");
 
-                const cb = normalizeCashbackConfig(account.cashback_config);
+                const cb = normalizeCashbackConfig(account.cashback_config) as any;
                 setCycleType(cb.cycleType || 'calendar_month');
-                setStatementDay(cb.statementDay);
-                setDueDate(cb.dueDate);
-                setMinSpendTarget(cb.minSpendTarget);
+                setStatementDay(cb.statementDay ?? null);
+                setDueDate(cb.dueDate ?? null);
+                setMinSpendTarget(cb.minSpendTarget ?? undefined);
                 setDefaultRate(cb.defaultRate || 0);
-                setMaxCashback(cb.maxBudget || null);
+                setMaxCashback(cb.maxBudget ?? undefined);
 
                 // New fields
-                setAnnualFee(account.annual_fee || 0);
-                setReceiverName(account.receiver_name || "");
-                setParentAccountId(account.parent_account_id || null);
+                (setAnnualFee as any)((account.annual_fee as any) || 0);
+                (setReceiverName as any)((account.receiver_name as any) || "");
+                (setParentAccountId as any)((account.parent_account_id as any) || null);
+                (setStartDate as any)(account.start_date as any);
 
                 // Determine main type
                 if (account.type === 'bank') setActiveMainType('bank');
@@ -398,12 +399,12 @@ export function AccountSlideV2({
                 setSecuredById(secured);
                 setIsCollateralLinked(secured !== "none");
 
-                const loadedLevels = (cb.levels || []).map(lvl => ({
+                const loadedLevels = (cb.levels || []).map((lvl: any) => ({
                     id: lvl.id || Math.random().toString(36).substr(2, 9),
                     name: lvl.name || "",
                     minTotalSpend: lvl.minTotalSpend || 0,
                     defaultRate: lvl.defaultRate || 0,
-                    rules: (lvl.rules || []).map(r => ({
+                    rules: (lvl.rules || []).map((r: any) => ({
                         id: r.id || Math.random().toString(36).substr(2, 9),
                         categoryIds: r.categoryIds || [],
                         rate: r.rate || 0,
@@ -434,9 +435,9 @@ export function AccountSlideV2({
                 setCycleType('calendar_month');
                 setStatementDay(null);
                 setDueDate(null);
-                setMinSpendTarget(null);
+                setMinSpendTarget(undefined);
                 setDefaultRate(0);
-                setMaxCashback(null);
+                setMaxCashback(undefined);
                 setAnnualFee(0);
                 setReceiverName("");
                 setSecuredById("none");
@@ -613,7 +614,7 @@ export function AccountSlideV2({
                                     {[
                                         { id: 'savings', label: 'Savings' },
                                         { id: 'investment', label: 'Invest' }
-                                    ].map(sub => (
+                                    ].map((sub: any) => (
                                         <button
                                             key={sub.id}
                                             type="button"
@@ -1194,7 +1195,7 @@ export function AccountSlideV2({
                                                                     setLevels(newLevels);
                                                                 }}
                                                             >
-                                                                <RotateCcw className="h-4 w-4" title="Duplicate Level" />
+                                                                <RotateCcw className="h-4 w-4" />
                                                             </Button>
                                                             <Button
                                                                 variant="ghost"
@@ -1268,7 +1269,7 @@ export function AccountSlideV2({
                                                         </div>
 
                                                         <div className="space-y-2">
-                                                            {level.rules.map((rule, rIdx) => (
+                                                            {level.rules.map((rule: any, rIdx: number) => (
                                                                 <div key={rule.id} className="flex flex-wrap items-start gap-2 bg-slate-50 p-2 rounded border border-slate-200">
                                                                     <div className="flex-1 min-w-[140px] space-y-1">
                                                                         <div className="flex items-center gap-1.5">
@@ -1295,7 +1296,7 @@ export function AccountSlideV2({
                                                                                     <CommandList className="max-h-48">
                                                                                         <CommandEmpty className="text-xs py-2 px-4">No category found.</CommandEmpty>
                                                                                         <CommandGroup>
-                                                                                            {categories.map((cat) => (
+                                                                                            {categories.map((cat: any) => (
                                                                                                 <CommandItem
                                                                                                     key={cat.id}
                                                                                                     value={cat.name}
@@ -1348,7 +1349,7 @@ export function AccountSlideV2({
 
                                                                         {rule.categoryIds.length > 0 && (
                                                                             <div className="flex flex-wrap gap-1 mt-1.5">
-                                                                                {rule.categoryIds.map(id => {
+                                                                                {rule.categoryIds.map((id: string) => {
                                                                                     const cat = categories.find(c => c.id === id);
                                                                                     return cat ? (
                                                                                         <div key={id} className="flex items-center bg-blue-50 text-blue-700 text-[10px] font-bold px-1.5 rounded-full border border-blue-100">
@@ -1413,7 +1414,7 @@ export function AccountSlideV2({
                                                                             }}
                                                                             className="h-8 w-8 text-slate-400 hover:text-slate-600"
                                                                         >
-                                                                            <RotateCcw className="h-3 w-3" title="Duplicate Rule" />
+                                                                            <RotateCcw className="h-3 w-3" />
                                                                         </Button>
                                                                         <Button
                                                                             type="button"
