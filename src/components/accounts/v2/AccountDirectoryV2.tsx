@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Account, Category, Person, Shop } from "@/types/moneyflow.types";
 import { AccountHeaderV2 } from "./AccountHeaderV2";
 import { AccountTableV2 } from "./AccountTableV2";
@@ -32,6 +33,7 @@ export function AccountDirectoryV2({
     people,
     shops
 }: AccountDirectoryV2Props) {
+    const router = useRouter();
     // State
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -235,7 +237,7 @@ export function AccountDirectoryV2({
                 shops={shops}
                 onSuccess={() => {
                     setIsTxnSlideOpen(false);
-                    // Refresh data if needed, but slide handles toast and router.refresh
+                    router.refresh(); // Refresh account list/stats
                 }}
             />
 

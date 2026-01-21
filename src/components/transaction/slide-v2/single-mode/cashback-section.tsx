@@ -1,7 +1,8 @@
 "use client";
 
+import { useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
-import { Percent, Info, Settings2 } from "lucide-react";
+import { Percent, Info, Settings2, AlertTriangle, RotateCcw } from "lucide-react";
 import { SingleTransactionFormValues } from "../types";
 import { toast } from "sonner";
 import {
@@ -15,16 +16,18 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { SmartAmountInput } from "@/components/ui/smart-amount-input";
-import { Account } from "@/types/moneyflow.types";
+import { Account, Category } from "@/types/moneyflow.types";
 import { calculateStatementCycle } from "@/lib/cycle-utils";
 import { format } from "date-fns";
-import { normalizeCashbackConfig } from "@/lib/cashback";
+import { normalizeCashbackConfig, parseCashbackConfig } from "@/lib/cashback";
+import { resolveCashbackPolicy } from "@/services/cashback/policy-resolver";
 
 type CashbackSectionProps = {
     accounts?: Account[];
+    categories?: Category[];
 };
 
-export function CashbackSection({ accounts }: CashbackSectionProps) {
+export function CashbackSection({ accounts, categories = [] }: CashbackSectionProps) {
     const form = useFormContext<SingleTransactionFormValues>();
     const isExpanded = useWatch({ control: form.control, name: "ui_is_cashback_expanded" });
     const cashbackMode = useWatch({ control: form.control, name: "cashback_mode" });
@@ -32,6 +35,33 @@ export function CashbackSection({ accounts }: CashbackSectionProps) {
     const transactionType = useWatch({ control: form.control, name: "type" });
     const sourceAccountId = useWatch({ control: form.control, name: "source_account_id" });
     const personId = useWatch({ control: form.control, name: "person_id" });
+    const amount = useWatch({ control: form.control, name: "amount" }) || 0;
+    const sharePercent = useWatch({ control: form.control, name: "cashback_share_percent" });
+    const shareFixed = useWatch({ control: form.control, name: "cashback_share_fixed" });
+    const categoryId = useWatch({ control: form.control, name: "category_id" });
+
+    const policy = useMemo(() => {
+        if (!sourceAccountId || !accounts) return null;
+        const acc = accounts.find(a => a.id === sourceAccountId);
+        if (!acc) return null;
+
+        const category = categories.find(c => c.id === categoryId);
+
+        return resolveCashbackPolicy({
+            account: acc as any,
+            categoryId,
+            amount: Math.abs(amount),
+            cycleTotals: {
+                spent: acc.stats?.spent_this_cycle || 0
+            },
+            categoryName: category?.name
+        });
+    }, [sourceAccountId, accounts, categoryId, amount, categories]);
+
+    const activeAccount = useMemo(() => {
+        if (!sourceAccountId || !accounts) return null;
+        return accounts.find(a => a.id === sourceAccountId) || null;
+    }, [sourceAccountId, accounts]);
 
     // Calculate Cycle
     let cycleInfo = null;
@@ -158,32 +188,80 @@ export function CashbackSection({ accounts }: CashbackSectionProps) {
                                     <FormField
                                         control={form.control}
                                         name="cashback_share_percent"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel className="text-xs font-semibold text-slate-500">% Rate</FormLabel>
-                                                <div className="relative">
-                                                    <Input
-                                                        type="number"
-                                                        placeholder="0"
-                                                        {...field}
-                                                        value={field.value ?? ''}
-                                                        onChange={e => {
-                                                            let val = Number(e.target.value);
-                                                            // Removed hardcoded 10% limit to support higher rates (e.g. 20%)
-                                                            field.onChange(val);
-                                                            // Auto-switch mode based on interaction
-                                                            if (currentTab === 'claim') form.setValue('cashback_mode', 'percent');
-                                                            if (currentTab === 'giveaway') form.setValue('cashback_mode', 'real_percent');
-                                                        }}
-                                                        className={cn(
-                                                            "pr-7 h-10 text-right",
-                                                            (cashbackMode === 'percent' || cashbackMode === 'real_percent') ? "border-amber-500 ring-1 ring-amber-500" : ""
-                                                        )}
-                                                    />
-                                                    <Percent className="absolute right-2.5 top-3 h-4 w-4 text-muted-foreground" />
-                                                </div>
-                                            </FormItem>
-                                        )}
+                                        render={({ field }) => {
+                                            const isOverPolicy = policy && field.value && field.value > (policy.rate * 100);
+                                            const remainsCap = activeAccount?.stats?.remains_cap ?? Infinity;
+                                            const projectedReward = Math.abs(amount) * ((field.value || 0) / 100);
+                                            const isOverCap = projectedReward > remainsCap;
+
+                                            return (
+                                                <FormItem>
+                                                    <FormLabel className="text-xs font-semibold text-slate-500">% Rate</FormLabel>
+                                                    <div className="relative">
+                                                        <SmartAmountInput
+                                                            value={field.value ?? 0}
+                                                            onChange={(val) => {
+                                                                field.onChange(val);
+                                                                // Auto-switch mode based on interaction
+                                                                if (currentTab === 'claim') form.setValue('cashback_mode', 'percent');
+                                                                if (currentTab === 'giveaway') form.setValue('cashback_mode', 'real_percent');
+                                                            }}
+                                                            placeholder="0"
+                                                            unit="%"
+                                                            hideLabel={true}
+                                                            className={cn(
+                                                                "h-10",
+                                                                (cashbackMode === 'percent' || cashbackMode === 'real_percent') ? "border-amber-500 ring-1 ring-amber-500" : ""
+                                                            )}
+                                                        />
+                                                    </div>
+
+                                                    {/* Validation & Reset */}
+                                                    {!!isOverPolicy && (
+                                                        <div className="flex flex-col gap-1 mt-1">
+                                                            <div className="flex items-center gap-1.5 text-rose-600 font-bold text-[10px] leading-tight flex-wrap">
+                                                                <AlertTriangle className="w-3 h-3 shrink-0" />
+                                                                <span>Higher than card rate ({(policy.rate * 100).toFixed(1)}%)</span>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    className="h-auto p-0 text-[10px] font-black underline uppercase text-rose-700 hover:text-rose-800 hover:bg-transparent"
+                                                                    onClick={(e) => {
+                                                                        e.preventDefault();
+                                                                        field.onChange(policy.rate * 100);
+                                                                    }}
+                                                                >
+                                                                    <RotateCcw className="w-2.5 h-2.5 mr-1" /> Reset
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Budget Warning */}
+                                                    {(!!isOverCap && cashbackMode.includes('real') && !!personId) && (
+                                                        <div className="mt-1 p-1.5 rounded bg-rose-50 border border-rose-100">
+                                                            <div className="flex items-start gap-1.5 text-rose-700 text-[10px] leading-tight">
+                                                                <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                                                                <div>
+                                                                    <p className="font-bold">Budget Overflow!</p>
+                                                                    <p className="opacity-80">Reward ({new Intl.NumberFormat('vi-VN').format(projectedReward)}) exceeds remaining cap ({new Intl.NumberFormat('vi-VN').format(remainsCap)}).</p>
+                                                                    <Button
+                                                                        variant="link"
+                                                                        className="h-auto p-0 text-[10px] font-black underline h-auto mt-1"
+                                                                        onClick={() => {
+                                                                            form.setValue('cashback_mode', 'voluntary');
+                                                                            form.setValue('cashback_share_fixed', projectedReward);
+                                                                            form.setValue('cashback_share_percent', undefined);
+                                                                        }}
+                                                                    >
+                                                                        Switch to Voluntary Mode
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </FormItem>
+                                            );
+                                        }}
                                     />
 
                                     <FormField
@@ -242,24 +320,47 @@ export function CashbackSection({ accounts }: CashbackSectionProps) {
 
                             {/* TOTAL GIVE AWAY ROW */}
                             <div className="flex items-center justify-between p-2 bg-slate-100 rounded-md text-sm">
-                                <span className="text-slate-500 font-medium">Total Give Away:</span>
-                                <span className="font-bold text-slate-700">0</span>
+                                <span className="text-slate-500 font-medium">Projected Reward:</span>
+                                <span className="font-bold text-slate-700">
+                                    {(() => {
+                                        const p = sharePercent || 0;
+                                        const f = shareFixed || 0;
+                                        const total = (Math.abs(amount) * (p / 100)) + f;
+                                        return new Intl.NumberFormat('vi-VN').format(total);
+                                    })()}
+                                </span>
                             </div>
 
                             {/* POLICY SUMMARY */}
                             <div className="space-y-1 pt-2">
                                 <div className="flex justify-between text-xs">
                                     <span className="text-slate-500">Match Policy:</span>
-                                    <span className="font-medium">Legacy</span>
+                                    <span className="font-medium text-right">
+                                        {(() => {
+                                            const source = policy?.metadata.policySource;
+                                            const reason = policy?.metadata.reason || '';
+                                            if (source === 'category_rule') return `Category Rule (${reason})`;
+                                            if (source === 'level_default') return `Tier Level (${policy?.metadata.levelName || 'Current'})`;
+                                            if (source === 'program_default') return 'Card Default';
+                                            if (source === 'legacy') return 'Legacy Rules';
+                                            return 'Auto Math';
+                                        })()}
+                                    </span>
                                 </div>
                                 <div className="flex justify-between text-xs">
                                     <span className="text-slate-500">Applied Rate:</span>
-                                    <span className="font-medium bg-slate-100 px-1 rounded">10%</span>
+                                    <span className="font-medium bg-slate-100 px-1 rounded">
+                                        {(sharePercent || (policy?.rate ? policy.rate * 100 : 0)).toFixed(1)}%
+                                    </span>
                                 </div>
-                                <div className="flex justify-between text-xs pt-1">
-                                    <span className="text-amber-600 font-medium">Budget Left:</span>
-                                    <span className="text-amber-600 font-bold">294,900</span>
-                                </div>
+                                {activeAccount?.stats?.remains_cap !== undefined && activeAccount.stats.remains_cap !== null && (
+                                    <div className="flex justify-between text-xs pt-1">
+                                        <span className="text-amber-600 font-medium">Budget Left:</span>
+                                        <span className="text-amber-600 font-bold">
+                                            {new Intl.NumberFormat('vi-VN').format(activeAccount.stats.remains_cap)}
+                                        </span>
+                                    </div>
+                                )}
                             </div>
 
                             {/* COLLAPSIBLE DETAILS */}
@@ -270,13 +371,26 @@ export function CashbackSection({ accounts }: CashbackSectionProps) {
 
                                 <div className="grid grid-cols-2 gap-y-1 text-xs">
                                     <span className="text-slate-500">Summary:</span>
-                                    <span className="text-right font-medium">Virtual • 10.0%</span>
+                                    <span className="text-right font-medium">
+                                        {cashbackMode === 'none_back' ? 'None' : (cashbackMode.includes('real') ? 'Real' : 'Virtual')} • {(sharePercent || (policy?.rate ? policy.rate * 100 : 0)).toFixed(1)}%
+                                    </span>
 
                                     <span className="text-slate-500">Source:</span>
-                                    <span className="text-right font-medium">Auto-Policy</span>
+                                    <span className="text-right font-medium">
+                                        {(() => {
+                                            const source = policy?.metadata.policySource;
+                                            if (source === 'category_rule') return 'Specific Category Rule';
+                                            if (source === 'level_default') return 'Tier Achievement';
+                                            if (source === 'program_default') return 'Standard Program';
+                                            if (source === 'legacy') return 'Global Settings';
+                                            return source || 'N/A';
+                                        })()}
+                                    </span>
 
-                                    <span className="text-slate-500">Reason:</span>
-                                    <span className="text-right font-medium">Legacy</span>
+                                    <span className="text-slate-500">Criteria:</span>
+                                    <span className="text-right font-medium text-[10px] italic text-slate-400">
+                                        {policy?.metadata.reason || 'N/A'}
+                                    </span>
                                 </div>
 
                                 <div className="text-[10px] text-slate-400 pt-1 flex justify-between border-t border-slate-100 mt-2">

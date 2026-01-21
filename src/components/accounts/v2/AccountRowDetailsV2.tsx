@@ -1,27 +1,31 @@
 import React from 'react';
-import { Account, TransactionWithDetails } from "@/types/moneyflow.types";
+import { Account } from "@/types/moneyflow.types";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { loadTransactions } from "@/services/transaction.service";
+import { loadAccountTransactionsV2 } from "@/services/transaction.service";
 import Link from "next/link";
-import { Wallet, ArrowUpRight, ArrowDownLeft, RotateCcw, Copy, Check, CreditCard, Banknote, HandCoins, Link2, LucideIcon } from "lucide-react";
+import { Wallet, ArrowUpRight, ArrowDownLeft, RotateCcw, Copy, Check, CreditCard, Banknote, HandCoins, Link2, LucideIcon, User, Pencil, Building2 } from "lucide-react";
 import { toast } from "sonner";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"; // Need to import Tooltip
+import { Button } from "@/components/ui/button"; // Need to import Button
+import { getCategoryIcon } from "@/lib/category-icon";
 
 interface AccountRowDetailsProps {
     account: Account;
     isExpanded: boolean;
     allAccounts?: Account[];
+    onEditTransaction?: (id: string) => void;
 }
 
-export function AccountRowDetailsV2({ account, isExpanded, allAccounts = [] }: AccountRowDetailsProps) {
-    const [transactions, setTransactions] = React.useState<TransactionWithDetails[]>([]);
+export function AccountRowDetailsV2({ account, isExpanded, allAccounts = [], onEditTransaction }: AccountRowDetailsProps) {
+    const [transactions, setTransactions] = React.useState<any[]>([]); // Use simplified type from V2 loader
     const [isLoading, setIsLoading] = React.useState(false);
     const [copiedId, setCopiedId] = React.useState<string | null>(null);
 
     React.useEffect(() => {
         if (isExpanded && account.id) {
             setIsLoading(true);
-            loadTransactions({ accountId: account.id, limit: 3 })
+            loadAccountTransactionsV2(account.id, 5) // Fetch 5 recent
                 .then(setTransactions)
                 .finally(() => setIsLoading(false));
         }
@@ -181,7 +185,17 @@ export function AccountRowDetailsV2({ account, isExpanded, allAccounts = [] }: A
                     {/* Section B: Account Details (Financial Stats) */}
                     <div className="space-y-3">
                         <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest border-b pb-1">Account Details</h4>
-                        <div className="grid grid-cols-2 gap-2">
+                        {/* 
+                           Layout Logic:
+                           - Default: grid-cols-2 (2x2)
+                           - Standalone (lots of vertical space needs filling): grid-cols-1 (1x4) to match txn list height
+                        */}
+                        <div className={cn(
+                            "grid gap-2",
+                            (!parentAccount && !account.secured_by_account_id && (!account.relationships?.is_parent))
+                                ? "grid-cols-1"
+                                : "grid-cols-2"
+                        )}>
                             <div className="p-2 bg-white rounded border border-slate-100 shadow-sm">
                                 <p className="text-[9px] text-slate-400 uppercase font-bold mb-1">Spent (Cycle)</p>
                                 <p className="text-sm font-black text-slate-700">{formatMoney(spentThisCycle)}</p>
@@ -242,30 +256,92 @@ export function AccountRowDetailsV2({ account, isExpanded, allAccounts = [] }: A
                             </>
                         ) : transactions.length > 0 ? (
                             transactions.map((txn) => (
-                                <div key={txn.id} className="flex items-center justify-between p-2 bg-white rounded border border-slate-100 shadow-sm hover:border-slate-200 transition-colors">
-                                    <div className="flex items-center gap-2 min-w-0">
+                                <div key={txn.id} className="flex items-center justify-between p-2 bg-white rounded border border-slate-100 shadow-sm hover:border-slate-200 transition-colors group">
+                                    <div className="flex items-center gap-2 min-w-0 flex-1">
                                         <div className={cn(
                                             "h-7 w-7 rounded flex items-center justify-center shrink-0",
                                             txn.displayType === 'income' ? "bg-emerald-50 text-emerald-600" :
                                                 txn.displayType === 'transfer' ? "bg-indigo-50 text-indigo-600" :
                                                     "bg-rose-50 text-rose-600"
                                         )}>
-                                            {txn.displayType === 'income' ? <ArrowUpRight className="h-3.5 w-3.5" /> :
-                                                txn.displayType === 'transfer' ? <RotateCcw className="h-3.5 w-3.5" /> :
-                                                    <ArrowDownLeft className="h-3.5 w-3.5" />}
+                                            {(() => {
+                                                if (txn.category_icon && typeof txn.category_icon === 'string') {
+                                                    return <img src={txn.category_icon} className="w-full h-full object-contain p-1" alt="" />;
+                                                }
+                                                // If no icon URL, use helper
+                                                if (!txn.category_icon && txn.category_name) {
+                                                    const CatIcon = getCategoryIcon(txn.category_name);
+                                                    return <CatIcon className="h-3.5 w-3.5" />;
+                                                }
+
+                                                // Fallback to Type Icons
+                                                return (txn.displayType === 'income' ? <ArrowUpRight className="h-3.5 w-3.5" /> :
+                                                    txn.displayType === 'transfer' ? <RotateCcw className="h-3.5 w-3.5" /> :
+                                                        <ArrowDownLeft className="h-3.5 w-3.5" />);
+                                            })()}
                                         </div>
-                                        <div className="min-w-0">
-                                            <p className="text-[11px] font-bold text-slate-700 truncate">{txn.note || txn.category_name || 'No Description'}</p>
-                                            <p className="text-[9px] text-slate-400 font-medium">
-                                                {new Date(txn.occurred_at).toLocaleDateString('vi-VN')}
-                                            </p>
+
+                                        <div className="min-w-0 flex flex-col gap-0.5">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                                                    {new Date(txn.occurred_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })}
+                                                </span>
+                                                <p className="text-[11px] font-bold text-slate-700 truncate min-w-0 max-w-[120px] md:max-w-[200px]">
+                                                    {txn.note || txn.category_name || 'No Description'}
+                                                </p>
+                                            </div>
+                                            {/* Details Line: Back (Bank?) • Person */}
+                                            <div className="flex items-center gap-2 text-[9px] leading-tight">
+                                                <span className="flex items-center gap-1 text-slate-400 font-medium">
+                                                    <Building2 className="w-2.5 h-2.5" />
+                                                    {/* Maybe 'back' means Bank/Source? Or just 'Bank' label? User said "back". Assuming Bank icon/label */}
+                                                    {/* If it's transfer, maybe destination? For now use generic 'Bank' icon as decoration for account context */}
+                                                    Bank
+                                                </span>
+                                                {txn.person_name && (
+                                                    <span className="flex items-center gap-1 bg-indigo-50/50 text-indigo-600 px-1.5 py-0.5 rounded-full font-bold border border-indigo-100/50">
+                                                        <User className="w-2.5 h-2.5" />
+                                                        {txn.person_name}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className={cn(
-                                        "text-xs font-black tabular-nums whitespace-nowrap",
-                                        txn.displayType === 'income' ? "text-emerald-600" : "text-slate-700"
-                                    )}>
-                                        {txn.displayType === 'income' ? '+' : '-'}{formatMoney(txn.amount)}
+
+                                    {/* Right Side: Amount + Actions */}
+                                    <div className="flex items-center gap-3 pl-2">
+                                        <div className={cn(
+                                            "text-xs font-black tabular-nums whitespace-nowrap",
+                                            txn.displayType === 'income' ? "text-emerald-600" : "text-slate-700"
+                                        )}>
+                                            {txn.displayType === 'income' ? '+' : '-'}{formatMoney(txn.amount)}
+                                        </div>
+
+                                        <div className="flex items-center gap-0.5 border-l pl-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-slate-600" onClick={() => copyToClipboard(txn.id, txn.id)}>
+                                                            {copiedId === txn.id ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent side="top">Copy ID</TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+
+                                            {onEditTransaction && (
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-400 hover:text-indigo-600" onClick={() => onEditTransaction(txn.id)}>
+                                                                <Pencil className="h-3 w-3" />
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="top">Edit</TooltipContent>
+                                                    </Tooltip>
+                                                </TooltipProvider>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             ))

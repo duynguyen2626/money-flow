@@ -348,7 +348,7 @@ export function TransactionSlideV2({
                                         onAddNewPerson={() => setIsPeopleDialogOpen(true)}
                                     />
                                     <SplitBillSection people={people} />
-                                    <CashbackSection accounts={accounts} />
+                                    <CashbackSection accounts={accounts} categories={categories} />
                                 </form>
                             </FormProvider>
                         </div>

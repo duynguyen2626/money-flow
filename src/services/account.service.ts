@@ -214,12 +214,16 @@ async function getStatsForAccount(supabase: ReturnType<typeof createClient>, acc
     due_date_display,
     due_date,
     remains_cap,
-    shared_cashback: real_awarded
+    shared_cashback: real_awarded,
+    real_awarded,
+    virtual_profit
   }
 }
 
-export async function getAccounts(): Promise<Account[]> {
-  const supabase = createClient()
+
+
+export async function getAccounts(supabaseClient?: SupabaseClient): Promise<Account[]> {
+  const supabase = supabaseClient ?? createClient()
 
   const { data, error } = await supabase
     .from('accounts')

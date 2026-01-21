@@ -194,6 +194,8 @@ export async function upsertTransactionCashback(
     categoryName: transaction.category_name ?? undefined
   });
 
+  let effectiveRate = policy.rate;
+
   switch (modePreference) {
     case 'real_fixed':
       mode = 'real';
@@ -203,14 +205,25 @@ export async function upsertTransactionCashback(
 
     case 'real_percent':
       mode = 'real';
-      // Hybrid: If user set a specific percent in Transaction Form, use it?
-      // Or use Policy?
-      // Usually "real_percent" means "Use the Standard Rate".
-      // But if user overrode it in form?
-      // Transaction form seems to save to `cashback_share_percent`.
-      // Let's prefer the explicitly saved percent if non-zero, else policy.
-      const usedRate = transaction.cashback_share_percent ? transaction.cashback_share_percent : policy.rate;
-      amount = Math.abs(transaction.amount) * usedRate + fixedInput;
+      effectiveRate = transaction.cashback_share_percent !== undefined && transaction.cashback_share_percent !== null
+        ? transaction.cashback_share_percent
+        : policy.rate;
+      amount = Math.abs(transaction.amount) * effectiveRate + fixedInput;
+      countsToBudget = true;
+      break;
+
+    case 'percent':
+      mode = 'virtual';
+      effectiveRate = transaction.cashback_share_percent !== undefined && transaction.cashback_share_percent !== null
+        ? transaction.cashback_share_percent
+        : policy.rate;
+      amount = Math.abs(transaction.amount) * effectiveRate + fixedInput;
+      countsToBudget = true;
+      break;
+
+    case 'fixed':
+      mode = 'virtual';
+      amount = fixedInput;
       countsToBudget = true;
       break;
 
@@ -223,7 +236,6 @@ export async function upsertTransactionCashback(
     case 'none_back':
     default:
       mode = 'virtual';
-      // Use Policy for virtual
       amount = Math.abs(transaction.amount) * policy.rate;
       countsToBudget = true;
       break;
@@ -240,7 +252,10 @@ export async function upsertTransactionCashback(
     mode,
     amount, // This is the total value
     counts_to_budget: countsToBudget,
-    metadata: policy.metadata,
+    metadata: {
+      ...policy.metadata,
+      rate: effectiveRate
+    },
     note: mode === 'virtual'
       ? `Projected: ${policy.metadata.reason}`
       : (transaction.note || `Manual: ${policy.metadata.reason}`)
@@ -288,8 +303,10 @@ export async function upsertTransactionCashback(
 /**
  * MF5.2 Engine: Deterministic Recomputation
  */
-export async function recomputeCashbackCycle(cycleId: string) {
-  const supabase = getCashbackClient();
+import { SupabaseClient } from '@supabase/supabase-js'
+
+export async function recomputeCashbackCycle(cycleId: string, supabaseClient?: SupabaseClient) {
+  const supabase = supabaseClient ?? getCashbackClient();
 
   // 1. Fetch Cycle & Parent Account Info
   const { data: cycle } = await supabase
@@ -1174,4 +1191,87 @@ export async function getMonthlyCashbackTransactions(cardId: string, month: numb
       cashbackGiven: given
     };
   });
+}
+
+/**
+ * Fetches all cashback cycles for a specific account.
+ */
+export async function getAccountCycles(accountId: string) {
+  const supabase = createClient();
+  const { data, error } = await supabase.from('cashback_cycles')
+    .select('id, cycle_tag, spent_amount, real_awarded, virtual_profit, min_spend_target, max_budget, start_date, end_date')
+    .eq('account_id', accountId)
+    .order('cycle_tag', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching account cycles:', error);
+  }
+  return data || [];
+}
+
+/**
+ * Fetches detailed transactions for a specific cashback cycle.
+ */
+export async function getTransactionsForCycle(cycleId: string) {
+  const supabase = createClient();
+
+  // Use direct relations instead of legacy line items to fix missing relation error
+  // Explicitly select person name
+  const { data: entries, error: entriesError } = await (supabase
+    .from('cashback_entries')
+    .select(`
+      mode, amount, metadata, transaction_id,
+      transaction:transactions!inner (
+        id, occurred_at, note, amount, account_id,
+        cashback_share_percent, cashback_share_fixed,
+        category:categories(name, icon),
+        shop:shops(name, image_url),
+        person:people!transactions_person_id_fkey(name)
+      )
+    `)
+    .eq('cycle_id', cycleId)
+    .neq('transaction.status', 'void') as any);
+
+  if (entriesError || !entries) {
+    console.error('[getTransactionsForCycle] Failed to load entries:', entriesError);
+    return [];
+  }
+
+  const { resolveCashbackPolicy } = await import('./cashback/policy-resolver');
+
+  return (entries as any).map((e: any) => {
+    const t = e.transaction;
+    if (!t) return null;
+
+    const category = t.category;
+    const shop = t.shop;
+    const person = t.person;
+
+    const bankBack = e.amount;
+    const peopleBack = e.mode === 'real' ? e.amount : 0;
+    const profit = e.mode === 'virtual' ? e.amount : 0;
+    const policyMetadata = normalizePolicyMetadata(e.metadata);
+    const effectiveRate = policyMetadata?.rate ?? 0;
+
+    return {
+      id: t.id,
+      occurred_at: t.occurred_at,
+      note: t.note,
+      amount: t.amount,
+      earned: bankBack,
+      bankBack,
+      peopleBack,
+      profit,
+      effectiveRate,
+      sharePercent: t.cashback_share_percent,
+      shareFixed: t.cashback_share_fixed,
+      shopName: shop?.name,
+      shopLogoUrl: shop?.image_url,
+      categoryName: category?.name,
+      categoryIcon: category?.icon,
+      categoryLogoUrl: category?.image_url,
+      personName: person?.name,
+      policyMetadata,
+    } as CashbackTransaction;
+  }).filter((t: any): t is CashbackTransaction => t !== null);
 }

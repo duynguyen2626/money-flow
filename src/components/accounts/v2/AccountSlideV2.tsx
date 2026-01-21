@@ -142,7 +142,9 @@ export function AccountSlideV2({
         if (open) {
             let loadedState = "";
             if (account) {
-                // ... (logic to build state object matching what we save)
+                const config = normalizeCashbackConfig(account.cashback_config);
+
+                // Initial load
                 const stateObj = {
                     name: account.name,
                     type: account.type,
@@ -156,34 +158,35 @@ export function AccountSlideV2({
                     securedById: account.secured_by_account_id || "none",
                     isCollateralLinked: !!account.secured_by_account_id,
                     // Cashback config
-                    cycleType: (account.cashback_config as any)?.program?.cycleType || 'calendar_month',
-                    statementDay: (account.cashback_config as any)?.program?.statementDay || null,
-                    dueDate: (account.cashback_config as any)?.program?.dueDate || null,
-                    minSpendTarget: (account.cashback_config as any)?.program?.minSpendTarget || null,
-                    defaultRate: (account.cashback_config as any)?.program?.defaultRate || 0,
-                    maxCashback: (account.cashback_config as any)?.program?.maxBudget || null,
-                    levels: ((account.cashback_config as any)?.program?.levels || []).map((lvl: any) => ({
+                    cycleType: config.cycleType || 'calendar_month',
+                    statementDay: config.statementDay || null,
+                    dueDate: config.dueDate || null,
+                    minSpendTarget: config.minSpendTarget || null,
+                    defaultRate: config.defaultRate || 0,
+                    maxCashback: config.maxBudget || null,
+                    levels: (config.levels || []).map(lvl => ({
+                        id: lvl.id,
                         name: lvl.name || "",
                         minTotalSpend: lvl.minTotalSpend || 0,
                         defaultRate: lvl.defaultRate || 0,
-                        rules: (lvl.rules || []).map((r: any) => ({
+                        rules: (lvl.rules || []).map(r => ({
+                            id: r.id,
                             categoryIds: [...(r.categoryIds || [])].sort(),
                             rate: r.rate || 0,
                             maxReward: r.maxReward || null
                         }))
                     })),
                     // Derived simple mode state for check
-                    isCategoryRestricted: false, // We'll re-derive this below for consistency if we wanted, but comparing the resulting config is better.
-                    // simpler: just construct the 'save' object and stringify it.
+                    isCategoryRestricted: false,
                 };
 
                 // Normalizing logic for simple mode to match how valid levels look
-                const loadedLevels = ((account.cashback_config as any)?.program?.levels || []).map((lvl: any) => ({
-                    id: lvl.id, // keep ID for keying but exclude from dirty check if generated? No, IDs are stable in DB.
+                const loadedLevels = (config.levels || []).map(lvl => ({
+                    id: lvl.id,
                     name: lvl.name || "",
                     minTotalSpend: lvl.minTotalSpend || 0,
                     defaultRate: lvl.defaultRate || 0,
-                    rules: (lvl.rules || []).map((r: any) => ({
+                    rules: (lvl.rules || []).map(r => ({
                         id: r.id,
                         categoryIds: r.categoryIds || [],
                         rate: r.rate || 0,
@@ -384,10 +387,10 @@ export function AccountSlideV2({
                 setMaxCashback(cb.maxBudget ?? undefined);
 
                 // New fields
-                (setAnnualFee as any)((account.annual_fee as any) || 0);
-                (setReceiverName as any)((account.receiver_name as any) || "");
-                (setParentAccountId as any)((account.parent_account_id as any) || null);
-                (setStartDate as any)(account.start_date as any);
+                setAnnualFee(account.annual_fee || 0);
+                setReceiverName(account.receiver_name || "");
+                setParentAccountId(account.parent_account_id || null);
+                setStartDate((account as any).start_date);
 
                 // Determine main type
                 if (account.type === 'bank') setActiveMainType('bank');
@@ -590,7 +593,7 @@ export function AccountSlideV2({
                                         key={item.id}
                                         type="button"
                                         onClick={() => {
-                                            setActiveMainType(item.id as any);
+                                            setActiveMainType(item.id as 'bank' | 'credit' | 'savings' | 'others');
                                             if (item.id === 'bank') setType('bank');
                                             else if (item.id === 'credit') setType('credit_card');
                                             else if (item.id === 'savings') setType('savings');
@@ -1358,7 +1361,7 @@ export function AccountSlideV2({
                                                                                                 type="button"
                                                                                                 onClick={() => {
                                                                                                     const newLevels = [...levels];
-                                                                                                    newLevels[lIdx].rules[rIdx].categoryIds = rule.categoryIds.filter(cid => cid !== id);
+                                                                                                    newLevels[lIdx].rules[rIdx].categoryIds = rule.categoryIds.filter((cid: string) => cid !== id);
                                                                                                     setLevels(newLevels);
                                                                                                 }}
                                                                                                 className="ml-1 hover:text-rose-500"
