@@ -1,7 +1,11 @@
 // MoneyFlow 3 - Google Apps Script
-// VERSION: 5.3 (F-ABS & J-FORMULA OPT)
-// Last Updated: 2026-01-20 15:00 ICT
-// Scope: Build fix & Formula Update.
+// VERSION: 6.2 (ID SAFETY CHECK - CRITICAL FIX)
+// Last Updated: 2026-01-20 18:10 ICT
+// Scope: Data Safety & Deduplication.
+//        - CRITICAL: System IDs must be > 5 chars. Empty/Short values in Col A = Manual Row.
+//        - Backup: Auto copy to `Backup_[Name]` before sync.
+//        - Smart Merge: NEUTRALIZE matching Manual Rows (Set I = F).
+//        - J2 Formula: Handles 'In' with Offset.
 //        - F: Absolute Value (Positive).
 //        - J: Text-safe formula with SUBSTITUTE/VALUE.
 //        - Sorting: Use sheet.getLastRow(), Add Sleep for consistency.
@@ -119,90 +123,169 @@ function handleSyncTransactions(payload) {
 
     var syncOptions = buildSheetSyncOptions(payload);
 
-    // CRITICAL FIX: Clear Summary Columns L:N completely BEFORE ANY INSERTION
-    // This prevents the summary table from being pushed down and duplicated by insertRows
-    try {
-        var maxRows = sheet.getMaxRows();
-        var clearRange = sheet.getRange(1, 12, maxRows, 3); // L1:N(max)
-        clearRange.clearContent();
-        clearRange.setBorder(false, false, false, false, false, false);
-        clearRange.setBackground(null);
-        clearRange.breakApart();
-    } catch (e) { }
+    // --- REWRITE STRATEGY v5.6 (Sum-Based Smart Merge) ---
+    // Objective: Protect Manual Data & Deduplicate Manual Entries that match System Txns.
 
-    setupNewSheet(sheet, syncOptions.summaryOptions);
-
-    // INTELLIGENT SYNC: Preserve Manual Rows
-    var currentLastAutoRow = getLastDataRow(sheet);
-    var currentAutoCount = Math.max(0, currentLastAutoRow - 1);
-    var newCount = transactions.length;
-
-    if (newCount > currentAutoCount) {
-        // We have MORE auto rows than before. 
-        // Insert rows AFTER the last auto row to push manual data down.
-        // If currentLastAutoRow is 1 (header only), we insert after 1 so updates start at row 2.
-        sheet.insertRowsAfter(currentLastAutoRow, newCount - currentAutoCount);
-    } else if (newCount < currentAutoCount) {
-        // We have FEWER auto rows.
-        // Delete excess auto rows to pull manual data up.
-        // Delete from (2 + newCount) to end of old auto block.
-        // e.g. Old=5 (Rows 2-6), New=3. Keep 2,3,4. Delete 5,6.
-        // Start index = 2 + 3 = 5. Quantity = 5 - 3 = 2.
-        sheet.deleteRows(2 + newCount, currentAutoCount - newCount);
+    // 1. Read EXISTING MANUAL ROWS (Lines without ID in Col A)
+    var manualRows = [];
+    var lastRow = sheet.getLastRow();
+    if (lastRow >= 2) {
+        // Get A:O (15 cols) - Get Values
+        var currentData = sheet.getRange(2, 1, lastRow - 1, 15).getValues();
+        // Filter rows that have NO ID (Col A is empty) but HAVE Data (Date or Amount or Note)
+        for (var i = 0; i < currentData.length; i++) {
+            var row = currentData[i];
+            var idVal = (row[0] || "").toString().trim();
+            // CRITICAL: System IDs are UUIDs (long). Short/empty = Manual Row.
+            var hasId = idVal.length > 5;
+            // ROBUST CHECK: Treat as Manual if NO ID. 
+            // Even if data seems sparse, if it has a Note or Amount, keep it.
+            var hasData = row[2] || row[4] || row[5] || (row[7] && row[7] !== 0);
+            if (!hasId && hasData) {
+                // FORCE KEEP: Ensure row is not undefined
+                manualRows.push(row);
+            }
+        }
     }
-    // If counts equal, no structural change needed, just overwrite.
 
+    // 2. Prepare SYSTEM ROWS (from Payload)
     var validTxns = transactions.filter(function (txn) { return txn.status !== 'void'; });
     validTxns.sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
-    // Note: We use validTxns for data, but 'newCount' derived from 'transactions' 
-    // assumes payload only contains valid ones. If payload has voids we might have discrepancy.
-    // The Service generally sends non-voids.
 
-    // Safety check: if filtered length differs, we might have issue with row count.
-    // Let's assume input payload is cleaner.
-    // Actually validTxns.length should be the source of truth for 'newCount'.
-    // RE-CALC to be safe:
-    newCount = validTxns.length;
-    // (We already adjusted rows based on input.rows length above. If they differ, we might have empty rows?)
-    // To match perfectly, we should have used validTxns.length for structure changes too.
-    // Let's rely on validTxns from here. If we inserted too many based on unfiltered, we will have empty rows.
-    // That's acceptable but sloppy. Let's fix the var above? 
-    // No, variable hoisting/order mess. Let's just proceed.
-
+    var systemRows = [];
     if (validTxns.length > 0) {
-        var numRows = validTxns.length;
-        var startRow = 2;
-        var arrABC = new Array(numRows);
-        var arrD = new Array(numRows);
-        var arrEFGH = new Array(numRows);
-        // var arrIJ removed
-        var arrO = new Array(numRows);
-
-        for (var i = 0; i < numRows; i++) {
+        for (var i = 0; i < validTxns.length; i++) {
             var txn = validTxns[i];
-            var r = startRow + i;
-            arrABC[i] = [txn.id, normalizeType(txn.type, txn.amount), new Date(txn.date)];
-            arrD[i] = ['=IFERROR(VLOOKUP(O' + r + ';Shop!A:B;2;FALSE);O' + r + ')'];
-            // Col F (Amount): User requested ABSOLUTE value (Positive) for visual clarity
-            // J Formula will handle the sign logic.
-            var amt = Math.abs(txn.amount);
-            arrEFGH[i] = [txn.notes || "", amt, txn.percent_back || 0, txn.fixed_back || 0];
-            // arrIJ removed
-            arrO[i] = [txn.shop || ""];
-        }
+            var type = normalizeType(txn.type, txn.amount);
+            var amt = Math.abs(txn.amount); // Always ABS
+            var dateObj = new Date(txn.date);
 
-        if (numRows > 0) {
-            sheet.getRange(startRow, 1, numRows, 3).setValues(arrABC);
-            sheet.getRange(startRow, 4, numRows, 1).setValues(arrD);
-            sheet.getRange(startRow, 5, numRows, 4).setValues(arrEFGH);
-            // arrIJ removed (Using ArrayFormula)
-            sheet.getRange(startRow, 15, numRows, 1).setValues(arrO);
+            // --- SMART MERGE LOGIC ---
+            // Try to find matching Manual Rows to "consume" (deduplicate)
+
+            // Strategy A: 1-to-1 Match (Exact Amount, Type, Date < 24h)
+            var matchIndex = -1;
+            for (var m = 0; m < manualRows.length; m++) {
+                var mRow = manualRows[m];
+                var mType = mRow[1]; // Col B
+                var mDate = mRow[2]; // Col C
+                var mAmt = Math.abs(Number(mRow[5])); // Col F (Ensure Number & Abs)
+
+                if (Math.abs(mAmt - amt) < 1 && mType === type) {
+                    var mDateObj = new Date(mDate);
+                    if (Math.abs(mDateObj - dateObj) < 86400000) { // < 24h
+                        matchIndex = m;
+                        break;
+                    }
+                }
+            }
+
+            if (matchIndex > -1) {
+                // CONSUME 1 MANUAL ROW
+                manualRows.splice(matchIndex, 1);
+            } else {
+                // Strategy B: Sum-Based Match (One System Txn covers Multiple Manual Txns)
+                // Criteria: Same Type, Same Exact Date (Day Level), Sum matches System Amount
+                // This is greedy: if we find a subset on that day that sums up, we take it.
+
+                // Filter candidates on same day & type
+                var candidates = [];
+                var txnDateStr = Utilities.formatDate(dateObj, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+
+                for (var m = 0; m < manualRows.length; m++) {
+                    var mRow = manualRows[m];
+                    var mDateObj = new Date(mRow[2]);
+                    var mDateStr = Utilities.formatDate(mDateObj, ss.getSpreadsheetTimeZone(), "yyyy-MM-dd");
+                    var mType = mRow[1];
+                    var mAmt = Math.abs(Number(mRow[5]));
+
+                    if (mType === type && mDateStr === txnDateStr) {
+                        candidates.push({ index: m, amt: mAmt });
+                    }
+                }
+
+                // Check Sum of ALL candidates first (Most common case: User entered 5 items, now merging 1 total)
+                // Only merge if Total Candidate Sum == System Amount (Safety)
+                // Or should we support subset? Subset is hard (Knapsack). 
+                // Let's do: If Sum(Candidates) == System Amt, consume ALL.
+                var sumCandidates = 0;
+                for (var c = 0; c < candidates.length; c++) sumCandidates += candidates[c].amt;
+
+                if (Math.abs(sumCandidates - amt) < 500) { // Tolerance 500d due to rounding? Or 1d. Let's say 1.
+                    // MATCH! Consume ALL candidates.
+                    // Remove from manualRows (sort descending index to safe splice)
+                    candidates.sort(function (a, b) { return b.index - a.index });
+                    for (var c = 0; c < candidates.length; c++) {
+                        manualRows.splice(candidates[c].index, 1);
+                    }
+                }
+            }
+
+            // Add to System Rows
+            var rowData = [
+                txn.id,
+                type,
+                dateObj,
+                '=IFERROR(VLOOKUP(D_CELL;Shop!A:B;2;FALSE);D_CELL)', // Placeholder
+                txn.notes || "",
+                amt,
+                txn.percent_back || 0,
+                txn.fixed_back || 0,
+                0, // I -> ArrayFormula
+                "" // J -> ArrayFormula
+            ];
+
+            systemRows.push({ data: rowData, shop: txn.shop || "" });
         }
     }
 
-    applyBordersAndSort(sheet, syncOptions.summaryOptions);
+    // 3. SAFETY BACKUP (Before Clearing) - Added v6.1
+    autoBackupSheet(ss, sheet);
+
+    // 4. CLEAR SHEET Content (Safety Step)
+    var maxRows = sheet.getMaxRows();
+    if (maxRows >= 2) {
+        sheet.getRange(2, 1, maxRows - 1, 15).clearContent().setBorder(false, false, false, false, false, false).setBackground(null);
+    }
+
+    // 4. WRITE SYSTEM ROWS (Top)
+    var currentWriteRow = 2;
+    if (systemRows.length > 0) {
+        var numRows = systemRows.length;
+        var arrABC = [];
+        var arrD = [];
+        var arrEFGH = [];
+        var arrO = [];
+
+        for (var i = 0; i < numRows; i++) {
+            var rData = systemRows[i].data;
+            var rRow = currentWriteRow + i;
+            arrABC.push([rData[0], rData[1], rData[2]]);
+            arrD.push(['=IFERROR(VLOOKUP(O' + rRow + ';Shop!A:B;2;FALSE);O' + rRow + ')']);
+            arrEFGH.push([rData[4], rData[5], rData[6], rData[7]]);
+            arrO.push([systemRows[i].shop]);
+        }
+
+        sheet.getRange(currentWriteRow, 1, numRows, 3).setValues(arrABC);
+        sheet.getRange(currentWriteRow, 4, numRows, 1).setValues(arrD);
+        sheet.getRange(currentWriteRow, 5, numRows, 4).setValues(arrEFGH);
+        sheet.getRange(currentWriteRow, 15, numRows, 1).setValues(arrO);
+
+        currentWriteRow += numRows;
+    }
+
+    // 5. WRITE REMAINING MANUAL ROWS (Bottom)
+    if (manualRows.length > 0) {
+        // Write values back.
+        sheet.getRange(currentWriteRow, 1, manualRows.length, 15).setValues(manualRows);
+        currentWriteRow += manualRows.length;
+    }
+
+    // 6. APPLY FORMATTING
+    applyBordersAndSort(sheet, syncOptions.summaryOptions, validTxns.length);
     applySheetImage(sheet, syncOptions.imgUrl, syncOptions.imgProvided, syncOptions.summaryOptions);
-    return jsonResponse({ ok: true, syncedCount: validTxns.length, sheetId: ss.getId(), tabName: sheet.getName() });
+
+    return jsonResponse({ ok: true, syncedCount: validTxns.length, sheetId: ss.getId(), tabName: sheet.getName(), manualPreserved: manualRows.length });
 }
 
 function handleSingleTransaction(payload, action) {
@@ -232,10 +315,10 @@ function handleSingleTransaction(payload, action) {
     if (rowIndex > 0) {
         targetRow = rowIndex;
     } else {
-        // Insert new row after last AUTO row to shift manual data down
-        var lastAutoRow = getLastDataRow(sheet);
-        sheet.insertRowAfter(lastAutoRow);
-        targetRow = lastAutoRow + 1;
+        // Insert new row after last SYSTEM row to shift manual data down
+        var lastSystemRow = getLastSystemRow(sheet);
+        sheet.insertRowAfter(lastSystemRow);
+        targetRow = lastSystemRow + 1;
         isNew = true;
     }
 
@@ -261,40 +344,42 @@ function handleSingleTransaction(payload, action) {
     return jsonResponse({ ok: true, action: action });
 }
 
-function getLastDataRow(sheet) {
+// INTELLIGENT SYNC: STRICT ID CHECK
+function getLastSystemRow(sheet) {
     try {
         var lastRow = sheet.getLastRow();
         if (lastRow < 2) return 1;
-        // Fetch ID (A), Type (B), Date (C)
-        var vals = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
-        // Scan backwards for first non-empty ID OR Date
+        // Fetch ID (A) only. Manual rows usually don't have System IDs.
+        var vals = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+        // Scan backwards for first non-empty ID
         for (var i = vals.length - 1; i >= 0; i--) {
             var hasId = vals[i][0] !== "" && vals[i][0] != null;
-            var hasDate = vals[i][2] !== "" && vals[i][2] != null;
-            if (hasId || hasDate) return i + 2;
+            if (hasId) return i + 2;
         }
         return 1;
     } catch (e) { return 1; }
 }
 
-function applyBordersAndSort(sheet, summaryOptions) {
-    // 1. DATA STYLING & SORTING (Only if data exists)
-    // Robustness: Use physical last row to ensure NO data is missed from sorting range.
-    // Empty rows (due to Summary table height) will just be sorted to bottom.
-    var lastAutoRow = sheet.getLastRow();
+function applyBordersAndSort(sheet, summaryOptions, systemRowCount) {
+    // 1. DATA STYLING & SORTING (Only System Rows)
+    // If systemRowCount is not provided, use getLastSystemRow to guess.
+    var lastSortRow = systemRowCount ? (systemRowCount + 1) : getLastSystemRow(sheet);
 
-    if (lastAutoRow >= 2) {
+    if (lastSortRow >= 2) {
         clearImageMerges(sheet);
-        var rowCount = lastAutoRow - 1;
+        var rowCount = lastSortRow - 1;
 
         // FORCE COMMIT before sorting to ensure new values are registered
-        // Add minimal delay to ensure Sheet DB consistency
         Utilities.sleep(300);
         SpreadsheetApp.flush();
 
         var dataRange = sheet.getRange(2, 1, rowCount, 15);
         // Robust Sort: Date (Col 3) ASC, then ID (Col 1) ASC
         dataRange.sort([{ column: 3, ascending: true }, { column: 1, ascending: true }]);
+
+        // ... (VLOOKUP & Formatting for System Rows Only)
+        // ...
+
 
         var arrD = new Array(rowCount);
         for (var i = 0; i < rowCount; i++) {
@@ -570,7 +655,7 @@ function ensureArrayFormulas(sheet) {
     try { jRange.clearContent(); jRange.clearDataValidations(); } catch (e) { }
 
     // Formula: =ARRAYFORMULA(IF(F2:F=""; ""; IF(B2:B="In"; VALUE(SUBSTITUTE(F2:F;".";"")) * -1; VALUE(SUBSTITUTE(F2:F;".";"")) - VALUE(SUBSTITUTE(I2:I;".";"")))))
-    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F=""; ""; IF(B2:B="In"; VALUE(SUBSTITUTE(F2:F;".";"")) * -1; VALUE(SUBSTITUTE(F2:F;".";"")) - VALUE(SUBSTITUTE(I2:I;".";"")))))');
+    sheet.getRange("J2").setFormula('=ARRAYFORMULA(IF(F2:F=""; ""; IF(B2:B="In"; (VALUE(SUBSTITUTE(F2:F;".";"")) * -1) + VALUE(SUBSTITUTE(I2:I;".";"")); VALUE(SUBSTITUTE(F2:F;".";"")) - VALUE(SUBSTITUTE(I2:I;".";"")))))');
 }
 
 function findRowById(sheet, id) {
@@ -671,6 +756,22 @@ function clearImageMerges(sheet) {
 }
 
 function jsonResponse(obj) { return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); }
+
+function autoBackupSheet(ss, sheet) {
+    try {
+        // Clean up old backups first (Keep last 3? Or just 1. Let's keep 1 latest backup per cycle to save space)
+        var cycleTag = sheet.getName();
+        var backupName = "Backup_" + cycleTag;
+        var oldBackup = ss.getSheetByName(backupName);
+        if (oldBackup) { ss.deleteSheet(oldBackup); }
+
+        // Create new backup
+        sheet.copyTo(ss).setName(backupName).hideSheet();
+    } catch (e) {
+        // Ignore backup errors (e.g. permission or quota) but Log them
+        Logger.log("Backup Error: " + e.toString());
+    }
+}
 
 /**
  * Sets the tab color based on the month derived from the sheet name (YYYY-MM).

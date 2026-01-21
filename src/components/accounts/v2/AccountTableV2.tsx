@@ -41,6 +41,17 @@ export function AccountTableV2({
         collapseAll,
     } = useAccountExpandableRows();
 
+    // Collapse details on ESC
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                collapseAll();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [collapseAll]);
+
     // Use derived state for robust lookup
     const robustAllAccounts = allAccounts || accounts;
 
@@ -59,13 +70,58 @@ export function AccountTableV2({
 
     const visibleCols = getVisibleColumns();
 
-    // Grouping Logic
+    // Grouping & Sorting Logic
     const groupedAccounts = useMemo(() => {
+        const creditCards = accounts.filter(a => a.type === 'credit_card').sort((a, b) => {
+            const now = new Date();
+
+            // Helper to get days until due
+            const getDueDays = (acc: Account) => {
+                if (!acc.stats?.due_date) return Infinity;
+                const d = new Date(acc.stats.due_date);
+                return Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            };
+
+            const dueA = getDueDays(a);
+            const dueB = getDueDays(b);
+
+            // Priority 1: Has Due Date (All) - Sort by urgency
+            const hasDueA = dueA !== Infinity;
+            const hasDueB = dueB !== Infinity;
+
+            if (hasDueA && !hasDueB) return -1;
+            if (!hasDueA && hasDueB) return 1;
+            if (hasDueA && hasDueB) return dueA - dueB; // Sort by days left (asc)
+
+            // Priority 2: Spend More Needed - Yellow Group
+            const needsSpendA = !!(a.stats?.min_spend && !a.stats.is_qualified && (a.stats.min_spend > (a.stats.spent_this_cycle || 0)));
+            const needsSpendB = !!(b.stats?.min_spend && !b.stats.is_qualified && (b.stats.min_spend > (b.stats.spent_this_cycle || 0)));
+
+            if (needsSpendA && !needsSpendB) return -1;
+            if (!needsSpendA && needsSpendB) return 1;
+
+            if (needsSpendA && needsSpendB) {
+                // Both need spend, sort by cycle end date (urgency to spend)
+                const getCycleEnd = (acc: Account) => {
+                    if (!acc.stats?.cycle_range) return Infinity;
+                    const parts = acc.stats.cycle_range.split(' - ');
+                    if (parts.length < 2) return Infinity;
+                    try {
+                        const d = new Date(parts[1]);
+                        return isNaN(d.getTime()) ? Infinity : d.getTime();
+                    } catch { return Infinity; }
+                };
+                return getCycleEnd(a) - getCycleEnd(b);
+            }
+
+            return 0; // Equal priority
+        });
+
         const groups = {
             'credit': {
                 section: 'credit' as const,
                 label: 'Credit Cards',
-                accounts: accounts.filter(a => a.type === 'credit_card'),
+                accounts: creditCards,
             },
             'loans': {
                 section: 'loans' as const,
