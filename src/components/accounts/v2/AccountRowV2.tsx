@@ -1,12 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
-import { Account } from "@/types/moneyflow.types";
-import { AccountColumnConfig } from "@/hooks/useAccountColumnPreferences";
+import { useRouter } from 'next/navigation';
+import { Account, Category } from "@/types/moneyflow.types";
+import { AccountColumnConfig, AccountColumnKey } from "@/hooks/useAccountColumnPreferences";
 import { ExpandIcon } from "@/components/transaction/ui/ExpandIcon";
 import { AccountRowDetailsV2 } from "./AccountRowDetailsV2";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import {
     Edit,
     Wallet,
@@ -18,14 +18,10 @@ import {
     AlertTriangle,
     ArrowUpRight,
     Loader2,
-    Info,
+    CalendarRange,
     LucideIcon
 } from "lucide-react";
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from "@/components/ui/popover";
+
 import { cn } from "@/lib/utils";
 import {
     Tooltip,
@@ -33,7 +29,16 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { normalizeCashbackConfig } from "@/lib/cashback";
+
+import { AccountCycleTransactionsModal } from "./AccountCycleTransactionsModal";
+// Quick Edit
+import { TransactionSlideV2 } from "@/components/transaction/slide-v2/transaction-slide-v2";
+import { getPeopleAction } from "@/actions/people-actions";
+import { getShopsAction } from "@/actions/shop-actions";
+import { Person } from "@/types/moneyflow.types";
+import { Shop } from "@/types/moneyflow.types";
+import { toast } from 'sonner';
+import { AccountRewardsCell } from "./cells/account-rewards-cell";
 
 interface AccountRowProps {
     account: Account;
@@ -47,6 +52,7 @@ interface AccountRowProps {
     onTransfer: (account: Account) => void;
     familyBalance?: number;
     allAccounts?: Account[];
+    categories?: Category[];
 }
 
 export function AccountRowV2({
@@ -61,11 +67,27 @@ export function AccountRowV2({
     onTransfer,
     familyBalance,
     allAccounts,
+    categories,
 }: AccountRowProps) {
-    const handleRowClick = (e: React.MouseEvent) => {
-        const target = e.target as HTMLElement;
-        if (!target.closest('.action-cell')) {
-            onToggleExpand(account.id);
+    const router = useRouter();
+    const [isTransactionsModalOpen, setIsTransactionsModalOpen] = useState(false);
+    const [modalRefreshKey, setModalRefreshKey] = useState(0);
+
+    // Quick Edit State
+    const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
+    const [people, setPeople] = useState<Person[]>([]);
+    const [shops, setShops] = useState<Shop[]>([]);
+
+    const handleEditTransaction = (id: string) => {
+        // Fetch dependencies if not loaded
+        if (people.length === 0 || shops.length === 0) {
+            Promise.all([getPeopleAction(), getShopsAction()]).then(([p, s]) => {
+                setPeople(p);
+                setShops(s);
+                setEditingTransactionId(id);
+            });
+        } else {
+            setEditingTransactionId(id);
         }
     };
 
@@ -74,11 +96,16 @@ export function AccountRowV2({
         onToggleExpand(account.id);
     };
 
+    // Callback when a transaction is edited inside the modal
+    const onEditTransaction = (id: string) => {
+        handleEditTransaction(id);
+    };
+
     return (
         <>
             <tr
                 className={cn(
-                    "transition-all duration-200 cursor-pointer group/row",
+                    "transition-all duration-200 group/row",
                     isExpanded ? "bg-indigo-50/30 border-b-0" : "hover:bg-slate-50 border-b",
                     (() => {
                         if (account.type !== 'credit_card' && account.type !== 'debt') return "";
@@ -122,7 +149,6 @@ export function AccountRowV2({
                         return "";
                     })()
                 )}
-                onClick={handleRowClick}
             >
                 <td className="w-10 px-2 py-3 text-center border-r border-slate-200">
                     <ExpandIcon
@@ -136,7 +162,19 @@ export function AccountRowV2({
                         "px-4 py-3 align-middle text-sm font-normal text-foreground",
                         idx < visibleColumns.length - 1 && "border-r border-slate-200"
                     )}>
-                        {renderCell(account, col.key as any, { onEdit, onLend, onRepay, onPay, onTransfer }, familyBalance, allAccounts, isExpanded)}
+                        {renderCell(
+                            account,
+                            col.key,
+                            { onEdit, onLend, onRepay, onPay, onTransfer },
+                            familyBalance,
+                            allAccounts,
+                            isExpanded,
+                            categories,
+                            setIsTransactionsModalOpen,
+                            isTransactionsModalOpen,
+                            onEditTransaction, // Pass wrapper function
+                            modalRefreshKey
+                        )}
                     </td>
                 ))}
             </tr>
@@ -148,29 +186,62 @@ export function AccountRowV2({
                             account={account}
                             isExpanded={isExpanded}
                             allAccounts={allAccounts}
+                            onEditTransaction={onEditTransaction}
                         />
                     </td>
                 </tr>
             )}
+
+            {
+                editingTransactionId && (
+                    <TransactionSlideV2
+                        open={!!editingTransactionId}
+                        onOpenChange={(open) => !open && setEditingTransactionId(null)}
+                        mode="single"
+                        editingId={editingTransactionId}
+                        initialData={undefined}
+                        accounts={allAccounts || []}
+                        categories={categories || []}
+                        people={people}
+                        shops={shops}
+                        onSuccess={() => {
+                            setEditingTransactionId(null);
+                            setModalRefreshKey(prev => prev + 1); // Trigger modal refresh
+                            router.refresh(); // Refresh account stats (Rewards column)
+                            toast.success("Transaction updated");
+                        }}
+                    />
+                )
+            }
         </>
     );
 }
 
-function renderCell(account: Account, key: string, actions: any, familyBalance?: number, allAccounts?: Account[], isExpanded?: boolean) {
+interface AccountRowActions {
+    onEdit: (account: Account) => void;
+    onLend: (account: Account) => void;
+    onRepay: (account: Account) => void;
+    onPay: (account: Account) => void;
+    onTransfer: (account: Account) => void;
+}
+
+function renderCell(
+    account: Account,
+    key: AccountColumnKey,
+    actions: AccountRowActions,
+    familyBalance?: number,
+    allAccounts?: Account[],
+    isExpanded?: boolean,
+    categories?: Category[],
+    setIsTransactionsModalOpen?: (open: boolean) => void,
+    isTransactionsModalOpen?: boolean,
+    onEditTransaction?: (id: string) => void,
+    modalRefreshKey?: number
+) {
     const { onEdit, onLend, onRepay, onPay, onTransfer } = actions;
     const stats = account.stats;
 
     // Helper for compact money
-    const formatCompactMoney = (amount: number) => {
-        if (amount >= 1000000) {
-            return (amount / 1000000).toFixed(2).replace(/\.?0+$/, '') + 'M';
-        }
-        if (amount >= 1000) {
-            return (amount / 1000).toFixed(0) + 'k';
-        }
-        return new Intl.NumberFormat('vi-VN').format(amount);
-    };
-
     const formatMoneyVND = (amount: number) => {
         return new Intl.NumberFormat('vi-VN').format(Math.abs(amount));
     };
@@ -203,7 +274,7 @@ function renderCell(account: Account, key: string, actions: any, familyBalance?:
             const MainPlaceholderIcon = getPlaceholderIcon(account.type);
 
             return (
-                <div className="flex flex-col gap-2 min-w-[200px]">
+                <div className="flex flex-col gap-2 min-w-[170px]">
                     <div className="flex items-center gap-3">
                         <div className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded overflow-hidden">
                             {account.image_url ? (
@@ -335,12 +406,29 @@ function renderCell(account: Account, key: string, actions: any, familyBalance?:
             const parentId = account.parent_account_id;
             const parentAccount = parentId ? allAccounts?.find(a => a.id === parentId) : null;
 
-            // Limit to display: Own limit or Parent's limit
+            // Limit to display: Parent's limit (if child) or Own limit (if parent/independent)
             const displayLimit = parentAccount ? (parentAccount.credit_limit || 0) : (account.credit_limit || 0);
 
-            // For credit cards, current_balance represents debt (can be positive or negative)
-            // We want the absolute value to show how much is owed
-            const debtAbs = Math.abs(account.current_balance || 0);
+            // Family Balance Logic for Limit Calculation
+            let familyDebt = account.current_balance || 0;
+
+            if (isParent && allAccounts) {
+                // Parent: Own Balance + All Children Balances
+                const childrenBalances = allAccounts
+                    .filter(a => a.parent_account_id === account.id)
+                    .reduce((sum, child) => sum + (child.current_balance || 0), 0);
+                familyDebt = (account.current_balance || 0) + childrenBalances;
+            } else if (parentId && parentAccount && allAccounts) {
+                // Child: Parent Balance + All Siblings (including self)
+                // Effectively: Parent's "Family Balance"
+                const childrenBalances = allAccounts
+                    .filter(a => a.parent_account_id === parentId)
+                    .reduce((sum, child) => sum + (child.current_balance || 0), 0);
+                familyDebt = (parentAccount.current_balance || 0) + childrenBalances;
+            }
+
+            // For credit cards, absolute value of debt
+            const debtAbs = Math.abs(familyDebt);
             const limitProgress = displayLimit > 0 ? Math.min(100, (debtAbs / displayLimit) * 100) : 0;
 
             return (
@@ -360,7 +448,7 @@ function renderCell(account: Account, key: string, actions: any, familyBalance?:
                                 />
                             </div>
                             <div className="text-[9px] font-bold text-slate-400 text-right flex items-center justify-end gap-1">
-                                <span>{formatMoneyVND(debtAbs)}</span>
+                                <span title="Total Family Debt">{formatMoneyVND(debtAbs)}</span>
                                 <span className="text-slate-300">/</span>
                                 <span>{limitProgress.toFixed(0)}%</span>
                             </div>
@@ -368,138 +456,28 @@ function renderCell(account: Account, key: string, actions: any, familyBalance?:
                     )}
                 </div>
             );
-        case 'rewards':
-            if (account.type !== 'credit_card') return <span className="text-slate-300">—</span>;
 
-            // --- SPENT LOGIC ---
-            let spentContent = <div className="text-slate-400 text-[11px] font-black italic text-right w-full">No Target</div>;
-
-            // Helper to render Rules Badge
-            const renderRulesBadge = () => {
-                let ruleCount = 0;
-                const config = normalizeCashbackConfig(account.cashback_config);
-                if (config?.levels) {
-                    config.levels.forEach(lvl => ruleCount += (lvl.rules?.length || 0));
-                }
-
-                return ruleCount > 0 ? (
-                    <Popover>
-                        <PopoverTrigger>
-                            <div className="h-3.5 px-1 rounded-full text-[8px] bg-purple-100 text-purple-700 border border-purple-200 font-black whitespace-nowrap hover:bg-purple-200 cursor-pointer flex items-center">
-                                {ruleCount} RULES
-                            </div>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-64 p-3" align="end" side="left">
-                            <div className="space-y-2">
-                                <h4 className="text-xs font-black uppercase text-slate-500 border-b pb-1">Cashback Rules</h4>
-                                <div className="space-y-1">
-                                    {(() => {
-                                        const rulesDetails: { level: string, desc: string }[] = [];
-                                        if (config?.levels) {
-                                            config.levels.forEach(lvl => {
-                                                if (lvl.rules) {
-                                                    lvl.rules.forEach(r => {
-                                                        rulesDetails.push({
-                                                            level: lvl.name || `Level ${new Intl.NumberFormat('vi-VN', { notation: 'compact' }).format(lvl.minTotalSpend)}`,
-                                                            desc: r.description
-                                                        });
-                                                    });
-                                                }
-                                            });
-                                        }
-                                        return rulesDetails.map((rule, idx) => (
-                                            <div key={idx} className="flex justify-between items-center text-xs">
-                                                <span className="text-slate-600 font-medium truncate max-w-[120px]" title={rule.level}>{rule.level}</span>
-                                                <span className="font-bold text-emerald-600 truncate max-w-[120px]" title={rule.desc}>{rule.desc}</span>
-                                            </div>
-                                        ));
-                                    })()}
-                                </div>
-                            </div>
-                        </PopoverContent>
-                    </Popover>
-                ) : null;
-            };
-
-            const rulesBadge = renderRulesBadge();
-
-            if (stats?.min_spend) {
-                const progress = Math.min((stats.spent_this_cycle / stats.min_spend) * 100, 100);
-                const isMet = stats.spent_this_cycle >= stats.min_spend;
-                const remaining = Math.max(0, stats.min_spend - stats.spent_this_cycle);
-
-                spentContent = (
-                    <div className="w-full max-w-[100px] space-y-1">
-                        <div className="flex items-center justify-end gap-1.5 h-4 mb-0.5">
-                            {/* Reorganized: Rules - Amount - Info */}
-                            {rulesBadge}
-
-                            <span className={cn(
-                                "text-[11px] font-black tabular-nums",
-                                !isMet ? "text-amber-600" : "text-emerald-600"
-                            )}>
-                                {!isMet ? new Intl.NumberFormat('vi-VN').format(remaining) : 'QUALIFIED'}
-                            </span>
-
-                            <TooltipProvider>
-                                <Tooltip delayDuration={0}>
-                                    <TooltipTrigger asChild>
-                                        <Info className={cn("w-3 h-3 cursor-help shrink-0", !isMet ? "text-amber-500 hover:text-amber-600" : "text-emerald-500 hover:text-emerald-600")} />
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top" className="text-[11px] font-bold p-2 bg-slate-900 text-white z-50">
-                                        <div className="flex flex-col gap-1">
-                                            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px]">
-                                                <span className="text-slate-400">Spent:</span>
-                                                <span className="text-right text-emerald-400">{new Intl.NumberFormat('vi-VN').format(stats.spent_this_cycle)}</span>
-                                                <span className="text-slate-400">Target:</span>
-                                                <span className="text-right text-indigo-400">{new Intl.NumberFormat('vi-VN').format(stats.min_spend)}</span>
-                                                <span className="text-slate-400 border-t border-slate-700 pt-1">Spend More:</span>
-                                                <span className="text-right text-amber-400 border-t border-slate-700 pt-1 font-black">
-                                                    {remaining > 0 ? new Intl.NumberFormat('vi-VN').format(remaining) : '0'}
-                                                </span>
-                                            </div>
-                                            {!isMet && <p className="text-[9px] text-amber-500 italic text-center mt-1">Cần chi thêm để đạt cashback</p>}
-                                        </div>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                        </div>
-
-                        <Progress value={progress} className="h-1.5" indicatorClassName={isMet ? "bg-emerald-500" : "bg-indigo-500"} />
-                        <div className="flex justify-end items-center text-[9px] text-slate-400 font-bold gap-1 mt-0.5 whitespace-nowrap">
-                            {!isMet && (
-                                <span className="text-amber-600 flex items-center gap-1">
-                                    SPEND MORE {formatCompactMoney(remaining)}
-                                </span>
-                            )}
-                            {isMet && <span className="text-emerald-600">TARGET MET</span>}
-                        </div>
-                    </div>
-                );
-            } else if (rulesBadge) {
-                // Fallback: No min_spend but has rules (e.g., complex tier cards)
-                // Show Rules Badge + Actual Spent
-                spentContent = (
-                    <div className="w-full max-w-[100px] space-y-1">
-                        <div className="flex items-center justify-end gap-1.5 h-4 mb-0.5">
-                            {rulesBadge}
-                            <span className="text-[11px] font-black text-slate-700 tabular-nums">
-                                {new Intl.NumberFormat('vi-VN').format(stats?.spent_this_cycle || 0)}
-                            </span>
-                        </div>
-                        <div className="flex justify-end text-[9px] text-slate-400 font-bold gap-1 mt-0.5">
-                            <span>No Fixed Target</span>
-                        </div>
-                    </div>
-                );
-            }
-
+        case "rewards":
             return (
-                <div className="flex flex-col items-end justify-center gap-1.5 py-1 min-w-[120px]">
-                    {spentContent}
+                <div className="flex flex-col items-end justify-center min-w-[150px]">
+                    <AccountRewardsCell
+                        account={account}
+                        categories={categories}
+                        onOpenTransactions={() => setIsTransactionsModalOpen?.(true)}
+                    />
+                    <AccountCycleTransactionsModal
+                        open={isTransactionsModalOpen || false}
+                        onOpenChange={setIsTransactionsModalOpen || (() => { })}
+                        accountId={account.id}
+                        accountName={account.name}
+                        cycleDisplay={(stats?.cycle_range as string) || ''}
+                        onEditTransaction={onEditTransaction || (() => { })}
+                        refreshKey={modalRefreshKey}
+                    />
                 </div>
             );
-        case 'due':
+
+        case "due":
             if (account.type !== 'credit_card' && account.type !== 'debt') return <span className="text-slate-300">—</span>;
 
             const dueDate = stats?.due_date ? new Date(stats.due_date) : null;
@@ -532,11 +510,22 @@ function renderCell(account: Account, key: string, actions: any, familyBalance?:
             // If it's a Child (has parent), it should display PARENT's balance (Shared Debt).
             let displayBalance = familyBalance ?? account.current_balance;
 
-            if (account.parent_account_id && allAccounts) {
-                const parent = allAccounts.find(a => a.id === account.parent_account_id);
-                if (parent) {
-                    displayBalance = parent.current_balance;
-                }
+            const balIsParent = account.relationships?.is_parent;
+            const balParentId = account.parent_account_id;
+            const balParentAccount = balParentId ? allAccounts?.find(a => a.id === balParentId) : null;
+
+            if (balIsParent && allAccounts) {
+                // Parent: Own Balance + All Children Balances (Total Family Debt)
+                const childrenBalances = allAccounts
+                    .filter(a => a.parent_account_id === account.id)
+                    .reduce((sum, child) => sum + (child.current_balance || 0), 0);
+                displayBalance = (account.current_balance || 0) + childrenBalances;
+            } else if (balParentId && balParentAccount && allAccounts) {
+                // Child: Show Total Family Debt (Parent + Siblings)
+                const childrenBalances = allAccounts
+                    .filter(a => a.parent_account_id === balParentId)
+                    .reduce((sum, child) => sum + (child.current_balance || 0), 0);
+                displayBalance = (balParentAccount.current_balance || 0) + childrenBalances;
             }
 
             return (
@@ -547,15 +536,11 @@ function renderCell(account: Account, key: string, actions: any, familyBalance?:
                     )}>
                         {formatMoneyVND(displayBalance)}
                     </div>
-                    {/* Family badge removed from here */}
                 </div>
             );
-
-        case 'action':
+        case "action":
             const isCC = account.type === 'credit_card';
             const isDebt = account.type === 'debt';
-            const canPay = isCC || isDebt;
-            const canTransfer = !isCC; // Only allow transfer for bank/cash/ewallet
 
             return (
                 <TooltipProvider>
@@ -579,7 +564,7 @@ function renderCell(account: Account, key: string, actions: any, familyBalance?:
                 </TooltipProvider>
             );
         default:
-            return '—';
+            return <span className="text-slate-300">—</span>;
     }
 }
 
@@ -644,9 +629,4 @@ function ActionButtonsWithLoading({ actions, account, isCC, isDebt }: any) {
             </Tooltip>
         </>
     );
-}
-
-function formatMoneyVND(amount: number) {
-    if (amount === 0) return '-';
-    return new Intl.NumberFormat('vi-VN').format(amount);
 }

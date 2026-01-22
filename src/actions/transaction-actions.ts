@@ -191,22 +191,22 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   let personId = input.person_id ?? null;
   let categoryId = input.category_id ?? null;
 
-  // Debt Logic specific
-  let sharePercent = null;
-  let shareFixed = null;
+  let sharePercent: number | null = null;
+  let shareFixed: number | null = null;
+  const sharePercentEntry = typeof input.cashback_share_percent === 'number' ? Math.max(0, input.cashback_share_percent) : null;
+  const shareFixedVal = typeof input.cashback_share_fixed === 'number' ? Math.max(0, input.cashback_share_fixed) : null;
+
+  if (sharePercentEntry !== null) {
+    sharePercent = Math.min(100, sharePercentEntry) / 100;
+  }
+  if (shareFixedVal !== null) {
+    shareFixed = shareFixedVal;
+  }
 
   if (input.type === 'debt') {
-    const sharePercentEntry = Math.max(0, Number(input.cashback_share_percent ?? 0));
-    const sharePercentCapped = Math.min(100, sharePercentEntry);
-    const sharePercentRate = sharePercentCapped / 100;
-    const shareFixedVal = Math.max(0, Number(input.cashback_share_fixed ?? 0));
-    const percentContribution = sharePercentRate * originalAmount;
-    const rawCashback = percentContribution + shareFixedVal;
+    const rawCashback = (sharePercent || 0) * originalAmount + (shareFixed || 0);
     const cashbackGiven = Math.min(originalAmount, Math.max(0, rawCashback));
-
     finalAmount = Math.max(0, originalAmount - cashbackGiven);
-    sharePercent = sharePercentRate > 0 ? sharePercentRate : null;
-    shareFixed = shareFixedVal > 0 ? shareFixedVal : null;
   }
 
   // Insert into transactions table directly
@@ -678,12 +678,14 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
 
   // Calculate final amounts for single-table storage
   const originalAmount = Math.abs(input.amount);
-  const sharePercentEntry = Math.max(0, Number(input.cashback_share_percent ?? 0));
-  const sharePercentCapped = Math.min(100, sharePercentEntry);
-  const sharePercentRate = sharePercentCapped / 100;
-  const shareFixed = Math.max(0, Number(input.cashback_share_fixed ?? 0));
-  const percentContribution = sharePercentRate * originalAmount;
-  const rawCashback = percentContribution + shareFixed;
+  const sharePercentEntry = typeof input.cashback_share_percent === 'number' ? Math.max(0, input.cashback_share_percent) : null;
+  let sharePercent = null;
+  if (sharePercentEntry !== null) {
+    sharePercent = Math.min(100, sharePercentEntry) / 100;
+  }
+  const shareFixed = typeof input.cashback_share_fixed === 'number' ? Math.max(0, input.cashback_share_fixed) : null;
+
+  const rawCashback = (sharePercent || 0) * originalAmount + (shareFixed || 0);
   const cashbackGiven = Math.min(originalAmount, Math.max(0, rawCashback));
   const finalAmount = input.type === 'debt'
     ? (originalAmount - cashbackGiven)  // Debt: final = amount - cashback
@@ -703,8 +705,8 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       target_account_id: input.destination_account_id ?? input.debt_account_id ?? null,
       category_id: input.category_id ?? null,
       person_id: input.person_id ?? null,
-      cashback_share_percent: input.cashback_share_percent ?? null,
-      cashback_share_fixed: input.cashback_share_fixed ?? null,
+      cashback_share_percent: sharePercent,
+      cashback_share_fixed: shareFixed,
       persisted_cycle_tag: persistedCycleTag,
       shop_id: input.shop_id ?? null,
       cashback_mode: input.cashback_mode ?? null,
@@ -742,7 +744,7 @@ export async function updateTransaction(id: string, input: CreateTransactionInpu
       shop_name: shopInfo?.name ?? null,
       amount: finalAmount,
       original_amount: originalAmount,
-      cashback_share_percent: sharePercentRate,
+      cashback_share_percent: sharePercent,
       cashback_share_fixed: shareFixed,
       type: input.type === 'repayment' ? 'In' : 'Debt',
     };

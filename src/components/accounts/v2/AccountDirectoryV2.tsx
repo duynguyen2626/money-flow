@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { Account, Category, Person, Shop } from "@/types/moneyflow.types";
 import { AccountHeaderV2 } from "./AccountHeaderV2";
 import { AccountTableV2 } from "./AccountTableV2";
@@ -32,6 +33,7 @@ export function AccountDirectoryV2({
     people,
     shops
 }: AccountDirectoryV2Props) {
+    const router = useRouter();
     // State
     const [searchTerm, setSearchTerm] = useState('');
 
@@ -44,6 +46,7 @@ export function AccountDirectoryV2({
     // CRUD state (Account)
     const [isAccountSlideOpen, setIsAccountSlideOpen] = useState(false);
     const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+    const [editStack, setEditStack] = useState<Account[]>([]);
     const [isDeleteOpen, setIsDeleteOpen] = useState(false);
     const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
 
@@ -87,12 +90,28 @@ export function AccountDirectoryV2({
     // --- Account Handlers ---
     const handleAddAccount = () => {
         setSelectedAccount(null);
+        setEditStack([]);
         setIsAccountSlideOpen(true);
     };
 
     const handleEditAccount = (account: Account) => {
+        if (isAccountSlideOpen && selectedAccount && selectedAccount.id !== account.id) {
+            setEditStack(prev => [...prev, selectedAccount]);
+        } else if (!isAccountSlideOpen) {
+            setEditStack([]);
+        }
         setSelectedAccount(account);
         setIsAccountSlideOpen(true);
+    };
+
+    const handleBack = () => {
+        if (editStack.length > 0) {
+            const previous = editStack[editStack.length - 1];
+            setEditStack(prev => prev.slice(0, -1));
+            setSelectedAccount(previous);
+        } else {
+            setIsAccountSlideOpen(false);
+        }
     };
 
     const handleDeleteClick = (id: string) => {
@@ -183,6 +202,7 @@ export function AccountDirectoryV2({
                         onPay={handlePay}
                         onTransfer={handleTransfer}
                         allAccounts={initialAccounts}
+                        categories={categories}
                     />
                 ) : (
                     <AccountGridView
@@ -202,6 +222,8 @@ export function AccountDirectoryV2({
                 categories={categories}
                 existingAccountNumbers={Array.from(new Set(initialAccounts.map(a => a.account_number).filter(Boolean))) as string[]}
                 existingReceiverNames={Array.from(new Set(initialAccounts.map(a => a.receiver_name).filter(Boolean))) as string[]}
+                onEditAccount={handleEditAccount}
+                onBack={editStack.length > 0 ? handleBack : undefined}
             />
 
             {/* Transaction Quick Action Slide */}
@@ -215,7 +237,7 @@ export function AccountDirectoryV2({
                 shops={shops}
                 onSuccess={() => {
                     setIsTxnSlideOpen(false);
-                    // Refresh data if needed, but slide handles toast and router.refresh
+                    router.refresh(); // Refresh account list/stats
                 }}
             />
 

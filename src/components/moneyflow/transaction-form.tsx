@@ -4028,10 +4028,35 @@ export function TransactionForm({
         (isDebtForm || transactionType === "income") && "h-full flex flex-col",
       )}
     >
-      <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
-        <FileText className="h-4 w-4 text-slate-500" />
-        Note
-      </label>
+      <div className="flex items-center justify-between w-full">
+        <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+          <FileText className="h-4 w-4 text-slate-500" />
+          Note
+        </label>
+        {(() => {
+          const personId = form.getValues("person_id");
+          // Use peopleState which is available in scope
+          const selectedPerson = peopleState.find((p) => p.id === personId);
+          const hasSheet = !!selectedPerson?.google_sheet_url;
+          const label = hasSheet ? "+ Not sync" : "+ #nosync";
+
+          return (
+            <span
+              onClick={() => {
+                const current = form.getValues("note") || "";
+                if (!current.includes("#nosync")) {
+                  const newValue = current ? `${current} #nosync` : "#nosync";
+                  form.setValue("note", newValue, { shouldDirty: true });
+                }
+              }}
+              className="text-[10px] text-slate-400 hover:text-blue-600 hover:bg-slate-50 px-1.5 py-0.5 rounded cursor-pointer transition-colors"
+              title="Click to add #nosync tag"
+            >
+              {label}
+            </span>
+          );
+        })()}
+      </div>
       {isDebtForm || transactionType === "income" ? (
         <input
           type="text"

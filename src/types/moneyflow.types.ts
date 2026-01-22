@@ -35,6 +35,10 @@ export type AccountStats = {
   remains_cap: number | null
   shared_cashback: number | null
   due_date: string | null // ISO Date string for sorting
+  // Cashback Stats
+  real_awarded?: number // For multi-tier progress logic
+  virtual_profit?: number // For multi-tier progress logic
+  next_level_name?: string
 }
 
 export type AccountRelationships = {

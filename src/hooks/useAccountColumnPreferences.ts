@@ -3,10 +3,9 @@ import { useState, useEffect } from 'react';
 export type AccountColumnKey =
     | 'account'
     | 'limit'
-    | 'spent'
+    | 'rewards' // Merged 'spent' and 'cashback_advanced'
     | 'due'
     | 'balance'
-    | 'cashback_advanced'
     | 'action';
 
 export interface AccountColumnConfig {
@@ -20,10 +19,9 @@ export interface AccountColumnConfig {
 const defaultAccountColumns: AccountColumnConfig[] = [
     { key: 'account', label: 'Account', defaultWidth: 250, minWidth: 200, frozen: true },
     { key: 'limit', label: 'Limit', defaultWidth: 120, minWidth: 100 },
-    { key: 'spent', label: 'Spent', defaultWidth: 220, minWidth: 180 },
+    { key: 'rewards', label: 'Rewards', defaultWidth: 150, minWidth: 130 },
     { key: 'due', label: 'Due', defaultWidth: 140, minWidth: 120 },
     { key: 'balance', label: 'Balance', defaultWidth: 180, minWidth: 150 },
-    { key: 'cashback_advanced', label: 'Advanced Cashback', defaultWidth: 160, minWidth: 140 },
     { key: 'action', label: 'Actions', defaultWidth: 120, minWidth: 100, frozen: true },
 ];
 
@@ -35,10 +33,9 @@ export function useAccountColumnPreferences() {
     const [visibleColumns, setVisibleColumns] = useState<Record<AccountColumnKey, boolean>>({
         account: true,
         limit: true,
-        spent: true,
+        rewards: true,
         due: true,
         balance: true,
-        cashback_advanced: true,
         action: true,
     });
 
@@ -57,7 +54,12 @@ export function useAccountColumnPreferences() {
             const savedVis = localStorage.getItem('mf_v3_account_col_vis');
             const savedWidths = localStorage.getItem('mf_v3_account_col_width');
 
-            if (savedOrder) setColumnOrder(JSON.parse(savedOrder));
+            if (savedOrder) {
+                // Filter out keys that no longer exist in our definition to incorrect lookups
+                const parsed = JSON.parse(savedOrder);
+                const validKeys = defaultAccountColumns.map(c => c.key);
+                setColumnOrder(parsed.filter((k: any) => validKeys.includes(k)));
+            }
             if (savedVis) setVisibleColumns(JSON.parse(savedVis));
             if (savedWidths) setColumnWidths(JSON.parse(savedWidths));
         } catch (e) {
@@ -90,10 +92,9 @@ export function useAccountColumnPreferences() {
         setVisibleColumns({
             account: true,
             limit: true,
-            spent: true,
+            rewards: true,
             due: true,
             balance: true,
-            cashback_advanced: true,
             action: true,
         });
         const map = {} as Record<AccountColumnKey, number>;
@@ -106,7 +107,8 @@ export function useAccountColumnPreferences() {
     const getVisibleColumns = () => {
         return columnOrder
             .filter(key => visibleColumns[key])
-            .map(key => defaultAccountColumns.find(c => c.key === key)!);
+            .map(key => defaultAccountColumns.find(c => c.key === key))
+            .filter(Boolean) as AccountColumnConfig[];
     };
 
     return {

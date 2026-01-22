@@ -215,3 +215,7 @@ export async function rolloverDebtAction(
   revalidatePath(`/people/${personId}`)
   return { success: true, message: 'Debt rolled over successfully' }
 }
+
+export async function getPeopleAction() {
+  return await getPeople();
+}

@@ -955,6 +955,13 @@ export async function updateTransaction(
     });
   }
 
+  revalidatePath("/transactions");
+  revalidatePath("/accounts");
+  revalidatePath("/people");
+  if (input.person_id) {
+    revalidatePath(`/people/${input.person_id}`);
+  }
+
   return true;
 }
 
@@ -1892,4 +1899,38 @@ export async function updateSplitBillAmounts(
       error: error instanceof Error ? error.message : String(error),
     };
   }
+}
+
+export async function loadAccountTransactionsV2(accountId: string, limit: number = 5) {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from('transactions')
+    .select(`
+      id, occurred_at, note, amount, type, status,
+      category:categories(name, icon),
+      person:people(name)
+    `)
+    .eq('account_id', accountId)
+    .neq('status', 'void')
+    .order('occurred_at', { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error('Error loading account transactions:', error);
+    return [];
+  }
+
+
+  return data.map((t: any) => ({
+    id: t.id,
+    occurred_at: t.occurred_at,
+    note: t.note,
+    amount: t.amount,
+    type: t.type,
+    status: t.status,
+    category_name: t.category?.name,
+    category_icon: t.category?.icon, // Only use DB icon URL if exists
+    person_name: t.person?.name,
+    displayType: t.type // Map if needed, but UI uses explicit check
+  }));
 }

@@ -9,4 +9,7 @@ export type ManageCycleSheetResponse = {
   sheetUrl?: string | null
   sheetId?: string | null
   error?: string
+  syncedCount?: number
+  manualPreserved?: number
+  totalRows?: number
 }
