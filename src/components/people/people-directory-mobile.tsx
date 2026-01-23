@@ -305,9 +305,7 @@ export function PeopleDirectoryMobile({
           <DialogFooter className="pt-3">
             {debtModalItem && (
               <Link
-                href={`/people/details?ids=${debtModalItem.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
+                href={`/people/${debtModalItem.id}?tab=details`}
                 onClick={() => setDebtModalItem(null)}
                 className="inline-flex items-center justify-center rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
               >

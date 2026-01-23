@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Simple wallet icon for Money Flow app -->
+  <!-- Wallet body -->
+  <rect x="10" y="22" width="44" height="26" rx="3" fill="#10b981" stroke="#059669" stroke-width="2.5"/>
+  
+  <!-- Wallet flap/top -->
+  <path d="M 10 28 L 10 24 C 10 22.3 11.3 21 13 21 L 51 21 C 52.7 21 54 22.3 54 24 L 54 28" 
+        fill="#14b8a6" stroke="#059669" stroke-width="2"/>
+  
+  <!-- Money symbol in center -->
+  <circle cx="32" cy="36" r="7" fill="#ffffff" opacity="0.25"/>
+  <text x="32" y="41" font-family="Arial, sans-serif" font-size="14" font-weight="bold" 
+        fill="#ffffff" text-anchor="middle">₫</text>
+  
+  <!-- Card slot detail -->
+  <rect x="40" y="33" width="10" height="6" rx="1" fill="#ffffff" opacity="0.35"/>
+</svg>

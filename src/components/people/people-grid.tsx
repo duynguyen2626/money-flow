@@ -56,7 +56,7 @@ export function PeopleGrid({ people, subscriptions, accounts, categories, shops 
 
   const handleSelect = (personId: string) => {
     setSelectedId(personId)
-    window.open(`/people/details?ids=${personId}`, '_blank')
+    router.push(`/people/${personId}/details`)
   }
 
   // Group people by status

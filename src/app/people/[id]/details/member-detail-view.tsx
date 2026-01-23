@@ -419,195 +419,177 @@ export function MemberDetailView({
 
             {/* SECTION 2: Cycle Stats + Transaction Table */}
             {activeTab === 'timeline' && activeCycle && (
-                <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-                    {/* Financial Summary Card - Consolidated */}
-                    <div className="bg-white rounded-lg border border-slate-200 p-4">
-                        {/* Header: Month + Status */}
-                        <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-3">
-                                <h2 className="text-lg font-bold text-slate-900">{getMonthName(activeCycle.tag, true)}</h2>
-                                <span className={cn(
-                                    "px-2 py-1 text-xs font-bold rounded uppercase",
-                                    activeCycle.remains > 100 ? "bg-rose-50 text-rose-700" : "bg-emerald-50 text-emerald-700"
-                                )}>
-                                    {activeCycle.remains > 100 ? 'Outstanding' : 'Settled'}
-                                </span>
-                            </div>
+                <div className="flex-1 overflow-y-auto px-4 py-3">
+                    {/* Cycle Header - Single Row */}
+                    <div className="bg-white rounded-lg border border-slate-200 p-3 mb-3">
+                        <div className="flex items-center justify-between">
+                            {/* Left: Month Name + Paid Badge + Filter Buttons */}
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-2">
+                                    <h2 className="text-base font-bold text-slate-900">{getMonthName(activeCycle.tag)}</h2>
 
-                            {/* Paid Badge - Interactive */}
-                            {metrics.paidCount > 0 && (
+                                    {/* +X Paid Badge - Clickable */}
+                                    {metrics.paidCount > 0 && (
+                                        <button
+                                            onClick={() => setShowPaidModal(true)}
+                                            className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200 hover:bg-purple-200 transition-colors cursor-pointer"
+                                        >
+                                            +{metrics.paidCount} Paid
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Original Lend Badge */}
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs">
+                                    <span className="text-slate-500 font-medium uppercase">Original:</span>
+                                    <span className="font-bold text-slate-700">{numberFormatter.format(activeCycle.stats.originalLend)}</span>
+                                </div>
+
+                                {/* Cashback Badge */}
+                                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 border border-amber-200 rounded text-xs">
+                                    <span className="text-amber-600 font-medium uppercase">Cashback:</span>
+                                    <span className="font-bold text-amber-700">{numberFormatter.format(activeCycle.stats.cashback)}</span>
+                                </div>
+
+                                {/* Net Lend (Filter Trigger) */}
                                 <button
-                                    onClick={() => setShowPaidModal(true)}
-                                    className="inline-flex items-center px-3 py-1 rounded-md text-xs font-bold bg-purple-100 text-purple-700 border border-purple-200 hover:bg-purple-200 transition-colors cursor-pointer"
+                                    onClick={() => setFilterType('lend')}
+                                    className={cn(
+                                        "flex items-center gap-1.5 px-3 py-1.5 border rounded transition-all text-xs",
+                                        filterType === 'lend' ? "bg-blue-100 border-blue-400" : "bg-blue-50 border-blue-200 hover:bg-blue-100"
+                                    )}
                                 >
-                                    {metrics.paidCount > 1 ? `${metrics.paidCount} Paid Txns` : '1 Paid Txn'}
+                                    <span className="text-blue-600 font-medium uppercase flex items-center gap-1">
+                                        Net Lend:
+                                    </span>
+                                    <span className="font-bold text-blue-700">{numberFormatter.format(activeCycle.stats.lend)}</span>
+                                    <span className="text-[10px] text-blue-500 font-normal ml-1">
+                                        ({compactNumberFormatter.format(activeCycle.stats.originalLend)} - {compactNumberFormatter.format(activeCycle.stats.cashback)})
+                                    </span>
                                 </button>
-                            )}
-                        </div>
 
-                        {/* Financial Metrics Grid - 2x2 */}
-                        <div className="grid grid-cols-4 gap-3">
-                            {/* In (Gross) */}
-                            <div className="bg-slate-50 rounded-lg p-3">
-                                <p className="text-[11px] text-slate-500 font-semibold uppercase mb-1">Original</p>
-                                <p className="text-sm font-bold text-slate-900">{numberFormatter.format(activeCycle.stats.originalLend)}</p>
+                                {/* Repay (Filter Trigger) */}
+                                <button
+                                    onClick={() => setFilterType('repay')}
+                                    className={cn(
+                                        "flex items-center gap-1.5 px-3 py-1.5 border rounded transition-all text-xs",
+                                        filterType === 'repay' ? "bg-emerald-100 border-emerald-400" : "bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
+                                    )}
+                                >
+                                    <span className="text-emerald-600 font-medium uppercase flex items-center gap-1">
+                                        Repay:
+                                    </span>
+                                    <span className="font-bold text-emerald-700">{numberFormatter.format(activeCycle.stats.repay)}</span>
+                                </button>
+
+                                {/* Remains (Filter Trigger) */}
+                                <button
+                                    onClick={() => setFilterType('all')}
+                                    className={cn(
+                                        "flex items-center gap-1.5 px-3 py-1.5 border-2 rounded-md transition-all relative group text-xs",
+                                        filterType === 'all'
+                                            ? "bg-rose-50 border-rose-400 shadow-sm"
+                                            : "bg-white border-slate-200 hover:border-rose-300"
+                                    )}
+                                >
+                                    <span className="text-slate-500 font-bold uppercase">REMAINS:</span>
+                                    <span className="font-bold text-rose-600">{numberFormatter.format(activeCycle.remains)}</span>
+
+                                    {/* Tooltip on Hover */}
+                                    <div className="absolute top-full mt-2 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+                                        Remains = Net Lend - Repay
+                                    </div>
+                                </button>
                             </div>
 
-                            {/* Cashback */}
-                            <div className="bg-amber-50 rounded-lg p-3">
-                                <p className="text-[11px] text-amber-600 font-semibold uppercase mb-1">Cashback</p>
-                                <p className="text-sm font-bold text-amber-700">{numberFormatter.format(activeCycle.stats.cashback)}</p>
-                            </div>
+                            {/* Right: Action Buttons + Search */}
+                            <div className="flex items-center gap-2">
+                                {/* Rollover Button */}
+                                {activeCycle.remains > 100 && (
+                                    <RolloverDebtDialog
+                                        personId={person.id}
+                                        currentCycle={activeCycle.tag}
+                                        remains={activeCycle.remains}
+                                        trigger={
+                                            <button className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border-2 border-amber-300 text-amber-700 bg-amber-50 rounded-md hover:bg-amber-100 hover:border-amber-400 transition-colors">
+                                                <RefreshCw className="h-3.5 w-3.5" />
+                                                Rollover
+                                            </button>
+                                        }
+                                    />
+                                )}
 
-                            {/* Net Lend */}
-                            <div className="bg-blue-50 rounded-lg p-3">
-                                <p className="text-[11px] text-blue-600 font-semibold uppercase mb-1">Net Lend</p>
-                                <p className="text-sm font-bold text-blue-700">{numberFormatter.format(activeCycle.stats.lend)}</p>
-                            </div>
-
-                            {/* Remaining */}
-                            <div className={cn("rounded-lg p-3", activeCycle.remains > 100 ? "bg-rose-50" : "bg-emerald-50")}>
-                                <p className={cn("text-[11px] font-semibold uppercase mb-1", activeCycle.remains > 100 ? "text-rose-600" : "text-emerald-600")}>Remaining</p>
-                                <p className={cn("text-sm font-bold", activeCycle.remains > 100 ? "text-rose-700" : "text-emerald-700")}>{numberFormatter.format(Math.max(0, activeCycle.remains))}</p>
-                            </div>
-                        </div>
-
-                        {/* Action Buttons Bar */}
-                        <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-100">
-                            {/* Rollover Button */}
-                            {activeCycle.remains > 100 && (
-                                <RolloverDebtDialog
-                                    personId={person.id}
-                                    currentCycle={activeCycle.tag}
-                                    remains={activeCycle.remains}
-                                    trigger={
-                                        <button className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border-2 border-amber-300 text-amber-700 bg-amber-50 rounded-md hover:bg-amber-100 hover:border-amber-400 transition-colors">
-                                            <RefreshCw className="h-3.5 w-3.5" />
-                                            Rollover
+                                {/* Debt Button */}
+                                <AddTransactionDialog
+                                    accounts={accounts}
+                                    categories={categories}
+                                    people={[person]}
+                                    shops={shops}
+                                    buttonText="Debt"
+                                    defaultType="debt"
+                                    defaultPersonId={person.id}
+                                    buttonClassName="h-8 px-3 text-xs border-2 border-slate-300 hover:border-slate-400"
+                                    asChild
+                                    triggerContent={
+                                        <button className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border-2 border-blue-300 text-blue-700 bg-white rounded-md hover:bg-blue-50 hover:border-blue-500 hover:text-blue-800 transition-colors">
+                                            <UserMinus className="h-3.5 w-3.5" />
+                                            Debt
                                         </button>
                                     }
                                 />
-                            )}
 
-                            {/* Debt Button */}
-                            <AddTransactionDialog
-                                accounts={accounts}
-                                categories={categories}
-                                people={[person]}
-                                shops={shops}
-                                buttonText="Debt"
-                                defaultType="debt"
-                                defaultPersonId={person.id}
-                                buttonClassName="h-8 px-3 text-xs border-2 border-slate-300 hover:border-slate-400"
-                                asChild
-                                triggerContent={
-                                    <button className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border-2 border-blue-300 text-blue-700 bg-white rounded-md hover:bg-blue-50 hover:border-blue-500 hover:text-blue-800 transition-colors">
-                                        <UserMinus className="h-3.5 w-3.5" />
-                                        Debt
-                                    </button>
-                                }
-                            />
-
-                            {/* Repay Button */}
-                            <AddTransactionDialog
-                                accounts={accounts}
-                                categories={categories}
-                                people={[person]}
-                                shops={shops}
-                                buttonText="Repay"
-                                defaultType="repayment"
-                                defaultPersonId={person.id}
-                                buttonClassName="h-8 px-3 text-xs border-2 border-slate-300 hover:border-slate-400"
-                                asChild
-                                triggerContent={
-                                    <button className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border-2 border-emerald-300 text-emerald-700 bg-white rounded-md hover:bg-emerald-50 hover:border-emerald-500 hover:text-emerald-800 transition-colors">
-                                        <Plus className="h-3.5 w-3.5" />
-                                        Repay
-                                    </button>
-                                }
-                            />
-
-                            {/* Sheet Button */}
-                            <ManageSheetButton
-                                personId={person.id}
-                                cycleTag={activeCycle.tag}
-                                scriptLink={person.sheet_link}
-                                googleSheetUrl={person.google_sheet_url}
-                                sheetFullImg={person.sheet_full_img}
-                                showBankAccount={person.sheet_show_bank_account ?? false}
-                                showQrImage={person.sheet_show_qr_image ?? false}
-                                size="sm"
-                                buttonClassName="h-8 text-xs font-medium"
-                                linkedLabel="Sheet"
-                                unlinkedLabel="Sheet"
-                                splitMode={true}
-                            />
-
-                            {/* Search - Right aligned */}
-                            <div className="relative ml-auto">
-                                <Input
-                                    placeholder="Search..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="h-8 w-48 text-xs pr-8"
+                                {/* Repay Button */}
+                                <AddTransactionDialog
+                                    accounts={accounts}
+                                    categories={categories}
+                                    people={[person]}
+                                    shops={shops}
+                                    buttonText="Repay"
+                                    defaultType="repayment"
+                                    defaultPersonId={person.id}
+                                    buttonClassName="h-8 px-3 text-xs border-2 border-slate-300 hover:border-slate-400"
+                                    asChild
+                                    triggerContent={
+                                        <button className="flex items-center gap-1.5 h-8 px-3 text-xs font-medium border-2 border-emerald-300 text-emerald-700 bg-white rounded-md hover:bg-emerald-50 hover:border-emerald-500 hover:text-emerald-800 transition-colors">
+                                            <Plus className="h-3.5 w-3.5" />
+                                            Repay
+                                        </button>
+                                    }
                                 />
-                                {searchTerm && (
-                                    <button
-                                        onClick={() => setSearchTerm('')}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                                    >
-                                        <X className="h-3.5 w-3.5" />
-                                    </button>
-                                )}
-                            </div>
-                        </div>
 
-                        {/* Filter Type Buttons - Inline below metrics */}
-                        <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
-                            <button
-                                onClick={() => setFilterType('all')}
-                                className={cn(
-                                    "text-xs font-medium px-2 py-1 rounded transition-all",
-                                    filterType === 'all'
-                                        ? "bg-slate-900 text-white"
-                                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                                )}
-                            >
-                                All
-                            </button>
-                            <button
-                                onClick={() => setFilterType('lend')}
-                                className={cn(
-                                    "text-xs font-medium px-2 py-1 rounded transition-all",
-                                    filterType === 'lend'
-                                        ? "bg-blue-600 text-white"
-                                        : "bg-blue-50 text-blue-600 hover:bg-blue-100"
-                                )}
-                            >
-                                Lend Only
-                            </button>
-                            <button
-                                onClick={() => setFilterType('repay')}
-                                className={cn(
-                                    "text-xs font-medium px-2 py-1 rounded transition-all",
-                                    filterType === 'repay'
-                                        ? "bg-emerald-600 text-white"
-                                        : "bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                                )}
-                            >
-                                Repay Only
-                            </button>
-                            <button
-                                onClick={() => setFilterType('cashback')}
-                                className={cn(
-                                    "text-xs font-medium px-2 py-1 rounded transition-all",
-                                    filterType === 'cashback'
-                                        ? "bg-amber-600 text-white"
-                                        : "bg-amber-50 text-amber-600 hover:bg-amber-100"
-                                )}
-                            >
-                                Cashback Only
-                            </button>
+                                {/* Sheet Button - Manage Sheet Modal */}
+                                <ManageSheetButton
+                                    personId={person.id}
+                                    cycleTag={activeCycle.tag}
+                                    scriptLink={person.sheet_link}
+                                    googleSheetUrl={person.google_sheet_url}
+                                    sheetFullImg={person.sheet_full_img}
+                                    showBankAccount={person.sheet_show_bank_account ?? false}
+                                    showQrImage={person.sheet_show_qr_image ?? false}
+                                    size="sm"
+                                    buttonClassName="h-8 text-xs font-medium"
+                                    linkedLabel="Sheet"
+                                    unlinkedLabel="Sheet"
+                                    splitMode={true}
+                                />
+
+                                <div className="relative">
+                                    <Input
+                                        placeholder="Search..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="h-8 w-48 text-xs pr-8"
+                                    />
+                                    {searchTerm && (
+                                        <button
+                                            onClick={() => setSearchTerm('')}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
 
