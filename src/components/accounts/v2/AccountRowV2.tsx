@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -5,7 +7,6 @@ import { Account, Category } from "@/types/moneyflow.types";
 import { AccountColumnConfig, AccountColumnKey } from "@/hooks/useAccountColumnPreferences";
 import { ExpandIcon } from "@/components/transaction/ui/ExpandIcon";
 import { AccountRowDetailsV2 } from "./AccountRowDetailsV2";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
     Edit,
@@ -14,12 +15,12 @@ import {
     Banknote,
     ArrowRightLeft,
     CreditCard,
-    Link2,
-    AlertTriangle,
     ArrowUpRight,
     Loader2,
-    CalendarRange,
-    LucideIcon
+    LucideIcon,
+    BookOpen,
+    Network,
+    Users
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -73,13 +74,11 @@ export function AccountRowV2({
     const [isTransactionsModalOpen, setIsTransactionsModalOpen] = useState(false);
     const [modalRefreshKey, setModalRefreshKey] = useState(0);
 
-    // Quick Edit State
     const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
     const [people, setPeople] = useState<Person[]>([]);
     const [shops, setShops] = useState<Shop[]>([]);
 
     const handleEditTransaction = (id: string) => {
-        // Fetch dependencies if not loaded
         if (people.length === 0 || shops.length === 0) {
             Promise.all([getPeopleAction(), getShopsAction()]).then(([p, s]) => {
                 setPeople(p);
@@ -96,7 +95,6 @@ export function AccountRowV2({
         onToggleExpand(account.id);
     };
 
-    // Callback when a transaction is edited inside the modal
     const onEditTransaction = (id: string) => {
         handleEditTransaction(id);
     };
@@ -111,7 +109,6 @@ export function AccountRowV2({
                         if (account.type !== 'credit_card' && account.type !== 'debt') return "";
                         const now = new Date();
 
-                        // Priority 1: High Urgency (Due or Rule < 5 days)
                         let dueDays = Infinity;
                         if (account.stats?.due_date) {
                             dueDays = Math.ceil((new Date(account.stats.due_date).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
@@ -135,13 +132,11 @@ export function AccountRowV2({
                             return "bg-rose-50/50 border-rose-100 hover:bg-rose-100/50 shadow-[inset_4px_0_0_0_#fb7185]";
                         }
 
-                        // Priority 2: Spend More Needed (Yellow)
                         const remaining = (account.stats?.min_spend || 0) - (account.stats?.spent_this_cycle || 0);
                         if (account.stats?.min_spend && !account.stats?.is_qualified && remaining > 0) {
                             return "bg-amber-50 border-amber-200 hover:bg-amber-100 shadow-[inset_4px_0_0_0_#f59e0b]";
                         }
 
-                        // Qualified status
                         if (account.stats?.is_qualified) {
                             return "bg-emerald-50/30 border-emerald-100 hover:bg-emerald-100/30";
                         }
@@ -172,7 +167,7 @@ export function AccountRowV2({
                             categories,
                             setIsTransactionsModalOpen,
                             isTransactionsModalOpen,
-                            onEditTransaction, // Pass wrapper function
+                            onEditTransaction,
                             modalRefreshKey
                         )}
                     </td>
@@ -192,27 +187,25 @@ export function AccountRowV2({
                 </tr>
             )}
 
-            {
-                editingTransactionId && (
-                    <TransactionSlideV2
-                        open={!!editingTransactionId}
-                        onOpenChange={(open) => !open && setEditingTransactionId(null)}
-                        mode="single"
-                        editingId={editingTransactionId}
-                        initialData={undefined}
-                        accounts={allAccounts || []}
-                        categories={categories || []}
-                        people={people}
-                        shops={shops}
-                        onSuccess={() => {
-                            setEditingTransactionId(null);
-                            setModalRefreshKey(prev => prev + 1); // Trigger modal refresh
-                            router.refresh(); // Refresh account stats (Rewards column)
-                            toast.success("Transaction updated");
-                        }}
-                    />
-                )
-            }
+            {editingTransactionId && (
+                <TransactionSlideV2
+                    open={!!editingTransactionId}
+                    onOpenChange={(open) => !open && setEditingTransactionId(null)}
+                    mode="single"
+                    editingId={editingTransactionId}
+                    initialData={undefined}
+                    accounts={allAccounts || []}
+                    categories={categories || []}
+                    people={people}
+                    shops={shops}
+                    onSuccess={() => {
+                        setEditingTransactionId(null);
+                        setModalRefreshKey(prev => prev + 1);
+                        router.refresh();
+                        toast.success("Transaction updated");
+                    }}
+                />
+            )}
         </>
     );
 }
@@ -241,13 +234,22 @@ function renderCell(
     const { onEdit, onLend, onRepay, onPay, onTransfer } = actions;
     const stats = account.stats;
 
-    // Helper for compact money
-    const formatMoneyVND = (amount: number) => {
-        return new Intl.NumberFormat('vi-VN').format(Math.abs(amount));
+    const badgeBase = "h-6 px-3 text-[10px] font-semibold uppercase tracking-wide rounded-full border flex items-center justify-center gap-1 min-w-[96px]";
+
+    const renderRoleBadge = (role: 'parent' | 'child' | 'standalone') => {
+        if (role === 'parent') {
+            return <span className={`${badgeBase} bg-amber-100 text-amber-800 border-amber-300`}><Network className="w-3.5 h-3.5" />Parent</span>;
+        }
+        if (role === 'child') {
+            return <span className={`${badgeBase} bg-indigo-100 text-indigo-800 border-indigo-300`}><Users className="w-3.5 h-3.5" />Child</span>;
+        }
+        return <span className={`${badgeBase} bg-slate-100 text-slate-700 border-slate-300`}>Standalone</span>;
     };
 
+    const formatMoneyVND = (amount: number) => new Intl.NumberFormat('vi-VN').format(Math.abs(amount));
+
     switch (key) {
-        case 'account':
+        case 'account': {
             const children = allAccounts?.filter((a: Account) => a.parent_account_id === account.id) || [];
 
             const getPlaceholderIcon = (type: string): LucideIcon => {
@@ -261,11 +263,11 @@ function renderCell(
                 }
             };
 
-            const renderIcon = (type: string, url: string | null | undefined, name: string, sizeClass: string = "w-4 h-4", fontSizeClass: string = "text-[9px]") => {
-                if (url) return <img src={url} className={cn(sizeClass, "object-contain rounded-sm")} />;
+            const renderIcon = (type: string, url: string | null | undefined, name: string, sizeClass: string = "w-4 h-4") => {
+                if (url) return <img src={url} className={cn(sizeClass, "object-contain rounded-sm")} alt="" />;
                 const Icon = getPlaceholderIcon(type);
                 return (
-                    <div className={cn(sizeClass, "flex items-center justify-center bg-slate-100 rounded text-slate-400 p-0.5")}>
+                    <div className={cn(sizeClass, "flex items-center justify-center bg-slate-100 rounded text-slate-400 p-0.5")}> 
                         <Icon className="w-full h-full" />
                     </div>
                 );
@@ -275,7 +277,7 @@ function renderCell(
 
             return (
                 <div className="flex flex-col gap-2 min-w-[170px]">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 w-full">
                         <div className="h-10 w-10 flex-shrink-0 flex items-center justify-center rounded overflow-hidden">
                             {account.image_url ? (
                                 <img src={account.image_url} alt="" className="w-full h-full object-contain" />
@@ -285,9 +287,8 @@ function renderCell(
                                 </div>
                             )}
                         </div>
-                        <div className="flex flex-col min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                                {/* Type Icon BEFORE name */}
+                        <div className="flex items-center justify-between min-w-0 flex-1 gap-3">
+                            <div className="flex items-center gap-2 min-w-0">
                                 {account.type === 'credit_card' && <CreditCard className="w-3.5 h-3.5 text-indigo-500 shrink-0" />}
                                 {account.type === 'bank' && <Banknote className="w-3.5 h-3.5 text-blue-500 shrink-0" />}
                                 {account.type === 'ewallet' && <Wallet className="w-3.5 h-3.5 text-purple-500 shrink-0" />}
@@ -296,79 +297,125 @@ function renderCell(
 
                                 <Link
                                     href={`/accounts/v2/${account.id}`}
-                                    className="font-black text-base leading-none hover:underline hover:text-indigo-600 transition-colors"
+                                    className="font-black text-base leading-none hover:underline hover:text-indigo-600 transition-colors truncate"
                                     onClick={(e) => e.stopPropagation()}
                                 >
                                     {account.name}
                                 </Link>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 justify-end">
+                        {account.secured_by_account_id ? (
+                            <TooltipProvider>
+                                <Tooltip delayDuration={300}>
+                                    <TooltipTrigger asChild>
+                                        <span className={`${badgeBase} bg-indigo-100 text-indigo-800 border-indigo-300`}>
+                                            <BookOpen className="w-3.5 h-3.5" />
+                                            Secured
+                                        </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <div className="flex items-center gap-2">
+                                            {(() => {
+                                                const secured = allAccounts?.find(a => a.id === account.secured_by_account_id);
+                                                return secured ? (
+                                                    <>
+                                                        {renderIcon(secured.type, secured.image_url, secured.name)}
+                                                        <span>Secured by {secured.name}</span>
+                                                    </>
+                                                ) : 'Secured by collateral';
+                                            })()}
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        ) : null}
 
-                                <div className="flex items-center gap-1.5 ml-auto">
-                                    {account.secured_by_account_id && (
-                                        <TooltipProvider>
-                                            <Tooltip delayDuration={300}>
-                                                <TooltipTrigger asChild>
-                                                    <Link2 className="w-3 h-3 text-indigo-500" />
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <div className="flex items-center gap-2">
-                                                        {(() => {
-                                                            const secured = allAccounts?.find(a => a.id === account.secured_by_account_id);
-                                                            return secured ? (
-                                                                <>
-                                                                    {renderIcon(secured.type, secured.image_url, secured.name)}
-                                                                    <span>Secured by {secured.name}</span>
-                                                                </>
-                                                            ) : 'Secured by collateral';
-                                                        })()}
-                                                    </div>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    )}
-                                    {account.relationships?.is_parent && (
-                                        <TooltipProvider>
-                                            <Tooltip delayDuration={300}>
-                                                <TooltipTrigger asChild>
-                                                    <Badge variant="secondary" className="h-5 px-2 text-[9px] bg-indigo-50 text-indigo-700 border-indigo-200 font-black whitespace-nowrap min-w-[60px] justify-center cursor-help">
-                                                        PARENT
-                                                    </Badge>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <div className="space-y-1">
-                                                        <p className="font-bold">Child Accounts:</p>
-                                                        {allAccounts?.filter(a => a.parent_account_id === account.id).map(child => (
-                                                            <div key={child.id} className="flex items-center gap-2">
-                                                                {renderIcon(child.type, child.image_url, child.name)}
-                                                                <span>{child.name}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    )}
-                                    {account.relationships?.parent_info && (
-                                        <TooltipProvider>
-                                            <Tooltip delayDuration={300}>
-                                                <TooltipTrigger asChild>
-                                                    <Badge variant="secondary" className="h-5 px-2 text-[9px] bg-slate-100 text-slate-600 border-slate-200 font-black whitespace-nowrap min-w-[60px] justify-center cursor-help">
-                                                        CHILD
-                                                    </Badge>
-                                                </TooltipTrigger>
-                                                <TooltipContent>
-                                                    <div className="flex items-center gap-2">
-                                                        {renderIcon(account.relationships.parent_info.type, account.relationships.parent_info.image_url, account.relationships.parent_info.name)}
-                                                        <span>Parent: {account.relationships.parent_info.name}</span>
-                                                    </div>
-                                                </TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                    )}
-                                </div>
+                        {account.relationships?.is_parent ? (
+                            <TooltipProvider>
+                                <Tooltip delayDuration={300}>
+                                    <TooltipTrigger asChild>
+                                        <div className="cursor-help">{renderRoleBadge('parent')}</div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <div className="space-y-1">
+                                            <p className="font-bold">Child Accounts:</p>
+                                            {allAccounts?.filter(a => a.parent_account_id === account.id).map(child => (
+                                                <div key={child.id} className="flex items-center gap-2">
+                                                    {renderIcon(child.type, child.image_url, child.name)}
+                                                    <span>{child.name}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        ) : account.relationships?.parent_info ? (
+                            <TooltipProvider>
+                                <Tooltip delayDuration={300}>
+                                    <TooltipTrigger asChild>
+                                        <div className="cursor-help">{renderRoleBadge('child')}</div>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <div className="flex items-center gap-2">
+                                            {renderIcon(account.relationships.parent_info.type, account.relationships.parent_info.image_url, account.relationships.parent_info.name)}
+                                            <span>Parent: {account.relationships.parent_info.name}</span>
+                                        </div>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                        ) : (
+                            renderRoleBadge('standalone')
+                        )}
+
+                        {(() => {
+                            const isDueAccount = account.type === 'credit_card' || account.type === 'debt';
+                            const dueDate = stats?.due_date ? new Date(stats.due_date) : null;
+                            let daysLeft = Infinity;
+                            if (dueDate) {
+                                const diffTime = dueDate.getTime() - new Date().getTime();
+                                daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            }
+
+                            const formatDate = (date: Date | null) => date ? new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' }).format(date) : '';
+
+                            if (!isDueAccount || daysLeft === Infinity) {
+                                const typeLabels: Record<string, { icon: React.ComponentType<any>, label: string }> = {
+                                    'bank': { icon: Banknote, label: 'Bank Account' },
+                                    'ewallet': { icon: Wallet, label: 'E-Wallet' },
+                                    'savings': { icon: ArrowUpRight, label: 'Savings' },
+                                    'cash': { icon: Wallet, label: 'Cash' },
+                                };
+                                const info = typeLabels[account.type] || { icon: Wallet, label: 'Account' };
+                                const Icon = info.icon;
+                                return (
+                                    <span className={`${badgeBase} bg-slate-100 text-slate-600 border-slate-300 w-[140px]`}>
+                                        <Icon className="w-3.5 h-3.5" />
+                                        {info.label}
+                                    </span>
+                                );
+                            }
+
+                            const tone = daysLeft <= 0
+                                ? "bg-rose-100 text-rose-800 border-rose-300"
+                                : daysLeft <= 5
+                                    ? "bg-amber-100 text-amber-800 border-amber-300"
+                                    : "bg-emerald-100 text-emerald-800 border-emerald-300";
+
+                            const dayNumber = Math.abs(daysLeft);
+                            const labelDate = formatDate(dueDate);
+
+                            return (
+                                <span className={`${badgeBase} ${tone} w-[140px]`}>
+                                    <span className="font-black text-base">{dayNumber}d</span>
+                                    <span className="text-slate-400">•</span>
+                                    <span className="font-bold">{labelDate}</span>
+                                </span>
+                            );
+                        })()}
                             </div>
                         </div>
                     </div>
-                    {/* Vertical Child List when expanded */}
+
                     {isExpanded && children.length > 0 && (
                         <div className="ml-10 flex flex-col gap-1 border-l-2 border-indigo-100 pl-3 py-1">
                             {children.map((child: Account) => (
@@ -401,33 +448,28 @@ function renderCell(
                     )}
                 </div>
             );
-        case 'limit':
+        }
+        case 'limit': {
             const isParent = account.relationships?.is_parent;
             const parentId = account.parent_account_id;
             const parentAccount = parentId ? allAccounts?.find(a => a.id === parentId) : null;
 
-            // Limit to display: Parent's limit (if child) or Own limit (if parent/independent)
             const displayLimit = parentAccount ? (parentAccount.credit_limit || 0) : (account.credit_limit || 0);
 
-            // Family Balance Logic for Limit Calculation
             let familyDebt = account.current_balance || 0;
 
             if (isParent && allAccounts) {
-                // Parent: Own Balance + All Children Balances
                 const childrenBalances = allAccounts
                     .filter(a => a.parent_account_id === account.id)
                     .reduce((sum, child) => sum + (child.current_balance || 0), 0);
                 familyDebt = (account.current_balance || 0) + childrenBalances;
             } else if (parentId && parentAccount && allAccounts) {
-                // Child: Parent Balance + All Siblings (including self)
-                // Effectively: Parent's "Family Balance"
                 const childrenBalances = allAccounts
                     .filter(a => a.parent_account_id === parentId)
                     .reduce((sum, child) => sum + (child.current_balance || 0), 0);
                 familyDebt = (parentAccount.current_balance || 0) + childrenBalances;
             }
 
-            // For credit cards, absolute value of debt
             const debtAbs = Math.abs(familyDebt);
             const limitProgress = displayLimit > 0 ? Math.min(100, (debtAbs / displayLimit) * 100) : 0;
 
@@ -456,8 +498,8 @@ function renderCell(
                     )}
                 </div>
             );
-
-        case "rewards":
+        }
+        case 'rewards':
             return (
                 <div className="flex flex-col items-end justify-center min-w-[150px]">
                     <AccountRewardsCell
@@ -476,38 +518,9 @@ function renderCell(
                     />
                 </div>
             );
-
-        case "due":
-            if (account.type !== 'credit_card' && account.type !== 'debt') return <span className="text-slate-300">—</span>;
-
-            const dueDate = stats?.due_date ? new Date(stats.due_date) : null;
-            let daysLeft = Infinity;
-            if (dueDate) {
-                const diffTime = dueDate.getTime() - new Date().getTime();
-                daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            }
-
-            if (daysLeft === Infinity) return <span className="text-slate-300">—</span>;
-
-            return (
-                <div className="flex flex-col gap-1 items-end">
-                    <div className={cn(
-                        "text-xs font-normal text-slate-700 tracking-tight flex items-center justify-end gap-1",
-                        daysLeft <= 5 && "text-rose-700"
-                    )}>
-                        <span className="font-black text-sm">{Math.abs(daysLeft)}</span>
-                        <span className="font-bold opacity-80 uppercase text-[9px]">{daysLeft === 0 ? 'today' : (daysLeft < 0 ? 'days ago' : 'days')}</span>
-                        <span className="text-slate-300 mx-0.5">-</span>
-                        <span className={cn("font-black text-sm", daysLeft <= 5 ? "text-rose-700" : "text-slate-600")}>
-                            {dueDate ? new Intl.DateTimeFormat('en-US', { day: '2-digit', month: 'short' }).format(dueDate) : ''}
-                        </span>
-                        {daysLeft <= 5 && <AlertTriangle className="w-3.5 h-3.5 animate-pulse text-rose-600 shrink-0" />}
-                    </div>
-                </div>
-            );
-        case 'balance':
-            // Logic: Balance column displays family balance if it's a parent
-            // If it's a Child (has parent), it should display PARENT's balance (Shared Debt).
+        case 'due':
+            return <span className="text-[10px] text-slate-400">Due is shown in the Account column</span>;
+        case 'balance': {
             let displayBalance = familyBalance ?? account.current_balance;
 
             const balIsParent = account.relationships?.is_parent;
@@ -515,13 +528,11 @@ function renderCell(
             const balParentAccount = balParentId ? allAccounts?.find(a => a.id === balParentId) : null;
 
             if (balIsParent && allAccounts) {
-                // Parent: Own Balance + All Children Balances (Total Family Debt)
                 const childrenBalances = allAccounts
                     .filter(a => a.parent_account_id === account.id)
                     .reduce((sum, child) => sum + (child.current_balance || 0), 0);
                 displayBalance = (account.current_balance || 0) + childrenBalances;
             } else if (balParentId && balParentAccount && allAccounts) {
-                // Child: Show Total Family Debt (Parent + Siblings)
                 const childrenBalances = allAccounts
                     .filter(a => a.parent_account_id === balParentId)
                     .reduce((sum, child) => sum + (child.current_balance || 0), 0);
@@ -538,7 +549,8 @@ function renderCell(
                     </div>
                 </div>
             );
-        case "action":
+        }
+        case 'action': {
             const isCC = account.type === 'credit_card';
             const isDebt = account.type === 'debt';
 
@@ -563,27 +575,28 @@ function renderCell(
                     </div>
                 </TooltipProvider>
             );
+        }
         default:
             return <span className="text-slate-300">—</span>;
     }
 }
 
-function ActionButtonsWithLoading({ actions, account, isCC, isDebt }: any) {
+interface ActionButtonsProps {
+    actions: AccountRowActions;
+    account: Account;
+    isCC: boolean;
+    isDebt: boolean;
+}
+
+function ActionButtonsWithLoading({ actions, account, isCC, isDebt }: ActionButtonsProps) {
     const [loadingAction, setLoadingAction] = React.useState<string | null>(null);
 
-    const handleAction = async (action: string, callback: any) => {
+    const handleAction = (action: string, callback: (account: Account) => void) => {
         setLoadingAction(action);
-        // Simulate loading for UI feedback if sync, or wait if async
-        // Since callbacks are void, we just show it briefly or until slide opens?
-        // Slide opening is fast. User asked for "loading indicator... avoiding freeze feeling".
-        // Just setting state will re-render with spinner.
-
-        // This relies on React flush.
         setTimeout(() => {
             callback(account);
             setLoadingAction(null);
-        }, 300); // 300ms fake delay to show spinner? or just 0? User asked for visible indicator. 
-        // 0 might be too fast to see. 
+        }, 300);
     };
 
     return (

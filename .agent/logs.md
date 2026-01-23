@@ -1,31 +1,35 @@
 ## Error Type
-Console Error
+Build Error
 
 ## Error Message
-React does not recognize the `indicatorClassName` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `indicatorclassname` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+Parsing ecmascript source code failed
 
+## Build Output
+./money-flow-3/src/components/accounts/v2/AccountRowV2.tsx:172:26
+Parsing ecmascript source code failed
+  170 |                             onEditTransaction, // Pass wrapper function
+  171 |                             modalRefreshKey
+> 172 |                         )}
+      |                          ^
+  173 |                     </td>
+  174 |                 ))}
+  175 |             </tr>
 
-    at div (<anonymous>:null:null)
-    at Progress (src/components/ui/progress.tsx:18:5)
-    at renderCell (src/components/accounts/v2/AccountRowV2.tsx:329:25)
-    at <unknown> (src/components/accounts/v2/AccountRowV2.tsx:120:26)
-    at Array.map (<anonymous>:null:null)
-    at AccountRowV2 (src/components/accounts/v2/AccountRowV2.tsx:115:33)
-    at <unknown> (src/components/accounts/v2/AccountTableV2.tsx:183:53)
-    at Array.map (<anonymous>:null:null)
-    at <unknown> (src/components/accounts/v2/AccountTableV2.tsx:177:61)
-    at Array.map (<anonymous>:null:null)
-    at AccountTableV2 (src/components/accounts/v2/AccountTableV2.tsx:164:45)
-    at AccountDirectoryV2 (src/components/accounts/v2/AccountDirectoryV2.tsx:177:21)
-    at AccountsV2Page (src\app\accounts\v2\page.tsx:36:17)
+Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
 
-## Code Frame
-  16 |
-  17 |   return (
-> 18 |     <div
-     |     ^
-  19 |       role="progressbar"
-  20 |       aria-valuenow={value}
-  21 |       aria-valuemin={0}
+Import traces:
+  Client Component Browser:
+    ./money-flow-3/src/components/accounts/v2/AccountRowV2.tsx [Client Component Browser]
+    ./money-flow-3/src/components/accounts/v2/AccountTableV2.tsx [Client Component Browser]
+    ./money-flow-3/src/components/accounts/v2/AccountDirectoryV2.tsx [Client Component Browser]
+    ./money-flow-3/src/components/accounts/v2/AccountDirectoryV2.tsx [Server Component]
+    ./money-flow-3/src/app/accounts/v2/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./money-flow-3/src/components/accounts/v2/AccountRowV2.tsx [Client Component SSR]
+    ./money-flow-3/src/components/accounts/v2/AccountTableV2.tsx [Client Component SSR]
+    ./money-flow-3/src/components/accounts/v2/AccountDirectoryV2.tsx [Client Component SSR]
+    ./money-flow-3/src/components/accounts/v2/AccountDirectoryV2.tsx [Server Component]
+    ./money-flow-3/src/app/accounts/v2/page.tsx [Server Component]
 
 Next.js version: 16.0.10 (Turbopack)

@@ -34,7 +34,7 @@ export function useAccountColumnPreferences() {
         account: true,
         limit: true,
         rewards: true,
-        due: true,
+        due: false,
         balance: true,
         action: true,
     });
@@ -93,7 +93,7 @@ export function useAccountColumnPreferences() {
             account: true,
             limit: true,
             rewards: true,
-            due: true,
+            due: false,
             balance: true,
             action: true,
         });
