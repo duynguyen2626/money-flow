@@ -67,7 +67,7 @@ export function resolveCashbackPolicy(params: {
 
     // Gate: if program has minSpendTarget and current spend is below it, skip levels and stay at program default
     const requiresMinSpend = typeof program.minSpendTarget === 'number' && program.minSpendTarget > 0
-    if (requiresMinSpend && cycleTotals.spent < program.minSpendTarget) {
+    if (requiresMinSpend && program.minSpendTarget && cycleTotals.spent < program.minSpendTarget) {
         return {
             rate: program.defaultRate,
             maxReward: undefined,

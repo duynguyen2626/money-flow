@@ -1235,7 +1235,7 @@ export async function getMonthlyCashbackTransactions(cardId: string, month: numb
 export async function getAccountCycles(accountId: string) {
   const supabase = createClient();
   const { data, error } = await supabase.from('cashback_cycles')
-    .select('id, cycle_tag, spent_amount, real_awarded, virtual_profit, min_spend_target, max_budget, start_date, end_date')
+    .select('id, cycle_tag, spent_amount, real_awarded, virtual_profit, min_spend_target, max_budget, is_exhausted, met_min_spend')
     .eq('account_id', accountId)
     .order('cycle_tag', { ascending: false });
 

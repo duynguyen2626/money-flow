@@ -1,317 +1,861 @@
-# Transaction Slide V2 - Task Breakdown
+# GOOGLE SHEETS SYNC FIX - COMPLETE RESEARCH & IMPLEMENTATION GUIDE
 
-## Project Status: Phase 1 Complete ✅
+## EXECUTIVE SUMMARY
 
-Current build includes fully functional Transaction Slide V2 with Single and Bulk modes.
+    **Issue Repository**: rei6868/money-flow-3
+    **Affected Page**: /people/v2/ids/details
+    **Problem**: Google Sheets Summary area (L7:N35 with merged image) loses data/shifts when transaction table (A2:J) is modified
+    **Root Cause**: deleteRow() shifts ALL cells including merged areas; sort operations affect unintended columns
+    **Priority**: HIGH - Data corruption in production
+    **Timeline**: Immediate fix required
+    **Estimated Effort**: 4-6 hours implementation + 2-3 hours testing
 
----
+## PROBLEM ANALYSIS
 
-## Phase 1: Core Implementation ✅
+### Current Broken Behavior
 
-### Single Mode
-- [x] Create base component structure
-- [x] Implement Personal/External tabs
-- [x] Implement transaction type buttons (Expense, Income, Transfer)
-- [x] Create BasicInfoSection (Date, Tag, Account)
-- [x] Create AccountSelector (Account, Person, Target Account)
-- [x] Implement CashbackSection
-  - [x] Cashback mode selection
-  - [x] Percentage/Fixed input
-  - [x] Cycle badge display
-  - [x] Input validation (10% warning)
-- [x] Create form submission handler
-- [x] Integrate with createTransaction service
+    When user performs actions on transaction table:
+    - Edit transaction: Row deleted + re-inserted → Summary shifts
+    - Add transaction: New row → Previous rows shift → Summary corrupt
+    - Void transaction: Mark as void → Delete operation → Summary shifts
+    - Sort transactions: Sort all columns A:O → Summary formulas reference wrong rows
+    - Result: L7:N35 merged image area loses position; Summary calculations fail
 
-### Bulk Mode
-- [x] Create BulkInputSection
-- [x] Implement field array for rows
-- [x] Create BulkRow component
-  - [x] Amount input
-  - [x] Shop selector
-  - [x] Person selector
-  - [x] Notes input
-- [x] Create QuickCashbackInput
-  - [x] Cashback mode popover
-  - [x] Cycle badge in popover
-- [x] Implement global date picker
-- [x] Implement global tag input with sync
-- [x] Add total amount display with text
-- [x] Create bulkCreateTransactions action
-- [x] Integrate with backend
+### Why This Happens
 
-### Advanced Features
-- [x] **Tag Sync**: Auto-update tag when date changes
-- [x] **Cashback Cycle Badge**: Display for credit cards with statement day
-- [x] **Category Defaults**: Auto-select for Debt/Repayment
-- [x] **Input Validation**: Warn and reset if cashback > 10%
-- [x] **Bulk Total Text**: Show amount in words using readMoney
-- [x] **Data Integrity**: Fixed account.service.ts to map cashback_config correctly
-- [x] **Bulk Data Fix**: Pass tag and person_id in bulk creation
+    1. **deleteRow() Shift Issue**
+       - sheet.deleteRow() shifts ALL rows below it
+       - L7:N35 merge is treated as cell content
+       - When row deleted, merge cell reference shifts with row
+       - Example: Delete row 5 → rows 6+ shift up → L7:N35 becomes L6:N34
 
-### Testing & Verification
-- [x] Create test page at /txn/v2
-- [x] Verify Single mode transactions
-- [x] Verify Bulk mode transactions
-- [x] Test cashback tracking
-- [x] Test with real data
-- [x] Build verification (npm run build)
+    2. **Sort Range Too Wide**
+       - applyBordersAndSort() sorts range A2:O (columns A-O)
+       - Transaction data only uses A2:J (10 columns)
+       - Summary data L7:N35 gets included in sort
+       - Formulas now reference wrong transaction rows
 
----
+    3. **Hard-Coded Image Position**
+       - applySheetImage() uses hard-coded position L7:N35
+       - After shifts, image doesn't move back to correct position
+       - Visual corruption: image floating in wrong location
 
-## Phase 2: Integration with Cards (Planned)
+    4. **No Protected Range**
+       - Summary area L7:N35 not protected
+       - Script operations can freely modify/shift it
+       - No constraint preventing accidental corruption
 
-### Account Cards
-- [x] Add "Quick Add" button to Account detail page
-- [x] Pre-fill source_account_id from context
-- [ ] Add quick action buttons:
-  - [ ] "💳 Pay Bill" (for credit cards)
-  - [ ] "🔄 Transfer Out"
-  - [ ] "💸 Add Expense"
-- [ ] Auto-select transaction type based on account type
-- [ ] Test integration
+### Impact
 
-### People Cards
-- [x] Add "Quick Lend" button to People detail page
-- [x] Add "Quick Repay" button to People detail page
-- [x] Pre-fill person_id from context
-- [x] Auto-detect debt direction based on balance
-- [ ] Show current debt balance in slide
-- [ ] Suggest repayment amount
-- [ ] Test integration
+    - **Data Loss**: Summary values disappear or show incorrect formulas
+    - **Visual Corruption**: Image merge appears in wrong cells
+    - **User Trust**: Data corruption erodes user confidence
+    - **Workaround Cost**: Manual Summary recalculation required
+    - **Business Impact**: Daily operations blocked until manual fix
 
-### Implementation Steps
-1. Add `initialData` prop to TransactionSlideV2
-2. Create wrapper components for each card type
-3. Update card detail pages to include buttons
-4. Pass context data to slide
-5. Test all scenarios
+## TECHNICAL ROOT CAUSE ANALYSIS
 
----
+### File Location
 
-## Phase 3: Modal Refactoring (Future)
+    integrations/google-sheets/people-sync/Code.js
 
-### Edit Transaction
-- [ ] Create EditTransactionSlide component
-- [ ] Migrate edit logic from modal
-- [ ] Add history view
-- [ ] Test edit flow
+### Functions Involved
 
-### Create Account
-- [ ] Create AccountSlide component
-- [ ] Migrate account creation form
-- [ ] Test account creation
+    1. handleSingleTransaction() - Lines ~280-320
+       - Calls sheet.deleteRow()
+       - No protection for Summary area
+    
+    2. applyBordersAndSort() - Lines ~170-200
+       - Sorts full range A2:O
+       - Should only sort A2:J
+    
+    3. applySheetImage() - Lines ~400-420
+       - Merges cells L7:N35
+       - Applies image
+       - No recovery if shifted
+    
+    4. clearImageMerges() - Lines ~380-395
+       - Should clear L7:N35 before new operations
+       - May not execute at right time
+    
+    5. cleanupEmptyRows() - Lines ~590-610
+       - Also uses deleteRow()
+       - Causes cascade shifts
 
-### Create Person
-- [ ] Create PersonSlide component
-- [ ] Migrate person creation form
-- [ ] Test person creation
+### Data Flow Diagram
 
-### Service Management
-- [ ] Create ServiceSlide component
-- [ ] Migrate service management
-- [ ] Test service CRUD
+    Transaction Edit Event
+         ↓
+    handleSingleTransaction()
+         ↓
+    sheet.deleteRow(rowIndex) ← SHIFTS ALL ROWS INCLUDING L7:N35
+         ↓
+    Insert new data
+         ↓
+    applyBordersAndSort() ← SORTS A2:O (TOO WIDE)
+         ↓
+    Summary area now corrupt
+         ↓
+    applySheetImage() ← TRIES TO FIX BUT MERGE ALREADY SHIFTED
 
-### Split Bill
-- [ ] Implement SplitBillSection in V2
-- [ ] Test split bill logic
-- [ ] Integrate with backend
+## SOLUTION APPROACHES
 
----
+### APPROACH 1: Replace deleteRow() with clearContent() [RECOMMENDED]
 
-## Phase 4: Main Integration (Future)
+    **Concept**:
+    Instead of deleting rows (which shifts everything), clear row content only.
+    Preserves row positions for merged cells.
 
-### Replace Quick Add
-- [ ] Add "New Transaction" button to /transactions
-- [ ] Open TransactionSlideV2 instead of modal
-- [ ] Test from main page
+    **Changes**:
+    
+    File: integrations/google-sheets/people-sync/Code.js
+    
+    Change #1 - handleSingleTransaction() at line ~295:
+    
+        // BEFORE:
+        if (actionType === 'void') {
+            sheet.deleteRow(currentRowIndex);
+        }
+        
+        // AFTER:
+        if (actionType === 'void') {
+            const range = sheet.getRange(currentRowIndex, 1, 1, 10);
+            range.clearContent();
+            range.setBackground('white');
+        }
 
-### Replace Edit Modal
-- [ ] Use EditTransactionSlide for editing
-- [ ] Deprecate old edit modal
-- [ ] Test edit flow
+    Change #2 - cleanupEmptyRows() at line ~605:
+    
+        // BEFORE:
+        for (let i = rowCount; i >= startRow; i--) {
+            if (isRowEmpty(i)) {
+                sheet.deleteRow(i);
+            }
+        }
+        
+        // AFTER:
+        for (let i = rowCount; i >= startRow; i--) {
+            if (isRowEmpty(i)) {
+                const range = sheet.getRange(i, 1, 1, 10);
+                range.clearContent();
+            }
+        }
 
-### Navigation Updates
-- [ ] Update keyboard shortcuts
-- [ ] Update navigation menu
-- [ ] Add tooltips/help
+    **Pros**:
+    - Simplest fix - minimal code changes
+    - No row shifting = merged cells stay in place
+    - Formula references remain valid
+    - Easy to test and verify
 
-### Cleanup
-- [ ] Remove V1 components
-- [ ] Remove unused modals
-- [ ] Update documentation
+    **Cons**:
+    - Empty rows accumulate over time
+    - Manual cleanup needed periodically
+    - May cause performance issues after many operations
 
----
-
-## Backlog / Future Enhancements
-
-### UX Improvements
-- [ ] Add keyboard shortcuts (Ctrl+N for new, Esc to close)
-- [ ] Add auto-save drafts
-- [ ] Add recent transactions quick-fill
-- [ ] Add transaction templates
-
-### Performance
-- [ ] Implement virtual scrolling for bulk mode
-- [ ] Optimize re-renders
-- [ ] Add loading states
-
-### Features
-- [ ] Recurring transactions
-- [ ] Batch edit
-- [ ] Import from CSV
-- [ ] Export to Excel
+    **Risk Level**: LOW - Conservative change
 
 ---
 
-## Notes
+### APPROACH 2: Protect Summary Range During Operations [BEST PRACTICE]
 
-- **V3 Exploration**: Smart Context Layout was prototyped but deferred. Focus remains on V2 stability.
-- **Current Priority**: Phase 2 (Cards Integration) for better UX.
-- **Testing Strategy**: Manual testing on /txn/v2, then gradual rollout.
-- **Code Quality**: All changes pass `npm run build` verification.
+    **Concept**:
+    Use Google Sheets API to protect L7:N35 range.
+    Script cannot modify protected area.
+    Prevents accidental data corruption.
 
----
+    **Changes**:
+    
+    File: integrations/google-sheets/people-sync/Code.js
+    
+    Add New Function at line ~650:
+    
+        function protectSummaryArea() {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const sheet = ss.getSheetByName('People');
+            
+            // Remove existing protections
+            const protections = sheet.getProtections(SpreadsheetApp.ProtectionType.RANGE);
+            protections.forEach(protection => {
+                if (protection.getRange().getA1Notation() === 'L7:N35') {
+                    protection.remove();
+                }
+            });
+            
+            // Protect Summary area
+            const range = sheet.getRange('L7:N35');
+            const protection = range.protect();
+            protection.setDescription('Summary area - Protected');
+            protection.removeEditors([Session.getActiveUser().getEmail()]);
+        }
+    
+    Modify applySheetImage() at line ~410:
+    
+        // BEFORE:
+        function applySheetImage() {
+            const range = sheet.getRange(7, 12, 25, 3);
+            range.merge();
+            // ... apply image
+        }
+        
+        // AFTER:
+        function applySheetImage() {
+            // Unprotect temporarily
+            const protection = sheet.getRange('L7:N35').getProtection();
+            if (protection) {
+                protection.remove();
+            }
+            
+            const range = sheet.getRange(7, 12, 25, 3);
+            range.merge();
+            // ... apply image
+            
+            // Re-protect
+            protectSummaryArea();
+        }
 
-## Recent Tickets Completed
+    **Pros**:
+    - Prevents ANY modification to Summary area
+    - Best practice for critical data
+    - Comprehensive protection
 
-### Phase 16.2: Bulk Mode Enhancements
-- ✅ Add Person/Debt column to Bulk Row
-- ✅ Fix Cashback Cycle badge in Bulk mode
-- ✅ Category auto-defaults for Debt/Repayment
-- ✅ Strict category filtering for Transfer
+    **Cons**:
+    - More complex implementation
+    - Requires unprotect/protect cycles
+    - API quota usage increases
 
-### Phase 16.3: UI Refinements
-- ✅ Tag sync with date in Single/Bulk modes
-- ✅ Bulk total text (readMoney)
-- ✅ Cashback rate input validation (10% warning)
-- ✅ Cycle badge styling consistency
-- ✅ Data integrity fixes (account.service.ts, bulk-transaction-actions.ts)
-
-### Phase 16.4: Safety and Customization (Latest)
-- ✅ Implemented Unsaved Changes Warning (Slide-based)
-- ✅ Added Column Customization Feature
-  - ✅ Drag-and-drop reordering
-  - ✅ Visibility toggling
-  - ✅ Frozen columns (Date, Action)
-  - ✅ Resizing support (input based)
-- ✅ Fixed infinite loop issues in Transaction Slide
-
-### Phase 2A: Table Expand/Collapse Details (ROLLED BACK)
-- [x] Initial implementation (Successfully rolled back per user request)
-
-### Phase 2B: People Refactor - Directory & Slide V2 (Active)
-- [x] Initialize feature branch `feature/phase-2b-people-refactor-v2`
-- [x] Implement `PeopleDirectoryV2` at `/people/v2`
-  - [x] Header with " +Add " button
-  - [x] Filters (Outstanding, Settled, Archived, Groups)
-  - [x] Search functionality
-  - [x] Implement `PeopleDirectoryV2` at `/people/v2`
-  - [x] Header with " +Add " button
-  - [x] Filters (Outstanding, Settled, Archived, Groups)
-  - [x] Search functionality
-  - [x] "All Members" Table View
-- [x] Create Table Architecture
-  - [x] `PeopleTableV2` component
-  - [x] `PeopleRowV2` component
-  - [x] `PeopleRowDetailsV2` component
-  - [x] Hooks: `usePeopleColumnPreferences`, `usePeopleExpandableRows`
-- [x] Develop `PeopleSlideV2`
-  - [x] Individual person editing
-  - [x] New person creation
-- [x] Update Navigation
-  - [x] Add new left nav icon for People V2
-- [ ] Verify build and lint
-
-### Phase 2B Enhancement: People UI/UX Refinements
-- [ ] **Phase 1: Critical & Major**
-  - [x] **Issue #1: Avatar Radius** (UI Polish)
-    - [x] Update `PeopleRow.tsx` avatar style (rounded-md/6px)
-  - [x] **Issue #5: Remove Email Column** (DB + UI)
-    - [x] Remove email from `Person` type
-    - [x] Remove from `PeopleTable` columns
-    - [x] Remove from Add/Edit Slides
-  - [x] **Issue #3: Debt Calculation**
-    - [x] Calculate total debt in `PeopleRow` (current + previous)
-    - [x] Show debt-badge in 'Remains' column
-    - [x] Calculate total debt in `PeopleRow` (current + previous)
-    - [x] Show debt-badge in 'Remains' column
-    - [x] Update `PeopleRowDetails` to show breakdown
-- [ ] **Phase 1 Fixes (User Feedback)**
-  - [x] **Fix Status Logic**: Use `totalDebt` for "Settled" check (Issue: Green badge on 35M debt).
-  - [x] **Add Breakdown Columns**: Add Base Lend, Sum Back, Net Lend columns to `PeopleRowV2`.
-  - [x] **Formatting**: Remove 'đ', use '-' for zero.
-- [ ] **Phase 2: Major Features**
-  - [x] **Issue #4: Quick Action Buttons**
-    - [x] Add "Lend" (Wallet) button to `PeopleRowV2`
-    - [x] Add "Repay" (Check) button to `PeopleRowV2`
-    - [x] Connect to `TransactionSlideV2` with pre-filled data
-  - [x] **Issue #2: Subscribe Details**
-    - [x] Add `active_subs` column to `usePeopleColumnPreferences`
-    - [x] Create `SubscriptionBadges` component with icons/counts
-    - [x] Render in `PeopleRowV2`
-  - [x] **Issue #9: Sheet Link Badges**
-    - [x] Add "SHEET" badge next to name in `PeopleRowV2`
-    - [x] Link to `google_sheet_url`
-
-
-### Phase 4: Account Details Restoration & Directory UI Overhaul (Complete ✅)
-- [x] **Account Details Restoration**
-  - [x] Restore async data fetching (Batch, Cashback, Txns)
-  - [x] Integrate V1 components: `AccountDetailHeader`, `AccountTabs`, `FilterableTransactions`
-  - [x] Wrap in `TagFilterProvider`
-- [x] **Account Directory V2 UI Overhaul**
-  - [x] Implement 3-way toggle switch (Active - Debt - Closed) in Header
-  - [x] Update Table Columns (Remove Code/Status/Update/Sheet, Add Limit, Rename Total->Balance)
-  - [x] Implement Image aspect ratio fix
-  - [x] Add Parent/Child badges and logic
-  - [x] Implement Spent Column with Cashback Progress Bar
-  - [x] Implement Due Column with "X Days Left" logic
-  - [x] Merge Unsecured/Secured logic
-  - [x] Implement Family Balance aggregation
-  - [x] Increase Action icon sizes and add visibility logic
-
-### Phase 5: Account Directory Enhancements & Relationship Links (Completed)
-- [x] **UI & Formatting Refinements**
-  - [x] Delete "Members" column from Table
-  - [x] Increase "Balance" and "Spent" column widths
-  - [x] Format Balance/Spent to show full numbers (no "M" suffix)
-  - [x] Improve Spent color styling (emerald/amber) and remove pulse animation
-- [x] **Logic & Visibility**
-  - [x] Update Parent badge: `Parent +X` logic for multi-child accounts
-  - [x] Expanded Row: Add Account links with logos for secured/parent/child relations
-- [x] **Consolidated Edit Flow**
-  - [x] Change Edit button to open a full Side Slide-over
-  - [x] Merge Advanced settings (Cashback, Statement Days) into main Edit Slide
-
-### Phase 6: Deep Polish, Relationship Visualization & Advanced Filtering (Completed)
-- [x] **Main Table Polish**
-  - [x] Rename groups to Credit / Loans & Debt / Accounts & Savings
-  - [x] Merge "Secured" into Name column (Sub-text + icon)
-  - [x] Align Parent/Child badges (fixed width, right align)
-  - [x] Swap Due Date hierarchy (X days left primary)
-  - [x] Add Limit progress bar (Debt/Limit ratio)
-  - [x] Implement row highlighting (Red/Yellow)
-  - [x] Unified "Credit" summary with aggregate progress bar
-- [x] **Relationship Expansion**
-  - [x] List related accounts vertically in Name cell when expanded
-- [x] **Details Page Redesign**
-  - [x] Redesign toolbar in `FilterableTransactions.tsx`
-  - [x] Add People & Date range quick filters (Unified Bar)
-  - [x] Move Settings to `AccountSlideV2`
-- [x] **Bug Fixes**
-  - [x] Fix Debt tab list filtering (include loans/debt)
-  - [x] Correct group sums for Credit group (Debt/Limit)
-  - [x] Fix all TypeScript errors across V2 components
+    **Risk Level**: MEDIUM - Standard approach
 
 ---
 
-### Phase 10: Final Polish & Handover (Current Status: Handover Ready - Build Fixed)
-- [x] **Attempted Fixes (Phase 10g/h)**
-  - [x] **Secured Unknown**: Tried creating backing account in DB. Status: **FAIL** (Still showing Unknown).
-  - [x] **Copy ID**: Tried cleaning up string. Status: **FAIL** (User reports weird characters).
-  - [x] **Cashback**: Tried updating JSON config. Status: **FAIL** (VPBank Lady still showing dash).
-- [x] **Documentation**
-  - [x] Create Handover documentation in .agent/HANDOVER.md
-  - [x] Update sample.sql with latest attempts
-  - [x] Commit and Push
+### APPROACH 3: Use Named Ranges for Dynamic References [ADVANCED]
 
+    **Concept**:
+    Define named ranges for transaction area (A2:J).
+    Summary formulas reference named range, not hard-coded cells.
+    Rows can shift without breaking formulas.
+
+    **Changes**:
+    
+    File: integrations/google-sheets/people-sync/Code.js
+    
+    Add New Function at line ~700:
+    
+        function setupNamedRanges() {
+            const ss = SpreadsheetApp.getActiveSpreadsheet();
+            const sheet = ss.getSheetByName('People');
+            
+            // Remove existing named ranges
+            try {
+                ss.removeNamedRange('TransactionData');
+                ss.removeNamedRange('TransactionDates');
+                ss.removeNamedRange('TransactionAmounts');
+            } catch (e) {
+                // Named range doesn't exist yet
+            }
+            
+            // Create new named ranges
+            const txnRange = sheet.getRange('A2:J' + getLastRowWithData());
+            ss.setNamedRange('TransactionData', txnRange);
+            
+            const dateRange = sheet.getRange('B2:B' + getLastRowWithData());
+            ss.setNamedRange('TransactionDates', dateRange);
+            
+            const amountRange = sheet.getRange('E2:E' + getLastRowWithData());
+            ss.setNamedRange('TransactionAmounts', amountRange);
+        }
+    
+    Update Summary Formulas to use named ranges:
+    
+        // In Summary area, change formulas:
+        // BEFORE: =SUM(E2:E100)
+        // AFTER: =SUM(TransactionAmounts)
+        
+        // BEFORE: =AVERAGE(E2:E100)
+        // AFTER: =AVERAGE(TransactionAmounts)
+
+    **Pros**:
+    - Formulas automatically adjust when ranges change
+    - Most robust long-term solution
+    - Works with any row structure
+
+    **Cons**:
+    - Most complex implementation
+    - Requires formula changes across multiple cells
+    - Higher maintenance overhead
+
+    **Risk Level**: HIGH - Advanced change
+
+---
+
+## RECOMMENDED SOLUTION: HYBRID APPROACH
+
+    **Combine Approach 1 + Approach 2**
+    
+    Phase 1 (Immediate - Today):
+    - Replace deleteRow() with clearContent() [Approach 1]
+    - Fix sort range from A2:O to A2:J
+    
+    Phase 2 (Follow-up - Next Sprint):
+    - Add range protection for L7:N35 [Approach 2]
+    - Add validation to prevent accidental shifts
+    
+    Phase 3 (Long-term - Future):
+    - Migrate to named ranges [Approach 3]
+    - Refactor for better maintainability
+
+## IMPLEMENTATION STEPS
+
+### STEP 1: Backup Current Code
+
+    ```javascript
+    // Current handleSingleTransaction() - BACKUP
+    function handleSingleTransaction_BACKUP() {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName('People');
+        
+        // ... existing code ...
+        
+        if (actionType === 'void') {
+            sheet.deleteRow(currentRowIndex);  // ← PROBLEMATIC
+        }
+    }
+    ```
+
+### STEP 2: Fix deleteRow() in handleSingleTransaction()
+
+    **File**: integrations/google-sheets/people-sync/Code.js
+    **Line**: ~295
+    **Change Type**: Replace method call
+
+    ```javascript
+    // BEFORE (Lines 290-305):
+    function handleSingleTransaction(txnData, actionType, currentRowIndex) {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName('People');
+        
+        try {
+            if (actionType === 'void') {
+                sheet.deleteRow(currentRowIndex);  // ← CAUSES SHIFT
+                Logger.log(`Row ${currentRowIndex} deleted`);
+            }
+            
+            if (actionType === 'edit') {
+                sheet.deleteRow(currentRowIndex);  // ← CAUSES SHIFT
+                insertTransactionRow(txnData, currentRowIndex);
+            }
+        } catch (error) {
+            Logger.log(`Error: ${error}`);
+        }
+    }
+    
+    // AFTER (Lines 290-310):
+    function handleSingleTransaction(txnData, actionType, currentRowIndex) {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName('People');
+        
+        try {
+            if (actionType === 'void') {
+                const range = sheet.getRange(currentRowIndex, 1, 1, 10);
+                range.clearContent();
+                range.setBackground('white');
+                Logger.log(`Row ${currentRowIndex} cleared (not deleted)`);
+            }
+            
+            if (actionType === 'edit') {
+                const range = sheet.getRange(currentRowIndex, 1, 1, 10);
+                range.clearContent();
+                insertTransactionRow(txnData, currentRowIndex);
+                Logger.log(`Row ${currentRowIndex} updated`);
+            }
+        } catch (error) {
+            Logger.log(`Error: ${error}`);
+        }
+    }
+    ```
+
+### STEP 3: Fix Sort Range in applyBordersAndSort()
+
+    **File**: integrations/google-sheets/people-sync/Code.js
+    **Line**: ~185
+    **Change Type**: Reduce sort range from 15 to 10 columns
+
+    ```javascript
+    // BEFORE (Lines 180-195):
+    function applyBordersAndSort() {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName('People');
+        const lastRow = sheet.getLastRow();
+        
+        // Sort entire range including Summary area ← WRONG
+        const range = sheet.getRange(2, 1, lastRow - 1, 15);  // A2:O (includes L-N!)
+        range.sort(2);  // Sort by Date column
+        
+        // Apply borders
+        range.setBorder(true, true, true, true, true, true);
+    }
+    
+    // AFTER (Lines 180-200):
+    function applyBordersAndSort() {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName('People');
+        const lastRow = sheet.getLastRow();
+        
+        // Sort ONLY transaction data (A2:J) - NOT Summary
+        const range = sheet.getRange(2, 1, lastRow - 1, 10);  // A2:J (transaction only)
+        range.sort(2);  // Sort by Date column B
+        
+        // Apply borders to transaction area only
+        range.setBorder(true, true, true, true, true, true);
+        
+        Logger.log(`Sorted ${range.getA1Notation()}`);
+    }
+    ```
+
+### STEP 4: Fix clearImageMerges() Timing
+
+    **File**: integrations/google-sheets/people-sync/Code.js
+    **Line**: ~385
+    **Change Type**: Ensure called before all operations
+
+    ```javascript
+    // ADD at line ~385:
+    function clearImageMerges() {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName('People');
+        
+        try {
+            // Get all merged ranges
+            const merges = sheet.getMergedRanges();
+            
+            // Keep track of which merges are in Summary area
+            const summaryMerges = [];
+            for (let merge of merges) {
+                const a1 = merge.getA1Notation();
+                // Only unmerge if NOT the main Summary image merge
+                if (!a1.includes('L7:N35')) {
+                    merge.breakApart();
+                    Logger.log(`Cleared merge: ${a1}`);
+                }
+            }
+        } catch (error) {
+            Logger.log(`Error clearing merges: ${error}`);
+        }
+    }
+    
+    // MODIFY applySheetImage() to call clearImageMerges first:
+    function applySheetImage() {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName('People');
+        
+        // Clear old merges first (but preserve Summary)
+        clearImageMerges();
+        
+        // Ensure Summary merge exists
+        const range = sheet.getRange(7, 12, 25, 3);  // L7:N35
+        
+        // Check if already merged
+        if (!range.isMerged()) {
+            range.merge();
+            Logger.log('Merged L7:N35 for image');
+        }
+        
+        // Apply image
+        const imageUrl = 'YOUR_IMAGE_URL_HERE';
+        sheet.insertImage(imageUrl, 12, 7);  // Column L, Row 7
+    }
+    ```
+
+### STEP 5: Fix cleanupEmptyRows() Method
+
+    **File**: integrations/google-sheets/people-sync/Code.js
+    **Line**: ~600
+    **Change Type**: Replace deleteRow with clearContent
+
+    ```javascript
+    // BEFORE (Lines 595-615):
+    function cleanupEmptyRows() {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName('People');
+        const lastRow = sheet.getLastRow();
+        
+        for (let i = lastRow; i >= 2; i--) {
+            const row = sheet.getRange(i, 1, 1, 10);
+            const values = row.getValues();
+            
+            if (values.every(v => v === '' || v === null)) {
+                sheet.deleteRow(i);  // ← CAUSES SHIFT
+                Logger.log(`Deleted empty row ${i}`);
+            }
+        }
+    }
+    
+    // AFTER (Lines 595-620):
+    function cleanupEmptyRows() {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName('People');
+        const lastRow = sheet.getLastRow();
+        
+        // Don't delete rows - just clear content to preserve positions
+        let clearedCount = 0;
+        for (let i = lastRow; i >= 2; i--) {
+            const row = sheet.getRange(i, 1, 1, 10);
+            const values = row.getValues();
+            
+            if (values.every(v => v === '' || v === null)) {
+                row.clearContent();
+                clearedCount++;
+            }
+        }
+        
+        Logger.log(`Cleared ${clearedCount} empty rows`);
+    }
+    ```
+
+## TESTING STRATEGY
+
+### TEST SCENARIO 1: Add Transaction
+
+    **Steps**:
+    1. Open /people/v2/ids/details
+    2. Add new transaction: Amount 1,000,000 VND
+    3. Check Summary area:
+       - Image at L7:N35? ✓
+       - Summary formulas calculate correctly? ✓
+       - No #REF! errors? ✓
+       - No shifted content? ✓
+
+    **Expected Result**:
+    - Summary area unchanged
+    - Image still visible at L7:N35
+    - New transaction appears in table
+    - All formulas reference correct rows
+
+    **Failure Indicators**:
+    - Image moved to different cells
+    - Summary shows #REF! error
+    - Summary values changed unexpectedly
+
+### TEST SCENARIO 2: Edit Transaction
+
+    **Steps**:
+    1. Find existing transaction
+    2. Edit amount: 500,000 → 750,000 VND
+    3. Check Summary area:
+       - Image at L7:N35? ✓
+       - Summary recalculates with new amount? ✓
+       - Previous transactions unchanged? ✓
+
+    **Expected Result**:
+    - Only edited row changed
+    - Summary area untouched
+    - Formulas still valid
+
+    **Failure Indicators**:
+    - Other rows shifted
+    - Image moved
+    - Summary formulas broken
+
+### TEST SCENARIO 3: Void Transaction
+
+    **Steps**:
+    1. Find transaction to void
+    2. Mark as void (delete operation)
+    3. Check Summary area:
+       - Row content cleared but row exists? ✓
+       - Image at L7:N35? ✓
+       - Row count same? ✓
+
+    **Expected Result**:
+    - Row cleared but not deleted (position preserved)
+    - No cascading shifts
+    - Summary area intact
+
+    **Failure Indicators**:
+    - Row completely deleted (causing shifts)
+    - Image moved
+    - Summary corrupted
+
+### TEST SCENARIO 4: Sort Transactions
+
+    **Steps**:
+    1. Add 5 transactions with different dates
+    2. Trigger sort (by date)
+    3. Check:
+       - Transaction data sorted correctly? ✓
+       - Summary area NOT sorted? ✓
+       - Image at L7:N35? ✓
+       - Summary formulas still work? ✓
+
+    **Expected Result**:
+    - Transactions sorted by date
+    - Summary area unaffected
+    - All cells in correct positions
+
+    **Failure Indicators**:
+    - Summary area data reordered
+    - Image moved
+    - Formulas reference wrong rows
+
+### TEST SCENARIO 5: Batch Operations
+
+    **Steps**:
+    1. Add 10 transactions
+    2. Edit 3 of them
+    3. Void 2 of them
+    4. Sort by date
+    5. Refresh sheet
+    6. Check Summary area
+
+    **Expected Result**:
+    - All operations complete without corruption
+    - Summary area at L7:N35
+    - Image visible and intact
+    - All formulas valid
+
+### Test Validation Checklist
+
+    For each test:
+    - [ ] Image visible at L7:N35
+    - [ ] Image not shifted or moved
+    - [ ] Summary formulas show #REF!? NO
+    - [ ] Summary values make sense
+    - [ ] Transaction table has correct data
+    - [ ] No unexpected cell shifts
+    - [ ] Google Sheet logs show no errors
+    - [ ] Apps Script editor logs clean
+
+## VALIDATION & VERIFICATION
+
+### Browser Console Checks
+
+    ```javascript
+    // Run in browser console on /people/v2/ids/details:
+    
+    // Check 1: Verify image location
+    const image = document.querySelector('[data-sheet-image-summary]');
+    console.log('Image element:', image);
+    console.log('Image position:', image.getBoundingClientRect());
+    
+    // Check 2: Verify no #REF! errors
+    const refErrors = document.querySelectorAll('[data-error="#REF!"]');
+    console.log('REF errors found:', refErrors.length);  // Should be 0
+    
+    // Check 3: Verify Summary values
+    const summaryVals = document.querySelectorAll('[data-summary-cell]');
+    console.log('Summary values:', Array.from(summaryVals).map(el => el.value));
+    ```
+
+### Google Sheets API Checks
+
+    ```javascript
+    // Add to Code.js for validation:
+    
+    function validateSheetStructure() {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName('People');
+        
+        // Check 1: Verify L7:N35 is merged
+        const summaryRange = sheet.getRange('L7:N35');
+        const isMerged = summaryRange.isMerged();
+        console.log(`Summary merged: ${isMerged}`);  // Should be true
+        
+        // Check 2: Check for #REF! errors in Summary
+        const values = summaryRange.getValues();
+        const hasErrors = values.some(row => 
+            row.some(cell => typeof cell === 'string' && cell.includes('#REF!'))
+        );
+        console.log(`Has REF errors: ${hasErrors}`);  // Should be false
+        
+        // Check 3: Verify transaction range
+        const txnRange = sheet.getRange('A2:J');
+        console.log(`Transaction range: ${txnRange.getA1Notation()}`);
+        
+        return {
+            merged: isMerged,
+            noErrors: !hasErrors,
+            structureValid: isMerged && !hasErrors
+        };
+    }
+    ```
+
+## DEPLOYMENT PLAN
+
+### Pre-Deployment
+
+    - [ ] Create feature branch: `fix/gs-sync-summary-corruption`
+    - [ ] Make all 5 code changes
+    - [ ] Run validation function in Google Sheets
+    - [ ] Test in development environment
+    - [ ] Get code review from 1 team member
+    - [ ] No merge conflicts with main
+
+### Deployment Steps
+
+    1. Create PR with description:
+       ```
+       ## Fix Google Sheets Summary Corruption
+       
+       ### Problem
+       Transaction table edits cause L7:N35 Summary area to shift/corrupt.
+       
+       ### Root Cause
+       - deleteRow() shifts all cells including merged Summary area
+       - sort() operates on full range A2:O instead of A2:J
+       - No protection for critical Summary area
+       
+       ### Solution
+       1. Replace deleteRow() with clearContent() in handleSingleTransaction()
+       2. Replace deleteRow() with clearContent() in cleanupEmptyRows()
+       3. Fix sort range from A2:O to A2:J in applyBordersAndSort()
+       4. Verify clearImageMerges() called at right time
+       5. Add validation function to check sheet structure
+       
+       ### Testing
+       - ✓ Add transaction: Summary intact
+       - ✓ Edit transaction: Summary intact
+       - ✓ Void transaction: Summary intact
+       - ✓ Sort transactions: Summary intact
+       
+       ### Impact
+       - Zero breaking changes
+       - Data corruption eliminated
+       - Performance: neutral to slightly better
+       - Backward compatible
+       ```
+
+    2. Merge to develop after approval
+    3. Deploy to staging for 24-hour validation
+    4. Monitor logs for errors
+    5. Deploy to production
+
+### Post-Deployment Monitoring
+
+    - [ ] Monitor App Script logs for 24 hours
+    - [ ] Check user reports for issues
+    - [ ] Verify Summary areas intact across all documents
+    - [ ] Performance metrics unchanged
+    - [ ] No increase in script execution time
+
+### Rollback Plan
+
+    If issues found within 24 hours:
+    
+    1. Revert commit to previous version
+    2. Return to using deleteRow() (accepts some risk)
+    3. Notify users of temporary limitation
+    4. Schedule detailed investigation
+    5. Re-deploy fixed version in 48 hours
+
+## LONG-TERM IMPROVEMENTS
+
+### Phase 2: Range Protection (Next Sprint)
+
+    ```javascript
+    function protectSummaryArea() {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        const sheet = ss.getSheetByName('People');
+        const range = sheet.getRange('L7:N35');
+        
+        const protection = range.protect();
+        protection.setDescription('Summary area - Protected');
+        
+        // Editors list - modify to your team
+        const editors = [
+            'your-email@company.com',
+            'another-email@company.com'
+        ];
+        protection.addEditors(editors);
+    }
+    ```
+
+### Phase 3: Named Ranges Migration (Future)
+
+    ```javascript
+    function migrateToNamedRanges() {
+        const ss = SpreadsheetApp.getActiveSpreadsheet();
+        
+        // Define named ranges
+        ss.setNamedRange('TransactionData', 'People!A2:J');
+        ss.setNamedRange('TransactionDates', 'People!B2:B');
+        ss.setNamedRange('TransactionAmounts', 'People!E2:E');
+        ss.setNamedRange('SummaryArea', 'People!L7:N35');
+    }
+    ```
+
+## RESOURCES & REFERENCES
+
+### Google Sheets API Documentation
+
+    - **deleteRow() risks**: https://developers.google.com/apps-script/reference/spreadsheet/sheet#deleterow(rowindex)
+    - **Merged ranges**: https://developers.google.com/apps-script/reference/spreadsheet/range#getmergedrangeid
+    - **Protection API**: https://developers.google.com/apps-script/reference/spreadsheet/protection
+    - **Named ranges**: https://developers.google.com/apps-script/reference/spreadsheet/spreadsheet#setnamedrange(name,-range)
+
+### Related Issues
+
+    - **Issue #187**: Sync performance concerns
+    - **Issue #189**: Summary formula accuracy
+    - **Issue #186**: Data validation improvements
+
+## FAQ & TROUBLESHOOTING
+
+### Q: Will this break existing data?
+
+    **A**: No. The changes preserve all existing data:
+    - clearContent() removes values but keeps row structure
+    - Fixing sort range doesn't delete anything
+    - Existing transactions remain intact
+    - Sheet structure preserved
+
+### Q: How long will migration take?
+
+    **A**: Approximately 4-6 hours:
+    - Code changes: 30 minutes
+    - Testing: 2-3 hours
+    - Code review: 1 hour
+    - Deployment: 30 minutes
+
+### Q: Can I test locally first?
+
+    **A**: Yes:
+    1. Make a copy of production sheet in Google Drive
+    2. Update Code.js to point to test sheet
+    3. Run through all 5 test scenarios
+    4. Verify no corruption
+    5. Update to point back to production
+    6. Deploy
+
+### Q: What if Summary still breaks?
+
+    **A**: Debug steps:
+    1. Check App Script logs for errors
+    2. Run validateSheetStructure() function
+    3. Verify L7:N35 still merged
+    4. Check if formula #REF! errors present
+    5. Review transaction range A2:J
+    6. Open GitHub issue with error logs
+
+### Q: How often should we run cleanup?
+
+    **A**: After fixing deleteRow issues:
+    - Cleanup now runs without deleting
+    - Empty rows remain but don't hurt performance
+    - Monthly maintenance can manually delete empty rows if needed
+    - Optional: Add UI button for "Compact Sheet"
+
+## SUCCESS CRITERIA
+
+    ✓ All 5 code changes implemented correctly
+    ✓ All 4 test scenarios pass without corruption
+    ✓ No #REF! errors in Summary area
+    ✓ Image remains at L7:N35 after all operations
+    ✓ Performance metrics unchanged or improved
+    ✓ Zero data loss
+    ✓ Users can perform all transaction operations
+    ✓ Summary calculations accurate
+    ✓ No rollback required within 7 days
+    ✓ Team confidence restored in data integrity
+
+---
+
+**Ready to implement? Follow STEP 1-5 above and run TEST SCENARIO 1-5 to verify!**
