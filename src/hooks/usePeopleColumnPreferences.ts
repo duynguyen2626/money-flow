@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 
-export type PeopleColumnKey = 'name' | 'active_subs' | 'debt_tag' | 'current_debt' | 'base_lend' | 'cashback' | 'net_lend' | 'balance' | 'action';
+export type PeopleColumnKey = 'name' | 'status' | 'base_lend' | 'balance' | 'action';
 
 export interface PeopleColumnConfig {
     key: PeopleColumnKey;
@@ -11,14 +11,10 @@ export interface PeopleColumnConfig {
 }
 
 const defaultPeopleColumns: PeopleColumnConfig[] = [
-    { key: 'name', label: 'Name', defaultWidth: 250, minWidth: 200, frozen: true },
-    { key: 'active_subs', label: 'Active Subs', defaultWidth: 180, minWidth: 150 },
-    { key: 'debt_tag', label: 'Debt Tag', defaultWidth: 120, minWidth: 100 },
-    { key: 'current_debt', label: 'Current Debt', defaultWidth: 140, minWidth: 120 },
+    { key: 'name', label: 'Name', defaultWidth: 280, minWidth: 220, frozen: true },
+    { key: 'status', label: 'Status', defaultWidth: 200, minWidth: 150 },
     { key: 'base_lend', label: 'Entire Base', defaultWidth: 140, minWidth: 120 },
-    { key: 'cashback', label: 'Entire Repaid', defaultWidth: 140, minWidth: 120 },
-    { key: 'net_lend', label: 'Current', defaultWidth: 140, minWidth: 120 },
-    { key: 'balance', label: 'Remains', defaultWidth: 150, minWidth: 120 },
+    { key: 'balance', label: 'Remaining', defaultWidth: 150, minWidth: 120 },
     { key: 'action', label: 'Actions', defaultWidth: 100, minWidth: 80, frozen: true },
 ];
 
@@ -29,12 +25,8 @@ export function usePeopleColumnPreferences() {
 
     const [visibleColumns, setVisibleColumns] = useState<Record<PeopleColumnKey, boolean>>({
         name: true,
-        active_subs: true,
-        debt_tag: true,
-        current_debt: true,
+        status: true,
         base_lend: true,
-        cashback: true,
-        net_lend: true,
         balance: true,
         action: true,
     });
@@ -87,12 +79,8 @@ export function usePeopleColumnPreferences() {
         setColumnOrder(defaultPeopleColumns.map(c => c.key));
         setVisibleColumns({
             name: true,
-            active_subs: true,
-            debt_tag: true,
-            current_debt: true,
+            status: true,
             base_lend: true,
-            cashback: true,
-            net_lend: true,
             balance: true,
             action: true,
         });

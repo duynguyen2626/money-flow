@@ -313,8 +313,10 @@ function PersonCardComponent({
                     {/* View Details Button as Link */}
                     <Link
                         href={`/people/details?ids=${person.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="h-8 w-full rounded-lg border border-slate-100 bg-white shadow-sm text-blue-500 hover:text-blue-600 hover:border-blue-200 transition-colors flex items-center justify-center"
-                        title="View Details"
+                        title="View Details (opens in new tab)"
                     >
                         <Eye className="w-3.5 h-3.5" />
                     </Link>

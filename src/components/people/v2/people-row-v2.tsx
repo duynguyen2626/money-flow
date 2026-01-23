@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit, User, CheckCircle2, HandCoins, Banknote } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SubscriptionBadges } from "./subscription-badges";
 import {
     Tooltip,
     TooltipContent,
@@ -104,6 +103,8 @@ function renderCell(person: Person, key: string, onEdit: (p: Person) => void, on
                         <div className="flex items-center gap-2">
                             <Link
                                 href={`/people/details?ids=${person.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
                                 className="font-medium text-sm leading-none hover:underline hover:text-blue-600 transition-colors truncate"
                                 onClick={(e) => e.stopPropagation()}
                             >
@@ -123,64 +124,64 @@ function renderCell(person: Person, key: string, onEdit: (p: Person) => void, on
                                     <span className="text-[9px] font-bold uppercase tracking-wider">Sheet</span>
                                 </a>
                             )}
-                            {person.is_group && <span className="text-[10px] text-muted-foreground">Group</span>}
+                            {person.subscription_details && person.subscription_details.length > 0 && (
+                                <Badge variant="secondary" className="text-[9px] px-1.5">
+                                    +{person.subscription_details.length}
+                                </Badge>
+                            )}
                         </div>
                     </div>
                 </div>
             );
-        case 'active_subs':
-            return (
-                <SubscriptionBadges
-                    subscriptions={person.subscription_details || []}
-                    maxDisplay={2}
-                />
-            );
-        case 'debt_tag':
-            // Show debt tag (e.g., "2026-01")
-            return (
-                <div className="text-sm text-slate-600">
-                    {person.current_cycle_label || '-'}
-                </div>
-            );
-        case 'current_debt':
-            // Show current cycle debt amount only (label is in debt_tag column)
-            return (
-                <div className="tabular-nums tracking-tight font-medium text-slate-700">
-                    {formatMoneyVND(person.current_cycle_debt || 0)}
-                </div>
-            );
+        case 'status':
+            // Consolidated status: SETTLED | OWES [2026-01] [+X] | YOU OWE [2026-01]
+            const totalDebt = (person.current_cycle_debt || 0) + (person.outstanding_debt || 0);
+            const debtTag = person.current_cycle_label || '-';
+            
+            if (totalDebt <= 0) {
+                // SETTLED
+                return (
+                    <div className="flex items-center gap-2">
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+                        <span className="text-sm font-medium text-emerald-700">SETTLED</span>
+                    </div>
+                );
+            } else if (totalDebt > 0) {
+                // OWES
+                return (
+                    <div className="flex items-center gap-2">
+                        <Badge variant="destructive" className="text-[11px] bg-red-100 text-red-700 border-0">
+                            OWES {debtTag}
+                        </Badge>
+                        {person.outstanding_debt && person.outstanding_debt > 0 && (
+                            <Badge variant="outline" className="text-[10px] px-1 bg-slate-50">
+                                +1
+                            </Badge>
+                        )}
+                    </div>
+                );
+            }
+            return <span className="text-sm text-slate-500">—</span>;
         case 'base_lend':
             return (
                 <div className="tabular-nums tracking-tight text-muted-foreground">
                     {formatMoneyVND(person.total_base_debt || 0)}
                 </div>
             );
-        case 'cashback':
-            return (
-                <div className="tabular-nums tracking-tight text-muted-foreground">
-                    {formatMoneyVND(person.total_cashback || 0)}
-                </div>
-            );
-        case 'net_lend':
-            return (
-                <div className="tabular-nums tracking-tight font-medium text-slate-700">
-                    {formatMoneyVND(person.total_net_debt || 0)}
-                </div>
-            );
-        case 'balance': // Remains
+        case 'balance': // Remaining
             // Show TOTAL debt (current + outstanding)
-            const totalDebt = (person.current_cycle_debt || 0) + (person.outstanding_debt || 0);
+            const total = (person.current_cycle_debt || 0) + (person.outstanding_debt || 0);
             return (
                 <Badge
                     variant="outline"
                     className={cn(
                         "tabular-nums tracking-tight font-medium border-0 px-2 py-1",
-                        totalDebt > 0
+                        total > 0
                             ? "bg-red-50 text-red-600"
                             : "bg-slate-50 text-slate-500 opacity-50"
                     )}
                 >
-                    {formatMoneyVND(totalDebt)}
+                    {formatMoneyVND(total)}
                 </Badge>
             );
         case 'action':
