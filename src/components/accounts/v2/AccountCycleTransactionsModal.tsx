@@ -215,7 +215,8 @@ export function AccountCycleTransactionsModal({
         transactions.forEach(t => {
             const policySource = t.policyMetadata?.policySource || 'default';
             const levelName = t.policyMetadata?.levelName || 'No Level';
-            const ruleName = t.policyMetadata?.categoryName || t.categoryName || 'General';
+            // Use category name from transaction, policyMetadata doesn't have categoryName
+            const ruleName = t.categoryName || 'General';
             const rate = t.effectiveRate;
 
             // Find existing group
@@ -283,18 +284,8 @@ export function AccountCycleTransactionsModal({
     }, [transactions]);
 
     const formatCycleLabel = (tag: string, label: string, spent?: number) => {
-        // Parse cycle tag to get date range
-        const parsed = parseCycleTag(tag);
+        // For now, just use the provided label with spent amount
         let displayLabel = label;
-        
-        if (parsed) {
-            // Format as DD-MM to DD-MM
-            const startDay = String(parsed.startDay).padStart(2, '0');
-            const startMonth = String(parsed.startMonth).padStart(2, '0');
-            const endDay = String(parsed.endDay).padStart(2, '0');
-            const endMonth = String(parsed.endMonth).padStart(2, '0');
-            displayLabel = `${startDay}-${startMonth} to ${endDay}-${endMonth}`;
-        }
 
         // Add spent amount if available
         if (spent && spent > 0) {
