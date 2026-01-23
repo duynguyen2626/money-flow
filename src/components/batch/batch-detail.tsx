@@ -241,7 +241,7 @@ export function BatchDetail({
                     <div className="text-muted-foreground flex items-center gap-2">
                         Source:
                         {sourceAccount ? (
-                            <Link href={`/accounts/v2/${sourceAccount.id}`} className="text-blue-600 hover:underline">
+                            <Link href={`/accounts/${sourceAccount.id}`} className="text-blue-600 hover:underline">
                                 {sourceAccount.name}
                             </Link>
                         ) : 'N/A'}

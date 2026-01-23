@@ -48,7 +48,7 @@ export function TransactionFlowCell({ transaction, className }: TransactionFlowC
 
             {/* Source Side (Account) - Align LEFT */}
             <div className="flex items-center gap-3 flex-1 min-w-0">
-                <Link href={`/accounts/v2/${transaction.account_id}`} target="_blank" className="shrink-0">
+                <Link href={`/accounts/${transaction.account_id}`} target="_blank" className="shrink-0">
                     {sourceImg ? (
                         <img
                             src={sourceImg}
@@ -63,7 +63,7 @@ export function TransactionFlowCell({ transaction, className }: TransactionFlowC
                     )}
                 </Link>
                 <div className="flex flex-col min-w-0 items-start">
-                    <Link href={`/accounts/v2/${transaction.account_id}`} target="_blank" className="hover:underline">
+                    <Link href={`/accounts/${transaction.account_id}`} target="_blank" className="hover:underline">
                         <span className="text-sm font-medium truncate w-full" title={sourceName}>{sourceName}</span>
                     </Link>
                     {sourceCycle && sourceCycle !== 'Monthly Cycle' && (

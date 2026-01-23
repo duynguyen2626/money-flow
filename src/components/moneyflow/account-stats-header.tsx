@@ -288,7 +288,7 @@ export function AccountStatsHeader({
             {account.secured_by_account_id && collateralAccount && (
               <p className="text-xs text-blue-700">
                 Secured by{' '}
-                <Link href={`/accounts/v2/${collateralAccount.id}`} className="inline-flex items-center gap-1 underline">
+                <Link href={`/accounts/${collateralAccount.id}`} className="inline-flex items-center gap-1 underline">
                   <Link2 className="h-3 w-3" />
                   {collateralAccount.name}
                 </Link>

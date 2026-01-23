@@ -50,7 +50,7 @@ export function AccountGridView({ accounts, onEdit, onDelete }: AccountGridViewP
                             </Avatar>
                             <div className="min-w-0">
                                 <Link
-                                    href={`/accounts/v2/${account.id}`}
+                                    href={`/accounts/${account.id}`}
                                     className="block font-black text-slate-900 text-sm hover:text-blue-600 transition-colors truncate max-w-[120px]"
                                 >
                                     {account.name}

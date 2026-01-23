@@ -205,7 +205,7 @@ export function AccountTable({
                                     {/* Simple heuristic for "days left" would go here if available in stats */}
                                   </div>
                                 )}
-                                <Link href={`/accounts/v2/${account.id}`} className="font-bold text-slate-900 hover:text-blue-700 hover:underline decoration-blue-700/30 underline-offset-4 transition-colors truncate">
+                                <Link href={`/accounts/${account.id}`} className="font-bold text-slate-900 hover:text-blue-700 hover:underline decoration-blue-700/30 underline-offset-4 transition-colors truncate">
                                   {account.name}
                                 </Link>
                               </div>
@@ -313,7 +313,7 @@ export function AccountTable({
                               </div>
                             )}
                             {account.relationships?.parent_info && (
-                              <Link href={`/accounts/v2/${account.relationships.parent_info.id}`} className="flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-sm hover:underline decoration-blue-700/30">
+                              <Link href={`/accounts/${account.relationships.parent_info.id}`} className="flex items-center gap-1 text-[10px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-sm hover:underline decoration-blue-700/30">
                                 {account.relationships.parent_info.type === 'savings' ? (
                                   <ShieldCheck className="h-3 w-3" />
                                 ) : (

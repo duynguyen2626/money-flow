@@ -296,7 +296,9 @@ function renderCell(
                                 {account.type === 'debt' && <HandCoins className="w-3.5 h-3.5 text-rose-500 shrink-0" />}
 
                                 <Link
-                                    href={`/accounts/v2/${account.id}`}
+                                    href={`/accounts/${account.id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
                                     className="font-black text-base leading-none hover:underline hover:text-indigo-600 transition-colors truncate"
                                     onClick={(e) => e.stopPropagation()}
                                 >
@@ -432,7 +434,9 @@ function renderCell(
                                             )}
                                         </div>
                                         <Link
-                                            href={`/accounts/v2/${child.id}`}
+                                            href={`/accounts/${child.id}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
                                             className="text-[11px] font-bold text-slate-500 hover:text-indigo-600 truncate"
                                             onClick={(e) => e.stopPropagation()}
                                         >

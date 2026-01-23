@@ -48,7 +48,7 @@ export function SidebarNav({ className }: SidebarNavProps) {
   // Phase 7X-2: Reordered items and updated icons
   const navItems: NavItem[] = [
     { title: "Dashboard", href: "/", icon: LayoutGrid },
-    { title: "Accounts", href: "/accounts/v2", icon: Landmark },
+    { title: "Accounts", href: "/accounts", icon: Landmark },
     {
       title: "Transactions",
       href: "/transactions",

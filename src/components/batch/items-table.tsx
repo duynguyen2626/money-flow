@@ -298,7 +298,7 @@ export function ItemsTable({
                                     <span className="text-muted-foreground">Draft Fund</span>
                                     <span className="text-muted-foreground">➔</span>
                                     {item.target_account_id ? (
-                                        <Link href={`/accounts/v2/${item.target_account_id}`} className="text-blue-600 hover:underline font-medium flex items-center gap-1">
+                                        <Link href={`/accounts/${item.target_account_id}`} className="text-blue-600 hover:underline font-medium flex items-center gap-1">
                                             {item.target_account?.name || 'Account'}
                                             {activeInstallmentAccounts.includes(item.target_account_id) && (
                                                 <span title="Has Active Installments">
