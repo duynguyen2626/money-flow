@@ -20,6 +20,12 @@ type SheetSyncTransaction = {
   img_url?: string | null
 }
 
+function getCycleTag(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  return `${year}-${month}`
+}
+
 function isValidWebhook(url: string | null | undefined): url is string {
   if (!url) return false
   const trimmed = url.trim()
@@ -364,57 +370,67 @@ export async function syncAllTransactions(personId: string) {
       accounts: { name: string | null } | null
     }[]
 
-    let sent = 0
+    // Group transactions by cycle tag
+    const cycleMap = new Map<string, typeof rows>()
+    
     for (const txn of rows) {
-      const shopData = txn.shops as any
-      let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
-
-      // Fallback for Repayment/Transfer if shop is empty -> Use Account Name (e.g. "Vpbank Lady", "Wallet A")
-      if (!shopName) {
-        if (txn.note?.toLowerCase().startsWith('rollover')) {
-          shopName = 'Bank'
-        } else {
-          const accData = txn.accounts as any
-          shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
-        }
+      const cycleTag = txn.tag || getCycleTag(new Date(txn.occurred_at))
+      if (!cycleMap.has(cycleTag)) {
+        cycleMap.set(cycleTag, [])
       }
-
-      // Determine type: debt = lending out, repayment = receiving back
-      const syncType = txn.type === 'repayment' ? 'In' : 'Debt'
-
-      const payload = buildPayload(
-        {
-          id: txn.id,
-          occurred_at: txn.occurred_at,
-          note: txn.note,
-          shop_name: shopName ?? '',
-          tag: txn.tag ?? undefined,
-          amount: txn.amount,
-          original_amount: Math.abs(txn.amount),
-          cashback_share_percent: txn.cashback_share_percent ?? undefined,
-          cashback_share_fixed: txn.cashback_share_fixed ?? undefined,
-          type: syncType,
-        },
-        'create'
-      )
-
-      const result = await postToSheet(sheetLink, {
-        ...payload,
-        person_id: personId,
-        cycle_tag: txn.tag ?? undefined,
-      })
-      if (!result.success) {
-        return { success: false, message: result.message ?? 'Sheet sync failed' }
-      }
-      sent += 1
-
-      // Gentle pacing to avoid rate limiting
-      if (rows.length > 1) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
+      cycleMap.get(cycleTag)!.push(txn)
     }
 
-    return { success: true, count: sent }
+    let totalSynced = 0
+
+    // Sync each cycle as a batch
+    for (const [cycleTag, cycleTxns] of cycleMap.entries()) {
+      const rowsPayload = cycleTxns.map(txn => {
+        const shopData = txn.shops as any
+        let shopName = Array.isArray(shopData) ? shopData[0]?.name : shopData?.name
+
+        // Fallback for Repayment/Transfer if shop is empty -> Use Account Name
+        if (!shopName) {
+          if (txn.note?.toLowerCase().startsWith('rollover')) {
+            shopName = 'Bank'
+          } else {
+            const accData = txn.accounts as any
+            shopName = (Array.isArray(accData) ? accData[0]?.name : accData?.name) ?? ''
+          }
+        }
+
+        // Determine type: debt = lending out, repayment = receiving back
+        const syncType = txn.type === 'repayment' ? 'In' : 'Debt'
+
+        return {
+          id: txn.id,
+          date: txn.occurred_at,
+          type: syncType,
+          notes: txn.note || '',
+          shop: shopName || '',
+          amount: Math.abs(txn.amount),
+          percent_back: txn.cashback_share_percent || 0,
+          fixed_back: txn.cashback_share_fixed || 0,
+          status: txn.status,
+        }
+      })
+
+      const payload = {
+        action: 'syncTransactions',
+        personId: personId,
+        cycleTag: cycleTag,
+        rows: rowsPayload,
+      }
+
+      const result = await postToSheet(sheetLink, payload)
+      if (!result.success) {
+        return { success: false, message: result.message ?? `Sheet sync failed for cycle ${cycleTag}` }
+      }
+
+      totalSynced += rowsPayload.length
+    }
+
+    return { success: true, count: totalSynced }
   } catch (err) {
     console.error('Sync all transactions failed:', err)
     return { success: false, message: 'Sync failed' }

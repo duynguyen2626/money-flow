@@ -1,26 +1,19 @@
-// MoneyFlow 3 - Google Apps Script
-// VERSION: 6.4 (SUMMARY AREA PROTECTION - SAFE EDIT/DELETE)
-// Last Updated: 2026-01-23 10:35 ICT
-// Scope: Data Safety & Deduplication.
-//        - CRITICAL: System IDs must be > 5 chars. Empty/Short values in Col A = Manual Row.
-//        - Backup: Auto copy to `Backup_[Name]` before sync.
-//        - Smart Merge: NEUTRALIZE matching Manual Rows (Set I = F).
-//        - J2 Formula: Handles 'In' with Offset.
-//        - F: Absolute Value (Positive).
-//        - J: Text-safe formula with SUBSTITUTE/VALUE.
-//        - Sorting: Use sheet.getLastRow(), Add Sleep for consistency.
-//
-// VERSION HISTORY:
-// v6.4 (2026-01-23) - BREAKING FIX: Summary area (L7:N35) protection
-//      * Fix #1: handleSingleTransaction() - Use clearContent() instead of deleteRow()
-//      * Fix #2: applyBordersAndSort() - Sort A2:J only (exclude Summary at L:N)
-//      * Fix #3: clearImageMerges() - Preserve L7:N35 merge protection
-//      * Fix #4: applySheetImage() - Add isMerged() check before merge
-//      * Fix #5: cleanupEmptyRows() - Use clearContent() instead of deleteRow()
-//      * NEW: validateSheetStructure() - Verify merge integrity & detect #REF! errors
-//      * Impact: Prevents Summary area shifts when users edit/delete transactions
-//
-// v6.3 (2026-01-20) - UPSERT STRATEGY - MEMORY SAFE
+/**
+ * MoneyFlow 3 - Google Apps Script
+ * @version 6.4 (Summary Area Protection)
+ * @date 2026-01-23
+ * 
+ * CRITICAL FIXES (v6.4):
+ * - Fix #1-5: Use clearContent() instead of deleteRow() to prevent row shifts
+ * - Sort A2:J only (excludes Summary area L:N)
+ * - Preserve L6:N35 merge protection during all operations
+ * - Added validateSheetStructure() for integrity checks
+ * 
+ * RULES:
+ * - System IDs: Must be >5 chars (UUID). Short/empty values in Col A = Manual Row
+ * - Auto Backup: Creates `Backup_[Name]` before sync
+ * - Smart Merge: Neutralizes matching manual rows (sets I = F)
+ */
 
 /*
 function onOpen() {
@@ -386,6 +379,20 @@ function getLastSystemRow(sheet) {
 
 
 function applyBordersAndSort(sheet, summaryOptions, systemRowCount) {
+    // 0. ENSURE HEADERS EXIST (Fix: Headers can go missing after delete+sync)
+    try {
+        var headerRange = sheet.getRange('A1:J1');
+        if (headerRange.isBlank() || headerRange.getValue() !== 'ID') {
+            var headers = ['ID', 'Type', 'Date', 'Shop', 'Notes', 'Amount', '% Back', 'đ Back', 'Σ Back', 'Final Price'];
+            headerRange.setValues([headers]);
+            headerRange.setFontWeight('bold').setBackground('#E5E7EB').setFontColor('#111827').setFontSize(12).setBorder(true, true, true, true, true, true);
+            sheet.setFrozenRows(1);
+            Logger.log('Headers restored in A1:J1');
+        }
+    } catch (e) {
+        Logger.log('Header restore error: ' + e);
+    }
+
     // 0. SELF-HEALING: Remove completely empty rows to prevent gaps
     cleanupEmptyRows(sheet);
 
@@ -451,10 +458,36 @@ function applyBordersAndSort(sheet, summaryOptions, systemRowCount) {
         clearRange.clearContent();
         clearRange.setBorder(false, false, false, false, false, false);
         clearRange.setBackground(null);
-        clearRange.breakApart();
+        // NOTE: DO NOT call breakApart() - it will destroy the L6:N35 merge we just created
     } catch (e) { }
 
     setupSummaryTable(sheet, summaryOptions);
+
+    // 3. RE-APPLY COLUMN VISIBILITY & WIDTHS (A and O should always be hidden)
+    try {
+        sheet.showColumns(1, 15); // Unhide all first to reset
+        sheet.hideColumns(1); // Hide A (ID)
+        sheet.hideColumns(15); // Hide O (Shop Name)
+        Logger.log('Column visibility reset: A hidden, O hidden');
+    } catch (e) {
+        Logger.log('Column visibility error: ' + e);
+    }
+
+    // 4. RESTORE COLUMN WIDTHS (Fix: Format gets reset after sort operations)
+    try {
+        sheet.setColumnWidth(2, 70);   // B: Type
+        sheet.setColumnWidth(3, 100);  // C: Date
+        sheet.setColumnWidth(4, 50);   // D: Shop
+        sheet.setColumnWidth(5, 400);  // E: Notes
+        sheet.setColumnWidth(6, 110);  // F: Amount
+        sheet.setColumnWidth(7, 70);   // G: % Back
+        sheet.setColumnWidth(8, 80);   // H: đ Back
+        sheet.setColumnWidth(9, 90);   // I: Σ Back
+        sheet.setColumnWidth(10, 110); // J: Final Price
+        Logger.log('Column widths restored');
+    } catch (e) {
+        Logger.log('Column width error: ' + e);
+    }
 }
 
 
@@ -752,11 +785,11 @@ function applySheetImage(sheet, imgUrl, imgProvided, summaryOptions) {
         showBankAccount = summaryOptions.showBankAccount;
     }
 
-    var baseRange = sheet.getRange(6, 13, 26, 2); // M6:N31
-    var accountRange = sheet.getRange(7, 12, 25, 3); // L7:N35 (CRITICAL: Summary Area)
+    var baseRange = sheet.getRange(6, 12, 30, 3); // L6:N35 (CRITICAL: Summary Area)
+    var accountRange = sheet.getRange(6, 12, 30, 3); // L6:N35 (No. + Summary + Value)
 
     if (showBankAccount) {
-        try { sheet.getRange(7, 13, 25, 2).clearContent(); } catch (e) { } // M7:N31
+        try { sheet.getRange(7, 13, 25, 1).clearContent(); } catch (e) { } // M7:M31
         try { accountRange.clearContent(); } catch (e) { }
     } else {
         try { baseRange.clearContent(); } catch (e) { }
@@ -774,17 +807,17 @@ function applySheetImage(sheet, imgUrl, imgProvided, summaryOptions) {
 
     var targetRange = showBankAccount ? accountRange : baseRange;
     
-    // CRITICAL FIX: Ensure accountRange (L7:N35) is properly merged
+    // CRITICAL FIX: Ensure accountRange (L6:M35) is properly merged
     // This prevents Summary image from shifting when rows above are modified
     if (showBankAccount) {
         try {
             // Check if already merged first
             if (!targetRange.isMerged()) {
                 targetRange.merge();
-                Logger.log('Merged L7:N35 for Summary image protection');
+                Logger.log('Merged L6:N35 for Summary image protection');
             }
         } catch (e) {
-            Logger.log('Merge error for L7:N35: ' + e);
+            Logger.log('Merge error for L6:N35: ' + e);
         }
     } else {
         try { targetRange.merge(); } catch (e) { }
@@ -800,14 +833,8 @@ function applySheetImage(sheet, imgUrl, imgProvided, summaryOptions) {
 }
 
 function clearImageMerges(sheet) {
-    try { 
-        sheet.getRange(6, 13, 26, 2).breakApart(); // M6:N31
-        Logger.log('Cleared merge: M6:N31');
-    } catch (e) { }
-    
-    // NOTE: L7:N35 merge is managed by applySheetImage()
-    // We do NOT break apart L7:N35 here to preserve the main Summary image
-    // applySheetImage() will re-merge as needed
+    // No-op: image merge is handled by applySheetImage()
+    // Deliberately not breaking merges near Summary (L6:N35) to avoid unmerging the image block
 }
 
 function jsonResponse(obj) { return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); }
@@ -892,7 +919,7 @@ function cleanupEmptyRows(sheet) {
             if (isEmpty) {
                 // CRITICAL FIX: Clear content instead of deleting row
                 // This prevents all rows below from shifting up
-                // Summary area at L7:N35 stays in place
+                // Summary area at L6:N35 stays in place
                 var emptyRow = sheet.getRange(i + 2, 1, 1, 15); // i is 0-based from Row 2
                 emptyRow.clearContent();
                 emptyRow.setBackground('white');
@@ -909,7 +936,7 @@ function cleanupEmptyRows(sheet) {
 
 /**
  * VALIDATION FUNCTION for Google Sheets Sync Fix
- * Run this function to verify that Summary area (L7:N35) is intact after operations
+ * Run this function to verify that Summary area (L6:M35) is intact after operations
  * Called automatically after critical operations; can also be run manually for debugging
  */
 function validateSheetStructure() {
@@ -923,15 +950,15 @@ function validateSheetStructure() {
         summaryMerged: false,
         noRefErrors: true,
         structureValid: false,
-        summaryPosition: 'L7:N35',
+        summaryPosition: 'L6:N35',
         errors: []
     };
     
-    // Check 1: Verify L7:N35 is merged
+    // Check 1: Verify L6:N35 is merged
     try {
-        var summaryRange = sheet.getRange('L7:N35');
+        var summaryRange = sheet.getRange('L6:N35');
         validation.summaryMerged = summaryRange.isMerged();
-        Logger.log("✓ Summary merged (L7:N35): " + validation.summaryMerged);
+        Logger.log("✓ Summary merged (L6:N35): " + validation.summaryMerged);
         
         if (!validation.summaryMerged) {
             validation.errors.push("Summary area not merged - may be corrupted");
@@ -943,7 +970,7 @@ function validateSheetStructure() {
     
     // Check 2: Check for #REF! errors in Summary
     try {
-        var summaryRange = sheet.getRange('L7:N35');
+        var summaryRange = sheet.getRange('L6:N35');
         var values = summaryRange.getValues();
         var refErrors = [];
         
