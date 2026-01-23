@@ -45,7 +45,7 @@ export function AccountFamilyModal({
                         <div className="space-y-2">
                             <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-1">Parent Entity</h4>
                             <Link
-                                href={`/accounts/${parentInfo.id}`}
+                                href={`/accounts/v2/${parentInfo.id}`}
                                 onClick={onClose}
                                 className="flex items-center gap-3 p-3 rounded-lg border bg-blue-50/50 hover:bg-blue-50 transition-colors group relative overflow-hidden"
                             >
@@ -86,7 +86,7 @@ export function AccountFamilyModal({
                                 {childrenAccounts.map((child) => (
                                     <Link
                                         key={child.id}
-                                        href={`/accounts/${child.id}`}
+                                        href={`/accounts/v2/${child.id}`}
                                         onClick={onClose}
                                         className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors"
                                     >

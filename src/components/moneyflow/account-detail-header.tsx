@@ -83,7 +83,7 @@ export function AccountDetailHeader({
   cashbackStats,
   shops,
   batchStats,
-  backHref = '/accounts',
+  backHref = '/accounts/v2',
 }: AccountDetailHeaderProps) {
   const router = useRouter()
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
@@ -373,8 +373,6 @@ export function AccountDetailHeader({
 
         {/* Line 3: Quick Actions */}
         <div className="flex flex-wrap items-center gap-1.5">
-        {/* Line 3: Quick Actions */}
-        <div className="flex flex-wrap items-center gap-1.5">
           <TransactionTrigger
             initialData={{ source_account_id: account.id }}
             accounts={allAccounts}
@@ -612,6 +610,6 @@ export function AccountDetailHeader({
         onOpenChange={setIsSlideOpen}
         account={account}
       />
-    </div >
+    </div>
   )
 }

@@ -93,7 +93,7 @@ export default async function AccountDetailsV2Page({ params, searchParams }: Pag
                         assetConfig={null}
                         shops={shops}
                         batchStats={batchStats}
-                        backHref="/accounts/v2"
+                        backHref="/accounts"
                     />
 
                     <AccountTabs accountId={account.id} activeTab={activeTab} />
