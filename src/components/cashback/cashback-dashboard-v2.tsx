@@ -11,6 +11,7 @@ import { CashbackMatrixView } from './cashback-matrix-view'
 import { CashbackMonthDetailModal } from './month-detail-modal'
 import { LayoutList, Table as TableIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 
 interface Props {
     initialData: CashbackYearSummary[]
@@ -22,6 +23,7 @@ export function CashbackDashboardV2({ initialData, year, cards }: Props) {
     const [selectedCardId, setSelectedCardId] = useState<string | null>(initialData[0]?.cardId ?? null)
     const [detailModal, setDetailModal] = useState<{ month: number, tab?: string } | null>(null)
     const [viewMode, setViewMode] = useState<'detail' | 'matrix'>('detail')
+    const [redeemOpen, setRedeemOpen] = useState(false)
 
 
     // Filter: credit cards + exclude DUPLICATE/DO NOT USE + exclude zero-data
@@ -167,6 +169,9 @@ export function CashbackDashboardV2({ initialData, year, cards }: Props) {
                                                 Net Profit: <span className={cn(selectedSummary.netProfit >= 0 ? "text-green-600" : "text-red-600")}>{fmt(selectedSummary.netProfit)}</span>
                                             </div>
                                         </div>
+                                        <Button size="sm" onClick={() => setRedeemOpen(true)}>
+                                            Redeem cashback
+                                        </Button>
                                     </div>
 
                                     {/* 6+6 Table */}
@@ -226,6 +231,18 @@ export function CashbackDashboardV2({ initialData, year, cards }: Props) {
                     </>
                 )}
             </div>
+
+            {selectedSummary?.cardId && (
+                <AddTransactionDialog
+                    isOpen={redeemOpen}
+                    onOpenChange={setRedeemOpen}
+                    accounts={[]}
+                    categories={[]}
+                    people={[]}
+                    defaultSourceAccountId={selectedSummary.cardId}
+                    defaultType="income"
+                />
+            )}
         </div>
     )
 }
