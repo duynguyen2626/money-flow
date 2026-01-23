@@ -67,14 +67,6 @@ export function AccountTabs({ accountId, activeTab }: AccountTabsProps) {
           </div>
         )}
       </div>
-      {isPending && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Loading...
-          </div>
-        </div>
-      )}
     </>
   )
 }
