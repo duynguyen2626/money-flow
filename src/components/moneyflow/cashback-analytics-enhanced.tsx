@@ -78,13 +78,19 @@ export function CashbackAnalyticsEnhanced({
         if (!cardData?.transactions) return []
         if (activeRuleTab === 'all') return cardData.transactions
 
-        const selectedLevel = config?.levels?.find((_, idx) => `level-${idx}` === activeRuleTab)
+        const selectedLevel = config?.levels?.find((_, idx) => `level-${lvl.id || idx}` === activeRuleTab)
         if (!selectedLevel) return cardData.transactions
 
+        // Filter by matching levelName from policyMetadata (most accurate)
         return cardData.transactions.filter(txn => {
+            const txnLevelName = txn.policyMetadata?.levelName
+            if (txnLevelName && txnLevelName === selectedLevel.name) {
+                return true
+            }
+            // Fallback to category-based filtering if no policyMetadata
             const categoryId = txn.category_id
             const hasRuleForCategory = selectedLevel.rules?.some(r => r.categoryIds?.includes(categoryId))
-            return hasRuleForCategory || (!selectedLevel.rules || selectedLevel.rules.length === 0)
+            return hasRuleForCategory
         })
     }, [cardData?.transactions, activeRuleTab, config?.levels])
 
@@ -446,6 +452,15 @@ export function CashbackAnalyticsEnhanced({
                                     <span>Showing transactions from all levels</span>
                                 )}
                             </div>
+                            {/* Summary Row */}
+                            <div className="px-2 py-2 text-xs text-slate-600 border-b border-slate-200 bg-slate-50 rounded">
+                                <span className="font-medium text-slate-700">
+                                    {tab.level
+                                        ? `Showing ${filteredTransactions.length} transaction${filteredTransactions.length !== 1 ? 's' : ''} from ${tab.level.name}`
+                                        : `Showing ${filteredTransactions.length} transaction${filteredTransactions.length !== 1 ? 's' : ''} from all levels`
+                                    }
+                                </span>
+                            </div>
                             <CashbackTransactionTable
                                 transactions={filteredTransactions}
                                 onEdit={handleEdit}
@@ -460,6 +475,11 @@ export function CashbackAnalyticsEnhanced({
             {ruleTabs.length === 1 && (
                 <div className="space-y-3">
                     <h3 className="text-sm font-semibold text-slate-700">Transactions in Cycle</h3>
+                    <div className="px-2 py-2 text-xs text-slate-600 border-b border-slate-200 bg-slate-50 rounded">
+                        <span className="font-medium text-slate-700">
+                            Showing {cardData.transactions.length} transaction{cardData.transactions.length !== 1 ? 's' : ''} from all levels
+                        </span>
+                    </div>
                     <CashbackTransactionTable
                         transactions={cardData.transactions}
                         onEdit={handleEdit}
