@@ -127,8 +127,9 @@ export default async function CashbackPage({ searchParams }: PageProps) {
                 if (monthCard) {
                     months.push({
                         month,
+                        // Align with new cashback engine: "Give Away" = totalGivenAway
                         totalGivenAway: monthCard.totalGivenAway,
-                        cashbackGiven: monthCard.sharedAmount,
+                        cashbackGiven: monthCard.totalGivenAway,
                     })
                 }
             }
@@ -153,7 +154,8 @@ export default async function CashbackPage({ searchParams }: PageProps) {
                 cashbackRedeemedYearTotal: 0,
                 annualFeeYearTotal: annualFee,
                 interestYearTotal: 0,
-                cashbackGivenYearTotal: card.sharedAmount,
+                // Use engine-computed totalGivenAway for year summary consistency
+                cashbackGivenYearTotal: card.totalGivenAway,
             }
         })
     )

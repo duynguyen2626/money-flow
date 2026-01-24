@@ -51,12 +51,12 @@ export function CashbackMatrixView({ data, cards, year, onMonthClick }: Props) {
         const totalAnnualFee = filteredData.reduce((sum, d) => sum + d.annualFeeYearTotal, 0)
         const totalProfit = filteredData.reduce((sum, d) => sum + d.netProfit, 0)
 
-        // Calculate monthly totals
+        // Calculate monthly totals (Give Away = totalGivenAway)
         const monthTotals: Record<number, number> = {}
         for (let m = range[0]; m <= range[1]; m++) {
             monthTotals[m] = filteredData.reduce((sum, d) => {
                 const md = d.months.find(x => x.month === m)
-                return sum + (md?.cashbackGiven || 0)
+                return sum + (md?.totalGivenAway || 0)
             }, 0)
         }
 
@@ -104,7 +104,8 @@ export function CashbackMatrixView({ data, cards, year, onMonthClick }: Props) {
                                 {/* Months */}
                                 {Array.from({ length: range[1] - range[0] + 1 }, (_, i) => i + range[0]).map(month => {
                                     const monthData = summary.months.find(m => m.month === month)
-                                    const val = monthData?.cashbackGiven || 0
+                                    // Display Give Away per month using totalGivenAway
+                                    const val = monthData?.totalGivenAway || 0
                                     const cardInfo = cards.find(c => c.accountId === summary.cardId)
                                     const cardName = cardInfo?.accountName || "Unknown Card"
 
