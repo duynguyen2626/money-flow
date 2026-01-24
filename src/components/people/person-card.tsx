@@ -95,8 +95,8 @@ function PersonCardComponent({
     const openDetails = (e?: MouseEvent, tag?: string) => {
         e?.stopPropagation()
         const url = tag
-            ? `/people/details?ids=${person.id}&tag=${encodeURIComponent(tag)}`
-            : `/people/details?ids=${person.id}`
+            ? `/people/${person.id}/details?tag=${encodeURIComponent(tag)}`
+            : `/people/${person.id}/details`
         startTransition(() => {
             router.push(url)
         })
@@ -312,7 +312,7 @@ function PersonCardComponent({
 
                     {/* View Details Button as Link */}
                     <Link
-                        href={`/people/details?ids=${person.id}`}
+                        href={`/people/${person.id}/details`}
                         className="h-8 w-full rounded-lg border border-slate-100 bg-white shadow-sm text-blue-500 hover:text-blue-600 hover:border-blue-200 transition-colors flex items-center justify-center"
                         title="View Details"
                     >

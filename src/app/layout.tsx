@@ -21,8 +21,9 @@ export const metadata: Metadata = {
   title: 'Money Flow 3.0 - Personal Finance Dashboard',
   description: 'Track your accounts, transactions, debts, and cashback with double-entry bookkeeping.',
   icons: {
-    icon: '/cloud.svg',
-    shortcut: '/cloud.svg',
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
   },
 }
 
