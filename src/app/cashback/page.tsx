@@ -1,11 +1,11 @@
 import { CashbackDashboardV2 } from '@/components/cashback/cashback-dashboard-v2'
+import { CashbackMatrixView } from '@/components/cashback/cashback-matrix-view'
 import { CashbackVolunteerMatrixView } from '@/components/cashback/cashback-volunteer-matrix-view'
 import { YearSelector } from '@/components/cashback/year-selector'
 import { getCashbackProgress } from '@/services/cashback.service'
 import { createClient } from '@/lib/supabase/server'
 import { VolunteerCashbackData } from '@/types/cashback.types'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CreditCard, Users } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -102,7 +102,7 @@ async function fetchVolunteerCashbackData(year: number): Promise<VolunteerCashba
 export default async function CashbackPage({ searchParams }: PageProps) {
     const params = await searchParams
     const year = params.year ? parseInt(params.year) : new Date().getFullYear()
-    const defaultTab = params.tab || 'cards'
+    const defaultTab = (params.tab === 'matrix' || params.tab === 'volunteer') ? params.tab : 'detail'
 
     const supabase = await createClient()
 
@@ -155,20 +155,33 @@ export default async function CashbackPage({ searchParams }: PageProps) {
 
             const annualFee = accountData?.annual_fee || 0
 
+            // Derive totals from engine outputs to avoid stale netProfit
+            const bankBackYearTotal = card.totalEarned || 0
+            const sharedYearTotal = card.totalGivenAway || 0
+            const derivedNetProfit = bankBackYearTotal - sharedYearTotal - annualFee
+
             return {
                 cardId: card.accountId,
                 cardType: 'credit_card' as const,
                 year,
-                netProfit: card.netProfit,
+                netProfit: derivedNetProfit,
                 months,
-                cashbackRedeemedYearTotal: 0,
+                cashbackRedeemedYearTotal: bankBackYearTotal,
                 annualFeeYearTotal: annualFee,
                 interestYearTotal: 0,
-                // Use engine-computed totalGivenAway for year summary consistency
-                cashbackGivenYearTotal: card.totalGivenAway,
+                // Use engine-computed totals for consistency
+                cashbackGivenYearTotal: sharedYearTotal,
+                bankBackYearTotal,
+                sharedYearTotal,
             }
         })
     )
+
+    // Attach cashback_config to cards for UI popover
+    const cardsWithConfig = cards.map(c => ({
+        ...c,
+        cashback_config: creditCards?.find(acc => acc.id === c.accountId)?.cashback_config ?? null,
+    }))
 
     // Fetch volunteer cashback data
     const volunteerData = await fetchVolunteerCashbackData(year)
@@ -177,33 +190,47 @@ export default async function CashbackPage({ searchParams }: PageProps) {
         <div className="h-screen flex flex-col p-6">
             <div className="flex items-center justify-between mb-6">
                 <h1 className="text-3xl font-bold">Cashback Dashboard</h1>
-                <YearSelector year={year} defaultTab={defaultTab} />
+                <div className="w-32">
+                    <YearSelector year={year} defaultTab={defaultTab} />
+                </div>
             </div>
 
             <Tabs defaultValue={defaultTab} className="flex-1 flex flex-col overflow-hidden">
                 <TabsList className="mb-4 flex gap-2 bg-transparent p-0">
                     <TabsTrigger
-                        value="cards"
+                        value="detail"
                         className="rounded-none border border-slate-200 px-3 py-2 text-sm font-medium data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:border-slate-900"
                     >
-                        <CreditCard className="w-4 h-4 mr-2" />
-                        Cards (Normal)
+                        Detail
+                    </TabsTrigger>
+                    <TabsTrigger
+                        value="matrix"
+                        className="rounded-none border border-slate-200 px-3 py-2 text-sm font-medium data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:border-slate-900"
+                    >
+                        Matrix
                     </TabsTrigger>
                     <TabsTrigger
                         value="volunteer"
                         className="rounded-none border border-slate-200 px-3 py-2 text-sm font-medium data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:border-slate-900"
                     >
-                        <Users className="w-4 h-4 mr-2" />
                         Volunteer
                     </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="cards" className="flex-1 overflow-hidden mt-0">
+                <TabsContent value="detail" className="flex-1 overflow-hidden mt-0">
                     <CashbackDashboardV2
                         initialData={yearSummaries}
                         year={year}
-                        cards={cards}
+                        cards={cardsWithConfig}
                         tieredMap={tieredMap}
+                    />
+                </TabsContent>
+
+                <TabsContent value="matrix" className="flex-1 overflow-hidden mt-0">
+                    <CashbackMatrixView
+                        data={yearSummaries}
+                        cards={cardsWithConfig}
+                        year={year}
                     />
                 </TabsContent>
 

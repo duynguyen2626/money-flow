@@ -39,17 +39,20 @@ export function CashbackVolunteerMatrixView({ data, year }: Props) {
 
     return (
         <>
-            <div className="border rounded-md overflow-hidden">
+            <div className="border rounded-sm overflow-hidden">
+                <div className="px-3 py-2 bg-slate-50 border-b">
+                    <p className="text-xs text-muted-foreground">Click on any amount to view transaction details</p>
+                </div>
                 <Table>
-                    <TableHeader className="bg-muted/50 sticky top-0 z-10">
+                    <TableHeader className="bg-slate-50 sticky top-0 z-10">
                         <TableRow>
-                            <TableHead className="w-[200px] bg-muted/50 border-r">Account</TableHead>
+                            <TableHead className="w-[200px] bg-slate-50 border-r text-left">Account</TableHead>
                             {monthNames.slice(1).map((name, idx) => (
-                                <TableHead key={idx + 1} className="text-right min-w-[100px] bg-muted/50 border-r px-2">
+                                <TableHead key={idx + 1} className="text-center min-w-[100px] bg-slate-50 border-r px-2">
                                     {name}
                                 </TableHead>
                             ))}
-                            <TableHead className="text-right font-bold bg-muted/50 px-2">Total</TableHead>
+                            <TableHead className="text-center font-bold bg-slate-50 px-2">Total</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -62,9 +65,22 @@ export function CashbackVolunteerMatrixView({ data, year }: Props) {
                         ) : (
                             <>
                                 {data.map(person => (
-                                    <TableRow key={person.personId} className="hover:bg-muted/20">
-                                        <TableCell className="font-medium border-r px-2 py-1">
-                                            {person.personName}
+                                    <TableRow key={person.personId} className="hover:bg-muted/10">
+                                        <TableCell className="font-medium border-r px-2 py-2 text-sm">
+                                            <div className="flex items-center gap-2">
+                                                {person.personImageUrl ? (
+                                                    <img
+                                                        src={person.personImageUrl}
+                                                        alt={person.personName}
+                                                        className="w-6 h-6 rounded-none object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="w-6 h-6 rounded-none bg-slate-200 flex items-center justify-center text-xs font-medium text-slate-600">
+                                                        {person.personName.charAt(0).toUpperCase()}
+                                                    </div>
+                                                )}
+                                                <span>{person.personName}</span>
+                                            </div>
                                         </TableCell>
                                         {monthNames.slice(1).map((_, idx) => {
                                             const month = idx + 1
@@ -75,42 +91,38 @@ export function CashbackVolunteerMatrixView({ data, year }: Props) {
                                                 <TableCell
                                                     key={month}
                                                     className={cn(
-                                                        "text-right text-xs border-r px-2 py-1",
-                                                        value > 0 ? "cursor-pointer" : ""
+                                                        "text-center text-xs border-r px-2 py-2",
+                                                        value > 0 ? "hover:bg-blue-50 cursor-pointer" : "text-muted-foreground"
                                                     )}
+                                                    onClick={() => value > 0 && handleMonthClick(person.personId, person.personName, month)}
                                                 >
                                                     {value > 0 ? (
-                                                        <button
-                                                            onClick={() => handleMonthClick(person.personId, person.personName, month)}
-                                                            className="text-green-600 hover:text-green-800 hover:underline font-medium"
-                                                        >
-                                                            {fmt(value)}
-                                                        </button>
+                                                        <span className="text-sm font-semibold text-blue-700 cursor-pointer">{fmt(value)}</span>
                                                     ) : (
-                                                        <span className="text-muted-foreground/30">-</span>
+                                                        <span className="text-muted-foreground">0</span>
                                                     )}
                                                 </TableCell>
                                             )
                                         })}
-                                        <TableCell className="text-right font-bold text-sm px-2 py-1 text-green-600">
+                                        <TableCell className="text-center font-bold text-sm px-2 py-2 text-green-700">
                                             {fmt(person.yearTotal)}
                                         </TableCell>
                                     </TableRow>
                                 ))}
 
                                 {/* Total Row */}
-                                <TableRow className="bg-muted/30 font-bold border-t-2">
+                                <TableRow className="bg-muted/30 font-bold border-t">
                                     <TableCell className="border-r px-2 py-2">TOTAL</TableCell>
                                     {monthNames.slice(1).map((_, idx) => {
                                         const month = idx + 1
                                         const total = monthlyTotals[month] || 0
                                         return (
-                                            <TableCell key={month} className="text-right text-xs border-r px-2 py-2">
-                                                {total > 0 ? fmt(total) : '-'}
+                                            <TableCell key={month} className="text-center text-xs border-r px-2 py-2">
+                                                {total > 0 ? fmt(total) : '0'}
                                             </TableCell>
                                         )
                                     })}
-                                    <TableCell className="text-right text-xs px-2 py-2 text-green-700">
+                                    <TableCell className="text-center text-sm px-2 py-2 text-green-800">
                                         {fmt(grandTotal)}
                                     </TableCell>
                                 </TableRow>

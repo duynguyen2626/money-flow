@@ -1159,7 +1159,8 @@ export async function getCashbackYearAnalytics(year: number): Promise<import('@/
       cashbackGiven: val.given
     }));
 
-    const cashbackGivenYearTotal = monthsArray.reduce((sum, m) => sum + m.cashbackGiven, 0);
+    // Use totalGivenAway sum for consistency with monthly display
+    const cashbackGivenYearTotal = monthsArray.reduce((sum, m) => sum + m.totalGivenAway, 0);
     const cashbackRedeemedYearTotal = cardRedeemedTxns.reduce((sum: any, t: any) => sum + Math.abs(t.amount || 0), 0);
     const annualFeeYearTotal = card.annual_fee || 0;
     const interestYearTotal = 0;

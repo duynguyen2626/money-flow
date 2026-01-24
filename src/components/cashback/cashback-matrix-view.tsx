@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils'
 import Image from 'next/image'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { CashbackMonthDetailModal } from './month-detail-modal'
+import { useState } from 'react'
 
 interface Props {
     data: CashbackYearSummary[]
@@ -14,8 +16,15 @@ interface Props {
     onMonthClick?: (cardId: string, cardName: string, month: number) => void
 }
 
-export function CashbackMatrixView({ data, cards, year, onMonthClick }: Props) {
+export function CashbackMatrixView({ data, cards, year }: Props) {
+    const [detailModal, setDetailModal] = useState<{ cardId: string, cardName: string, month: number } | null>(null)
     const monthNames = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+    const derivedNet = (summary: CashbackYearSummary) => {
+        const givenAway = summary.months.reduce((sum, m) => sum + m.totalGivenAway, 0)
+        const annualFee = summary.annualFeeYearTotal || 0
+        return (summary.cashbackRedeemedYearTotal || 0) - givenAway - annualFee
+    }
 
     // Helper for full currency
     const fmt = (n: number) => {
@@ -37,7 +46,7 @@ export function CashbackMatrixView({ data, cards, year, onMonthClick }: Props) {
         }
 
         // Filter 2: Exclude zero-data accounts
-        const hasActivity = d.netProfit !== 0 ||
+        const hasActivity = derivedNet(d) !== 0 ||
             d.cashbackGivenYearTotal !== 0 ||
             d.cashbackRedeemedYearTotal !== 0 ||
             d.months.some(m => m.totalGivenAway > 0)
@@ -49,7 +58,7 @@ export function CashbackMatrixView({ data, cards, year, onMonthClick }: Props) {
         // Calculate Totals for this range
         const totalRedeemed = filteredData.reduce((sum, d) => sum + d.cashbackRedeemedYearTotal, 0)
         const totalAnnualFee = filteredData.reduce((sum, d) => sum + d.annualFeeYearTotal, 0)
-        const totalProfit = filteredData.reduce((sum, d) => sum + d.netProfit, 0)
+        const totalProfit = filteredData.reduce((sum, d) => sum + derivedNet(d), 0)
 
         // Calculate monthly totals (Give Away = totalGivenAway)
         const monthTotals: Record<number, number> = {}
@@ -61,16 +70,21 @@ export function CashbackMatrixView({ data, cards, year, onMonthClick }: Props) {
         }
 
         return (
-            <Table className="border rounded-md">
-                <TableHeader className="bg-muted/50 sticky top-0 z-10">
+            <Table className="border rounded-sm">
+                <TableHeader className="bg-slate-50 sticky top-0 z-10">
                     <TableRow>
-                        <TableHead className="w-[250px] bg-muted/50 border-r">Card ({range[0] === 1 ? 'Jan-Jun' : 'Jul-Dec'})</TableHead>
+                        <TableHead colSpan={9} className="bg-slate-50 border-b px-3 py-2">
+                            <p className="text-xs text-muted-foreground font-normal">Click on any amount to view transaction details</p>
+                        </TableHead>
+                    </TableRow>
+                    <TableRow>
+                        <TableHead className="w-[250px] bg-slate-50 border-r text-left">Card ({range[0] === 1 ? 'Jan-Jun' : 'Jul-Dec'})</TableHead>
                         {Array.from({ length: range[1] - range[0] + 1 }, (_, i) => i + range[0]).map(m => (
-                            <TableHead key={m} className="text-right min-w-[100px] bg-muted/50 border-r px-2">{monthNames[m]}</TableHead>
+                            <TableHead key={m} className="text-center min-w-[100px] bg-slate-50 border-r px-2">{monthNames[m]}</TableHead>
                         ))}
-                        <TableHead className="text-right font-bold bg-muted/50 border-r px-2">Redeemed</TableHead>
-                        <TableHead className="text-right font-bold bg-muted/50 border-r px-2">Annual Fee</TableHead>
-                        <TableHead className="text-right font-bold bg-muted/50 px-2">Net Profit</TableHead>
+                        <TableHead className="text-center font-bold bg-slate-50 border-r px-2">Redeemed</TableHead>
+                        <TableHead className="text-center font-bold bg-slate-50 border-r px-2">Annual Fee</TableHead>
+                        <TableHead className="text-center font-bold bg-slate-50 px-2">Net Profit</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -110,52 +124,49 @@ export function CashbackMatrixView({ data, cards, year, onMonthClick }: Props) {
                                     const cardName = cardInfo?.accountName || "Unknown Card"
 
                                     return (
-                                        <TableCell key={month} className={cn("text-right text-xs border-r px-2 py-1", val > 0 ? "text-blue-600 font-medium" : "text-muted-foreground/20")}>
-                                            {val > 0 && onMonthClick ? (
-                                                <button
-                                                    onClick={() => onMonthClick(summary.cardId, cardName, month)}
-                                                    className="hover:underline cursor-pointer"
-                                                >
+                                        <TableCell key={month} className={cn("text-center text-xs border-r px-2 py-2 transition-colors", val > 0 ? "hover:bg-blue-50 cursor-pointer" : "text-muted-foreground")}>
+                                            {val > 0 ? (
+                                                <span className="text-sm font-semibold text-blue-700 cursor-pointer" onClick={() => setDetailModal({ cardId: summary.cardId, cardName, month })}>
                                                     {fmt(val)}
-                                                </button>
+                                                </span>
                                             ) : (
-                                                fmt(val)
+                                                <span className="text-muted-foreground">0</span>
                                             )}
                                         </TableCell>
                                     )
                                 })}
 
                                 {/* Totals (Yearly) */}
-                                <TableCell className={cn("text-right font-medium text-xs border-r px-2 py-1", summary.cashbackRedeemedYearTotal > 0 ? "text-green-600" : "text-muted-foreground/30")}>
+                                <TableCell className={cn("text-center font-medium text-xs border-r px-2 py-2", summary.cashbackRedeemedYearTotal > 0 ? "text-green-600" : "text-muted-foreground")}>
                                     {fmt(summary.cashbackRedeemedYearTotal)}
                                 </TableCell>
                                 {/* Annual Fee Cell */}
-                                <TableCell className={cn("text-right font-medium text-xs border-r px-2 py-1", summary.annualFeeYearTotal > 0 ? "text-red-600" : "text-muted-foreground/30")}>
-                                    {summary.annualFeeYearTotal > 0 ? `-${fmt(summary.annualFeeYearTotal)}` : '-'}
+                                <TableCell className={cn("text-center font-medium text-xs border-r px-2 py-2", summary.annualFeeYearTotal > 0 ? "text-red-600" : "text-muted-foreground")}>
+                                    {summary.annualFeeYearTotal > 0 ? fmt(summary.annualFeeYearTotal) : '-'}
                                 </TableCell>
-                                <TableCell className={cn("text-right font-bold text-sm px-2 py-1", summary.netProfit >= 0 ? "text-green-600" : "text-red-600")}>
-                                    {fmt(summary.netProfit)}
+                                <TableCell className={cn("text-center font-bold text-sm px-2 py-2", derivedNet(summary) >= 0 ? "text-green-600" : "text-red-600")}>
+                                    {fmt(derivedNet(summary))}
                                 </TableCell>
                             </TableRow>
                         )
                     })}
 
                     {/* Total Row */}
-                    <TableRow className="bg-muted/30 font-bold border-t-2">
+                    <TableRow className="bg-muted/30 font-bold border-t">
                         <TableCell className="border-r px-2 py-2">TOTAL</TableCell>
                         {Array.from({ length: range[1] - range[0] + 1 }, (_, i) => i + range[0]).map(month => (
-                            <TableCell key={month} className="text-right text-xs border-r px-2 py-2">
+                            <TableCell key={month} className="text-center text-xs border-r px-2 py-2">
                                 {fmt(monthTotals[month] || 0)}
                             </TableCell>
                         ))}
-                        <TableCell className="text-right text-xs border-r px-2 py-2 text-green-700">
+                        <TableCell className="text-center text-xs border-r px-2 py-2 text-green-700">
                             {fmt(totalRedeemed)}
                         </TableCell>
                         {/* Total Annual Fee */}
-                        <TableCell className="text-right text-xs border-r px-2 py-2 text-red-600">
-                            {totalAnnualFee > 0 ? `-${fmt(totalAnnualFee)}` : '-'}
+                        <TableCell className="text-center text-xs border-r px-2 py-2 text-red-600">
+                            {totalAnnualFee > 0 ? fmt(totalAnnualFee) : '-'}
                         </TableCell>
-                        <TableCell className="text-right text-xs px-2 py-2 text-green-700">
+                        <TableCell className="text-center text-xs px-2 py-2 text-green-700">
                             {fmt(totalProfit)}
                         </TableCell>
                     </TableRow>
@@ -180,6 +191,18 @@ export function CashbackMatrixView({ data, cards, year, onMonthClick }: Props) {
                     </TabsContent>
                 </Tabs>
             </div>
+
+            {detailModal && (
+                <CashbackMonthDetailModal
+                    open={!!detailModal}
+                    onOpenChange={(op) => !op && setDetailModal(null)}
+                    mode="card"
+                    cardId={detailModal.cardId}
+                    cardName={detailModal.cardName}
+                    month={detailModal.month}
+                    year={year}
+                />
+            )}
         </Card>
     )
 }

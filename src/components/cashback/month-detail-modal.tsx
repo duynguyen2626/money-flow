@@ -141,95 +141,119 @@ export function CashbackMonthDetailModal({
                             <TableBody>
                                 {expenses.length === 0 ? (
                                     <TableRow><TableCell colSpan={7} className="text-center h-24 text-muted-foreground">No eligible transactions</TableCell></TableRow>
-                                ) : expenses.map((t: any) => (
-                                    <TableRow key={t.id}>
-                                        <TableCell className="whitespace-nowrap w-24">
-                                            {new Date(t.occurred_at).toLocaleDateString('vi-VN')}
-                                        </TableCell>
-                                        <TableCell className="max-w-[200px] truncate" title={t.note || ''}>
-                                            {t.note || (t.category?.name ?? 'Unknown')}
-                                        </TableCell>
-                                        <TableCell>{t.category?.icon} {t.category?.name}</TableCell>
-                                        <TableCell className="text-right font-medium">{fmt(Math.abs(t.amount))}</TableCell>
-                                        <TableCell className="text-right text-amber-600">
-                                            {t.cashback_share_percent ? `${(parseFloat(t.cashback_share_percent) * 100).toFixed(0)}%` : '-'}
-                                        </TableCell>
-                                        <TableCell className="text-right text-amber-600">
-                                            {t.cashback_share_fixed ? fmt(parseFloat(t.cashback_share_fixed)) : '-'}
-                                        </TableCell>
-                                        <TableCell className="text-right font-semibold text-blue-600">
-                                            {(() => {
-                                                const sharePercent = parseFloat(t.cashback_share_percent || '0')
-                                                const shareFixed = parseFloat(t.cashback_share_fixed || '0')
-                                                const txnAmount = Math.abs(t.amount)
-                                                const total = (sharePercent * txnAmount) + shareFixed
-                                                return total > 0 ? fmt(total) : '-'
-                                            })()}
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
+                                ) : (
+                                    <>
+                                        {expenses.map((t: any) => (
+                                            <TableRow key={t.id}>
+                                                <TableCell className="whitespace-nowrap w-24">
+                                                    {new Date(t.occurred_at).toLocaleDateString('vi-VN')}
+                                                </TableCell>
+                                                <TableCell className="max-w-[200px] truncate" title={t.note || ''}>
+                                                    {t.note || (t.category?.name ?? 'Unknown')}
+                                                </TableCell>
+                                                <TableCell>{t.category?.icon} {t.category?.name}</TableCell>
+                                                <TableCell className="text-right font-medium">{fmt(Math.abs(t.amount))}</TableCell>
+                                                <TableCell className="text-right text-amber-600">
+                                                    {t.cashback_share_percent ? `${(parseFloat(t.cashback_share_percent) * 100).toFixed(0)}%` : '-'}
+                                                </TableCell>
+                                                <TableCell className="text-right text-amber-600">
+                                                    {t.cashback_share_fixed ? fmt(parseFloat(t.cashback_share_fixed)) : '-'}
+                                                </TableCell>
+                                                <TableCell className="text-right font-semibold text-blue-600">
+                                                    {(() => {
+                                                        const sharePercent = parseFloat(t.cashback_share_percent || '0')
+                                                        const shareFixed = parseFloat(t.cashback_share_fixed || '0')
+                                                        const txnAmount = Math.abs(t.amount)
+                                                        const total = (sharePercent * txnAmount) + shareFixed
+                                                        return total > 0 ? fmt(total) : '-'
+                                                    })()}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                        {/* Total Row */}
+                                        <TableRow className="bg-muted/30 font-bold border-t">
+                                            <TableCell colSpan={3} className="px-2 py-2">TOTAL</TableCell>
+                                            <TableCell className="text-right text-xs px-2 py-2">{fmt(totalOriginalAmount)}</TableCell>
+                                            <TableCell className="text-right text-xs px-2 py-2">-</TableCell>
+                                            <TableCell className="text-right text-xs px-2 py-2">-</TableCell>
+                                            <TableCell className="text-right text-xs px-2 py-2 text-blue-700">{fmt(totalLent)}</TableCell>
+                                        </TableRow>
+                                    </>
+                                )}
                             </TableBody>
                         </Table>
                     </div>
                 ) : (
-                    // VOLUNTEER MODE - Single table with Person, Original, Final, You Gave columns
-                    <div className="flex-1 flex flex-col overflow-hidden">
-                        <div className="mb-2 text-sm text-muted-foreground">
-                            Total cashback given: <span className="font-bold text-green-600">{fmt(volunteerTotal)}</span>
+                    // VOLUNTEER MODE - Match card mode structure
+                    <div className="flex-1 overflow-auto border rounded-md">
+                        <div className="p-3 bg-muted/30 border-b">
+                            <h3 className="font-semibold">Give Away ({fmt(volunteerTotal)})</h3>
                         </div>
-                        <div className="flex-1 overflow-auto border rounded-md">
-                            <Table>
-                                <TableHeader className="bg-muted/50 sticky top-0">
-                                    <TableRow>
-                                        <TableHead>Date</TableHead>
-                                        <TableHead>Person</TableHead>
-                                        <TableHead>Note</TableHead>
-                                        <TableHead className="text-right">Original</TableHead>
-                                        <TableHead className="text-right">Final</TableHead>
-                                        <TableHead className="text-right">You Gave</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {volunteerData.length === 0 ? (
-                                        <TableRow><TableCell colSpan={6} className="text-center h-24 text-muted-foreground">No volunteer transactions found</TableCell></TableRow>
-                                    ) : volunteerData.map((tx) => (
-                                        <TableRow key={tx.id}>
-                                            <TableCell className="whitespace-nowrap w-24">
-                                                {new Date(tx.date).toLocaleDateString('vi-VN')}
-                                            </TableCell>
-                                            <TableCell className="whitespace-nowrap">
-                                                <div className="flex items-center gap-2">
-                                                    {tx.personImageUrl ? (
-                                                        <img
-                                                            src={tx.personImageUrl}
-                                                            alt={tx.personName}
-                                                            className="w-6 h-6 rounded-full object-cover"
-                                                        />
-                                                    ) : (
-                                                        <div className="w-6 h-6 rounded-full bg-slate-200 flex items-center justify-center text-xs font-medium text-slate-600">
-                                                            {tx.personName.charAt(0).toUpperCase()}
+                        <Table>
+                            <TableHeader className="bg-muted/50 sticky top-0">
+                                <TableRow>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Person</TableHead>
+                                    <TableHead>Note</TableHead>
+                                    <TableHead className="text-right">Amount</TableHead>
+                                    <TableHead className="text-right">% Back</TableHead>
+                                    <TableHead className="text-right">Fixed Back</TableHead>
+                                    <TableHead className="text-right">Σ Back</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {volunteerData.length === 0 ? (
+                                    <TableRow><TableCell colSpan={7} className="text-center h-24 text-muted-foreground">No volunteer transactions found</TableCell></TableRow>
+                                ) : (
+                                    <>
+                                        {volunteerData.map((tx) => {
+                                            const cashbackGiven = tx.cashbackGiven
+                                            // For volunteer, we don't have separate % and fixed, so show total in Σ Back
+                                            return (
+                                                <TableRow key={tx.id}>
+                                                    <TableCell className="whitespace-nowrap w-24">
+                                                        {new Date(tx.date).toLocaleDateString('vi-VN')}
+                                                    </TableCell>
+                                                    <TableCell className="whitespace-nowrap">
+                                                        <div className="flex items-center gap-2">
+                                                            {tx.personImageUrl ? (
+                                                                <img
+                                                                    src={tx.personImageUrl}
+                                                                    alt={tx.personName}
+                                                                    className="w-6 h-6 rounded-none object-cover"
+                                                                />
+                                                            ) : (
+                                                                <div className="w-6 h-6 rounded-none bg-slate-200 flex items-center justify-center text-xs font-medium text-slate-600">
+                                                                    {tx.personName.charAt(0).toUpperCase()}
+                                                                </div>
+                                                            )}
+                                                            <span className="font-medium text-sm">{tx.personName}</span>
                                                         </div>
-                                                    )}
-                                                    <span className="font-medium">{tx.personName}</span>
-                                                </div>
+                                                    </TableCell>
+                                                    <TableCell className="max-w-[200px] truncate" title={tx.note}>
+                                                        {tx.note}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-medium">{fmt(tx.originalAmount)}</TableCell>
+                                                    <TableCell className="text-right text-amber-600">-</TableCell>
+                                                    <TableCell className="text-right text-amber-600">-</TableCell>
+                                                    <TableCell className="text-right font-semibold text-blue-600">{fmt(cashbackGiven)}</TableCell>
+                                                </TableRow>
+                                            )
+                                        })}
+                                        {/* Total Row */}
+                                        <TableRow className="bg-muted/30 font-bold border-t">
+                                            <TableCell colSpan={3} className="px-2 py-2">TOTAL</TableCell>
+                                            <TableCell className="text-right text-xs px-2 py-2">
+                                                {fmt(Array.isArray(volunteerData) ? volunteerData.reduce((sum, t) => sum + t.originalAmount, 0) : 0)}
                                             </TableCell>
-                                            <TableCell className="max-w-[200px] truncate" title={tx.note}>
-                                                {tx.note}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {fmt(tx.originalAmount)}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {fmt(tx.finalPrice)}
-                                            </TableCell>
-                                            <TableCell className="text-right font-medium text-green-600">
-                                                {fmt(tx.cashbackGiven)}
-                                            </TableCell>
+                                            <TableCell className="text-right text-xs px-2 py-2">-</TableCell>
+                                            <TableCell className="text-right text-xs px-2 py-2">-</TableCell>
+                                            <TableCell className="text-right text-xs px-2 py-2 text-blue-700">{fmt(volunteerTotal)}</TableCell>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </div>
+                                    </>
+                                )}
+                            </TableBody>
+                        </Table>
                     </div>
                 )}
             </DialogContent>

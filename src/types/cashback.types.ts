@@ -109,6 +109,9 @@ export type CashbackYearSummary = {
   interestYearTotal: number
   cashbackGivenYearTotal: number
   netProfit: number
+  // Enriched fields for UI summaries
+  bankBackYearTotal?: number
+  sharedYearTotal?: number
 }
 
 // ============================================================================
