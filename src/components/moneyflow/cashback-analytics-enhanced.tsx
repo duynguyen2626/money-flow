@@ -78,7 +78,7 @@ export function CashbackAnalyticsEnhanced({
         if (!cardData?.transactions) return []
         if (activeRuleTab === 'all') return cardData.transactions
 
-        const selectedLevel = config?.levels?.find((_, idx) => `level-${lvl.id || idx}` === activeRuleTab)
+        const selectedLevel = config?.levels?.find((level, idx) => `level-${level.id || idx}` === activeRuleTab)
         if (!selectedLevel) return cardData.transactions
 
         // Filter by matching levelName from policyMetadata (most accurate)
@@ -87,10 +87,7 @@ export function CashbackAnalyticsEnhanced({
             if (txnLevelName && txnLevelName === selectedLevel.name) {
                 return true
             }
-            // Fallback to category-based filtering if no policyMetadata
-            const categoryId = txn.category_id
-            const hasRuleForCategory = selectedLevel.rules?.some(r => r.categoryIds?.includes(categoryId))
-            return hasRuleForCategory
+            return false
         })
     }, [cardData?.transactions, activeRuleTab, config?.levels])
 
