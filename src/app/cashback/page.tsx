@@ -109,12 +109,22 @@ export default async function CashbackPage({ searchParams }: PageProps) {
     // Fetch card cashback data
     const { data: creditCards } = await supabase
         .from('accounts')
-        .select('id')
-        .eq('type', 'credit_card') as { data: { id: string }[] | null }
+        .select('id, cashback_config')
+        .eq('type', 'credit_card') as { data: { id: string, cashback_config: any }[] | null }
 
     const accountIds = creditCards?.map(a => a.id) ?? []
     const referenceDate = new Date(year, 0, 1)
     const cards = await getCashbackProgress(0, accountIds, referenceDate, false)
+
+    // Detect multi-tier (levels) to improve UI labels
+    const tieredMap: Record<string, boolean> = {}
+    for (const acc of (creditCards || [])) {
+        try {
+            const cfg = acc.cashback_config ? JSON.parse(typeof acc.cashback_config === 'string' ? acc.cashback_config : JSON.stringify(acc.cashback_config)) : null
+            const levels = cfg?.program?.levels || cfg?.levels || []
+            tieredMap[acc.id] = Array.isArray(levels) && levels.length > 0
+        } catch { tieredMap[acc.id] = false }
+    }
 
     const yearSummaries = await Promise.all(
         cards.map(async (card) => {
@@ -187,6 +197,7 @@ export default async function CashbackPage({ searchParams }: PageProps) {
                         initialData={yearSummaries}
                         year={year}
                         cards={cards}
+                        tieredMap={tieredMap}
                     />
                 </TabsContent>
 

@@ -16,9 +16,10 @@ interface Props {
     initialData: CashbackYearSummary[]
     year: number
     cards: CashbackCard[]
+    tieredMap?: Record<string, boolean>
 }
 
-export function CashbackDashboardV2({ initialData, year, cards }: Props) {
+export function CashbackDashboardV2({ initialData, year, cards, tieredMap }: Props) {
     const [selectedCardId, setSelectedCardId] = useState<string | null>(initialData[0]?.cardId ?? null)
     const [detailModal, setDetailModal] = useState<{ month: number, tab?: string } | null>(null)
     const [viewMode, setViewMode] = useState<'detail' | 'matrix'>('detail')
@@ -183,11 +184,18 @@ export function CashbackDashboardV2({ initialData, year, cards }: Props) {
                                         <CardContent className="p-4 grid grid-cols-5 gap-4 text-center">
                                             <div>
                                                 <div className="text-xs text-muted-foreground uppercase">Rate</div>
-                                                <div className="text-lg font-bold">{(selectedCardInfo?.rate || 0) * 100}%</div>
+                                                {tieredMap?.[selectedSummary.cardId] ? (
+                                                    <div className="text-sm font-medium text-purple-700 bg-purple-50 rounded px-2 inline-flex items-center gap-2">
+                                                        Varies by tier
+                                                        <a className="underline text-purple-700" href={`/accounts/${selectedSummary.cardId}?tab=cashback`} target="_blank" rel="noreferrer">rules</a>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-lg font-bold">{(selectedCardInfo?.rate || 0) * 100}%</div>
+                                                )}
                                             </div>
                                             <div>
                                                 <div className="text-xs text-muted-foreground uppercase">Max/Cycle</div>
-                                                <div className="text-lg font-bold">{fmt(selectedCardInfo?.maxCashback || 0)}</div>
+                                                <div className="text-lg font-bold">{selectedCardInfo?.maxCashback ? fmt(selectedCardInfo.maxCashback) : '-'}</div>
                                             </div>
                                             <div>
                                                 <div className="text-xs text-muted-foreground uppercase">Total Give Away</div>
