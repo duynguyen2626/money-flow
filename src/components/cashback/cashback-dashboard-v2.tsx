@@ -5,11 +5,12 @@ import { CashbackYearSummary, CashbackCard } from '@/types/cashback.types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import Image from 'next/image'
 import { CashbackMatrixView } from './cashback-matrix-view'
 import { CashbackMonthDetailModal } from './month-detail-modal'
-import { LayoutList, Table as TableIcon } from 'lucide-react'
+import { LayoutList, Table as TableIcon, HelpCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 interface Props {
@@ -164,8 +165,24 @@ export function CashbackDashboardV2({ initialData, year, cards, tieredMap }: Pro
                                     <div className="flex justify-between items-center">
                                         <div>
                                             <h2 className="text-xl font-bold">{selectedCardInfo?.accountName}</h2>
-                                            <div className="text-muted-foreground text-sm">
-                                                Net Profit: <span className={cn(selectedSummary.netProfit >= 0 ? "text-green-600" : "text-red-600")}>{fmt(selectedSummary.netProfit)}</span>
+                                            <div className="text-muted-foreground text-sm flex items-center gap-2">
+                                                <TooltipProvider>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <div className="flex items-center gap-1 cursor-help">
+                                                                Net Profit: <span className={cn(selectedSummary.netProfit >= 0 ? "text-green-600" : "text-red-600")}>{fmt(selectedSummary.netProfit)}</span>
+                                                                <HelpCircle className="w-4 h-4 text-blue-500" />
+                                                            </div>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent side="right" className="max-w-xs">
+                                                            Profit = Bank Back - Share Shared - Annual Fee
+                                                            <br />
+                                                            Bank Back: Cashback từ ngân hàng
+                                                            <br />
+                                                            Shared: Số tiền chia sẻ cho người khác
+                                                        </TooltipContent>
+                                                    </Tooltip>
+                                </TooltipProvider>
                                             </div>
                                         </div>
                                     </div>
@@ -182,33 +199,85 @@ export function CashbackDashboardV2({ initialData, year, cards, tieredMap }: Pro
                                     {/* Totals Row */}
                                     <Card>
                                         <CardContent className="p-4 grid grid-cols-5 gap-4 text-center">
-                                            <div>
-                                                <div className="text-xs text-muted-foreground uppercase">Rate</div>
-                                                {tieredMap?.[selectedSummary.cardId] ? (
-                                                    <div className="text-sm font-medium text-purple-700 bg-purple-50 rounded px-2 inline-flex items-center gap-2">
-                                                        Varies by tier
-                                                        <a className="underline text-purple-700" href={`/accounts/${selectedSummary.cardId}?tab=cashback`} target="_blank" rel="noreferrer">rules</a>
+                                            <TooltipProvider>
+                                                <div>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <span className="text-xs text-muted-foreground uppercase">Rate</span>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <HelpCircle className="w-3 h-3 text-blue-500 cursor-help" />
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="top">
+                                                                Tỷ lệ cashback cơ sở của thẻ
+                                                            </TooltipContent>
+                                                        </Tooltip>
                                                     </div>
-                                                ) : (
-                                                    <div className="text-lg font-bold">{(selectedCardInfo?.rate || 0) * 100}%</div>
-                                                )}
-                                            </div>
-                                            <div>
-                                                <div className="text-xs text-muted-foreground uppercase">Max/Cycle</div>
-                                                <div className="text-lg font-bold">{selectedCardInfo?.maxCashback ? fmt(selectedCardInfo.maxCashback) : '-'}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-xs text-muted-foreground uppercase">Total Give Away</div>
-                                                <div className="text-lg font-bold text-amber-600">{fmt(selectedSummary.months.reduce((sum, m) => sum + m.totalGivenAway, 0))}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-xs text-muted-foreground uppercase">Redeemed This Year</div>
-                                                <div className="text-lg font-bold text-green-600">+{fmt(selectedSummary.cashbackRedeemedYearTotal)}</div>
-                                            </div>
-                                            <div>
-                                                <div className="text-xs text-muted-foreground uppercase">Annual Fee</div>
-                                                <div className="text-lg font-bold text-red-500">-{fmt(selectedSummary.annualFeeYearTotal)}</div>
-                                            </div>
+                                                    {tieredMap?.[selectedSummary.cardId] ? (
+                                                        <div className="text-sm font-medium text-purple-700 bg-purple-50 rounded px-2 inline-flex items-center gap-2 mt-1">
+                                                            Varies by tier
+                                                            <a className="underline text-purple-700" href={`/accounts/${selectedSummary.cardId}?tab=cashback`} target="_blank" rel="noreferrer">rules</a>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-lg font-bold">{(selectedCardInfo?.rate || 0) * 100}%</div>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <span className="text-xs text-muted-foreground uppercase">Max/Cycle</span>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <HelpCircle className="w-3 h-3 text-blue-500 cursor-help" />
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="top">
+                                                                Giới hạn cashback tối đa trong một chu kỳ (tháng/kỳ)
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </div>
+                                                    <div className="text-lg font-bold">{selectedCardInfo?.maxCashback ? fmt(selectedCardInfo.maxCashback) : '-'}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <span className="text-xs text-muted-foreground uppercase">Total Give Away</span>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <HelpCircle className="w-3 h-3 text-blue-500 cursor-help" />
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="top" className="max-w-xs">
+                                                                Tổng cashback đã chia sẻ cho người khác trong năm
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </div>
+                                                    <div className="text-lg font-bold text-amber-600">{fmt(selectedSummary.months.reduce((sum, m) => sum + m.totalGivenAway, 0))}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <span className="text-xs text-muted-foreground uppercase">Redeemed</span>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <HelpCircle className="w-3 h-3 text-blue-500 cursor-help" />
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="top" className="max-w-xs">
+                                                                Cashback đã quy đổi/nhận từ ngân hàng trong năm
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </div>
+                                                    <div className="text-lg font-bold text-green-600">+{fmt(selectedSummary.cashbackRedeemedYearTotal)}</div>
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <span className="text-xs text-muted-foreground uppercase">Annual Fee</span>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <HelpCircle className="w-3 h-3 text-blue-500 cursor-help" />
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="top">
+                                                                Phí hàng năm của thẻ
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </div>
+                                                    <div className="text-lg font-bold text-red-500">-{fmt(selectedSummary.annualFeeYearTotal)}</div>
+                                                </div>
+                                            </TooltipProvider>
                                         </CardContent>
                                     </Card>
                                 </div>
