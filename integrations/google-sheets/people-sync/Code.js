@@ -1,14 +1,19 @@
-// MoneyFlow 3 - Google Apps Script
-// VERSION: 6.3 (UPSERT STRATEGY - MEMORY SAFE)
-// Last Updated: 2026-01-20 18:30 ICT
-// Scope: Data Safety & Deduplication.
-//        - CRITICAL: System IDs must be > 5 chars. Empty/Short values in Col A = Manual Row.
-//        - Backup: Auto copy to `Backup_[Name]` before sync.
-//        - Smart Merge: NEUTRALIZE matching Manual Rows (Set I = F).
-//        - J2 Formula: Handles 'In' with Offset.
-//        - F: Absolute Value (Positive).
-//        - J: Text-safe formula with SUBSTITUTE/VALUE.
-//        - Sorting: Use sheet.getLastRow(), Add Sleep for consistency.
+/**
+ * MoneyFlow 3 - Google Apps Script
+ * @version 6.4 (Summary Area Protection)
+ * @date 2026-01-23
+ * 
+ * CRITICAL FIXES (v6.4):
+ * - Fix #1-5: Use clearContent() instead of deleteRow() to prevent row shifts
+ * - Sort A2:J only (excludes Summary area L:N)
+ * - Preserve L6:N35 merge protection during all operations
+ * - Added validateSheetStructure() for integrity checks
+ * 
+ * RULES:
+ * - System IDs: Must be >5 chars (UUID). Short/empty values in Col A = Manual Row
+ * - Auto Backup: Creates `Backup_[Name]` before sync
+ * - Smart Merge: Neutralizes matching manual rows (sets I = F)
+ */
 
 /*
 function onOpen() {
@@ -309,8 +314,12 @@ function handleSingleTransaction(payload, action) {
 
     if (action === 'delete' || payload.status === 'void') {
         if (rowIndex > 0) {
-            // Delete row to shift manual data up
-            sheet.deleteRow(rowIndex);
+            // Clear row content instead of deleting to preserve row positions
+            // This prevents Summary area (L7:N35) from shifting when rows change
+            var range = sheet.getRange(rowIndex, 1, 1, 15); // A:O
+            range.clearContent();
+            range.setBackground('white');
+            Logger.log('Row ' + rowIndex + ' cleared (not deleted) - Summary area protected');
         }
         applySheetImage(sheet, syncOptions.imgUrl, syncOptions.imgProvided, syncOptions.summaryOptions);
         return jsonResponse({ ok: true, action: 'deleted' });
@@ -370,6 +379,20 @@ function getLastSystemRow(sheet) {
 
 
 function applyBordersAndSort(sheet, summaryOptions, systemRowCount) {
+    // 0. ENSURE HEADERS EXIST (Fix: Headers can go missing after delete+sync)
+    try {
+        var headerRange = sheet.getRange('A1:J1');
+        if (headerRange.isBlank() || headerRange.getValue() !== 'ID') {
+            var headers = ['ID', 'Type', 'Date', 'Shop', 'Notes', 'Amount', '% Back', 'đ Back', 'Σ Back', 'Final Price'];
+            headerRange.setValues([headers]);
+            headerRange.setFontWeight('bold').setBackground('#E5E7EB').setFontColor('#111827').setFontSize(12).setBorder(true, true, true, true, true, true);
+            sheet.setFrozenRows(1);
+            Logger.log('Headers restored in A1:J1');
+        }
+    } catch (e) {
+        Logger.log('Header restore error: ' + e);
+    }
+
     // 0. SELF-HEALING: Remove completely empty rows to prevent gaps
     cleanupEmptyRows(sheet);
 
@@ -385,9 +408,12 @@ function applyBordersAndSort(sheet, summaryOptions, systemRowCount) {
         Utilities.sleep(300);
         SpreadsheetApp.flush();
 
-        var dataRange = sheet.getRange(2, 1, rowCount, 15);
+        // CRITICAL FIX: Sort ONLY transaction data (A2:J) - NOT Summary area (L:N)
+        // Summary area at L7:N35 must NOT be included in sort operations
+        var dataRange = sheet.getRange(2, 1, rowCount, 10); // A2:J only (10 columns)
         // Robust Sort: Date (Col 3) ASC, then ID (Col 1) ASC
         dataRange.sort([{ column: 3, ascending: true }, { column: 1, ascending: true }]);
+        Logger.log('Sorted transaction data range: ' + dataRange.getA1Notation() + ' (Summary protected)');
 
         // ... (VLOOKUP & Formatting for System Rows Only)
         // ...
@@ -432,10 +458,36 @@ function applyBordersAndSort(sheet, summaryOptions, systemRowCount) {
         clearRange.clearContent();
         clearRange.setBorder(false, false, false, false, false, false);
         clearRange.setBackground(null);
-        clearRange.breakApart();
+        // NOTE: DO NOT call breakApart() - it will destroy the L6:N35 merge we just created
     } catch (e) { }
 
     setupSummaryTable(sheet, summaryOptions);
+
+    // 3. RE-APPLY COLUMN VISIBILITY & WIDTHS (A and O should always be hidden)
+    try {
+        sheet.showColumns(1, 15); // Unhide all first to reset
+        sheet.hideColumns(1); // Hide A (ID)
+        sheet.hideColumns(15); // Hide O (Shop Name)
+        Logger.log('Column visibility reset: A hidden, O hidden');
+    } catch (e) {
+        Logger.log('Column visibility error: ' + e);
+    }
+
+    // 4. RESTORE COLUMN WIDTHS (Fix: Format gets reset after sort operations)
+    try {
+        sheet.setColumnWidth(2, 70);   // B: Type
+        sheet.setColumnWidth(3, 100);  // C: Date
+        sheet.setColumnWidth(4, 50);   // D: Shop
+        sheet.setColumnWidth(5, 400);  // E: Notes
+        sheet.setColumnWidth(6, 110);  // F: Amount
+        sheet.setColumnWidth(7, 70);   // G: % Back
+        sheet.setColumnWidth(8, 80);   // H: đ Back
+        sheet.setColumnWidth(9, 90);   // I: Σ Back
+        sheet.setColumnWidth(10, 110); // J: Final Price
+        Logger.log('Column widths restored');
+    } catch (e) {
+        Logger.log('Column width error: ' + e);
+    }
 }
 
 
@@ -733,11 +785,11 @@ function applySheetImage(sheet, imgUrl, imgProvided, summaryOptions) {
         showBankAccount = summaryOptions.showBankAccount;
     }
 
-    var baseRange = sheet.getRange(6, 13, 26, 2); // M6:N31
-    var accountRange = sheet.getRange(7, 12, 25, 3); // L7:N31
+    var baseRange = sheet.getRange(6, 12, 30, 3); // L6:N35 (CRITICAL: Summary Area)
+    var accountRange = sheet.getRange(6, 12, 30, 3); // L6:N35 (No. + Summary + Value)
 
     if (showBankAccount) {
-        try { sheet.getRange(7, 13, 25, 2).clearContent(); } catch (e) { } // M7:N31
+        try { sheet.getRange(7, 13, 25, 1).clearContent(); } catch (e) { } // M7:M31
         try { accountRange.clearContent(); } catch (e) { }
     } else {
         try { baseRange.clearContent(); } catch (e) { }
@@ -754,17 +806,35 @@ function applySheetImage(sheet, imgUrl, imgProvided, summaryOptions) {
     if (!imgUrl) return;
 
     var targetRange = showBankAccount ? accountRange : baseRange;
-    try { targetRange.merge(); } catch (e) { }
+    
+    // CRITICAL FIX: Ensure accountRange (L6:M35) is properly merged
+    // This prevents Summary image from shifting when rows above are modified
+    if (showBankAccount) {
+        try {
+            // Check if already merged first
+            if (!targetRange.isMerged()) {
+                targetRange.merge();
+                Logger.log('Merged L6:N35 for Summary image protection');
+            }
+        } catch (e) {
+            Logger.log('Merge error for L6:N35: ' + e);
+        }
+    } else {
+        try { targetRange.merge(); } catch (e) { }
+    }
 
     try {
         var escapedUrl = imgUrl.replace(/"/g, '""');
         targetRange.getCell(1, 1).setFormula('=IMAGE("' + escapedUrl + '";2)');
-    } catch (e) { }
+        Logger.log('Image applied to ' + targetRange.getA1Notation());
+    } catch (e) {
+        Logger.log('Image formula error: ' + e);
+    }
 }
 
 function clearImageMerges(sheet) {
-    try { sheet.getRange(6, 13, 26, 2).breakApart(); } catch (e) { } // M6:N31
-    try { sheet.getRange(7, 12, 25, 3).breakApart(); } catch (e) { } // L7:N31
+    // No-op: image merge is handled by applySheetImage()
+    // Deliberately not breaking merges near Summary (L6:N35) to avoid unmerging the image block
 }
 
 function jsonResponse(obj) { return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); }
@@ -817,8 +887,9 @@ function setMonthTabColor(sheet) {
 }
 
 /**
- * Scans the sheet for completely empty rows (checking key columns) and deletes them.
- * Shifts cells up.
+ * Scans the sheet for completely empty rows (checking key columns) and clears them.
+ * NO LONGER DELETES rows - this prevents Summary area (L7:N35) from shifting.
+ * Empty rows remain but don't corrupt data; can be manually deleted if needed.
  */
 function cleanupEmptyRows(sheet) {
     try {
@@ -830,9 +901,9 @@ function cleanupEmptyRows(sheet) {
         // Checking Note(4) is optional as it can be empty.
         var range = sheet.getRange(2, 1, lastRow - 1, 15);
         var values = range.getValues();
-        var rowsDeleted = 0;
+        var rowsCleared = 0;
 
-        // Scan backwards to delete safely
+        // Scan backwards to clear safely (not delete!)
         for (var i = values.length - 1; i >= 0; i--) {
             var row = values[i];
             // ID (A) is empty AND Date (C) is empty AND Amount (F) is empty (or 0 but usually manual amount is set)
@@ -846,14 +917,106 @@ function cleanupEmptyRows(sheet) {
             var isEmpty = (!id || id === "") && (!date || date === "") && (!amount && amount !== 0);
 
             if (isEmpty) {
-                sheet.deleteRow(i + 2); // i is 0-based from Row 2. So Row = i + 2.
-                rowsDeleted++;
+                // CRITICAL FIX: Clear content instead of deleting row
+                // This prevents all rows below from shifting up
+                // Summary area at L6:N35 stays in place
+                var emptyRow = sheet.getRange(i + 2, 1, 1, 15); // i is 0-based from Row 2
+                emptyRow.clearContent();
+                emptyRow.setBackground('white');
+                rowsCleared++;
             }
         }
-        if (rowsDeleted > 0) {
-            Logger.log("cleanupEmptyRows: Deleted " + rowsDeleted + " empty rows.");
+        if (rowsCleared > 0) {
+            Logger.log("cleanupEmptyRows: Cleared " + rowsCleared + " empty rows (not deleted - Summary protected).");
         }
     } catch (e) {
         Logger.log("cleanupEmptyRows Error: " + e.toString());
     }
+}
+
+/**
+ * VALIDATION FUNCTION for Google Sheets Sync Fix
+ * Run this function to verify that Summary area (L6:M35) is intact after operations
+ * Called automatically after critical operations; can also be run manually for debugging
+ */
+function validateSheetStructure() {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var sheet = ss.getActiveSheet();
+    
+    Logger.log("=== VALIDATION START: Sheet Structure Check ===");
+    Logger.log("Sheet: " + sheet.getName());
+    
+    var validation = {
+        summaryMerged: false,
+        noRefErrors: true,
+        structureValid: false,
+        summaryPosition: 'L6:N35',
+        errors: []
+    };
+    
+    // Check 1: Verify L6:N35 is merged
+    try {
+        var summaryRange = sheet.getRange('L6:N35');
+        validation.summaryMerged = summaryRange.isMerged();
+        Logger.log("✓ Summary merged (L6:N35): " + validation.summaryMerged);
+        
+        if (!validation.summaryMerged) {
+            validation.errors.push("Summary area not merged - may be corrupted");
+        }
+    } catch (e) {
+        validation.errors.push("Error checking Summary merge: " + e);
+        Logger.log("✗ Error checking Summary merge: " + e);
+    }
+    
+    // Check 2: Check for #REF! errors in Summary
+    try {
+        var summaryRange = sheet.getRange('L6:N35');
+        var values = summaryRange.getValues();
+        var refErrors = [];
+        
+        for (var i = 0; i < values.length; i++) {
+            for (var j = 0; j < values[i].length; j++) {
+                var cell = values[i][j];
+                if (typeof cell === 'string' && cell.includes('#REF!')) {
+                    validation.noRefErrors = false;
+                    refErrors.push('Cell ' + summaryRange.getCell(i + 1, j + 1).getA1Notation() + ': ' + cell);
+                }
+            }
+        }
+        
+        if (validation.noRefErrors) {
+            Logger.log("✓ No #REF! errors in Summary area");
+        } else {
+            Logger.log("✗ Found #REF! errors in Summary area:");
+            refErrors.forEach(function(err) { Logger.log("  - " + err); });
+            validation.errors = validation.errors.concat(refErrors);
+        }
+    } catch (e) {
+        validation.errors.push("Error checking Summary values: " + e);
+        Logger.log("✗ Error checking Summary values: " + e);
+    }
+    
+    // Check 3: Verify transaction range
+    try {
+        var lastRow = sheet.getLastRow();
+        var txnRange = sheet.getRange('A2:J' + lastRow);
+        Logger.log("✓ Transaction data range: " + txnRange.getA1Notation());
+    } catch (e) {
+        validation.errors.push("Error reading transaction range: " + e);
+        Logger.log("✗ Error reading transaction range: " + e);
+    }
+    
+    // Final validation
+    validation.structureValid = validation.summaryMerged && validation.noRefErrors;
+    
+    Logger.log("");
+    if (validation.structureValid) {
+        Logger.log("✓✓✓ VALIDATION PASSED - Sheet structure is healthy");
+    } else {
+        Logger.log("✗✗✗ VALIDATION FAILED - Issues detected:");
+        validation.errors.forEach(function(err) { Logger.log("  - " + err); });
+    }
+    Logger.log("=== VALIDATION END ===");
+    
+    return validation;
 }

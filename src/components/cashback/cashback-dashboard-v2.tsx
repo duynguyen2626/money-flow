@@ -12,6 +12,7 @@ import { CashbackMatrixView } from './cashback-matrix-view'
 import { CashbackMonthDetailModal } from './month-detail-modal'
 import { LayoutList, Table as TableIcon, HelpCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
 
 type CashbackRuleConfig = {
     id?: string
@@ -51,6 +52,7 @@ export function CashbackDashboardV2({ initialData, year, cards, tieredMap }: Pro
     const [detailModal, setDetailModal] = useState<{ month: number, tab?: string } | null>(null)
     const [viewMode, setViewMode] = useState<'detail' | 'matrix'>('detail')
     const [searchQuery, setSearchQuery] = useState('')
+    const [redeemOpen, setRedeemOpen] = useState(false)
 
 
     // Filter: credit cards + exclude DUPLICATE/DO NOT USE + exclude zero-data
@@ -382,6 +384,9 @@ export function CashbackDashboardV2({ initialData, year, cards, tieredMap }: Pro
                                             <h2 className="text-xl font-bold">{selectedCardInfo?.accountName}</h2>
                                             <div className="text-muted-foreground text-sm">Monthly breakdown</div>
                                         </div>
+                                        <Button size="sm" onClick={() => setRedeemOpen(true)}>
+                                            Redeem cashback
+                                        </Button>
                                     </div>
 
                                     {/* 6+6 Table */}
@@ -441,6 +446,18 @@ export function CashbackDashboardV2({ initialData, year, cards, tieredMap }: Pro
                     </>
                 )}
             </div>
+
+            {selectedSummary?.cardId && (
+                <AddTransactionDialog
+                    isOpen={redeemOpen}
+                    onOpenChange={setRedeemOpen}
+                    accounts={[]}
+                    categories={[]}
+                    people={[]}
+                    defaultSourceAccountId={selectedSummary.cardId}
+                    defaultType="income"
+                />
+            )}
         </div>
     )
 }

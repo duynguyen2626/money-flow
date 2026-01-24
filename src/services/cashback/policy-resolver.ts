@@ -65,6 +65,23 @@ export function resolveCashbackPolicy(params: {
         priority: 0
     }
 
+    // Gate: if program has minSpendTarget and current spend is below it, skip levels and stay at program default
+    const requiresMinSpend = typeof program.minSpendTarget === 'number' && program.minSpendTarget > 0
+    if (requiresMinSpend && program.minSpendTarget && cycleTotals.spent < program.minSpendTarget) {
+        return {
+            rate: program.defaultRate,
+            maxReward: undefined,
+            minSpend: program.minSpendTarget ?? undefined,
+            metadata: {
+                policySource: 'program_default',
+                reason: `Below min spend target (${program.minSpendTarget})`,
+                rate: program.defaultRate,
+                ruleType: 'program_default',
+                priority: 0
+            }
+        }
+    }
+
     // 2. Select Level by spent_amount (Highest qualifying level wins)
     // Sort levels by minTotalSpend DESC
     if (program.levels && program.levels.length > 0) {
@@ -143,6 +160,19 @@ export function resolveCashbackPolicy(params: {
                         // Let's store 20. The Determinism is in the LOGIC above, not just this number.
                         // But to be helpful, let's distinguish them.
                         priority: 20
+                    }
+                } else {
+                    // No rule matched within the level -> fall back to program default (not level default)
+                    finalRate = program.defaultRate
+                    finalMaxReward = undefined
+                    source = {
+                        policySource: 'program_default',
+                        reason: categoryName
+                            ? `No rule for ${categoryName}, use program default`
+                            : 'No rule matched, use program default',
+                        rate: finalRate,
+                        ruleType: 'program_default',
+                        priority: 0
                     }
                 }
             }

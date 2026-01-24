@@ -51,7 +51,47 @@
   - **Cycle Tags:** Display distinct ranges (e.g., "25.10 - 24.11") instead of just raw tags (e.g., "NOV25").
   - **Cashback:** Show "Need to Spend" badges in Yellow/Amber if Min Spend is not met.
 
-## 6. Testing & Validation
+## 6. Cashback Engine (CRITICAL - v3.0)
+- **3-Tier Policy Resolution:**
+  1. **Category Rule (Priority 20):** Rules defined per category within a level (e.g., Education 15% Premium).
+  2. **Level Default (Priority 10):** Fallback within a level if no category rule matches.
+  3. **Program Default (Priority 0):** Universal fallback (0.3%) when no level matches or category rule not found.
+- **Min Spend Target Gate:** If `minSpendTarget` is set and NOT met, ALL levels are skipped; only program default applies.
+- **Policy Fallback Logic:**
+  - If **level matches** but **category rule NOT found** in that level → return **program_default** (NOT level_default).
+  - If **no level matches** → return **program_default**.
+- **Cycle Accuracy:** 
+  - When resolving policy for transactions in a historical cycle, use **`cycle.spent_amount`** (that cycle's total), NOT `currentSpend` (current cycle).
+  - This ensures historical transactions show rates based on their own cycle's spending, not current cycle.
+- **Cashback Metadata Storage:**
+  - Stored in `cashback_entries.metadata: {policySource, rate, ruleMaxReward, levelId, categoryId, levelName, reason}`.
+  - `policySource` values: "category_rule", "level_default", "program_default".
+- **Account Config Structure:**
+  - `account.cashback_config.program.levels[].minTotalSpend` MUST match the stated tier name (e.g., "≥15M" → 15000000).
+  - Each level can have multiple category rules AND a defaultRate.
+- **Cycle Grouping by Year:**
+  - For **statement cycles** (spanning months), use **fiscal year** (start year), not end year.
+  - Example: Cycle "2025-12" (Nov 20 - Dec 19, 2025) groups under year **2025**.
+  - Example: Cycle "2026-01" (Dec 20, 2025 - Jan 19, 2026) groups under year **2025** (not 2026).
+  - Detection: If `statementDay > 15` AND `month === 1`, subtract 1 from year.
+
+## 7. Edit Transaction Flow (CRITICAL)
+- **Auto-Category Assignment Guard:**
+  - The `BasicInfoSection` auto-assigns default categories (e.g., "Shopping" for debt type).
+  - **MUST** check if category is already set before assigning: `if (currentCategoryId) return;` inside useEffect.
+  - This prevents overwriting the loaded category during edit mode.
+- **Form Hook Rules:**
+  - **NO top-level early returns** before hooks. All guard logic must be inside useEffect/useMemo.
+  - Violating this causes "Rendered fewer hooks than expected" error.
+- **Category Preservation:**
+  - When editing a transaction, `category_id` is loaded from DB and should NOT be overridden by auto-assignment.
+  - Only auto-assign on NEW transactions (when `category_id` is empty).
+
+## 8. Testing & Validation
 - **Self-Correction:** Before outputting code, verify imports are correct and unused variables are removed.
 - **Linting:** Ensure code passes ESLint rules (no unused imports, no console.log in production code).
 
+## 📚 Documentation & References
+- **Cashback Guide (Vietnamese):** `.agent/CASHBACK_GUIDE_VI.md` - Comprehensive guide for cashback flow, rewards UI, edit transaction.
+- **Copilot Instructions:** `.github/copilot-instructions.md` - Stack, patterns, integrations.
+- **Schema:** `database/SCHEMA.md` or `supabase/migrations/`.

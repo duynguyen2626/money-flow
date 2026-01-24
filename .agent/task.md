@@ -1,317 +1,118 @@
-# Transaction Slide V2 - Task Breakdown
+ Phase 1 – Icon Tab Browser
+  Mục tiêu:
+   Thay favicon đám mây Vercel bằng hệ thống icon liên quan tài chính, ưu tiên đơn giản trước, dynamic sau.
+  Yêu cầu chung:
+   Tạo favicon độ phân giải chuẩn (32×32 hoặc 64×64), nền trong suốt, rõ ràng ở kích thước nhỏ.
+   Phong cách icon: đơn giản, flat, màu chủ đạo xanh lá / xanh teal để khớp tông Money Flow.
+  Task 1 – Default favicon (ưu tiên triển khai trước)
+   Mô tả:
+    Thay favicon mặc định bằng một icon duy nhất cho toàn bộ app.
+   Yêu cầu:
+    Thiết kế icon túi tiền xanh hoặc cọc tiền xanh, đơn giản, dễ nhận dạng.
+    Đảm bảo hiển thị tốt trên nền sáng và nền tối.
+    Áp dụng favicon này cho mọi route nếu chưa sẵn sàng dynamic.
+   Pros:
+    Thực hiện nhanh, giảm cảm giác “app demo” do icon Vercel.
+    Không đụng tới logic router, ít risk.
+   Cons:
+    Không phân biệt được tab Accounts, People, Txn khi mở nhiều tab.
+  Task 2 – Dynamic favicon theo page (triển khai sau khi routing ổn định)
+   Mô tả:
+    Mỗi nhóm page có favicon riêng, giúp người dùng định hướng tốt hơn khi mở nhiều tab:
+     Accounts list: icon ngân hàng / tòa nhà bank.
+     Accounts details (/accounts/v2/details): icon thẻ tín dụng.
+     People: icon 1 người.
+     People details: icon nhiều người / group.
+     Transactions (Txn): icon 2 mũi tên in/out.
+     Category: icon tag.
+   Dev note (Next.js + Vercel):
+    Sử dụng next/head hoặc layout theo segment để set <link rel="icon"> theo route.
+    Kiểm tra behavior khi chuyển route client-side để đảm bảo favicon update mượt, không flicker.
+   Pros:
+    UX cao, nhìn tab là biết đang ở phần nào của app.
+    Cảm giác sản phẩm “polished”, giống SaaS mature.
+   Cons:
+    Cần thêm thời gian vẽ bộ icon nhỏ + wiring logic theo router.
+    Có thể phát sinh bug nếu cấu trúc layout/route phức tạp.
+  Guideline:
+   Nếu dynamic gặp vấn đề, fallback về 1 favicon túi tiền xanh, nhưng giữ code structure sẵn cho future upgrade.
 
-## Project Status: Phase 1 Complete ✅
+ Phase 2 – Header /accounts/v2/details (“Tổng quan tài khoản”)
+  Mục tiêu:
+   Làm header account details nhất quán với Accounts V2: rõ trạng thái, hạn mức, số dư nổi bật, phong cách tối giản.
+  Bố cục:
+   Header dạng card ngang, chia 2–3 cột, responsive:
+    Cột trái: thông tin thẻ + trạng thái.
+    Cột giữa: hạn mức tín dụng.
+    Cột phải: số dư nổi bật.
+   Desktop: 3 cột trên 1 hàng.
+   Mobile: stack dọc 3 card, giữ hierarchy từ trái sang phải → trên xuống dưới.
+  Nội dung chi tiết:
+   Khối trái – Thông tin thẻ:
+    Hiển thị:
+     Logo thẻ (thumbnail nhỏ).
+     Tên tài khoản: “Msb Online”.
+     Badge trạng thái: ACTIVE (màu xám/xanh nhẹ, không quá chói, thể hiện stable).
+    Phong cách:
+     Text chính: đậm, dễ đọc.
+     Badge ACTIVE: rounded pill, nền xám nhạt, text xanh lá đậm nhẹ.
+   Khối giữa – Hạn mức tín dụng:
+    Label: “Hạn mức tín dụng”.
+    Giá trị: ví dụ “30.000.000”.
+    Style:
+     Label chữ nhỏ, màu xám trung tính.
+     Value màu xám đậm, font lớn hơn 1–2 cấp so với label.
+   Khối phải – Số dư nổi bật:
+    Label: “Số dư hiện tại” hoặc “Balance”.
+    Giá trị: số tiền hiển thị màu xanh lá (nhất quán với cột Balance ở Accounts V2).
+    Nếu cần thêm thông tin phụ:
+     Hiển thị Net value hoặc Available credit dạng text nhỏ bên dưới.
+  Màu sắc:
+   Xanh lá: dùng cho số dư dương / trạng thái tốt.
+   Cam: dùng cho cảnh báo (gần chạm limit, unpaid bill, v.v.).
+   Xám: dùng cho trạng thái trung tính/chưa hoàn thành.
+  Phong cách:
+   Tối giản, nhiều khoảng trắng, border mỏng, bo góc nhẹ.
+   Không dùng quá nhiều icon trong header để tránh rối.
+   Responsive: tránh text wrap lung tung, ưu tiên truncate với tooltip nếu tên tài khoản quá dài.
 
-Current build includes fully functional Transaction Slide V2 with Single and Bulk modes.
-
----
-
-## Phase 1: Core Implementation ✅
-
-### Single Mode
-- [x] Create base component structure
-- [x] Implement Personal/External tabs
-- [x] Implement transaction type buttons (Expense, Income, Transfer)
-- [x] Create BasicInfoSection (Date, Tag, Account)
-- [x] Create AccountSelector (Account, Person, Target Account)
-- [x] Implement CashbackSection
-  - [x] Cashback mode selection
-  - [x] Percentage/Fixed input
-  - [x] Cycle badge display
-  - [x] Input validation (10% warning)
-- [x] Create form submission handler
-- [x] Integrate with createTransaction service
-
-### Bulk Mode
-- [x] Create BulkInputSection
-- [x] Implement field array for rows
-- [x] Create BulkRow component
-  - [x] Amount input
-  - [x] Shop selector
-  - [x] Person selector
-  - [x] Notes input
-- [x] Create QuickCashbackInput
-  - [x] Cashback mode popover
-  - [x] Cycle badge in popover
-- [x] Implement global date picker
-- [x] Implement global tag input with sync
-- [x] Add total amount display with text
-- [x] Create bulkCreateTransactions action
-- [x] Integrate with backend
-
-### Advanced Features
-- [x] **Tag Sync**: Auto-update tag when date changes
-- [x] **Cashback Cycle Badge**: Display for credit cards with statement day
-- [x] **Category Defaults**: Auto-select for Debt/Repayment
-- [x] **Input Validation**: Warn and reset if cashback > 10%
-- [x] **Bulk Total Text**: Show amount in words using readMoney
-- [x] **Data Integrity**: Fixed account.service.ts to map cashback_config correctly
-- [x] **Bulk Data Fix**: Pass tag and person_id in bulk creation
-
-### Testing & Verification
-- [x] Create test page at /txn/v2
-- [x] Verify Single mode transactions
-- [x] Verify Bulk mode transactions
-- [x] Test cashback tracking
-- [x] Test with real data
-- [x] Build verification (npm run build)
-
----
-
-## Phase 2: Integration with Cards (Planned)
-
-### Account Cards
-- [x] Add "Quick Add" button to Account detail page
-- [x] Pre-fill source_account_id from context
-- [ ] Add quick action buttons:
-  - [ ] "💳 Pay Bill" (for credit cards)
-  - [ ] "🔄 Transfer Out"
-  - [ ] "💸 Add Expense"
-- [ ] Auto-select transaction type based on account type
-- [ ] Test integration
-
-### People Cards
-- [x] Add "Quick Lend" button to People detail page
-- [x] Add "Quick Repay" button to People detail page
-- [x] Pre-fill person_id from context
-- [x] Auto-detect debt direction based on balance
-- [ ] Show current debt balance in slide
-- [ ] Suggest repayment amount
-- [ ] Test integration
-
-### Implementation Steps
-1. Add `initialData` prop to TransactionSlideV2
-2. Create wrapper components for each card type
-3. Update card detail pages to include buttons
-4. Pass context data to slide
-5. Test all scenarios
-
----
-
-## Phase 3: Modal Refactoring (Future)
-
-### Edit Transaction
-- [ ] Create EditTransactionSlide component
-- [ ] Migrate edit logic from modal
-- [ ] Add history view
-- [ ] Test edit flow
-
-### Create Account
-- [ ] Create AccountSlide component
-- [ ] Migrate account creation form
-- [ ] Test account creation
-
-### Create Person
-- [ ] Create PersonSlide component
-- [ ] Migrate person creation form
-- [ ] Test person creation
-
-### Service Management
-- [ ] Create ServiceSlide component
-- [ ] Migrate service management
-- [ ] Test service CRUD
-
-### Split Bill
-- [ ] Implement SplitBillSection in V2
-- [ ] Test split bill logic
-- [ ] Integrate with backend
-
----
-
-## Phase 4: Main Integration (Future)
-
-### Replace Quick Add
-- [ ] Add "New Transaction" button to /transactions
-- [ ] Open TransactionSlideV2 instead of modal
-- [ ] Test from main page
-
-### Replace Edit Modal
-- [ ] Use EditTransactionSlide for editing
-- [ ] Deprecate old edit modal
-- [ ] Test edit flow
-
-### Navigation Updates
-- [ ] Update keyboard shortcuts
-- [ ] Update navigation menu
-- [ ] Add tooltips/help
-
-### Cleanup
-- [ ] Remove V1 components
-- [ ] Remove unused modals
-- [ ] Update documentation
-
----
-
-## Backlog / Future Enhancements
-
-### UX Improvements
-- [ ] Add keyboard shortcuts (Ctrl+N for new, Esc to close)
-- [ ] Add auto-save drafts
-- [ ] Add recent transactions quick-fill
-- [ ] Add transaction templates
-
-### Performance
-- [ ] Implement virtual scrolling for bulk mode
-- [ ] Optimize re-renders
-- [ ] Add loading states
-
-### Features
-- [ ] Recurring transactions
-- [ ] Batch edit
-- [ ] Import from CSV
-- [ ] Export to Excel
-
----
-
-## Notes
-
-- **V3 Exploration**: Smart Context Layout was prototyped but deferred. Focus remains on V2 stability.
-- **Current Priority**: Phase 2 (Cards Integration) for better UX.
-- **Testing Strategy**: Manual testing on /txn/v2, then gradual rollout.
-- **Code Quality**: All changes pass `npm run build` verification.
-
----
-
-## Recent Tickets Completed
-
-### Phase 16.2: Bulk Mode Enhancements
-- ✅ Add Person/Debt column to Bulk Row
-- ✅ Fix Cashback Cycle badge in Bulk mode
-- ✅ Category auto-defaults for Debt/Repayment
-- ✅ Strict category filtering for Transfer
-
-### Phase 16.3: UI Refinements
-- ✅ Tag sync with date in Single/Bulk modes
-- ✅ Bulk total text (readMoney)
-- ✅ Cashback rate input validation (10% warning)
-- ✅ Cycle badge styling consistency
-- ✅ Data integrity fixes (account.service.ts, bulk-transaction-actions.ts)
-
-### Phase 16.4: Safety and Customization (Latest)
-- ✅ Implemented Unsaved Changes Warning (Slide-based)
-- ✅ Added Column Customization Feature
-  - ✅ Drag-and-drop reordering
-  - ✅ Visibility toggling
-  - ✅ Frozen columns (Date, Action)
-  - ✅ Resizing support (input based)
-- ✅ Fixed infinite loop issues in Transaction Slide
-
-### Phase 2A: Table Expand/Collapse Details (ROLLED BACK)
-- [x] Initial implementation (Successfully rolled back per user request)
-
-### Phase 2B: People Refactor - Directory & Slide V2 (Active)
-- [x] Initialize feature branch `feature/phase-2b-people-refactor-v2`
-- [x] Implement `PeopleDirectoryV2` at `/people/v2`
-  - [x] Header with " +Add " button
-  - [x] Filters (Outstanding, Settled, Archived, Groups)
-  - [x] Search functionality
-  - [x] Implement `PeopleDirectoryV2` at `/people/v2`
-  - [x] Header with " +Add " button
-  - [x] Filters (Outstanding, Settled, Archived, Groups)
-  - [x] Search functionality
-  - [x] "All Members" Table View
-- [x] Create Table Architecture
-  - [x] `PeopleTableV2` component
-  - [x] `PeopleRowV2` component
-  - [x] `PeopleRowDetailsV2` component
-  - [x] Hooks: `usePeopleColumnPreferences`, `usePeopleExpandableRows`
-- [x] Develop `PeopleSlideV2`
-  - [x] Individual person editing
-  - [x] New person creation
-- [x] Update Navigation
-  - [x] Add new left nav icon for People V2
-- [ ] Verify build and lint
-
-### Phase 2B Enhancement: People UI/UX Refinements
-- [ ] **Phase 1: Critical & Major**
-  - [x] **Issue #1: Avatar Radius** (UI Polish)
-    - [x] Update `PeopleRow.tsx` avatar style (rounded-md/6px)
-  - [x] **Issue #5: Remove Email Column** (DB + UI)
-    - [x] Remove email from `Person` type
-    - [x] Remove from `PeopleTable` columns
-    - [x] Remove from Add/Edit Slides
-  - [x] **Issue #3: Debt Calculation**
-    - [x] Calculate total debt in `PeopleRow` (current + previous)
-    - [x] Show debt-badge in 'Remains' column
-    - [x] Calculate total debt in `PeopleRow` (current + previous)
-    - [x] Show debt-badge in 'Remains' column
-    - [x] Update `PeopleRowDetails` to show breakdown
-- [ ] **Phase 1 Fixes (User Feedback)**
-  - [x] **Fix Status Logic**: Use `totalDebt` for "Settled" check (Issue: Green badge on 35M debt).
-  - [x] **Add Breakdown Columns**: Add Base Lend, Sum Back, Net Lend columns to `PeopleRowV2`.
-  - [x] **Formatting**: Remove 'đ', use '-' for zero.
-- [ ] **Phase 2: Major Features**
-  - [x] **Issue #4: Quick Action Buttons**
-    - [x] Add "Lend" (Wallet) button to `PeopleRowV2`
-    - [x] Add "Repay" (Check) button to `PeopleRowV2`
-    - [x] Connect to `TransactionSlideV2` with pre-filled data
-  - [x] **Issue #2: Subscribe Details**
-    - [x] Add `active_subs` column to `usePeopleColumnPreferences`
-    - [x] Create `SubscriptionBadges` component with icons/counts
-    - [x] Render in `PeopleRowV2`
-  - [x] **Issue #9: Sheet Link Badges**
-    - [x] Add "SHEET" badge next to name in `PeopleRowV2`
-    - [x] Link to `google_sheet_url`
-
-
-### Phase 4: Account Details Restoration & Directory UI Overhaul (Complete ✅)
-- [x] **Account Details Restoration**
-  - [x] Restore async data fetching (Batch, Cashback, Txns)
-  - [x] Integrate V1 components: `AccountDetailHeader`, `AccountTabs`, `FilterableTransactions`
-  - [x] Wrap in `TagFilterProvider`
-- [x] **Account Directory V2 UI Overhaul**
-  - [x] Implement 3-way toggle switch (Active - Debt - Closed) in Header
-  - [x] Update Table Columns (Remove Code/Status/Update/Sheet, Add Limit, Rename Total->Balance)
-  - [x] Implement Image aspect ratio fix
-  - [x] Add Parent/Child badges and logic
-  - [x] Implement Spent Column with Cashback Progress Bar
-  - [x] Implement Due Column with "X Days Left" logic
-  - [x] Merge Unsecured/Secured logic
-  - [x] Implement Family Balance aggregation
-  - [x] Increase Action icon sizes and add visibility logic
-
-### Phase 5: Account Directory Enhancements & Relationship Links (Completed)
-- [x] **UI & Formatting Refinements**
-  - [x] Delete "Members" column from Table
-  - [x] Increase "Balance" and "Spent" column widths
-  - [x] Format Balance/Spent to show full numbers (no "M" suffix)
-  - [x] Improve Spent color styling (emerald/amber) and remove pulse animation
-- [x] **Logic & Visibility**
-  - [x] Update Parent badge: `Parent +X` logic for multi-child accounts
-  - [x] Expanded Row: Add Account links with logos for secured/parent/child relations
-- [x] **Consolidated Edit Flow**
-  - [x] Change Edit button to open a full Side Slide-over
-  - [x] Merge Advanced settings (Cashback, Statement Days) into main Edit Slide
-
-### Phase 6: Deep Polish, Relationship Visualization & Advanced Filtering (Completed)
-- [x] **Main Table Polish**
-  - [x] Rename groups to Credit / Loans & Debt / Accounts & Savings
-  - [x] Merge "Secured" into Name column (Sub-text + icon)
-  - [x] Align Parent/Child badges (fixed width, right align)
-  - [x] Swap Due Date hierarchy (X days left primary)
-  - [x] Add Limit progress bar (Debt/Limit ratio)
-  - [x] Implement row highlighting (Red/Yellow)
-  - [x] Unified "Credit" summary with aggregate progress bar
-- [x] **Relationship Expansion**
-  - [x] List related accounts vertically in Name cell when expanded
-- [x] **Details Page Redesign**
-  - [x] Redesign toolbar in `FilterableTransactions.tsx`
-  - [x] Add People & Date range quick filters (Unified Bar)
-  - [x] Move Settings to `AccountSlideV2`
-- [x] **Bug Fixes**
-  - [x] Fix Debt tab list filtering (include loans/debt)
-  - [x] Correct group sums for Credit group (Debt/Limit)
-  - [x] Fix all TypeScript errors across V2 components
-
----
-
-### Phase 10: Final Polish & Handover (Current Status: Handover Ready - Build Fixed)
-- [x] **Attempted Fixes (Phase 10g/h)**
-  - [x] **Secured Unknown**: Tried creating backing account in DB. Status: **FAIL** (Still showing Unknown).
-  - [x] **Copy ID**: Tried cleaning up string. Status: **FAIL** (User reports weird characters).
-  - [x] **Cashback**: Tried updating JSON config. Status: **FAIL** (VPBank Lady still showing dash).
-- [x] **Documentation**
-  - [x] Create Handover documentation in .agent/HANDOVER.md
-  - [x] Update sample.sql with latest attempts
-  - [x] Commit and Push
-
+ Phase 3 – Goal Cards (“Mục tiêu tài chính”)
+  Mục tiêu:
+   Gom “Qualifying Status” + “Potential Profit” thành một khối Mục tiêu tài chính, dùng progress bar thể hiện tiến độ tới 3.000.000, consistent với cột Rewards ở Accounts V2.
+  Bố cục:
+   Một card lớn phía dưới header, tiêu đề: “Mục tiêu tài chính”.
+   Bên trong chia 2 phần:
+    Phần trên: thông tin tổng quan mục tiêu.
+    Phần dưới: progress bar + status text.
+  Nội dung:
+   Header card:
+    Title: “Mục tiêu tài chính”.
+    Sub-label nhỏ: “Target: 3.000.000”.
+   Thông tin chi tiết:
+    Hàng 1:
+     Badge trạng thái: “Qualified” / “Needs 951.077” (giữ logic như Accounts V2).
+      Qualified: nền xanh lá nhạt, chữ xanh đậm.
+      Needs: nền cam nhạt, chữ cam đậm.
+     Text bên phải: “Est. reward: 204.9k” hoặc “Potential profit: …”.
+    Hàng 2:
+     Progress bar full width:
+      Fill màu cam hoặc xanh tùy trạng thái:
+       Đạt đủ/quá target: fill xanh lá 100%.
+       Chưa đủ: fill cam, số % ở giữa bar.
+      Bên dưới progress: text nhỏ:
+       “2.048.923 / 3.000.000 (68%)”.
+   Micro copy gợi ý:
+    Khi Qualified:
+     “Bạn đã đủ điều kiện nhận thưởng.”.
+    Khi Needs:
+     “Cần thêm 951.077 chi tiêu đủ điều kiện để đạt thưởng.”.
+  Tông màu:
+   Tương thích với Rewards cột bên Accounts V2:
+    Bar nền nhạt, fill cam/xanh, value text rõ ràng.
+   Sử dụng cam cho “đang tiến tới mục tiêu”, xanh cho “đã đạt”.
+  UX notes:
+   Click toàn bộ card “Mục tiêu tài chính” có thể mở modal/slide hiển thị breakdown chi tiết cashback/rewards (phase sau).
+   Đảm bảo card trông rõ ràng cả trên desktop và mobile; trên mobile có thể stack:
+    Title + Target.
+    Status + Potential profit.
+    Progress bar + text %.

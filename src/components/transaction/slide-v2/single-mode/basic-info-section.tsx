@@ -62,6 +62,10 @@ export function BasicInfoSection({ shops, categories, people, onAddNewCategory }
 
     // Auto-select defaults for Debt (Lend) and Repayment
     useEffect(() => {
+        // Skip auto-assignment if category already set (edit mode)
+        const currentCategoryId = form.getValues('category_id');
+        if (currentCategoryId) return;
+
         if (transactionType === 'debt') {
             const shoppingCat = categories.find(c => c.name === 'Shopping');
             if (shoppingCat) {

@@ -46,13 +46,15 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
         if (!acc) return null;
 
         const category = categories.find(c => c.id === categoryId);
+        const cycleSpent = acc.stats?.spent_this_cycle || 0;
+        const projectedSpent = cycleSpent + Math.abs(amount);
 
         return resolveCashbackPolicy({
             account: acc as any,
             categoryId,
             amount: Math.abs(amount),
             cycleTotals: {
-                spent: acc.stats?.spent_this_cycle || 0
+                spent: projectedSpent
             },
             categoryName: category?.name
         });
@@ -318,21 +320,29 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                 />
                             )}
 
-                            {/* TOTAL GIVE AWAY ROW */}
+                            {/* TOTAL PROJECTED REWARD (BANK) */}
                             <div className="flex items-center justify-between p-2 bg-slate-100 rounded-md text-sm">
-                                <span className="text-slate-500 font-medium">Projected Reward:</span>
+                                <span className="text-slate-500 font-medium">Projected Reward (Bank):</span>
                                 <span className="font-bold text-slate-700">
                                     {(() => {
-                                        const p = sharePercent || 0;
-                                        const f = shareFixed || 0;
-                                        const total = (Math.abs(amount) * (p / 100)) + f;
-                                        return new Intl.NumberFormat('vi-VN').format(total);
+                                        const rate = policy?.rate ?? 0;
+                                        const raw = Math.abs(amount) * rate;
+                                        const capped = policy?.maxReward ? Math.min(raw, policy.maxReward) : raw;
+                                        return new Intl.NumberFormat('vi-VN').format(Math.round(capped));
                                     })()}
                                 </span>
                             </div>
 
                             {/* POLICY SUMMARY */}
                             <div className="space-y-1 pt-2">
+                                <div className="flex justify-between text-xs border-b border-slate-100 pb-2 mb-2">
+                                    <span className="text-slate-500 font-bold">Cycle Spent:</span>
+                                    <span className="font-black text-indigo-600">
+                                        {activeAccount?.stats?.spent_this_cycle 
+                                            ? new Intl.NumberFormat('vi-VN').format(activeAccount.stats.spent_this_cycle)
+                                            : '—'}
+                                    </span>
+                                </div>
                                 <div className="flex justify-between text-xs">
                                     <span className="text-slate-500">Match Policy:</span>
                                     <span className="font-medium text-right">
@@ -348,9 +358,15 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
                                     </span>
                                 </div>
                                 <div className="flex justify-between text-xs">
-                                    <span className="text-slate-500">Applied Rate:</span>
+                                    <span className="text-slate-500">Bank Rate:</span>
                                     <span className="font-medium bg-slate-100 px-1 rounded">
-                                        {(sharePercent || (policy?.rate ? policy.rate * 100 : 0)).toFixed(1)}%
+                                        {(policy?.rate ? policy.rate * 100 : 0).toFixed(1)}%
+                                    </span>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-slate-500">Your Share:</span>
+                                    <span className="font-medium bg-slate-50 px-1 rounded">
+                                        {(sharePercent ?? (policy?.rate ? policy.rate * 100 : 0)).toFixed(1)}%
                                     </span>
                                 </div>
                                 {activeAccount?.stats?.remains_cap !== undefined && activeAccount.stats.remains_cap !== null && (
@@ -395,14 +411,21 @@ export function CashbackSection({ accounts, categories = [] }: CashbackSectionPr
 
                                 <div className="text-[10px] text-slate-400 pt-1 flex justify-between border-t border-slate-100 mt-2">
                                     <span>Min Spend Progress:</span>
-                                    <span className="text-amber-600 font-medium">333 / 3,000,000</span>
+                                    <span className="text-amber-600 font-medium">
+                                        {(() => {
+                                            const minSpend = policy?.minSpend || activeAccount?.stats?.min_spend || 0;
+                                            const spent = activeAccount?.stats?.spent_this_cycle || 0;
+                                            if (!minSpend || minSpend <= 0) return '—';
+                                            return `${new Intl.NumberFormat('vi-VN').format(spent)} / ${new Intl.NumberFormat('vi-VN').format(minSpend)}`;
+                                        })()}
+                                    </span>
                                 </div>
                             </div>
                         </div>
                     </Tabs>
-                </div >
+                </div>
             )
             }
-        </div >
+        </div>
     );
 }

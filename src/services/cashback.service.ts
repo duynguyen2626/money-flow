@@ -599,7 +599,7 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
           transaction:transactions!inner (
             id, occurred_at, note, amount, account_id,
             cashback_share_percent, cashback_share_fixed,
-            category:categories(name, icon),
+            category:categories(id, name, icon),
             shop:shops(name, image_url),
             person:people!transactions_person_id_fkey(name)
           )
@@ -621,22 +621,58 @@ export async function getCashbackProgress(monthOffset: number = 0, accountIds?: 
           const shop = t.shop;
           const person = t.person;
 
-          const bankBack = e.amount;
-          const peopleBack = e.mode === 'real' ? e.amount : 0;
-          const profit = e.mode === 'virtual' ? e.amount : 0;
-          const policyMetadata = normalizePolicyMetadata(e.metadata);
-          const effectiveRate = policyMetadata?.rate ?? 0;
+          const txnAmount = Math.abs(t.amount);
+          // Use the spent amount from THIS cycle being viewed, not current cycle
+          const cycleSpentForPolicy = (cycle as any)?.spent_amount ?? 0;
+          
+          const resolvedPolicy = resolveCashbackPolicy({
+            account: acc,
+            categoryId: category?.id,
+            amount: txnAmount,
+            cycleTotals: { spent: cycleSpentForPolicy },
+            categoryName: category?.name
+          });
+
+          const resolvedMetadata = normalizePolicyMetadata(resolvedPolicy.metadata);
+          // Always prefer fresh resolved metadata for display to fix stale policySource/rate issues
+          const policyMetadata = resolvedMetadata ?? normalizePolicyMetadata(e.metadata);
+
+          const policyRate = policyMetadata?.rate ?? 0; // Default rate from policy (e.g., 10%)
+          const sharePercent = t.cashback_share_percent ?? policyRate; // User's customized share (e.g., 8%)
+          const shareFixed = t.cashback_share_fixed ?? 0;
+
+          // Bank Back: What the bank gives back (policy rate), capped by rule maxReward or cycle maxBudget
+          let bankBack = txnAmount * policyRate;
+          const ruleMaxReward = policyMetadata?.ruleMaxReward ?? resolvedPolicy.maxReward ?? null;
+          const cycleMaxBudget = (cycle as any)?.max_budget ?? null;
+          
+          // Apply cap from rule first, then from cycle budget
+          if (ruleMaxReward !== null && ruleMaxReward > 0) {
+            bankBack = Math.min(bankBack, ruleMaxReward);
+          }
+          if (cycleMaxBudget !== null && cycleMaxBudget > 0) {
+            // Note: In a multi-transaction scenario, this would need cumulative tracking.
+            // For now, we cap individual transaction to avoid exceeding cycle budget per transaction.
+            bankBack = Math.min(bankBack, cycleMaxBudget);
+          }
+          
+          // People CB: What was shared with others
+          // If shareFixed is set, use it; otherwise calculate from sharePercent
+          const peopleBack = shareFixed > 0 ? shareFixed : (txnAmount * sharePercent);
+          
+          // Profit: Your profit (capped bank back minus share)
+          const profit = bankBack - peopleBack;
 
           return {
             id: t.id,
             occurred_at: t.occurred_at,
             note: t.note,
             amount: t.amount,
-            earned: bankBack,
+            earned: bankBack, // For backwards compatibility
             bankBack,
             peopleBack,
             profit,
-            effectiveRate,
+            effectiveRate: policyRate,
             sharePercent: t.cashback_share_percent,
             shareFixed: t.cashback_share_fixed,
             shopName: shop?.name,
@@ -1199,7 +1235,7 @@ export async function getMonthlyCashbackTransactions(cardId: string, month: numb
 export async function getAccountCycles(accountId: string) {
   const supabase = createClient();
   const { data, error } = await supabase.from('cashback_cycles')
-    .select('id, cycle_tag, spent_amount, real_awarded, virtual_profit, min_spend_target, max_budget, start_date, end_date')
+    .select('id, cycle_tag, spent_amount, real_awarded, virtual_profit, min_spend_target, max_budget, is_exhausted, met_min_spend')
     .eq('account_id', accountId)
     .order('cycle_tag', { ascending: false });
 

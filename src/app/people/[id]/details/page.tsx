@@ -15,10 +15,15 @@ export const dynamic = 'force-dynamic'
 export default async function MemberDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const { id: personId } = await params
 
+    console.log('[MemberDetailsPage] personId:', personId)
+
     // Fetch person details
     const person = await getPersonWithSubs(personId)
 
+    console.log('[MemberDetailsPage] person:', person ? 'found' : 'NOT FOUND')
+
     if (!person) {
+        console.log('[MemberDetailsPage] notFound() triggered for:', personId)
         notFound()
     }
 

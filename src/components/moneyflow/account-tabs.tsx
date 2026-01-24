@@ -4,6 +4,7 @@ import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AccountTabContext } from '@/context/account-tab-context'
 
 type AccountTabsProps = {
   accountId: string
@@ -32,7 +33,7 @@ export function AccountTabs({ accountId, activeTab }: AccountTabsProps) {
   ]
 
   return (
-    <>
+    <AccountTabContext.Provider value={{ isPending }}>
       <div className="flex items-center justify-between border-b border-slate-200">
         <div className="flex">
           {tabs.map((tab) => {
@@ -67,14 +68,6 @@ export function AccountTabs({ accountId, activeTab }: AccountTabsProps) {
           </div>
         )}
       </div>
-      {isPending && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
-          <div className="flex items-center gap-2 text-sm text-slate-600">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Loading...
-          </div>
-        </div>
-      )}
-    </>
+    </AccountTabContext.Provider>
   )
 }
