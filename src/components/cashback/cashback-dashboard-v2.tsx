@@ -271,11 +271,15 @@ function MonthTableHalf({ summary, range, onMonthClick }: { summary: CashbackYea
                         {displayMonths.map(m => (
                             <td
                                 key={m.month}
-                                className="p-2 text-right hover:bg-muted/50 cursor-pointer transition-colors"
-                                title="Click for details"
-                                onClick={() => onMonthClick(m.month)}
+                                className={`p-2 text-right transition-colors ${m.totalGivenAway > 0 ? 'hover:bg-blue-50 cursor-pointer hover:text-blue-600 font-medium' : ''}`}
+                                title={m.totalGivenAway > 0 ? 'Click to view transactions' : ''}
+                                onClick={() => m.totalGivenAway > 0 && onMonthClick(m.month)}
                             >
-                                {m.totalGivenAway > 0 ? fmt(m.totalGivenAway) : '-'}
+                                {m.totalGivenAway > 0 ? (
+                                    <span className="underline decoration-blue-400">{fmt(m.totalGivenAway)}</span>
+                                ) : (
+                                    '-'
+                                )}
                             </td>
                         ))}
                     </tr>
