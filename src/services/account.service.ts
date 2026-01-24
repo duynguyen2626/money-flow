@@ -730,7 +730,6 @@ export async function deleteAccount(id: string): Promise<boolean> {
   }
 
   revalidatePath('/accounts')
-  revalidatePath('/accounts/v2')
   return true
 }
 
@@ -748,6 +747,5 @@ export async function updateAccountStatus(id: string, isActive: boolean): Promis
   }
 
   revalidatePath('/accounts')
-  revalidatePath('/accounts/v2')
   return true
 }

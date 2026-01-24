@@ -110,7 +110,7 @@ export function AccountRowDetailsV2({ account, isExpanded, allAccounts = [], onE
                                 <div className="flex items-center gap-3">
                                     {renderIcon(parentAccount.type, parentAccount.image_url, parentAccount.name, "h-8 w-8")}
                                     <div className="flex flex-col min-w-0">
-                                        <Link href={`/accounts/v2/${parentAccount.id}`} className="text-sm font-black text-indigo-600 hover:underline truncate">
+                                        <Link href={`/accounts/${parentAccount.id}`} target="_blank" rel="noreferrer" className="text-sm font-black text-indigo-600 hover:underline truncate">
                                             {parentAccount.name}
                                         </Link>
                                         <div className="flex items-center gap-2">
@@ -135,7 +135,7 @@ export function AccountRowDetailsV2({ account, isExpanded, allAccounts = [], onE
                                         <div className="flex items-center gap-3">
                                             {renderIcon(secured.type, secured.image_url, secured.name, "h-8 w-8")}
                                             <div className="flex flex-col min-w-0">
-                                                <Link href={`/accounts/v2/${secured.id}`} className="text-sm font-black text-blue-600 hover:underline truncate">
+                                                <Link href={`/accounts/${secured.id}`} target="_blank" rel="noreferrer" className="text-sm font-black text-blue-600 hover:underline truncate">
                                                     {secured.name}
                                                 </Link>
                                                 <div className="flex items-center gap-2">
@@ -161,7 +161,7 @@ export function AccountRowDetailsV2({ account, isExpanded, allAccounts = [], onE
                                             <div className="flex items-center gap-2.5 min-w-0">
                                                 {renderIcon(child.type, child.image_url, child.name, "h-7 w-7")}
                                                 <div className="flex flex-col min-w-0">
-                                                    <Link href={`/accounts/v2/${child.id}`} className="text-xs font-black text-slate-700 hover:text-indigo-600 truncate">
+                                                    <Link href={`/accounts/${child.id}`} target="_blank" rel="noreferrer" className="text-xs font-black text-slate-700 hover:text-indigo-600 truncate">
                                                         {child.name}
                                                     </Link>
                                                     <span className="text-[9px] font-mono text-slate-400 truncate lowercase">{child.id.slice(0, 16)}...</span>
@@ -353,7 +353,7 @@ export function AccountRowDetailsV2({ account, isExpanded, allAccounts = [], onE
                         )}
                         {transactions.length > 0 && (
                             <Link
-                                href={`/accounts/v2/${account.id}`}
+                                href={`/accounts/${account.id}`}
                                 className="block text-[10px] text-center text-blue-600 font-bold uppercase tracking-widest hover:underline pt-1"
                             >
                                 View all history
