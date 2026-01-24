@@ -181,12 +181,18 @@ export default async function CashbackPage({ searchParams }: PageProps) {
             </div>
 
             <Tabs defaultValue={defaultTab} className="flex-1 flex flex-col overflow-hidden">
-                <TabsList className="mb-4">
-                    <TabsTrigger value="cards">
+                <TabsList className="mb-4 flex gap-2 bg-transparent p-0">
+                    <TabsTrigger
+                        value="cards"
+                        className="rounded-none border border-slate-200 px-3 py-2 text-sm font-medium data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:border-slate-900"
+                    >
                         <CreditCard className="w-4 h-4 mr-2" />
                         Cards (Normal)
                     </TabsTrigger>
-                    <TabsTrigger value="volunteer">
+                    <TabsTrigger
+                        value="volunteer"
+                        className="rounded-none border border-slate-200 px-3 py-2 text-sm font-medium data-[state=active]:bg-slate-900 data-[state=active]:text-white data-[state=active]:border-slate-900"
+                    >
                         <Users className="w-4 h-4 mr-2" />
                         Volunteer
                     </TabsTrigger>
