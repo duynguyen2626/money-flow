@@ -5,6 +5,11 @@ import { ShoppingBag } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { Category } from '@/types/moneyflow.types'
 import Link from 'next/link'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: '🏪 Shops & Merchants',
+}
 
 export const dynamic = 'force-dynamic'
 

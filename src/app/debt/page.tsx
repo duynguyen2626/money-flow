@@ -4,6 +4,11 @@ import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
 import { DebtList } from '@/components/moneyflow/debt-list'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: '📊 Debt Summary',
+}
 
 export const dynamic = 'force-dynamic'
 

@@ -3,6 +3,11 @@ import { getAccounts } from '@/services/account.service'
 import { getCategories } from '@/services/category.service'
 import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: '💳 Accounts & Cards',
+}
 
 export const dynamic = 'force-dynamic'
 

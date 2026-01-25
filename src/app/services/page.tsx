@@ -2,6 +2,11 @@ import { getServices } from '@/services/service-manager'
 import { getPeople } from '@/services/people.service'
 import { ServicesPageContent } from '@/components/services/services-page-content'
 import { Bot } from 'lucide-react'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: '🔔 Subscriptions',
+}
 
 export const dynamic = 'force-dynamic'
 

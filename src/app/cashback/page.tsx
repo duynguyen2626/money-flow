@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { CashbackDashboardV2 } from '@/components/cashback/cashback-dashboard-v2'
 import { CashbackVolunteerMatrixView } from '@/components/cashback/cashback-volunteer-matrix-view'
 import { YearSelector } from '@/components/cashback/year-selector'
@@ -6,6 +7,14 @@ import { createClient } from '@/lib/supabase/server'
 import { VolunteerCashbackData } from '@/types/cashback.types'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { CreditCard, Users } from 'lucide-react'
+import { getAccounts } from '@/services/account.service'
+import { getCategories } from '@/services/category.service'
+import { getPeople } from '@/services/people.service'
+import { getShops } from '@/services/shop.service'
+
+export const metadata: Metadata = {
+  title: '💳 Cashback Dashboard',
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -106,12 +115,19 @@ export default async function CashbackPage({ searchParams }: PageProps) {
 
     const supabase = await createClient()
 
-    // Fetch card cashback data
-    const { data: creditCards } = await supabase
-        .from('accounts')
-        .select('id')
-        .eq('type', 'credit_card') as { data: { id: string }[] | null }
+    // Fetch all necessary data in parallel
+    const [creditCardsData, accountsData, categoriesData, peopleData, shopsData] = await Promise.all([
+        supabase
+            .from('accounts')
+            .select('id')
+            .eq('type', 'credit_card') as Promise<{ data: { id: string }[] | null }>,
+        getAccounts(),
+        getCategories(),
+        getPeople(),
+        getShops(),
+    ])
 
+    const creditCards = creditCardsData.data
     const accountIds = creditCards?.map(a => a.id) ?? []
     const referenceDate = new Date(year, 0, 1)
     const cards = await getCashbackProgress(0, accountIds, referenceDate, false)
@@ -185,6 +201,10 @@ export default async function CashbackPage({ searchParams }: PageProps) {
                         initialData={yearSummaries}
                         year={year}
                         cards={cards}
+                        accounts={accountsData}
+                        categories={categoriesData}
+                        people={peopleData}
+                        shops={shopsData}
                     />
                 </TabsContent>
 
