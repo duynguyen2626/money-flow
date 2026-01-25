@@ -1349,8 +1349,8 @@ export function UnifiedTransactionTable({
               onMouseUp={handleCellMouseUp}
               onMouseLeave={handleCellMouseUp}
             >
-              <TableHeader className="sticky top-0 z-40 bg-white backdrop-blur text-foreground font-bold shadow-sm ring-1 ring-slate-200">
-                <TableRow className="hover:bg-transparent border-b border-slate-200">
+              <TableHeader className="sticky top-0 z-40 bg-gradient-to-r from-slate-50 to-slate-100 backdrop-blur text-foreground font-bold shadow-sm border-b border-slate-200">
+                <TableRow className="hover:bg-transparent border-none">
                   {displayedColumns.map(col => {
                     // Sticky Logic Removed Personally by User Request
                     // "Mobile Layout bỏ freeze cột (bỏ cả Web luôn)" -> remove sticky classes
@@ -1364,7 +1364,7 @@ export function UnifiedTransactionTable({
                       <TableHead
                         key={col.key}
                         className={cn(
-                          "border-r border-slate-200 bg-slate-200 font-semibold text-slate-700 whitespace-nowrap sticky top-0 z-30 shadow-sm",
+                          "border-r border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 font-semibold text-slate-700 whitespace-nowrap sticky top-0 z-30 py-4 px-3",
                           // Ensure higher z-index for left-sticky columns to overlap standard headers during horizontal scroll
                           (stickyStyle.left !== undefined) && "z-50",
                           stickyClass
@@ -2588,9 +2588,9 @@ export function UnifiedTransactionTable({
                     <TableRow
                       key={txn.id}
                       className={cn(
-                        "border-b border-slate-200 transition-colors text-base",
+                        "border-b border-slate-100 transition-colors text-base py-3",
                         isMenuOpen ? "bg-blue-50" : rowBgColor,
-                        !isExcelMode && "hover:bg-slate-50/50",
+                        !isExcelMode && "hover:bg-slate-50",
                         (updatingTxnIds.has(txn.id) || loadingIds?.has(txn.id)) && "opacity-70 animate-pulse bg-slate-50"
                       )}
                     >
@@ -2613,10 +2613,10 @@ export function UnifiedTransactionTable({
                             onMouseDown={(e) => handleCellMouseDown(txn.id, col.key, e)}
                             onMouseEnter={() => handleCellMouseEnter(txn.id, col.key)}
                             className={cn(
-                              `border-r border-slate-200 ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
-                              } ${col.key === "amount" ? amountClass : ""} ${voidedTextClass} truncate`,
+                              `border-r border-slate-100 ${col.key === "amount" ? "text-right" : ""} ${col.key === "amount" ? "font-bold" : ""
+                              } ${col.key === "amount" ? amountClass : ""} ${voidedTextClass} truncate px-3 py-3`,
                               stickyClass,
-                              col.key === "date" && "p-1",
+                              col.key === "date" && "p-3",
                               col.key === "date" && "relative overflow-visible",
                               isExcelMode && "select-none cursor-crosshair active:cursor-crosshair",
                               isExcelMode && selectedCells.has(txn.id) && col.key === 'amount' && "bg-blue-100 ring-2 ring-inset ring-blue-500 z-10" // ADDED: Visual feedback for selected cells
@@ -2638,10 +2638,10 @@ export function UnifiedTransactionTable({
                           {displayedColumns.findIndex(c => c.key === 'amount') > 1 && (
                             <TableCell colSpan={displayedColumns.findIndex(c => c.key === 'amount') - 1} />
                           )}
-                          <TableCell className="font-bold text-emerald-700 text-right pr-4">
+                          <TableCell className="font-bold text-emerald-700 text-right pr-4 py-3">
                             Total Income:
                           </TableCell>
-                          <TableCell className="font-bold text-emerald-700 text-right">
+                          <TableCell className="font-bold text-emerald-700 text-right py-3">
                             {numberFormatter.format(summary.incomeSummary.sumAmount)}
                           </TableCell>
                           <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')} />
@@ -2652,10 +2652,10 @@ export function UnifiedTransactionTable({
                           {displayedColumns.findIndex(c => c.key === 'amount') > 1 && (
                             <TableCell colSpan={displayedColumns.findIndex(c => c.key === 'amount') - 1} />
                           )}
-                          <TableCell className="font-bold text-red-600 text-right pr-4">
+                          <TableCell className="font-bold text-red-600 text-right pr-4 py-3">
                             Total Expense:
                           </TableCell>
-                          <TableCell className="font-bold text-red-600 text-right">
+                          <TableCell className="font-bold text-red-600 text-right py-3">
                             {numberFormatter.format(summary.expenseSummary.sumAmount)}
                           </TableCell>
                           <TableCell colSpan={displayedColumns.length - 1 - displayedColumns.findIndex(c => c.key === 'amount')}></TableCell>
