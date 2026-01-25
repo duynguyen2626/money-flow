@@ -12,11 +12,11 @@ interface SearchBarProps {
 
 export function SearchBar({ value, onChange, className }: SearchBarProps) {
   return (
-    <div className={cn("relative", className)}>
+    <div className={cn("relative flex-1", className)}>
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
       <Input
         type="text"
-        placeholder="Search transactions..."
+        placeholder="search by notes or paste ID here"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="h-9 pl-9 pr-9 bg-background"

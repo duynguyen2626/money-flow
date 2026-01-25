@@ -8,14 +8,13 @@ import {
 } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Check, ChevronDown, Search, Users, Landmark } from 'lucide-react'
+import { Check, ChevronDown, Search, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface QuickFilterItem {
   id: string
   name: string
   image?: string | null
-  icon?: 'person' | 'account'
 }
 
 interface QuickFilterDropdownProps {
@@ -24,6 +23,7 @@ interface QuickFilterDropdownProps {
   onValueChange: (id: string | undefined) => void
   placeholder: string
   emptyText: string
+  fullWidth?: boolean
 }
 
 export function QuickFilterDropdown({
@@ -32,6 +32,7 @@ export function QuickFilterDropdown({
   onValueChange,
   placeholder,
   emptyText,
+  fullWidth,
 }: QuickFilterDropdownProps) {
   const [open, setOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -68,29 +69,41 @@ export function QuickFilterDropdown({
           variant="outline"
           size="sm"
           className={cn(
-            "h-9 gap-2 min-w-[130px] justify-between font-medium",
+            "gap-2 justify-between font-medium",
+            fullWidth ? 'w-full h-10' : 'w-[140px] h-9',
             !value && "text-muted-foreground"
           )}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
           {selectedItem ? (
-            <div className="flex items-center gap-2">
-              {selectedItem.icon === 'person' && <Users className="w-3.5 h-3.5" />}
-              {selectedItem.icon === 'account' && <Landmark className="w-3.5 h-3.5" />}
+            <div className="flex items-center gap-2 truncate">
               {selectedItem.image && (
                 <img
                   src={selectedItem.image}
                   alt={selectedItem.name}
-                  className="w-4 h-4 rounded-none object-contain bg-white"
+                  className="w-4 h-4 rounded-none object-contain bg-white shrink-0"
                 />
               )}
               <span className="truncate">{selectedItem.name}</span>
             </div>
           ) : (
-            <span>{placeholder}</span>
+            <span className="truncate">{placeholder}</span>
           )}
-          <ChevronDown className="w-3 h-3 opacity-50" />
+          <div className="flex items-center gap-0.5 shrink-0">
+            {value && (
+              <div
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onValueChange(undefined)
+                }}
+                className="hover:bg-current hover:bg-opacity-10 rounded p-0.5 transition-colors cursor-pointer"
+              >
+                <X className="w-3 h-3 opacity-70 hover:opacity-100" />
+              </div>
+            )}
+            <ChevronDown className="w-3 h-3 opacity-50" />
+          </div>
         </Button>
       </PopoverTrigger>
       <PopoverContent 
@@ -139,8 +152,6 @@ export function QuickFilterDropdown({
                   )}
                 >
                   <div className="flex items-center gap-2">
-                      {item.icon === 'person' && <Users className="w-3.5 h-3.5" />}
-                      {item.icon === 'account' && <Landmark className="w-3.5 h-3.5" />}
                     {item.image && (
                       <img
                         src={item.image}
@@ -148,7 +159,7 @@ export function QuickFilterDropdown({
                         className="w-5 h-5 rounded-none object-contain bg-white"
                       />
                     )}
-                      <span className="truncate">{item.name}</span>
+                    <span className="truncate">{item.name}</span>
                   </div>
                   {value === item.id && (
                     <Check className="w-3.5 h-3.5 shrink-0" />

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useMemo } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -62,6 +62,17 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [isMounted, setIsMounted] = useState(false)
   const pathname = usePathname()
 
+  const currentPageTitle = useMemo(() => {
+    if (!pathname) return "Money Flow 3"
+    if (pathname === "/") return "Dashboard"
+
+    const match = navItems.find((item) =>
+      item.href !== "/" && (pathname === item.href || pathname.startsWith(`${item.href}/`))
+    )
+
+    return match?.title ?? "Money Flow 3"
+  }, [pathname])
+
   // Load state from localStorage on mount (Client-side only)
   useEffect(() => {
     setIsMounted(true)
@@ -110,7 +121,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div suppressHydrationWarning className={cn("sticky top-0 z-50 flex items-center mb-8 bg-card/80 backdrop-blur-md py-4 -mt-4 transition-all", sidebarCollapsed ? "justify-center" : "justify-between")}>
           {!sidebarCollapsed && (
             <span className="text-xl font-bold text-slate-800 tracking-tight">
-              Money Flow <span className="text-blue-600">3</span>
+              {currentPageTitle}
             </span>
           )}
           <Button
@@ -191,7 +202,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   {/* Mobile Logo */}
                   <div className="flex items-center px-6 mb-8">
                     <span className="text-xl font-bold text-slate-800 tracking-tight">
-                      Money Flow <span className="text-blue-600">3</span>
+                      {currentPageTitle}
                     </span>
                   </div>
 
@@ -232,7 +243,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 </div>
               </SheetContent>
             </Sheet>
-            <span className="text-lg font-bold text-slate-800">Money Flow <span className="text-blue-600">3</span></span>
+            <span className="text-lg font-bold text-slate-800">{currentPageTitle}</span>
           </div>
         </div>
         <div className="mx-auto w-full max-w-[1920px] px-4 sm:px-6 lg:px-8 flex-1 min-h-0 bg-white">

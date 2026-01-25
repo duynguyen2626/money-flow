@@ -7,7 +7,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
-import { Check, ChevronDown, TrendingUp, TrendingDown, ArrowLeftRight, Users, PiggyBank, Sparkles } from 'lucide-react'
+import { Check, ChevronDown, TrendingUp, TrendingDown, ArrowLeftRight, Users, PiggyBank, Sparkles, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type FilterType = 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer' | 'cashback'
@@ -33,9 +33,10 @@ const TYPE_OPTIONS: TypeOption[] = [
 interface TypeFilterDropdownProps {
   value: FilterType
   onChange: (value: FilterType) => void
+  fullWidth?: boolean
 }
 
-export function TypeFilterDropdown({ value, onChange }: TypeFilterDropdownProps) {
+export function TypeFilterDropdown({ value, onChange, fullWidth }: TypeFilterDropdownProps) {
   const [open, setOpen] = useState(false)
   const closeTimeout = useRef<NodeJS.Timeout | null>(null)
   
@@ -93,17 +94,31 @@ export function TypeFilterDropdown({ value, onChange }: TypeFilterDropdownProps)
           variant="outline"
           size="sm"
           className={cn(
-            "h-9 gap-2 min-w-[110px] justify-between font-medium",
+            "gap-2 justify-between font-medium",
+            fullWidth ? 'w-full h-10' : 'w-[120px] h-9',
             currentOption.color
           )}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
         >
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 truncate">
             {currentOption.icon}
             <span className="truncate">{currentOption.label}</span>
           </div>
-          <ChevronDown className="w-3 h-3 opacity-50" />
+          <div className="flex items-center gap-0.5 shrink-0">
+            {value !== 'all' && (
+              <div
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onChange('all')
+                }}
+                className="hover:bg-current hover:bg-opacity-10 rounded p-0.5 transition-colors cursor-pointer"
+              >
+                <X className="w-3 h-3 opacity-70 hover:opacity-100" />
+              </div>
+            )}
+            <ChevronDown className="w-3 h-3 opacity-50" />
+          </div>
         </Button>
       </PopoverTrigger>
       <PopoverContent 

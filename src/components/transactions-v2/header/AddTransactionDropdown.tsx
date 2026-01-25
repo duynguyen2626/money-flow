@@ -114,12 +114,13 @@ export function AddTransactionDropdown({ onSelect }: AddTransactionDropdownProps
       <PopoverTrigger asChild>
         <Button
           size="sm"
-          className="h-9 gap-2 bg-primary hover:bg-primary/90 shadow-sm"
+          className="h-9 gap-2 bg-primary hover:bg-primary/90 shadow-sm md:w-auto w-9 px-0 md:px-4 relative z-10"
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
+          title="Add transaction"
         >
           <Plus className="w-4 h-4" />
-          <span>Add</span>
+          <span className="hidden md:inline">Add</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent 
