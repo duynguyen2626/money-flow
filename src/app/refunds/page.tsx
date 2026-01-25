@@ -7,6 +7,11 @@ import { UnifiedTransactionTable } from '@/components/moneyflow/unified-transact
 import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Refund Queue | Money Flow',
+}
 
 export const dynamic = 'force-dynamic'
 

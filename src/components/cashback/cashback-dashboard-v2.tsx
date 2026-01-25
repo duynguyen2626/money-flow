@@ -12,7 +12,8 @@ import { CashbackMatrixView } from './cashback-matrix-view'
 import { CashbackMonthDetailModal } from './month-detail-modal'
 import { LayoutList, Table as TableIcon, HelpCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { AddTransactionDialog } from '@/components/moneyflow/add-transaction-dialog'
+import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
+import { Account, Category, Person, Shop } from '@/types/moneyflow.types'
 
 type CashbackRuleConfig = {
     id?: string
@@ -45,14 +46,18 @@ interface Props {
     year: number
     cards: CashbackCardWithConfig[]
     tieredMap?: Record<string, boolean>
+    accounts: Account[]
+    categories: Category[]
+    people: Person[]
+    shops: Shop[]
 }
 
-export function CashbackDashboardV2({ initialData, year, cards, tieredMap }: Props) {
+export function CashbackDashboardV2({ initialData, year, cards, tieredMap, accounts = [], categories = [], people = [], shops = [] }: Props) {
     const [selectedCardId, setSelectedCardId] = useState<string | null>(initialData[0]?.cardId ?? null)
     const [detailModal, setDetailModal] = useState<{ month: number, tab?: string } | null>(null)
     const [viewMode, setViewMode] = useState<'detail' | 'matrix'>('detail')
     const [searchQuery, setSearchQuery] = useState('')
-    const [redeemOpen, setRedeemOpen] = useState(false)
+    const [addTransactionOpen, setAddTransactionOpen] = useState(false)
 
 
     // Filter: credit cards + exclude DUPLICATE/DO NOT USE + exclude zero-data
@@ -384,7 +389,7 @@ export function CashbackDashboardV2({ initialData, year, cards, tieredMap }: Pro
                                             <h2 className="text-xl font-bold">{selectedCardInfo?.accountName}</h2>
                                             <div className="text-muted-foreground text-sm">Monthly breakdown</div>
                                         </div>
-                                        <Button size="sm" onClick={() => setRedeemOpen(true)}>
+                                        <Button size="sm" onClick={() => setAddTransactionOpen(true)}>
                                             Redeem cashback
                                         </Button>
                                     </div>
@@ -448,14 +453,18 @@ export function CashbackDashboardV2({ initialData, year, cards, tieredMap }: Pro
             </div>
 
             {selectedSummary?.cardId && (
-                <AddTransactionDialog
-                    isOpen={redeemOpen}
-                    onOpenChange={setRedeemOpen}
-                    accounts={[]}
-                    categories={[]}
-                    people={[]}
-                    defaultSourceAccountId={selectedSummary.cardId}
-                    defaultType="income"
+                <TransactionSlideV2
+                    open={addTransactionOpen}
+                    onOpenChange={setAddTransactionOpen}
+                    accounts={accounts}
+                    categories={categories}
+                    people={people}
+                    shops={shops}
+                    initialData={{
+                        type: 'income',
+                        source_account_id: selectedSummary.cardId,
+                    }}
+                    onSuccess={() => setAddTransactionOpen(false)}
                 />
             )}
         </div>

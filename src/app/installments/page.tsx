@@ -13,6 +13,11 @@ import { PendingInstallmentTable } from "@/components/installments/pending-insta
 import { Plus, Clock, CheckCircle, AlertCircle } from "lucide-react";
 import { CreateInstallmentDialog } from "@/components/installments/create-installment-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Installment Plans | Money Flow',
+}
 
 interface PageProps {
   searchParams: Promise<{ highlight?: string; tab?: string }>;

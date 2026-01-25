@@ -10,7 +10,7 @@ import { TagFilterProvider } from '@/context/tag-filter-context'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Transactions',
+  title: 'Transactions | Money Flow',
 }
 
 export const dynamic = 'force-dynamic'
