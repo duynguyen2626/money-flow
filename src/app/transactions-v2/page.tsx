@@ -1,15 +1,33 @@
-// Placeholder for transactions-v2 page
-// Will be implemented in Phase 1-2
-export default function TransactionsV2Page() {
+import { getAccounts } from '@/services/account.service'
+import { getCategories } from '@/services/category.service'
+import { getUnifiedTransactions } from '@/services/transaction.service'
+import { getPeople } from '@/services/people.service'
+import { getShops } from '@/services/shop.service'
+import { TransactionsPageV2 } from '@/components/transactions-v2/TransactionsPageV2'
+import { Metadata } from 'next'
+
+export const metadata: Metadata = {
+  title: 'Transactions V2 | Money Flow',
+}
+
+export const dynamic = 'force-dynamic'
+
+export default async function TransactionsV2Page() {
+  const [accounts, categories, people, recentTransactions, shops] = await Promise.all([
+    getAccounts(),
+    getCategories(),
+    getPeople(),
+    getUnifiedTransactions({ limit: 1000, includeVoided: true }),
+    getShops(),
+  ])
+
   return (
-    <div className="flex items-center justify-center h-screen">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold">Transactions V2</h1>
-        <p className="text-muted-foreground mt-2">Under development</p>
-        <a href="/transactions" className="text-primary underline mt-4 block">
-          ← Back to V1
-        </a>
-      </div>
-    </div>
+    <TransactionsPageV2
+      transactions={recentTransactions}
+      accounts={accounts}
+      categories={categories}
+      people={people}
+      shops={shops}
+    />
   )
 }
