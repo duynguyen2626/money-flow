@@ -8,7 +8,7 @@ import Link from 'next/link'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: '🏪 Shops & Merchants',
+  title: 'Shops & Merchants | Money Flow',
 }
 
 export const dynamic = 'force-dynamic'

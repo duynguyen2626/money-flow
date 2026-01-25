@@ -5,7 +5,7 @@ import { Bot } from 'lucide-react'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: '🔔 Subscriptions',
+  title: 'Subscriptions | Money Flow',
 }
 
 export const dynamic = 'force-dynamic'

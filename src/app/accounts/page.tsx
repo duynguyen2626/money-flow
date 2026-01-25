@@ -6,7 +6,7 @@ import { getShops } from '@/services/shop.service'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: '💳 Accounts & Cards',
+  title: 'Accounts & Cards | Money Flow',
 }
 
 export const dynamic = 'force-dynamic'

@@ -2,7 +2,7 @@ import { BankSelectionLanding } from '@/components/batch/bank-selection-landing'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: '📤 Batch Import',
+  title: 'Batch Import | Money Flow',
 }
 
 /**

@@ -13,7 +13,7 @@ import { getPeople } from '@/services/people.service'
 import { getShops } from '@/services/shop.service'
 
 export const metadata: Metadata = {
-  title: '💳 Cashback Dashboard',
+    title: 'Cashback Dashboard | Money Flow',
 }
 
 export const dynamic = 'force-dynamic'

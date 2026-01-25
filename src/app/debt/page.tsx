@@ -7,7 +7,7 @@ import { DebtList } from '@/components/moneyflow/debt-list'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: '📊 Debt Summary',
+  title: 'Debt Summary | Money Flow',
 }
 
 export const dynamic = 'force-dynamic'

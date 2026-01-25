@@ -7,7 +7,7 @@ import { PeopleDirectoryV2 } from '@/components/people/v2/people-directory-v2'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: '👥 People & Debt',
+    title: 'People & Debt | Money Flow',
 }
 
 export const dynamic = 'force-dynamic'

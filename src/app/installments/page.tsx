@@ -16,7 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: '📅 Installment Plans',
+  title: 'Installment Plans | Money Flow',
 }
 
 interface PageProps {

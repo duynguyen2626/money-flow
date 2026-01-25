@@ -10,7 +10,7 @@ import Link from 'next/link'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: '💰 Refund Queue',
+  title: 'Refund Queue | Money Flow',
 }
 
 export const dynamic = 'force-dynamic'
