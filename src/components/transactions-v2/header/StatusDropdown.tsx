@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   Popover,
   PopoverContent,
@@ -51,12 +51,22 @@ interface StatusDropdownProps {
 
 export function StatusDropdown({ value, onChange }: StatusDropdownProps) {
   const [open, setOpen] = useState(false)
+  const closeTimeout = useRef<NodeJS.Timeout | null>(null)
 
   const currentOption = STATUS_OPTIONS.find(opt => opt.value === value) || STATUS_OPTIONS[0]
 
   const handleSelect = (status: StatusFilter) => {
     onChange(status)
     setOpen(false)
+  }
+
+  const handleMouseEnter = () => {
+    if (closeTimeout.current) clearTimeout(closeTimeout.current)
+    setOpen(true)
+  }
+
+  const handleMouseLeave = () => {
+    closeTimeout.current = setTimeout(() => setOpen(false), 120)
   }
 
   return (
@@ -69,6 +79,8 @@ export function StatusDropdown({ value, onChange }: StatusDropdownProps) {
             "h-9 gap-2 min-w-[110px] justify-between font-medium",
             currentOption.color
           )}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         >
           <div className="flex items-center gap-1.5">
             {currentOption.icon}
@@ -81,6 +93,8 @@ export function StatusDropdown({ value, onChange }: StatusDropdownProps) {
         className="w-[160px] p-1" 
         align="end"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         <div className="space-y-0.5">
           {STATUS_OPTIONS.map(option => (

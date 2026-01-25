@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Popover,
   PopoverContent,
@@ -31,6 +31,7 @@ export function MonthYearPickerV2({
   onModeChange,
 }: MonthYearPickerV2Props) {
   const [open, setOpen] = useState(false)
+  const closeTimeout = useRef<NodeJS.Timeout | null>(null)
 
   const displayText = mode === 'month' 
     ? format(date, 'MMM yyyy')
@@ -39,6 +40,15 @@ export function MonthYearPickerV2({
         ? `${format(dateRange.from, 'dd MMM')} - ${format(dateRange.to, 'dd MMM')}`
         : format(dateRange.from, 'dd MMM yyyy')
       : 'Select range'
+
+  const handleMouseEnter = () => {
+    if (closeTimeout.current) clearTimeout(closeTimeout.current)
+    setOpen(true)
+  }
+
+  const handleMouseLeave = () => {
+    closeTimeout.current = setTimeout(() => setOpen(false), 120)
+  }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -49,6 +59,8 @@ export function MonthYearPickerV2({
           className={cn(
             "h-9 gap-2 min-w-[140px] justify-between font-medium"
           )}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         >
           <div className="flex items-center gap-1.5">
             <CalendarIcon className="w-3.5 h-3.5" />
@@ -58,6 +70,7 @@ export function MonthYearPickerV2({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
+        <div onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
         <div className="p-2 border-b flex gap-1">
           <Button
             variant={mode === 'month' ? 'default' : 'ghost'}
@@ -103,6 +116,7 @@ export function MonthYearPickerV2({
             initialFocus
           />
         )}
+        </div>
       </PopoverContent>
     </Popover>
   )

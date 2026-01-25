@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Popover,
   PopoverContent,
@@ -62,6 +62,7 @@ interface AddTransactionDropdownProps {
 
 export function AddTransactionDropdown({ onSelect }: AddTransactionDropdownProps) {
   const [open, setOpen] = useState(false)
+  const closeTimeout = useRef<NodeJS.Timeout | null>(null)
 
   // Get recent types from localStorage
   const getRecentTypes = (): string[] => {
@@ -90,6 +91,15 @@ export function AddTransactionDropdown({ onSelect }: AddTransactionDropdownProps
     setOpen(false)
   }
 
+  const handleMouseEnter = () => {
+    if (closeTimeout.current) clearTimeout(closeTimeout.current)
+    setOpen(true)
+  }
+
+  const handleMouseLeave = () => {
+    closeTimeout.current = setTimeout(() => setOpen(false), 120)
+  }
+
   const recentTypes = getRecentTypes()
   const recentOptions = recentTypes
     .map(t => ADD_OPTIONS.find(opt => opt.type === t))
@@ -105,6 +115,8 @@ export function AddTransactionDropdown({ onSelect }: AddTransactionDropdownProps
         <Button
           size="sm"
           className="h-9 gap-2 bg-primary hover:bg-primary/90 shadow-sm"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         >
           <Plus className="w-4 h-4" />
           <span>Add</span>
@@ -114,6 +126,8 @@ export function AddTransactionDropdown({ onSelect }: AddTransactionDropdownProps
         className="w-[200px] p-1" 
         align="end"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         <div className="space-y-0.5">
           {/* Recent Section */}

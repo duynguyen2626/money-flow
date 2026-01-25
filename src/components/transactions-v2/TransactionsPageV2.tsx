@@ -5,6 +5,7 @@ import { TransactionWithDetails, Account, Category, Person, Shop } from '@/types
 import { TransactionHeader, FilterType, StatusFilter } from './header/TransactionHeader'
 import { DateRange } from 'react-day-picker'
 import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameMonth } from 'date-fns'
+import { formatCycleTag } from '@/lib/cycle-utils'
 
 interface TransactionsPageV2Props {
   transactions: TransactionWithDetails[]
@@ -32,6 +33,7 @@ export function TransactionsPageV2({
 
   const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>()
   const [selectedPersonId, setSelectedPersonId] = useState<string | undefined>()
+  const [selectedCycle, setSelectedCycle] = useState<string | undefined>()
 
   const handleReset = () => {
     setSearch('')
@@ -50,8 +52,34 @@ export function TransactionsPageV2({
     statusFilter !== 'active' ||
     !!selectedAccountId ||
     !!selectedPersonId ||
+    !!selectedCycle ||
     !isSameMonth(date, new Date()) ||
     dateMode === 'range'
+
+  // Build cycle options based on selected account (credit cards with cycles only)
+  const cycleOptions = useMemo(() => {
+    const relevantTxns = selectedAccountId
+      ? transactions.filter(t => t.account_id === selectedAccountId || t.to_account_id === selectedAccountId)
+      : transactions
+
+    const tags = new Set<string>()
+    relevantTxns.forEach(t => {
+      const tag = t.persisted_cycle_tag || t.account_billing_cycle || null
+      if (tag) tags.add(tag)
+    })
+
+    return Array.from(tags).map(tag => ({
+      value: tag,
+      label: formatCycleTag(tag) || tag,
+    }))
+  }, [transactions, selectedAccountId])
+
+  // Auto-clear selected cycle if it no longer exists
+  useEffect(() => {
+    if (selectedCycle && !cycleOptions.some(o => o.value === selectedCycle)) {
+      setSelectedCycle(undefined)
+    }
+  }, [cycleOptions, selectedCycle])
 
   // Filter Logic
   const filteredTransactions = useMemo(() => {
@@ -85,6 +113,12 @@ export function TransactionsPageV2({
       // Person Filter
       if (selectedPersonId) {
         if (t.person_id !== selectedPersonId) return false
+      }
+
+      // Cycle filter
+      if (selectedCycle) {
+        const tag = t.persisted_cycle_tag || t.account_billing_cycle || null
+        if (tag !== selectedCycle) return false
       }
 
       // Search
@@ -148,6 +182,9 @@ export function TransactionsPageV2({
         onAccountChange={setSelectedAccountId}
         personId={selectedPersonId}
         onPersonChange={setSelectedPersonId}
+        cycles={cycleOptions}
+        selectedCycle={selectedCycle}
+        onCycleChange={setSelectedCycle}
         searchTerm={search}
         onSearchChange={setSearch}
         filterType={filterType}

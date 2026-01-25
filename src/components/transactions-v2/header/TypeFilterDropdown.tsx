@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
-import { Check, ChevronDown } from 'lucide-react'
+import { Check, ChevronDown, TrendingUp, TrendingDown, ArrowLeftRight, Users, PiggyBank, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type FilterType = 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer' | 'cashback'
@@ -17,16 +17,17 @@ interface TypeOption {
   label: string
   color: string
   bgColor: string
+  icon: React.ReactNode
 }
 
 const TYPE_OPTIONS: TypeOption[] = [
-  { value: 'all', label: 'All', color: 'text-slate-700', bgColor: 'hover:bg-slate-50' },
-  { value: 'income', label: 'Income', color: 'text-emerald-700', bgColor: 'hover:bg-emerald-50' },
-  { value: 'expense', label: 'Expense', color: 'text-rose-700', bgColor: 'hover:bg-rose-50' },
-  { value: 'lend', label: 'Lend', color: 'text-amber-700', bgColor: 'hover:bg-amber-50' },
-  { value: 'repay', label: 'Repay', color: 'text-indigo-700', bgColor: 'hover:bg-indigo-50' },
-  { value: 'transfer', label: 'Transfer', color: 'text-blue-700', bgColor: 'hover:bg-blue-50' },
-  { value: 'cashback', label: 'Cashback', color: 'text-green-700', bgColor: 'hover:bg-green-50' },
+  { value: 'all', label: 'All', color: 'text-slate-700', bgColor: 'hover:bg-slate-50', icon: <Sparkles className="w-3.5 h-3.5" /> },
+  { value: 'income', label: 'Income', color: 'text-emerald-700', bgColor: 'hover:bg-emerald-50', icon: <TrendingUp className="w-3.5 h-3.5" /> },
+  { value: 'expense', label: 'Expense', color: 'text-rose-700', bgColor: 'hover:bg-rose-50', icon: <TrendingDown className="w-3.5 h-3.5" /> },
+  { value: 'lend', label: 'Lend', color: 'text-amber-700', bgColor: 'hover:bg-amber-50', icon: <Users className="w-3.5 h-3.5" /> },
+  { value: 'repay', label: 'Repay', color: 'text-indigo-700', bgColor: 'hover:bg-indigo-50', icon: <PiggyBank className="w-3.5 h-3.5" /> },
+  { value: 'transfer', label: 'Transfer', color: 'text-blue-700', bgColor: 'hover:bg-blue-50', icon: <ArrowLeftRight className="w-3.5 h-3.5" /> },
+  { value: 'cashback', label: 'Cashback', color: 'text-green-700', bgColor: 'hover:bg-green-50', icon: <Sparkles className="w-3.5 h-3.5" /> },
 ]
 
 interface TypeFilterDropdownProps {
@@ -36,6 +37,7 @@ interface TypeFilterDropdownProps {
 
 export function TypeFilterDropdown({ value, onChange }: TypeFilterDropdownProps) {
   const [open, setOpen] = useState(false)
+  const closeTimeout = useRef<NodeJS.Timeout | null>(null)
   
   const currentOption = TYPE_OPTIONS.find(opt => opt.value === value) || TYPE_OPTIONS[0]
 
@@ -66,6 +68,15 @@ export function TypeFilterDropdown({ value, onChange }: TypeFilterDropdownProps)
     setOpen(false)
   }
 
+  const handleMouseEnter = () => {
+    if (closeTimeout.current) clearTimeout(closeTimeout.current)
+    setOpen(true)
+  }
+
+  const handleMouseLeave = () => {
+    closeTimeout.current = setTimeout(() => setOpen(false), 120)
+  }
+
   const recentTypes = getRecentTypes()
   const recentOptions = recentTypes
     .map(t => TYPE_OPTIONS.find(opt => opt.value === t))
@@ -82,11 +93,16 @@ export function TypeFilterDropdown({ value, onChange }: TypeFilterDropdownProps)
           variant="outline"
           size="sm"
           className={cn(
-            "h-9 gap-2 min-w-[100px] justify-between font-medium",
+            "h-9 gap-2 min-w-[110px] justify-between font-medium",
             currentOption.color
           )}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
         >
-          <span>{currentOption.label}</span>
+          <div className="flex items-center gap-1.5">
+            {currentOption.icon}
+            <span className="truncate">{currentOption.label}</span>
+          </div>
           <ChevronDown className="w-3 h-3 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -94,6 +110,8 @@ export function TypeFilterDropdown({ value, onChange }: TypeFilterDropdownProps)
         className="w-[180px] p-1" 
         align="end"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
         <div className="space-y-0.5">
           {/* Recent Section */}
@@ -113,7 +131,10 @@ export function TypeFilterDropdown({ value, onChange }: TypeFilterDropdownProps)
                     value === option.value && "bg-accent"
                   )}
                 >
-                  <span>{option.label}</span>
+                  <div className="flex items-center gap-2 truncate">
+                    {option.icon}
+                    <span className="truncate">{option.label}</span>
+                  </div>
                   {value === option.value && (
                     <Check className="w-3.5 h-3.5" />
                   )}
@@ -135,7 +156,10 @@ export function TypeFilterDropdown({ value, onChange }: TypeFilterDropdownProps)
                 value === option.value && "bg-accent"
               )}
             >
-              <span>{option.label}</span>
+              <div className="flex items-center gap-2 truncate">
+                {option.icon}
+                <span className="truncate">{option.label}</span>
+              </div>
               {value === option.value && (
                 <Check className="w-3.5 h-3.5" />
               )}
