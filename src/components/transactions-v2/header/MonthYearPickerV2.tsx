@@ -41,13 +41,11 @@ export function MonthYearPickerV2({
 
   const displayText = mode === 'month'
     ? format(date, 'MMM yyyy')
-    : mode === 'range'
-      ? (dateRange?.from
-          ? dateRange.to
-            ? `${format(dateRange.from, 'dd MMM')} - ${format(dateRange.to, 'dd MMM')}`
-            : format(dateRange.from, 'dd MMM yyyy')
-          : 'Select range')
-      : format(date, 'MMM dd, yyyy')
+    : (dateRange?.from
+        ? dateRange.to
+          ? `${format(dateRange.from, 'dd MMM')} - ${format(dateRange.to, 'dd MMM')}`
+          : format(dateRange.from, 'dd MMM yyyy')
+        : 'Select range')
 
   const handleMouseEnter = () => {
     if (closeTimeout.current) clearTimeout(closeTimeout.current)
@@ -107,14 +105,6 @@ export function MonthYearPickerV2({
             Month
           </Button>
           <Button
-            variant={mode === 'single' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => onModeChange('single')}
-            className="flex-1 h-7 text-xs"
-          >
-            Date
-          </Button>
-          <Button
             variant={mode === 'range' ? 'default' : 'ghost'}
             size="sm"
             onClick={() => onModeChange('range')}
@@ -141,20 +131,6 @@ export function MonthYearPickerV2({
                 // Modal closes on blur or clicking outside
               }}
               numberOfMonths={2}
-              disabled={disabledMatchers as any}
-              initialFocus
-            />
-          )}
-          {mode === 'single' && (
-            <Calendar
-              mode="single"
-              selected={date}
-              onSelect={(newDate) => {
-                if (newDate) {
-                  onDateChange(newDate)
-                  setOpen(false)
-                }
-              }}
               disabled={disabledMatchers as any}
               initialFocus
             />

@@ -8,6 +8,9 @@ import { endOfMonth, isSameMonth, isWithinInterval, parseISO, startOfMonth } fro
 import { formatCycleTag } from '@/lib/cycle-utils'
 import { normalizeMonthTag } from '@/lib/month-tag'
 import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
+import { TransactionsTable } from './TransactionsTable'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Button } from '@/components/ui/button'
 
 interface TransactionsPageV2Props {
   transactions: TransactionWithDetails[]
@@ -24,6 +27,8 @@ export function TransactionsPageV2({
   people,
   shops
 }: TransactionsPageV2Props) {
+  const searchParams = useSearchParams()
+  const router = useRouter()
   // Filter State
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState<FilterType>('all')
@@ -38,10 +43,17 @@ export function TransactionsPageV2({
   const [selectedCycle, setSelectedCycle] = useState<string | undefined>()
   const [isSlideOpen, setIsSlideOpen] = useState(false)
   const [slideOverrideType, setSlideOverrideType] = useState<string | undefined>()
-  const lastAccountRef = useRef<string | undefined>()
+  const lastAccountRef = useRef<string | undefined>(undefined)
   const [disabledRange, setDisabledRange] = useState<{ start: Date; end: Date } | undefined>(undefined)
   const isManualDateChange = useRef(false)
   const selectionOrderRef = useRef<'range' | 'account' | undefined>(undefined)
+  const pageSize = 30
+  const initialPage = useMemo(() => {
+    const param = Number(searchParams.get('page'))
+    return Number.isFinite(param) && param > 0 ? param : 1
+  }, [searchParams])
+  const [page, setPage] = useState<number>(initialPage)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
   // Compute available months from transactions
   const availableMonths = useMemo(() => {
@@ -70,7 +82,7 @@ export function TransactionsPageV2({
   const handleDateChange = (newDate: Date) => {
     isManualDateChange.current = true
     setDate(newDate)
-    if ((dateMode === 'single' || dateMode === 'month') && selectedCycle && selectedCycle !== 'custom') {
+    if (dateMode === 'month' && selectedCycle && selectedCycle !== 'custom') {
       setSelectedCycle('custom')
     }
   }
@@ -87,10 +99,10 @@ export function TransactionsPageV2({
     }
   }
 
-  const handleModeChange = (mode: 'month' | 'range' | 'single') => {
-    setDateMode(mode as any)
-    // When switching to Month or Date mode, auto-select Custom cycle
-    if ((mode === 'month' || mode === 'single') && selectedCycle && selectedCycle !== 'custom') {
+  const handleModeChange = (mode: 'month' | 'range') => {
+    setDateMode(mode)
+    // When switching to Month mode, auto-select Custom cycle
+    if (mode === 'month' && selectedCycle && selectedCycle !== 'custom') {
       setSelectedCycle('custom')
     }
   }
@@ -332,6 +344,75 @@ export function TransactionsPageV2({
     }
   }
 
+  // Pagination derived values
+  const totalPages = Math.max(1, Math.ceil(filteredTransactions.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const pageStart = (currentPage - 1) * pageSize
+  const pageEnd = pageStart + pageSize
+  const pageTransactions = filteredTransactions.slice(pageStart, pageEnd)
+  const showingStart = filteredTransactions.length === 0 ? 0 : pageStart + 1
+  const showingEnd = filteredTransactions.length === 0 ? 0 : Math.min(pageEnd, filteredTransactions.length)
+
+  // Sync page param on change
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString())
+    const currentParam = Number(params.get('page'))
+    if (!Number.isFinite(currentParam) || currentParam !== currentPage) {
+      params.set('page', String(currentPage))
+      router.replace(`?${params.toString()}`, { scroll: false })
+    }
+  }, [currentPage, router, searchParams])
+
+  // Clamp page when filters change
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages)
+    }
+  }, [page, totalPages])
+
+  // Clear selection when data set changes significantly
+  useEffect(() => {
+    setSelectedIds(new Set())
+  }, [filteredTransactions])
+
+  const handleToggleRow = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const handleToggleAll = (checked: boolean) => {
+    if (checked) {
+      const next = new Set(selectedIds)
+      pageTransactions.forEach((t) => next.add(t.id))
+      setSelectedIds(next)
+    } else {
+      const next = new Set(selectedIds)
+      pageTransactions.forEach((t) => next.delete(t.id))
+      setSelectedIds(next)
+    }
+  }
+
+  const handlePageChange = (next: number) => {
+    const clamped = Math.min(Math.max(next, 1), totalPages)
+    setPage(clamped)
+  }
+
+  const handleEdit = (txn: TransactionWithDetails) => {
+    // For edit mode, we'll need to pass the transaction data to the slide
+    // For now, just open the slide and let it handle the transaction
+    setIsSlideOpen(true)
+  }
+
+  const handleClone = (txn: TransactionWithDetails) => {
+    // For clone, we create a new transaction with the same data
+    setSlideOverrideType(txn.type)
+    setIsSlideOpen(true)
+  }
+
   return (
     <div className="flex flex-col h-screen bg-background">
       <TransactionHeader
@@ -363,18 +444,52 @@ export function TransactionsPageV2({
         availableMonths={availableMonths}
       />
 
-      {/* Table Content - Placeholder */}
-      <div className="flex-1 overflow-auto p-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-medium text-muted-foreground">
-              {filteredTransactions.length} transactions
-            </h2>
+      {/* Table Content */}
+      <div className="flex-1 overflow-auto p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="text-sm text-muted-foreground">
+            Page {currentPage} / {totalPages} · {filteredTransactions.length} filtered / {transactions.length} total
           </div>
-          
-          <div className="border rounded-lg p-8 text-center text-muted-foreground">
-            <p className="text-sm">Table coming in Phase 2...</p>
-            <p className="text-xs mt-2">Filtered: {filteredTransactions.length} / {transactions.length}</p>
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-md px-3 py-1 text-sm">
+              <span className="font-semibold">{selectedIds.size} selected</span>
+              <div className="h-4 w-px bg-slate-300" />
+              <Button variant="ghost" size="sm">Void</Button>
+              <Button variant="ghost" size="sm">Refund</Button>
+              <Button variant="ghost" size="sm">Split</Button>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>Clear</Button>
+            </div>
+          )}
+        </div>
+
+        {pageTransactions.length === 0 ? (
+          <div className="border rounded-lg p-10 text-center text-muted-foreground">
+            <p className="text-sm">No transactions match the current filters.</p>
+          </div>
+        ) : (
+          <TransactionsTable
+            transactions={pageTransactions}
+            selectedIds={selectedIds}
+            onToggleRow={handleToggleRow}
+            onToggleAll={handleToggleAll}
+            onEdit={handleEdit}
+            onClone={handleClone}
+          />
+        )}
+
+        {/* Footer / Pagination */}
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
+          <div>
+            Showing {showingStart}-{showingEnd} of {filteredTransactions.length}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}>
+              Prev
+            </Button>
+            <div className="px-2">{currentPage} / {totalPages}</div>
+            <Button variant="outline" size="sm" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages}>
+              Next
+            </Button>
           </div>
         </div>
       </div>
