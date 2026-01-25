@@ -68,7 +68,7 @@ export function SidebarNav({ className }: SidebarNavProps) {
       ]
     },
     { title: "People", href: "/people", icon: Users },
-    { title: "People V2", href: "/people/v2", icon: Contact },
+    { title: "People", href: "/people", icon: Contact },
     { title: "Batch Import", href: "/batch", icon: Database },
     { title: "Services", href: "/services", icon: Cloud }, // Updated Icon
     { title: "Settings", href: "/settings", icon: Settings },

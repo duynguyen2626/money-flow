@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { TransactionWithDetails, Account, Category, Person, Shop } from '@/types/moneyflow.types'
 import { UnifiedTransactionTable } from '../moneyflow/unified-transaction-table'
-import { TransactionToolbar, FilterType, StatusFilter } from './TransactionToolbar'
+import { FilterType, StatusFilter } from './TransactionToolbar'
 import { DateRange } from 'react-day-picker'
-import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameMonth } from 'date-fns'
+import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameDay, isSameMonth } from 'date-fns'
 import { TransactionSlideV2 } from '@/components/transaction/slide-v2/transaction-slide-v2'
 import { UnsavedChangesWarning } from '@/components/transaction/unsaved-changes-warning'
 import { ConfirmRefundDialogV2 } from '@/components/moneyflow/confirm-refund-dialog-v2'
@@ -13,6 +13,9 @@ import { REFUND_PENDING_ACCOUNT_ID } from '@/constants/refunds'
 import { voidTransactionAction } from '@/actions/transaction-actions'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { TransactionHeader } from '@/components/transactions-v2/header/TransactionHeader'
+import { formatCycleTag } from '@/lib/cycle-utils'
+import { normalizeMonthTag } from '@/lib/month-tag'
 
 import {
     AlertDialog,
@@ -48,11 +51,17 @@ export function UnifiedTransactionsPage({
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('active')
 
     const [date, setDate] = useState<Date>(new Date())
-    const [dateRange, setDateRange] = useState<DateRange>()
-    const [dateMode, setDateMode] = useState<'month' | 'range'>('month')
+    const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
+    const [dateMode, setDateMode] = useState<'month' | 'range' | 'date'>('range')
 
     const [selectedAccountId, setSelectedAccountId] = useState<string | undefined>()
     const [selectedPersonId, setSelectedPersonId] = useState<string | undefined>()
+    const [selectedCycle, setSelectedCycle] = useState<string | undefined>()
+    const [disabledRange, setDisabledRange] = useState<{ start: Date; end: Date } | undefined>(undefined)
+
+    const isManualDateChange = useRef(false)
+    const prevAccountIdRef = useRef<string | undefined>(undefined)
+    const selectionOrderRef = useRef<'range' | 'account' | undefined>(undefined)
 
     // Transaction Slide V2 States
     const [isSlideOpen, setIsSlideOpen] = useState(false)
@@ -86,25 +95,143 @@ export function UnifiedTransactionsPage({
     const [voidTxn, setVoidTxn] = useState<TransactionWithDetails | null>(null)
     const [isVoidAlertOpen, setIsVoidAlertOpen] = useState(false)
 
+    const availableMonths = useMemo(() => {
+        const months = new Set<string>()
+        transactions.forEach(t => {
+            const d = parseISO(t.occurred_at)
+            const key = `${d.getFullYear()}-${d.getMonth()}`
+            months.add(key)
+        })
+        return months
+    }, [transactions])
+
+    const cycleOptions = useMemo(() => {
+        if (!selectedAccountId) return []
+
+        const relevantTxns = transactions.filter(
+            t => t.account_id === selectedAccountId || t.to_account_id === selectedAccountId
+        )
+
+        const tags = new Set<string>()
+        relevantTxns.forEach(t => {
+            const normalized = normalizeMonthTag(t.persisted_cycle_tag || t.account_billing_cycle || undefined)
+            if (normalized) tags.add(normalized)
+        })
+
+        const base = Array.from(tags)
+            .sort((a, b) => b.localeCompare(a))
+            .map(tag => ({
+                value: tag,
+                label: formatCycleTag(tag) || tag,
+            }))
+        if (selectedCycle === 'custom') base.unshift({ value: 'custom', label: 'Custom' })
+        return base
+    }, [transactions, selectedAccountId, selectedCycle])
+
+    useEffect(() => {
+        if (selectedCycle && !cycleOptions.some(o => o.value === selectedCycle)) {
+            setSelectedCycle(undefined)
+        }
+    }, [cycleOptions, selectedCycle])
+
+    useEffect(() => {
+        if (selectedCycle === 'custom') {
+            setDisabledRange(undefined)
+            return
+        }
+
+        if (!selectedCycle) {
+            setDisabledRange(undefined)
+            return
+        }
+
+        const [yearStr, monthStr] = selectedCycle.split('-')
+        const year = Number(yearStr)
+        const month = Number(monthStr)
+        if (!Number.isFinite(year) || !Number.isFinite(month)) {
+            setDisabledRange(undefined)
+            return
+        }
+
+        const startMonth = month === 1 ? 12 : month - 1
+        const startYear = month === 1 ? year - 1 : year
+        const cycleStart = new Date(startYear, startMonth - 1, 25)
+        const cycleEnd = new Date(year, month - 1, 24)
+
+        setDisabledRange({ start: cycleStart, end: cycleEnd })
+
+        if (!isManualDateChange.current && selectionOrderRef.current !== 'range' && dateMode !== 'range') {
+            setDateMode('range')
+            setDateRange({ from: cycleStart, to: cycleEnd })
+        }
+        isManualDateChange.current = false
+    }, [selectedCycle, dateMode])
+
+    useEffect(() => {
+        if (prevAccountIdRef.current !== selectedAccountId) {
+            setSelectedCycle(undefined)
+            setDisabledRange(undefined)
+            selectionOrderRef.current = undefined
+        }
+        prevAccountIdRef.current = selectedAccountId
+    }, [selectedAccountId])
+
     const handleReset = () => {
         setSearch('')
         setFilterType('all')
         setStatusFilter('active')
         setSelectedAccountId(undefined)
         setSelectedPersonId(undefined)
+        setSelectedCycle(undefined)
         setDate(new Date())
         setDateMode('month')
         setDateRange(undefined)
+        setDisabledRange(undefined)
+        selectionOrderRef.current = undefined
+    }
+
+    const handleDateChange = (newDate: Date) => {
+        isManualDateChange.current = true
+        setDate(newDate)
+        if (dateMode !== 'range') {
+            setDateRange(undefined)
+        }
+    }
+
+    const handleRangeChange = (range: DateRange | undefined) => {
+        isManualDateChange.current = true
+        setDateRange(range)
+        if (range) {
+            setSelectedCycle(undefined)
+        }
+        if (range?.from && range?.to && !selectedAccountId) {
+            selectionOrderRef.current = 'range'
+        }
+    }
+
+    const handleModeChange = (mode: 'month' | 'range' | 'date') => {
+        setDateMode(mode)
+        if (mode !== 'range') {
+            setDateRange(undefined)
+        } else {
+            setSelectedCycle(undefined)
+        }
+    }
+
+    const handleCycleChange = (cycle?: string) => {
+        setSelectedCycle(cycle)
     }
 
     const hasActiveFilters =
         search !== '' ||
         filterType !== 'all' ||
-        statusFilter !== 'void' && statusFilter !== 'active'/* wait status default is active so if not active it is changed? No user might want to see void. But reset resets to Active. So if Void -> Active. */ || statusFilter === 'void' ||
+        statusFilter !== 'active' ||
         !!selectedAccountId ||
         !!selectedPersonId ||
-        !isSameMonth(date, new Date()) ||
-        dateMode === 'range'
+        !!selectedCycle ||
+        (dateMode === 'month' ? !isSameMonth(date, new Date()) : false) ||
+        (dateMode === 'date') ||
+        (dateMode === 'range' && !!dateRange)
 
     // Filter Logic
     const filteredTransactions = useMemo(() => {
@@ -128,6 +255,8 @@ export function UnifiedTransactionsPage({
                 const start = startOfMonth(date)
                 const end = endOfMonth(date)
                 if (!isWithinInterval(tDate, { start, end })) return false
+            } else if (dateMode === 'date') {
+                if (!isSameDay(tDate, date)) return false
             } else if (dateMode === 'range' && dateRange?.from) {
                 const start = dateRange.from
                 const end = dateRange.to || dateRange.from
@@ -222,6 +351,14 @@ export function UnifiedTransactionsPage({
         setSlideMode('add')
         setSelectedTxn(null)
         setIsSlideOpen(true)
+    }
+
+    const handleAddFromHeader = (type?: string) => {
+        if (type) {
+            handleAddWithState(type)
+            return
+        }
+        handleAdd()
     }
 
     const handleEdit = (t: TransactionWithDetails) => {
@@ -337,16 +474,16 @@ export function UnifiedTransactionsPage({
     return (
         <div className="flex flex-col h-full bg-background/50">
             {/* Header Section */}
-            <div className="flex flex-col gap-0 border-b bg-background sticky top-0 z-10 shadow-sm">
-                <TransactionToolbar
+            <div className="flex flex-col gap-0 bg-background sticky top-0 z-10">
+                <TransactionHeader
                     accounts={accounts}
                     people={people}
                     date={date}
                     dateRange={dateRange}
-                    mode={dateMode}
-                    onModeChange={setDateMode}
-                    onDateChange={setDate}
-                    onRangeChange={setDateRange}
+                    dateMode={dateMode}
+                    onDateChange={handleDateChange}
+                    onRangeChange={handleRangeChange}
+                    onModeChange={handleModeChange}
 
                     accountId={selectedAccountId}
                     onAccountChange={setSelectedAccountId}
@@ -366,8 +503,13 @@ export function UnifiedTransactionsPage({
                     hasActiveFilters={hasActiveFilters}
                     onReset={handleReset}
 
-                    onAdd={handleAdd}
-                    onAddWithState={handleAddWithState}
+                    onAdd={handleAddFromHeader}
+
+                    cycles={cycleOptions}
+                    selectedCycle={selectedCycle}
+                    onCycleChange={handleCycleChange}
+                    disabledRange={disabledRange}
+                    availableMonths={availableMonths}
                 />
             </div>
 

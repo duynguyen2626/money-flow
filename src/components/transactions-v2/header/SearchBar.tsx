@@ -19,7 +19,7 @@ export function SearchBar({ value, onChange, className }: SearchBarProps) {
         placeholder="search by notes or paste ID here"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-9 pl-9 pr-9 bg-background"
+        className="h-9 pl-9 pr-9 bg-background border border-input shadow-sm"
       />
       <button
         onClick={() => value && onChange('')}

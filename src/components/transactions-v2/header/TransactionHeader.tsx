@@ -31,10 +31,10 @@ interface TransactionHeaderProps {
   // Date State
   date: Date
   dateRange: DateRange | undefined
-  dateMode: 'month' | 'range'
+  dateMode: 'month' | 'range' | 'date'
   onDateChange: (date: Date) => void
   onRangeChange: (range: DateRange | undefined) => void
-  onModeChange: (mode: 'month' | 'range') => void
+  onModeChange: (mode: 'month' | 'range' | 'date') => void
 
   // Filter State
   accountId?: string
@@ -97,6 +97,9 @@ export function TransactionHeader({
   availableMonths,
 }: TransactionHeaderProps) {
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
+
+  const isRangeFilterActive = dateMode === 'range' && !!dateRange && !selectedCycle
+  const isCycleDisabled = !accountId || cycles.length === 0 || isRangeFilterActive
 
   // Desktop filters component
   const DesktopFilters = () => (
