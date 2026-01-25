@@ -1343,14 +1343,14 @@ export function UnifiedTransactionTable({
           />
         </div>
         {!isMobile && (
-          <div className="hidden md:block flex-1 min-h-0 overflow-auto w-full scrollbar-visible h-full bg-white relative" style={{ scrollbarGutter: 'stable' }}>
+          <div className="hidden md:block flex-1 min-h-0 overflow-auto w-full h-full bg-white relative" style={{ scrollbarGutter: 'stable' }}>
             <table
               className="w-full caption-bottom text-sm border-collapse min-w-[800px] lg:min-w-0"
               onMouseUp={handleCellMouseUp}
               onMouseLeave={handleCellMouseUp}
             >
-              <TableHeader className="sticky top-0 z-40 bg-white backdrop-blur text-foreground font-bold shadow-sm ring-1 ring-slate-200">
-                <TableRow className="hover:bg-transparent border-b border-slate-200">
+              <TableHeader className="sticky top-0 z-50 bg-gradient-to-b from-slate-50 to-white backdrop-blur-sm border-b-2 border-slate-200 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.1)]">
+                <TableRow className="hover:bg-transparent border-0">
                   {displayedColumns.map(col => {
                     // Sticky Logic Removed Personally by User Request
                     // "Mobile Layout bỏ freeze cột (bỏ cả Web luôn)" -> remove sticky classes
@@ -1364,9 +1364,9 @@ export function UnifiedTransactionTable({
                       <TableHead
                         key={col.key}
                         className={cn(
-                          "border-r border-slate-200 bg-slate-200 font-semibold text-slate-700 whitespace-nowrap sticky top-0 z-30 shadow-sm",
+                          "border-r border-slate-200 bg-transparent text-slate-700 whitespace-nowrap sticky top-0 z-40 font-semibold",
                           // Ensure higher z-index for left-sticky columns to overlap standard headers during horizontal scroll
-                          (stickyStyle.left !== undefined) && "z-50",
+                          (stickyStyle.left !== undefined) && "z-60",
                           stickyClass
                         )}
                         style={stickyStyle}

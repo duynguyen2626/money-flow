@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import {
   Popover,
   PopoverContent,
@@ -16,10 +16,10 @@ import { cn } from '@/lib/utils'
 interface MonthYearPickerV2Props {
   date: Date
   dateRange: DateRange | undefined
-  mode: 'month' | 'range'
+  mode: 'month' | 'range' | 'date'
   onDateChange: (date: Date) => void
   onRangeChange: (range: DateRange | undefined) => void
-  onModeChange: (mode: 'month' | 'range') => void
+  onModeChange: (mode: 'month' | 'range' | 'date') => void
   disabledRange?: { start: Date; end: Date } | undefined
   availableMonths?: Set<string>
   fullWidth?: boolean
@@ -37,23 +37,24 @@ export function MonthYearPickerV2({
   fullWidth,
 }: MonthYearPickerV2Props) {
   const [open, setOpen] = useState(false)
-  const closeTimeout = useRef<NodeJS.Timeout | null>(null)
 
-  const displayText = mode === 'month'
-    ? format(date, 'MMM yyyy')
-    : (dateRange?.from
-        ? dateRange.to
+  const displayText = (() => {
+    if (mode === 'month') return format(date, 'MMM yyyy')
+    if (mode === 'date') return format(date, 'dd MMM yyyy')
+    if (mode === 'range') {
+      if (dateRange?.from) {
+        return dateRange.to
           ? `${format(dateRange.from, 'dd MMM')} - ${format(dateRange.to, 'dd MMM')}`
           : format(dateRange.from, 'dd MMM yyyy')
-        : 'Select range')
+      }
+      return 'Date Select'
+    }
+    return 'Select date'
+  })()
 
-  const handleMouseEnter = () => {
-    if (closeTimeout.current) clearTimeout(closeTimeout.current)
-    setOpen(true)
-  }
-
-  const handleMouseLeave = () => {
-    closeTimeout.current = setTimeout(() => setOpen(false), 120)
+  const handleModeSelect = (nextMode: 'month' | 'date' | 'range') => {
+    onModeChange(nextMode)
+    setOpen(true) // keep popover open when switching tabs
   }
 
   const disabledMatchers = disabledRange
@@ -61,7 +62,7 @@ export function MonthYearPickerV2({
     : undefined
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -70,14 +71,25 @@ export function MonthYearPickerV2({
             "gap-2 justify-between font-medium",
             fullWidth ? 'w-full h-10' : 'w-[200px] h-9'
           )}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
         >
           <div className="flex items-center gap-1.5 truncate">
             <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">{displayText}</span>
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
+            {mode === 'date' && (
+              <div
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onRangeChange(undefined)
+                  onModeChange('month')
+                  onDateChange(new Date())
+                }}
+                className="hover:bg-current hover:bg-opacity-10 rounded p-0.5 transition-colors cursor-pointer"
+              >
+                <X className="w-3 h-3 opacity-70 hover:opacity-100" />
+              </div>
+            )}
             {mode === 'range' && dateRange?.from && dateRange?.to && (
               <div
                 onClick={(e) => {
@@ -94,25 +106,33 @@ export function MonthYearPickerV2({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
-        <div onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
-        <div className="p-2 border-b flex gap-1">
-          <Button
-            variant={mode === 'month' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => onModeChange('month')}
-            className="flex-1 h-7 text-xs"
-          >
-            Month
-          </Button>
-          <Button
-            variant={mode === 'range' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => onModeChange('range')}
-            className="flex-1 h-7 text-xs"
-          >
-            Range
-          </Button>
-        </div>
+        <div>
+          <div className="p-2 border-b flex gap-1">
+            <Button
+              variant={mode === 'month' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => handleModeSelect('month')}
+              className="flex-1 h-7 text-xs"
+            >
+              Month
+            </Button>
+            <Button
+              variant={mode === 'date' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => handleModeSelect('date')}
+              className="flex-1 h-7 text-xs"
+            >
+              Date
+            </Button>
+            <Button
+              variant={mode === 'range' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => handleModeSelect('range')}
+              className="flex-1 h-7 text-xs"
+            >
+              Range
+            </Button>
+          </div>
 
           {mode === 'month' && (
             <MonthGrid
@@ -121,14 +141,27 @@ export function MonthYearPickerV2({
               availableMonths={availableMonths}
             />
           )}
+          {mode === 'date' && (
+            <Calendar
+              mode="single"
+              selected={date}
+              onSelect={(d) => {
+                if (d) {
+                  onDateChange(d)
+                  setOpen(false)
+                }
+              }}
+              disabled={disabledMatchers as any}
+              initialFocus
+            />
+          )}
           {mode === 'range' && (
             <Calendar
               mode="range"
               selected={dateRange}
               onSelect={(range) => {
                 onRangeChange(range)
-                // Keep popover open until both dates selected
-                // Modal closes on blur or clicking outside
+                // Keep popover open until user dismisses
               }}
               numberOfMonths={2}
               disabled={disabledMatchers as any}
