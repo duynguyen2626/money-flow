@@ -116,3 +116,12 @@
     Title + Target.
     Status + Potential profit.
     Progress bar + text %.
+
+ Phase 4 - Transaction Header Date Picker Fix
+  Mục tiêu:
+   Fix và điều chỉnh date picker trong Transaction Header theo yêu cầu (check branch fix/txn-header-date-picker).
+  Tasks:
+   [x] Fetch & Checkout branch
+   [ ] Verify Date Picker logic (MonthYearPickerV2)
+   [ ] Fix issues if any
+

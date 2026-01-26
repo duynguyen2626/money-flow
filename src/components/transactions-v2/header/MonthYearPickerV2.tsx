@@ -151,7 +151,7 @@ export function MonthYearPickerV2({
                   setOpen(false)
                 }
               }}
-              disabled={disabledMatchers as any}
+              disabled={disabledMatchers}
               initialFocus
             />
           )}
@@ -164,7 +164,7 @@ export function MonthYearPickerV2({
                 // Keep popover open until user dismisses
               }}
               numberOfMonths={2}
-              disabled={disabledMatchers as any}
+              disabled={disabledMatchers}
               initialFocus
             />
           )}
@@ -174,101 +174,101 @@ export function MonthYearPickerV2({
   )
 }
 
-  function MonthGrid({ value, onChange, availableMonths }: { value: Date; onChange: (d: Date) => void; availableMonths?: Set<string> }) {
-    const [year, setYear] = useState(value.getFullYear())
-    const [showYearPicker, setShowYearPicker] = useState(false)
-    const [yearSearch, setYearSearch] = useState('')
-    const currentYear = new Date().getFullYear()
-    const currentMonth = new Date().getMonth()
-    
-    const months = Array.from({ length: 12 }, (_, i) => new Date(year, i, 1))
-    const yearRange = Array.from({ length: 100 }, (_, i) => currentYear - i)
-    const filteredYears = yearSearch 
-      ? yearRange.filter(y => String(y).includes(yearSearch))
-      : yearRange
-    
-    const isMonthDisabled = (monthIndex: number) => {
-      // Disable future months
-      if (year > currentYear || (year === currentYear && monthIndex > currentMonth)) {
-        // Check if transactions exist in this future month
-        const key = `${year}-${monthIndex}`
-        return !availableMonths?.has(key)
-      }
-      return false
+function MonthGrid({ value, onChange, availableMonths }: { value: Date; onChange: (d: Date) => void; availableMonths?: Set<string> }) {
+  const [year, setYear] = useState(value.getFullYear())
+  const [showYearPicker, setShowYearPicker] = useState(false)
+  const [yearSearch, setYearSearch] = useState('')
+  const currentYear = new Date().getFullYear()
+  const currentMonth = new Date().getMonth()
+
+  const months = Array.from({ length: 12 }, (_, i) => new Date(year, i, 1))
+  const yearRange = Array.from({ length: 110 }, (_, i) => (currentYear + 10) - i)
+  const filteredYears = yearSearch
+    ? yearRange.filter(y => String(y).includes(yearSearch))
+    : yearRange
+
+  const isMonthDisabled = (monthIndex: number) => {
+    // Disable future months
+    if (year > currentYear || (year === currentYear && monthIndex > currentMonth)) {
+      // Check if transactions exist in this future month
+      const key = `${year}-${monthIndex}`
+      return !availableMonths?.has(key)
     }
-    
-    return (
-      <div className="p-3 w-[320px]">
-        {!showYearPicker ? (
-          <>
-            <div className="flex items-center justify-between mb-2">
-              <button className="p-1 rounded hover:bg-accent" onClick={() => setYear(y => y - 1)}>
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button 
-                className="text-sm font-semibold px-2 py-1 rounded hover:bg-accent"
-                onClick={() => setShowYearPicker(true)}
-              >
-                {year}
-              </button>
-              <button className="p-1 rounded hover:bg-accent" onClick={() => setYear(y => y + 1)}>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {months.map((m, idx) => {
-                const disabled = isMonthDisabled(idx)
-                return (
-                  <button
-                    key={idx}
-                    disabled={disabled}
-                    className={`px-2 py-2 rounded-md border hover:bg-accent text-sm ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    onClick={() => !disabled && onChange(new Date(year, idx, 1))}
-                  >
-                    {format(m, 'MMM')}
-                  </button>
-                )
-              })}
-            </div>
-          </>
-        ) : (
-          <div>
-            <div className="mb-2">
-              <input
-                type="text"
-                placeholder="Search year..."
-                value={yearSearch}
-                onChange={(e) => setYearSearch(e.target.value)}
-                className="w-full px-2 py-1 text-sm border rounded"
-                autoFocus
-              />
-            </div>
-            <div className="max-h-[240px] overflow-y-auto space-y-1">
-              {filteredYears.map(y => (
-                <button
-                  key={y}
-                  className="w-full px-2 py-1.5 text-sm text-left rounded hover:bg-accent"
-                  onClick={() => {
-                    setYear(y)
-                    setShowYearPicker(false)
-                    setYearSearch('')
-                  }}
-                >
-                  {y}
-                </button>
-              ))}
-            </div>
+    return false
+  }
+
+  return (
+    <div className="p-3 w-[320px]">
+      {!showYearPicker ? (
+        <>
+          <div className="flex items-center justify-between mb-2">
+            <button className="p-1 rounded hover:bg-accent" onClick={() => setYear(y => y - 1)}>
+              <ChevronLeft className="w-4 h-4" />
+            </button>
             <button
-              className="mt-2 w-full px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-              onClick={() => {
-                setShowYearPicker(false)
-                setYearSearch('')
-              }}
+              className="text-sm font-semibold px-2 py-1 rounded hover:bg-accent"
+              onClick={() => setShowYearPicker(true)}
             >
-              Cancel
+              {year}
+            </button>
+            <button className="p-1 rounded hover:bg-accent" onClick={() => setYear(y => y + 1)}>
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-        )}
-      </div>
-    )
-  }
+          <div className="grid grid-cols-3 gap-2">
+            {months.map((m, idx) => {
+              const disabled = isMonthDisabled(idx)
+              return (
+                <button
+                  key={idx}
+                  disabled={disabled}
+                  className={`px-2 py-2 rounded-md border hover:bg-accent text-sm ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  onClick={() => !disabled && onChange(new Date(year, idx, 1))}
+                >
+                  {format(m, 'MMM')}
+                </button>
+              )
+            })}
+          </div>
+        </>
+      ) : (
+        <div>
+          <div className="mb-2">
+            <input
+              type="text"
+              placeholder="Search year..."
+              value={yearSearch}
+              onChange={(e) => setYearSearch(e.target.value)}
+              className="w-full px-2 py-1 text-sm border rounded"
+              autoFocus
+            />
+          </div>
+          <div className="max-h-[240px] overflow-y-auto space-y-1">
+            {filteredYears.map(y => (
+              <button
+                key={y}
+                className="w-full px-2 py-1.5 text-sm text-left rounded hover:bg-accent"
+                onClick={() => {
+                  setYear(y)
+                  setShowYearPicker(false)
+                  setYearSearch('')
+                }}
+              >
+                {y}
+              </button>
+            ))}
+          </div>
+          <button
+            className="mt-2 w-full px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+            onClick={() => {
+              setShowYearPicker(false)
+              setYearSearch('')
+            }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
