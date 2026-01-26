@@ -66,7 +66,7 @@ export function MonthYearPickerV2({
     : undefined
 
   return (
-    <Popover open={open} onOpenChange={setOpen} modal={true}>
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -161,7 +161,6 @@ export function MonthYearPickerV2({
                 }
               }}
               disabled={disabledMatchers}
-              initialFocus
             />
           )}
           {mode === 'range' && (
@@ -174,7 +173,6 @@ export function MonthYearPickerV2({
               }}
               numberOfMonths={2}
               disabled={disabledMatchers}
-              initialFocus
             />
           )}
         </div>
