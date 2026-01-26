@@ -116,3 +116,47 @@
     Title + Target.
     Status + Potential profit.
     Progress bar + text %.
+
+ Phase 4 - Transaction Header Date Picker Fix
+  Mục tiêu:
+   Fix và điều chỉnh date picker trong Transaction Header theo yêu cầu (check branch fix/txn-header-date-picker).
+  Tasks:
+   [x] Fetch & Checkout branch
+   [ ] Verify Date Picker logic (MonthYearPickerV2)
+   [x] Fix issues if any
+
+ Phase 5 - Date Picker & Cycle Interaction Refinement
+  Mục tiêu:
+   Điều chỉnh hành vi đóng modal của Date Picker và ràng buộc logic giữa Cycle Filter và Date Picker.
+  Tasks:
+   [ ] MonthYearPickerV2: Remove auto-close on selection (Date/Month/Range).
+   [ ] MonthYearPickerV2: Implement 'locked' mode when Cycle is selected (show toast on click).
+   [x] TransactionHeader: Pass locked state to MonthYearPickerV2.
+
+ Phase 6 - Transaction Interaction Refactor
+  Mục tiêu:
+   Chuyển đổi từ Real-time filtering sang Manual filtering (Apply/Clear).
+   Viết lại Date Picker với UI/UX mới (Tabs, OK button, no auto-close).
+   Thêm logic Confirm khi Clear filters.
+  Tasks:
+   [ ] Refactor TransactionHeader: Implement local state buffer.
+   [ ] Refactor TransactionHeader: Add Filter/Clear button with 2 states.
+   [ ] Refactor TransactionHeader: Manual Search behavior.
+   [ ] Implement MonthYearPickerV3 (Tabs: Month, Date, Range; OK button).
+   [x] Add Confirmation Dialog for Clear action.
+
+ Phase 7 - Filter UX Enhancements
+  Mục tiêu:
+   "Hybrid Filter Mode": Filter realtime nếu đang ở chế độ Filter (hasActiveFilters=true).
+   Strict Date/Cycle Rules: Visually disable Date Picker keys when Cycle is active.
+  Tasks:
+   [ ] TransactionHeader: Create wrapper handlers for realtime updates if active.
+   [x] MonthYearPickerV2: Add visual disabled state (opacity, cursor) when locked.
+
+ Phase 8 - Dynamic Filter Options
+  Mục tiêu:
+   Dropdowns (Account, People) chỉ hiển thị options available trong current filter result.
+  Tasks:
+   [ ] UnifiedTransactionsPage: Calculate availableAccountIds & availablePersonIds from filtered transactions.
+   [ ] TransactionHeader: Accept availableIds props and filter dropdown options accordingly.
+
