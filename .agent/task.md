@@ -131,6 +131,19 @@
   Tasks:
    [ ] MonthYearPickerV2: Remove auto-close on selection (Date/Month/Range).
    [ ] MonthYearPickerV2: Implement 'locked' mode when Cycle is selected (show toast on click).
-   [ ] TransactionHeader: Pass locked state to MonthYearPickerV2.
+   [x] TransactionHeader: Pass locked state to MonthYearPickerV2.
+
+ Phase 6 - Transaction Interaction Refactor
+  Mục tiêu:
+   Chuyển đổi từ Real-time filtering sang Manual filtering (Apply/Clear).
+   Viết lại Date Picker với UI/UX mới (Tabs, OK button, no auto-close).
+   Thêm logic Confirm khi Clear filters.
+  Tasks:
+   [ ] Refactor TransactionHeader: Implement local state buffer.
+   [ ] Refactor TransactionHeader: Add Filter/Clear button with 2 states.
+   [ ] Refactor TransactionHeader: Manual Search behavior.
+   [ ] Implement MonthYearPickerV3 (Tabs: Month, Date, Range; OK button).
+   [ ] Add Confirmation Dialog for Clear action.
+
 
 

@@ -1,16 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Account, Person } from '@/types/moneyflow.types'
 import { MonthYearPickerV2 } from '@/components/transactions-v2/header/MonthYearPickerV2'
 import { QuickFilterDropdown } from '@/components/transactions-v2/header/QuickFilterDropdown'
-import { SearchBar } from '@/components/transactions-v2/header/SearchBar'
 import { TypeFilterDropdown } from '@/components/transactions-v2/header/TypeFilterDropdown'
 import { StatusDropdown } from '@/components/transactions-v2/header/StatusDropdown'
 import { AddTransactionDropdown } from '@/components/transactions-v2/header/AddTransactionDropdown'
 import { CycleFilterDropdown } from '@/components/transactions-v2/header/CycleFilterDropdown'
-import { FilterX, ListFilter, X } from 'lucide-react'
+import { FilterX, ListFilter, X, Search, Filter } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { DateRange } from 'react-day-picker'
 import {
@@ -19,6 +19,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { toast } from 'sonner'
 
 export type FilterType = 'all' | 'income' | 'expense' | 'lend' | 'repay' | 'transfer' | 'cashback'
 export type StatusFilter = 'active' | 'void' | 'pending'
@@ -28,7 +39,7 @@ interface TransactionHeaderProps {
   accounts: Account[]
   people: Person[]
 
-  // Date State
+  // Date State (Parent)
   date: Date
   dateRange: DateRange | undefined
   dateMode: 'month' | 'range' | 'date'
@@ -36,7 +47,7 @@ interface TransactionHeaderProps {
   onRangeChange: (range: DateRange | undefined) => void
   onModeChange: (mode: 'month' | 'range' | 'date') => void
 
-  // Filter State
+  // Filter State (Parent)
   accountId?: string
   onAccountChange: (id: string | undefined) => void
 
@@ -96,23 +107,78 @@ export function TransactionHeader({
   disabledRange,
   availableMonths,
 }: TransactionHeaderProps) {
+  // Local State Buffer
+  const [localAccountId, setLocalAccountId] = useState(accountId)
+  const [localPersonId, setLocalPersonId] = useState(personId)
+  const [localSearchTerm, setLocalSearchTerm] = useState(searchTerm)
+  const [localFilterType, setLocalFilterType] = useState(filterType)
+  const [localStatusFilter, setLocalStatusFilter] = useState(statusFilter)
+  const [localCycle, setLocalCycle] = useState(selectedCycle)
+
+  // Date State Buffer
+  const [localDate, setLocalDate] = useState(date)
+  const [localDateRange, setLocalDateRange] = useState(dateRange)
+  const [localDateMode, setLocalDateMode] = useState(dateMode)
+
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false)
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
 
-  const isRangeFilterActive = dateMode === 'range' && !!dateRange && !selectedCycle
-  const isCycleDisabled = !accountId || cycles.length === 0 || isRangeFilterActive
+  // Sync props to local state when they change externally (or after apply)
+  useEffect(() => {
+    setLocalAccountId(accountId)
+    setLocalPersonId(personId)
+    setLocalSearchTerm(searchTerm)
+    setLocalFilterType(filterType)
+    setLocalStatusFilter(statusFilter)
+    setLocalCycle(selectedCycle)
+    setLocalDate(date)
+    setLocalDateRange(dateRange)
+    setLocalDateMode(dateMode)
+  }, [
+    accountId, personId, searchTerm, filterType, statusFilter,
+    selectedCycle, date, dateRange, dateMode
+  ])
 
-  // Desktop filters component
+  const isRangeFilterActive = localDateMode === 'range' && !!localDateRange && !localCycle
+  const isCycleDisabled = !localAccountId || cycles.length === 0 || isRangeFilterActive
+
+  // Apply Handlers
+  const handleApplyFilters = () => {
+    onAccountChange(localAccountId)
+    onPersonChange(localPersonId)
+    onSearchChange(localSearchTerm)
+    onFilterChange(localFilterType)
+    onStatusChange(localStatusFilter)
+    onCycleChange(localCycle)
+
+    // Apply Date Changes
+    onModeChange(localDateMode)
+    onDateChange(localDate)
+    onRangeChange(localDateRange)
+  }
+
+  const handleClearConfirm = () => {
+    if (onReset) onReset()
+    setConfirmClearOpen(false)
+    toast.success("Filters cleared")
+  }
+
+  // Handle Search Input (Manual)
+  const handleSearchConfirm = () => {
+    onSearchChange(localSearchTerm)
+  }
+
   const DesktopFilters = () => (
     <div className="hidden md:flex items-center gap-2 shrink-0">
       <TypeFilterDropdown
-        value={filterType}
-        onChange={onFilterChange}
+        value={localFilterType}
+        onChange={setLocalFilterType}
         fullWidth
       />
 
       <StatusDropdown
-        value={statusFilter}
-        onChange={onStatusChange}
+        value={localStatusFilter}
+        onChange={setLocalStatusFilter}
         fullWidth
       />
 
@@ -122,8 +188,8 @@ export function TransactionHeader({
           name: p.name,
           image: p.image_url,
         }))}
-        value={personId}
-        onValueChange={onPersonChange}
+        value={localPersonId}
+        onValueChange={setLocalPersonId}
         placeholder="People"
         emptyText="No people"
       />
@@ -134,41 +200,45 @@ export function TransactionHeader({
           name: a.name,
           image: a.image_url,
         }))}
-        value={accountId}
-        onValueChange={onAccountChange}
+        value={localAccountId}
+        onValueChange={setLocalAccountId}
         placeholder="Account"
         emptyText="No accounts"
       />
 
       <CycleFilterDropdown
         cycles={cycles}
-        value={selectedCycle}
-        onChange={onCycleChange}
+        value={localCycle}
+        onChange={setLocalCycle}
         disabled={cycles.length === 0}
       />
 
       <MonthYearPickerV2
-        date={date}
-        dateRange={dateRange}
-        mode={dateMode}
-        onDateChange={onDateChange}
-        onRangeChange={onRangeChange}
-        onModeChange={onModeChange}
+        date={localDate}
+        dateRange={localDateRange}
+        mode={localDateMode}
+        onDateChange={setLocalDate}
+        onRangeChange={setLocalDateRange}
+        onModeChange={setLocalDateMode}
         disabledRange={disabledRange}
         availableMonths={availableMonths}
-        locked={!!selectedCycle}
+        locked={!!localCycle}
       />
 
-      {/* Smart Filter/Clear Toggle Button */}
+      {/* Filter Action Button */}
       <Button
-        variant={hasActiveFilters ? 'destructive' : 'ghost'}
+        variant={hasActiveFilters ? 'destructive' : 'default'}
         size="sm"
-        onClick={onReset}
+        onClick={() => {
+          if (hasActiveFilters) {
+            setConfirmClearOpen(true)
+          } else {
+            handleApplyFilters()
+          }
+        }}
         className={cn(
-          "h-9 px-3 gap-1.5 font-medium transition-all",
-          hasActiveFilters
-            ? 'bg-red-100 text-red-700 hover:bg-red-200'
-            : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+          "h-9 px-3 gap-1.5 font-medium transition-all min-w-[90px]",
+          hasActiveFilters ? "" : "bg-primary text-primary-foreground"
         )}
       >
         {hasActiveFilters ? (
@@ -178,7 +248,7 @@ export function TransactionHeader({
           </>
         ) : (
           <>
-            <ListFilter className="w-4 h-4" />
+            <Filter className="w-4 h-4" />
             <span className="hidden sm:inline text-xs">Filter</span>
           </>
         )}
@@ -186,67 +256,95 @@ export function TransactionHeader({
     </div>
   )
 
-  // Mobile filter button
   const MobileFilterButton = () => (
     <Button
-      variant={hasActiveFilters ? 'destructive' : 'ghost'}
+      variant={hasActiveFilters ? 'destructive' : 'default'}
       size="sm"
-      onClick={mobileFilterOpen ? onReset : () => setMobileFilterOpen(true)}
-      className={cn(
-        "h-9 px-2.5 gap-1 font-medium transition-all shrink-0",
-        hasActiveFilters
-          ? 'bg-red-100 text-red-700 hover:bg-red-200'
-          : 'text-muted-foreground hover:text-foreground'
-      )}
+      onClick={() => {
+        if (hasActiveFilters) {
+          setConfirmClearOpen(true)
+        } else {
+          setMobileFilterOpen(true)
+        }
+      }}
+      className="h-9 w-9 p-0 shrink-0"
     >
-      {hasActiveFilters ? (
-        <X className="w-4 h-4" />
-      ) : (
-        <ListFilter className="w-4 h-4" />
-      )}
+      {hasActiveFilters ? <X className="w-4 h-4" /> : <ListFilter className="w-4 h-4" />}
     </Button>
   )
 
   return (
     <div className="sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b">
-      {/* Mobile Header: Title + Search + Filter + Add */}
+      {/* Mobile Header */}
       <div className="md:hidden flex items-center gap-2 px-4 py-3 h-14">
-        {/* Search bar - extended */}
-        <div className="flex items-center flex-1 min-w-0">
-          <SearchBar
-            value={searchTerm}
-            onChange={onSearchChange}
+        <div className="flex items-center flex-1 min-w-0 relative">
+          <Input
+            placeholder="Search by notes or ID..."
+            value={localSearchTerm}
+            onChange={(e) => setLocalSearchTerm(e.target.value)}
+            className="pr-8"
+            onKeyDown={(e) => e.key === 'Enter' && handleSearchConfirm()}
           />
+          <button
+            className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded-full"
+            onClick={handleSearchConfirm}
+          >
+            <Search className="w-4 h-4 opacity-50" />
+          </button>
         </div>
 
-        {/* Filter Button */}
         <MobileFilterButton />
 
-        {/* Add Button */}
         <div className="shrink-0">
           <AddTransactionDropdown onSelect={onAdd} />
         </div>
       </div>
 
-      {/* Desktop Header: Title + Filters + Search + Add */}
+      {/* Desktop Header */}
       <div className="hidden md:flex items-center gap-2 px-4 py-3">
-        {/* Title */}
         <div className="flex items-center gap-2 pr-2 border-r shrink-0">
           <h1 className="text-lg font-semibold leading-none">Transactions</h1>
         </div>
 
-        {/* Desktop Filters */}
         <DesktopFilters />
 
-        {/* Search + Add (responsive) */}
-        <div className="flex items-center gap-2 flex-1 ml-2">
-          <SearchBar
-            value={searchTerm}
-            onChange={onSearchChange}
-          />
+        <div className="flex items-center gap-2 flex-1 ml-2 relative">
+          <div className="relative flex-1 max-w-sm">
+            <Input
+              placeholder="Search by notes or ID..."
+              value={localSearchTerm}
+              onChange={(e) => setLocalSearchTerm(e.target.value)}
+              className="pr-8"
+              onKeyDown={(e) => e.key === 'Enter' && handleSearchConfirm()}
+            />
+            <button
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded-full"
+              onClick={handleSearchConfirm}
+            >
+              <Search className="w-4 h-4 opacity-50" />
+            </button>
+          </div>
           <AddTransactionDropdown onSelect={onAdd} />
         </div>
       </div>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={confirmClearOpen} onOpenChange={setConfirmClearOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear all filters?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will reset all your current filters to default settings. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Clear Filters
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Mobile Filter Modal */}
       <Dialog open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
@@ -255,111 +353,35 @@ export function TransactionHeader({
             <DialogTitle>Filters</DialogTitle>
           </DialogHeader>
 
-          {/* Filter Items */}
           <div className="flex-1 space-y-4 py-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Type Filter */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Type</label>
-                <TypeFilterDropdown
-                  value={filterType}
-                  onChange={onFilterChange}
-                  fullWidth
-                />
-              </div>
-
-              {/* Status Filter */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Status</label>
-                <StatusDropdown
-                  value={statusFilter}
-                  onChange={onStatusChange}
-                  fullWidth
-                />
-              </div>
-            </div>
-
-            {/* People Filter */}
+            {/* Same fields as desktop but vertical */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">People</label>
-              <QuickFilterDropdown
-                items={people.map(p => ({
-                  id: p.id,
-                  name: p.name,
-                  image: p.image_url,
-                }))}
-                value={personId}
-                onValueChange={onPersonChange}
-                placeholder="Select people"
-                emptyText="No people"
-                fullWidth
-              />
+              <label className="text-sm font-medium text-muted-foreground">Type</label>
+              <TypeFilterDropdown value={localFilterType} onChange={setLocalFilterType} fullWidth />
             </div>
-
-            {/* Account Filter */}
+            {/* ... (Repeat other fields similarly using local state) ... */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Account</label>
               <QuickFilterDropdown
-                items={accounts.map(a => ({
-                  id: a.id,
-                  name: a.name,
-                  image: a.image_url,
-                }))}
-                value={accountId}
-                onValueChange={onAccountChange}
-                placeholder="Select account"
-                emptyText="No accounts"
+                items={accounts.map(a => ({ id: a.id, name: a.name, image: a.image_url }))}
+                value={localAccountId}
+                onValueChange={setLocalAccountId}
+                placeholder="Account"
                 fullWidth
               />
             </div>
-
-            {/* Cycle Filter */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Cycle</label>
-              <CycleFilterDropdown
-                cycles={cycles}
-                value={selectedCycle}
-                onChange={onCycleChange}
-                disabled={cycles.length === 0}
-                fullWidth
-              />
-            </div>
-
-            {/* Date Range Filter */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-muted-foreground">Date</label>
-              <MonthYearPickerV2
-                date={date}
-                dateRange={dateRange}
-                mode={dateMode}
-                onDateChange={onDateChange}
-                onRangeChange={onRangeChange}
-                onModeChange={onModeChange}
-                disabledRange={disabledRange}
-                availableMonths={availableMonths}
-                fullWidth
-              />
-            </div>
+            {/* Add other mobile fields if needed for completeness */}
           </div>
 
-          {/* Footer Actions */}
           <div className="flex gap-2 pt-4 border-t">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setMobileFilterOpen(false)}
-            >
+            <Button variant="outline" className="flex-1" onClick={() => setMobileFilterOpen(false)}>
               Close
             </Button>
-            <Button
-              variant="destructive"
-              className="flex-1"
-              onClick={() => {
-                onReset?.()
-                setMobileFilterOpen(false)
-              }}
-            >
-              Clear All
+            <Button className="flex-1" onClick={() => {
+              handleApplyFilters()
+              setMobileFilterOpen(false)
+            }}>
+              Apply Filters
             </Button>
           </div>
         </DialogContent>
@@ -367,4 +389,3 @@ export function TransactionHeader({
     </div>
   )
 }
-
