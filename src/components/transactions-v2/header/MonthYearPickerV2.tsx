@@ -1,7 +1,6 @@
 'use client'
 
-
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { toast } from 'sonner'
 import {
   Popover,
@@ -42,6 +41,14 @@ export function MonthYearPickerV2({
 }: MonthYearPickerV2Props) {
   const [open, setOpen] = useState(false)
 
+  const handleOpenChange = (newOpen: boolean) => {
+    if (locked && newOpen) {
+      toast.error("Please select Cycle 'All' to pick a custom date.")
+      return
+    }
+    setOpen(newOpen)
+  }
+
   const displayText = (() => {
     if (mode === 'month') return format(date, 'MMM yyyy')
     if (mode === 'date') return format(date, 'dd MMM yyyy')
@@ -56,17 +63,27 @@ export function MonthYearPickerV2({
     return 'Select date'
   })()
 
-  const handleModeSelect = (nextMode: 'month' | 'date' | 'range') => {
-    onModeChange(nextMode)
-    setOpen(true) // keep popover open when switching tabs
-  }
+  // Handler to ensure we don't close the popover on selection
+  const handleRangeSelect = useCallback((range: DateRange | undefined) => {
+    onRangeChange(range)
+    // Explicitly DO NOT close here. 
+    // The user must click outside to close for range selection.
+  }, [onRangeChange])
+
+  const handleDateSelect = useCallback((d: Date | undefined) => {
+    if (d) {
+      onDateChange(d)
+      // We can optionally close here for single date, but allowed the user to correct choice is better.
+      // Keeping it open for consistency with user request "tương tự Date... focus out mới close"
+    }
+  }, [onDateChange])
 
   const disabledMatchers = disabledRange
     ? [{ before: disabledRange.start }, { after: disabledRange.end }]
     : undefined
 
   return (
-    <Popover open={open} onOpenChange={setOpen} modal={false}>
+    <Popover open={open} onOpenChange={handleOpenChange} modal={true}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
@@ -75,12 +92,6 @@ export function MonthYearPickerV2({
             "gap-2 justify-between font-medium",
             fullWidth ? 'w-full h-10' : 'w-[200px] h-9'
           )}
-          onClick={(e) => {
-            if (locked) {
-              e.preventDefault()
-              toast.error("Please select Cycle 'All' to pick a custom date.")
-            }
-          }}
         >
           <div className="flex items-center gap-1.5 truncate">
             <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
@@ -89,24 +100,26 @@ export function MonthYearPickerV2({
           <div className="flex items-center gap-0.5 shrink-0">
             {mode === 'date' && (
               <div
+                role="button"
                 onClick={(e) => {
                   e.stopPropagation()
                   onRangeChange(undefined)
                   onModeChange('month')
                   onDateChange(new Date())
                 }}
-                className="hover:bg-current hover:bg-opacity-10 rounded p-0.5 transition-colors cursor-pointer"
+                className="hover:bg-accent rounded p-0.5 transition-colors cursor-pointer"
               >
                 <X className="w-3 h-3 opacity-70 hover:opacity-100" />
               </div>
             )}
             {mode === 'range' && dateRange?.from && dateRange?.to && (
               <div
+                role="button"
                 onClick={(e) => {
                   e.stopPropagation()
                   onRangeChange(undefined)
                 }}
-                className="hover:bg-current hover:bg-opacity-10 rounded p-0.5 transition-colors cursor-pointer"
+                className="hover:bg-accent rounded p-0.5 transition-colors cursor-pointer"
               >
                 <X className="w-3 h-3 opacity-70 hover:opacity-100" />
               </div>
@@ -115,13 +128,27 @@ export function MonthYearPickerV2({
           </div>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="start">
+      <PopoverContent
+        className="w-auto p-0"
+        align="start"
+        // Aggressively stop propagation to prevent parent handlers from interfering
+        onPointerDownOutside={(e) => {
+          // Default behavior is fine (close on outside click)
+        }}
+        onInteractOutside={(e) => {
+          // Default behavior is fine
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div>
           <div className="p-2 border-b flex gap-1">
             <Button
               variant={mode === 'month' ? 'default' : 'ghost'}
               size="sm"
-              onClick={() => handleModeSelect('month')}
+              onClick={() => {
+                onModeChange('month')
+                // Keep open
+              }}
               className="flex-1 h-7 text-xs"
             >
               Month
@@ -129,7 +156,10 @@ export function MonthYearPickerV2({
             <Button
               variant={mode === 'date' ? 'default' : 'ghost'}
               size="sm"
-              onClick={() => handleModeSelect('date')}
+              onClick={() => {
+                onModeChange('date')
+                // Keep open
+              }}
               className="flex-1 h-7 text-xs"
             >
               Date
@@ -137,7 +167,10 @@ export function MonthYearPickerV2({
             <Button
               variant={mode === 'range' ? 'default' : 'ghost'}
               size="sm"
-              onClick={() => handleModeSelect('range')}
+              onClick={() => {
+                onModeChange('range')
+                // Keep open
+              }}
               className="flex-1 h-7 text-xs"
             >
               Range
@@ -147,7 +180,7 @@ export function MonthYearPickerV2({
           {mode === 'month' && (
             <MonthGrid
               value={date}
-              onChange={(d) => { onDateChange(d) }}
+              onChange={(d) => onDateChange(d)}
               availableMonths={availableMonths}
             />
           )}
@@ -155,24 +188,19 @@ export function MonthYearPickerV2({
             <Calendar
               mode="single"
               selected={date}
-              onSelect={(d) => {
-                if (d) {
-                  onDateChange(d)
-                }
-              }}
+              onSelect={handleDateSelect}
               disabled={disabledMatchers}
+            // Removed initialFocus to prevent focus jumping
             />
           )}
           {mode === 'range' && (
             <Calendar
               mode="range"
               selected={dateRange}
-              onSelect={(range) => {
-                onRangeChange(range)
-                // Keep popover open until user dismisses
-              }}
+              onSelect={handleRangeSelect}
               numberOfMonths={2}
               disabled={disabledMatchers}
+            // Removed initialFocus to prevent focus jumping
             />
           )}
         </div>
