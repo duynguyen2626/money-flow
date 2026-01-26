@@ -321,6 +321,26 @@ export function UnifiedTransactionsPage({
         selectedAccountId, selectedPersonId
     ])
 
+    // Calculate available filter options based on current filtered view
+    const { availableAccountIds, availablePersonIds } = useMemo(() => {
+        // If no active filters, we don't need to restrict options (optimization)
+        if (!hasActiveFilters) return { availableAccountIds: undefined, availablePersonIds: undefined }
+
+        const accIds = new Set<string>()
+        const personIds = new Set<string>()
+
+        filteredTransactions.forEach(t => {
+            if (t.account_id) accIds.add(t.account_id)
+            if (t.to_account_id) accIds.add(t.to_account_id)
+            if (t.person_id) personIds.add(t.person_id)
+        })
+
+        return {
+            availableAccountIds: accIds,
+            availablePersonIds: personIds
+        }
+    }, [filteredTransactions, hasActiveFilters])
+
     // Selection State
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
@@ -510,6 +530,8 @@ export function UnifiedTransactionsPage({
                     onCycleChange={handleCycleChange}
                     disabledRange={disabledRange}
                     availableMonths={availableMonths}
+                    availableAccountIds={availableAccountIds}
+                    availablePersonIds={availablePersonIds}
                 />
             </div>
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Account, Person } from '@/types/moneyflow.types'
 import { MonthYearPickerV2 } from '@/components/transactions-v2/header/MonthYearPickerV2'
 import { QuickFilterDropdown } from '@/components/transactions-v2/header/QuickFilterDropdown'
@@ -77,6 +77,10 @@ interface TransactionHeaderProps {
 
   // Available months for constraints
   availableMonths?: Set<string>
+
+  // Dynamic Filter Options
+  availableAccountIds?: Set<string>
+  availablePersonIds?: Set<string>
 }
 
 export function TransactionHeader({
@@ -106,6 +110,8 @@ export function TransactionHeader({
   onCycleChange,
   disabledRange,
   availableMonths,
+  availableAccountIds,
+  availablePersonIds,
 }: TransactionHeaderProps) {
   // Local State Buffer
   const [localAccountId, setLocalAccountId] = useState(accountId)
@@ -139,6 +145,20 @@ export function TransactionHeader({
     selectedCycle, date, dateRange, dateMode
   ])
 
+  // --- Filter Options Logic ---
+  const filteredPeople = useMemo(() => {
+    if (!availablePersonIds) return people
+    // Always include the currently selected one to prevent it from disappearing
+    return people.filter(p => availablePersonIds.has(p.id) || p.id === localPersonId)
+  }, [people, availablePersonIds, localPersonId])
+
+  const filteredAccounts = useMemo(() => {
+    if (!availableAccountIds) return accounts
+    // Always include the currently selected one
+    return accounts.filter(a => availableAccountIds.has(a.id) || a.id === localAccountId)
+  }, [accounts, availableAccountIds, localAccountId])
+
+
   // --- Hybrid Real-time Handlers ---
   const handleFilterChange = (setter: (val: any) => void, propHandler: (val: any) => void) => (val: any) => {
     setter(val)
@@ -147,7 +167,7 @@ export function TransactionHeader({
     }
   }
 
-  // Wrapper for Cycle Change (Specific rule: If cycle selected, might need to reset date range in parent? Logic handled by parent usually)
+  // Wrapper for Cycle Change
   const handleCycleChange = (val: string | undefined) => {
     setLocalCycle(val)
     if (hasActiveFilters) {
@@ -155,7 +175,7 @@ export function TransactionHeader({
     }
   }
 
-  // Wrapper for MonthYearPicker (It returns multiple values, handle carefully)
+  // Wrapper for MonthYearPicker
   const handleDateUpdate = (
     updates: {
       date?: Date,
@@ -215,7 +235,7 @@ export function TransactionHeader({
       />
 
       <QuickFilterDropdown
-        items={people.map(p => ({
+        items={filteredPeople.map(p => ({
           id: p.id,
           name: p.name,
           image: p.image_url,
@@ -223,11 +243,11 @@ export function TransactionHeader({
         value={localPersonId}
         onValueChange={handleFilterChange(setLocalPersonId, onPersonChange)}
         placeholder="People"
-        emptyText="No people"
+        emptyText="No people found"
       />
 
       <QuickFilterDropdown
-        items={accounts.map(a => ({
+        items={filteredAccounts.map(a => ({
           id: a.id,
           name: a.name,
           image: a.image_url,
@@ -235,7 +255,7 @@ export function TransactionHeader({
         value={localAccountId}
         onValueChange={handleFilterChange(setLocalAccountId, onAccountChange)}
         placeholder="Account"
-        emptyText="No accounts"
+        emptyText="No accounts found"
       />
 
       <CycleFilterDropdown
@@ -254,7 +274,7 @@ export function TransactionHeader({
         onModeChange={(m) => handleDateUpdate({ mode: m })}
         disabledRange={disabledRange}
         availableMonths={availableMonths}
-        locked={!!localCycle} // Pass local cycle state
+        locked={!!localCycle}
       />
 
       {/* Filter Action Button */}
@@ -399,22 +419,24 @@ export function TransactionHeader({
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">People</label>
               <QuickFilterDropdown
-                items={people.map(p => ({ id: p.id, name: p.name, image: p.image_url }))}
+                items={filteredPeople.map(p => ({ id: p.id, name: p.name, image: p.image_url }))}
                 value={localPersonId}
                 onValueChange={setLocalPersonId}
                 placeholder="People"
                 fullWidth
+                emptyText="No people found"
               />
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Account</label>
               <QuickFilterDropdown
-                items={accounts.map(a => ({ id: a.id, name: a.name, image: a.image_url }))}
+                items={filteredAccounts.map(a => ({ id: a.id, name: a.name, image: a.image_url }))}
                 value={localAccountId}
                 onValueChange={setLocalAccountId}
                 placeholder="Account"
                 fullWidth
+                emptyText="No accounts found"
               />
             </div>
 

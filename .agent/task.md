@@ -151,4 +151,12 @@
    Strict Date/Cycle Rules: Visually disable Date Picker keys when Cycle is active.
   Tasks:
    [ ] TransactionHeader: Create wrapper handlers for realtime updates if active.
-   [ ] MonthYearPickerV2: Add visual disabled state (opacity, cursor) when locked.
+   [x] MonthYearPickerV2: Add visual disabled state (opacity, cursor) when locked.
+
+ Phase 8 - Dynamic Filter Options
+  Mục tiêu:
+   Dropdowns (Account, People) chỉ hiển thị options available trong current filter result.
+  Tasks:
+   [ ] UnifiedTransactionsPage: Calculate availableAccountIds & availablePersonIds from filtered transactions.
+   [ ] TransactionHeader: Accept availableIds props and filter dropdown options accordingly.
+
