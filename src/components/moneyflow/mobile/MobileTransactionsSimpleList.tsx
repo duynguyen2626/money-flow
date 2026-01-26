@@ -1,6 +1,8 @@
 import type { ReactNode } from "react"
 import { Category, TransactionWithDetails } from "@/types/moneyflow.types"
-import { ArrowRight, Copy, Wrench } from "lucide-react"
+import { ArrowRight, Copy, Wrench, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, History, RefreshCcw } from "lucide-react"
+import { CycleBadge } from "@/components/transactions-v2/badge/CycleBadge"
+import { cn } from "@/lib/utils"
 
 interface MobileTransactionsSimpleListProps {
     transactions: TransactionWithDetails[]
@@ -14,6 +16,7 @@ interface MobileTransactionsSimpleListProps {
         currency: (val: number) => string
         date: (date: string | number | Date) => string
     }
+    accounts?: any[] // Optional, to pass to CycleBadge if needed, but we can pass minimal info
 }
 
 export function MobileTransactionsSimpleList({
@@ -25,6 +28,7 @@ export function MobileTransactionsSimpleList({
     onCopyId,
     renderActions,
     formatters,
+    accounts = [],
 }: MobileTransactionsSimpleListProps) {
     if (!transactions.length) {
         return (
@@ -72,12 +76,34 @@ export function MobileTransactionsSimpleList({
                                 ? 'text-red-500'
                                 : 'text-slate-600'
 
+                    // Type Badge Construction
+                    const badgeBaseClass = "inline-flex items-center justify-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] uppercase tracking-wider font-bold border"
+                    let typeBadge = null;
+                    const tType = txn.type;
+                    if (tType === 'expense') {
+                        typeBadge = <span className={cn(badgeBaseClass, "bg-red-50 text-red-600 border-red-200")}>OUT</span>
+                    } else if (tType === 'income') {
+                        typeBadge = <span className={cn(badgeBaseClass, "bg-emerald-50 text-emerald-600 border-emerald-200")}>IN</span>
+                    } else if (tType === 'transfer') {
+                        typeBadge = <span className={cn(badgeBaseClass, "bg-blue-50 text-blue-600 border-blue-200")}>TF</span>
+                    } else if (tType === 'debt' || tType === 'loan') {
+                        typeBadge = <span className={cn(badgeBaseClass, "bg-amber-50 text-amber-600 border-amber-200")}>DEBT</span>
+                    } else if (tType === 'repayment') {
+                        typeBadge = <span className={cn(badgeBaseClass, "bg-purple-50 text-purple-600 border-purple-200")}>REPAY</span>
+                    }
+
                     // Line 3: Badges (Cycle, Tag) & Category
                     // Category
-                    const categoryName = categories.find(cat => cat.id === txn.category_id)?.name || txn.category_name || 'Uncategorized'
+                    const actualCategory = categories.find(c => c.id === txn.category_id);
+                    const categoryName = actualCategory?.name || txn.category_name || 'Uncategorized'
+                    const categoryImage = actualCategory?.image_url
+
                     // Badges
-                    const cycleTag = (txn as any).persisted_cycle_tag
+                    const cycleTag = (txn as any).persisted_cycle_tag || txn.tag
                     const tag = (txn as any).tag // e.g. debt tag
+
+                    // Cycle Logic using Refund Account (Source)
+                    const refundAccount = accounts.find(a => a.id === txn.account_id) // rough guess
 
                     return (
                         <div
@@ -121,6 +147,9 @@ export function MobileTransactionsSimpleList({
                                             {noteText}
                                         </span>
                                     </div>
+
+                                    {/* Type Badge on Top Right */}
+                                    <div className="shrink-0">{typeBadge}</div>
                                 </div>
 
                                 {/* Line 2: Flow (Left) - Amount (Right) */}
@@ -128,27 +157,34 @@ export function MobileTransactionsSimpleList({
                                     {/* Left: Flow */}
                                     <div className="flex items-center gap-1 min-w-0">
                                         {showFlow ? (
-                                            <div className="flex items-center gap-1 text-xs text-slate-600">
-                                                {sourceImage && (
-                                                    <img
-                                                        src={sourceImage}
-                                                        alt=""
-                                                        className="max-h-5 max-w-5 h-auto w-auto rounded-none object-contain"
-                                                    />
-                                                )}
-                                                {targetImage && (
-                                                    <>
-                                                        <ArrowRight className="h-3 w-3 text-slate-400" />
+                                            <div className="flex items-center gap-2 text-xs text-slate-600">
+                                                {/* Source */}
+                                                <div className="flex items-center gap-1">
+                                                    {sourceImage ? (
+                                                        <img
+                                                            src={sourceImage}
+                                                            alt=""
+                                                            className="h-6 w-6 rounded-none object-contain"
+                                                        />
+                                                    ) : <span className="text-[10px] italic text-slate-400">Src</span>}
+                                                </div>
+
+                                                <ArrowRight className="h-3 w-3 text-slate-400" />
+
+                                                {/* Target */}
+                                                <div className="flex items-center gap-1">
+                                                    {targetImage ? (
                                                         <img
                                                             src={targetImage}
                                                             alt=""
-                                                            className="max-h-5 max-w-5 h-auto w-auto rounded-none object-contain"
+                                                            className="h-6 w-6 rounded-none object-contain"
                                                         />
-                                                    </>
-                                                )}
+                                                    ) : <span className="text-[10px] italic text-slate-400">Dst</span>}
+                                                </div>
                                             </div>
                                         ) : (
-                                            <div />
+                                            // Ensure height consistency
+                                            <div className="h-6" />
                                         )}
                                     </div>
 
@@ -171,24 +207,30 @@ export function MobileTransactionsSimpleList({
                                 </div>
 
                                 {/* Line 3: Badges (Left) - Category (Right) */}
-                                <div className="flex items-center justify-between gap-2 mt-1">
+                                <div className="flex items-center justify-between gap-2 mt-1 min-h-[24px]">
                                     {/* Left: Badges (Cycle, Tag) */}
                                     <div className="flex items-center gap-1.5 overflow-hidden">
-                                        {cycleTag && (
-                                            <span className="inline-flex items-center rounded-md bg-purple-50 px-1.5 py-0.5 text-[10px] font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10 whitespace-nowrap">
-                                                {cycleTag}
-                                            </span>
-                                        )}
-                                        {tag && (
+                                        <CycleBadge
+                                            account={refundAccount}
+                                            cycleTag={cycleTag}
+                                            txnDate={dateValue}
+                                            mini={true} // Use mini version for mobile if supported, else default
+                                        />
+                                        {tag && tag !== cycleTag && (
                                             <span className="inline-flex items-center rounded-md bg-teal-50 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 ring-1 ring-inset ring-teal-700/10 whitespace-nowrap">
                                                 {tag}
                                             </span>
                                         )}
                                     </div>
 
-                                    {/* Right: Category */}
-                                    <div className="text-xs text-slate-500 font-medium truncate max-w-[150px]">
-                                        {categoryName}
+                                    {/* Right: Category (Image + Name) */}
+                                    <div className="flex items-center gap-1.5 max-w-[150px] justify-end">
+                                        {categoryImage && (
+                                            <img src={categoryImage} alt="" className="h-5 w-5 object-contain" />
+                                        )}
+                                        <div className="text-xs text-slate-500 font-medium truncate">
+                                            {categoryName}
+                                        </div>
                                     </div>
                                 </div>
                             </div>

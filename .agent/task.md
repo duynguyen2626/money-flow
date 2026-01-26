@@ -158,5 +158,18 @@
    Dropdowns (Account, People) chỉ hiển thị options available trong current filter result.
   Tasks:
    [ ] UnifiedTransactionsPage: Calculate availableAccountIds & availablePersonIds from filtered transactions.
-   [ ] TransactionHeader: Accept availableIds props and filter dropdown options accordingly.
+   [x] TransactionHeader: Accept availableIds props and filter dropdown options accordingly.
+
+ Phase 9 - UI Redesign & Modernization (New Branch)
+  Mục tiêu:
+   Modernize Transaction Header (Shadcn/Tailwind, fix scrollbar).
+   Refactor Flow & Entity Column (Cycle as Date Range, Type Badge replaces Arrow).
+   Simplify Category Column (Remove Type).
+   Redesign Action Column.
+  Tasks:
+   [ ] Header: Fix container layout & scrollbar styling.
+   [ ] Table: Update "Flow & Entity" column definition (Cycle Range 01-01 to 30-01, Type Badge in middle).
+   [ ] Table: Update "Category" column definition (Remove Type).
+   [ ] Table: Redesign "Action" layout.
+
 

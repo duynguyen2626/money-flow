@@ -103,7 +103,7 @@ function renderCell(person: Person, key: string, onEdit: (p: Person) => void, on
                     <div className="flex flex-col min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                             <Link
-                                href={`/people/${person.id}/details`}
+                                href={`/people/details?id=${person.id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="font-medium text-sm leading-none hover:underline hover:text-blue-600 transition-colors truncate"

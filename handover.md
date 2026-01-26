@@ -6,6 +6,16 @@
 ## Summary
 We have successfully refactored the Transaction Table (`TransactionRow.tsx`) to use a **Fixed-Width CSS Grid Layout**. This resolves critical issues with column alignment, overlapping badges, and layout shifts.
 
+## Update (Jan 26, 2026)
+- Unified Flow rendering in `UnifiedTransactionTable`:
+    - People debt badge order: [tag][name][avatar]
+    - Badges align left; name aligns right in target entity
+    - Refund flow badges restored with text
+    - From/To badges darker in account/person detail views + hint text added under table for account details
+- Cycle badge format updated to `dd-MM~dd-MM` and consistent size
+- Calendar-month cycle now renders range (no blank)
+- Account details context fix: `AccountContentWrapper` no longer depends on context provider
+
 ## Key Changes
 1.  **Grid Layout**: Encapsulated in `ui_standards.md`. Flow column is now fixed at `480px`.
 2.  **Image Rendering**:
