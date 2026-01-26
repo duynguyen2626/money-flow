@@ -120,14 +120,15 @@ export default async function CashbackPage({ searchParams }: PageProps) {
         supabase
             .from('accounts')
             .select('id')
-            .eq('type', 'credit_card') as Promise<{ data: { id: string }[] | null }>,
+            .eq('type', 'credit_card')
+            .returns<{ id: string }[]>(),
         getAccounts(),
         getCategories(),
         getPeople(),
         getShops(),
     ])
 
-    const creditCards = creditCardsData.data
+    const creditCards = creditCardsData.data ?? []
     const accountIds = creditCards?.map(a => a.id) ?? []
     const referenceDate = new Date(year, 0, 1)
     const cards = await getCashbackProgress(0, accountIds, referenceDate, false)

@@ -2,14 +2,13 @@
 
 import { ReactNode } from 'react'
 import { Loader2 } from 'lucide-react'
-import { useAccountTabLoading } from '@/context/account-tab-context'
 
 type AccountContentWrapperProps = {
   children: ReactNode
+  isPending?: boolean
 }
 
-export function AccountContentWrapper({ children }: AccountContentWrapperProps) {
-  const { isPending } = useAccountTabLoading()
+export function AccountContentWrapper({ children, isPending = false }: AccountContentWrapperProps) {
 
   return (
     <div className="relative flex-1 bg-white overflow-hidden">

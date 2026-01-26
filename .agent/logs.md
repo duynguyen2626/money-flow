@@ -2,88 +2,103 @@
 Console Error
 
 ## Error Message
-In HTML, <button> cannot be a descendant of <button>.
+In HTML, <a> cannot be a descendant of <a>.
 This will cause a hydration error.
 
   ...
-    <Popover open={false} onOpenChange={function bound dispatchSetState}>
-      <Popper __scopePopper={{Popper:[...]}}>
-        <PopperProvider scope={{Popper:[...]}} anchor={null} onAnchorChange={function bound dispatchSetState}>
-          <PopoverProvider scope={undefined} contentId="radix-_r_v_" triggerRef={{current:null}} open={false} ...>
-            <PopoverTrigger asChild={true}>
-              <PopperAnchor asChild={true} __scopePopper={{Popper:[...]}}>
-                <Primitive.div asChild={true} ref={function}>
-                  <Primitive.div.Slot ref={function}>
-                    <Primitive.div.SlotClone ref={function}>
-                      <Primitive.button type="button" aria-haspopup="dialog" aria-expanded={false} ...>
-                        <Primitive.button.Slot type="button" aria-haspopup="dialog" aria-expanded={false} ...>
-                          <Primitive.button.SlotClone type="button" aria-haspopup="dialog" aria-expanded={false} ...>
-                            <_c variant="outline" size="sm" className="h-9 w-[140..." ...>
->                             <button
->                               className="inline-flex items-center whitespace-nowrap text-sm ring-offset-background t..."
+    <div className="relative w..." style={{}}>
+      <div>
+      <div className="hidden md:..." style={{...}}>
+        <table className="w-full cap..." onMouseUp={function handleCellMouseUp} onMouseLeave={function handleCellMouseUp}>
+          <_c2>
+          <_c4>
+            <tbody ref={null} className={"[&_tr:la..."}>
+              <_c8 className="border-b b...">
+                <tr ref={null} className="border-b t...">
+                  <_c12>
+                  <_c12>
+                  <_c12 onMouseDown={function onMouseDown} onMouseEnter={function onMouseEnter} className="border-r b..." ...>
+                    <td ref={null} className={"p-2 alig..."} onMouseDown={function onMouseDown} ...>
+                      <div className="flex items...">
+                        <div className="flex-1 min...">
+                          <RenderEntity name="Techcomban..." icon="https://im..." link="/accounts/..." badges={[...]} ...>
+                            <LinkComponent href="/accounts/..." onClick={function onClick} target="_blank" ...>
+>                             <a
+>                               target="_blank"
+>                               rel="noopener noreferrer"
+>                               className="block w-full hover:bg-slate-50 rounded-sm transition-colors p-0.5 relative ..."
 >                               ref={function}
->                               onMouseEnter={function handleMouseEnter}
->                               onMouseLeave={function handleMouseLeave}
->                               type="button"
->                               aria-haspopup="dialog"
->                               aria-expanded={false}
->                               aria-controls="radix-_r_v_"
->                               data-state="closed"
->                               onClick={function handleEvent}
+>                               onClick={function onClick}
+>                               onMouseEnter={function onMouseEnter}
+>                               onTouchStart={function onTouchStart}
+>                               href="/accounts/8d5bb150-d62e-4473-a00d-a8aee6a12331"
 >                             >
-                                <div>
                                 <div className="flex items...">
->                                 <button
->                                   onClick={function onClick}
->                                   className="hover:bg-current hover:bg-opacity-10 rounded p-0.5 transition-colors"
->                                 >
+                                  <div className="shrink-0 f...">
+                                    <LinkComponent href="/accounts/..." onClick={function onClick} target="_blank" ...>
+>                                     <a
+>                                       target="_blank"
+>                                       rel="noopener noreferrer"
+>                                       ref={function}
+>                                       onClick={function onClick}
+>                                       onMouseEnter={function onMouseEnter}
+>                                       onTouchStart={function onTouchStart}
+>                                       href="/accounts/8d5bb150-d62e-4473-a00d-a8aee6a12331"
+>                                     >
                                   ...
-            ...
+                        ...
+                  ...
+              ...
 
 
 
-    at button (<anonymous>:null:null)
-    at QuickFilterDropdown (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/transactions-v2/header/QuickFilterDropdown.tsx:92:15)
-    at DesktopFilters (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/transactions-v2/header/TransactionHeader.tsx:126:7)
-    at TransactionHeader (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/transactions-v2/header/TransactionHeader.tsx:215:9)
-    at TransactionsPageV2 (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/transactions-v2/TransactionsPageV2.tsx:337:7)
-    at TransactionsV2Page (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/app/transactions-v2/page.tsx:25:5)
+    at a (<anonymous>:null:null)
+    at RenderEntity (src/components/moneyflow/unified-transaction-table.tsx:2267:35)
+    at renderCell (src/components/moneyflow/unified-transaction-table.tsx:2588:31)
+    at <unknown> (src/components/moneyflow/unified-transaction-table.tsx:2879:30)
+    at Array.map (<anonymous>:null:null)
+    at <unknown> (src/components/moneyflow/unified-transaction-table.tsx:2850:41)
+    at Array.map (<anonymous>:null:null)
+    at UnifiedTransactionTable (src/components/moneyflow/unified-transaction-table.tsx:1480:40)
+    at UnifiedTransactionsPage (src/components/transactions/UnifiedTransactionsPage.tsx:548:17)
+    at TransactionsPage (src\app\transactions\page.tsx:29:7)
 
 ## Code Frame
-  90 |           <div className="flex items-center gap-0.5 shrink-0">
-  91 |             {value && (
-> 92 |               <button
-     |               ^
-  93 |                 onClick={(e) => {
-  94 |                   e.stopPropagation()
-  95 |                   onValueChange(undefined)
+  2265 |                                 {leadingElement && <div className="shrink-0">{leadingElement}</div>}
+  2266 |                                 {link ? (
+> 2267 |                                   <Link href={link} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer">
+       |                                   ^
+  2268 |                                     {renderAvatar(icon, name, isSquare)}
+  2269 |                                   </Link>
+  2270 |                                 ) : renderAvatar(icon, name, isSquare)}
 
 Next.js version: 16.0.10 (Turbopack)
-
 ## Error Type
 Console Error
 
 ## Error Message
-<button> cannot contain a nested <button>.
+<a> cannot contain a nested <a>.
 See this log for the ancestor stack trace.
 
 
-    at button (<anonymous>:null:null)
-    at _c (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/ui/button.tsx:46:7)
-    at QuickFilterDropdown (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/transactions-v2/header/QuickFilterDropdown.tsx:66:9)
-    at QuickFilterDropdown (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/transactions-v2/header/QuickFilterDropdown.tsx:65:7)
-    at DesktopFilters (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/transactions-v2/header/TransactionHeader.tsx:126:7)
-    at TransactionHeader (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/transactions-v2/header/TransactionHeader.tsx:215:9)
-    at TransactionsPageV2 (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/components/transactions-v2/TransactionsPageV2.tsx:337:7)
-    at TransactionsV2Page (../../../../Mobile Documents/com~apple~CloudDocs/Github Nov25/money-flow-3/src/app/transactions-v2/page.tsx:25:5)
+    at a (<anonymous>:null:null)
+    at RenderEntity (src/components/moneyflow/unified-transaction-table.tsx:2315:31)
+    at renderCell (src/components/moneyflow/unified-transaction-table.tsx:2588:31)
+    at <unknown> (src/components/moneyflow/unified-transaction-table.tsx:2879:30)
+    at Array.map (<anonymous>:null:null)
+    at <unknown> (src/components/moneyflow/unified-transaction-table.tsx:2850:41)
+    at Array.map (<anonymous>:null:null)
+    at UnifiedTransactionTable (src/components/moneyflow/unified-transaction-table.tsx:1480:40)
+    at UnifiedTransactionsPage (src/components/transactions/UnifiedTransactionsPage.tsx:548:17)
+    at TransactionsPage (src\app\transactions\page.tsx:29:7)
 
 ## Code Frame
-  44 |     const Comp = asChild ? Slot : "button"
-  45 |     return (
-> 46 |       <Comp
-     |       ^
-  47 |         className={cn(buttonVariants({ variant, size, className }))}
-  48 |         ref={ref}
-  49 |         {...props}
+  2313 |                           if (link) {
+  2314 |                             return (
+> 2315 |                               <Link href={link} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer" className="block w-full hover:bg-slate-50 rounded-sm transition-colors p-0.5 relative z-20">
+       |                               ^
+  2316 |                                 {Content}
+  2317 |                               </Link>
+  2318 |                             )
 
 Next.js version: 16.0.10 (Turbopack)

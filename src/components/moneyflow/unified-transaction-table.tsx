@@ -1,5 +1,6 @@
 "use client"
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { startOfMonth, endOfMonth, isWithinInterval, parseISO, isSameDay, isSameMonth, format } from 'date-fns'
 import { useCallback, useEffect, useMemo, useState, useRef } from "react"
 import { createPortal } from "react-dom"
 import {
@@ -119,6 +120,9 @@ const numberFormatter = new Intl.NumberFormat('en-US', {
 });
 
 
+
+import { Badge } from "@/components/ui/badge"
+import { CycleBadge } from "@/components/transactions-v2/badge/CycleBadge"
 
 interface ColumnConfig {
   key: ColumnKey
@@ -247,16 +251,43 @@ export function UnifiedTransactionTable({
       })
     }, 2000)
   }, [])
+
+  const copyToClipboard = useCallback(async (value: string, successLabel?: string) => {
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = value
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
+
+      if (successLabel) {
+        toast.success(`${successLabel} copied`)
+      }
+
+      return true
+    } catch (err) {
+      toast.error('Copy failed')
+      return false
+    }
+  }, [])
   const defaultColumns: ColumnConfig[] = [
-    { key: "date", label: "Date", defaultWidth: 160, minWidth: 140 },
-    { key: "shop", label: "Note", defaultWidth: 250, minWidth: 180 },
+    { key: "date", label: "Date & Type", defaultWidth: 140, minWidth: 120 },
+    { key: "shop", label: "Note & Category", defaultWidth: 420, minWidth: 300 },
     { key: "people", label: "People", defaultWidth: 150, minWidth: 120 },
-    { key: "account", label: "Flow & Entity", defaultWidth: 280, minWidth: 220 },
+    { key: "account", label: "Flow", defaultWidth: 260, minWidth: 250 },
     { key: "amount", label: "BASE", defaultWidth: 120, minWidth: 100 },
     { key: "final_price", label: "Net Value", defaultWidth: 120, minWidth: 100 },
     { key: "category", label: "Category", defaultWidth: 180 },
     { key: "id", label: "ID", defaultWidth: 100 },
-    { key: "actions", label: "Action", defaultWidth: 80, minWidth: 60 },
+    { key: "actions", label: "Action", defaultWidth: 100, minWidth: 60 },
   ]
   const [isColumnCustomizerOpen, setIsColumnCustomizerOpen] = useState(false)
 
@@ -276,7 +307,7 @@ export function UnifiedTransactionTable({
       date: true,
       shop: true,
       note: false,
-      category: false, // Merged into Shop (inline badge)
+      category: true, // Shown by default with new UI
       tag: false,
       account: true,
       amount: true,
@@ -1241,37 +1272,43 @@ export function UnifiedTransactionTable({
     }
 
     return (
-      <div className="flex items-center gap-1" data-action-menu-wrapper onClick={(e) => e.stopPropagation()}>
-        {/* Quick Actions */}
-        <button
-          className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-          onClick={(e) => { e.stopPropagation(); handleEdit(txn); }}
-          title="Edit"
-        >
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
-        <CustomTooltip content="Duplicate">
+      <div className="flex items-center gap-0.5" data-action-menu-wrapper onClick={(e) => e.stopPropagation()}>
+        {/* Quick Actions - Primary */}
+        <CustomTooltip content="Edit">
           <button
-            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
-            onClick={(e) => { e.stopPropagation(); handleDuplicate(txn); }}
+            className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+            onClick={(e) => { e.stopPropagation(); handleEdit(txn); }}
           >
-            <ClipboardPaste className="h-3.5 w-3.5" />
+            <Pencil className="h-3.5 w-3.5" />
           </button>
         </CustomTooltip>
 
+        <CustomTooltip content="Duplicate">
+          <button
+            className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
+            onClick={(e) => { e.stopPropagation(); handleDuplicate(txn); }}
+          >
+            <CopyPlus className="h-3.5 w-3.5" />
+          </button>
+        </CustomTooltip>
+
+        {/* More Actions Menu */}
         <Popover open={isMenuOpen} onOpenChange={(open) => setActionMenuOpen(open ? txn.id : null)}>
           <PopoverTrigger asChild>
             <button
               id={`action-btn-${txn.id}`}
               type="button"
               data-action-trigger
-              className="inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              className={cn(
+                "inline-flex items-center justify-center rounded-md p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors",
+                isMenuOpen && "bg-slate-100 text-slate-700"
+              )}
               disabled={isExcelMode}
               onClick={event => {
                 event.stopPropagation()
               }}
             >
-              <Wrench className="h-3.5 w-3.5 pointer-events-none" />
+              <Settings2 className="h-3.5 w-3.5 pointer-events-none" />
             </button>
           </PopoverTrigger>
           <PopoverContent
@@ -1332,9 +1369,9 @@ export function UnifiedTransactionTable({
               if (isExcelMode) return;
               handleEdit(txn);
             }}
-            onCopyId={(id) => {
-              navigator.clipboard.writeText(id)
-              toast.success("Transaction ID copied")
+            onCopyId={async (id) => {
+              const ok = await copyToClipboard(id, "Transaction ID")
+              if (!ok) return
             }}
             formatters={{
               currency: (val) => numberFormatter.format(val),
@@ -1352,9 +1389,6 @@ export function UnifiedTransactionTable({
               <TableHeader className="sticky top-0 z-50 bg-gradient-to-b from-slate-50 to-white backdrop-blur-sm border-b-2 border-slate-200 shadow-[0_2px_8px_-2px_rgba(0,0,0,0.1)]">
                 <TableRow className="hover:bg-transparent border-0">
                   {displayedColumns.map(col => {
-                    // Sticky Logic Removed Personally by User Request
-                    // "Mobile Layout bỏ freeze cột (bỏ cả Web luôn)" -> remove sticky classes
-                    const stickyClass = "";
                     const stickyStyle: React.CSSProperties = { width: columnWidths[col.key] };
 
                     const isMobileCategoryDate = isMobile && col.key === 'category'
@@ -1364,10 +1398,8 @@ export function UnifiedTransactionTable({
                       <TableHead
                         key={col.key}
                         className={cn(
-                          "border-r border-slate-200 bg-transparent text-slate-700 whitespace-nowrap sticky top-0 z-40 font-semibold",
-                          // Ensure higher z-index for left-sticky columns to overlap standard headers during horizontal scroll
-                          (stickyStyle.left !== undefined) && "z-60",
-                          stickyClass
+                          "border-r border-slate-200 bg-transparent text-slate-700 whitespace-nowrap font-semibold h-11",
+                          // Removed sticky top-0 as requested
                         )}
                         style={stickyStyle}
                       >
@@ -1493,7 +1525,32 @@ export function UnifiedTransactionTable({
                   }
 
                   const renderCell = (key: ColumnKey) => {
+                    const refundAccount = accounts.find(a => a.id === txn.account_id); // Lifted up for Category case availability
                     switch (key) {
+                      case "category": {
+                        const actualCategory = categories.find(c => c.id === txn.category_id);
+                        const displayCategory = actualCategory?.name || txn.category_name;
+                        const catImg = actualCategory?.image_url;
+
+                        // Full size image without crop/rounded if available
+                        return (
+                          <div className="flex items-center gap-2">
+                            <div className="h-8 w-8 flex items-center justify-center shrink-0">
+                              {catImg ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={catImg} alt="" className="h-full w-full object-contain" />
+                              ) : (
+                                <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center">
+                                  <span className="text-[10px]">🏷️</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium text-slate-700">{displayCategory || 'Uncategorized'}</span>
+                            </div>
+                          </div>
+                        )
+                      }
                       case "date": {
                         const d = new Date(txn.occurred_at ?? txn.created_at ?? Date.now())
                         const day = String(d.getDate()).padStart(2, '0')
@@ -1536,6 +1593,7 @@ export function UnifiedTransactionTable({
                         )
                       }
                       // Note: 'type' column was removed - it's now merged into the 'date' column
+
                       case "shop": {
                         let shopLogo = txn.shop_image_url;
 
@@ -1604,24 +1662,27 @@ export function UnifiedTransactionTable({
                         if (showHourglass) {
                           refundBadge = (
                             <CustomTooltip content="Refund Requested - Waiting for Confirmation">
-                              <div className="flex items-center justify-center rounded bg-amber-100 border border-amber-300 text-amber-700 px-1 py-0.5 shrink-0 ml-1">
+                              <div className="flex items-center gap-0.5 justify-center rounded bg-amber-100 border border-amber-300 text-amber-700 px-1.5 py-0.5 shrink-0 ml-1">
                                 <Clock className="h-3 w-3" />
+                                <span className="text-[10px] font-bold">Pending</span>
                               </div>
                             </CustomTooltip>
                           );
                         } else if (showReversed) {
                           refundBadge = (
                             <CustomTooltip content="Refund Completed">
-                              <div className="flex items-center justify-center rounded bg-slate-100 border border-slate-300 text-slate-700 px-1 py-0.5 shrink-0 ml-1">
+                              <div className="flex items-center gap-0.5 justify-center rounded bg-slate-100 border border-slate-300 text-slate-700 px-1.5 py-0.5 shrink-0 ml-1">
                                 <Undo2 className="h-3 w-3" />
+                                <span className="text-[10px] font-bold">Refunded</span>
                               </div>
                             </CustomTooltip>
                           );
                         } else if (showCheck) {
                           refundBadge = (
                             <CustomTooltip content="Refund Confirmed">
-                              <div className="flex items-center justify-center rounded bg-emerald-100 border border-emerald-300 text-emerald-700 px-1 py-0.5 shrink-0 ml-1">
+                              <div className="flex items-center gap-0.5 justify-center rounded bg-emerald-100 border border-emerald-300 text-emerald-700 px-1.5 py-0.5 shrink-0 ml-1">
                                 <Check className="h-3 w-3" />
+                                <span className="text-[10px] font-bold">Confirmed</span>
                               </div>
                             </CustomTooltip>
                           );
@@ -1673,36 +1734,34 @@ export function UnifiedTransactionTable({
                               </div>
                             )}
 
-                            <div className="flex flex-col min-w-0 flex-1 justify-center">
-                              {/* Row 1: ID (Compact) + Note */}
-                              <div className="flex items-center gap-1.5 min-w-0 w-full mb-0.5">
-                                {/* ID Badge - Moved Up & Compact - 2 characters + ellipsis? Or just icon? User said "align sau img [7e...] làm gọn lại" */}
+                            <div className="flex items-center gap-2 min-w-0 flex-1 justify-between">
+                              {/* Left: ID Badge + Note */}
+                              <div className="flex items-center gap-1.5 min-w-0 flex-1">
                                 <CustomTooltip content={`Click to copy: ${txnIdFull}`}>
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      navigator.clipboard.writeText(txn.id);
-                                      setCopiedId(txn.id);
-                                      setTimeout(() => setCopiedId(null), 2000);
+                                      copyToClipboard(txn.id).then((ok) => {
+                                        if (!ok) return
+                                        setCopiedId(txn.id);
+                                        setTimeout(() => setCopiedId(null), 2000);
+                                      })
                                     }}
                                     className={cn(
-                                      "inline-flex items-center gap-0.5 px-0.5 py-0 rounded text-[9px] font-mono transition-colors shrink-0 h-4",
-                                      copiedId === txn.id
-                                        ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
-                                        : "bg-slate-100 text-slate-400 border border-slate-200 hover:bg-slate-200"
+                                      "p-1 hover:bg-slate-100 rounded text-slate-300 hover:text-slate-600 transition-colors shrink-0",
+                                      copiedId === txn.id && "text-emerald-500"
                                     )}
+                                    title={`Copy Transaction ID: ${txn.id}`}
                                   >
-                                    <span className="max-w-[30px] truncate">{txnIdShort}</span>
-                                    {copiedId === txn.id ? <Check className="h-2 w-2" /> : <Copy className="h-2 w-2" />}
+                                    {copiedId === txn.id ? <CheckCheck className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
                                   </button>
                                 </CustomTooltip>
 
-                                {/* Note Content - Same Line */}
                                 {txn.note ? (
                                   <CustomTooltip content={txn.note}>
                                     <span
                                       className="text-slate-900 font-bold truncate cursor-help block flex-1"
-                                      style={{ fontSize: `0.9em` }} // Match Flow
+                                      style={{ fontSize: `0.9em` }}
                                     >
                                       {txn.note}
                                     </span>
@@ -1710,24 +1769,11 @@ export function UnifiedTransactionTable({
                                 ) : (
                                   <span className="text-slate-400 italic text-[0.9em]">No note</span>
                                 )}
-
-                                {/* Inline Category Badge */}
-                                {(() => {
-                                  const actualCategory = categories.find(c => c.id === txn.category_id);
-                                  const displayCategory = actualCategory?.name || txn.category_name;
-                                  if (!displayCategory) return null;
-                                  return (
-                                    <span className="inline-flex items-center justify-center rounded-sm bg-slate-100 border border-slate-200 px-1.5 h-4 text-[9px] font-bold text-slate-500 uppercase tracking-tight shrink-0 ml-1">
-                                      {displayCategory}
-                                    </span>
-                                  )
-                                })()}
                               </div>
 
-                              {/* Row 2: Badges (Installment/Refund/Split) */}
+                              {/* Right: All Badges in Single Row */}
                               {(() => {
                                 const metadata = (typeof txn.metadata === 'string' ? JSON.parse(txn.metadata) : txn.metadata) as any;
-                                // Support New and Old flags
                                 const isSplitParent = metadata?.is_split_bill === true || metadata?.is_split_bill_base === true;
                                 const isSplitChild = !!(metadata?.parent_transaction_id || metadata?.split_parent_id);
                                 const splitGroupName = metadata?.split_group_name;
@@ -1735,7 +1781,6 @@ export function UnifiedTransactionTable({
                                 let splitBadge = null;
                                 if (isSplitParent || isSplitChild) {
                                   const badgeText = isSplitParent ? "SPLIT" : "SHARE";
-                                  // Parent = Indigo (Distinct), Child = Slate (Subtle)
                                   const badgeColor = isSplitParent
                                     ? "bg-indigo-50 text-indigo-700 border-indigo-200"
                                     : "bg-slate-50 text-slate-600 border-slate-200";
@@ -1757,20 +1802,22 @@ export function UnifiedTransactionTable({
                                 }
 
                                 const hasBulkDebts = (metadata?.bulk_allocation?.debts?.length > 0) || (metadata?.bulkAllocation?.debts?.length > 0);
-                                return (installmentBadge || refundBadge || confirmRefundBadge || splitBadge || hasBulkDebts) && (
-                                  <div className="flex items-center gap-1">
+                                const showBadges = installmentBadge || refundBadge || confirmRefundBadge || splitBadge || hasBulkDebts;
+
+                                if (!showBadges) return null;
+
+                                return (
+                                  <div className="flex items-center gap-1 ml-auto">
                                     {installmentBadge}
                                     {refundBadge}
                                     {confirmRefundBadge}
                                     {splitBadge}
-                                    {/* Repayment Counter Badge (Added to Shop Column) */}
                                     {hasBulkDebts && (() => {
                                       const bulkAllocation = metadata?.bulk_allocation || metadata?.bulkAllocation;
 
                                       if (bulkAllocation?.debts && bulkAllocation.debts.length > 0) {
                                         const debts = bulkAllocation.debts as { id: string, amount: number, tag?: string, note?: string }[];
                                         const count = debts.length;
-                                        // Only show badge if count > 1 (True Bulk). Single item is redundant context.
                                         if (count <= 1) return null;
 
                                         return (
@@ -1812,94 +1859,64 @@ export function UnifiedTransactionTable({
                       case "note": {
                         const linkedIdForCopy = (refundSeq === 2 || refundSeq === 3) ? displayIdForBadge : null;
                         return (
-                          <div className="flex items-center gap-1 max-w-[250px] group/note">
-                            {/* Linked ID Copy (if exists) */}
-                            {linkedIdForCopy && linkedIdForCopy !== txn.id && (
+                          <div className="flex items-center gap-2 max-w-[250px] group/note justify-between w-full">
+                            {/* Left: Note + Linked ID */}
+                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                              {linkedIdForCopy && linkedIdForCopy !== txn.id && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    copyToClipboard(linkedIdForCopy).then((ok) => {
+                                      if (!ok) return
+                                      setCopiedId(`linked-${txn.id}`);
+                                      setTimeout(() => setCopiedId(null), 2000);
+                                    })
+                                  }}
+                                  className={cn(
+                                    "opacity-0 group-hover/note:opacity-100 transition-opacity p-0.5 hover:bg-blue-50 rounded text-blue-400 hover:text-blue-600 shrink-0",
+                                    copiedId === `linked-${txn.id}` && "opacity-100 text-emerald-500"
+                                  )}
+                                  title={`Copy Linked ID: ${linkedIdForCopy}`}
+                                >
+                                  {copiedId === `linked-${txn.id}` ? <CheckCheck className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
+                                </button>
+                              )}
+
+                              <span
+                                className="text-slate-900 font-bold truncate cursor-help block flex-1"
+                                style={{ fontSize: `0.9em` }}
+                              >
+                                {txn.note}
+                              </span>
+
+                              {txn.note && (
+                                <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
+                                  <Info className="h-3 w-3 text-slate-400 flex-shrink-0" />
+                                </CustomTooltip>
+                              )}
+                            </div>
+
+                            {/* Right: Copy Icon Only */}
+                            <div className="flex items-center gap-1 ml-auto shrink-0">
+                              {/* Transaction ID Copy */}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  navigator.clipboard.writeText(linkedIdForCopy);
-                                  setCopiedId(`linked-${txn.id}`);
-                                  setTimeout(() => setCopiedId(null), 2000);
+                                  copyToClipboard(txn.id).then((ok) => {
+                                    if (!ok) return
+                                    setCopiedId(txn.id);
+                                    setTimeout(() => setCopiedId(null), 2000);
+                                  })
                                 }}
                                 className={cn(
-                                  "opacity-0 group-hover/note:opacity-100 transition-opacity p-0.5 hover:bg-blue-50 rounded text-blue-400 hover:text-blue-600",
-                                  copiedId === `linked-${txn.id}` && "opacity-100 text-emerald-500"
+                                  "p-1 hover:bg-slate-100 rounded text-slate-300 hover:text-slate-600 transition-colors shrink-0",
+                                  copiedId === txn.id && "text-emerald-500"
                                 )}
-                                title={`Copy Linked ID: ${linkedIdForCopy}`}
+                                title={`Copy Transaction ID: ${txn.id}`}
                               >
-                                {copiedId === `linked-${txn.id}` ? <CheckCheck className="h-3 w-3" /> : <Link2 className="h-3 w-3" />}
+                                {copiedId === txn.id ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
                               </button>
-                            )}
-
-                            {/* Note Content */}
-                            {/* Note Content & Badges Container */}
-                            <div className="flex flex-col items-start min-w-0 flex-1 gap-0.5">
-                              <div className="flex items-center gap-2 truncate w-full">
-                                <span
-                                  className="text-slate-900 font-bold truncate cursor-help block flex-1"
-                                  style={{ fontSize: `0.9em` }} // Match Flow
-                                >
-                                  {txn.note}
-                                </span>
-
-                                {/* Split Bill Indicator */}
-                                {(() => {
-                                  const metadata = (typeof txn.metadata === 'string' ? JSON.parse(txn.metadata) : txn.metadata) as any;
-                                  const isSplitParent = metadata?.is_split_bill === true || metadata?.is_split_bill_base === true;
-                                  const isSplitChild = !!(metadata?.parent_transaction_id || metadata?.split_parent_id);
-                                  const splitGroupName = metadata?.split_group_name;
-
-                                  if (!isSplitParent && !isSplitChild) return null;
-
-                                  const badgeText = isSplitParent ? "SPLIT" : "SHARE";
-                                  const badgeColor = isSplitParent
-                                    ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                                    : "bg-slate-50 text-slate-600 border-slate-200";
-                                  const tooltipText = isSplitParent
-                                    ? (splitGroupName ? `Split Bill Parent - Group: ${splitGroupName}` : "Split Bill Parent (Total)")
-                                    : "Split Bill Share (Linked)";
-
-                                  return (
-                                    <CustomTooltip content={tooltipText}>
-                                      <span className={cn(
-                                        "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md border text-[10px] font-semibold whitespace-nowrap",
-                                        badgeColor
-                                      )}>
-                                        {isSplitParent ? "⚡" : "🔗"} {badgeText}
-                                      </span>
-                                    </CustomTooltip>
-                                  );
-                                })()}
-
-                                {txn.note && (
-                                  <CustomTooltip content={<div className="max-w-[300px] whitespace-normal break-words">{txn.note}</div>}>
-                                    <Info className="h-3 w-3 text-slate-400 flex-shrink-0" />
-                                  </CustomTooltip>
-                                )}
-                              </div>
-
-
                             </div>
-
-
-
-                            {/* Transaction ID Copy */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigator.clipboard.writeText(txn.id);
-                                setCopiedId(txn.id);
-                                setTimeout(() => setCopiedId(null), 2000);
-                              }}
-                              className={cn(
-                                "p-0.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 ml-1 transition-colors",
-                                copiedId === txn.id && "text-emerald-500"
-                              )}
-                              title={`Copy Transaction ID: ${txn.id}`}
-                            >
-                              {copiedId === txn.id ? <CheckCheck className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                            </button>
                           </div>
                         );
                       }
@@ -1969,21 +1986,12 @@ export function UnifiedTransactionTable({
                           ? new Date(occurredDate).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
                           : null;
 
-                        const catBadgeColor = "bg-slate-100 border-slate-200 text-slate-700";
+                        const shopName = txn.shop_name || "Unknown";
 
                         return (
                           <div className="flex w-full flex-col gap-1">
-                            <div className="flex items-center gap-1.5 justify-start">
-                              {isMobile && (
-                                <input
-                                  type="checkbox"
-                                  className="rounded border-slate-300 pointer-events-auto"
-                                  checked={isSelected}
-                                  onClick={(e) => { e.stopPropagation(); if (e.shiftKey) handleSelectOne(txn.id, !isSelected, true); }}
-                                  onChange={(e) => handleSelectOne(txn.id, e.target.checked)}
-                                />
-                              )}
-                              {/* 1. Category Icon (Visual) */}
+                            <div className="flex w-full items-center gap-2 min-w-0">
+                              {/* 1. Category Icon (Visual) - Keep visual but remove text badge */}
                               <CustomTooltip content={displayCategory}>
                                 <div className="shrink-0 cursor-help">
                                   {displayImage ? (
@@ -1991,48 +1999,40 @@ export function UnifiedTransactionTable({
                                       {/* eslint-disable-next-line @next/next/no-img-element */}
                                       <img src={displayImage} alt="" className="h-full w-full object-contain rounded-sm ring-0 outline-none" />
                                     </div>
-                                  ) : categoryIcon ? (
+                                  ) : (
                                     <div className="flex h-8 w-8 items-center justify-center bg-slate-50 rounded-sm text-sm border border-slate-200">
                                       {categoryIcon}
-                                    </div>
-                                  ) : (
-                                    <div className="flex h-8 w-8 items-center justify-center bg-slate-100 rounded-sm text-[10px] font-bold text-slate-500 border border-slate-200 uppercase">
-                                      {displayCategory.slice(0, 1)}
                                     </div>
                                   )}
                                 </div>
                               </CustomTooltip>
 
-                              {/* 2. Type Badge - Fixed defined Width */}
-                              <span className={cn("inline-flex items-center gap-1 rounded-md border px-1.5 h-6 text-[10px] font-extrabold whitespace-nowrap w-[60px] justify-center shrink-0", typeColor)}>
-                                {typeIcon} {typeLabel}
-                              </span>
+                              <div className="flex flex-col min-w-0 flex-1">
+                                {/* Details Row: Note or Shop Name */}
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-semibold text-slate-900 truncate" title={shopName}>{shopName}</span>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                                  {isMobile && mobileDateLabel && (
+                                    <span className="text-[10px] text-slate-400 font-mono mr-1">{mobileDateLabel}</span>
+                                  )}
+                                  {/* Only show Note text if exists */}
+                                  {txn.note && <span className="truncate max-w-[200px] italic">{txn.note}</span>}
+                                </div>
+                              </div>
 
-                              {/* 3. Category Name Badge - Align Start */}
-                              <CustomTooltip content={displayCategory}>
-                                <span
-                                  className={cn("inline-flex items-center justify-start rounded-md border px-1.5 font-extrabold truncate w-[85px] h-6 leading-none cursor-help shrink-0 pl-1.5", catBadgeColor, typeTextColor)}
-                                  style={{ fontSize: `${fontSize}px` }}
-                                >
-                                  {displayCategory}
-                                </span>
-                              </CustomTooltip>
 
-                              {/* 4. Status Indicators - Separate Tooltip to avoid shadowing */}
-
-                              {!isMobile && mobileDateLabel && (
-                                <span className="text-[10px] text-slate-500 leading-tight">{mobileDateLabel}</span>
-                              )}
                             </div>
 
-                            {/* Linked Repayment Badges REMOVED from Category Column */}
-                            {(() => null)()}
 
-                            {isMobile && mobileDateLabel && (
-                              <div className="flex w-full justify-start">
-                                <span className="text-[11px] text-slate-500 leading-tight block pl-14">{mobileDateLabel}</span>
-                              </div>
-                            )}
+
+                            {
+                              isMobile && mobileDateLabel && (
+                                <div className="flex w-full justify-start">
+                                  <span className="text-[11px] text-slate-500 leading-tight block pl-14">{mobileDateLabel}</span>
+                                </div>
+                              )
+                            }
                           </div>
                         )
                       }
@@ -2060,7 +2060,7 @@ export function UnifiedTransactionTable({
                           targetName = personNameLink || 'Unknown Person'
                           targetIcon = personAvatar
                           targetId = personId
-                          targetLink = `/people/${personId}/details`
+                          targetLink = `/people/details?id=${personId}`
                         } else if (targetId) {
                           targetType = 'account'
                           if (targetName === 'Unknown') {
@@ -2087,23 +2087,14 @@ export function UnifiedTransactionTable({
                         // "Smart Context"
                         const isPersonContext = context === 'person' || (Boolean(contextId) && personId === contextId);
                         const isAccountContext = context === 'account' || (Boolean(contextId) && !isPersonContext);
+                        const isDetailContext = isPersonContext || isAccountContext;
 
                         // --- 3. Badges & Tags ---
                         const cycleTag = normalizeMonthTag(txn.persisted_cycle_tag) ?? txn.persisted_cycle_tag
                         const debtTag = personId ? (normalizeMonthTag(txn.tag) ?? txn.tag) : null
 
-                        let cycleLabel = "-"
-                        if (sourceId) {
-                          const acc = accounts.find(a => a.id === sourceId)
-                          if (acc && acc.cashback_config) {
-                            const config = parseCashbackConfig(acc.cashback_config)
-                            const range = getCashbackCycleRange(config, new Date(txn.occurred_at))
-                            if (range) {
-                              const fmt = (d: Date) => `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}`
-                              cycleLabel = `${fmt(range.start)} to ${fmt(range.end)}`
-                            }
-                          }
-                        }
+                        // Cycle Label Logic removed - using CycleBadge component directly
+                        // (Lines 2125-2136 removed)
 
                         // --- 4. Render Helper for Entity ---
                         // Simplified Entity Renderer that is fully clickable
@@ -2114,7 +2105,11 @@ export function UnifiedTransactionTable({
                           isSquare = true,
                           badges = [],
                           contextBadge = null,
-                          isTarget = false // New prop for right-aligned target entities
+                          isTarget = false,
+                          badgeClassName,
+                          inlineBadges = false,
+                          leadingElement = null,
+                          trailingElement = null
                         }: {
                           name: string,
                           icon?: string | null,
@@ -2122,76 +2117,128 @@ export function UnifiedTransactionTable({
                           isSquare?: boolean,
                           badges?: React.ReactNode[],
                           contextBadge?: React.ReactNode,
-                          isTarget?: boolean
+                          isTarget?: boolean,
+                          badgeClassName?: string,
+                          inlineBadges?: boolean,
+                          leadingElement?: React.ReactNode,
+                          trailingElement?: React.ReactNode
                         }) => {
+                          const baseBadgeClasses = "rounded-lg py-1 px-2 h-10 w-full hover:bg-slate-100 transition-colors"
+                          const defaultColors = "bg-slate-50 border border-slate-200"
+                          const badgeClasses = cn(baseBadgeClasses, badgeClassName || defaultColors)
+
+                          const renderAvatar = (imgSrc: string | null | undefined, altText: string, isSquare: boolean) => {
+                            if (imgSrc) {
+                              return (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={imgSrc} alt={altText} className={cn("h-7 w-7 object-contain shrink-0 rounded-md border-none ring-0 outline-none bg-white", isSquare ? "" : "")} />
+                              )
+                            }
+                            return (
+                              <div className={cn("flex h-7 w-7 items-center justify-center bg-white shrink-0 text-slate-400 rounded-md border border-slate-100 ring-0 outline-none")}>
+                                {link?.includes('people') ? <User className="h-3.5 w-3.5" /> : <Wallet className="h-3.5 w-3.5" />}
+                              </div>
+                            )
+                          }
+
                           const Content = isTarget ? (
                             // Target Entity: Right-aligned with Image After Text
-                            <div className="flex items-center gap-2 min-w-0 w-full justify-end">
-                              {/* Name & Badges */}
-                              <div className="flex flex-col min-w-0 flex-1 justify-center items-end">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  {/* From/To Badge */}
+                            <div className={cn("flex items-center gap-2 min-w-0 w-full justify-end", badgeClasses)}>
+                              {inlineBadges ? (
+                                <div className="flex items-center gap-2 min-w-0 flex-1 h-full">
+                                  {/* Context Badge (To) */}
                                   {contextBadge}
+                                  {/* Badges Inline */}
+                                  {badges.length > 0 && (
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      {badges}
+                                    </div>
+                                  )}
+                                  {/* Name */}
                                   <CustomTooltip content={name}>
-                                    <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1 text-right cursor-help">
+                                    <span className="text-[0.85em] font-bold text-slate-700 truncate block text-right cursor-help leading-tight ml-auto">
                                       {name}
                                     </span>
                                   </CustomTooltip>
                                 </div>
-                                {badges.length > 0 && (
-                                  <div className="flex flex-wrap gap-1 mt-0.5 justify-end">
-                                    {badges}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Icon - After Text */}
-                              {icon ? (
-                                <>
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={icon} alt="" className={cn("h-8 w-8 object-contain shrink-0 rounded-sm border-none ring-0 outline-none", isSquare ? "" : "")} />
-                                </>
                               ) : (
-                                <div className={cn("flex h-8 w-8 items-center justify-center bg-slate-100 shrink-0 text-slate-400 rounded-sm border-none ring-0 outline-none")}>
-                                  {link?.includes('people') ? <User className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
+                                // Original behavior (flex-col)
+                                <div className="flex flex-col min-w-0 flex-1 justify-center items-end h-full">
+                                  <div className="flex items-center gap-1.5 min-w-0 w-full justify-end">
+                                    {/* From/To Badge */}
+                                    {contextBadge}
+                                    <CustomTooltip content={name}>
+                                      <span className="text-[0.85em] font-bold text-slate-700 truncate block text-right cursor-help leading-tight">
+                                        {name}
+                                      </span>
+                                    </CustomTooltip>
+                                  </div>
+                                  {badges.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 justify-end w-full">
+                                      {badges}
+                                    </div>
+                                  )}
                                 </div>
                               )}
+
+                              {/* Icon - After Text */}
+                              <div className="shrink-0 flex items-center gap-1">
+                                {renderAvatar(icon, name, isSquare)}
+                                {trailingElement && <div className="shrink-0">{trailingElement}</div>}
+                              </div>
                             </div>
                           ) : (
                             // Source Entity: Default layout with Icon Before Text
-                            <div className="flex items-center gap-2 min-w-0 w-full">
+                            <div className={cn("flex items-center gap-2 min-w-0 w-full", badgeClasses)}>
                               {/* Icon - Increased Size */}
-                              {icon ? (
-                                <>
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img src={icon} alt="" className={cn("h-8 w-8 object-contain shrink-0 rounded-sm border-none ring-0 outline-none", isSquare ? "" : "")} />
-                                </>
-                              ) : (
-                                <div className={cn("flex h-8 w-8 items-center justify-center bg-slate-100 shrink-0 text-slate-400 rounded-sm border-none ring-0 outline-none")}>
-                                  {link?.includes('people') ? <User className="h-4 w-4" /> : <Wallet className="h-4 w-4" />}
-                                </div>
-                              )}
+                              <div className="shrink-0 flex items-center gap-1">
+                                {leadingElement && <div className="shrink-0">{leadingElement}</div>}
+                                {renderAvatar(icon, name, isSquare)}
+                              </div>
 
-                              {/* Name & Badges */}
-                              <div className="flex flex-col min-w-0 flex-1 justify-center">
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                  {/* From/To Badge */}
+                              {inlineBadges ? (
+                                <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden h-full">
+                                  {/* Context Badge (From) */}
                                   {contextBadge}
-
+                                  {/* Name */}
                                   <CustomTooltip content={name}>
-                                    <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1 cursor-help">
+                                    <span className="text-[0.85em] font-bold text-slate-700 truncate block cursor-help leading-tight">
                                       {name}
                                     </span>
                                   </CustomTooltip>
+                                  {/* Badges Inline */}
+                                  {badges.length > 0 && (
+                                    <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
+                                      {badges}
+                                    </div>
+                                  )}
                                 </div>
-                                {/* Badges Row Removed - Now displayed in Shop/Note column */}
-                              </div>
+                              ) : (
+                                // Original behavior (flex-col)
+                                <div className="flex flex-col min-w-0 flex-1 justify-center h-full">
+                                  <div className="flex items-center gap-1.5 min-w-0 w-full">
+                                    {/* From/To Badge */}
+                                    {contextBadge}
+
+                                    <CustomTooltip content={name}>
+                                      <span className="text-[0.9em] font-bold text-slate-700 truncate block flex-1 cursor-help">
+                                        {name}
+                                      </span>
+                                    </CustomTooltip>
+                                  </div>
+                                  {badges.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 justify-start w-full">
+                                      {badges}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )
 
                           if (link) {
                             return (
-                              <Link href={link} onClick={(e) => e.stopPropagation()} className="block w-full hover:bg-slate-50 rounded-sm transition-colors p-0.5 relative z-20">
+                              <Link href={link} onClick={(e) => e.stopPropagation()} target="_blank" rel="noopener noreferrer" className="block w-full hover:bg-slate-50 rounded-sm transition-colors p-0.5 relative z-20">
                                 {Content}
                               </Link>
                             )
@@ -2202,7 +2249,7 @@ export function UnifiedTransactionTable({
                         const personEntity = personId ? {
                           name: personNameLink || 'Unknown Person',
                           icon: personAvatar,
-                          link: `/people/${personId}`,
+                          link: `/people/details?id=${personId}`,
                         } : null
                         const accountEntity = {
                           name: sourceName,
@@ -2211,10 +2258,14 @@ export function UnifiedTransactionTable({
                         }
 
                         // Badges Construction - Rounded md and Bold Colors
-                        const cycleBadge = (cycleLabel && cycleLabel !== '-') ? (
-                          <span key="cycle" className="inline-flex items-center rounded-md bg-purple-100 px-1.5 py-0.5 text-[0.7em] font-bold text-purple-700 whitespace-nowrap leading-none border border-purple-200">
-                            {cycleLabel}
-                          </span>
+                        const sourceAccountForBadge = accounts.find(a => a.id === sourceId);
+                        const cycleBadge = sourceAccountForBadge ? (
+                          <CycleBadge
+                            key="cycle"
+                            account={sourceAccountForBadge}
+                            cycleTag={(txn as any).persisted_cycle_tag || txn.tag}
+                            txnDate={txn.occurred_at || txn.created_at}
+                          />
                         ) : null
 
                         const tagBadge = (cycleTag || debtTag) ? (
@@ -2223,9 +2274,45 @@ export function UnifiedTransactionTable({
                           </span>
                         ) : null
 
-                        const fromBadge = <span key="from" className="inline-flex items-center rounded-md bg-orange-100 px-1.5 h-5 text-[0.7em] font-extrabold text-orange-700 border border-orange-200">FROM</span>
-                        const toBadge = <span key="to" className="inline-flex items-center rounded-md bg-sky-100 px-1.5 h-5 text-[0.7em] font-extrabold text-sky-700 border border-sky-200">TO</span>
+                        const fromBadge = (
+                          <span
+                            key="from"
+                            className={cn(
+                              "inline-flex items-center rounded-md px-1.5 h-5 text-[0.7em] font-extrabold border",
+                              isDetailContext ? "bg-orange-200 text-orange-900 border-orange-300" : "bg-orange-100 text-orange-700 border-orange-200"
+                            )}
+                          >
+                            FROM
+                          </span>
+                        )
+                        const toBadge = (
+                          <span
+                            key="to"
+                            className={cn(
+                              "inline-flex items-center rounded-md px-1.5 h-5 text-[0.7em] font-extrabold border",
+                              isDetailContext ? "bg-sky-200 text-sky-900 border-sky-300" : "bg-sky-100 text-sky-700 border-sky-200"
+                            )}
+                          >
+                            TO
+                          </span>
+                        )
 
+                        // Custom People Badge Logic - Icon + MMM, yy format
+                        const peopleDebtTag = txn.tag ? (
+                          <span key="people-debt" className="inline-flex items-center gap-1 rounded-[4px] bg-amber-50 border border-amber-200 text-amber-700 px-1.5 h-6 text-[11px] font-bold whitespace-nowrap">
+                            <User className="h-3 w-3" />
+                            {(() => {
+                              // Parse "2026-01" -> "Jan, 26"
+                              try {
+                                const [y, m] = txn.tag.split('-')
+                                const date = new Date(parseInt(y), parseInt(m) - 1, 1)
+                                return format(date, 'MMM, yy')
+                              } catch {
+                                return txn.tag
+                              }
+                            })()}
+                          </span>
+                        ) : null
 
                         // 6. Paid Badges Logic (Moved from Category) -> REMOVED from here.
 
@@ -2246,9 +2333,10 @@ export function UnifiedTransactionTable({
                                     name={accountEntity.name}
                                     icon={accountEntity.icon}
                                     link={accountEntity.link}
-                                    badges={[tagBadge, cycleBadge]}
-                                    contextBadge={toBadge}
                                     isTarget={true}
+                                    badgeClassName="bg-emerald-50 border border-emerald-200"
+                                    inlineBadges={true}
+                                    badges={[cycleBadge].filter(Boolean)}
                                   />
                                 </div>
                               </div>
@@ -2262,8 +2350,9 @@ export function UnifiedTransactionTable({
                                     name={accountEntity.name}
                                     icon={accountEntity.icon}
                                     link={accountEntity.link}
-                                    badges={[cycleBadge]}
-                                    contextBadge={fromBadge}
+                                    badgeClassName="bg-red-50 border border-red-200"
+                                    inlineBadges={true}
+                                    badges={[cycleBadge].filter(Boolean)}
                                   />
                                 </div>
                               </div>
@@ -2289,9 +2378,10 @@ export function UnifiedTransactionTable({
                                     name={targetName}
                                     icon={targetIcon}
                                     link={targetLink}
-                                    badges={[tagBadge]} // Tags on target
+                                    badges={targetType === 'person' ? [peopleDebtTag].filter(Boolean) : [cycleBadge || tagBadge].filter(Boolean)}
                                     contextBadge={toBadge}
                                     isTarget={true}
+                                    inlineBadges={true}
                                   />
                                 </div>
                               </div>
@@ -2312,6 +2402,7 @@ export function UnifiedTransactionTable({
                                     link={sourceId ? `/accounts/${sourceId}` : null}
                                     badges={[cycleBadge]}
                                     contextBadge={fromBadge}
+                                    inlineBadges={true}
                                   />
                                 </div>
                               </div>
@@ -2320,51 +2411,157 @@ export function UnifiedTransactionTable({
                         }
 
                         // SCENARIO 3: STANDARD VIEW (No Context or context mismatch)
-                        // Show: [Source] -> [Target]
+                        // Refactor: Source -> [Type] -> Target
+                        // Entity aligns: Left (Source), Right (Target)
+                        // "Cycle acocunt là show theo dạng 01-01 to 30-01" -> Use CycleBadge on Source Account
+
                         if (targetType === 'none') {
+                          // Badges for Source
+                          const sourceBadges = [
+                            <CycleBadge
+                              key="cycle"
+                              account={sourceAccountForBadge}
+                              cycleTag={cycleTag}
+                              txnDate={txn.occurred_at || txn.created_at}
+                            />
+                          ]
+
+                          // Type Badge Construction
+                          // Type Badge Construction
+                          // Type Badge Construction
+                          const badgeBaseClass = "inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border min-w-[85px] w-[85px] shrink-0 h-7"
+
+                          let typeBadge = null;
+                          const tType = txn.type;
+                          if (tType === 'expense') {
+                            typeBadge = <span className={cn(badgeBaseClass, "bg-red-50 text-red-600 border-red-200 hover:bg-red-100")}>
+                              <ArrowUpRight className="h-3 w-3" />
+                              OUT
+                            </span>
+                          } else if (tType === 'income') {
+                            typeBadge = <span className={cn(badgeBaseClass, "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100")}>
+                              <ArrowDownLeft className="h-3 w-3" />
+                              IN
+                            </span>
+                          } else if (tType === 'transfer') {
+                            typeBadge = <span className={cn(badgeBaseClass, "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100")}>
+                              <ArrowRightLeft className="h-3 w-3" />
+                              TF
+                            </span>
+                          } else if (tType === 'debt' || tType === 'loan') {
+                            typeBadge = <span className={cn(badgeBaseClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100")}>
+                              <History className="h-3 w-3" />
+                              DEBT
+                            </span>
+                          } else if (tType === 'repayment') {
+                            typeBadge = <span className={cn(badgeBaseClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100")}>
+                              <RefreshCcw className="h-3 w-3" />
+                              REPAY
+                            </span>
+                          }
+
+                          // Single Entity -> Align Type Badge Left per request
+                          // "Nếu chỉ có single entiry: kéo dài badges ra sát Type không cần | giữa"
                           return (
-                            <div className="flex items-center w-full min-w-0">
+                            <div className="flex items-center gap-2 w-full min-w-0">
                               <div className="flex-1 min-w-0">
                                 <RenderEntity
                                   name={sourceName}
                                   icon={sourceIcon}
                                   link={sourceId ? `/accounts/${sourceId}` : null}
-                                  badges={[cycleBadge]}
+                                  badges={sourceBadges}
+                                  inlineBadges={true}
                                 />
                               </div>
+                              {typeBadge}
                             </div>
                           )
                         }
 
+                        // 2 Entities -> Source [Type] Target
+                        // Badges for Source
+                        const sourceBadges = [
+                          <CycleBadge
+                            key="cycle"
+                            account={sourceAccountForBadge}
+                            cycleTag={cycleTag}
+                            txnDate={txn.occurred_at || txn.created_at}
+                            compact={true} // Compact (Icon Only) if 2 entities
+                          />
+                        ]
+
+                        // Badges for Target
+                        const targetBadges = targetType === 'person'
+                          ? [peopleDebtTag].filter(Boolean)
+                          : [tagBadge].filter(Boolean)
+
+                        // Type Badge Logic
+                        const badgeBaseClass = "inline-flex items-center justify-center gap-1.5 rounded-md px-2 py-0.5 text-[10px] uppercase tracking-wider font-bold border min-w-[85px] w-[85px] h-8 shrink-0"
+
+                        let typeBadge = null;
+                        const tType = txn.type;
+                        if (tType === 'expense') {
+                          typeBadge = <span className={cn(badgeBaseClass, "bg-red-50 text-red-600 border-red-200 hover:bg-red-100")}>
+                            <ArrowUpRight className="h-3 w-3" />
+                            OUT
+                          </span>
+                        } else if (tType === 'income') {
+                          typeBadge = <span className={cn(badgeBaseClass, "bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100")}>
+                            <ArrowDownLeft className="h-3 w-3" />
+                            IN
+                          </span>
+                        } else if (tType === 'transfer') {
+                          typeBadge = <span className={cn(badgeBaseClass, "bg-blue-50 text-blue-600 border-blue-200 hover:bg-blue-100")}>
+                            <ArrowRightLeft className="h-3 w-3" />
+                            TF
+                          </span>
+                        } else if (tType === 'debt' || tType === 'loan') {
+                          typeBadge = <span className={cn(badgeBaseClass, "bg-amber-50 text-amber-600 border-amber-200 hover:bg-amber-100")}>
+                            <History className="h-3 w-3" />
+                            DEBT
+                          </span>
+                        } else if (tType === 'repayment') {
+                          typeBadge = <span className={cn(badgeBaseClass, "bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100")}>
+                            <RefreshCcw className="h-3 w-3" />
+                            REPAY
+                          </span>
+                        }
+
                         return (
-                          <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center w-full min-w-0">
+                          <div className="flex items-center gap-2 w-full min-w-0">
                             {/* Left: Source */}
-                            <div className="min-w-0 w-full overflow-hidden">
+                            <div className="flex-1 min-w-0 max-w-[42%]">
                               <RenderEntity
                                 name={sourceName}
                                 icon={sourceIcon}
                                 link={sourceId ? `/accounts/${sourceId}` : null}
-                                badges={[cycleBadge]}
+                                badges={sourceBadges}
+                                inlineBadges={true}
                               />
                             </div>
 
-                            {/* Center: Arrow (Only if Target exists) */}
-                            <div className="shrink-0 flex justify-center text-slate-400">
-                              <MoveRight className="h-5 w-5" />
-                            </div>
+                            {/* Center: Separator */}
+                            <span className="text-slate-300 font-light shrink-0">|</span>
 
                             {/* Right: Target */}
-                            <div className="min-w-0 w-full overflow-hidden">
+                            <div className="flex-1 min-w-0 max-w-[42%]">
                               <RenderEntity
                                 name={targetName}
                                 icon={targetIcon}
                                 link={targetLink}
-                                badges={[tagBadge]}
+                                badges={targetBadges}
                                 isTarget={true}
+                                inlineBadges={true}
                               />
+                            </div>
+
+                            {/* Far Right: Type Badge */}
+                            <div className="ml-auto pl-2">
+                              {typeBadge}
                             </div>
                           </div>
                         )
+
 
                       }
                       case "tag": {
@@ -2555,24 +2752,21 @@ export function UnifiedTransactionTable({
                       case "id":
                         const isCopied = copiedId === txn.id
                         return (
-                          <CustomTooltip content={txn.id}>
-                            <div className="flex items-center gap-1.5 max-w-[100px]">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigator.clipboard.writeText(txn.id);
+                          <CustomTooltip content={isCopied ? 'Copied!' : txn.id}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                copyToClipboard(txn.id).then((ok) => {
+                                  if (!ok) return
                                   setCopiedId(txn.id);
                                   setTimeout(() => setCopiedId(null), 2000);
-                                }}
-                                className="text-slate-400 hover:text-slate-600 transition-colors shrink-0"
-                                title="Copy ID"
-                              >
-                                {isCopied ? <CheckCheck className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-                              </button>
-                              <span className="text-[0.85em] text-slate-400 font-mono cursor-help truncate">
-                                {isCopied ? 'Copied!' : `${txn.id.slice(0, 8)}...`}
-                              </span>
-                            </div>
+                                })
+                              }}
+                              className="p-1 hover:bg-slate-100 rounded text-slate-300 hover:text-slate-600 transition-colors shrink-0"
+                              title="Copy ID"
+                            >
+                              {isCopied ? <CheckCheck className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                            </button>
                           </CustomTooltip>
                         )
                       default:
@@ -2667,6 +2861,16 @@ export function UnifiedTransactionTable({
               </TableBody >
 
             </table>
+            {context === 'account' && (
+              <div className="border-t border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+                <span className="font-semibold text-slate-700">Flow hint:</span>{" "}
+                <span>
+                  <span className="font-semibold text-orange-900">FROM (orange)</span>: chi tiêu hoặc nhận vào từ account khác (transfer in).{' '}
+                  <span className="font-semibold text-sky-900">TO (blue)</span>: chuyển sang account khác hoặc cho People (lend).{' '}
+                  Các trường hợp khác hiển thị theo type của giao dịch.
+                </span>
+              </div>
+            )}
           </div >
         )
         }
@@ -3078,16 +3282,18 @@ export function UnifiedTransactionTable({
         isOpen={!!historyTarget}
         onClose={() => setHistoryTarget(null)}
       />
-      {confirmRefundTxn && (
-        <ConfirmRefundDialogV2
-          open={!!confirmRefundTxn}
-          onOpenChange={(open) => {
-            if (!open) setConfirmRefundTxn(null)
-          }}
-          transaction={confirmRefundTxn}
-          accounts={accounts}
-        />
-      )}
+      {
+        confirmRefundTxn && (
+          <ConfirmRefundDialogV2
+            open={!!confirmRefundTxn}
+            onOpenChange={(open) => {
+              if (!open) setConfirmRefundTxn(null)
+            }}
+            transaction={confirmRefundTxn}
+            accounts={accounts}
+          />
+        )
+      }
       {
         cloningTxn && (
           <AddTransactionDialog
@@ -3113,14 +3319,16 @@ export function UnifiedTransactionTable({
       />
 
       {/* Request Refund Dialog */}
-      {refundTarget && (
-        <RequestRefundDialog
-          open={isRefundOpen}
-          onOpenChange={setIsRefundOpen}
-          transaction={refundTarget}
-          type={refundType}
-        />
-      )}
+      {
+        refundTarget && (
+          <RequestRefundDialog
+            open={isRefundOpen}
+            onOpenChange={setIsRefundOpen}
+            transaction={refundTarget}
+            type={refundType}
+          />
+        )
+      }
       {/* Column Customizer */}
       <ColumnCustomizer
         open={isColumnCustomizerOpen}
@@ -3181,6 +3389,6 @@ export function UnifiedTransactionTable({
           setColumnWidths(prev => ({ ...prev, [key]: width }))
         }}
       />
-    </div>
+    </div >
   )
 }
