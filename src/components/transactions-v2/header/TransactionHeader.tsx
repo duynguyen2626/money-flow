@@ -63,7 +63,7 @@ interface TransactionHeaderProps {
   selectedCycle?: string
   onCycleChange: (cycle?: string) => void
   disabledRange?: { start: Date; end: Date } | undefined
-  
+
   // Available months for constraints
   availableMonths?: Set<string>
 }
@@ -104,17 +104,17 @@ export function TransactionHeader({
   // Desktop filters component
   const DesktopFilters = () => (
     <div className="hidden md:flex items-center gap-2 shrink-0">
-            <TypeFilterDropdown
-              value={filterType}
-              onChange={onFilterChange}
-              fullWidth
-            />
+      <TypeFilterDropdown
+        value={filterType}
+        onChange={onFilterChange}
+        fullWidth
+      />
 
-            <StatusDropdown
-              value={statusFilter}
-              onChange={onStatusChange}
-              fullWidth
-            />
+      <StatusDropdown
+        value={statusFilter}
+        onChange={onStatusChange}
+        fullWidth
+      />
 
       <QuickFilterDropdown
         items={people.map(p => ({
@@ -156,6 +156,7 @@ export function TransactionHeader({
         onModeChange={onModeChange}
         disabledRange={disabledRange}
         availableMonths={availableMonths}
+        locked={!!selectedCycle}
       />
 
       {/* Smart Filter/Clear Toggle Button */}

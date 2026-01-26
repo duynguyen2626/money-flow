@@ -123,5 +123,14 @@
   Tasks:
    [x] Fetch & Checkout branch
    [ ] Verify Date Picker logic (MonthYearPickerV2)
-   [ ] Fix issues if any
+   [x] Fix issues if any
+
+ Phase 5 - Date Picker & Cycle Interaction Refinement
+  Mục tiêu:
+   Điều chỉnh hành vi đóng modal của Date Picker và ràng buộc logic giữa Cycle Filter và Date Picker.
+  Tasks:
+   [ ] MonthYearPickerV2: Remove auto-close on selection (Date/Month/Range).
+   [ ] MonthYearPickerV2: Implement 'locked' mode when Cycle is selected (show toast on click).
+   [ ] TransactionHeader: Pass locked state to MonthYearPickerV2.
+
 

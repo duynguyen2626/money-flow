@@ -1,6 +1,8 @@
 'use client'
 
+
 import { useState } from 'react'
+import { toast } from 'sonner'
 import {
   Popover,
   PopoverContent,
@@ -23,6 +25,7 @@ interface MonthYearPickerV2Props {
   disabledRange?: { start: Date; end: Date } | undefined
   availableMonths?: Set<string>
   fullWidth?: boolean
+  locked?: boolean
 }
 
 export function MonthYearPickerV2({
@@ -35,6 +38,7 @@ export function MonthYearPickerV2({
   disabledRange,
   availableMonths,
   fullWidth,
+  locked,
 }: MonthYearPickerV2Props) {
   const [open, setOpen] = useState(false)
 
@@ -71,6 +75,12 @@ export function MonthYearPickerV2({
             "gap-2 justify-between font-medium",
             fullWidth ? 'w-full h-10' : 'w-[200px] h-9'
           )}
+          onClick={(e) => {
+            if (locked) {
+              e.preventDefault()
+              toast.error("Please select Cycle 'All' to pick a custom date.")
+            }
+          }}
         >
           <div className="flex items-center gap-1.5 truncate">
             <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
@@ -137,7 +147,7 @@ export function MonthYearPickerV2({
           {mode === 'month' && (
             <MonthGrid
               value={date}
-              onChange={(d) => { onDateChange(d); setOpen(false) }}
+              onChange={(d) => { onDateChange(d) }}
               availableMonths={availableMonths}
             />
           )}
@@ -148,7 +158,6 @@ export function MonthYearPickerV2({
               onSelect={(d) => {
                 if (d) {
                   onDateChange(d)
-                  setOpen(false)
                 }
               }}
               disabled={disabledMatchers}
