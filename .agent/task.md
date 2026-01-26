@@ -143,7 +143,12 @@
    [ ] Refactor TransactionHeader: Add Filter/Clear button with 2 states.
    [ ] Refactor TransactionHeader: Manual Search behavior.
    [ ] Implement MonthYearPickerV3 (Tabs: Month, Date, Range; OK button).
-   [ ] Add Confirmation Dialog for Clear action.
+   [x] Add Confirmation Dialog for Clear action.
 
-
-
+ Phase 7 - Filter UX Enhancements
+  Mục tiêu:
+   "Hybrid Filter Mode": Filter realtime nếu đang ở chế độ Filter (hasActiveFilters=true).
+   Strict Date/Cycle Rules: Visually disable Date Picker keys when Cycle is active.
+  Tasks:
+   [ ] TransactionHeader: Create wrapper handlers for realtime updates if active.
+   [ ] MonthYearPickerV2: Add visual disabled state (opacity, cursor) when locked.

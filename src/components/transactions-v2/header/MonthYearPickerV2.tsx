@@ -108,7 +108,8 @@ export function MonthYearPickerV2({
           size="sm"
           className={cn(
             "gap-2 justify-between font-medium",
-            fullWidth ? 'w-full h-10' : 'w-[200px] h-9'
+            fullWidth ? 'w-full h-10' : 'w-[200px] h-9',
+            locked && "opacity-50 cursor-not-allowed bg-muted/50"
           )}
         >
           <div className="flex items-center gap-1.5 truncate">

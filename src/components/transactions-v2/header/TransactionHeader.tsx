@@ -139,10 +139,42 @@ export function TransactionHeader({
     selectedCycle, date, dateRange, dateMode
   ])
 
-  const isRangeFilterActive = localDateMode === 'range' && !!localDateRange && !localCycle
-  const isCycleDisabled = !localAccountId || cycles.length === 0 || isRangeFilterActive
+  // --- Hybrid Real-time Handlers ---
+  const handleFilterChange = (setter: (val: any) => void, propHandler: (val: any) => void) => (val: any) => {
+    setter(val)
+    if (hasActiveFilters) {
+      propHandler(val)
+    }
+  }
 
-  // Apply Handlers
+  // Wrapper for Cycle Change (Specific rule: If cycle selected, might need to reset date range in parent? Logic handled by parent usually)
+  const handleCycleChange = (val: string | undefined) => {
+    setLocalCycle(val)
+    if (hasActiveFilters) {
+      onCycleChange(val)
+    }
+  }
+
+  // Wrapper for MonthYearPicker (It returns multiple values, handle carefully)
+  const handleDateUpdate = (
+    updates: {
+      date?: Date,
+      range?: DateRange | undefined,
+      mode?: 'month' | 'range' | 'date'
+    }
+  ) => {
+    if (updates.date !== undefined) setLocalDate(updates.date)
+    if (updates.range !== undefined) setLocalDateRange(updates.range)
+    if (updates.mode !== undefined) setLocalDateMode(updates.mode)
+
+    if (hasActiveFilters) {
+      // Apply immediately if filtering
+      if (updates.mode !== undefined) onModeChange(updates.mode)
+      if (updates.date !== undefined) onDateChange(updates.date)
+      if (updates.range !== undefined) onRangeChange(updates.range)
+    }
+  }
+
   const handleApplyFilters = () => {
     onAccountChange(localAccountId)
     onPersonChange(localPersonId)
@@ -172,13 +204,13 @@ export function TransactionHeader({
     <div className="hidden md:flex items-center gap-2 shrink-0">
       <TypeFilterDropdown
         value={localFilterType}
-        onChange={setLocalFilterType}
+        onChange={handleFilterChange(setLocalFilterType, onFilterChange)}
         fullWidth
       />
 
       <StatusDropdown
         value={localStatusFilter}
-        onChange={setLocalStatusFilter}
+        onChange={handleFilterChange(setLocalStatusFilter, onStatusChange)}
         fullWidth
       />
 
@@ -189,7 +221,7 @@ export function TransactionHeader({
           image: p.image_url,
         }))}
         value={localPersonId}
-        onValueChange={setLocalPersonId}
+        onValueChange={handleFilterChange(setLocalPersonId, onPersonChange)}
         placeholder="People"
         emptyText="No people"
       />
@@ -201,7 +233,7 @@ export function TransactionHeader({
           image: a.image_url,
         }))}
         value={localAccountId}
-        onValueChange={setLocalAccountId}
+        onValueChange={handleFilterChange(setLocalAccountId, onAccountChange)}
         placeholder="Account"
         emptyText="No accounts"
       />
@@ -209,7 +241,7 @@ export function TransactionHeader({
       <CycleFilterDropdown
         cycles={cycles}
         value={localCycle}
-        onChange={setLocalCycle}
+        onChange={handleCycleChange}
         disabled={cycles.length === 0}
       />
 
@@ -217,12 +249,12 @@ export function TransactionHeader({
         date={localDate}
         dateRange={localDateRange}
         mode={localDateMode}
-        onDateChange={setLocalDate}
-        onRangeChange={setLocalDateRange}
-        onModeChange={setLocalDateMode}
+        onDateChange={(d) => handleDateUpdate({ date: d })}
+        onRangeChange={(r) => handleDateUpdate({ range: r })}
+        onModeChange={(m) => handleDateUpdate({ mode: m })}
         disabledRange={disabledRange}
         availableMonths={availableMonths}
-        locked={!!localCycle}
+        locked={!!localCycle} // Pass local cycle state
       />
 
       {/* Filter Action Button */}
@@ -354,12 +386,27 @@ export function TransactionHeader({
           </DialogHeader>
 
           <div className="flex-1 space-y-4 py-4">
-            {/* Same fields as desktop but vertical */}
+            {/* Mobile filters handled with local state only for now, Apply button commits them */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Type</label>
               <TypeFilterDropdown value={localFilterType} onChange={setLocalFilterType} fullWidth />
             </div>
-            {/* ... (Repeat other fields similarly using local state) ... */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Status</label>
+              <StatusDropdown value={localStatusFilter} onChange={setLocalStatusFilter} fullWidth />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">People</label>
+              <QuickFilterDropdown
+                items={people.map(p => ({ id: p.id, name: p.name, image: p.image_url }))}
+                value={localPersonId}
+                onValueChange={setLocalPersonId}
+                placeholder="People"
+                fullWidth
+              />
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium text-muted-foreground">Account</label>
               <QuickFilterDropdown
@@ -370,7 +417,34 @@ export function TransactionHeader({
                 fullWidth
               />
             </div>
-            {/* Add other mobile fields if needed for completeness */}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Cycle</label>
+              <CycleFilterDropdown
+                cycles={cycles}
+                value={localCycle}
+                onChange={setLocalCycle}
+                disabled={cycles.length === 0}
+                fullWidth
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-muted-foreground">Date</label>
+              <MonthYearPickerV2
+                date={localDate}
+                dateRange={localDateRange}
+                mode={localDateMode}
+                // Mobile doesn't use hybrid real-time, just local buffer until Apply
+                onDateChange={setLocalDate}
+                onRangeChange={setLocalDateRange}
+                onModeChange={setLocalDateMode}
+                disabledRange={disabledRange}
+                availableMonths={availableMonths}
+                fullWidth
+                locked={!!localCycle}
+              />
+            </div>
           </div>
 
           <div className="flex gap-2 pt-4 border-t">
