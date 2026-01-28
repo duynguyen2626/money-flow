@@ -30,6 +30,8 @@ export interface Database {
           sheet_full_img: string | null
           sheet_show_bank_account: boolean
           sheet_show_qr_image: boolean
+          sheet_bank_info: string | null
+          sheet_linked_bank_id: string | null
         }
         Insert: {
           id?: string
@@ -47,6 +49,8 @@ export interface Database {
           sheet_full_img?: string | null
           sheet_show_bank_account?: boolean
           sheet_show_qr_image?: boolean
+          sheet_linked_bank_id?: string | null
+          sheet_bank_info?: string | null
         }
         Update: {
           id?: string
@@ -64,6 +68,8 @@ export interface Database {
           sheet_full_img?: string | null
           sheet_show_bank_account?: boolean
           sheet_show_qr_image?: boolean
+          sheet_linked_bank_id?: string | null
+          sheet_bank_info?: string | null
         }
       }
       sheet_webhook_links: {

@@ -22,6 +22,7 @@ type AddTransactionDialogProps = {
   defaultType?: "expense" | "income" | "debt" | "transfer" | "repayment";
   buttonClassName?: string;
   defaultSourceAccountId?: string;
+  defaultTargetAccountId?: string;
   defaultDebtAccountId?: string;
   defaultAmount?: number;
   triggerContent?: ReactNode;
@@ -314,6 +315,8 @@ export function AddTransactionDialog({
     ...urlValues,
     ...(defaultAmount ? { amount: defaultAmount } : {}),
     ...(defaultPersonId && !initialValues?.person_id ? { person_id: defaultPersonId } : {}),
+    ...(defaultSourceAccountId && !initialValues?.source_account_id ? { source_account_id: defaultSourceAccountId } : {}),
+    ...(defaultTargetAccountId && !initialValues?.target_account_id ? { target_account_id: defaultTargetAccountId } : {}),
     // Auto-populate Category based on type
     ...(!initialValues?.category_id && defaultType ? (() => {
       if (defaultType === 'repayment') {
@@ -383,6 +386,7 @@ export function AddTransactionDialog({
     defaultPersonId,
     defaultType,
     defaultSourceAccountId,
+    defaultTargetAccountId,
     categories,
     shops,
     accounts,

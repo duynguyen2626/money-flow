@@ -130,12 +130,14 @@ export function MemberDetailView({
     // Initial Data for Slide
     const slideInitialData = useMemo(() => {
         if (slideOverrideType) {
+            const isRepayment = slideOverrideType === 'repayment';
             return {
                 type: slideOverrideType as any,
                 occurred_at: new Date(),
-                amount: 0,
+                amount: isRepayment ? (activeCycle?.remains || 0) : 0,
                 cashback_mode: "none_back" as const,
-                person_id: person.id, // Default person
+                person_id: person.id,
+                source_account_id: (isRepayment && person.sheet_linked_bank_id) ? person.sheet_linked_bank_id : undefined,
             }
         }
         if (!selectedTxn) return undefined

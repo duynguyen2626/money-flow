@@ -1,4 +1,4 @@
-import { Search, RotateCcw, UserMinus, Plus, Check, ChevronDown, FileText, RefreshCw, Settings, Sheet } from 'lucide-react'
+import { Search, RotateCcw, UserMinus, Plus, Check, ChevronDown, FileText, RefreshCw, Settings, Sheet, History, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { DebtCycle } from '@/hooks/use-person-details'
 import { Input } from '@/components/ui/input'
@@ -73,7 +73,7 @@ export function TransactionControlBar({
                                 remains={activeCycle.remains}
                                 trigger={
                                     <button className="flex items-center gap-1.5 h-8 px-3 bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 hover:border-amber-300 rounded-lg text-xs font-bold transition-colors">
-                                        <RotateCcw className="h-3.5 w-3.5" />
+                                        <History className="h-3.5 w-3.5" />
                                         Rollover
                                     </button>
                                 }
@@ -198,7 +198,9 @@ export function TransactionControlBar({
                             googleSheetUrl={person.google_sheet_url}
                             sheetFullImg={person.sheet_full_img}
                             showBankAccount={person.sheet_show_bank_account ?? false}
+                            sheetLinkedBankId={person.sheet_linked_bank_id || null}
                             showQrImage={person.sheet_show_qr_image ?? false}
+                            accounts={accounts}
                             size="sm"
                             buttonClassName="h-9 px-3 gap-1.5 text-xs text-slate-700 hover:bg-slate-50 border-slate-200"
                             linkedLabel={activeCycle.tag}

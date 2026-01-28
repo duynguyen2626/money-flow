@@ -28,6 +28,7 @@ interface PersonDetailTabsProps {
     googleSheetUrl?: string | null
     sheetFullImg?: string | null
     showBankAccount?: boolean
+    sheetLinkedBankId?: string | null
     showQrImage?: boolean
     transactions: any[]
     cycleSheets?: PersonCycleSheet[]
@@ -45,6 +46,7 @@ export function PersonDetailTabs({
     googleSheetUrl,
     sheetFullImg,
     showBankAccount = false,
+    sheetLinkedBankId = null,
     showQrImage = false,
     transactions,
     cycleSheets = [],
@@ -274,6 +276,7 @@ export function PersonDetailTabs({
                                         shops={shops}
                                         defaultType="repayment"
                                         defaultPersonId={personId}
+                                        defaultTargetAccountId={sheetLinkedBankId || undefined}
                                         asChild
                                         triggerContent={
                                             <Button variant="outline" size="sm" className="h-9 text-emerald-600 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-700 hover:border-emerald-300">
@@ -299,7 +302,9 @@ export function PersonDetailTabs({
                                     googleSheetUrl={googleSheetUrl}
                                     sheetFullImg={sheetFullImg}
                                     showBankAccount={showBankAccount}
+                                    sheetLinkedBankId={sheetLinkedBankId}
                                     showQrImage={showQrImage}
+                                    accounts={accounts}
                                     buttonClassName="h-9 border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800 hover:border-emerald-300"
                                     size="sm"
                                     showCycleAction={true}

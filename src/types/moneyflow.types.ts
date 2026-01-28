@@ -133,6 +133,8 @@ export type Person = {
   google_sheet_url?: string | null
   sheet_full_img?: string | null
   sheet_show_bank_account?: boolean | null
+  sheet_bank_info?: string | null
+  sheet_linked_bank_id?: string | null
   sheet_show_qr_image?: boolean | null
   debt_account_id?: string | null
   balance?: number | null

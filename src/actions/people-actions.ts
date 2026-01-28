@@ -69,6 +69,8 @@ export type UpdatePersonPayload = {
   google_sheet_url?: string | null
   sheet_full_img?: string | null
   sheet_show_bank_account?: boolean
+  sheet_bank_info?: string | null
+  sheet_linked_bank_id?: string | null
   sheet_show_qr_image?: boolean
   subscriptionIds?: string[]
   is_owner?: boolean
